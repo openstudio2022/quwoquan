@@ -1,44 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
-class _FakeAssistantRepository implements AssistantRepository {
-  _FakeAssistantRepository({List<AssistantSkillConsent>? initial})
+class _FakeAssistantConsentFacet implements AssistantSkillConsentFacet {
+  _FakeAssistantConsentFacet({List<AssistantSkillConsent>? initial})
     : _items = <AssistantSkillConsent>[...?initial];
 
   final List<AssistantSkillConsent> _items;
-
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async => AssistantPolicyView(
-    version: policyVersionHint.isEmpty ? 'test' : policyVersionHint,
-    values: <String, dynamic>{
-      'grantedScopes': _items
-          .where((item) => item.granted)
-          .map((item) => item.skillId)
-          .toList(growable: false),
-    },
-  );
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async => AssistantInteractionReportBatchAck(
-    accepted: true,
-    count: events.length,
-    resource: 'interaction_event_batch',
-  );
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async => AssistantScorecardReportBatchAck(
-    accepted: true,
-    count: scorecards.length,
-    resource: 'scorecard_batch',
-  );
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() async {
@@ -65,45 +34,14 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<void> revokeSkillConsent({required String skillId}) async {
     _items.removeWhere((item) => item.skillId == skillId);
   }
-
-  @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  }) async {
-    return AssistantSearchResultView(
-      queryEcho: query,
-      searchIntensity: searchIntensity,
-    );
-  }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = 32,
-    String? status,
-  }) async => const <AssistantUserTaskView>[];
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = 32,
-  }) async => const <AssistantUserMemoryView>[];
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = 64,
-  }) async => const <AssistantSkillCatalogItemView>[];
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
   test('hydrate existing personal_content_access consent', () async {
     final container = ProviderContainer(
       overrides: [
-        assistantRepositoryProvider.overrideWithValue(
-          _FakeAssistantRepository(
+        assistantSkillConsentFacetProvider.overrideWithValue(
+          _FakeAssistantConsentFacet(
             initial: <AssistantSkillConsent>[
               AssistantSkillConsent(
                 skillId: kPersonalContentAccessSkillId,
@@ -133,9 +71,12 @@ void main() {
     () async {
       final container = ProviderContainer(
         overrides: [
-          assistantRepositoryProvider.overrideWithValue(
-            _FakeAssistantRepository(),
+          assistantSkillConsentFacetProvider.overrideWithValue(
+            _FakeAssistantConsentFacet(),
           ),
+          contentFeatureFlagProvider(
+            'enable_assistant_content_identity_index',
+          ).overrideWithValue(true),
         ],
       );
       addTearDown(container.dispose);

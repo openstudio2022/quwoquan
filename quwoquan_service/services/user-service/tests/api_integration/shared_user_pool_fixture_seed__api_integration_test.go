@@ -129,7 +129,13 @@ func TestContractFixtureSeedSharedUserPoolReadsViaHandler(t *testing.T) {
 	verifiedProfiles := map[string]struct{}{}
 	for _, target := range personas {
 		if _, exists := verifiedProfiles[target.UserID]; !exists {
-			profileRec := doRequest(t, http.MethodGet, "/user/profile/"+target.UserID, "", nil)
+			profileRec := doRequest(
+				t,
+				http.MethodGet,
+				"/user/profile/"+target.UserID,
+				"",
+				authHeaders(target.UserID),
+			)
 			if profileRec.Code != http.StatusOK {
 				t.Fatalf("profile %s expected 200, got %d: %s", target.UserID, profileRec.Code, profileRec.Body.String())
 			}

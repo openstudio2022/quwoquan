@@ -1,56 +1,29 @@
-domain: content
-aggregate: ContentReaction
+entity: ContentReaction
+domain: CONTENT
+
+description: |
+  ContentReaction 对象专属错误码。共享错误码唯一定义于 content/post/errors.yaml；
+  content 域 codegen 与端云 parity 按固定文件列表合并，code 全域唯一。
 
 errors:
-  - code: CONTENT.USER.reaction_actor_invalid
+  - code: CONTENT.USER.comment_like_duplicate
     kind: USER
-    reason: reaction_actor_invalid
-    http_status: 400
-    recovery:
-      action: surface
-      disruptionLevel: snackbar
-    dart_const: reactionActorInvalid
-    go_const: ErrReactionActorInvalid
-    user_message:
-      zh: "互动身份无效，请刷新后重试"
-      en: "The reaction actor is invalid. Please refresh and retry."
-
-  - code: CONTENT.USER.reaction_target_invalid
-    kind: USER
-    reason: reaction_target_invalid
-    http_status: 400
-    recovery:
-      action: surface
-      disruptionLevel: snackbar
-    dart_const: reactionTargetInvalid
-    go_const: ErrReactionTargetInvalid
-    user_message:
-      zh: "互动目标无效"
-      en: "The reaction target is invalid."
-
-  - code: CONTENT.USER.reaction_version_conflict
-    kind: USER
-    reason: reaction_version_conflict
+    reason: comment_like_duplicate
     http_status: 409
-    recovery:
-      action: refresh
-      disruptionLevel: snackbar
-    dart_const: reactionVersionConflict
-    go_const: ErrReactionVersionConflict
+    recovery_action: surface
+    dart_const: commentLikeDuplicate
+    go_const: ErrCommentLikeDuplicate
     user_message:
-      zh: "互动状态已更新，请刷新后重试"
-      en: "The reaction state changed. Please refresh and retry."
+      zh: "已经点过赞了"
+      en: "Already liked"
 
-  - code: CONTENT.SYSTEM.reaction_storage_failed
-    kind: SYSTEM
-    reason: reaction_storage_failed
-    http_status: 503
-    recovery:
-      action: retry
-      disruptionLevel: passiveIndicator
-      afterSeconds: 3
-    dart_const: reactionStorageFailed
-    go_const: ErrReactionStorageFailed
+  - code: CONTENT.USER.comment_reaction_forbidden
+    kind: USER
+    reason: comment_reaction_forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: commentReactionForbidden
+    go_const: ErrCommentReactionForbidden
     user_message:
-      zh: "互动暂时不可用，请稍后重试"
-      en: "Reactions are temporarily unavailable. Please retry shortly."
+      zh: "当前无法评价这条评论"
+      en: "Not allowed to react to this comment"

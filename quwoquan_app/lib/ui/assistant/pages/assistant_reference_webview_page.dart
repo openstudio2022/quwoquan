@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -115,7 +116,7 @@ class _AssistantReferenceWebViewPageState
         ? widget.title.trim()
         : widget.source.trim().isNotEmpty
         ? widget.source.trim()
-        : UITextConstants.assistantReferenceSectionTitle;
+        : AssistantText.assistantReferenceSectionTitle;
     return AppScaffold(
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: AppNavigationBar(
@@ -193,7 +194,7 @@ class _ReferenceLoadError extends StatelessWidget {
           semantic: UiErrorSemantic(
             category: UiErrorCategory.sectionLoad,
             scope: UiErrorScope.section,
-            title: '参考网页暂时没打开',
+            title: UITextConstants.pageLoadFailedTitle,
             message: host.trim().isNotEmpty
                 ? host.trim()
                 : UITextConstants.contentLoadSoftFailed,

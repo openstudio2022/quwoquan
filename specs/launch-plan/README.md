@@ -14,4 +14,4 @@
 
 - 后续落实跟踪以 `specs/launch-plan/` 为准。
 - 建立开发/排查对话时，优先引用 `three_week_dual_engine_launch_plan.md` 中的 `WSx / Tx.y`。
-- `specs/gates/` 下同名文件仅作为既往来源/引用保留，不属于本目录结构。
+- `specs/gates/` 不再保留同名副本；所有上线计划与落实跟踪均以本目录为准。

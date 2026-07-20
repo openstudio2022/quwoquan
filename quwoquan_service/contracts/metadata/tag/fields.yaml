@@ -360,17 +360,8 @@ entities:
       - { name: matchedTags, type: "[]string", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: score, type: float64, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
 
-  TagFeedbackRequest:
-    description: 标签推荐反馈请求
-    fields:
-      - { name: tagRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
-      - { name: action, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read, description: "click / ignore / correct" }
-      - { name: context, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
-
-  TagFeedbackResultView:
-    description: 反馈结果
-    fields:
-      - { name: accepted, type: bool, constraints: [NOT_NULL, DEFAULT_FALSE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+  # TagFeedbackRequest / TagFeedbackResultView 的唯一声明在
+  # tag/tag_feedback/fields.yaml（对象专属 packet），此处不再重复。
 
   TagCooccurrenceView:
     description: 标签对共现项

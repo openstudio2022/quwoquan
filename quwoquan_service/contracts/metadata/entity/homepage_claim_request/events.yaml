@@ -6,10 +6,10 @@ events:
     consumers: [platform-ops]
     channel: event_store
     payload_entity: HomepageClaimRequest
-    payload_fields: [_id, homepageId, requesterPersonaId, claimTier, status, createdAt, version]
+    payload_fields: [claimRequestId, homepageId, requesterPersonaId, claimTier, status, createdAt, version]
   - name: HomepageClaimReviewed
     producer: entity-service
     consumers: [platform-ops, homepage-projection]
     channel: event_store
     payload_entity: HomepageClaimRequest
-    payload_fields: [_id, homepageId, status, reviewerAccountId, reviewedAt, version]
+    payload_fields: [claimRequestId, homepageId, status, reviewerAccountId, reviewedAt, version]

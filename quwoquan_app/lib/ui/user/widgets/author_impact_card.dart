@@ -53,7 +53,7 @@ class AuthorImpactCard extends ConsumerWidget {
     AuthorImpactItem item,
   ) {
     return ({String cursor = ''}) => ref
-        .read(userProfileRepositoryProvider)
+        .read(authorImpactQueryProvider)
         .listAuthorImpactEvidence(
           subAccountId: summary.authorId,
           impactId: item.impactId,

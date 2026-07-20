@@ -73,6 +73,19 @@ func (f *FakeRedis) SAdd(_ context.Context, key string, members ...string) error
 	return nil
 }
 
+func (f *FakeRedis) SRem(_ context.Context, key string, members ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	set := f.sets[key]
+	for _, member := range members {
+		delete(set, member)
+	}
+	if len(set) == 0 {
+		delete(f.sets, key)
+	}
+	return nil
+}
+
 func (f *FakeRedis) SMembers(_ context.Context, key string) ([]string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

@@ -14,14 +14,39 @@ events:
   - name: CommentCreated
     domain: content
     entity: Comment
-    canonical: contracts/metadata/content/post/events.yaml
+    canonical: contracts/metadata/content/comment/events.yaml
 
-  - name: ContentReactionActivated
+  - name: CommentDeleted
+    domain: content
+    entity: Comment
+    canonical: contracts/metadata/content/comment/events.yaml
+
+  - name: CommentPinChanged
+    domain: content
+    entity: Comment
+    canonical: contracts/metadata/content/comment/events.yaml
+
+  - name: CommentAttachmentsBound
+    domain: content
+    entity: Comment
+    canonical: contracts/metadata/content/comment/events.yaml
+
+  - name: CommentModerated
+    domain: content
+    entity: Comment
+    canonical: contracts/metadata/content/comment/events.yaml
+
+  - name: CommentsTombstoned
+    domain: content
+    entity: Comment
+    canonical: contracts/metadata/content/comment/events.yaml
+
+  - name: ContentReactionSet
     domain: content
     entity: ContentReaction
     canonical: contracts/metadata/content/content_reaction/events.yaml
 
-  - name: ContentReactionRemoved
+  - name: ContentReactionCleared
     domain: content
     entity: ContentReaction
     canonical: contracts/metadata/content/content_reaction/events.yaml
@@ -52,6 +77,11 @@ events:
     canonical: contracts/metadata/messages/conversation_membership/events.yaml
 
   - name: ConversationMemberRemoved
+    domain: messages
+    entity: ConversationMembership
+    canonical: contracts/metadata/messages/conversation_membership/events.yaml
+
+  - name: ConversationMemberLeft
     domain: messages
     entity: ConversationMembership
     canonical: contracts/metadata/messages/conversation_membership/events.yaml

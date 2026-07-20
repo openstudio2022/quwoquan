@@ -11,10 +11,80 @@ api_routes:
   operation: CreateAssistantConversation
   path: /assistant/conversations
 
+  description: 一次创建助手会话；clientRequestId 为稳定 intent，重放返回首个结果。
   request_fields:
   - summary
   - clientRequestId
   response_entity: AssistantConversation
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.conversation_invalid_argument
+  - ASSISTANT.USER.conversation_idempotency_conflict
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.conversation_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_conversation_command
+    trace: true
+    attributes: [operation, outcome, error_code, replayed]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: conversation_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: AssistantConversationQueryFacade
+    kind: query
+    method: listConversations
+    reader: AssistantConversationReader
+    slice: AssistantConversationListView
+  method: GET
+  operation: ListAssistantConversations
+  path: /assistant/conversations
+
+  description: owner 会话列表；updatedAt desc + conversationId tiebreak 的 keyset 分页，历史抽屉与最近会话的唯一数据源。
+  query_params: [limit, cursor]
+  response_entity: AssistantConversationListView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.conversation_invalid_argument
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.conversation_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_conversation_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: requester_self
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -32,7 +102,32 @@ api_routes:
   operation: GetAssistantConversation
   path: /assistant/conversations/{conversationId}
 
+  description: 读取 owner 自己的会话快照；非 owner 返回 not_found 防枚举。
   response_entity: AssistantConversation
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.conversation_not_found
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.conversation_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_conversation_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: conversation_owner
   security:
     anonymous_policy: deny
     auth_mode: required

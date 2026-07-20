@@ -19,6 +19,8 @@ FORBIDDEN = (
     re.compile(r"\bbatchId\b"),
     re.compile(r"\btask_root\b"),
     re.compile(r"\bbatch_root\b"),
+    re.compile(r"\btask\s*:\s*(?:str|Path)\b"),
+    re.compile(r"\bbatch\s*:\s*(?:str|Path)\b"),
     re.compile(r"\bTASKS_ROOT\b"),
     re.compile(r"\bQWQ_BATCH_"),
     re.compile(r"--task\b"),

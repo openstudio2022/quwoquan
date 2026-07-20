@@ -33,6 +33,7 @@ type MongoPostStore struct {
 	outbox      *mongo.Collection
 	sequences   *mongo.Collection
 	checkpoints *mongo.Collection
+	tombstones  *mongo.Collection
 }
 
 func NewMongoPostStore(coll *mongo.Collection) *MongoPostStore {
@@ -43,7 +44,19 @@ func NewMongoPostStore(coll *mongo.Collection) *MongoPostStore {
 		outbox:      db.Collection("content_outbox"),
 		sequences:   db.Collection("content_outbox_sequences"),
 		checkpoints: db.Collection("projection_checkpoints"),
+		tombstones:  db.Collection("deleted_post_tombstones"),
 	}
+}
+
+// deletedPostTombstoneDocument 是 content.DeletedPostTombstone 的持久化形态：
+// _id 复用 postId 作唯一 dedupe key，expireAt TTL 索引承载保留期自动清理。
+type deletedPostTombstoneDocument struct {
+	ID        string    `bson:"_id"`
+	PostID    string    `bson:"postId"`
+	AuthorID  string    `bson:"authorId"`
+	Reason    string    `bson:"reason"`
+	DeletedAt time.Time `bson:"deletedAt"`
+	ExpireAt  time.Time `bson:"expireAt"`
 }
 
 func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
@@ -147,7 +160,49 @@ func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	if _, err := s.tombstones.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "postId", Value: 1}},
+			Options: options.Index().SetName("idx_tombstone_post").SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "deletedAt", Value: -1}},
+			Options: options.Index().SetName("idx_tombstone_deleted_at"),
+		},
+		{
+			Keys:    bson.D{{Key: "expireAt", Value: 1}},
+			Options: options.Index().SetName("idx_tombstone_expire").SetExpireAfterSeconds(0),
+		},
+	}); err != nil {
+		return fmt.Errorf("create deleted post tombstone indexes: %w", err)
+	}
 	return s.ensureOutboxIndexes(ctx)
+}
+
+// FindTombstone 实现 postports.TombstoneReader：保留期内返回墓碑事实，
+// TTL 到期（或从未删除）返回 found=false。
+func (s *MongoPostStore) FindTombstone(
+	ctx context.Context,
+	postID string,
+) (postports.PostDeletionTombstone, bool, error) {
+	var document deletedPostTombstoneDocument
+	err := s.tombstones.FindOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(postID)},
+	).Decode(&document)
+	if err == mongo.ErrNoDocuments {
+		return postports.PostDeletionTombstone{}, false, nil
+	}
+	if err != nil {
+		return postports.PostDeletionTombstone{}, false, err
+	}
+	return postports.PostDeletionTombstone{
+		PostID:    document.PostID,
+		AuthorID:  document.AuthorID,
+		Reason:    document.Reason,
+		DeletedAt: document.DeletedAt,
+		ExpireAt:  document.ExpireAt,
+	}, true, nil
 }
 
 func (s *MongoPostStore) Load(ctx context.Context, id string) (*postmodel.Post, bool, error) {
@@ -278,6 +333,25 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 			}
 		}
 
+		if commit.Tombstone != nil {
+			tombstone := deletedPostTombstoneDocument{
+				ID:        strings.TrimSpace(commit.Tombstone.PostID),
+				PostID:    strings.TrimSpace(commit.Tombstone.PostID),
+				AuthorID:  strings.TrimSpace(commit.Tombstone.AuthorID),
+				Reason:    strings.TrimSpace(commit.Tombstone.Reason),
+				DeletedAt: commit.Tombstone.DeletedAt.UTC(),
+				ExpireAt:  commit.Tombstone.ExpireAt.UTC(),
+			}
+			if _, upsertErr := s.tombstones.UpdateOne(
+				txCtx,
+				bson.M{"_id": tombstone.ID},
+				bson.M{"$setOnInsert": tombstone},
+				options.UpdateOne().SetUpsert(true),
+			); upsertErr != nil {
+				return nil, upsertErr
+			}
+		}
+
 		expiresAt := commit.ReceiptExpiresAt
 		if expiresAt.IsZero() {
 			expiresAt = time.Now().UTC().Add(24 * time.Hour)
@@ -377,6 +451,22 @@ func (s *MongoPostStore) SetLikeCount(ctx context.Context, id string, count int6
 	return res.MatchedCount == 1, nil
 }
 
+// SetShareCount 只写由 OutboundShareFact 权威集合重建的 projection。
+func (s *MongoPostStore) SetShareCount(ctx context.Context, id string, count int64) (bool, error) {
+	if count < 0 {
+		return false, fmt.Errorf("Post shareCount cannot be negative")
+	}
+	res, err := s.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(id)},
+		bson.M{"$set": bson.M{"shareCount": count, "updatedAt": time.Now().UTC()}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount == 1, nil
+}
+
 func (s *MongoPostStore) ListAll(ctx context.Context) ([]postmodel.Post, error) {
 	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	cur, err := s.coll.Find(ctx, bson.M{}, opts)
@@ -410,8 +500,9 @@ func (s *MongoPostStore) ListPublished(ctx context.Context, limit int, cursor st
 	}
 
 	filter := bson.M{
-		"status":     "published",
-		"visibility": "public",
+		"status":           "published",
+		"visibility":       "public",
+		"moderationStatus": "approved",
 	}
 
 	if cursor != "" {
@@ -443,8 +534,9 @@ func (s *MongoPostStore) ListByAuthor(ctx context.Context, authorID string, limi
 		limit = 20
 	}
 	filter := bson.M{
-		"authorId": authorID,
-		"status":   "published",
+		"authorId":         authorID,
+		"status":           "published",
+		"moderationStatus": "approved",
 	}
 	if cursor != "" {
 		var cursorDoc postmodel.Post

@@ -1,6 +1,7 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — `runArtifacts` / cardPayload 等开放 JSON 与 Markdown 解析。
 
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class AssistantAnswerContent extends StatelessWidget {
@@ -493,7 +495,13 @@ class AssistantAnswerContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: children,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant markdown rendering degraded to selectable text',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return SelectableText(markdownText, style: textStyle);
     }
   }
@@ -563,7 +571,13 @@ class AssistantAnswerContent extends StatelessWidget {
     if (raw.isEmpty) return null;
     try {
       return parseRunArtifacts(raw);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant run artifacts could not be decoded',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }
@@ -685,7 +699,7 @@ class _AssistantCitationChip extends StatelessWidget {
       context,
     ).withValues(alpha: 0.56);
     return Transform.translate(
-      offset: const Offset(0, -3),
+      offset: const Offset(AppSpacing.zero, -AppSpacing.three),
       child: GestureDetector(
         key: ValueKey<String>('assistant_reference_chip_${reference.index}'),
         onTap: onTap,
@@ -867,11 +881,11 @@ class _MarkdownSegment {
   String _fallbackTitle() {
     switch (cardType) {
       case 'compare':
-        return '对比卡片';
+        return AssistantText.assistantCardCompare;
       case 'trend':
-        return '趋势卡片';
+        return AssistantText.assistantCardTrend;
       case 'diagram':
-        return '结构图';
+        return AssistantText.assistantCardDiagram;
       default:
         return cardType;
     }
@@ -883,7 +897,13 @@ class _MarkdownSegment {
       if (decoded is Map<String, dynamic>) return decoded;
       if (decoded is Map) return decoded.cast<String, dynamic>();
       return null;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant structured card payload could not be decoded',
+        name: 'assistant.answer_content',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

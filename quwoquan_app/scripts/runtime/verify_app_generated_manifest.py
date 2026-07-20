@@ -21,6 +21,7 @@ MANIFEST = APP / "tool/cloud_codegen/generated_manifest.json"
 GENERATOR = "app-only-emitter"
 ALLOWED_PREFIXES = (
     "lib/app/navigation/generated/",
+    "lib/application/content/media/generated/",
     "lib/assistant/generated/",
     "lib/cloud/runtime/generated/",
     "lib/cloud/assistant/generated/",

@@ -3,197 +3,228 @@ package config_layer
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/model"
-	"quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/ports"
+	"quwoquan_service/runtime/controlplane"
 )
 
+// ErrScopeInvalid / ErrSnapshotNotFound 是快照查询的稳定错误哨兵，
+// HTTP adapter 据此映射 metadata errors.yaml 声明的错误码。
+var (
+	ErrScopeInvalid     = fmt.Errorf("config snapshot scope invalid")
+	ErrSnapshotNotFound = fmt.Errorf("config snapshot not found")
+)
+
+// Facade 提供 IaC 配置只读快照查询。配置唯一真相源是版本化发布包；
+// 平台不提供任何写路径。
 type Facade struct {
-	store   ports.AggregateStore
-	reader  ports.LayerReader
-	catalog ports.ConfigKeyCatalog
+	source  *SnapshotSource
+	catalog *ConfigKeyCatalog
 	now     func() time.Time
 }
 
-type SetValueCommand struct {
-	LayerID         string            `json:"layerId"`
-	ExpectedVersion int64             `json:"expectedVersion"`
-	Scope           model.Scope       `json:"scope"`
-	ConfigKey       string            `json:"configKey"`
-	Value           model.ConfigValue `json:"value"`
-	IdempotencyKey  string            `json:"-"`
+type ConfigSnapshotView struct {
+	Domain          string         `json:"domain"`
+	Service         string         `json:"service"`
+	Environment     string         `json:"environment"`
+	Files           []SnapshotFile `json:"files"`
+	ReleaseVersions []string       `json:"releaseVersions"`
+	MergedSha256    string         `json:"mergedSha256,omitempty"`
+	SnapshotSource  string         `json:"snapshotSource"`
 }
 
-type EffectiveConfigItem struct {
-	Key           string            `json:"key"`
-	Value         model.ConfigValue `json:"value"`
-	SourceLayerID string            `json:"sourceLayerId"`
+type ConfigDomainItem struct {
+	Domain      string   `json:"domain"`
+	Label       string   `json:"label"`
+	Services    []string `json:"services,omitempty"`
+	Description string   `json:"description"`
 }
 
-type EffectiveConfigSlice struct {
-	Items         []EffectiveConfigItem `json:"items"`
-	EffectiveHash string                `json:"effectiveHash"`
+type ConfigDomainSlice struct {
+	Items []ConfigDomainItem `json:"items"`
 }
 
-func NewFacade(
-	store ports.AggregateStore,
-	reader ports.LayerReader,
-	catalog ports.ConfigKeyCatalog,
-) (*Facade, error) {
-	if store == nil || reader == nil || catalog == nil {
-		return nil, fmt.Errorf("config layer store, reader and generated key catalog are required")
+func NewFacade(source *SnapshotSource, catalog *ConfigKeyCatalog) (*Facade, error) {
+	if source == nil || catalog == nil {
+		return nil, fmt.Errorf("config snapshot facade requires snapshot source and generated key catalog")
 	}
-	return &Facade{store: store, reader: reader, catalog: catalog, now: time.Now}, nil
+	return &Facade{source: source, catalog: catalog, now: time.Now}, nil
 }
 
-func (f *Facade) ListConfigKeys(context.Context) []ports.ConfigKeyDescriptor {
+func (f *Facade) ListConfigKeys(context.Context) []ConfigKeyDescriptor {
 	return f.catalog.List()
 }
 
-func (f *Facade) ListLayers(ctx context.Context) ([]model.ConfigLayer, error) {
-	return f.reader.List(ctx)
-}
-
-func (f *Facade) SetValue(ctx context.Context, command SetValueCommand) (ports.CommitReceipt, model.ConfigLayer, error) {
-	command.LayerID = strings.TrimSpace(command.LayerID)
-	command.ConfigKey = strings.TrimSpace(command.ConfigKey)
-	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	command.Scope = command.Scope.Normalized()
-	if command.LayerID == "" || command.ConfigKey == "" || command.IdempotencyKey == "" {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand("layerId, configKey and Idempotency-Key are required")
-	}
-	if command.ExpectedVersion < 0 {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand("expectedVersion cannot be negative")
-	}
-	if err := command.Scope.Validate(); err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand(err.Error())
-	}
-	if command.LayerID != command.Scope.LayerID() {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand("layerId must equal canonical scope id")
-	}
-	descriptor, found := f.catalog.Get(command.ConfigKey)
-	if !found {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand(fmt.Sprintf("config key %q is not registered", command.ConfigKey))
-	}
-	payload, err := json.Marshal(command)
-	if err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand(err.Error())
-	}
-	commandDigest := fmt.Sprintf("%x", sha256.Sum256(payload))
-	if receipt, found, err := f.store.Replay(ctx, command.LayerID, command.IdempotencyKey, commandDigest); err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, err
-	} else if found {
-		layer, loadErr := f.store.Load(ctx, command.LayerID)
-		return receipt, layer, loadErr
+// Resolve 解析 sys.* 有效配置：codegen 键目录 default 叠加发布包 config.yaml
+// 顶层平铺 sys.* 覆盖。响应结构与 runtime/controlplane 客户端 wire 对齐。
+func (f *Facade) Resolve(_ context.Context, scope controlplane.ConfigResolutionScope) (controlplane.ConfigResolveResponse, error) {
+	environment := strings.TrimSpace(scope.Environment)
+	service := strings.TrimSpace(scope.Service)
+	if environment == "" {
+		return controlplane.ConfigResolveResponse{}, fmt.Errorf("%w: resolve requires environment", ErrScopeInvalid)
 	}
 
-	var current model.ConfigLayer
-	if command.ExpectedVersion == 0 {
-		current, err = model.NewConfigLayer(command.Scope, f.now())
-	} else {
-		current, err = f.store.Load(ctx, command.LayerID)
-	}
-	if err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, err
-	}
-	now := f.now().UTC()
-	next, err := current.SetValue(command.ConfigKey, command.Value, descriptor.Kind, descriptor.Scope, now)
-	if err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, invalidCommand(err.Error())
-	}
-	eventPayload, err := json.Marshal(next)
-	if err != nil {
-		return ports.CommitReceipt{}, model.ConfigLayer{}, err
-	}
-	eventDigest := sha256.Sum256([]byte(command.LayerID + "\x00" + command.IdempotencyKey))
-	receipt, err := f.store.Commit(ctx, command.ExpectedVersion, ports.ChangeSet{
-		Layer: next, IdempotencyKey: command.IdempotencyKey, CommandDigest: commandDigest,
-		Events: []model.Event{{
-			ID:   "config-layer-value-set-" + fmt.Sprintf("%x", eventDigest[:16]),
-			Type: "ConfigLayerValueSet", AggregateID: next.ID, AggregateType: "ConfigLayer",
-			Payload: eventPayload, OccurredAt: now,
-		}},
-	})
-	return receipt, next, err
-}
-
-func invalidCommand(message string) error {
-	return fmt.Errorf("%w: %s", model.ErrInvalid, message)
-}
-
-func (f *Facade) Resolve(ctx context.Context, scope model.Scope) (EffectiveConfigSlice, error) {
-	if strings.TrimSpace(scope.Environment) == "" {
-		return EffectiveConfigSlice{}, fmt.Errorf("resolve requires environment")
-	}
-	layers, err := f.reader.List(ctx)
-	if err != nil {
-		return EffectiveConfigSlice{}, err
-	}
-	resolved := make(map[string]EffectiveConfigItem, len(f.catalog.List()))
+	values := make([]controlplane.ResolvedConfigValue, 0, len(f.catalog.List()))
+	resolved := map[string]controlplane.ResolvedConfigValue{}
 	for _, descriptor := range f.catalog.List() {
-		resolved[descriptor.Key] = EffectiveConfigItem{
-			Key: descriptor.Key, Value: descriptor.Default, SourceLayerID: "metadata-default",
+		resolved[descriptor.Key] = controlplane.ResolvedConfigValue{
+			Key:         descriptor.Key,
+			Value:       descriptor.Default,
+			ScopeLevel:  "global",
+			ScopeID:     "all",
+			SourceLayer: "config_schema",
+			Metadata: map[string]any{
+				"owner":      descriptor.Owner,
+				"scope":      descriptor.Scope,
+				"reload":     descriptor.Reload,
+				"risk_level": descriptor.RiskLevel,
+			},
 		}
 	}
-	sort.Slice(layers, func(i, j int) bool {
-		left, right := scopeRank(layers[i].Scope.Level), scopeRank(layers[j].Scope.Level)
-		if left == right {
-			return layers[i].ID < layers[j].ID
+	if service != "" {
+		overrides, files, err := f.source.SysOverrides(environment, service)
+		if err != nil && !os.IsNotExist(err) {
+			return controlplane.ConfigResolveResponse{}, err
 		}
-		return left < right
-	})
-	for _, layer := range layers {
-		if !scopeMatches(layer.Scope, scope) || layer.Status != "active" {
-			continue
+		sourceLayer := "release-package"
+		if len(files) > 0 {
+			sourceLayer = files[len(files)-1].Path
 		}
-		for _, entry := range layer.Entries {
-			resolved[entry.Key] = EffectiveConfigItem{Key: entry.Key, Value: entry.Value, SourceLayerID: layer.ID}
+		for key, value := range overrides {
+			if _, registered := f.catalog.Get(key); !registered && !f.catalog.InNamespace(key) {
+				continue
+			}
+			resolved[key] = controlplane.ResolvedConfigValue{
+				Key:         key,
+				Value:       value,
+				ScopeLevel:  "service",
+				ScopeID:     service,
+				SourceLayer: sourceLayer,
+			}
 		}
 	}
-	items := make([]EffectiveConfigItem, 0, len(resolved))
 	for _, item := range resolved {
-		items = append(items, item)
+		values = append(values, item)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
-	raw, err := json.Marshal(items)
+	sort.Slice(values, func(i, j int) bool { return values[i].Key < values[j].Key })
+	hash := controlplane.EffectiveConfigHash(values)
+	return controlplane.ConfigResolveResponse{
+		Scope:         controlplane.ConfigResolutionScope{Environment: environment, Service: service},
+		ResolvedAt:    f.now().UTC().Format(time.RFC3339),
+		EffectiveHash: hash,
+		DesiredHash:   hash,
+		Values:        values,
+		Source:        "release-package",
+	}, nil
+}
+
+// GetSnapshot 返回单个配置域在指定环境的发布包只读快照。
+func (f *Facade) GetSnapshot(_ context.Context, environment, service string) (ConfigSnapshotView, error) {
+	environment = strings.TrimSpace(environment)
+	service = strings.TrimSpace(service)
+	if environment == "" || service == "" {
+		return ConfigSnapshotView{}, fmt.Errorf("%w: snapshot requires env and service", ErrScopeInvalid)
+	}
+	view := ConfigSnapshotView{
+		Environment:     environment,
+		Service:         service,
+		ReleaseVersions: []string{},
+		SnapshotSource:  f.source.Mode(),
+	}
+	switch service {
+	case "app":
+		view.Domain = "app"
+		files, err := f.source.AppConfigFiles(environment)
+		if err != nil {
+			return ConfigSnapshotView{}, err
+		}
+		if len(files) == 0 {
+			return ConfigSnapshotView{}, ErrSnapshotNotFound
+		}
+		view.Files = files
+	case "data":
+		view.Domain = "data"
+		files, err := f.source.DataCatalogFiles()
+		if err != nil {
+			return ConfigSnapshotView{}, err
+		}
+		if len(files) == 0 {
+			return ConfigSnapshotView{}, ErrSnapshotNotFound
+		}
+		view.Files = files
+	default:
+		view.Domain = "cloud-service"
+		files, err := f.source.ServiceConfigFiles(environment, service)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return ConfigSnapshotView{}, ErrSnapshotNotFound
+			}
+			return ConfigSnapshotView{}, err
+		}
+		releases, err := f.source.ReleaseFiles(service)
+		if err != nil {
+			return ConfigSnapshotView{}, err
+		}
+		view.Files = append(files, releases...)
+		for _, release := range releases {
+			name := release.Path
+			if idx := strings.LastIndex(name, "/"); idx >= 0 {
+				name = name[idx+1:]
+			}
+			view.ReleaseVersions = append(view.ReleaseVersions, strings.TrimSuffix(name, ".yaml"))
+		}
+	}
+	view.MergedSha256 = mergedDigest(view.Files)
+	return view, nil
+}
+
+// ListDomains 返回可查看的配置域清单。
+func (f *Facade) ListDomains(context.Context) (ConfigDomainSlice, error) {
+	services, err := f.source.ListCloudServices()
 	if err != nil {
-		return EffectiveConfigSlice{}, err
+		return ConfigDomainSlice{}, err
 	}
-	hash := sha256.Sum256(raw)
-	return EffectiveConfigSlice{Items: items, EffectiveHash: fmt.Sprintf("%x", hash[:])}, nil
+	return ConfigDomainSlice{Items: []ConfigDomainItem{
+		{
+			Domain:      "cloud-service",
+			Label:       "云侧领域服务",
+			Services:    services,
+			Description: "服务 configs/default 与 configs/<env> 树，release 双版本保留（当前灰度与上一版本）",
+		},
+		{
+			Domain:      "app",
+			Label:       "端侧 App",
+			Services:    []string{"app"},
+			Description: "quwoquan_app/configs/<env> 构建期发布配置",
+		},
+		{
+			Domain:      "data",
+			Label:       "数据工程",
+			Services:    []string{"data"},
+			Description: "quwoquan_data control_plane 共享 catalog（发布包内容资产的一部分）",
+		},
+	}}, nil
 }
 
-func scopeRank(level string) int {
-	switch level {
-	case "global":
-		return 0
-	case "environment":
-		return 1
-	case "cluster":
-		return 2
-	case "service":
-		return 3
-	default:
-		return 4
+func mergedDigest(files []SnapshotFile) string {
+	if len(files) == 0 {
+		return ""
 	}
-}
-
-func scopeMatches(layer, target model.Scope) bool {
-	switch layer.Level {
-	case "global":
-		return true
-	case "environment":
-		return layer.Environment == target.Environment
-	case "cluster":
-		return layer.Environment == target.Environment && layer.Cluster == target.Cluster
-	case "service":
-		return layer.Environment == target.Environment && layer.Cluster == target.Cluster && layer.Service == target.Service
-	default:
-		return false
+	type digestEntry struct {
+		Path   string `json:"path"`
+		SHA256 string `json:"sha256"`
 	}
+	entries := make([]digestEntry, 0, len(files))
+	for _, file := range files {
+		entries = append(entries, digestEntry{Path: file.Path, SHA256: file.SHA256})
+	}
+	payload, _ := json.Marshal(entries)
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
 }

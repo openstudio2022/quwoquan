@@ -1,4 +1,4 @@
-# L4 特性：historical-feedback-context-builder
+# L3 特性：historical-feedback-context-builder
 
 ## 功能说明
 - 细化记录反馈构建器，将聚合数据转为可注入运行上下文。

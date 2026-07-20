@@ -14,20 +14,34 @@ domain_acceptance:
     title: circle community 领域边界验收
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
-    boundary_points: []
+    - 9 个业务对象（circle 含 section_config、membership、group、group_membership、file、post_placement、behavior_fact、search_item_view）按对象 packet 治理：state/receipt/outbox 同事务、命名迁移服务端 CAS、no-op receipt 持久化、If-Match 仅 group/file 快照覆盖两处（封闭清单）。
+    - Circle 聚合本体命令仅圈主/管理员（BOLA fail-closed）；展示位（pin/feature）唯一写入口是 CirclePostPlacement，feed 读模型由 placement outbox 投影回写。
+    boundary_points:
+    - Circle↔MediaAsset 引用完整性由 tombstone 关系承载（无 MediaAssetDeleted 消费者，2026-07-19 裁决删除悬空声明）。
+    - hub 多圈发现 feed 为端侧有界并发扇出（性能债注记，聚合 API 属规格增量走 /prd）。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_group__api_integration_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_file_contract__api_integration_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_post_placement__api_integration_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_behavior_fact__api_integration_test.go
+      - quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart
+      - quwoquan_app/test/user_acceptance/journeys/circle/circle_navigation_journey__user_acceptance_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: da1_local_contract
         cases:
         - local_contract.circle_community.domain_service.da1.da1_local_contract
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: da1_api_integration
         cases:
         - api_integration.circle_community.domain_service.da1.da1_api_integration
@@ -40,5 +54,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

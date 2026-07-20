@@ -554,6 +554,59 @@ func (s *MongoContentReactionStore) ReadCommentReactionValues(
 	return values, nil
 }
 
+// ReadAuthorLikedFlags 批量返回「Post 作者赞过该评论」事实：入参按 postAuthorId
+// 分组 commentIds，单次 $or 查询覆盖全部分组，返回 commentId → liked。
+func (s *MongoContentReactionStore) ReadAuthorLikedFlags(
+	ctx context.Context,
+	commentIDsByPostAuthor map[string][]string,
+) (map[string]bool, error) {
+	flags := map[string]bool{}
+	predicates := make(bson.A, 0, len(commentIDsByPostAuthor))
+	for postAuthorID, commentIDs := range commentIDsByPostAuthor {
+		postAuthorID = strings.TrimSpace(postAuthorID)
+		ids := make([]string, 0, len(commentIDs))
+		for _, commentID := range commentIDs {
+			if commentID = strings.TrimSpace(commentID); commentID != "" {
+				ids = append(ids, commentID)
+			}
+		}
+		if postAuthorID == "" || len(ids) == 0 {
+			continue
+		}
+		predicates = append(predicates, bson.M{
+			"actorId":  postAuthorID,
+			"targetId": bson.M{"$in": ids},
+		})
+	}
+	if len(predicates) == 0 {
+		return flags, nil
+	}
+	cursor, err := s.aggregates.Find(
+		ctx,
+		bson.M{
+			"targetKind":     string(reactiondomain.TargetKindComment),
+			"actorDimension": string(reactiondomain.ActorDimensionPersona),
+			"reaction":       string(reactiondomain.ValueLike),
+			"$or":            predicates,
+		},
+		options.Find().SetProjection(bson.M{"targetId": 1}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var rows []struct {
+		TargetID string `bson:"targetId"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		flags[row.TargetID] = true
+	}
+	return flags, nil
+}
+
 func validateReactionCommit(commit reactionports.Commit) error {
 	if commit.Aggregate == nil || strings.TrimSpace(commit.Aggregate.ID()) == "" {
 		return contentgenerated.AppErrorFromVersionConflict("reaction commit requires aggregate")

@@ -5,9 +5,9 @@ import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 /// UAT 契约桩：证明沉浸视频旅程依赖的交付与负缓存合同在测试图中可组装。
 ///
 /// 完整 Patrol/设备旅程需 alpha media edge + Simulator CA；本文件锁定
-/// 「自然摄影师」类内容必须使用 manifest 可达相对 key，且 404 不会无限重打。
+/// 分钟级与小时边界 canary 必须使用 manifest 可达相对 key，且 404 不会无限重打。
 void main() {
-  test('沉浸视频旅程媒体引用必须是 video-primary + archived cover', () {
+  test('沉浸视频旅程使用 125 秒与小时边界受控媒体引用', () {
     final resolver = MediaDeliveryResolver(
       MediaEndpointConfig(
         avatarBaseUrl: 'https://alpha-avatar.quwoquan-env.test:17100',
@@ -16,21 +16,30 @@ void main() {
         attachmentBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
       ),
     );
-    final video = resolver.resolve(
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+    final seekVideo = resolver.resolve(
+      'media/video/s/media-canary-seek-125s/v1/source.mp4',
       kind: MediaDeliveryKind.video,
+      assetId: 'media-canary-seek-125s',
       version: 1,
     );
-    final cover = resolver.resolve(
-      'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
-      kind: MediaDeliveryKind.image,
+    final previewManifest = resolver.resolve(
+      'media/video/s/media-canary-seek-125s/v1/preview/manifest.json',
+      kind: MediaDeliveryKind.video,
+      assetId: 'media-canary-seek-125s',
       version: 1,
     );
-    expect(video.url, contains('alpha-video.quwoquan-env.test'));
-    expect(video.url, contains('video-primary-0001'));
-    expect(cover.url, contains('archived-image'));
-    expect(video.url, isNot(contains('mock/seed')));
-    expect(cover.url, isNot(contains('mock/seed')));
+    final hourVideo = resolver.resolve(
+      'media/video/s/media-canary-hour-boundary-3595s/v1/source.mp4',
+      kind: MediaDeliveryKind.video,
+      assetId: 'media-canary-hour-boundary-3595s',
+      version: 1,
+    );
+    expect(seekVideo.url, contains('alpha-video.quwoquan-env.test'));
+    expect(seekVideo.url, contains('media-canary-seek-125s'));
+    expect(previewManifest.url, contains('/preview/manifest.json'));
+    expect(hourVideo.url, contains('media-canary-hour-boundary-3595s'));
+    expect(seekVideo.url, isNot(contains('mock/seed')));
+    expect(hourVideo.url, isNot(contains('mock/seed')));
   });
 
   test('封面 404 负缓存后同 identity 不再请求', () {

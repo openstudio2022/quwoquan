@@ -44,11 +44,11 @@ client_projection:
       nullable: false
       source: avatarVersion
       default: "0"
-    - name: personaContextVersion
-      dart_type: String
+    - name: contextVersion
+      dart_type: int
       nullable: false
-      source: personaContextVersion
-      default: "''"
+      source: contextVersion
+      default: "1"
     - name: personaSnapshotVersion
       dart_type: int
       nullable: false
@@ -69,3 +69,20 @@ client_projection:
       nullable: false
       source: isPrimary
       default: "false"
+
+    - name: isolationLevel
+      dart_type: String
+      nullable: false
+      source: isolationLevel
+      default: "'open'"
+
+    - name: profileVisibility
+      dart_type: String
+      nullable: false
+      source: profileVisibility
+      default: "'public'"
+
+    - name: switchedAt
+      dart_type: DateTime
+      nullable: true
+      source: switchedAt

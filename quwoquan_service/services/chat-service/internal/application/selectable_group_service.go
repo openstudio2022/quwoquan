@@ -16,6 +16,24 @@ import (
 // 仅保留 mutual 且未屏蔽的联系人。两个用例共享一次 mutualContactIDSet 计算，
 // 前端不再逐群多次拉成员求交集。
 
+type SelectableGroupConversationRow struct {
+	ConversationID    string `json:"conversationId"`
+	Title             string `json:"title"`
+	AvatarURL         string `json:"avatarUrl"`
+	CircleID          string `json:"circleId"`
+	FriendMemberCount int    `json:"friendMemberCount"`
+	MemberCount       int    `json:"memberCount"`
+}
+
+type SelectableGroupContactMemberRow struct {
+	ContactID     string `json:"contactId"`
+	UserID        string `json:"userId"`
+	DisplayName   string `json:"displayName"`
+	AvatarURL     string `json:"avatarUrl"`
+	RelationState string `json:"relationState"`
+	Source        string `json:"source"`
+}
+
 // mutualContactIDSet 返回 viewer 的权威互关联系人 userId 集合（已排除屏蔽与自身）。
 func (s *MemberService) mutualContactIDSet(
 	ctx context.Context,
@@ -51,10 +69,19 @@ func (s *MemberService) ListSelectableGroupConversations(
 	ctx context.Context,
 	userID string,
 	query string,
+	source string,
 	limit int,
-) ([]map[string]any, error) {
+) ([]SelectableGroupConversationRow, error) {
 	limit = clampSearchLimit(limit, 50)
-	rows := make([]map[string]any, 0, limit)
+	source = strings.TrimSpace(source)
+	if source != "" && source != "group" && source != "circle" {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"群聊来源无效",
+			"selectable group source must be group or circle",
+		)
+	}
+	rows := make([]SelectableGroupConversationRow, 0, limit)
 
 	mutual, err := s.mutualContactIDSet(ctx, userID, 100)
 	if err != nil {
@@ -77,6 +104,11 @@ func (s *MemberService) ListSelectableGroupConversations(
 		if conv.Status != "" && conv.Status != "active" {
 			continue
 		}
+		circleID := strings.TrimSpace(conv.CircleId)
+		if (source == "group" && circleID != "") ||
+			(source == "circle" && circleID == "") {
+			continue
+		}
 		if normalizedQuery != "" && !strings.Contains(strings.ToLower(conv.Title), normalizedQuery) {
 			continue
 		}
@@ -91,12 +123,13 @@ func (s *MemberService) ListSelectableGroupConversations(
 		if friendCount == 0 {
 			continue
 		}
-		rows = append(rows, map[string]any{
-			"conversationId":    conv.ID,
-			"title":             conv.Title,
-			"avatarUrl":         conv.AvatarUrl,
-			"friendMemberCount": friendCount,
-			"memberCount":       conv.MemberCount,
+		rows = append(rows, SelectableGroupConversationRow{
+			ConversationID:    conv.ID,
+			Title:             conv.Title,
+			AvatarURL:         conv.AvatarUrl,
+			CircleID:          circleID,
+			FriendMemberCount: friendCount,
+			MemberCount:       conv.MemberCount,
 		})
 		if len(rows) >= limit {
 			break
@@ -113,7 +146,7 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 	conversationID string,
 	query string,
 	limit int,
-) ([]map[string]any, error) {
+) ([]SelectableGroupContactMemberRow, error) {
 	limit = clampSearchLimit(limit, 100)
 	conversationID = strings.TrimSpace(conversationID)
 	if conversationID == "" {
@@ -146,7 +179,7 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 
 	viewer := strings.TrimSpace(userID)
 	normalizedQuery := normalizeSearchQuery(query)
-	items := make([]map[string]any, 0, limit)
+	items := make([]SelectableGroupContactMemberRow, 0, limit)
 	seen := map[string]struct{}{}
 	for _, m := range members {
 		id := strings.TrimSpace(m.UserId)
@@ -166,13 +199,13 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 			continue
 		}
 		seen[id] = struct{}{}
-		items = append(items, map[string]any{
-			"contactId":     id,
-			"userId":        id,
-			"displayName":   m.DisplayName,
-			"avatarUrl":     m.AvatarUrl,
-			"relationState": "mutual",
-			"source":        "group",
+		items = append(items, SelectableGroupContactMemberRow{
+			ContactID:     id,
+			UserID:        id,
+			DisplayName:   m.DisplayName,
+			AvatarURL:     m.AvatarUrl,
+			RelationState: "mutual",
+			Source:        "group",
 		})
 		if len(items) >= limit {
 			break

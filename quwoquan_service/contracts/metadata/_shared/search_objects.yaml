@@ -77,8 +77,10 @@ object_types:
   - id: tag
     label: 标签
     domain: tag
-    execution_strategy: remote_only
-    provider: tag_remote
+    # TagNodeView 是 taxonomy/filter projection；没有独立结果落地页，因此不进入
+    # RetrieveTarget 或结果 section。未来若提升为可导航对象，必须另行登记 route/surface。
+    execution_strategy: filter_only
+    provider: taxonomy_filter
   - id: integration.location_poi
     label: 位置
     domain: integration
@@ -205,7 +207,3 @@ section_kinds:
     title: 用户
     default_object_types:
       - user.profile
-  - id: tags
-    title: 标签
-    default_object_types:
-      - tag

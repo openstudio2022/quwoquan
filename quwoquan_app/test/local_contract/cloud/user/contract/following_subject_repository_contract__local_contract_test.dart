@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 void main() {
   group('FollowingSubject contract', () {
@@ -34,14 +35,17 @@ void main() {
       );
     });
 
-    test('mock seed includes user, circle and homepage unread states', () async {
-      final repo = MockFollowingSubjectRepository();
-      final items = await repo.listFollowingSubjects();
+    test('alpha typed facet 包含 user、circle 与 homepage 状态', () async {
+      final facet = AlphaFollowingSubjectFacet();
+      final slice = await facet.listFollowingSubjects(
+        const ListFollowingSubjectsQuery(limit: 20),
+      );
+      final items = slice.items;
 
       expect(items.map((e) => e.subjectType).toSet(), {
-        FollowingSubjectType.user,
-        FollowingSubjectType.circle,
-        FollowingSubjectType.homepage,
+        'user',
+        'circle',
+        'homepage',
       });
       expect(
         items.where((item) => item.hasUnreadChanges),
@@ -55,14 +59,26 @@ void main() {
       );
     });
 
-    test('mark visited clears unread flag in mock repository', () async {
-      final repo = MockFollowingSubjectRepository();
-      final before = await repo.listFollowingSubjects();
-      final target = before.firstWhere((item) => item.hasUnreadChanges);
+    test('typed visit command 清除未读并可由 query 回读', () async {
+      final facet = AlphaFollowingSubjectFacet();
+      final before = await facet.listFollowingSubjects(
+        const ListFollowingSubjectsQuery(limit: 20),
+      );
+      final target = before.items.firstWhere((item) => item.hasUnreadChanges);
+      final visitedAt = DateTime.utc(2026, 7, 20, 8);
 
-      final result = await repo.markFollowingSubjectVisited(subject: target);
-      final after = await repo.listFollowingSubjects();
-      final updated = after.firstWhere(
+      final result = await facet.markFollowedSubjectVisited(
+        MarkFollowedSubjectVisitedCommand(
+          subjectId: target.subjectId,
+          subjectType: target.subjectType,
+          visitedAt: visitedAt,
+          clientRequestId: 'visit-contract-1',
+        ),
+      );
+      final after = await facet.listFollowingSubjects(
+        const ListFollowingSubjectsQuery(limit: 20),
+      );
+      final updated = after.items.firstWhere(
         (item) =>
             item.subjectId == target.subjectId &&
             item.subjectType == target.subjectType,
@@ -71,7 +87,8 @@ void main() {
       expect(result.hasUnreadChanges, isFalse);
       expect(updated.hasUnreadChanges, isFalse);
       expect(updated.unreadChangeCount, equals(0));
-      expect(updated.lastVisitedAt, isNotEmpty);
+      expect(result.lastVisitedAt, visitedAt);
+      expect(updated.lastVisitedAt, visitedAt);
     });
   });
 }

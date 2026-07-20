@@ -44,81 +44,11 @@ objects:
   lifecycle_refs:
   - recommendation/model_release/aggregate.yaml#lifecycle
   member_bounds: {}
-  mutation_entrypoints:
-  - StageRecommendationModelRelease
-  - ActivateRecommendationModelRelease
-  - RollbackRecommendationModelRelease
+  mutation_entrypoints: []
   object_kind: aggregate_root
   relationships: []
   source_document: recommendation/model_release/fields.yaml
   source_entity: RecommendationModelRelease
-  storage_backend: postgres
-  storage_role: authoritative
-- access:
-    commands: aggregate_facade
-    cross_context: public_contract_only
-    queries: named_reader
-  bounded_context: Recommendation
-  canonical_object: RecommendationIntersectionVisitState
-  event_consumers: []
-  field_roles:
-    append_only_fact: []
-    authoritative_state:
-    - id
-    - personaId
-    - targetType
-    - targetId
-    - state
-    - version
-    - visitedAt
-    - updatedAt
-    owned_value: []
-    projection: []
-    reference:
-    - personaId
-    - targetType
-    - targetId
-    transport_only: []
-  identity:
-    fields:
-    - id
-    version_field: version
-    version_source: field
-  invariant_refs:
-  - recommendation/recommendation_intersection_visit_state/entity.yaml#business_rules
-  lifecycle_refs:
-  - recommendation/recommendation_intersection_visit_state/entity.yaml#lifecycle
-  member_bounds: {}
-  mutation_entrypoints:
-  - MarkRecommendationIntersectionsVisited
-  object_kind: aggregate_root
-  relationships:
-  - access: named_reader
-    cardinality: N:1
-    consistency: eventual
-    kind: reference
-    name: persona
-    on_delete: cascade
-    reference_fields:
-    - personaId
-    target_object: user.Persona
-  - access: named_reader
-    cardinality: N:1
-    consistency: eventual
-    kind: reference
-    name: target
-    on_delete: tombstone
-    reference_fields:
-    - targetType
-    - targetId
-    target_objects:
-    - user.Persona
-    - entity.Homepage
-    - circle.Circle
-    - content.Post
-    - tag.TagNodeView
-  source_document: recommendation/recommendation_intersection_visit_state/fields.yaml
-  source_entity: RecommendationIntersectionVisitState
   storage_backend: mongodb
   storage_role: authoritative
 - access:
@@ -134,7 +64,12 @@ objects:
     - requestId
     - scenario
     - rank
+    - modelBucket
+    - modelVersion
     - modelReleaseId
+    - featureSnapshotAt
+    - userFeatureSnapshot
+    - itemFeatureSnapshot
     - exposedAt
     - personaId
     - targetType
@@ -172,7 +107,7 @@ objects:
     consistency: eventual
     kind: event_source
     name: persona
-    on_delete: retain
+    on_delete: cascade
     reference_fields:
     - personaId
     target_object: user.Persona
@@ -207,7 +142,10 @@ objects:
   field_roles:
     append_only_fact:
     - id
-    - exposureId
+    - requestId
+    - personaId
+    - targetType
+    - targetId
     - feedbackType
     - value
     - occurredAt
@@ -215,7 +153,8 @@ objects:
     owned_value: []
     projection: []
     reference:
-    - exposureId
+    - personaId
+    - targetId
     transport_only: []
   identity:
     fields:
@@ -234,9 +173,20 @@ objects:
     name: exposure
     on_delete: retain
     reference_fields:
-    - exposureId
+    - targetId
     target_object: recommendation.RecommendationExposureFact
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: persona
+    on_delete: cascade
+    reference_fields:
+    - personaId
+    target_object: user.Persona
   source_document: recommendation/rec_model/fields.yaml
   source_entity: RecommendationFeedbackFact
   storage_backend: mongodb
   storage_role: append_only
+  local_identity_reasons:
+    requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference

@@ -202,7 +202,7 @@ quwoquan_app/lib/core/di/
   app_data_source_mode.dart          # alpha 固定 Mock；beta/gamma/prod 固定 Remote
 ```
 
-- **God 对象迁移方向**：`AppContentRepository` 已删除且不保留薄门面；[`lib/core/mock/prototype_mock_data.dart`](../../quwoquan_app/lib/core/mock/prototype_mock_data.dart) 的剩余对象必须按 packet 迁入 `quwoquan_cloud_mock` 后从 production tree 删除。
+- **God 对象迁移结果**：`AppContentRepository` 与 `lib/core/mock/prototype_mock_data.dart` 均已删除且不保留薄门面；alpha/test 数据只允许按对象 packet 存于 `quwoquan_cloud_mock`。
 
 以上结构只描述存量迁移输入，禁止继续扩展。商用目标为：
 
@@ -268,5 +268,5 @@ quwoquan_app/test/support/
 | 2026-03-29 | 新增 §9：Mock/Remote/配置目录目标；`test/support` 隔离根与移植速查表 |
 | 2026-03-30 | **§5.1 功能规格**：冻结「发布态 R1–R6 / 开发测试态 D1–D4 / 测试代码用语边界」验收表；明确 R1–R6 为运行时与工程边界、物理零 Mock 属 P4 |
 | 2026-04-12 | §6 增补：`verify_ui_app_data_source_mode_ratchet`、`verify_lib_no_test_only_symbols`、Makefile 目标与正式构建 define；索引表增加棘轮脚本 |
-| 2026-04-12 | **P1 进展**：`mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider` 收敛于 [`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart)；`lib/ui/**` 对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线已 **清零**（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)）；[`app_content_repository_provider`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart) 改为依 `remoteDataSourceActiveProvider` 选型 |
+| 2026-04-12 | **历史 P1 进展**：当时的 `mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider`、`app_content_repository.dart` 与 `app_content_repository_provider.dart` 已在后续切换中退役；`lib/ui/**` 对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线曾清零（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)） |
 | 2026-07-15 | `AppContentRepository`、空 Remote、Mock、provider 与兼容 barrel 同批删除；`AppDataSourceMode` 归位 `core/di`，`prod-sim` Mock 特例删除。上行 2026-04-12 记录仅为历史状态，不再是当前规则。 |

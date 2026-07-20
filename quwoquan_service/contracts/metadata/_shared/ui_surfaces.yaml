@@ -4,14 +4,20 @@ surfaces:
     owner: chat
     route_id: chat
     path_template: /chat
-    description: 趣信列表与会话入口
+    description: 趣信列表与会话入口（含通知维度 AppMessage inbox 与当前 persona 通话记录）
     operation_ids:
       - ListInbox
       - ListConversations
       - ListConversationTimestamps
       - BatchGetConversations
       - ListContacts
-      - SearchContacts
+      - ListContactHome
+      - ListAppMessages
+      - GetAppMessage
+      - AckAppMessage
+      - ReadAppMessage
+      - GetAppMessageUnreadCount
+      - ListCalls
 
   - id: startGroupChat
     owner: chat
@@ -23,6 +29,21 @@ surfaces:
       - ListConversations
       - SearchSocialRelations
       - ListPersonaCircles
+      - ListGroupCandidates
+      - ListSelectableGroupConversations
+      - ListSelectableGroupContactMembers
+
+  - id: greetingInbox
+    owner: chat
+    route_id: greetingInbox
+    path_template: /chat/greetings
+    description: 打招呼收件箱与发件箱
+    operation_ids:
+      - ListGreetingInbox
+      - ListGreetingOutbox
+      - ReplyGreetingRequest
+      - IgnoreGreetingRequest
+      - CancelGreetingRequest
 
   - id: chatDetail
     owner: chat
@@ -31,9 +52,11 @@ surfaces:
     description: IM 会话详情
     operation_ids:
       - GetConversation
+      - InitiateCall
       - InitMediaUpload
       - CompleteMediaUpload
       - AbortMediaUpload
+      - ListMembers
       - ListMessages
       - SendMessage
       - RecallMessage
@@ -49,7 +72,10 @@ surfaces:
     operation_ids:
       - GetConversation
       - UpdateConversationSettings
+      - UpdateAnnouncement
       - ListMembers
+      - RemoveMember
+      - LeaveConversation
 
   - id: chatManage
     owner: chat
@@ -59,7 +85,7 @@ surfaces:
     operation_ids:
       - GetConversation
       - ListMembers
-      - UpdateConversationSettings
+      - UpdateGroupGovernanceSettings
       - DissolveConversation
 
   - id: chatAddMembers
@@ -71,7 +97,6 @@ surfaces:
       - ListMembers
       - AddMembers
       - ListContacts
-      - SearchContacts
 
   - id: chatTransferOwnership
     owner: chat
@@ -102,6 +127,15 @@ surfaces:
       - GetConversation
       - ListMembers
 
+  - id: chatAnnouncement
+    owner: chat
+    route_id: chatAnnouncement
+    path_template: /chat/{id}/announcement
+    description: 群公告查看与编辑页
+    operation_ids:
+      - GetGroupHome
+      - UpdateAnnouncement
+
   - id: assistantHalfSheet
     owner: assistant
     route_id: assistantPersonal
@@ -119,9 +153,12 @@ surfaces:
     description: 找私助云端优先对话入口
     operation_ids:
       - CreateAssistantConversation
+      - ListAssistantConversations
       - GetAssistantConversation
+      - ListConversationTurns
       - StartAssistantRun
       - GetAssistantRun
+      - CancelAssistantRun
       - StreamAssistantRunEvents
       - ListAppMessages
       - GetAppMessage
@@ -137,7 +174,10 @@ surfaces:
       - GetPolicy
       - ListSkills
       - ListAssistantTasks
-      - ListAssistantMemories
+      - SetAssistantPreference
+      - ListAssistantPreferences
+      - RevokeAssistantPreference
+      - RestoreAssistantPreference
       - ListConsents
       - GrantSkillConsent
       - RevokeSkillConsent
@@ -155,7 +195,10 @@ surfaces:
       - GetPolicy
       - ListSkills
       - ListAssistantTasks
-      - ListAssistantMemories
+      - SetAssistantPreference
+      - ListAssistantPreferences
+      - RevokeAssistantPreference
+      - RestoreAssistantPreference
       - ListConsents
       - GrantSkillConsent
       - RevokeSkillConsent
@@ -165,7 +208,9 @@ surfaces:
     route_id: chatDetail
     path_template: /chat/{id}
     description: 私助记录抽屉与分页
-    operation_ids: []
+    operation_ids:
+      - ListAssistantConversations
+      - ListConversationTurns
 
   - id: assistantFeedback
     owner: assistant
@@ -182,6 +227,7 @@ surfaces:
     path_template: /search
     description: 全局搜索记录页与记录管理态
     operation_ids:
+      - ListHotQueries
       - ListRecentSearches
       - UpsertRecentSearch
       - DeleteRecentSearch
@@ -193,10 +239,7 @@ surfaces:
     path_template: /search
     description: 输入后的实时联想页（最常使用、联系人、聊天记录、搜索网络结果）
     operation_ids:
-      - SearchContacts
       - SearchSocialRelations
-      - SearchConversations
-      - SearchMessages
       - SearchCircles
       - ListCircleGroups
       - SearchCircleGroups
@@ -208,14 +251,10 @@ surfaces:
     path_template: /search/network
     description: 网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）
     operation_ids:
-      - GetNearbyLocations
-      - SubmitPostPublication
-      - SearchLocations
-      - SearchPosts
-      - GetPost
-      - SearchCircles
+      - SearchQuery
       - SearchXiaoquResults
       - UpsertRecentSearch
+      - ReportSearchFeedback
 
   - id: locationPlaceLanding
     owner: search
@@ -252,16 +291,22 @@ surfaces:
     owner: entity
     route_id: homepageDetail
     path_template: /homepages/{id}
-    description: 实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑、相关群组）
+    description: 实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow
     operation_ids:
       - GetObjectPageBundle
       - GetEntityImpact
       - GetHomepageDetail
-      - FollowHomepage
-      - UnfollowHomepage
       - GetHomepageShell
       - GetHomepageReviewSummary
       - GetHomepageRelatedGroups
+      - ListHomepageReviews
+      - GetMyHomepageReview
+      - GetEntityWishlistState
+      - CreateHomepageReview
+      - UpdateHomepageReview
+      - DeleteHomepageReview
+      - FollowSubject
+      - UnfollowSubject
 
   - id: homepageIntroduction
     owner: entity
@@ -305,8 +350,14 @@ surfaces:
     description: 圈子/组织统一对象页：身份 / 我的交集 / 打动 / Tab 内容（你认识的人有 N 个在这交集卡）
     operation_ids:
       - GetCircle
+      - UpdateCircle
+      - ArchiveCircle
+      - UpdateCircleSections
       - GetCircleImpact
       - GetCircleFeed
+      - RemovePostFromCircle
+      - PinCirclePost
+      - FeatureCirclePost
       - ListCircleMemberships
       - ListCircleGroups
       - SearchCircleGroups
@@ -351,29 +402,30 @@ surfaces:
     path_template: /user/{username}
     description: 用户主页壳层（我的 / TA的，统一对象页 + 你们的交集卡）
     operation_ids:
-      - GetUserProfile
+      - GetUserHomepageBundle
       - GetSubAccountProfile
-      - ListUserWorks
       - ListUserPosts
-      - ListUserLifeItems
-      - ListUserLikes
       - GetRelationshipCapability
       - FollowUser
       - UnfollowUser
+      - SendGreetingRequest
       - CreateReport
       - ListPersonaCircles
+      - ListProfileInteractionActivitiesReceived
+      - ListProfileInteractionActivitiesSent
 
   - id: profileCareerInterests
     owner: user
     route_id: profileCareerInterests
     path_template: /profile/career-interests
-    description: 我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系）
+    description: 我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系；添加/移除动作产出标签反馈事实）
     operation_ids:
       - GetProfileEditSnapshot
       - UpdateUserProfile
       - ResolveTag
       - ListTagChildren
       - ValidateTagRefs
+      - ReportTagFeedback
 
   - id: addContact
     owner: user
@@ -439,8 +491,13 @@ surfaces:
     owner: app
     route_id: home
     path_template: /
-    description: App 主导航壳与跨端导航 chrome
-    operation_ids: []
+    description: App 主导航壳与跨端导航 chrome；含启动期匿名引导与 token 滑动刷新
+    operation_ids:
+      - LoginAnonymous
+      - RefreshToken
+      - GetActivePersonaContext
+      - UpsertDevicePushEndpoint
+      - RemoveDevicePushEndpoint
 
   - id: homeFeed
     owner: content
@@ -459,13 +516,17 @@ surfaces:
       - ReactToComment
       - BindMediaAssetsToComment
       - GetMediaAsset
-      - RequestOriginalImageAccess
       - InitMediaUpload
       - CompleteMediaUpload
       - AbortMediaUpload
       - CreateOutboundShare
       - PlacePostInCircle
       - ListPersonaCircles
+      - ListFollowingSubjects
+      - MarkFollowedSubjectVisited
+      - ListFollowing
+      - FollowUser
+      - UnfollowUser
 
   - id: welcome
     owner: app
@@ -478,15 +539,31 @@ surfaces:
     owner: circle
     route_id: circles
     path_template: /circles
-    description: 圈子发现与分类列表入口
-    operation_ids: []
+    description: 圈子发现与分类列表入口（含建圈动作）
+    operation_ids:
+      - ListCircles
+      - ListCircleDiscoveryFeed
+      - SearchCircles
+      - CreateCircle
+      - GetCircleFeed
+      - ListPersonaCircles
 
   - id: profileHome
     owner: user
     route_id: profile
     path_template: /profile
-    description: 我的主页根入口
-    operation_ids: []
+    description: 我的主页根入口（互动 tab 内联承载评论收发、删除与回应）
+    operation_ids:
+      - GetMeProfile
+      - GetUserHomepageBundle
+      - ListFollowing
+      - ListProfileInteractionActivitiesReceived
+      - ListProfileInteractionActivitiesSent
+      - UpdateProfileInteractionState
+      - ListCommentsByAuthor
+      - ListCommentsForPostAuthor
+      - DeleteComment
+      - ReactToComment
 
   - id: interestMatch
     owner: interest_match
@@ -499,8 +576,16 @@ surfaces:
     owner: user
     route_id: login
     path_template: /login
-    description: 商用登录入口
-    operation_ids: []
+    description: 商用登录入口（手机 OTP + 一键登录 + 社交登录）
+    operation_ids:
+      - SendOtp
+      - LoginWithPhone
+      - LoginWithWechat
+      - LoginWithAlipay
+      - LoginWithQq
+      - LoginOneTap
+      - CreateAlipayAuthorizationRequest
+      - ResolveOneTapLoginHint
 
   - id: legalUserAgreement
     owner: legal
@@ -545,8 +630,6 @@ surfaces:
       - CreateOutboundShare
       - PlacePostInCircle
       - ListPersonaCircles
-      - CreateOutboundShare
-      - PlacePostInCircle
       - GetMediaUploadSession
       - SelectAutoVideoCover
       - SelectManualVideoCover
@@ -555,11 +638,9 @@ surfaces:
     owner: content
     route_id: createEditImage
     path_template: /create/edit-image
-    description: 图片编辑全屏页
+    description: 图片编辑全屏页；像素编辑保持本地，滤镜目录只读当前 active FilterCatalogRelease
     operation_ids:
-      - GetMediaAsset
-      - SelectAutoVideoCover
-      - SelectManualVideoCover
+      - GetActiveFilterCatalog
 
   - id: workBrowser
     owner: content
@@ -585,6 +666,10 @@ surfaces:
       - InitMediaUpload
       - CompleteMediaUpload
       - AbortMediaUpload
+      - CreateOutboundShare
+      - ListFollowing
+      - FollowUser
+      - UnfollowUser
 
   - id: circleStats
     owner: circle
@@ -593,6 +678,9 @@ surfaces:
     description: 圈子成员、群聊、粉丝与获赞统计列表
     operation_ids:
       - ListCircleMemberships
+      - ListPendingCircleMemberships
+      - ApproveCircleMember
+      - RejectCircleMember
       - UpdateCircleMembershipRole
       - ListCircleGroupMemberships
       - UpdateCircleGroupMemberRole
@@ -609,7 +697,8 @@ surfaces:
     route_id: assistantSkills
     path_template: /assistant/skills
     description: 私助技能中心
-    operation_ids: []
+    operation_ids:
+      - ListAssistantConversations
 
   - id: personalAssistantChatAlias
     owner: assistant
@@ -622,8 +711,59 @@ surfaces:
     owner: settings
     route_id: settings
     path_template: /settings
-    description: 设置中枢
-    operation_ids: []
+    description: 设置中枢（通知/隐私/通话设置、账号凭证与登出）
+    operation_ids:
+      - GetNotificationSettings
+      - GetPrivacySettings
+      - GetCallSettings
+      - UpdateNotificationSettings
+      - UpdatePrivacySettings
+      - UpdateCallSettings
+      - ListCredentials
+      - BindPhoneCredential
+      - BindCarrierPhoneCredential
+      - UnbindCredential
+      - Logout
+
+  - id: settingsNotifications
+    owner: settings
+    route_id: settingsNotifications
+    path_template: /settings/notifications
+    description: 通知偏好设置页
+    operation_ids:
+      - GetNotificationSettings
+      - UpdateNotificationSettings
+
+  - id: settingsPrivacy
+    owner: settings
+    route_id: settingsPrivacy
+    path_template: /settings/privacy
+    description: 隐私与陌生人消息设置页
+    operation_ids:
+      - GetPrivacySettings
+      - UpdatePrivacySettings
+
+  - id: settingsCalls
+    owner: settings
+    route_id: settingsCalls
+    path_template: /settings/calls
+    description: 通话铃声与振动设置页
+    operation_ids:
+      - GetCallSettings
+      - UpdateCallSettings
+
+  - id: settingsAccountSecurity
+    owner: settings
+    route_id: settingsAccountSecurity
+    path_template: /settings/account-security
+    description: 账号凭证、安全、登出与注销设置页
+    operation_ids:
+      - ListCredentials
+      - BindPhoneCredential
+      - BindCarrierPhoneCredential
+      - UnbindCredential
+      - Logout
+      - CloseAccount
 
   - id: settingsPermissions
     owner: settings
@@ -632,12 +772,41 @@ surfaces:
     description: 权限管理说明页
     operation_ids: []
 
+  - id: blockedUsers
+    owner: user
+    route_id: blockedUsers
+    path_template: /settings/blocked-users
+    description: 拉黑用户管理页
+    operation_ids:
+      - BlockUser
+      - UnblockUser
+      - ListBlockedUsers
+
+  - id: blockedKeywords
+    owner: user
+    route_id: blockedKeywords
+    path_template: /settings/blocked-keywords
+    description: 当前 persona 的屏蔽关键词管理页
+    operation_ids:
+      - GetPrivacySettings
+      - UpdatePrivacySettings
+
+  - id: myReports
+    owner: content
+    route_id: myReports
+    path_template: /settings/my-reports
+    description: 当前 persona 私有可见的举报进度页
+    operation_ids:
+      - ListMyReports
+
   - id: settingsDarkMode
     owner: settings
     route_id: settingsDarkMode
     path_template: /settings/dark-mode
     description: 外观与深色模式设置页
-    operation_ids: []
+    operation_ids:
+      - GetAppearanceSettings
+      - UpdateAppearanceSettings
 
   - id: settingsAbout
     owner: settings
@@ -652,6 +821,10 @@ surfaces:
     path_template: /profile/edit
     description: 我的资料编辑页
     operation_ids:
+      - GetMeProfile
+      - GetProfileEditSnapshot
+      - GetProfileQrCard
+      - UpdateUserProfile
       - InitMediaUpload
       - CompleteMediaUpload
       - AbortMediaUpload
@@ -666,25 +839,27 @@ surfaces:
     route_id: profilePersonas
     path_template: /profile/personas
     description: 分身管理页
-    operation_ids: []
-
-  - id: profileComments
-    owner: user
-    route_id: profileComments
-    path_template: /profile/comments
-    description: 资料页评论列表
     operation_ids:
-      - ListCommentsByAuthor
-      - ListCommentsForPostAuthor
-      - DeleteComment
-      - ReactToComment
+      - ListPersonas
+      - GetPersonaManagementSummary
+      - GetPersonaLifecycleGuard
+      - CreatePersona
+      - UpdatePersona
+      - ApplyPersonaProfileSync
+      - RetirePersona
+      - ActivatePersona
 
   - id: profileStats
     owner: user
     route_id: profileStats
     path_template: /profile/stats
     description: 粉丝、关注与圈子统计列表
-    operation_ids: []
+    operation_ids:
+      - GetUserHomepageBundle
+      - ListFollowers
+      - ListFollowing
+      - FollowUser
+      - UnfollowUser
 
   - id: myIntersections
     owner: user
@@ -705,32 +880,58 @@ surfaces:
     route_id: rtcOutgoing
     path_template: /rtc/outgoing/{callId}
     description: 呼出等待页
-    operation_ids: []
+    operation_ids:
+      - GetCall
+      - CancelCall
 
   - id: rtcIncoming
     owner: rtc
     route_id: rtcIncoming
     path_template: /rtc/incoming/{callId}
     description: 来电接听页
-    operation_ids: []
+    operation_ids:
+      - GetCall
+      - AnswerCall
+      - RejectCall
+      - AckIncomingCallPresentation
 
   - id: rtcVoice
     owner: rtc
     route_id: rtcVoice
     path_template: /rtc/voice/{callId}
     description: 语音通话页
-    operation_ids: []
+    operation_ids:
+      - GetCall
+      - HangupCall
+      - JoinCall
+      - LeaveCall
+      - ReportMediaConnected
+      - ToggleMute
+      - ToggleCamera
+      - StartScreenShare
+      - StopScreenShare
 
   - id: rtcVideo
     owner: rtc
     route_id: rtcVideo
     path_template: /rtc/video/{callId}
     description: 视频通话页
-    operation_ids: []
+    operation_ids:
+      - GetCall
+      - HangupCall
+      - JoinCall
+      - LeaveCall
+      - ReportMediaConnected
+      - ToggleMute
+      - ToggleCamera
+      - StartScreenShare
+      - StopScreenShare
 
   - id: rtcPickParticipants
     owner: rtc
     route_id: rtcPickParticipants
     path_template: /rtc/pick-participants
     description: 通话参与者选择页
-    operation_ids: []
+    operation_ids:
+      - InitiateCall
+      - InviteToCall

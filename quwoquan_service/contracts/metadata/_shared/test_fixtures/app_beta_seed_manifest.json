@@ -1,6 +1,12 @@
 {
   "environment": "beta",
   "description": "本地端云 beta 联调 seed manifest，供自动化与人工 beta 共用。",
+  "releaseInputs": [
+    {
+      "objectId": "content.filter_catalog_release",
+      "manifestPath": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/beta.seed.json"
+    }
+  ],
   "seedRefs": [
     {
       "domain": "assistant",
@@ -86,6 +92,9 @@
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "greeting_core",
+        "subject_follow_core",
+        "contact_discovery_core",
         "following_subject_core",
         "settings_core"
       ],
@@ -93,7 +102,9 @@
       "targetStore": "postgres+mongodb:user_test",
       "verifiedEndpoints": [
         "/user/profile",
-        "/user/following-subjects"
+        "/user/following-subjects",
+        "/user/greeting-request/inbox",
+        "/owner/contact-discovery/latest"
       ]
     },
     {
@@ -104,8 +115,8 @@
         "entity_claim_core",
         "entity_picker_core"
       ],
-      "resetScope": "homepage_state snapshot in quwoquan_entity (ship/import sync+tombstone 幂等重放)",
-      "targetStore": "mongodb:quwoquan_entity.homepage_state",
+      "resetScope": "homepages authoritative collection in quwoquan_entity (ship/import sync+offline-stale 幂等重放)",
+      "targetStore": "mongodb:quwoquan_entity.homepages",
       "seedChannel": "promote→qwq-data ship --import（content import + entity-service homepage-import，与 gamma 同通道、env 参数区分）",
       "verifiedEndpoints": [
         "/homepages/search",
@@ -123,6 +134,24 @@
       "targetStore": "integration-service:memory",
       "verifiedEndpoints": [
         "/integration/locations/pois"
+      ]
+    },
+    {
+      "domain": "search",
+      "fixturePath": "search/test_fixtures/scenarios/search_scenarios.json",
+      "refs": [
+        "search_remote_acceptance"
+      ],
+      "resetScope": "derived quwoquan_objects index + quwoquan_search acceptance facts",
+      "targetStore": "elasticsearch:quwoquan_objects+mongodb:quwoquan_search",
+      "verifiedEndpoints": [
+        "/search",
+        "/search/hot-queries",
+        "/search/feedback"
+      ],
+      "deliveryChannels": [
+        "content/entity/circle/user search-backfill",
+        "search-service queryheat rebuild"
       ]
     },
     {
@@ -191,6 +220,11 @@
         "port": 18106
       },
       {
+        "prefix": "/search",
+        "service": "search-service",
+        "port": 18095
+      },
+      {
         "prefix": "/app-messages",
         "service": "notification-service",
         "port": 18107
@@ -200,6 +234,17 @@
         "service": "rtc-service",
         "port": 18108
       }
+    ]
+  },
+  "mediaSeedRef": "quwoquan_ops/environments/media_delivery_manifest.json",
+  "mediaCanary": {
+    "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
+    "readyAssetIds": [
+      "media-canary-seek-125s",
+      "media-canary-hour-boundary-3595s"
+    ],
+    "rejectionAssetIds": [
+      "media-canary-over-limit-3605s"
     ]
   },
   "schema": "app-seed-manifest"

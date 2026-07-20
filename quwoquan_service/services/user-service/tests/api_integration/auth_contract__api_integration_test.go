@@ -2,6 +2,8 @@ package api_integration
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -9,7 +11,9 @@ import (
 	"testing"
 )
 
-func TestAuth_SocialLogin_WechatAlipayQqExchangeStableServerIdentity(t *testing.T) {
+func TestAuth_SocialLoginRoutesRemainBlockedWithoutCommercialCredentials(
+	t *testing.T,
+) {
 	t.Cleanup(func() { cleanAll(t) })
 	cases := []struct {
 		name  string
@@ -32,28 +36,14 @@ func TestAuth_SocialLogin_WechatAlipayQqExchangeStableServerIdentity(t *testing.
 			if err != nil {
 				t.Fatalf("marshal request: %v", err)
 			}
-			first := doRequest(t, http.MethodPost, tc.path, string(requestBody), nil)
-			if first.Code != http.StatusOK {
-				t.Fatalf("%s login: expected 200, got %d: %s", tc.name, first.Code, first.Body.String())
-			}
-			firstBody := parseJSON(t, first)
-			ownerID, _ := firstBody["ownerId"].(string)
-			if ownerID == "" {
-				t.Fatalf("%s login missing ownerId: %#v", tc.name, firstBody)
-			}
-			accountHint, ok := firstBody["accountHint"].(map[string]any)
-			if !ok {
-				t.Fatalf("%s login missing accountHint: %#v", tc.name, firstBody)
-			}
-			if accountHint["nicknameCustomized"] != true {
-				t.Fatalf("%s provider nickname must be marked customized: %#v", tc.name, accountHint)
-			}
-			second := doRequest(t, http.MethodPost, tc.path, string(requestBody), nil)
-			if second.Code != http.StatusOK {
-				t.Fatalf("%s repeat login failed: %d: %s", tc.name, second.Code, second.Body.String())
-			}
-			if parseJSON(t, second)["ownerId"] != ownerID {
-				t.Fatalf("%s repeat login must resolve the same owner", tc.name)
+			response := doRequest(t, http.MethodPost, tc.path, string(requestBody), nil)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf(
+					"%s login must remain blocked without approved provider evidence: got %d: %s",
+					tc.name,
+					response.Code,
+					response.Body.String(),
+				)
 			}
 		})
 	}
@@ -244,16 +234,21 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 		t.Fatalf("expected ownerId and refreshToken, got %#v", loginBody)
 	}
 
-	var storedToken string
+	var storedHash string
 	if err := pgPool.QueryRow(
 		context.Background(),
-		`SELECT refresh_token FROM user_auth WHERE user_id = $1`,
+		`SELECT refresh_token_hash
+		   FROM account_sessions
+		  WHERE account_id = $1 AND status = 'active'
+		  ORDER BY issued_at DESC
+		  LIMIT 1`,
 		ownerID,
-	).Scan(&storedToken); err != nil {
-		t.Fatalf("query refresh token: %v", err)
+	).Scan(&storedHash); err != nil {
+		t.Fatalf("query refresh token hash: %v", err)
 	}
-	if storedToken != refreshToken {
-		t.Fatalf("stored refresh token mismatch")
+	digest := sha256.Sum256([]byte(strings.TrimSpace(refreshToken)))
+	if storedHash != hex.EncodeToString(digest[:]) {
+		t.Fatalf("refresh token must be stored as SHA-256 hash only")
 	}
 	if _, err := pgPool.Exec(
 		context.Background(),
@@ -344,107 +339,28 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	}
 }
 
-func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
+func TestAuth_OneTapRoutesRemainBlockedWithoutCarrierCredentials(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	hint := doRequest(
-		t,
-		http.MethodPost,
+	for _, path := range []string{
 		"/auth/login/one-tap/hint",
-		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
-		nil,
-	)
-	if hint.Code != http.StatusOK {
-		t.Fatalf("one tap hint: expected 200, got %d: %s", hint.Code, hint.Body.String())
-	}
-	hintBody := parseJSON(t, hint)
-	if hintBody["registered"] != false {
-		t.Fatalf("expected unregistered hint before login, got %#v", hintBody)
-	}
-	if hintBody["maskedPhone"] != "180****3901" {
-		t.Fatalf("expected masked phone hint, got %#v", hintBody["maskedPhone"])
-	}
-
-	rec := doRequest(
-		t,
-		http.MethodPost,
 		"/auth/login/one-tap",
-		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
-		nil,
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("one tap login: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	body := parseJSON(t, rec)
-	ownerID, _ := body["ownerId"].(string)
-	if ownerID == "" {
-		t.Fatalf("expected ownerId, got %#v", body)
-	}
-
-	var phone string
-	if err := pgPool.QueryRow(
-		context.Background(),
-		`SELECT phone FROM user_profiles WHERE user_id = $1`,
-		ownerID,
-	).Scan(&phone); err != nil {
-		t.Fatalf("query profile phone: %v", err)
-	}
-	if phone != "+8618013813901" {
-		t.Fatalf("expected server resolved phone, got %q", phone)
-	}
-
-	accountHint, _ := body["accountHint"].(map[string]any)
-	if accountHint["maskedPhone"] != "180****3901" {
-		t.Fatalf("expected accountHint masked phone, got %#v", accountHint)
-	}
-	if accountHint["nicknameCustomized"] != false {
-		t.Fatalf("new one-tap account must use system nickname marker: %#v", accountHint)
-	}
-
-	var deviceCount int
-	if err := pgPool.QueryRow(
-		context.Background(),
-		`SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_id = 'ios-1'`,
-		ownerID,
-	).Scan(&deviceCount); err != nil {
-		t.Fatalf("query user device: %v", err)
-	}
-	if deviceCount != 1 {
-		t.Fatalf("expected login device side effect, got %d", deviceCount)
-	}
-
-	var consentCount int
-	if err := pgPool.QueryRow(
-		context.Background(),
-		`SELECT count(*) FROM consent_records WHERE owner_id = $1 AND agreement_version = '2026-05' AND privacy_version = '2026-05'`,
-		ownerID,
-	).Scan(&consentCount); err != nil {
-		t.Fatalf("query consent record: %v", err)
-	}
-	if consentCount != 1 {
-		t.Fatalf("expected consent record side effect, got %d", consentCount)
-	}
-
-	hintAfterLogin := doRequest(
-		t,
-		http.MethodPost,
-		"/auth/login/one-tap/hint",
-		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
-		nil,
-	)
-	if hintAfterLogin.Code != http.StatusOK {
-		t.Fatalf("one tap hint after login: expected 200, got %d: %s", hintAfterLogin.Code, hintAfterLogin.Body.String())
-	}
-	registeredBody := parseJSON(t, hintAfterLogin)
-	if registeredBody["registered"] != true {
-		t.Fatalf("expected registered hint after login, got %#v", registeredBody)
-	}
-	registeredHint, ok := registeredBody["accountHint"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected accountHint for registered phone, got %#v", registeredBody)
-	}
-	if registeredHint["nicknameCustomized"] != false {
-		t.Fatalf("one-tap hint nickname marker mismatch: %#v", registeredHint)
+	} {
+		response := doRequest(
+			t,
+			http.MethodPost,
+			path,
+			`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
+			nil,
+		)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf(
+				"%s must remain blocked without approved carrier evidence: got %d: %s",
+				path,
+				response.Code,
+				response.Body.String(),
+			)
+		}
 	}
 }
 
@@ -576,7 +492,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	var deviceCount int
 	if err := pgPool.QueryRow(
 		context.Background(),
-		`SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_id = 'ios-1'`,
+		`SELECT count(*) FROM user_devices WHERE account_id = $1 AND device_id = 'ios-1'`,
 		ownerID,
 	).Scan(&deviceCount); err != nil {
 		t.Fatalf("query phone login device: %v", err)
@@ -596,7 +512,8 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 		t.Fatalf("expected phone login consent record, got %d", consentCount)
 	}
 
-	// 验证码一次性：相同验证码不可复用。
+	// challenge 行内 receipt：响应丢失后同一 phone+code 重放验证成功，
+	// AccountSession 仍按“每次合法 login 创建新 session”语义执行。
 	reuse := doRequest(
 		t,
 		http.MethodPost,
@@ -604,8 +521,20 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
-	if reuse.Code == http.StatusOK {
-		t.Fatalf("phone login reusing consumed otp: expected failure, got 200: %s", reuse.Body.String())
+	if reuse.Code != http.StatusOK {
+		t.Fatalf(
+			"same credential replay must return success, got %d: %s",
+			reuse.Code,
+			reuse.Body.String(),
+		)
+	}
+	reuseBody := parseJSON(t, reuse)
+	if reuseBody["ownerId"] != ownerID {
+		t.Fatalf(
+			"challenge replay must resolve the original owner: first=%s replay=%v",
+			ownerID,
+			reuseBody["ownerId"],
+		)
 	}
 }
 

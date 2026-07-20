@@ -10,6 +10,29 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val googleServicesConfig = projectDir.resolve("google-services.json")
+if (googleServicesConfig.isFile) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle(
+        "[rtc] google-services.json is absent; Firebase incoming calls remain fail-closed.",
+    )
+}
+gradle.taskGraph.whenReady {
+    val shipsProductionBinary =
+        allTasks.any { task ->
+            task.project == project &&
+                (task.name.contains("Release", ignoreCase = true) ||
+                    task.name.contains("Profile", ignoreCase = true))
+        }
+    if (shipsProductionBinary && !googleServicesConfig.isFile) {
+        throw GradleException(
+            "production Android build requires android/app/google-services.json; " +
+                "inject the protected Firebase config before building and remove it afterwards",
+        )
+    }
+}
+
 val repoRootDir = rootProject.projectDir.parentFile.parentFile
 val localEnvDebugPlaceholderCert =
     projectDir.resolve("src/debug-res-templates/local_env_debug_root_placeholder.crt")

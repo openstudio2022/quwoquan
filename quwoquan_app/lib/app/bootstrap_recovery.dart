@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -21,10 +22,19 @@ final class BootstrapFailure {
   final RuntimeFailureBase runtimeFailure;
 
   factory BootstrapFailure.fromError(Object error) {
-    final errorCode = error is StateError
+    final errorCode = error is CloudRuntimeConfigurationException
         ? OpsEventRecordErrorCode.startupConfigurationInvalid
         : OpsEventRecordErrorCode.startupInitializationFailed;
-    return BootstrapFailure._fromCode(errorCode, error);
+    return BootstrapFailure._fromCode(
+      errorCode,
+      error,
+      invalidKeys: error is CloudRuntimeConfigurationException
+          ? error.invalidKeys
+          : const <String>[],
+      failureSource: error is CloudRuntimeConfigurationException
+          ? error.source
+          : 'bootstrap',
+    );
   }
 
   factory BootstrapFailure.router(Object error) {
@@ -54,8 +64,22 @@ final class BootstrapFailure {
 
   factory BootstrapFailure._fromCode(
     OpsEventRecordErrorCode errorCode,
-    Object error,
-  ) {
+    Object error, {
+    Iterable<String> invalidKeys = const <String>[],
+    String failureSource = 'bootstrap',
+  }) {
+    final attributes = <RuntimeContextAttribute>[
+      RuntimeContextAttribute(
+        key: 'failureType',
+        value: error.runtimeType.toString(),
+      ),
+      RuntimeContextAttribute(key: 'failureSource', value: failureSource),
+      if (invalidKeys.isNotEmpty)
+        RuntimeContextAttribute(
+          key: 'invalidDefineKeys',
+          value: invalidKeys.join(','),
+        ),
+    ];
     return BootstrapFailure._(
       errorCode: errorCode,
       runtimeFailure: RuntimeFailure(
@@ -69,14 +93,7 @@ final class BootstrapFailure {
           businessObject: 'runtime.startup',
           functionModule: 'bootstrap',
         ),
-        context: RuntimeFailureContext(
-          attributes: <RuntimeContextAttribute>[
-            RuntimeContextAttribute(
-              key: 'failureType',
-              value: error.runtimeType.toString(),
-            ),
-          ],
-        ),
+        context: RuntimeFailureContext(attributes: attributes),
         recovery: const RuntimeRecoveryDirective(
           action: 'retry',
           disruptionLevel: 'fullPage',

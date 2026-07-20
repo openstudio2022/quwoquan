@@ -1,4 +1,4 @@
-# L4 特性：persona-lifecycle-contract
+# L3 特性：persona-lifecycle-contract
 
 ## 功能说明
 - 细化 persona-lifecycle-contract 特性的功能边界与端云协同行为。

@@ -90,6 +90,46 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         self.assertIsNone(request_obj.get_header("X-client-user-id"))
         self.assertIsNone(request_obj.get_header("X-test-auth-token"))
 
+    def test_authenticated_request_accepts_operation_headers_but_protects_bearer(self) -> None:
+        session = local_environment_auth.LocalAcceptanceSession(
+            owner_id="fixture_user_current",
+            persona_id="fixture_user_current",
+            access_token="local-test-bearer",
+        )
+        response = _Response(200, {"conversationId": "conversation_probe"})
+        opener = mock.Mock()
+        opener.open.return_value = response
+        with mock.patch.object(
+            local_environment_auth.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            payload = local_environment_auth.request_local_environment_json(
+                "https://gamma-api.quwoquan-env.test:19000",
+                path="/chat/conversations",
+                session=session,
+                method="POST",
+                body={"type": "group"},
+                headers={
+                    "Idempotency-Key": "group-probe-001",
+                    "X-Client-Operation-Id": "CreateConversation",
+                },
+            )
+
+        request_obj = opener.open.call_args.args[0]
+        self.assertEqual(payload, {"conversationId": "conversation_probe"})
+        self.assertEqual(request_obj.get_header("Authorization"), "Bearer local-test-bearer")
+        self.assertEqual(request_obj.get_header("Idempotency-key"), "group-probe-001")
+        self.assertEqual(request_obj.get_header("X-client-operation-id"), "CreateConversation")
+
+        with self.assertRaisesRegex(ValueError, "cannot override Authorization"):
+            local_environment_auth.request_local_environment_json(
+                "https://gamma-api.quwoquan-env.test:19000",
+                path="/chat/inbox",
+                session=session,
+                headers={"Authorization": "Bearer attacker-controlled"},
+            )
+
     def test_operation_path_with_colon_preserves_base_host(self) -> None:
         session = local_environment_auth.LocalAcceptanceSession(
             owner_id="data-release-operator",
@@ -123,6 +163,8 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
                 "jwt_secret": "jwt",
                 "device_ticket_secret": "device",
                 "otp_code_ref_key_b64": "code-ref",
+                "push_token_encryption_key_b64": "push-token",
+                "account_closure_subject_hmac_secret": "account-closure",
             },
         ):
             beta = local_environment_auth.prepare_local_environment_auth(
@@ -137,6 +179,10 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         self.assertNotEqual(beta.secret_path, gamma.secret_path)
         self.assertEqual(beta.environment["AUTH_JWT_ISSUER"], "quwoquan.beta.local")
         self.assertEqual(gamma.environment["AUTH_JWT_ISSUER"], "quwoquan.gamma.local")
+        self.assertEqual(
+            gamma.environment["CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"],
+            "account-closure",
+        )
 
     def test_rejects_cross_environment_target_pair(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported local environment target"):

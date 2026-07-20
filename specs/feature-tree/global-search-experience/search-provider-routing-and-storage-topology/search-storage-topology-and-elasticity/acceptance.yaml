@@ -48,18 +48,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
@@ -78,7 +81,7 @@ gwt_acceptance:
     when:
     - stackctl package --env gamma --include-services；up --env gamma --skip-app（含
       backfill）；health --target gamma-local --scope full；verify --env gamma --kind
-      all --tier all。
+      all --profile release。
     - 经 Caddy 网关 POST /search 与 POST /search/feedback。
     then:
     - up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成；health 全 healthy（search-service
@@ -111,17 +114,19 @@ gwt_acceptance:
     - '[migrated_from_planned] api_integration 真集群：原生镜像/托管集群 batch 与启动 SLA 重校准（R-S06-S-1
       / WP-E）。'
     - '[migrated_from_recorded_artifact] CI：search-service 统一消费 quwoquan_service/go.mod/go.sum，
-      verify_go_single_module.py + verify_search_service_module.sh --with-tests 已验证根依赖图、生产构建和测试可复现（R-S06-S-3）。'
+      verify_go_single_module.py + service gate 的根构建/测试已验证依赖图、生产构建和测试可复现（R-S06-S-3）。'
     - '[migrated_from_recorded_artifact] 已迁移 canonical run evidence（search_signal_t3_report.json）'
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
@@ -176,17 +181,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt3_local_contract
@@ -235,17 +243,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt4_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
@@ -254,5 +265,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

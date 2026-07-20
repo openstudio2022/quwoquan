@@ -118,6 +118,39 @@ func (s *MediaService) replayAsset(
 	return mediaAssetResult(result.Aggregate, true), true, nil
 }
 
+// recordAssetNoopReceipt 为目标状态已满足的媒体命名 set 持久化首个 no-op
+// 回执；相同 key 的后续重试即使资产状态继续演进也只重放本次结果。
+func (s *MediaService) recordAssetNoopReceipt(
+	ctx context.Context,
+	asset *mediamodel.MediaAsset,
+	commandName string,
+	commandDigest string,
+) (MediaAssetCommandResult, error) {
+	idempotencyKey, err := requireMediaIdempotencyKey(ctx)
+	if err != nil {
+		return MediaAssetCommandResult{}, err
+	}
+	result, err := s.data.Assets.RecordMediaAssetNoopReceipt(
+		ctx,
+		mediaports.MediaAssetNoopReceipt{
+			Aggregate:        asset,
+			IdempotencyKey:   idempotencyKey,
+			CommandName:      commandName,
+			CommandDigest:    commandDigest,
+			ReceiptExpiresAt: s.now().UTC().Add(mediaReceiptTTL),
+		},
+	)
+	if err != nil {
+		return MediaAssetCommandResult{}, unavailable(err)
+	}
+	if result.Aggregate == nil {
+		return MediaAssetCommandResult{}, unavailable(
+			errors.New("media asset no-op receipt returned no asset"),
+		)
+	}
+	return mediaAssetResult(result.Aggregate, result.Replayed), nil
+}
+
 func (s *MediaService) commitUploadSession(
 	ctx context.Context,
 	session *mediamodel.MediaUploadSession,
@@ -235,6 +268,7 @@ func uploadSessionResult(
 		result.SessionID = session.ID()
 		result.Version = session.Version()
 		result.Status = session.Status()
+		result.AssetID = session.AssetID()
 		result.ObjectKey = session.ObjectKey()
 		result.ExpiresAt = session.ExpiresAt()
 	}
@@ -252,22 +286,29 @@ func mediaAssetResult(
 	if asset == nil {
 		return MediaAssetCommandResult{Replayed: replayed}
 	}
-	descriptor := asset.VideoProcessingDescriptor()
+	videoDescriptor := asset.VideoProcessingDescriptor()
+	imageDescriptor := asset.ImageProcessingDescriptor()
 	return MediaAssetCommandResult{
-		AssetID:             asset.ID(),
-		Version:             asset.Version(),
-		ProcessingStatus:    asset.ProcessingStatus(),
-		AccessPolicy:        asset.AccessPolicy(),
-		CoverStrategy:       asset.CoverStrategy(),
-		ManualCoverAssetID:  asset.ManualCoverAssetID(),
-		CoverFrameTimeMs:    asset.CoverFrameTimeMs(),
-		VerifiedDurationMs:  descriptor.VerifiedDurationMs,
-		VideoWidth:          descriptor.VideoWidth,
-		VideoHeight:         descriptor.VideoHeight,
-		VideoCodec:          descriptor.VideoCodec,
-		VideoContainer:      descriptor.VideoContainer,
-		PreviewTrackVersion: descriptor.PreviewTrackVersion,
-		Replayed:            replayed,
+		AssetID:                  asset.ID(),
+		Version:                  asset.Version(),
+		ProcessingStatus:         asset.ProcessingStatus(),
+		AccessPolicy:             asset.AccessPolicy(),
+		CoverStrategy:            asset.CoverStrategy(),
+		ManualCoverAssetID:       asset.ManualCoverAssetID(),
+		CoverFrameTimeMs:         asset.CoverFrameTimeMs(),
+		ImageWidth:               imageDescriptor.ImageWidth,
+		ImageHeight:              imageDescriptor.ImageHeight,
+		ImageDeliveryContentType: imageDescriptor.ImageDeliveryContentType,
+		VerifiedDurationMs:       videoDescriptor.VerifiedDurationMs,
+		VideoWidth:               videoDescriptor.VideoWidth,
+		VideoHeight:              videoDescriptor.VideoHeight,
+		VideoCodec:               videoDescriptor.VideoCodec,
+		VideoContainer:           videoDescriptor.VideoContainer,
+		VideoAudioCodec:          videoDescriptor.VideoAudioCodec,
+		VideoKeyframeIntervalMs:  videoDescriptor.VideoKeyframeIntervalMs,
+		VideoFastStart:           videoDescriptor.VideoFastStart,
+		PreviewTrackVersion:      videoDescriptor.PreviewTrackVersion,
+		Replayed:                 replayed,
 	}
 }
 
@@ -377,13 +418,4 @@ type mediaAssetAccessPolicyUpdatedPayload struct {
 	AssetID      string                  `json:"assetId"`
 	OwnerID      string                  `json:"ownerId"`
 	AccessPolicy mediamodel.AccessPolicy `json:"accessPolicy"`
-}
-
-type mediaOriginalAccessGrantedPayload struct {
-	AuditID   string    `json:"auditId"`
-	AssetID   string    `json:"assetId"`
-	ViewerID  string    `json:"viewerId"`
-	Purpose   string    `json:"purpose"`
-	GrantedAt time.Time `json:"grantedAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
 }

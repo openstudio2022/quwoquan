@@ -1,0 +1,23 @@
+entity: MediaUploadSession
+layer: app_side
+
+description: |
+  端侧独立测试场景。上传三段式 init/complete/abort 经
+  ContentMediaUploadCoordinator + MediaUploadManager（队列/重试/断网恢复）。
+
+command_scenarios:
+  - name: upload_admission_error_mapping
+    description: 超限与不支持格式映射为 metadata 生成的 413/415 结构化错误
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/post/contract/post_error_code_contract__local_contract_test.dart
+
+  - name: upload_coordinator_lifecycle
+    description: init → 直传（sha256 校验）→ complete；任一失败 abort 兜底
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/media/content_media_object_uploader__local_contract_test.dart
+      - quwoquan_app/test/local_contract/cloud/media/media_upload_manager__local_contract_test.dart
+
+  - name: upload_owner_scoped_security
+    description: 上传网关 owner-scoped；跨 actor 会话不可见
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/media/profile_media_upload_gateway__streaming__security__local_contract_test.dart

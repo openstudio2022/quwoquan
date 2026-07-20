@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
@@ -9,7 +9,7 @@ void main() {
   test('groupHomeProvider 消费 GetGroupHome 云端主页契约', () async {
     final repo = _FakeChatRepository();
     final container = ProviderContainer(
-      overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+      overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
     );
     addTearDown(container.dispose);
 

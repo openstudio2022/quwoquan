@@ -22,13 +22,16 @@ var (
 	ErrStorageReadFailed              = errors.New("OPS.SYSTEM.storage_read_failed")
 	ErrStorageWriteFailed             = errors.New("OPS.SYSTEM.storage_write_failed")
 	ErrEventBatchInvalid              = errors.New("OPS.USER.event_batch_invalid")
+	ErrRuntimeLogBatchInvalid         = errors.New("OPS.USER.runtime_log_batch_invalid")
 	ErrIdempotencyKeyInvalid          = errors.New("OPS.USER.idempotency_key_invalid")
 	ErrQueryWindowInvalid             = errors.New("OPS.USER.query_window_invalid")
 	ErrEventDrilldownForbidden        = errors.New("OPS.USER.event_drilldown_forbidden")
 	ErrLogstoreUnavailable            = errors.New("OPS.SYSTEM.logstore_unavailable")
+	ErrRuntimeLogstoreUnavailable     = errors.New("OPS.SYSTEM.runtime_logstore_unavailable")
 	ErrStartupConfigurationInvalid    = errors.New("OPS.SYSTEM.startup_configuration_invalid")
 	ErrStartupInitializationFailed    = errors.New("OPS.SYSTEM.startup_initialization_failed")
 	ErrStartupRouterUnavailable       = errors.New("OPS.SYSTEM.startup_router_unavailable")
+	ErrUnclassifiedPageFailure        = errors.New("OPS.SYSTEM.unclassified_page_failure")
 	ErrStartupNativeFirstFrameTimeout = errors.New("OPS.SYSTEM.startup_native_first_frame_timeout")
 	ErrStartupEventInvalid            = errors.New("OPS.USER.startup_event_invalid")
 	ErrStartupTelemetryUnavailable    = errors.New("OPS.SYSTEM.startup_telemetry_unavailable")
@@ -100,6 +103,12 @@ func AppErrorFromEventBatchInvalid(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "事件批次不符合目录契约", debugMessage).WithMetadata("event_batch_invalid", 422).WithRecovery("absorb", 0)
 }
 
+// AppErrorFromRuntimeLogBatchInvalid returns *AppError for OPS.USER.runtime_log_batch_invalid (user_message from errors.yaml).
+func AppErrorFromRuntimeLogBatchInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRuntimeLogBatchInvalid.Error()))
+	return rerrors.NewAppError(code, "诊断日志批次不符合统一日志目录", debugMessage).WithMetadata("runtime_log_batch_invalid", 422).WithRecovery("absorb", 0)
+}
+
 // AppErrorFromIdempotencyKeyInvalid returns *AppError for OPS.USER.idempotency_key_invalid (user_message from errors.yaml).
 func AppErrorFromIdempotencyKeyInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyKeyInvalid.Error()))
@@ -124,6 +133,12 @@ func AppErrorFromLogstoreUnavailable(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "日志服务暂时不可用", debugMessage).WithMetadata("logstore_unavailable", 503).WithRecovery("retry", 5)
 }
 
+// AppErrorFromRuntimeLogstoreUnavailable returns *AppError for OPS.SYSTEM.runtime_logstore_unavailable (user_message from errors.yaml).
+func AppErrorFromRuntimeLogstoreUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRuntimeLogstoreUnavailable.Error()))
+	return rerrors.NewAppError(code, "诊断日志服务暂时不可用", debugMessage).WithMetadata("runtime_logstore_unavailable", 503).WithRecovery("retry", 5)
+}
+
 // AppErrorFromStartupConfigurationInvalid returns *AppError for OPS.SYSTEM.startup_configuration_invalid (user_message from errors.yaml).
 func AppErrorFromStartupConfigurationInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupConfigurationInvalid.Error()))
@@ -140,6 +155,12 @@ func AppErrorFromStartupInitializationFailed(debugMessage string) *rerrors.AppEr
 func AppErrorFromStartupRouterUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupRouterUnavailable.Error()))
 	return rerrors.NewAppError(code, "页面暂时无法打开，请重试", debugMessage).WithMetadata("startup_router_unavailable", 503).WithRecovery("retry", 1)
+}
+
+// AppErrorFromUnclassifiedPageFailure returns *AppError for OPS.SYSTEM.unclassified_page_failure (user_message from errors.yaml).
+func AppErrorFromUnclassifiedPageFailure(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrUnclassifiedPageFailure.Error()))
+	return rerrors.NewAppError(code, "页面遇到未分类异常", debugMessage).WithMetadata("unclassified_page_failure", 500).WithRecovery("absorb", 0)
 }
 
 // AppErrorFromStartupNativeFirstFrameTimeout returns *AppError for OPS.SYSTEM.startup_native_first_frame_timeout (user_message from errors.yaml).

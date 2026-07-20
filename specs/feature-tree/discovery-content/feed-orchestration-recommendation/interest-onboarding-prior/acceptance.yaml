@@ -39,18 +39,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.interest_onboarding_prior.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.interest_onboarding_prior.gwt1_local_contract
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: e2e_journey
         cases:
         - user_acceptance.discovery_content.feed_orchestration_recommendation.interest_onboarding_prior.e2e_journey
@@ -63,5 +66,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

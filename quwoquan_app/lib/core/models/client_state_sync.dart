@@ -64,6 +64,7 @@ class ClientStateSyncOutboxEntry {
     required this.intentType,
     required this.desiredBoolValue,
     required this.nextFlushAt,
+    this.sourceSurfaceId = '',
     this.confirmedBoolValue,
     this.retryCount = 0,
   });
@@ -74,6 +75,7 @@ class ClientStateSyncOutboxEntry {
   final String intentType;
   final bool desiredBoolValue;
   final DateTime nextFlushAt;
+  final String sourceSurfaceId;
   final bool? confirmedBoolValue;
   final int retryCount;
 
@@ -89,6 +91,7 @@ class ClientStateSyncOutboxEntry {
       objectId: (map['objectId'] ?? '').toString(),
       intentType: (map['intentType'] ?? '').toString(),
       desiredBoolValue: desiredBoolValue,
+      sourceSurfaceId: (map['sourceSurfaceId'] ?? '').toString(),
       nextFlushAt:
           DateTime.tryParse(map['nextFlushAt']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
@@ -106,6 +109,7 @@ class ClientStateSyncOutboxEntry {
     String? intentType,
     bool? desiredBoolValue,
     DateTime? nextFlushAt,
+    String? sourceSurfaceId,
     bool? confirmedBoolValue,
     int? retryCount,
   }) {
@@ -116,6 +120,7 @@ class ClientStateSyncOutboxEntry {
       intentType: intentType ?? this.intentType,
       desiredBoolValue: desiredBoolValue ?? this.desiredBoolValue,
       nextFlushAt: nextFlushAt ?? this.nextFlushAt,
+      sourceSurfaceId: sourceSurfaceId ?? this.sourceSurfaceId,
       confirmedBoolValue: confirmedBoolValue ?? this.confirmedBoolValue,
       retryCount: retryCount ?? this.retryCount,
     );
@@ -129,6 +134,7 @@ class ClientStateSyncOutboxEntry {
       'intentType': intentType,
       'desiredBoolValue': desiredBoolValue,
       'nextFlushAt': nextFlushAt.toUtc().toIso8601String(),
+      if (sourceSurfaceId.isNotEmpty) 'sourceSurfaceId': sourceSurfaceId,
       'confirmedBoolValue': confirmedBoolValue,
       'retryCount': retryCount,
     };

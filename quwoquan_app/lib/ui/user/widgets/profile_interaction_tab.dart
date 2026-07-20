@@ -58,7 +58,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     with _ProfileInlineActionsMixin {
   static const double _previewAspectRatio =
       DiscoveryFeedSpacing.homeFeedArticleSideThumbAspectRatio;
-  static const double _visitorFollowButtonWidth = 72.0;
 
   List<UserProfileSubTabConfig> get _interactionFilters => UserProfileUIConfig
       .interactionSubTabs
@@ -66,9 +65,8 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
       .toList(growable: false);
 
   List<ProfileInteractionActivityViewData>? _items;
-  final Map<String, bool> _visitorFollowingByUserId = <String, bool>{};
-  final Set<String> _visitorRelationshipLoading = <String>{};
   bool _loading = true;
+  Object? _loadError;
   InteractionSubTab? _loadedSubTab;
   InteractionDirection? _loadedDirection;
 
@@ -96,29 +94,37 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
       }
       return;
     }
-    final repo = ref.read(userProfileRepositoryProvider);
     setState(() {
       _loading = true;
+      _loadError = null;
     });
     try {
-      final list = direction == InteractionDirection.received
-          ? await repo.listProfileInteractionReceivedView(widget.userId)
-          : await repo.listProfileInteractionSentView(widget.userId);
-
-      final filterKey = subTab.id;
-      final filtered = list
-          .where((item) {
-            return item.filterKeys
-                .map((key) => key.trim())
-                .where((key) => key.isNotEmpty)
-                .contains(filterKey);
-          })
+      final page = await ref
+          .read(profileInteractionQueryFacetProvider)
+          .listActivities(
+            ContentProfileInteractionPageQuery(
+              subAccountId: widget.userId,
+              type: switch (subTab) {
+                InteractionSubTab.likes => ContentProfileInteractionType.like,
+                InteractionSubTab.comments =>
+                  ContentProfileInteractionType.comment,
+                InteractionSubTab.shares =>
+                  ContentProfileInteractionType.share,
+              },
+            ),
+            direction: direction == InteractionDirection.received
+                ? ContentProfileInteractionDirection.received
+                : ContentProfileInteractionDirection.sent,
+          );
+      final items = page.items
+          .map(ProfileInteractionActivityViewData.fromContentActivity)
           .toList(growable: false);
 
       if (mounted) {
         setState(() {
-          _items = filtered;
+          _items = items;
           _loading = false;
+          _loadError = null;
         });
       }
     } catch (error, stackTrace) {
@@ -132,8 +138,8 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
       );
       if (mounted) {
         setState(() {
-          _items = [];
           _loading = false;
+          _loadError = error;
         });
       }
     }
@@ -160,7 +166,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
             .map(
               (filter) => ProfileSecondaryTabItem(
                 id: filter.id,
-                label: _secondaryTabLabel(filter, state.interactionDirection),
+                label: _secondaryTabLabel(filter),
               ),
             )
             .toList(growable: false),
@@ -202,6 +208,27 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
           )
         : _loading
         ? Center(child: CupertinoActivityIndicator())
+        : _loadError != null
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  runtimeErrorDisplayMessage(_loadError!),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosSubheadline,
+                    color: fgSecondary,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.md),
+                CupertinoButton(
+                  onPressed: _load,
+                  child: Text(UITextConstants.retry),
+                ),
+              ],
+            ),
+          )
         : _items == null || _items!.isEmpty
         ? Center(
             child: Column(
@@ -237,21 +264,12 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
             itemCount: _items!.length,
             itemBuilder: (context, i) {
               final item = _items![i];
-              final showVisitorRow =
-                  state.interactionSubTab == InteractionSubTab.views &&
-                  state.interactionDirection == InteractionDirection.received;
-              return showVisitorRow
-                  ? _buildVisitorRow(
-                      context,
-                      item,
-                      isLast: i == _items!.length - 1,
-                    )
-                  : _buildInteractionRow(
-                      context,
-                      item,
-                      direction: state.interactionDirection,
-                      isLast: i == _items!.length - 1,
-                    );
+              return _buildInteractionRow(
+                context,
+                item,
+                direction: state.interactionDirection,
+                isLast: i == _items!.length - 1,
+              );
             },
           );
 
@@ -274,15 +292,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     );
   }
 
-  String _secondaryTabLabel(
-    UserProfileSubTabConfig filter,
-    InteractionDirection direction,
-  ) {
-    if (filter.id == InteractionSubTab.views.id) {
-      return direction == InteractionDirection.received
-          ? UITextConstants.interactionSubVisitors
-          : UITextConstants.profileBrowseHistory;
-    }
+  String _secondaryTabLabel(UserProfileSubTabConfig filter) {
     return UITextConstants.contentLabelForKey(filter.labelKey);
   }
 
@@ -450,209 +460,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     );
   }
 
-  Widget _buildVisitorRow(
-    BuildContext context,
-    ProfileInteractionActivityViewData item, {
-    required bool isLast,
-  }) {
-    final displayUserId = item.displaySubAccountId;
-    final displayName = item.displayName;
-    final avatarUrl = resolveAvatarImageUrl(item.displayAvatarUrl);
-    final fg = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.24 : 0.14);
-    final following = _visitorFollowingByUserId[displayUserId] ?? false;
-    _scheduleVisitorRelationshipLoad(displayUserId);
-
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Expanded(
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(
-                    AppSpacing.minInteractiveSize,
-                    AppSpacing.minInteractiveSize,
-                  ),
-                  onPressed: () => _pushDisplayUser(context, item, avatarUrl),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      vertical: AppSpacing.containerSm,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        SizedBox.square(
-                          dimension: AppSpacing.avatarUserMd,
-                          child: ClipOval(
-                            child: avatarUrl.isEmpty
-                                ? ColoredBox(
-                                    color: AppColors.iosFill(context),
-                                    child: Icon(
-                                      CupertinoIcons.person_crop_circle_fill,
-                                      color: fgSecondary,
-                                    ),
-                                  )
-                                : AppAvatarImage(
-                                    imageUrl: avatarUrl,
-                                    size: AppSpacing.avatarUserMd,
-                                    errorWidget: ColoredBox(
-                                      color: AppColors.iosFill(context),
-                                      child: Icon(
-                                        CupertinoIcons.person_crop_circle_fill,
-                                        color: fgSecondary,
-                                      ),
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        SizedBox(width: AppSpacing.containerSm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                displayName.isNotEmpty
-                                    ? displayName
-                                    : displayUserId,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosSubheadline,
-                                  fontWeight: AppTypography.regular,
-                                  color: fg,
-                                  letterSpacing: -0.18,
-                                ),
-                              ),
-                              SizedBox(height: AppSpacing.intraGroupXs),
-                              Text(
-                                UITextConstants
-                                    .profileInteractionViewReceivedText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosFootnote,
-                                  fontWeight: AppTypography.regular,
-                                  color: fgSecondary,
-                                ),
-                              ),
-                              if (item.createdAt != null) ...<Widget>[
-                                SizedBox(height: AppSpacing.intraGroupXs),
-                                Text(
-                                  _formatInteractionTime(item.createdAt!),
-                                  style: TextStyle(
-                                    fontSize: AppTypography.iosCaption2,
-                                    color: AppColors.iosTertiaryLabel(context),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.containerSm),
-              _VisitorFollowButton(
-                width: _visitorFollowButtonWidth,
-                following: following,
-                isDark: widget.isDark,
-                onPressed: displayUserId.isEmpty
-                    ? null
-                    : () => _toggleVisitorFollow(displayUserId),
-              ),
-            ],
-          ),
-        ),
-        if (!isLast)
-          Padding(
-            padding: EdgeInsets.only(
-              left:
-                  AppSpacing.containerMd +
-                  AppSpacing.avatarUserMd +
-                  AppSpacing.containerSm,
-              right: AppSpacing.containerMd,
-            ),
-            child: Divider(
-              height: AppSpacing.hairline,
-              thickness: AppSpacing.hairline,
-              color: separator,
-            ),
-          ),
-      ],
-    );
-  }
-
-  void _scheduleVisitorRelationshipLoad(String userId) {
-    if (userId.isEmpty ||
-        _visitorFollowingByUserId.containsKey(userId) ||
-        _visitorRelationshipLoading.contains(userId)) {
-      return;
-    }
-    _visitorRelationshipLoading.add(userId);
-    Future<void>.microtask(() async {
-      try {
-        final relation = await ref
-            .read(userProfileRepositoryProvider)
-            .getRelationship(userId);
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _visitorFollowingByUserId[userId] = relation.isFollowing;
-          _visitorRelationshipLoading.remove(userId);
-        });
-      } catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'profile interaction tab',
-            context: ErrorDescription('loading visitor relationship'),
-          ),
-        );
-        _visitorRelationshipLoading.remove(userId);
-      }
-    });
-  }
-
-  Future<void> _toggleVisitorFollow(String userId) async {
-    final repo = ref.read(userProfileRepositoryProvider);
-    final current = _visitorFollowingByUserId[userId] ?? false;
-    setState(() => _visitorFollowingByUserId[userId] = !current);
-    try {
-      if (current) {
-        await repo.unfollowUser(userId);
-      } else {
-        await repo.followUser(userId);
-      }
-    } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'profile interaction tab',
-          context: ErrorDescription('toggling visitor follow'),
-        ),
-      );
-      if (mounted) {
-        setState(() => _visitorFollowingByUserId[userId] = current);
-      }
-    }
-  }
-
   InteractionSubTab _interactionSubTabForId(String id) =>
       interactionSubTabFromId(id);
 
@@ -664,15 +471,10 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
         return CupertinoIcons.chat_bubble;
       case InteractionSubTab.shares:
         return CupertinoIcons.arrowshape_turn_up_right;
-      case InteractionSubTab.views:
-        return CupertinoIcons.eye;
     }
   }
 
   String _emptyStateTitle(InteractionSubTab subTab) {
-    final direction = ref
-        .read(profileNotifierProvider(widget.userId))
-        .interactionDirection;
     switch (subTab) {
       case InteractionSubTab.likes:
         return UITextConstants.profileInteractionEmptyLikes;
@@ -680,10 +482,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
         return UITextConstants.profileInteractionEmptyComments;
       case InteractionSubTab.shares:
         return UITextConstants.profileInteractionEmptyShares;
-      case InteractionSubTab.views:
-        return direction == InteractionDirection.received
-            ? UITextConstants.profileInteractionEmptyVisitors
-            : UITextConstants.profileInteractionEmptyBrowseHistory;
     }
   }
 

@@ -58,17 +58,17 @@
 - 不采用微软四层，因为当前仓库的核心矛盾是“层级过深、旧新并存、口径漂移”，而不是“缺少中间管理层”。
 - 不采用兼容迁移，因为兼容层会使脚手架、门禁和索引长期保留双重逻辑。
 
-### 当前差距
+### 迁移前差距
 
-- 目录、索引生成器、脚手架、门禁、命令文案仍然深度绑定旧层级。
-- `03-testing.mdc` 已有 `三层测试` 治理视图，但主流程和 deploy 文案仍混用 `L3/L4` 测试称呼。
-- `changes/` 旧脚手架体系与 `specs/feature-tree/` 主树并存，形成第二真相源。
+- 目录、索引生成器、脚手架、门禁、命令文案曾深度绑定旧层级。
+- `03-testing.mdc` 已有 `三层测试` 治理视图，但主流程和 deploy 文案曾混用 `L3/L4` 测试称呼。
+- `changes/` 旧脚手架体系曾与 `specs/feature-tree/` 主树并存，形成第二真相源。
 
 ## 方案对比
 
 ### 方案 A：文档先收口，脚本后续渐进改造
 
-先改 `spec.md / design.md / 树内任务文档 / acceptance.yaml` 与命令文案，暂不强制脚本零兼容，后续再慢慢迁移生成器和 gate。
+先改 `spec.md / design.md / acceptance.yaml` 与命令文案，暂不强制脚本零兼容，后续再迁移生成器和 gate。
 
 **优点**：
 - 改动节奏更平滑。
@@ -157,12 +157,12 @@
   - 设计真相源
 - `specs/feature-tree/<L1>/<L2>/acceptance.yaml`
   - 验收真相源
-- `树内任务文档` 或后续 `tasks.yaml`
-  - 任务真相源
+- 当前会话、PR 拆分或外部执行台账
+  - 短期任务状态，不进入正式特性树
 
-### 必须移除的第二真相源
+### 已移除的第二真相源
 
-- `runtime/tree.yaml` 中的旧四/五层结构
+- `specs/feature-tree/runtime/tree.yaml` 退役镜像
 - `changes/feature_catalog.yaml` 与旧 taxonomy
 - 脚手架中硬编码的旧 level 枚举
 - 测试规则和 deploy 文案中的 `L3/L4` 测试层表达
@@ -198,7 +198,7 @@
 - 任务 `文档与标准重写`
   - 主要覆盖 `local_contract`
 - 任务 `命令与流程去四层化`
-  - 主要覆盖 `local_contract + local_contract`
+  - 主要覆盖 `local_contract`
 - 任务 `脚手架、索引和 gate 重写`
   - 主要覆盖 `local_contract + api_integration`
 - 任务 `存量节点迁移与抽样验证`
@@ -218,7 +218,7 @@
 
 - 规格防偏：`spec.md`
 - 方案防漂：`design.md`
-- 任务防漏：`树内任务文档`
+- 任务防漏：当前会话与 PR 检查清单
 - 验收防回归：`acceptance.yaml`
 - 自动化防回长：tree index、脚手架、verify scripts、gate
 
@@ -236,31 +236,31 @@
 
 ## 灰度发布与回滚设计
 
-这是一次仓库治理切换，不做线上灰度，但需要“治理切换窗口”和“分支级回滚”。
+这是一次仓库治理切换，不做线上灰度，但需要单一治理切换窗口和增量级回滚。
 
 ### 切换策略
 
-- 在单独治理分支完成所有文档、脚本、索引和迁移修改
+- 在长期工作分支 `dev1.0` 的单一窗口完成所有文档、脚本、索引和迁移修改
 - 切换前冻结新特性创建入口
 - 完成 gate 与样例节点验证后一次性合入
 
 ### 回滚策略
 
-- 若 tree index 无法稳定重建，回滚整个治理分支
-- 若 gate 对旧层级扫描仍有漏网，回滚整个治理分支
-- 若样例节点迁移后 `acceptance` 或命令流程不可用，回滚整个治理分支
+- 若 tree index 无法稳定重建，撤销本次治理增量
+- 若 gate 对旧层级扫描仍有漏网，撤销本次治理增量
+- 若样例节点迁移后 `acceptance` 或命令流程不可用，撤销本次治理增量
 
-## 当前态到目标态
+## 迁移前状态到完成态
 
-### 当前态
+### 迁移前状态
 
-- 命令文案默认仍围绕四层/五层运行
+- 命令文案默认围绕四层/五层运行
 - 特性树与测试层使用重复的 `L*` 术语
-- 脚手架和索引生成器仍产出旧层级
+- 脚手架和索引生成器产出旧层级
 - `changes/` 与 `specs/feature-tree/` 双轨并存
 - 存量 `acceptance.yaml` level 枚举不统一
 
-### 目标态
+### 完成态
 
 - 仓库只有一套三层治理语言
 - 目录到 `L3_story`
@@ -276,7 +276,7 @@
 - `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`
 - `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`
 - `.cursor/rules/03-testing.mdc`
-- `.cursor/commands/content.source.discovery.md`
+- `.cursor/commands/explore.md`
 - `.cursor/commands/prd.md`
 - `.cursor/commands/design.md`
 - `.cursor/commands/dev.md`
@@ -285,21 +285,18 @@
 - `.cursor/commands/deliver.md`
 - `.cursor/commands/deploy.md`
 - `quwoquan_ops/gate/scaffold/new_feature_fullstack.sh`
-- `scripts/verify_feature_traceability.sh`
+- `quwoquan_ops/gate/scaffold/verify_feature_traceability.sh`
 - `quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`
 - `quwoquan_service/runtime/agentpack/tree_index.go`
 - `quwoquan_service/tools/gen_tree_index/main.go`
 - `specs/feature-tree/tree_index.yaml`
-- `specs/feature-tree/runtime/tree.yaml`
 
-## 未来演进
+## 后续演进边界
 
-- 为 `Task` 提供结构化 `tasks.yaml`，替代纯 Markdown 清单。
-- 给 `/explore`、`/prd`、`/design` 增加结构化输入模版。
-- 增加“树迁移审计脚本”，持续防止旧层级回流。
+- Task 只存在于当前会话、PR 拆分或外部执行台账，不新增树内任务文件。
+- `/explore`、`/prd`、`/design` 的结构化输入仍由命令契约承载，不复制为节点级模板真相源。
+- 树迁移审计持续由现有 feature-tree gate 承载。
 
-## 存量带规划任务
+## 剩余风险
 
-- `runtime/tree.yaml` 是否彻底废弃，还是只保留三层镜像，需要在实施阶段定稿。
-- `changes/` 旧体系退出主治理链路后的保留范围，需要在实施阶段明确。
-- 抽样迁移的代表性节点集合，需要在实施阶段确定。
+长期遗留与风险只登记在 `docs/outstanding_risks_backlog.md`；本节点不维护第二套规划任务或风险清单。

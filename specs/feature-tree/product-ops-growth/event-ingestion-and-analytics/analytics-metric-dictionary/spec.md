@@ -5,6 +5,10 @@
 定义产品日志、推荐反馈和服务 RED 指标的统一口径与来源边界。产品日志只覆盖页面、启动、关键动作、
 性能和异常；推荐/社交/Assistant 等业务事实继续由各自 metadata 与指标提供，不塞入产品日志信封。
 
+App 体验一级黄金指标的机器真相源为
+`quwoquan_service/contracts/metadata/ops/event_record/golden_metric_catalog.yaml`；本文解释语义，
+Dashboard、告警和 Portal 不得复制其分子、分母、目标值或下钻维度。
+
 ### 指标域
 
 1. `experience`
@@ -82,10 +86,24 @@
 
 - 指标字典必须与 `event_catalog.yaml` 和各领域业务 metadata 同源；不得把 BehaviorSignal 伪装成 Ops 事件。
 - 新增指标不得绕过字典直接进入 dashboard 或模型特征表。
+- 每个关键业务最多登记 3 个一级黄金指标；二级指标只能用于定位一级指标。机器门必须校验
+  source event、value field、freshness、SLO target 和高基数维度禁用。
 - 用户可见体验指标与训练指标共享口径，但可有不同聚合层。
 - 指标名称、分组与含义必须稳定；当前未上线阶段采用单轨替换，不维护事件版本兼容信封。
 - 启动指标的低基数标签只允许 `phase`、`outcome`、`platform`、`runtime_env` 与
   `recovery_surface`；`attemptId`、eventId、设备/账号标识和原始错误不得成为指标标签。
+
+### App 体验三项一级黄金指标
+
+1. `app_anr_rate`：发生 `app_anr_outcome(result=detected)` 的去重会话 /
+   `app_startup` 会话，目标 `< 0.47%`。
+2. `page_first_usable_p95_ms`：`page_first_usable.durationMs` 的 P95，内容、空态和错误态均
+   进入分布，目标 `≤ 2000ms`。
+3. `page_error_recovery_rate`：`page_error_outcome(result=recovered)` /
+   `page_error_outcome(result=shown)`，目标 `≥ 80%`。
+
+三项 freshness 均为 300 秒；允许按 `pageName/appVersion/networkClass` 及各事件的受控低基数
+扩展下钻，禁止 `sessionId/requestId/traceId/callStack/correlationHash` 成为指标维度。
 
 ## 五栏小趣 L1-L4 指标口径
 
@@ -111,6 +129,22 @@
 - Feed/Surface 的曝光、点击、停留和负反馈只经 `BehaviorReporter → /content/behaviors`，使用 `behaviors.yaml` 的既有强类型归因字段。
 - like/comment/report 等专用命令由 content-service 事务 outbox 投影一次 canonical `BehaviorSignal`，App 不补发第二条。
 - 实体主页、问小趣、`@小趣` 和创作绑定实体的业务标识由各自领域事件与指标承载；如需页面趋势，只关联 `pageName` 聚合，不扩张产品日志公共信封。
+
+### App 端观测职责边界
+
+- `AppPageContextStore + AppTelemetryRecorder` 是页面打开、路由首帧、首个可用终态和停留的唯一通道。仅
+  `app_pages.yaml` 中 `collect_page_access: true` 的页面产生 `page_open/page_return`；
+  `page_first_usable` 由同一 visit 的明确 content/empty/error 终态结算。页面 Widget 禁止再用
+  `JourneyEventTracker` 手工发送 `enter/exit`，避免同一次访问被双计。
+- `JourneyEventTracker` 只记录没有推荐反馈语义的关键产品动作，例如保存资料、发起联系、
+  拉黑、扫码入口和提交结果；失败必须携带 canonical `failReasonCode`，不得把页面曝光包装成
+  `product_action`。
+- `ContentBehaviorTracker` 只记录会进入推荐归因/反馈回流的内容与交集行为，例如合格曝光、
+  点击、停留、负反馈和交集证据行动；页面生命周期与普通设置动作不得进入该通道。
+- `PageLifecycleObservability`（底层 `AnalyticsService`）只记录加载、刷新、分页、媒体和错误等
+  技术状态，供页面可靠性诊断；它不能替代 `page_open/page_return`，也不能生成推荐反馈。
+- 同一用户动作只能有一个业务事实生产者：like/comment/report 等事务命令由服务端 outbox
+  投影 canonical `BehaviorSignal` 时，App 不再经任一 tracker 补发同义事件。
 
 ## 交集转化北极星指标（S6 增长商业化）
 

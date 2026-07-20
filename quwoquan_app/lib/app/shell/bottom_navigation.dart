@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class BottomNavigationWidget extends ConsumerWidget {
@@ -53,7 +54,7 @@ class BottomNavigationWidget extends ConsumerWidget {
         isPrimaryAction: true,
       ),
       _BottomDestination(
-        label: UITextConstants.chatPrimaryContacts,
+        label: ChatText.chatPrimaryContacts,
         icon: FluentIcons.chat_multiple_24_regular,
         selectedIcon: FluentIcons.chat_multiple_24_regular,
       ),

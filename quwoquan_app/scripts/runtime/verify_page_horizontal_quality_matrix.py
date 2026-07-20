@@ -7,7 +7,7 @@ v1：校验 page-horizontal-quality-matrix.md
 列扩展（P9…）时：同步增大下方 PILLAR_COUNT 与 label 元组。
 
 用法（仓库根）:
-  python3 scripts/verify_page_horizontal_quality_matrix.py
+  python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
 """
 
 from __future__ import annotations

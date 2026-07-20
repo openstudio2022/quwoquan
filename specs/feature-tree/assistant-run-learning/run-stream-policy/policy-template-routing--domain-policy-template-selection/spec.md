@@ -1,4 +1,4 @@
-# L4 特性：domain-policy-template-selection
+# L3 特性：domain-policy-template-selection
 
 ## 功能说明
 - 细化按域选择策略与模板的决策输入、权重与兜底规则。

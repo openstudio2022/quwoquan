@@ -2,7 +2,9 @@
 
 ## 设计动因
 
-当前仓库已经分别存在 `platform-ops-governance` 与 `product-ops-growth` 两条横切能力线，但缺少一个共同上位规格来统一以下问题：
+当前仓库已经分别存在 `platform-ops-governance` 与 `product-ops-growth` 两条横切能力线，
+但它们在部署上必须收敛到同一个 `product-ops-service` 进程（bounded context 仍保持分层），
+缺少一个共同上位规格来统一以下问题：
 - 统一 Web 门户 `ops-portal` 的壳层与菜单
 - 各领域三类面的共同契约基线
 - 控制面元数据对象的统一定义
@@ -12,7 +14,7 @@
 如果没有共同上位规格，后续很容易出现：
 - `platform-ops` 与 `product-ops` 分别定义两套门户壳层与菜单模型
 - 各领域控制面接口各自手写、各自命名
-- 三类面在逻辑上混合，后续拆分 Deployment 返工
+- `platform-ops-service` 与 `product-ops-service` 形成双进程、双状态源
 - App / Go / Python / Web 各自维护第二份控制面契约
 
 ## 上游评审结论
@@ -42,13 +44,14 @@
 结论：
 - 不选。适合组织规模更大、角色更明确的团队，不适合当前全栈共担模式。
 
-### 方案 B：统一门户壳层，后端按域分离
+### 方案 B：统一门户壳层，单进程内按 bounded context 分离
 
 优点：
 - 登录、权限、审计、搜索、通知、环境切换统一
 - 便于建立共同的控制面元数据和 codegen 体系
 - 更符合“一个团队维护、多域协作”的现状
-- 后端仍能按 `platform-ops` / `product-ops` 保持清晰边界
+- `product-ops-service` 内仍按 `platform-ops` / `product-ops` 保持清晰 bounded context 边界，
+  但环境内只有一个 ops 进程和一个控制面状态源
 
 缺点：
 - 门户壳层需要更强的菜单、权限、环境上下文治理
@@ -63,7 +66,9 @@
 - 统一门户命名为 `ops-portal`
 - 门户前端技术栈冻结为 `React + TypeScript`
 - 初期采用单前端应用 + 域模块化，不提前引入微前端
-- 门户只承载壳层、导航、全局能力与统一 UX 规范；业务能力仍由 `platform-ops` 与 `product-ops` 两个后端域提供
+- 门户只承载壳层、导航、全局能力与统一 UX 规范；`platform-ops` 与 `product-ops`
+  作为同一 `product-ops-service` 内的两个 bounded context 提供能力。
+  `platform-ops-service` 入口退役，不再进入任何环境 composition。
 
 ### 1.1 门户模块分层
 
@@ -343,7 +348,7 @@ deployment_profile: seed-box-compatible
 - `user-plane` 单独运行
 - `user-plane + platform-control-plane` 同进程
 - `user-plane + product-control-plane` 同 Pod 双容器
-- `platform-control-plane + product-control-plane` 共用 `seed-box` 容器
+- `platform-control-plane + product-control-plane` 共用 `product-ops-service` 进程
 - 三类面全部同 Pod、多容器
 - 三类面全部独立 Deployment / Pod
 
@@ -351,13 +356,15 @@ deployment_profile: seed-box-compatible
 
 当前阶段：
 - 领域服务主容器承接 `user-plane`
-- `seed-box` 作为控制面容器承接一个或两个控制面
-- 同 Pod 共部署，降低运维复杂度
+- `product-ops-service` 作为唯一 ops 控制面进程承接 `platform-ops` 与 `product-ops`
+- 两个 bounded context 共享认证 middleware、control-plane store 与审计模型，
+  代码包边界不因单进程而合并；`platform-ops-service` 入口退役
 
 未来阶段：
 - 用户面独立 Deployment，按用户流量 HPA
-- 控制面独立 Deployment，按队列、审批 SLA、批处理 CPU、case backlog 调整
-- 必要时 `platform-control-plane` 与 `product-control-plane` 再进一步拆分
+- 控制面先按队列、审批 SLA、批处理 CPU、case backlog 调整唯一 ops workload
+- 只有在对象级端口、独立审计和可回滚数据边界闭合后，才允许按 bounded context
+  拆分 Deployment；拆分不得恢复第二套门户或第二个状态真相源
 
 ### 3.3 部署元数据要求
 
@@ -412,12 +419,14 @@ planes:
 
 ### 3.5 `process_domain_mapping` 演进模型
 
-当前文件 `quwoquan_ops/environments/process_domain_mapping.yaml` 仍是 `domain -> process`。为保证三类面可独立部署，设计冻结为两阶段演进：
+当前文件 `quwoquan_ops/environments/process_domain_mapping.yaml` 仍是 `domain -> process`。
+M0 冻结 `ops -> product-ops-service` 唯一归属；为保证三类面可独立部署，设计冻结为两阶段演进：
 
 阶段 1：
 - 保持现有 `domain -> process`
 - 新增只读推导规则：`domain + plane -> process`
-- 若 domain 被映射到 `seed-box`，默认表示控制面能力可由 `seed-box` 承接
+- 若 domain 被映射到 `product-ops-service`，默认表示两个 ops bounded context
+  共享单一 control-plane composition
 
 阶段 2：
 - 升级为显式 `domain-plane -> process`
@@ -663,7 +672,7 @@ codegen 必须统一生成：
 - 控制面元数据对象可被 Web / Go / Python / App 共同消费
 - `sys.*` / `ops.*` / IaC 边界未漂移
 - 部署组合从“同 Pod”切换到“独立 Pod”时无需改写契约
-- 统一集成验收可纳入 `make gate-full`
+- 统一集成验收可纳入 `make gate-release ENV=gamma`
 
 ### 8.1 候选校验链路
 
@@ -693,7 +702,7 @@ user_acceptance：
 - 推荐 override 灰度与回滚链路
 - 核心 dashboard 在 integration/prod 样式语义与数据下钻一致性验证
 
-### 8.2 `make gate-full` 候选接入
+### 8.2 `make gate-release ENV=gamma` 候选接入
 
 建议新增以下候选校验：
 - `verify-control-plane-metadata`
@@ -729,4 +738,4 @@ user_acceptance：
 - 从当前 `domain -> process` 扩展到 `domain-plane -> process`
 - 从单前端域模块化演进到可插拔模块体系
 - 从 IA config 扩展到完整的 app shell / route / surface metadata single source
-- 将统一集成验收接入 `make gate-full`
+- 将统一集成验收接入 `make gate-release ENV=gamma`

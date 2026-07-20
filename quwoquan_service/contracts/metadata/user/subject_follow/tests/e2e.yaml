@@ -1,0 +1,23 @@
+aggregate: SubjectFollow
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: follow_homepage_reflects_in_channel
+    steps:
+      - user follows a homepage from homepage detail
+      - user opens home following channel
+    assertions:
+      - homepage_detail_viewer_follows_true_eventually
+      - following_subject_strip_contains_homepage
+
+  - name: unfollow_removes_from_channel
+    steps:
+      - user unfollows the homepage
+      - user refreshes home following channel
+    assertions:
+      - following_subject_strip_no_longer_contains_homepage
+      - homepage_follower_count_reconciled

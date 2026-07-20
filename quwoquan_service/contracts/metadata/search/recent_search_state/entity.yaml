@@ -18,8 +18,8 @@ lifecycle:
   optimistic_concurrency: version
   idempotency: command_receipt
 ddd_layer_mapping:
-  domain_model: internal/domain/search/recent_state
-  ports: internal/domain/search/recent_search_state/ports
-  application: internal/application/search
-  adapter_rest: internal/adapter/rest/search
-  adapter_event: internal/adapter/event/search
+  domain_model: services/search-service/internal/domain/recent_search_state/model
+  ports: services/search-service/internal/domain/recent_search_state/ports
+  application: services/search-service/internal/application/recentsearch
+  adapter_rest: services/search-service/internal/adapters/http
+  infrastructure: services/search-service/internal/infrastructure/recentsearchstore

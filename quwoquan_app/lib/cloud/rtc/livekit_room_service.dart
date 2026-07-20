@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
@@ -8,21 +9,23 @@ enum RtcConnectionState { disconnected, connecting, connected, reconnecting }
 
 extension LiveKitQualityMapping on ConnectionQuality {
   NetworkQuality toNetworkQuality() => switch (this) {
-        ConnectionQuality.excellent => NetworkQuality.good,
-        ConnectionQuality.good => NetworkQuality.slight,
-        ConnectionQuality.poor => NetworkQuality.poor,
-        _ => NetworkQuality.weak,
-      };
+    ConnectionQuality.excellent => NetworkQuality.good,
+    ConnectionQuality.good => NetworkQuality.slight,
+    ConnectionQuality.poor => NetworkQuality.poor,
+    _ => NetworkQuality.weak,
+  };
 }
 
 class LiveKitRoomService {
   Room? _room;
   EventsListener<RoomEvent>? _listener;
+  bool _cameraPausedForWeakNetwork = false;
 
   final _connectionState = ValueNotifier(RtcConnectionState.disconnected);
   final _activeSpeaker = ValueNotifier<String?>(null);
-  final _connectionQuality =
-      ValueNotifier<ConnectionQuality>(ConnectionQuality.excellent);
+  final _connectionQuality = ValueNotifier<ConnectionQuality>(
+    ConnectionQuality.excellent,
+  );
 
   ValueListenable<RtcConnectionState> get connectionState => _connectionState;
   ValueListenable<String?> get activeSpeaker => _activeSpeaker;
@@ -46,6 +49,9 @@ class LiveKitRoomService {
     bool enableVideo = false,
     bool enableAudio = true,
   }) async {
+    if (_room != null) {
+      await disconnect();
+    }
     _connectionState.value = RtcConnectionState.connecting;
 
     try {
@@ -53,9 +59,7 @@ class LiveKitRoomService {
         roomOptions: RoomOptions(
           adaptiveStream: true,
           dynacast: true,
-          defaultAudioPublishOptions: const AudioPublishOptions(
-            dtx: true,
-          ),
+          defaultAudioPublishOptions: const AudioPublishOptions(dtx: true),
           defaultVideoPublishOptions: const VideoPublishOptions(
             simulcast: true,
             videoCodec: 'VP8',
@@ -70,17 +74,26 @@ class LiveKitRoomService {
 
       await _room!.connect(url, token);
       _connectionState.value = RtcConnectionState.connected;
+      final localParticipant = _requireLocalParticipant();
 
       if (enableAudio) {
-        await _room!.localParticipant?.setMicrophoneEnabled(true);
+        await localParticipant.setMicrophoneEnabled(true);
       }
       if (enableVideo) {
-        await _room!.localParticipant?.setCameraEnabled(true);
+        await localParticipant.setCameraEnabled(true);
       }
-
-    } catch (e) {
-      _connectionState.value = RtcConnectionState.disconnected;
-      rethrow;
+    } catch (error, stackTrace) {
+      try {
+        await disconnect();
+      } catch (cleanupError, cleanupStackTrace) {
+        developer.log(
+          'RTC room cleanup after connect failure failed',
+          name: 'LiveKitRoomService',
+          error: cleanupError.runtimeType,
+          stackTrace: cleanupStackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -125,13 +138,24 @@ class LiveKitRoomService {
     switch (quality) {
       case ConnectionQuality.excellent:
       case ConnectionQuality.good:
+        if (_cameraPausedForWeakNetwork) {
+          for (final pub in lp.videoTrackPublications) {
+            if (pub.source != TrackSource.camera || pub.muted) continue;
+            final track = pub.track;
+            if (track != null) {
+              track.mediaStreamTrack.enabled = true;
+            }
+          }
+          _cameraPausedForWeakNetwork = false;
+        }
         break;
       case ConnectionQuality.poor:
         for (final pub in lp.videoTrackPublications) {
-          if (pub.track case LocalVideoTrack track) {
-            if (pub.source == TrackSource.camera) {
-              track.mediaStreamTrack.enabled = false;
-            }
+          if (pub.source != TrackSource.camera || pub.muted) continue;
+          final track = pub.track;
+          if (track != null) {
+            track.mediaStreamTrack.enabled = false;
+            _cameraPausedForWeakNetwork = true;
           }
         }
         break;
@@ -145,18 +169,24 @@ class LiveKitRoomService {
   }
 
   Future<void> setMicrophoneEnabled(bool enabled) async {
-    await _room?.localParticipant?.setMicrophoneEnabled(enabled);
+    await _requireLocalParticipant().setMicrophoneEnabled(enabled);
   }
 
   Future<void> setCameraEnabled(bool enabled) async {
-    await _room?.localParticipant?.setCameraEnabled(enabled);
+    await _requireLocalParticipant().setCameraEnabled(enabled);
+    if (!enabled) {
+      _cameraPausedForWeakNetwork = false;
+    } else if (_connectionQuality.value == ConnectionQuality.poor) {
+      _applyWeakNetworkAdaptation(ConnectionQuality.poor);
+    }
   }
 
   Future<void> switchCamera() async {
-    final publication = _room?.localParticipant?.videoTrackPublications
+    final publication = _requireLocalParticipant().videoTrackPublications
         .where((pub) => pub.source == TrackSource.camera)
         .firstOrNull;
-    if (publication?.track case LocalVideoTrack track) {
+    final track = publication?.track;
+    if (track != null) {
       final opts = track.currentOptions;
       final current = opts is CameraCaptureOptions
           ? opts.cameraPosition
@@ -165,7 +195,9 @@ class LiveKitRoomService {
           ? CameraPosition.back
           : CameraPosition.front;
       await track.setCameraPosition(next);
+      return;
     }
+    throw StateError('rtc camera track is unavailable');
   }
 
   Future<void> setSpeakerOn(bool speakerOn) async {
@@ -173,29 +205,68 @@ class LiveKitRoomService {
   }
 
   Future<void> startScreenShare() async {
-    await _room?.localParticipant?.setScreenShareEnabled(true);
+    await _requireLocalParticipant().setScreenShareEnabled(true);
   }
 
   Future<void> stopScreenShare() async {
-    await _room?.localParticipant?.setScreenShareEnabled(false);
+    await _requireLocalParticipant().setScreenShareEnabled(false);
   }
 
   Future<void> disconnect() async {
+    final room = _room;
+    _room = null;
     _listener?.dispose();
     _listener = null;
-    await _room?.disconnect();
-    await _room?.dispose();
-    _room = null;
+    _cameraPausedForWeakNetwork = false;
     _connectionState.value = RtcConnectionState.disconnected;
     _activeSpeaker.value = null;
+
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    try {
+      await room?.disconnect();
+    } catch (error, stackTrace) {
+      firstError = error;
+      firstStackTrace = stackTrace;
+    }
+    try {
+      await room?.dispose();
+    } catch (error, stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
+    }
+  }
+
+  LocalParticipant _requireLocalParticipant() {
+    final participant = _room?.localParticipant;
+    if (participant == null) {
+      throw StateError('rtc local participant is unavailable');
+    }
+    return participant;
   }
 
   void dispose() {
-    disconnect();
+    unawaited(_disconnectForDispose());
     _participantsChanged.close();
     _disconnected.close();
     _connectionState.dispose();
     _activeSpeaker.dispose();
     _connectionQuality.dispose();
+  }
+
+  Future<void> _disconnectForDispose() async {
+    try {
+      await disconnect();
+    } catch (error, stackTrace) {
+      developer.log(
+        'RTC room cleanup during dispose failed',
+        name: 'LiveKitRoomService',
+        error: error.runtimeType,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }

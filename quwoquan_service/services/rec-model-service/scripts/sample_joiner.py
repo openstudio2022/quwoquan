@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SampleJoiner: read rec_learning_events + rm_recommend_feature + rm_discovery_feed,
+SampleJoiner: read immutable online feature snapshots from rec_learning_events,
 write multi-label training samples to rec_training_samples.
 
 Event schema (MongoSink):
@@ -10,7 +10,8 @@ Event schema (MongoSink):
   createdAt:  datetime (Mongo server time)
   userId / targetId: string
   labels:  {sessionId, contentType, recallPath, action}
-  context: {score, authorId, tags, duration, recScore, feedRequestId, referralSource, ...}
+  context: {score, feedRequestId, featureSnapshotAt,
+            userFeatureSnapshot, itemFeatureSnapshot, ...}
 
 Labels output: click, dwell_s, like, share, comment, follow, dislike, engaged
 """
@@ -20,7 +21,8 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 
-from time_utils import as_utc, utc_now
+from time_utils import as_utc
+from privacy_guard import closed_subject_ids, reject_closed_documents
 
 try:
     from pymongo import MongoClient
@@ -52,107 +54,122 @@ def _extract_duration(event: dict) -> float:
     return float(ctx.get("duration", 0) or 0)
 
 
-def _extract_occurred_at(event: dict) -> datetime:
-    """Parse occurredAt (RFC3339) or fall back to createdAt."""
-    occurred = event.get("occurredAt", "")
-    if occurred:
+def _parse_time(value) -> datetime | None:
+    if isinstance(value, datetime):
+        return as_utc(value)
+    if isinstance(value, str) and value:
         try:
-            return as_utc(datetime.fromisoformat(occurred.replace("Z", "+00:00")))
+            return as_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
         except (ValueError, TypeError):
-            pass
-    created = event.get("createdAt")
-    if isinstance(created, datetime):
-        return as_utc(created)
-    return utc_now()
+            return None
+    return None
 
 
-def _build_user_features(user_feat_doc: dict) -> dict:
-    """Extract user features from rm_recommend_feature document."""
-    if not user_feat_doc:
-        return {}
-    uf = user_feat_doc.get("userFeatures", {})
-    tag_interaction = uf.get("tagInteraction", {})
-    author_interaction = uf.get("authorInteraction", {})
-    top_tags = sorted(tag_interaction.items(), key=lambda x: -x[1])[:50]
-    top_authors = sorted(author_interaction.items(), key=lambda x: -x[1])[:20]
-
-    topic_affinities = uf.get("topicAffinities", {})
-    audience_affinities = uf.get("audienceAffinities", {})
-    format_affinities = uf.get("formatAffinities", {})
-    entity_affinities = uf.get("entityAffinities", {})
-    entity_instance_affinities = uf.get("entityInstanceAffinities", {})
-
-    return {
-        "tagAffinities": dict(sorted(tag_interaction.items(), key=lambda x: -x[1])[:50]),
-        "authorAffinities": dict(top_authors),
-        "engagementRate": uf.get("engagementRate", 0.0),
-        "totalLikes": uf.get("totalLikes", 0),
-        "totalShares": uf.get("totalShares", 0),
-        "totalEvents": uf.get("totalEvents", 0),
-        "topicAffinities": dict(sorted(topic_affinities.items(), key=lambda x: -x[1])[:20]),
-        "audienceAffinities": dict(sorted(audience_affinities.items(), key=lambda x: -x[1])[:10]),
-        "formatAffinities": dict(sorted(format_affinities.items(), key=lambda x: -x[1])[:5]),
-        "entityAffinities": dict(sorted(entity_affinities.items(), key=lambda x: -x[1])[:20]),
-        "entityInstanceAffinities": dict(sorted(entity_instance_affinities.items(), key=lambda x: -x[1])[:20]),
-        "avgEngagementDepth": uf.get("avgEngagementDepth", 0.0),
-        "depthDistribution": uf.get("depthDistribution", {}),
-        "sourceDistribution": uf.get("sourceDistribution", {}),
-        "circleTagAffinities": dict(sorted(
-            uf.get("circleTagAffinities", {}).items(),
-            key=lambda x: -x[1],
-        )[:20]),
-        "socialInterestScore": uf.get("socialInterestScore", 0.0),
-        "typeENER": _compute_type_ener(uf),
-    }
+def _extract_occurred_at(event: dict) -> datetime | None:
+    """Parse occurredAt or createdAt; invalid facts fail closed."""
+    return _parse_time(event.get("occurredAt")) or _parse_time(event.get("createdAt"))
 
 
-def _compute_type_ener(uf: dict) -> dict:
-    imps = uf.get("typeImpressions", {})
-    engs = uf.get("typeEngagements", {})
-    result = {}
-    for ct, imp in imps.items():
-        if imp > 0:
-            result[ct] = engs.get(ct, 0) / imp
-    return result
+def _extract_request_id(event: dict) -> str:
+    context = event.get("context") or {}
+    labels = event.get("labels") or {}
+    return str(context.get("feedRequestId") or labels.get("feedRequestId") or "").strip()
 
 
-def _build_item_features(feed_doc: dict) -> dict:
-    if not feed_doc:
-        return {}
-    raw_published_at = feed_doc.get("publishedAt")
-    published_at = as_utc(raw_published_at) if isinstance(raw_published_at, datetime) else utc_now()
-    age_hours = (utc_now() - published_at).total_seconds() / 3600
-    tags = feed_doc.get("tagRefs", [])
-    return {
-        "contentType": feed_doc.get("contentType", ""),
-        "authorId": feed_doc.get("authorId", ""),
-        "tagRefs": tags,
-        "entityRefs": feed_doc.get("entityRefs", []),
-        "geoTagRef": feed_doc.get("geoTagRef", ""),
-        "ageHours": round(age_hours, 2),
-        "viewCount": feed_doc.get("viewCount", 0),
-        "likeCount": feed_doc.get("likeCount", 0),
-        "commentCount": feed_doc.get("commentCount", 0),
-        "shareCount": feed_doc.get("shareCount", 0),
-        "bodyLength": feed_doc.get("bodyLength", 0),
-        "hasCover": bool(feed_doc.get("coverUrl")),
-        "aspectRatio": feed_doc.get("aspectRatio", 0.0),
-        "tagCount": len(tags),
-        "qualityScore": feed_doc.get("qualityScore", 0.0),
-        "recScore": feed_doc.get("recScore", 0.0),
-        "contentVertical": feed_doc.get("contentVertical", ""),
-        "supplySource": feed_doc.get("supplySource", ""),
-        "semanticMentionCoverage": feed_doc.get("semanticMentionCoverage", 0.0),
-        "mediaCompleteness": feed_doc.get("mediaCompleteness", 0.0),
-        "intersectionFactStrength": feed_doc.get("intersectionFactStrength", 0.0),
-        "intersectionFreshness": feed_doc.get("intersectionFreshness", 0.0),
-        "affinityIntersectionScore": feed_doc.get("affinityIntersectionScore", 0.0),
-        "intersectionSourceRefTop": feed_doc.get("intersectionSourceRefTop", ""),
-        "intersectionConfidenceLabel": feed_doc.get("intersectionConfidenceLabel", ""),
-        "intersectionClass": feed_doc.get("intersectionClass", ""),
-        "publishHour": published_at.hour,
-        "recallPath": feed_doc.get("recallPath", ""),
-    }
+def _extract_online_snapshot(event: dict) -> tuple[dict, dict, datetime] | None:
+    """Read the immutable features captured by the online scoring request."""
+    if event.get("eventType") != "rec_impression":
+        return None
+    context = event.get("context") or {}
+    user = context.get("userFeatureSnapshot")
+    item = context.get("itemFeatureSnapshot")
+    captured_at = _parse_time(context.get("featureSnapshotAt"))
+    if not isinstance(user, dict) or not isinstance(item, dict) or captured_at is None:
+        return None
+    return dict(user), dict(item), captured_at
+
+
+def build_training_samples(
+    events: list[dict],
+    scenario: str,
+) -> tuple[list[dict], int, int]:
+    """Build samples only from immutable, request-correlated exposure facts."""
+    grouped = defaultdict(list)
+    rejected_missing_identity = 0
+    for event in events:
+        user_id = str(event.get("userId") or "").strip()
+        target_id = str(event.get("targetId") or "").strip()
+        request_id = _extract_request_id(event)
+        if not user_id or not target_id or not request_id:
+            rejected_missing_identity += 1
+            continue
+        # rec_model/fields.yaml 的关联身份是 requestId+targetId；禁止把同一用户
+        # 对同一内容的多次独立曝光合成一个样本。
+        grouped[(user_id, target_id, request_id)].append(event)
+
+    docs = []
+    rejected_missing_snapshot = 0
+    for (user_id, target_id, request_id), group_events in grouped.items():
+        impressions = []
+        for event in group_events:
+            occurred_at = _extract_occurred_at(event)
+            snapshot = _extract_online_snapshot(event)
+            if occurred_at is not None and snapshot is not None:
+                impressions.append((occurred_at, event, snapshot))
+        if not impressions:
+            rejected_missing_snapshot += 1
+            continue
+        impression_at, impression_event, snapshot = min(
+            impressions,
+            key=lambda row: row[0],
+        )
+        user_features, item_features, snapshot_at = snapshot
+
+        actions = set()
+        max_dwell = 0.0
+        for event in group_events:
+            actions.add(_extract_action(event))
+            max_dwell = max(max_dwell, _extract_duration(event))
+
+        has_positive = bool(actions & POSITIVE_ACTIONS) or max_dwell > IMPRESSION_WINDOW_SEC
+        has_negative = bool(actions & NEGATIVE_ACTIONS)
+        labels = {
+            "click": 1.0 if "click" in actions else 0.0,
+            "dwell_s": float(max_dwell),
+            "like": 1.0 if "like" in actions else 0.0,
+            "share": 1.0 if "share" in actions else 0.0,
+            "comment": 1.0 if "comment" in actions else 0.0,
+            "follow": 1.0 if "follow" in actions else 0.0,
+            "dislike": 1.0 if "dislike" in actions else 0.0,
+            "engaged": 1.0 if has_positive and not has_negative else 0.0,
+        }
+
+        impression_context = impression_event.get("context") or {}
+        # 在线特征必须在曝光事实之前或同一时刻完成快照。保留有符号差值，
+        # 让训练准入策略对“快照晚于曝光”的时间旅行样本按负值 fail-closed；
+        # 禁止 clamp 到 0，否则非法未来快照会伪装成零延迟样本。
+        feature_lag_seconds = (impression_at - snapshot_at).total_seconds()
+        docs.append({
+            "scenario": scenario,
+            "userId": user_id,
+            "targetId": target_id,
+            "requestId": request_id,
+            "userFeatures": user_features,
+            "itemFeatures": item_features,
+            "contextFeatures": {
+                # 与 RemoteModelScorer 发送给在线模型的评分时刻同源；禁止用
+                # 稍后的下发事实时刻重算，以免跨小时/跨日时产生训练-在线偏斜。
+                "requestHour": snapshot_at.hour,
+                "requestDayOfWeek": snapshot_at.weekday(),
+                "referralSource": impression_context.get("referralSource", ""),
+                "contentType": item_features.get("contentType", ""),
+            },
+            "labels": labels,
+            "ts": impression_at,
+            "featureSnapshotAt": snapshot_at,
+            "featureLagSeconds": round(feature_lag_seconds, 3),
+        })
+    return docs, rejected_missing_identity, rejected_missing_snapshot
 
 
 def main():
@@ -160,7 +177,7 @@ def main():
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
     p.add_argument("--limit", type=int, default=50000)
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
     p.add_argument("--clean", action="store_true", help="Drop existing samples for this scenario before writing")
     args = p.parse_args()
 
@@ -168,8 +185,6 @@ def main():
     db = client[args.db]
     events_coll = db["rec_learning_events"]
     samples_coll = db["rec_training_samples"]
-    feature_coll = db["rm_recommend_feature"]
-    feed_coll = db["rm_discovery_feed"]
 
     if args.clean:
         result = samples_coll.delete_many({"scenario": args.scenario})
@@ -184,79 +199,66 @@ def main():
         .sort("createdAt", -1)
         .limit(args.limit)
     )
+    events, closed_event_subjects = reject_closed_documents(db, events)
     if not events:
-        print("No learning events found", file=sys.stderr)
+        print(
+            "No open-subject learning events found "
+            f"(closed_subjects={len(closed_event_subjects)})",
+            file=sys.stderr,
+        )
         return 1
 
-    user_ids = list({e.get("userId", "") for e in events if e.get("userId")})
-    target_ids = list({e.get("targetId", "") for e in events if e.get("targetId")})
+    docs, rejected_missing_identity, rejected_missing_snapshot = (
+        build_training_samples(events, args.scenario)
+    )
 
-    user_features_map = {}
-    for doc in feature_coll.find({"userId": {"$in": user_ids}}):
-        user_features_map[doc["userId"]] = doc
-
-    item_features_map = {}
-    for doc in feed_coll.find({"postId": {"$in": target_ids}}):
-        item_features_map[doc["postId"]] = doc
-
-    grouped = defaultdict(list)
-    for e in events:
-        key = (e.get("userId", ""), e.get("targetId", ""))
-        grouped[key].append(e)
-
-    docs = []
-    for (user_id, target_id), group_events in grouped.items():
-        actions = set()
-        max_dwell = 0.0
-        earliest = None
-
-        for e in group_events:
-            action = _extract_action(e)
-            actions.add(action)
-            dwell = _extract_duration(e)
-            if dwell > max_dwell:
-                max_dwell = dwell
-            ts = _extract_occurred_at(e)
-            if earliest is None or ts < earliest:
-                earliest = ts
-
-        if earliest is None:
-            earliest = utc_now()
-
-        has_positive = bool(actions & POSITIVE_ACTIONS) or max_dwell > IMPRESSION_WINDOW_SEC
-        has_negative = bool(actions & NEGATIVE_ACTIONS)
-
-        labels = {
-            "click": 1.0 if "click" in actions else 0.0,
-            "dwell_s": float(max_dwell),
-            "like": 1.0 if "like" in actions else 0.0,
-            "share": 1.0 if "share" in actions else 0.0,
-            "comment": 1.0 if "comment" in actions else 0.0,
-            "follow": 1.0 if "follow" in actions else 0.0,
-            "dislike": 1.0 if "dislike" in actions else 0.0,
-            "engaged": 1.0 if has_positive and not has_negative else 0.0,
-        }
-
-        ctx_event = group_events[0].get("context") or {}
-        doc = {
-            "scenario": args.scenario,
-            "userId": user_id,
-            "targetId": target_id,
-            "userFeatures": _build_user_features(user_features_map.get(user_id)),
-            "itemFeatures": _build_item_features(item_features_map.get(target_id)),
-            "contextFeatures": {
-                "requestHour": earliest.hour,
-                "requestDayOfWeek": earliest.weekday(),
-                "referralSource": ctx_event.get("referralSource", ""),
-                "contentType": ctx_event.get("contentType", ""),
-            },
-            "labels": labels,
-            "ts": earliest,
-        }
-        docs.append(doc)
-
-    if docs:
-        samples_coll.insert_many(docs)
+    if not docs:
+        print(
+            "No admissible samples: impressions must carry requestId and immutable "
+            "online feature snapshots",
+            file=sys.stderr,
+        )
+        return 1
+    docs, closed_sample_subjects = reject_closed_documents(db, docs)
+    if not docs:
+        print(
+            "No admissible open-subject samples "
+            f"(closed_subjects={len(closed_sample_subjects)})",
+            file=sys.stderr,
+        )
+        return 1
+    samples_coll.insert_many(docs)
+    late_closed = closed_subject_ids(
+        db,
+        (doc["userId"] for doc in docs),
+    )
+    if late_closed:
+        inserted_ids = [
+            doc["_id"]
+            for doc in docs
+            if doc["userId"] in late_closed
+        ]
+        if inserted_ids:
+            samples_coll.delete_many({"_id": {"$in": inserted_ids}})
+        docs = [doc for doc in docs if doc["userId"] not in late_closed]
+    if not docs:
+        print(
+            "All samples were rejected by a concurrent account closure",
+            file=sys.stderr,
+        )
+        return 1
+    lags = sorted(d["featureLagSeconds"] for d in docs)
+    if lags:
+        p50 = lags[len(lags) // 2]
+        p95 = lags[min(len(lags) - 1, int(len(lags) * 0.95))]
+        stale_share = sum(1 for lag in lags if lag > 24 * 3600) / len(lags)
+        print(
+            f"Feature snapshot lag: p50={p50:.0f}s p95={p95:.0f}s "
+            f"share(lag>24h)={stale_share:.2%} "
+            f"rejected_identity={rejected_missing_identity} "
+            f"rejected_snapshot={rejected_missing_snapshot}",
+            file=sys.stderr,
+        )
     print(f"Wrote {len(docs)} samples for scenario={args.scenario}", file=sys.stderr)
     return 0
 

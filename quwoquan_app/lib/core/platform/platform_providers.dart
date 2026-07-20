@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
+import 'package:quwoquan_app/core/platform/incoming_call_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
 
 /// Current platform (assembly/observability only — do NOT branch on this in
 /// business code; consume [platformCapabilitiesProvider] instead).
@@ -86,3 +91,36 @@ final nativeShareBridgeProvider = Provider<NativeShareBridge>((ref) {
       return const UnsupportedNativeShareBridge();
   }
 });
+
+/// 来电原生桥只在 iOS / Android 装配；Web/OHOS/desktop 统一返回 typed 空能力。
+final incomingCallNativeBridgeProvider = Provider<IncomingCallNativeBridge>((
+  ref,
+) {
+  final platform = ref.watch(platformTargetProvider);
+  switch (platform) {
+    case AppPlatform.android:
+    case AppPlatform.ios:
+      return const MethodChannelIncomingCallNativeBridge();
+    case AppPlatform.web:
+    case AppPlatform.ohos:
+    case AppPlatform.desktop:
+      return const UnsupportedIncomingCallNativeBridge();
+  }
+});
+
+/// APNs VoIP 原生 queue 与 Dart FCM queue 的统一持久化入口。
+final pushEndpointGatewayProvider = Provider<PushEndpointGateway>(
+  (ref) => PersistentPushEndpointGateway(),
+);
+
+/// Firebase 只在防腐层内部判断 Android；业务仅消费 runtime state/capability。
+final firebaseIncomingCallRuntimeProvider =
+    Provider<FirebaseIncomingCallRuntime>((ref) {
+      final runtime = FirebaseIncomingCallRuntime(
+        pushEndpointGateway: ref.watch(pushEndpointGatewayProvider),
+      );
+      ref.onDispose(() {
+        unawaited(runtime.stop());
+      });
+      return runtime;
+    });

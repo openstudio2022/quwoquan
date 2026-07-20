@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
@@ -15,6 +17,29 @@ final class PostPublicationQueuedException implements Exception {
   final String publishIntentId;
 }
 
+final class PostPublicationTaskBlockedException implements Exception {
+  const PostPublicationTaskBlockedException(this.localDraftId);
+
+  final String localDraftId;
+}
+
+final class _PostPublicationPersonaMismatchException implements Exception {
+  const _PostPublicationPersonaMismatchException();
+}
+
+final class _PostPublicationPermanentException implements Exception {
+  const _PostPublicationPermanentException();
+}
+
+enum LocalPostPublicationBlockReason {
+  personaChanged,
+  invalidReceipt,
+  rejected,
+  remoteFailure,
+}
+
+enum LocalPostPublicationStage { preparingMedia, submitting }
+
 final class LocalPostPublicationIntent {
   const LocalPostPublicationIntent({
     required this.command,
@@ -22,11 +47,14 @@ final class LocalPostPublicationIntent {
     required this.circleIds,
     required this.createdAt,
     required this.nextAttemptAt,
+    this.stage = LocalPostPublicationStage.submitting,
     this.retryCount = 0,
     this.postId,
     this.committedVersion,
     this.acceptedAt,
+    this.publicationState,
     this.lastErrorCode,
+    this.blockReason,
     this.blocked = false,
   });
 
@@ -35,40 +63,57 @@ final class LocalPostPublicationIntent {
   final List<String> circleIds;
   final DateTime createdAt;
   final DateTime nextAttemptAt;
+  final LocalPostPublicationStage stage;
   final int retryCount;
   final String? postId;
   final int? committedVersion;
   final DateTime? acceptedAt;
+  final ContentPostPublicationState? publicationState;
   final String? lastErrorCode;
+  final LocalPostPublicationBlockReason? blockReason;
   final bool blocked;
 
   bool get publicationAccepted =>
-      postId?.trim().isNotEmpty == true && acceptedAt != null;
+      postId?.trim().isNotEmpty == true &&
+      committedVersion != null &&
+      acceptedAt != null &&
+      (publicationState == ContentPostPublicationState.pendingReview ||
+          publicationState == ContentPostPublicationState.published);
+  bool get requiresMediaPreparation =>
+      stage == LocalPostPublicationStage.preparingMedia;
 
   LocalPostPublicationIntent copyWith({
+    SubmitContentPostPublicationCommand? command,
     List<String>? circleIds,
     DateTime? nextAttemptAt,
+    LocalPostPublicationStage? stage,
     int? retryCount,
     String? postId,
     int? committedVersion,
     DateTime? acceptedAt,
+    ContentPostPublicationState? publicationState,
     String? lastErrorCode,
     bool clearLastErrorCode = false,
+    LocalPostPublicationBlockReason? blockReason,
+    bool clearBlockReason = false,
     bool? blocked,
   }) {
     return LocalPostPublicationIntent(
-      command: command,
+      command: command ?? this.command,
       authorPersonaId: authorPersonaId,
       circleIds: circleIds ?? this.circleIds,
       createdAt: createdAt,
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      stage: stage ?? this.stage,
       retryCount: retryCount ?? this.retryCount,
       postId: postId ?? this.postId,
       committedVersion: committedVersion ?? this.committedVersion,
       acceptedAt: acceptedAt ?? this.acceptedAt,
+      publicationState: publicationState ?? this.publicationState,
       lastErrorCode: clearLastErrorCode
           ? null
           : (lastErrorCode ?? this.lastErrorCode),
+      blockReason: clearBlockReason ? null : (blockReason ?? this.blockReason),
       blocked: blocked ?? this.blocked,
     );
   }
@@ -90,14 +135,19 @@ final class LocalPostPublicationIntent {
       nextAttemptAt:
           DateTime.tryParse(map['nextAttemptAt']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
+      stage: _optionalPublicationStage(map['stage']),
       retryCount: (map['retryCount'] as num?)?.toInt() ?? 0,
       postId: _optionalStorageText(map['postId']),
       committedVersion: (map['committedVersion'] as num?)?.toInt(),
       acceptedAt: DateTime.tryParse(
         map['acceptedAt']?.toString() ?? '',
       )?.toUtc(),
+      publicationState: _optionalPublicationState(map['publicationState']),
       lastErrorCode: _optionalStorageText(map['lastErrorCode']),
-      blocked: map['blocked'] == true,
+      blockReason: _optionalBlockReason(map['blockReason']),
+      blocked:
+          map['blocked'] == true ||
+          _hasUnsupportedPublicationState(map['publicationState']),
     );
   }
 
@@ -108,11 +158,14 @@ final class LocalPostPublicationIntent {
       'circleIds': circleIds,
       'createdAt': createdAt.toUtc().toIso8601String(),
       'nextAttemptAt': nextAttemptAt.toUtc().toIso8601String(),
+      'stage': stage.name,
       'retryCount': retryCount,
       'postId': postId,
       'committedVersion': committedVersion,
       'acceptedAt': acceptedAt?.toUtc().toIso8601String(),
+      'publicationState': publicationState?.wireValue,
       'lastErrorCode': lastErrorCode,
+      'blockReason': blockReason?.name,
       'blocked': blocked,
     };
   }
@@ -147,6 +200,43 @@ final class PostPublicationIntentQueueNotifier
     return const PostPublicationIntentQueueState();
   }
 
+  Future<void> beginMediaPreparation({
+    required SubmitContentPostPublicationCommand command,
+    required String authorPersonaId,
+    Iterable<String> circleIds = const <String>[],
+  }) async {
+    await _hydrated.future;
+    final normalizedPersonaId = authorPersonaId.trim();
+    if (normalizedPersonaId.isEmpty) {
+      throw ArgumentError.value(
+        authorPersonaId,
+        'authorPersonaId',
+        'must not be empty',
+      );
+    }
+    final existing = _intentForDraft(command.localDraftId);
+    if (existing != null) {
+      if (existing.authorPersonaId != normalizedPersonaId) {
+        throw PostPublicationTaskBlockedException(command.localDraftId);
+      }
+      if (!existing.requiresMediaPreparation) {
+        throw PostPublicationQueuedException(command.publishIntentId);
+      }
+    }
+    final now = DateTime.now().toUtc();
+    final intent = LocalPostPublicationIntent(
+      command: command,
+      authorPersonaId: normalizedPersonaId,
+      circleIds: _normalizedCircleIds(circleIds),
+      createdAt: existing?.createdAt ?? now,
+      nextAttemptAt: now,
+      stage: LocalPostPublicationStage.preparingMedia,
+    );
+    _replace(intent);
+    await _persist();
+    _scheduleRetry();
+  }
+
   Future<ContentPostPublicationReceipt> submit({
     required SubmitContentPostPublicationCommand command,
     required String authorPersonaId,
@@ -166,13 +256,25 @@ final class PostPublicationIntentQueueNotifier
       intent = LocalPostPublicationIntent(
         command: command,
         authorPersonaId: normalizedPersonaId,
-        circleIds: circleIds
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList(growable: false),
+        circleIds: _normalizedCircleIds(circleIds),
         createdAt: DateTime.now().toUtc(),
         nextAttemptAt: DateTime.now().toUtc(),
+      );
+      _replace(intent);
+      await _persist();
+    } else if (intent.requiresMediaPreparation) {
+      if (intent.authorPersonaId != normalizedPersonaId) {
+        throw PostPublicationTaskBlockedException(command.localDraftId);
+      }
+      intent = intent.copyWith(
+        command: command,
+        circleIds: _normalizedCircleIds(circleIds),
+        stage: LocalPostPublicationStage.submitting,
+        nextAttemptAt: DateTime.now().toUtc(),
+        retryCount: 0,
+        blocked: false,
+        clearLastErrorCode: true,
+        clearBlockReason: true,
       );
       _replace(intent);
       await _persist();
@@ -180,14 +282,37 @@ final class PostPublicationIntentQueueNotifier
     if (intent.publicationAccepted) {
       return _receiptFromIntent(intent);
     }
+    if (intent.publicationState == ContentPostPublicationState.rejected) {
+      throw PostPublicationTaskBlockedException(intent.command.localDraftId);
+    }
     try {
       return await _submitPublication(intent);
+    } on _PostPublicationPersonaMismatchException {
+      await _markFailed(
+        intent,
+        null,
+        false,
+        blockReason: LocalPostPublicationBlockReason.personaChanged,
+      );
+      throw PostPublicationTaskBlockedException(intent.command.localDraftId);
+    } on _PostPublicationPermanentException {
+      await _markFailed(
+        intent,
+        null,
+        false,
+        blockReason: LocalPostPublicationBlockReason.invalidReceipt,
+      );
+      throw PostPublicationTaskBlockedException(intent.command.localDraftId);
     } on CloudException catch (error) {
       final retryable = _isRetryable(error);
       await _markFailed(
         intent,
         error.code ?? error.runtimeFailure.code,
         retryable,
+        retryAfter: _retryAfter(error),
+        blockReason: retryable
+            ? null
+            : LocalPostPublicationBlockReason.remoteFailure,
       );
       if (retryable) {
         throw PostPublicationQueuedException(intent.command.publishIntentId);
@@ -205,6 +330,44 @@ final class PostPublicationIntentQueueNotifier
     }
   }
 
+  /// 取消尚未被服务端接受的发布意图，或清除已拒绝的本地终态任务。
+  /// pending_review/published 不能伪装成本地取消，必须走远端生命周期命令。
+  Future<void> cancelPending(String localDraftId) async {
+    await _hydrated.future;
+    final intent = _intentForDraft(localDraftId);
+    if (intent == null) {
+      return;
+    }
+    if (intent.publicationAccepted) {
+      throw StateError('accepted publication cannot be cancelled locally');
+    }
+    _remove(intent.command.localDraftId);
+    await _persist();
+    _scheduleRetry();
+  }
+
+  Future<void> retryPending(String localDraftId) async {
+    await _hydrated.future;
+    final intent = _intentForDraft(localDraftId);
+    if (intent == null ||
+        intent.requiresMediaPreparation ||
+        intent.publicationState == ContentPostPublicationState.rejected ||
+        intent.publicationState == ContentPostPublicationState.published) {
+      return;
+    }
+    _replace(
+      intent.copyWith(
+        retryCount: 0,
+        nextAttemptAt: DateTime.now().toUtc(),
+        blocked: false,
+        clearLastErrorCode: true,
+        clearBlockReason: true,
+      ),
+    );
+    await _persist();
+    await flushNow();
+  }
+
   Future<void> flushNow() async {
     await _hydrated.future;
     if (_flushing) {
@@ -216,21 +379,44 @@ final class PostPublicationIntentQueueNotifier
           .where(
             (intent) =>
                 !intent.blocked &&
+                !intent.requiresMediaPreparation &&
                 !intent.nextAttemptAt.isAfter(DateTime.now().toUtc()),
           )
           .toList(growable: false);
       for (final intent in due) {
         try {
-          if (intent.publicationAccepted) {
+          if (intent.publicationState ==
+              ContentPostPublicationState.pendingReview) {
+            await _refreshPendingIntent(intent);
+          } else if (intent.publicationAccepted) {
             await _finishAcceptedIntent(intent);
           } else {
             await _submitPublication(intent);
           }
+        } on _PostPublicationPersonaMismatchException {
+          await _markFailed(
+            intent,
+            null,
+            false,
+            blockReason: LocalPostPublicationBlockReason.personaChanged,
+          );
+        } on _PostPublicationPermanentException {
+          await _markFailed(
+            intent,
+            null,
+            false,
+            blockReason: LocalPostPublicationBlockReason.invalidReceipt,
+          );
         } on CloudException catch (error) {
+          final retryable = _isRetryable(error);
           await _markFailed(
             intent,
             error.code ?? error.runtimeFailure.code,
-            _isRetryable(error),
+            retryable,
+            retryAfter: _retryAfter(error),
+            blockReason: retryable
+                ? null
+                : LocalPostPublicationBlockReason.remoteFailure,
           );
         } catch (error, stackTrace) {
           developer.log(
@@ -294,27 +480,93 @@ final class PostPublicationIntentQueueNotifier
   ) async {
     final activePersona = await ref.read(activePersonaContextProvider.future);
     if (activePersona.subAccountId.trim() != intent.authorPersonaId) {
-      throw StateError('publication waits for its original persona context');
+      throw const _PostPublicationPersonaMismatchException();
     }
     final receipt = await ref
         .read(createContentPostPublicationWriterProvider)
         .submitPostPublication(intent.command);
+    final publicationState = _acceptedPublicationState(receipt, intent);
     final accepted = intent.copyWith(
       postId: receipt.postId,
       committedVersion: receipt.committedVersion,
       acceptedAt: receipt.acceptedAt,
+      publicationState: publicationState,
       retryCount: 0,
-      nextAttemptAt: DateTime.now().toUtc(),
+      nextAttemptAt:
+          publicationState == ContentPostPublicationState.pendingReview
+          ? DateTime.now().toUtc().add(const Duration(seconds: 15))
+          : DateTime.now().toUtc(),
       clearLastErrorCode: true,
+      clearBlockReason: true,
       blocked: false,
     );
     _replace(accepted);
     await _persist();
-    await _finishAcceptedIntent(accepted);
+    if (publicationState == ContentPostPublicationState.published) {
+      await _finishAcceptedIntent(accepted);
+    } else {
+      _scheduleRetry();
+    }
     return receipt;
   }
 
+  Future<void> _refreshPendingIntent(LocalPostPublicationIntent intent) async {
+    final postId = intent.postId?.trim() ?? '';
+    if (postId.isEmpty) {
+      throw const _PostPublicationPermanentException();
+    }
+    final status = await ref
+        .read(createWorkspaceContentPostPublicationStatusReaderProvider)
+        .getPostPublicationStatus(postId);
+    if (status.postId.trim() != postId) {
+      throw const _PostPublicationPermanentException();
+    }
+    switch (status.state) {
+      case ContentPostPublicationState.pendingReview:
+        _replace(
+          intent.copyWith(
+            nextAttemptAt: DateTime.now().toUtc().add(
+              const Duration(seconds: 15),
+            ),
+            retryCount: 0,
+            clearLastErrorCode: true,
+            clearBlockReason: true,
+            blocked: false,
+          ),
+        );
+        await _persist();
+        return;
+      case ContentPostPublicationState.published:
+        final published = intent.copyWith(
+          publicationState: ContentPostPublicationState.published,
+          nextAttemptAt: DateTime.now().toUtc(),
+          retryCount: 0,
+          clearLastErrorCode: true,
+          clearBlockReason: true,
+          blocked: false,
+        );
+        _replace(published);
+        await _persist();
+        await _finishAcceptedIntent(published);
+        return;
+      case ContentPostPublicationState.rejected:
+        _replace(
+          intent.copyWith(
+            publicationState: ContentPostPublicationState.rejected,
+            lastErrorCode: ContentErrorCode.publicationRejected.code,
+            blockReason: LocalPostPublicationBlockReason.rejected,
+            blocked: true,
+          ),
+        );
+        await _persist();
+        return;
+    }
+  }
+
   Future<void> _finishAcceptedIntent(LocalPostPublicationIntent intent) async {
+    if (intent.publicationState != ContentPostPublicationState.published) {
+      throw const _PostPublicationPermanentException();
+    }
     try {
       await ref
           .read(createDraftStoreProvider.notifier)
@@ -370,24 +622,42 @@ final class PostPublicationIntentQueueNotifier
 
   Future<void> _markFailed(
     LocalPostPublicationIntent intent,
-    String errorCode,
-    bool retryable,
-  ) async {
+    String? errorCode,
+    bool retryable, {
+    Duration? retryAfter,
+    LocalPostPublicationBlockReason? blockReason,
+  }) async {
     final retryCount = intent.retryCount + 1;
     final exponent = retryCount.clamp(0, 6).toInt();
-    final delaySeconds = 1 << exponent;
+    final fallbackDelaySeconds = 1 << exponent;
+    final directedDelaySeconds = retryAfter?.inSeconds ?? 0;
+    final delaySeconds = directedDelaySeconds > 0
+        ? directedDelaySeconds.clamp(1, 3600).toInt()
+        : fallbackDelaySeconds.clamp(2, 60).toInt();
     _replace(
       intent.copyWith(
         retryCount: retryCount,
         nextAttemptAt: DateTime.now().toUtc().add(
-          Duration(seconds: delaySeconds.clamp(2, 60).toInt()),
+          Duration(seconds: delaySeconds),
         ),
         lastErrorCode: errorCode,
+        clearLastErrorCode: errorCode == null,
+        blockReason: blockReason,
+        clearBlockReason: retryable && blockReason == null,
         blocked: !retryable,
       ),
     );
     await _persist();
     _scheduleRetry();
+  }
+
+  Duration? _retryAfter(CloudException error) {
+    final transportRetryAfter = error.retryAfter;
+    if (transportRetryAfter != null && transportRetryAfter > Duration.zero) {
+      return transportRetryAfter;
+    }
+    final afterSeconds = error.runtimeFailure.recovery.afterSeconds;
+    return afterSeconds > 0 ? Duration(seconds: afterSeconds) : null;
   }
 
   Future<void> _persist() async {
@@ -460,13 +730,40 @@ final class PostPublicationIntentQueueNotifier
       publishIntentId: intent.command.publishIntentId,
       localDraftId: intent.command.localDraftId,
       postId: intent.postId!,
-      state: 'published',
+      state: intent.publicationState!.wireValue,
       committedVersion: intent.committedVersion!,
       acceptedAt: intent.acceptedAt!,
     );
   }
 
+  ContentPostPublicationState _acceptedPublicationState(
+    ContentPostPublicationReceipt receipt,
+    LocalPostPublicationIntent intent,
+  ) {
+    final state = switch (receipt.state.trim()) {
+      'pending_review' => ContentPostPublicationState.pendingReview,
+      'published' => ContentPostPublicationState.published,
+      _ => throw const _PostPublicationPermanentException(),
+    };
+    if (receipt.publishIntentId.trim() != intent.command.publishIntentId ||
+        receipt.localDraftId.trim() != intent.command.localDraftId ||
+        receipt.postId.trim().isEmpty ||
+        receipt.committedVersion < 1 ||
+        receipt.acceptedAt.millisecondsSinceEpoch <= 0) {
+      throw const _PostPublicationPermanentException();
+    }
+    return state;
+  }
+
   bool _isRetryable(CloudException error) {
+    // 恢复动作由 errors.yaml -> RuntimeFailure 生成，是发布队列是否自动重试的
+    // 唯一业务语义；HTTP 分类只在旧/畸形响应缺少 recovery 时兜底。
+    final recoveryAction = error.runtimeFailure.recovery.action
+        .trim()
+        .toLowerCase();
+    if (recoveryAction.isNotEmpty) {
+      return recoveryAction == 'retry';
+    }
     return switch (error.type) {
       CloudErrorType.timeout ||
       CloudErrorType.cancelled ||
@@ -474,9 +771,10 @@ final class PostPublicationIntentQueueNotifier
       CloudErrorType.rateLimited ||
       CloudErrorType.server ||
       CloudErrorType.invalidResponse ||
-      CloudErrorType.unauthorized ||
       CloudErrorType.unknown => true,
-      CloudErrorType.forbidden || CloudErrorType.notFound => false,
+      CloudErrorType.unauthorized ||
+      CloudErrorType.forbidden ||
+      CloudErrorType.notFound => false,
     };
   }
 }
@@ -495,4 +793,33 @@ String _publicationQueueScopeKey(String? currentUserId) {
 String? _optionalStorageText(Object? value) {
   final normalized = value?.toString().trim() ?? '';
   return normalized.isEmpty ? null : normalized;
+}
+
+ContentPostPublicationState? _optionalPublicationState(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  try {
+    return ContentPostPublicationState.fromWire(normalized);
+  } on FormatException {
+    return null;
+  }
+}
+
+bool _hasUnsupportedPublicationState(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  return normalized.isNotEmpty && _optionalPublicationState(normalized) == null;
+}
+
+LocalPostPublicationBlockReason? _optionalBlockReason(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  for (final reason in LocalPostPublicationBlockReason.values) {
+    if (reason.name == normalized) {
+      return reason;
+    }
+  }
+  return normalized.isEmpty
+      ? null
+      : LocalPostPublicationBlockReason.invalidReceipt;
 }

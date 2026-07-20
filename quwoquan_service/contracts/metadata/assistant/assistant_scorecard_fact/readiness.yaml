@@ -1,0 +1,25 @@
+object: AssistantScorecardFact
+operations:
+  - ReportScorecard
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/assistant-service/internal/application/service.go
+    - quwoquan_service/services/assistant-service/internal/application/conversation_service.go
+  store:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/event_store.go
+  outbox: []
+  reader:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/event_store.go
+    - quwoquan_service/services/assistant-service/internal/infrastructure/projection/learning_profile_store.go
+  transport:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler.go
+  app_client: []
+  page: []
+tests:
+  local_contract:
+    - quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/assistant-service/tests/api_integration/learning_facts__api_integration_test.go
+    - quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
+  user_acceptance: []
+environments: []

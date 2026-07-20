@@ -76,4 +76,59 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 	if err != nil || count != 3 {
 		t.Fatalf("projection inbox count=%d err=%v want 3", count, err)
 	}
+
+	// PersonaBlocked 之后：block 事实投影可被读路径判定（双向）。
+	blockReader := recinfra.NewPersonaBlockReader(db)
+	blocked, err := blockReader.IsBlockedBetween(ctx, "stream_viewer", "stream_target")
+	if err != nil || !blocked {
+		t.Fatalf("IsBlockedBetween(viewer, target)=%v err=%v want true", blocked, err)
+	}
+	blocked, err = blockReader.IsBlockedBetween(ctx, "stream_target", "stream_viewer")
+	if err != nil || !blocked {
+		t.Fatalf("IsBlockedBetween(target, viewer)=%v err=%v want true", blocked, err)
+	}
+	blockedPersonaIDs, err := blockReader.ListBlockedPersonaIDs(ctx, "stream_viewer")
+	if err != nil ||
+		len(blockedPersonaIDs) != 1 ||
+		blockedPersonaIDs[0] != "stream_target" {
+		t.Fatalf(
+			"ListBlockedPersonaIDs(viewer)=%v err=%v want [stream_target]",
+			blockedPersonaIDs,
+			err,
+		)
+	}
+
+	// PersonaUnblocked 之后：block 标记清除、follow 不恢复。
+	if _, err := stream.XAdd(ctx, recinfra.PersonaRelationshipEventStream, map[string]string{
+		"eventId": "stream_unblock_4", "eventName": "PersonaUnblocked", "pairId": "stream_pair",
+		"sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target",
+		"following": "false", "version": "4",
+		"occurredAt": now.Add(3 * time.Second).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("append unblock stream event: %v", err)
+	}
+	if _, err := consumer.ProcessOnce(ctx); err != nil {
+		t.Fatalf("consume unblock stream: %v", err)
+	}
+	blocked, err = blockReader.IsBlockedBetween(ctx, "stream_viewer", "stream_target")
+	if err != nil || blocked {
+		t.Fatalf("IsBlockedBetween after unblock=%v err=%v want false", blocked, err)
+	}
+	blockedPersonaIDs, err = blockReader.ListBlockedPersonaIDs(ctx, "stream_viewer")
+	if err != nil || len(blockedPersonaIDs) != 0 {
+		t.Fatalf(
+			"ListBlockedPersonaIDs after unblock=%v err=%v want empty",
+			blockedPersonaIDs,
+			err,
+		)
+	}
+	var direction struct {
+		Following bool `bson:"following"`
+	}
+	if err := relationships.FindOne(ctx, bson.M{"sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target"}).Decode(&direction); err != nil {
+		t.Fatalf("read direction after unblock: %v", err)
+	}
+	if direction.Following {
+		t.Fatalf("unblock must not restore follow state")
+	}
 }

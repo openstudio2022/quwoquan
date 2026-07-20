@@ -36,4 +36,19 @@ public class PlatformVideoViewTest {
 
     exoPlayer.release();
   }
+
+  @Test
+  public void disposeDetachesFrameworkOwnedSurfaceAndIsIdempotent() throws Exception {
+    final Context context = ApplicationProvider.getApplicationContext();
+    final ExoPlayer exoPlayer = spy(new ExoPlayer.Builder(context).build());
+    final PlatformVideoView view = new PlatformVideoView(context, exoPlayer);
+
+    view.dispose();
+    view.dispose();
+
+    verify(exoPlayer, times(1)).clearVideoSurfaceView(any(SurfaceView.class));
+    verify(exoPlayer, times(1)).setVideoSurface(null);
+
+    exoPlayer.release();
+  }
 }

@@ -46,6 +46,28 @@
 - **不适用**：Go 服务端错误消息（由 `runtime-errors` 负责）；Dart 代码中纯日志/调试字符串
 - **约束**：生成文件 `lib/l10n/app_localizations*.dart` 标注 `DO NOT EDIT`，与服务端 codegen 产物同等保护
 
+## 冷启动品牌静态帧
+
+冷启动原生页、Flutter 第一帧、最终全开帧和应用图标共享同一品牌视觉链：
+
+```text
+AppColors / AppTypography / AppSpacing
+  -> WelcomeAppearance（唯一花瓣 appearance）
+  -> WelcomeStaticFrame / WelcomeFlowerMarkPainter
+  -> Flutter runtime + golden + native asset generator
+  -> Android launch resources + iOS LaunchScreen assets
+```
+
+- 图一高保只作为布局、色彩和字形语言的验收参考，禁止把截图或截图文字烘焙为运行时页面。
+- 品牌中文字体固定使用仓内 `Noto Sans SC` 可变字体；其 OFL-1.1、上游 commit 和
+  SHA-256 由 `assets/fonts/bundled_fonts_manifest.yaml` 审计，不再维护“临时字体待替换”分支。
+- 欢迎页、登录页品牌标与应用图标不得使用不同的透明度/渐变 appearance；花瓣路径、颜色、
+  花蕊和开放终态只由 `WelcomeFlowerMarkPainter` 解释。
+- Android `launch_background.xml` 与启动色资源由原生资产生成器从 Dart 品牌 token 生成；
+  iOS 自适应渐变位图与品牌簇也由同一生成器输出，原生资源不是可独立手调的第二真相源。
+- 状态栏、Flutter 布局与原生静态资源分别受 contract/golden 约束；任何 token 变更必须同步
+  重生成原生资源并通过首帧同构测试。
+
 ## 未来演进
 
 - 主题基础设施（`app-theme-infrastructure`）在本 L2 中作为独立 L3 建立，本次仅建节点，下一迭代交付

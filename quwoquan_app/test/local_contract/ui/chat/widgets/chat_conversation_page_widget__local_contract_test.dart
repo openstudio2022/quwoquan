@@ -6,12 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 
 Widget _scopedApp({
@@ -21,7 +23,7 @@ Widget _scopedApp({
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repo),
+      chatRepositoryCompositionProvider.overrideWithValue(repo),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _MutualCapabilityRepository(),
       ),
@@ -32,7 +34,10 @@ Widget _scopedApp({
     child: MaterialApp(
       navigatorObservers: <NavigatorObserver>[chatRouteObserver],
       home: Scaffold(
-        body: ChatConversationPage(conversationId: 'conv_001', onBack: () {}),
+        body: ChatConversationPage(
+          conversationId: 'fixture_conv_direct',
+          onBack: () {},
+        ),
       ),
     ),
   );
@@ -89,10 +94,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(
-        find.text(UITextConstants.chatMutualFollowRtcHint),
-        findsOneWidget,
-      );
+      expect(find.text(ChatText.chatMutualFollowRtcHint), findsOneWidget);
 
       await tester.tap(find.byKey(TestKeys.chatInputMoreButton));
       await tester.pump();
@@ -124,13 +126,15 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              MockChatRepository(),
+            ),
           ],
           child: MaterialApp(
             navigatorObservers: <NavigatorObserver>[chatRouteObserver],
             home: Scaffold(
               body: ChatConversationPage(
-                conversationId: 'conv_001',
+                conversationId: 'fixture_conv_direct',
                 onBack: () => backCalled = true,
               ),
             ),
@@ -171,23 +175,25 @@ void main() {
   // 错误态渲染
   // ──────────────────────────────────────────────────────────────────
   group('ChatConversationPage — 错误态渲染', () {
-    testWidgets('加载失败时页面不崩溃', (tester) async {
+    testWidgets('加载失败时展示可重试错误面', (tester) async {
       addTearDown(() => _disposeChatConversationWidget(tester));
       await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatConversationPage), findsOneWidget);
+      expect(find.byType(AppPageErrorState), findsOneWidget);
       await _disposeChatConversationWidget(tester);
     });
 
-    testWidgets('空消息列表安全渲染', (tester) async {
+    testWidgets('空消息列表展示语义空态', (tester) async {
       addTearDown(() => _disposeChatConversationWidget(tester));
       await tester.pumpWidget(_scopedApp(mock: _EmptyMessagesChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatConversationPage), findsOneWidget);
+      expect(find.text(ChatText.chatConversationNoMessages), findsOneWidget);
       await _disposeChatConversationWidget(tester);
     });
   });
@@ -239,7 +245,7 @@ class _MutualCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerSubAccountId': 'user_001',
+      'viewerSubAccountId': 'fixture_user_current',
       'targetSubAccountId': targetUserId,
       'relationState': 'mutual',
       'canGreet': false,
@@ -262,7 +268,7 @@ class _FollowingOnlyCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerSubAccountId': 'user_001',
+      'viewerSubAccountId': 'fixture_user_current',
       'targetSubAccountId': targetUserId,
       'relationState': 'following',
       'canGreet': true,

@@ -48,4 +48,6 @@ class HomepageUIConfig {
     HomepageSubTabConfig(id: "opinion", labelKey: "homepage_sub_opinion", isDefault: false, homepageTypes: <String>[]),
     HomepageSubTabConfig(id: "question", labelKey: "homepage_sub_question", isDefault: false, homepageTypes: <String>[]),
   ];
+
+  static const Set<String> wishlistHomepageTypes = <String>{"hotel", "restaurant", "sight", "museum", "heritage_site", "ancient_town", "religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park"};
 }

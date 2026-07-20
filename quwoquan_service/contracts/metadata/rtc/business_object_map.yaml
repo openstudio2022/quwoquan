@@ -29,8 +29,6 @@ objects:
     - roomId
     - maxParticipants
     - participantCount
-    - isRecording
-    - recordingUrl
     - isScreenSharing
     - screenShareUserId
     - endReason
@@ -71,6 +69,7 @@ objects:
   - JoinCall
   - LeaveCall
   - RejectCall
+  - ReportMediaConnected
   - StartScreenShare
   - StopScreenShare
   - ToggleCamera
@@ -147,16 +146,8 @@ objects:
     - isCameraOn
     - joinedAt
     - leftAt
-    - displayName
-    - avatarUrl
-    - trustRelation
-    - sourceLabel
-    - isKnownContact
-    - mutualContext
     - inviteStatus
     - invitedBy
-    - connectionQuality
-    - isSpeaking
     owned_value: []
     projection: []
     reference: []
@@ -174,65 +165,3 @@ objects:
   source_document: rtc/call_session/fields.yaml
   source_entity: CallParticipant
   storage_role: owned
-- access:
-    commands: aggregate_facade
-    cross_context: public_contract_only
-    queries: named_reader
-  bounded_context: RTC
-  canonical_object: CallRecording
-  event_consumers: []
-  field_roles:
-    append_only_fact: []
-    authoritative_state:
-    - id
-    - requestedBy
-    - consentSnapshot
-    - status
-    - startedAt
-    - stoppedAt
-    - createdAt
-    - updatedAt
-    - callId
-    - mediaAssetId
-    owned_value: []
-    projection: []
-    reference:
-    - callId
-    - mediaAssetId
-    transport_only: []
-  identity:
-    fields:
-    - id
-    version_source: store_commit
-  invariant_refs:
-  - rtc/call_recording/entity.yaml#business_rules
-  lifecycle_refs:
-  - rtc/call_recording/entity.yaml#lifecycle
-  member_bounds: {}
-  mutation_entrypoints:
-  - StartCallRecording
-  - StopCallRecording
-  object_kind: aggregate_root
-  relationships:
-  - access: named_reader
-    cardinality: N:1
-    consistency: eventual
-    kind: reference
-    name: mediaAsset
-    on_delete: tombstone
-    reference_fields:
-    - mediaAssetId
-    target_object: content.MediaAsset
-  - access: command_facade
-    cardinality: N:1
-    consistency: eventual
-    kind: reference
-    name: call
-    on_delete: retain
-    reference_fields:
-    - callId
-    target_object: rtc.CallSession
-  source_document: rtc/call_recording/fields.yaml
-  source_entity: CallRecording
-  storage_backend: mongodb
-  storage_role: authoritative

@@ -23,20 +23,21 @@
 ## 适用范围与约束
 
 - **适用**：推荐/ML 场景下「训练（批/任务）」与「推理（常驻服务）」分离的架构；当前模型形态为 LightGBM/规则可回退，场景为 content_feed 等有限 scenario；与 runtime 推荐引擎通过 HTTP 集成、不直接依赖训练侧。
-- **不适用/不负责**：非推荐场景（如纯检索、风控模型）的模型服务形态不在本节点约定；按 scenario 拆成多推理服务、训练侧对外暴露「提交训练任务」API 等，由后续特性在对应 L4/L5 的 spec/design/tasks 中说明。
+- **不适用/不负责**：非推荐场景（如纯检索、风控模型）的模型服务形态不在本节点约定；按 scenario 拆成多推理服务、训练侧对外暴露「提交训练任务」API 等，由后续 L3 Story 的 spec/acceptance 说明。
 - **前置条件**：ModelRegistry + OSS/TOS 可用；Go 侧已具备 CascadeScorer 与 RuleScorer 兜底；feature_registry 与推理契约已对齐。
 
 ## 子节点与验收重点
 
 | L3 | 说明 | 验收重点 |
 |----|------|----------|
-| rec-model-training | 训练管线 + 训练部署 | 样本→数据集→训练→注册可跑通；feature_registry 与推理侧一致；见其下 L4/L5。 |
-| rec-model-service | 推理 API + Go 集成 + 推理部署 | POST /score、延迟与兜底、契约与 metadata 一致；见 [rec-model-service/readiness.md](rec-model-service/readiness.md) 及其下 L4/L5。 |
+| rec-model-training | 训练管线 + 训练部署 | 样本→数据集→训练→注册可跑通；feature_registry 与推理侧一致；见本节点 acceptance。 |
+| rec-model-service | 推理 API + Go 集成 + 推理部署 | generated operation、延迟与兜底、契约与 metadata 一致；见本节点 acceptance。 |
 | evaluation-and-flywheel | replay 评估 + 在线 AB + 真实训练晋升 | NDCG/Recall@K/MAP/覆盖率/多样性、AB 显著性与 reload 证据；深度模型仍为长期上限。 |
 
 ## 进入开发前置条件
 
-- 进入两服务（rec-model-training、rec-model-service）Implement 前须通过 Create 阶段 G1，并满足特性树与契约就绪。**审视清单与当前状态**见 [preconditions.md](preconditions.md)。
+- 进入两服务（rec-model-training、rec-model-service）Implement 前须通过 G1，并以各节点
+  `spec.md` / `acceptance.yaml` 与 metadata 验证结果为准。
 
 ## 验收标准（L1 概要）
 
@@ -44,4 +45,4 @@
 - A2：rec-model-service 推理延迟与可用性满足约定；超时/失败时 Go 侧可回退。
 - A3：evaluation-and-flywheel 冻结离线 replay、在线 AB 与真实训练晋升口径，证明“越用越准”。
 - A7：rec_model_service 契约与 metadata/OpenAPI/endpoint_catalog 一致。
-- A8：训练管线与推理 API 各有对应测试与就绪检查；见各 L4/L5 acceptance。
+- A8：训练管线与推理 API 各有对应 local_contract、api_integration 与必要的 user_acceptance。

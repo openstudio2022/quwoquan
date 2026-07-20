@@ -1,0 +1,56 @@
+entity: SearchQuery
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  suggest 模式保留本地命名空间组合；result 模式统一依赖 SearchQueryFacet。
+  alpha 由 quwoquan_cloud_mock 的 typed adapter 回放 metadata fixture，
+  production 只经 generated operation 调 POST /search。
+  分层：
+    dto_scenarios      → test/local_contract/ui/search/**、test/local_contract/cloud/**（search DTO/契约）
+    feedback_scenarios → SearchFeedback typed command 编码与上报行为
+    widget_scenarios   → global_search_page / search_network_results_page widget 测试
+
+dto_scenarios:
+  - name: hot_query_slice_contract
+    description: Alpha 热词来自 metadata fixture，production DTO 严格解码 query/relevance
+    assertions:
+      - HotQuerySlice.items 按 relevance 降序
+      - 缺 query 或 relevance 时抛 FormatException
+
+  - name: search_response_carries_request_id
+    description: SearchResponse 解析云侧 requestId（搜索反馈归因锚点）
+    assertions:
+      - response.requestId 非空时透传给结果页
+      - requestId 缺失时反馈上报降级为跳过（不合成伪 id）
+
+  - name: search_hit_rank_position_preserved
+    description: 结果条目保留服务端排序位次，供 click 反馈 rankPosition 归因
+    assertions:
+      - items[i].rankPosition == i（服务端顺序）
+
+  - name: content_hit_is_typed_slice
+    description: content.post hit 解码为 CanonicalSearchContentHit，不经 payload.toWireMap 回转
+    assertions:
+      - content hit 缺 objectId/contentType 时严格失败
+      - App 不再依赖 ContentPostSearchRepository 或 PostSearchItemView generated DTO
+      - relatedTerms 为空时结果页不合成业务词
+
+feedback_scenarios:
+  - name: feedback_command_wire_shape
+    description: SearchFeedback typed command 编码只含 metadata writable_fields
+    assertions:
+      - body keys ⊆ [searchRequestId, eventType, objectId, target, rankPosition, referralSource, feedRequestId, dwellMs]
+      - eventType ∈ [impression, click, dwell, refine, zero_result, degrade]
+
+  - name: feedback_click_reported_once_per_tap
+    description: 结果条目点击触发一次 click 反馈（含 searchRequestId + rankPosition）
+    assertions:
+      - writer 收到 exactly one command per tap
+      - 失败静默不阻断跳转（fire-and-forget，结构化日志）
+
+widget_scenarios:
+  - name: results_page_impression_once_per_request
+    description: 一次搜索请求渲染完成上报一次查询级 impression
+    assertions:
+      - 同一 searchRequestId 不重复上报 impression

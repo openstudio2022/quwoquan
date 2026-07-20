@@ -6,6 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -25,6 +27,7 @@ IntersectionReason _reason({
   String confidenceLabel = '',
   String connectionSummary = '',
   List<IntersectionTextSpan>? primarySpans,
+  List<IntersectionVisual> sampleVisuals = const <IntersectionVisual>[],
   List<IntersectionPoint> intersectionPoints = const <IntersectionPoint>[],
   List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
 }) {
@@ -57,6 +60,7 @@ IntersectionReason _reason({
             target: objectTarget,
           ),
         ],
+    sampleVisuals: sampleVisuals,
     intersectionPoints: intersectionPoints,
     actionHints: actionHints,
     actionTargetId: 'post_$id',
@@ -200,6 +204,49 @@ void main() {
       await tester.pump();
 
       expect(tapped, same(reason));
+    });
+
+    testWidgets('sampleVisuals 统一头像簇在深浅色紧凑宽度均无溢出', (tester) async {
+      for (final brightness in <Brightness>[
+        Brightness.light,
+        Brightness.dark,
+      ]) {
+        final card = ObjectIntersectionCard.fromReasons(
+          title: UITextConstants.objectMyIntersectionsTitle,
+          reasons: <IntersectionReason>[
+            _reason(
+              id: 'ix_visuals_${brightness.name}',
+              primaryText: '共同关注的人正在讨论这条路线',
+              sampleVisuals: <IntersectionVisual>[
+                IntersectionVisual(assetKind: 'avatar', displayName: '林清越'),
+                IntersectionVisual(assetKind: 'avatar', displayName: '周屿'),
+                IntersectionVisual(
+                  assetKind: 'circleAvatar',
+                  displayName: '校园摄影圈',
+                ),
+                IntersectionVisual(assetKind: 'avatar', displayName: '顾川'),
+              ],
+            ),
+          ],
+          isDark: brightness == Brightness.dark,
+        );
+
+        await tester.pumpWidget(
+          CupertinoApp(
+            theme: CupertinoThemeData(brightness: brightness),
+            home: MediaQuery(
+              data: const MediaQueryData(size: Size(320, 568)),
+              child: SizedBox(width: 320, child: card),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(IntersectionVisualCluster), findsOneWidget);
+        expect(find.text('+1'), findsOneWidget);
+        expect(find.textContaining('共同关注的人'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
     });
 
     testWidgets('affinity 只显示推荐辅助文案，不伪装成事实计数', (tester) async {

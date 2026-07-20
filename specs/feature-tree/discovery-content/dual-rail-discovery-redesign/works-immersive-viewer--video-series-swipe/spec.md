@@ -1,4 +1,4 @@
-# L4 契约/任务：video-series-swipe（Work Browser V1.0）
+# L3 契约/任务：video-series-swipe（Work Browser V1.0）
 
 > 2026-06-11 更新：「同作者关联系列 / AuthorWorksCard」方案废弃；视频集由契约 `mediaItems` 表达。平台默认控制层（Chewie/Material 控件）在 Work Browser 内禁止。
 

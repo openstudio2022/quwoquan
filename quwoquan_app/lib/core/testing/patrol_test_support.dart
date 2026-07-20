@@ -14,8 +14,11 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/login_dependencies.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show accountSessionLoginCommandWriterProvider;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show LoginAnonymousCommand;
 
 /// Patrol user_acceptance tests should only run under `patrol test`.
 ///
@@ -69,6 +72,7 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
   await $.pump();
   await $.pump(const Duration(milliseconds: 300));
   if (_usesRuntimeAnonymousSession) {
+    _startRuntimeAnonymousSessionFromMountedApp();
     await _runtimeAnonymousSessionGate().future.timeout(
       const Duration(seconds: 15),
       onTimeout: () => throw StateError(
@@ -77,6 +81,20 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
     );
   }
   await $.pump(const Duration(seconds: 1));
+}
+
+void _startRuntimeAnonymousSessionFromMountedApp() {
+  final navigators = find.byType(Navigator).evaluate();
+  if (navigators.isEmpty) {
+    throw StateError(
+      'Patrol local Gamma anonymous session requires a mounted Navigator',
+    );
+  }
+  final container = ProviderScope.containerOf(navigators.first);
+  // UAT 已绕过欢迎流程，不能依赖欢迎页时序间接打开 auth restore gate。
+  // 这里只驱动真实 production Remote composition 发起匿名登录，不注入会话或假数据。
+  container.read(startupAuthRestoreGateProvider.notifier).open();
+  container.read(authSessionControllerProvider);
 }
 
 Future<void> patrolGoTo(
@@ -179,15 +197,16 @@ final class _PatrolAuthSessionController extends AuthSessionController {
     final gate = _runtimeAnonymousSessionGate();
     try {
       final result = await ref
-          .read(anonymousLoginGatewayProvider)
+          .read(accountSessionLoginCommandWriterProvider)
           .loginAnonymous(
-            installId: 'patrol-local-gamma-two-province',
-            deviceFingerprintHash: 'patrol-local-gamma-two-province',
-            platform: CloudRequestHeaders.platform(),
-            appVersion: 'local-e2e',
+            LoginAnonymousCommand(
+              installId: 'patrol-local-gamma-two-province',
+              deviceFingerprintHash: 'patrol-local-gamma-two-province',
+              platform: CloudRequestHeaders.platform(),
+              appVersion: 'local-e2e',
+            ),
           );
-      final activeSub = result.activeSub;
-      final subAccountId = activeSub?['subAccountId']?.toString().trim() ?? '';
+      final subAccountId = result.activeSub?.subAccountId.trim() ?? '';
       final session = buildPatrolAcceptanceSession(
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,

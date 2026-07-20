@@ -4,14 +4,31 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart'
+    show HomepageIntroduction;
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
+import 'package:quwoquan_app/ui/share/forward_share_models.dart';
+import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        CloudOperationCancellationSignal,
+        FollowSubjectCommand,
+        SubjectFollowSubjectType,
+        UnfollowSubjectCommand;
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
   const HomepageDetailPage({
@@ -25,6 +42,7 @@ class HomepageDetailPage extends ConsumerStatefulWidget {
     this.recommendationTraceId = '',
     this.experimentBucket = '',
     this.rolloutCohort = '',
+    this.initialTabTarget,
   });
 
   final String homepageId;
@@ -36,6 +54,7 @@ class HomepageDetailPage extends ConsumerStatefulWidget {
   final String recommendationTraceId;
   final String experimentBucket;
   final String rolloutCohort;
+  final HomepageDetailTabTarget? initialTabTarget;
 
   @override
   ConsumerState<HomepageDetailPage> createState() => _HomepageDetailPageState();
@@ -49,7 +68,11 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   ObjectPageBundle? _objectPageBundle;
   HomepageIntroduction? _introduction;
   String? _viewerOwnerUserId;
+  bool? _wishlistState;
   bool _didTrackEntityPageView = false;
+  int _reviewContinuationResumeToken = 0;
+  OpenHomepageReviewComposerContinuation? _lastActivatedReviewContinuation;
+  CloudOperationCancellationSignal? _introductionCancellation;
 
   @override
   void initState() {
@@ -58,7 +81,31 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   }
 
   @override
+  void dispose() {
+    _introductionCancellation?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        _resumeHomepageInteractionAfterLogin();
+      }
+    });
+    final pendingContinuation = ref.watch(authContinuationProvider);
+    if (ref.watch(authSessionControllerProvider).isAuthenticated &&
+        pendingContinuation is OpenHomepageReviewComposerContinuation &&
+        pendingContinuation.homepageId == widget.homepageId &&
+        !identical(pendingContinuation, _lastActivatedReviewContinuation)) {
+      _scheduleReviewContinuationResume(pendingContinuation);
+    }
     if (_errorSemantic != null && !_isLoading) {
       return AppScaffold(
         backgroundColor: AppColors.iosPageBackground(context),
@@ -91,15 +138,81 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       objectPageBundle: _objectPageBundle,
       introductionSummary: _introduction?.summary,
       viewerOwnerUserId: _viewerOwnerUserId,
+      wishlistState: _wishlistIntentApplicable
+          ? (_wishlistState ?? false)
+          : null,
+      initialTabTarget: widget.initialTabTarget,
       onBack: () => context.pop(),
+      onShare: () => unawaited(_shareHomepage()),
       onClaim: _openClaim,
       onMaintain: _openMaintenance,
       onReport: _openStatusReport,
-      onToggleFollow: _toggleHomepageFollow,
+      onToggleFollow: _toggleHomepagePrimaryIntent,
       onMessageOwner: _openOwnerMessage,
       onCreateContent: _openCreateContent,
       onOpenIntroduction: _openIntroduction,
+      onOpenRecord: _openRecord,
       onAttach: (reference) => context.pop(reference),
+      onReviewsChanged: () => unawaited(_load()),
+      requireReviewAuth: _requireReviewAuth,
+      reviewContinuationResumeToken: _reviewContinuationResumeToken,
+    );
+  }
+
+  bool get _wishlistIntentApplicable =>
+      _isWishlistHomepageType(_detail?.homepageType);
+
+  bool _isWishlistHomepageType(String? homepageType) => HomepageUIConfig
+      .wishlistHomepageTypes
+      .contains((homepageType ?? '').trim());
+
+  Future<bool> _requireReviewAuth() async {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      return true;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          OpenHomepageReviewComposerContinuation(homepageId: widget.homepageId),
+        );
+    await requireLogin(
+      ref,
+      context,
+      AuthGateReason.comment,
+      dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+      dismissPolicy: LoginDismissPolicy.safeFallback,
+    );
+    return false;
+  }
+
+  /// 站外/站内分享统一入口：链接与深链均来自 metadata link 模板 codegen。
+  Future<void> _shareHomepage() async {
+    final detail = _detail;
+    if (detail == null) {
+      return;
+    }
+    final startedAt = DateTime.now();
+    final payload = AppForwardPayload(
+      kind: AppForwardSubjectKind.entityProfile,
+      title: detail.title,
+      subtitle: detail.subtitle ?? '',
+      thumbnailUrl: detail.coverUrl ?? '',
+      deeplink: AppLinkTemplates.entityHomepageAppDeepLink(widget.homepageId),
+      landingUrl: AppPublicContentLinks.entityHomepageWebUrl(widget.homepageId),
+    );
+    await ForwardShareSheet.show(context, payload: payload);
+    if (!mounted) {
+      return;
+    }
+    unawaited(
+      trackHomepageProductAction(
+        ref,
+        action: 'share_open',
+        pageName: 'homepage_detail',
+        result: 'success',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+      ),
     );
   }
 
@@ -115,13 +228,39 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     setState(() {
       _isLoading = true;
       _errorSemantic = null;
+      _wishlistState = null;
     });
     try {
-      final repository = ref.read(homepageRepositoryProvider);
+      final repository = ref.read(homepageQueryProvider);
       late HomepageDetail loadedDetail;
       late HomepageShellData loadedShell;
       late ObjectPageBundle loadedBundle;
-      HomepageIntroduction? loadedIntroduction;
+      _introductionCancellation?.cancel();
+      final introductionCancellation = CloudOperationCancellationSignal();
+      _introductionCancellation = introductionCancellation;
+      final introductionFuture = () async {
+        try {
+          return await ref
+              .read(homepageIntroductionRepositoryProvider)
+              .getHomepageIntroduction(
+                widget.homepageId,
+                cancellation: introductionCancellation,
+              );
+        } catch (error, stackTrace) {
+          if (introductionCancellation.isCancelled) {
+            return null;
+          }
+          // 介绍是详情页的可降级附属模块；失败不得遮蔽主页主档、壳层与对象 Bundle。
+          unawaited(
+            AppExceptionTelemetryService.instance.recordHandledException(
+              source: 'entity.homepage_detail.load_introduction',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          );
+          return null;
+        }
+      }();
       await Future.wait<void>([
         repository.getHomepageDetail(widget.homepageId).then((d) {
           loadedDetail = d;
@@ -141,32 +280,25 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
             .then((bundle) {
               loadedBundle = bundle;
             }),
-        ref
-            .read(homepageIntroductionRepositoryProvider)
-            .getHomepageIntroduction(widget.homepageId)
-            .then((introduction) {
-              loadedIntroduction = introduction;
-            }),
       ]);
-      ActivePersonaContextViewData? activeContext;
-      try {
-        activeContext = await ref.read(activePersonaContextProvider.future);
-      } catch (_) {
-        activeContext = null;
-      }
+      final loadedWishlistState = await _loadWishlistState(loadedDetail);
       if (!mounted) {
         return;
       }
-      final ownerId = activeContext?.ownerUserId.trim() ?? '';
       setState(() {
         _detail = loadedDetail;
         _shell = loadedShell;
         _objectPageBundle = loadedBundle;
-        _introduction = loadedIntroduction;
-        _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId;
+        _wishlistState = loadedWishlistState;
         _isLoading = false;
       });
       _trackCanonicalEntityPageViewIfNeeded(loadedBundle, loadedDetail);
+      unawaited(_hydrateViewerOwnerContext());
+      final loadedIntroduction = await introductionFuture;
+      if (mounted &&
+          identical(_introductionCancellation, introductionCancellation)) {
+        setState(() => _introduction = loadedIntroduction);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -182,6 +314,51 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         );
         _isLoading = false;
       });
+    }
+  }
+
+  Future<bool?> _loadWishlistState(HomepageDetail detail) async {
+    if (!_isWishlistHomepageType(detail.homepageType)) {
+      return null;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      return false;
+    }
+    try {
+      final state = await ref
+          .read(homepageDetailEntityWishlistStateReaderProvider)
+          .getEntityWishlistState(
+            objectId: widget.homepageId,
+            objectKind: SubjectFollowSubjectType.homepage.wire,
+          );
+      return state.wishlisted;
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'entity.homepage_detail.load_wishlist_state',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<void> _hydrateViewerOwnerContext() async {
+    try {
+      final activeContext = await ref.read(activePersonaContextProvider.future);
+      if (!mounted) return;
+      final ownerId = activeContext.ownerUserId.trim();
+      setState(() => _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId);
+    } catch (error, stackTrace) {
+      // best-effort：仅影响维护入口的 owner 判定，不阻断公开详情。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'entity.homepage_detail.load_active_persona_context',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 
@@ -231,27 +408,118 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     }
   }
 
-  Future<void> _toggleHomepageFollow() async {
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      await requireLogin(ref, context, AuthGateReason.follow);
-      if (!mounted ||
-          !ref.read(authSessionControllerProvider).isAuthenticated) {
-        return;
-      }
-    }
+  Future<void> _toggleHomepagePrimaryIntent() async {
     final detail = _detail;
     if (detail == null) {
       return;
     }
+    final usesWishlistIntent = _isWishlistHomepageType(detail.homepageType);
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            usesWishlistIntent
+                ? WishlistHomepageContinuation(homepageId: widget.homepageId)
+                : FollowHomepageContinuation(homepageId: widget.homepageId),
+          );
+      await requireLogin(
+        ref,
+        context,
+        AuthGateReason.follow,
+        dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      );
+      return;
+    }
+    if (usesWishlistIntent) {
+      await _toggleHomepageWishlist(detail);
+      return;
+    }
+    await _toggleHomepageFollow(detail);
+  }
+
+  Future<void> _toggleHomepageWishlist(HomepageDetail detail) async {
+    final startedAt = DateTime.now();
+    final nextWishlisted = !(_wishlistState ?? false);
+    final tracker = ref.read(contentBehaviorTrackerProvider);
+    if (nextWishlisted) {
+      tracker.trackWishlistAdd(
+        widget.homepageId,
+        objectKind: SubjectFollowSubjectType.homepage.wire,
+        displayName: detail.title,
+        sourceSurface: AppUiSurfaces.homepageDetail.id,
+        feedRequestId: widget.feedRequestId,
+        referralSource: widget.referralSource,
+      );
+    } else {
+      tracker.trackWishlistRemove(
+        widget.homepageId,
+        objectKind: SubjectFollowSubjectType.homepage.wire,
+        sourceSurface: AppUiSurfaces.homepageDetail.id,
+        feedRequestId: widget.feedRequestId,
+        referralSource: widget.referralSource,
+      );
+    }
+    await tracker.flush();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _wishlistState = nextWishlisted);
+    unawaited(
+      trackHomepageProductAction(
+        ref,
+        action: nextWishlisted ? 'wishlist_add' : 'wishlist_remove',
+        pageName: AppUiSurfaces.homepageDetail.id,
+        result: 'success',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+      ),
+    );
+  }
+
+  Future<void> _toggleHomepageFollow(HomepageDetail detail) async {
+    final startedAt = DateTime.now();
     try {
-      final repository = ref.read(homepageRepositoryProvider);
-      final next = detail.viewerFollowsHomepage
-          ? await repository.unfollowHomepage(widget.homepageId)
-          : await repository.followHomepage(widget.homepageId);
+      // 关注关系唯一归属 user.SubjectFollow 聚合（B6 裁决 1）；
+      // Homepage 不再提供 follow 写入口。
+      final writer = ref.read(homepageSubjectFollowCommandWriterProvider);
+      final following = detail.viewerFollowsHomepage;
+      final result = following
+          ? await writer.unfollow(
+              UnfollowSubjectCommand(
+                subjectType: SubjectFollowSubjectType.homepage,
+                subjectId: widget.homepageId,
+              ),
+            )
+          : await writer.follow(
+              FollowSubjectCommand(
+                subjectType: SubjectFollowSubjectType.homepage,
+                subjectId: widget.homepageId,
+                source: widget.referralSource.value,
+              ),
+            );
       if (!mounted) {
         return;
       }
-      setState(() => _detail = next);
+      final delta = result.following == following
+          ? 0
+          : (result.following ? 1 : -1);
+      setState(
+        () => _detail = detail.copyWith(
+          viewerFollowsHomepage: result.following,
+          followerCount: (detail.followerCount + delta).clamp(0, 1 << 31),
+        ),
+      );
+      unawaited(
+        trackHomepageProductAction(
+          ref,
+          action: result.following ? 'follow' : 'unfollow',
+          pageName: 'homepageDetail',
+          result: 'success',
+          startedAt: startedAt,
+          homepageId: widget.homepageId,
+        ),
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -263,22 +531,21 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         scope: UiErrorScope.global,
       );
       await AppActionErrorFeedback.show(context, semantic: resolved);
+      unawaited(
+        trackHomepageProductAction(
+          ref,
+          action: detail.viewerFollowsHomepage ? 'unfollow' : 'follow',
+          pageName: 'homepageDetail',
+          result: 'failure',
+          startedAt: startedAt,
+          homepageId: widget.homepageId,
+          error: error,
+        ),
+      );
     }
   }
 
   Future<void> _openOwnerMessage() async {
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      await requireLogin(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        dismissFallback: AppRoutePaths.home,
-      );
-      if (!mounted ||
-          !ref.read(authSessionControllerProvider).isAuthenticated) {
-        return;
-      }
-    }
     final ownerSubAccountId =
         (_detail?.ownerSubAccountId?.trim().isNotEmpty == true
                 ? _detail!.ownerSubAccountId
@@ -287,9 +554,28 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (ownerSubAccountId == null || ownerSubAccountId.isEmpty) {
       return;
     }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            OpenHomepageOwnerConversationContinuation(
+              homepageId: widget.homepageId,
+              ownerSubAccountId: ownerSubAccountId,
+            ),
+          );
+      await requireLogin(
+        ref,
+        context,
+        AuthGateReason.sendMessage,
+        dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      );
+      return;
+    }
+    final startedAt = DateTime.now();
     try {
       final created = await ref
-          .read(chatRepositoryProvider)
+          .read(chatConversationRepositoryProvider)
           .createConversation(
             type: 'direct',
             initialMemberIds: <String>[ownerSubAccountId],
@@ -297,6 +583,16 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       if (!mounted || created.conversationId.isEmpty) {
         return;
       }
+      unawaited(
+        trackHomepageProductAction(
+          ref,
+          action: 'message_owner',
+          pageName: 'homepageDetail',
+          result: 'success',
+          startedAt: startedAt,
+          homepageId: widget.homepageId,
+        ),
+      );
       context.push(AppRoutePaths.chatDetail(id: created.conversationId));
     } catch (error) {
       if (!mounted) {
@@ -309,7 +605,72 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         scope: UiErrorScope.global,
       );
       await AppActionErrorFeedback.show(context, semantic: resolved);
+      unawaited(
+        trackHomepageProductAction(
+          ref,
+          action: 'message_owner',
+          pageName: 'homepageDetail',
+          result: 'failure',
+          startedAt: startedAt,
+          homepageId: widget.homepageId,
+          error: error,
+        ),
+      );
     }
+  }
+
+  void _resumeHomepageInteractionAfterLogin() {
+    if (!mounted) {
+      return;
+    }
+    final pending = ref.read(authContinuationProvider);
+    if (pending is OpenHomepageReviewComposerContinuation &&
+        pending.homepageId == widget.homepageId) {
+      _scheduleReviewContinuationResume(pending);
+      return;
+    }
+    final controller = ref.read(authContinuationProvider.notifier);
+    final wishlist = controller.take<WishlistHomepageContinuation>();
+    if (wishlist != null) {
+      if (wishlist.homepageId == widget.homepageId) {
+        unawaited(_toggleHomepagePrimaryIntent());
+      } else {
+        controller.set(wishlist);
+      }
+      return;
+    }
+    final follow = controller.take<FollowHomepageContinuation>();
+    if (follow != null) {
+      if (follow.homepageId == widget.homepageId) {
+        unawaited(_toggleHomepagePrimaryIntent());
+      } else {
+        controller.set(follow);
+      }
+      return;
+    }
+    final message = controller
+        .take<OpenHomepageOwnerConversationContinuation>();
+    if (message == null) {
+      return;
+    }
+    if (message.homepageId == widget.homepageId) {
+      unawaited(_openOwnerMessage());
+    } else {
+      controller.set(message);
+    }
+  }
+
+  void _scheduleReviewContinuationResume(
+    OpenHomepageReviewComposerContinuation continuation,
+  ) {
+    _lastActivatedReviewContinuation = continuation;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !identical(ref.read(authContinuationProvider), continuation)) {
+        return;
+      }
+      setState(() => _reviewContinuationResumeToken += 1);
+    });
   }
 
   void _openCreateContent(HomepageCanonicalReference reference) {
@@ -321,6 +682,35 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       AppRoutePaths.homepageIntroduction(
         id: widget.homepageId,
         source: widget.referralSource.value,
+      ),
+    );
+  }
+
+  void _openRecord(HomepageContentPreview item) {
+    final postId = item.postId.trim();
+    if (postId.isEmpty) {
+      return;
+    }
+    final contentType = (item.contentType ?? '').trim();
+    final feedRequestId = widget.feedRequestId.trim();
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackClick(
+          postId,
+          contentType: contentType.isEmpty ? null : contentType,
+          feedRequestId: feedRequestId.isEmpty ? null : feedRequestId,
+          referralSource: ReferralSource.entityPage,
+        );
+    context.push(
+      AppRoutePaths.workBrowser(
+        workId: postId,
+        filter: contentType.isEmpty ? null : contentType,
+        source: ReferralSource.entityPage.value,
+        sourceTheme: uiErrorAppearanceRouteValueFor(context),
+      ),
+      extra: WorkBrowserEntryRouteExtra(
+        referralSource: ReferralSource.entityPage,
+        feedRequestId: feedRequestId.isEmpty ? null : feedRequestId,
       ),
     );
   }

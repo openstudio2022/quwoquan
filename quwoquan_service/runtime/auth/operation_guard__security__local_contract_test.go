@@ -233,15 +233,27 @@ func TestGeneratedOperationGuardEnforcesIdempotencyAndVersionPolicy(t *testing.T
 			wantStatus:          http.StatusBadRequest,
 		},
 		{
-			name:                "if match must be quoted positive version",
+			name:                "if match must be quoted version",
 			versionPrecondition: "if_match",
 			ifMatch:             "1",
+			wantStatus:          http.StatusBadRequest,
+		},
+		{
+			name:                "if match rejects leading zero versions",
+			versionPrecondition: "if_match",
+			ifMatch:             `"01"`,
 			wantStatus:          http.StatusBadRequest,
 		},
 		{
 			name:                "explicit if match accepted",
 			versionPrecondition: "if_match",
 			ifMatch:             `"7"`,
+			wantStatus:          http.StatusNoContent,
+		},
+		{
+			name:                "if match zero expresses expected-absent create",
+			versionPrecondition: "if_match",
+			ifMatch:             `"0"`,
 			wantStatus:          http.StatusNoContent,
 		},
 		{

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""校验群头像商用端到端矩阵（E1–E4）证据 JSON 是否满足 commercial-e2e-matrix-runbook 零折扣口径。
+"""校验群头像四环境商用端到端矩阵证据是否满足零折扣口径。
 
 用法:
   python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_chat_avatar_commercial_matrix_evidence.py --manifest PATH
 
-Manifest 为 YAML（推荐）或 JSON：见 .qwq_output/env/<env>/runs/commercial-matrix-chat-avatar/manifest.sample.yaml
+Manifest 为 YAML（推荐）或 JSON，必须声明稳定 schema 和四个环境 target。
 
 退出码: 0 通过；2 GATE_BLOCK。
 """
@@ -26,7 +26,7 @@ from typing import Any
 
 REPO_ROOT = _find_repo_root()
 
-MATRIX_VERSION = 1
+MANIFEST_SCHEMA = "chat-avatar-commercial-matrix-manifest"
 PROBE_SCENARIO_PREFIX = "chat.group_avatar.sync_display_e2e"
 MATRIX_SCENARIO = "chat.group_avatar.sync_display_e2e.matrix"
 PROBE_REPORT_SCHEMA = "chat-avatar-e2e-probe-report"
@@ -34,21 +34,25 @@ MATRIX_REPORT_SCHEMA = "chat-avatar-device-matrix-report"
 AGGREGATE_REPORT_SCHEMA = "chat-avatar-local-gamma-e2e-report"
 
 SLOT_SPECS: dict[str, dict[str, str]] = {
-    "e1_beta": {"probe_env": "beta", "matrix_env": "beta", "label": "E1 beta"},
-    "e2_local_gamma": {
-        "probe_env": "local-gamma",
-        "matrix_env": "local-gamma",
-        "label": "E2 local-gamma",
+    "alpha_local": {
+        "probe_env": "alpha",
+        "matrix_env": "alpha",
+        "label": "alpha-local",
     },
-    "e3_cloud_gamma_pre": {
+    "beta_local": {
+        "probe_env": "beta",
+        "matrix_env": "beta",
+        "label": "beta-local",
+    },
+    "gamma_local": {
         "probe_env": "gamma",
         "matrix_env": "gamma",
-        "label": "E3 cloud-gamma-pre",
+        "label": "gamma-local",
     },
-    "e4_cloud_gamma_prod_smoke": {
-        "probe_env": "gamma",
-        "matrix_env": "gamma",
-        "label": "E4 cloud-gamma-prod-smoke",
+    "prod_hosted": {
+        "probe_env": "prod",
+        "matrix_env": "prod",
+        "label": "prod-hosted",
     },
 }
 
@@ -180,6 +184,9 @@ def check_slot(slot_key: str, entry: Any, root: Path, errors: list[str]) -> None
 
     agg_raw = entry.get("aggregate")
     if agg_raw:
+        if slot_key != "gamma_local":
+            errors.append(f"{label}: aggregate 仅允许用于 gamma-local")
+            return
         agg_path = rp(str(agg_raw))
         agg = load_json(agg_path, label=f"{label} aggregate", errors=errors)
         if agg is None:
@@ -256,9 +263,12 @@ def main() -> int:
 
     mpath = resolve_under(root, args.manifest)
     manifest = load_manifest(mpath)
-    ver = manifest.get("matrix_version")
-    if ver != MATRIX_VERSION:
-        print(f"[commercial-matrix] FAIL: matrix_version 须为 {MATRIX_VERSION}，实为 {ver!r}")
+    schema = manifest.get("schema")
+    if schema != MANIFEST_SCHEMA:
+        print(
+            f"[commercial-matrix] FAIL: schema 须为 {MANIFEST_SCHEMA!r}，"
+            f"实为 {schema!r}"
+        )
         return 2
 
     errors: list[str] = []

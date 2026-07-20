@@ -24,12 +24,6 @@ const rtcWsTypeParticipantJoined = 'participant.joined';
 /// Event `ParticipantLeft`
 const rtcWsTypeParticipantLeft = 'participant.left';
 
-/// Event `CallRecordingStarted`
-const rtcWsTypeCallRecordingStarted = 'call.recording_started';
-
-/// Event `CallRecordingStopped`
-const rtcWsTypeCallRecordingStopped = 'call.recording_stopped';
-
 /// Event `ScreenShareStarted`
 const rtcWsTypeScreenShareStarted = 'screen_share.started';
 
@@ -75,41 +69,41 @@ class RtcCallInitiatedPayload {
 /// WS payload for metadata event `CallRinging` (`client_ws_type` = [rtcWsTypeCallRinging]).
 class RtcCallRingingPayload {
   const RtcCallRingingPayload({
+    this.eventId,
     this.callId,
-    this.callType = 'voice',
-    this.initiatorId,
-    this.initiatorRingtoneId,
-    this.targetUserId,
-    this.conversationId,
+    this.targetPersonaId,
+    this.callType = 'audio',
     this.callerName,
+    this.callerAvatarUrl,
     this.sourceLabel,
     this.trustRelation,
     this.expiresAt,
+    this.deliveryKey,
   });
 
+  final String? eventId;
   final String? callId;
+  final String? targetPersonaId;
   final String callType;
-  final String? initiatorId;
-  final String? initiatorRingtoneId;
-  final String? targetUserId;
-  final String? conversationId;
   final String? callerName;
+  final String? callerAvatarUrl;
   final String? sourceLabel;
   final String? trustRelation;
   final String? expiresAt;
+  final String? deliveryKey;
 
   factory RtcCallRingingPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallRingingPayload(
+      eventId: payload['eventId'] as String?,
       callId: payload['callId'] as String?,
-      callType: payload['callType'] as String? ?? 'voice',
-      initiatorId: payload['initiatorId'] as String?,
-      initiatorRingtoneId: payload['initiatorRingtoneId'] as String?,
-      targetUserId: payload['targetUserId'] as String?,
-      conversationId: payload['conversationId'] as String?,
+      targetPersonaId: payload['targetPersonaId'] as String?,
+      callType: payload['callType'] as String? ?? 'audio',
       callerName: payload['callerName'] as String?,
+      callerAvatarUrl: payload['callerAvatarUrl'] as String?,
       sourceLabel: payload['sourceLabel'] as String?,
       trustRelation: payload['trustRelation'] as String?,
       expiresAt: payload['expiresAt'] as String?,
+      deliveryKey: payload['deliveryKey'] as String?,
     );
   }
 }
@@ -237,42 +231,6 @@ class RtcParticipantLeftPayload {
   }
 }
 
-/// WS payload for metadata event `CallRecordingStarted` (`client_ws_type` = [rtcWsTypeCallRecordingStarted]).
-class RtcCallRecordingStartedPayload {
-  const RtcCallRecordingStartedPayload({
-    this.callId,
-    this.startedByUserId,
-  });
-
-  final String? callId;
-  final String? startedByUserId;
-
-  factory RtcCallRecordingStartedPayload.fromWire(Map<String, dynamic> payload) {
-    return RtcCallRecordingStartedPayload(
-      callId: payload['callId'] as String?,
-      startedByUserId: payload['startedByUserId'] as String?,
-    );
-  }
-}
-
-/// WS payload for metadata event `CallRecordingStopped` (`client_ws_type` = [rtcWsTypeCallRecordingStopped]).
-class RtcCallRecordingStoppedPayload {
-  const RtcCallRecordingStoppedPayload({
-    this.callId,
-    this.recordingUrl,
-  });
-
-  final String? callId;
-  final String? recordingUrl;
-
-  factory RtcCallRecordingStoppedPayload.fromWire(Map<String, dynamic> payload) {
-    return RtcCallRecordingStoppedPayload(
-      callId: payload['callId'] as String?,
-      recordingUrl: payload['recordingUrl'] as String?,
-    );
-  }
-}
-
 /// WS payload for metadata event `ScreenShareStarted` (`client_ws_type` = [rtcWsTypeScreenShareStarted]).
 class RtcScreenShareStartedPayload {
   const RtcScreenShareStartedPayload({
@@ -356,18 +314,6 @@ final class RtcParticipantLeftWsPayload extends RtcWsPayload {
   final RtcParticipantLeftPayload data;
 }
 
-final class RtcCallRecordingStartedWsPayload extends RtcWsPayload {
-  const RtcCallRecordingStartedWsPayload(this.data);
-
-  final RtcCallRecordingStartedPayload data;
-}
-
-final class RtcCallRecordingStoppedWsPayload extends RtcWsPayload {
-  const RtcCallRecordingStoppedWsPayload(this.data);
-
-  final RtcCallRecordingStoppedPayload data;
-}
-
 final class RtcScreenShareStartedWsPayload extends RtcWsPayload {
   const RtcScreenShareStartedWsPayload(this.data);
 
@@ -408,10 +354,6 @@ RtcWsPayload parseRtcWsPayload({
       return RtcParticipantJoinedWsPayload(RtcParticipantJoinedPayload.fromWire(payload));
     case rtcWsTypeParticipantLeft:
       return RtcParticipantLeftWsPayload(RtcParticipantLeftPayload.fromWire(payload));
-    case rtcWsTypeCallRecordingStarted:
-      return RtcCallRecordingStartedWsPayload(RtcCallRecordingStartedPayload.fromWire(payload));
-    case rtcWsTypeCallRecordingStopped:
-      return RtcCallRecordingStoppedWsPayload(RtcCallRecordingStoppedPayload.fromWire(payload));
     case rtcWsTypeScreenShareStarted:
       return RtcScreenShareStartedWsPayload(RtcScreenShareStartedPayload.fromWire(payload));
     case rtcWsTypeScreenShareStopped:
@@ -430,8 +372,6 @@ const rtcWsKnownWireTypes = <String>[
   rtcWsTypeCallEnded,
   rtcWsTypeParticipantJoined,
   rtcWsTypeParticipantLeft,
-  rtcWsTypeCallRecordingStarted,
-  rtcWsTypeCallRecordingStopped,
   rtcWsTypeScreenShareStarted,
   rtcWsTypeScreenShareStopped,
 ];
@@ -450,19 +390,16 @@ const rtcCallInitiatedPayloadWireKeys = <String>[
 
 /// `CallRinging.payload_fields`（codegen 与 events.yaml 同步）。
 const rtcCallRingingPayloadWireKeys = <String>[
+  'eventId',
   'callId',
+  'targetPersonaId',
   'callType',
-  'initiatorId',
-  'initiatorRingtoneId',
-  'targetUserId',
-  'conversationId',
-];
-/// `CallRinging.optional_client_string_fields`
-const rtcCallRingingOptionalClientStringWireKeys = <String>[
   'callerName',
+  'callerAvatarUrl',
   'sourceLabel',
   'trustRelation',
   'expiresAt',
+  'deliveryKey',
 ];
 
 /// `CallAnswered.payload_fields`（codegen 与 events.yaml 同步）。
@@ -504,18 +441,6 @@ const rtcParticipantLeftPayloadWireKeys = <String>[
   'callId',
   'userId',
   'participantCount',
-];
-
-/// `CallRecordingStarted.payload_fields`（codegen 与 events.yaml 同步）。
-const rtcCallRecordingStartedPayloadWireKeys = <String>[
-  'callId',
-  'startedByUserId',
-];
-
-/// `CallRecordingStopped.payload_fields`（codegen 与 events.yaml 同步）。
-const rtcCallRecordingStoppedPayloadWireKeys = <String>[
-  'callId',
-  'recordingUrl',
 ];
 
 /// `ScreenShareStarted.payload_fields`（codegen 与 events.yaml 同步）。

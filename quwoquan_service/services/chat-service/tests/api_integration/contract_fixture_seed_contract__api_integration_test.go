@@ -27,7 +27,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if detail["id"] != "fixture_conv_direct" && detail["conversationId"] != "fixture_conv_direct" {
 		t.Fatalf("unexpected conversation detail: %+v", detail)
 	}
-	if avatarURL, _ := detail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/s/archived-avatar/user/") {
+	if avatarURL, _ := detail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "https://127.0.0.1:18081/media/avatar/s/archived-avatar/user/") {
 		t.Fatalf("expected direct conversation avatar to resolve to public media url, got %+v", detail)
 	}
 
@@ -38,7 +38,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if got := int(groupDetail["groupAvatarVersion"].(float64)); got <= 0 {
 		t.Fatalf("expected seeded group avatar backfill to populate version, got %+v", groupDetail)
 	}
-	if avatarURL, _ := groupDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/") || !strings.Contains(avatarURL, "fixture_conv_group") {
+	if avatarURL, _ := groupDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "https://127.0.0.1:18081/media/avatar/") || !strings.Contains(avatarURL, "fixture_conv_group") {
 		t.Fatalf("expected group conversation avatar to resolve via derived media url, got %+v", groupDetail)
 	}
 
@@ -52,7 +52,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if circleBoundDetail["circleId"] != "fixture_circle_photo" {
 		t.Fatalf("expected fixture circle id to survive seeding, got %+v", circleBoundDetail)
 	}
-	if avatarURL, _ := circleBoundDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/") || !strings.Contains(avatarURL, "fixture_conv_photo_group") {
+	if avatarURL, _ := circleBoundDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "https://127.0.0.1:18081/media/avatar/") || !strings.Contains(avatarURL, "fixture_conv_photo_group") {
 		t.Fatalf("expected circle-bound group avatar to resolve via derived media url, got %+v", circleBoundDetail)
 	}
 

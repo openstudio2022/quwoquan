@@ -16,8 +16,8 @@ source_entities:
 source_events:
   - UserProfileUpdated
   - PersonaFollowStateChanged
-  - ContentReactionActivated
-  - ContentReactionRemoved
+  - ContentReactionSet
+  - ContentReactionCleared
   - BehaviorBatchReported
 
 consumers:

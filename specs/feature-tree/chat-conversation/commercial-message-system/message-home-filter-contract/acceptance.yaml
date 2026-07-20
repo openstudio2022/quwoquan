@@ -41,12 +41,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_api_integration
@@ -55,6 +57,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_local_contract
@@ -78,12 +81,14 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.contract1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: contract1_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.message_home_filter_contract.contract1_api_integration
@@ -93,5 +98,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

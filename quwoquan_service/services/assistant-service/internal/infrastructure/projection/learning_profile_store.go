@@ -134,14 +134,6 @@ func (s *LearningProfileStore) GetLearningProfile(ctx context.Context, userID st
 	return &out, nil
 }
 
-func (s *LearningProfileStore) BuildMemoryItems(ctx context.Context, userID string, limit int) ([]assistant.AssistantUserMemoryView, error) {
-	profile, err := s.GetLearningProfile(ctx, userID)
-	if err != nil || profile == nil {
-		return nil, err
-	}
-	return buildMemoryItemsFromProfile(profile, limit), nil
-}
-
 func (s *LearningProfileStore) BuildTaskItems(ctx context.Context, userID string, now time.Time) ([]assistant.AssistantUserTaskView, error) {
 	profile, err := s.GetLearningProfile(ctx, userID)
 	if err != nil || profile == nil {
@@ -260,67 +252,12 @@ func (s *MemoryLearningProfileStore) GetLearningProfile(_ context.Context, userI
 	return &copy, nil
 }
 
-func (s *MemoryLearningProfileStore) BuildMemoryItems(ctx context.Context, userID string, limit int) ([]assistant.AssistantUserMemoryView, error) {
-	profile, err := s.GetLearningProfile(ctx, userID)
-	if err != nil || profile == nil {
-		return nil, err
-	}
-	return buildMemoryItemsFromProfile(profile, limit), nil
-}
-
 func (s *MemoryLearningProfileStore) BuildTaskItems(ctx context.Context, userID string, now time.Time) ([]assistant.AssistantUserTaskView, error) {
 	profile, err := s.GetLearningProfile(ctx, userID)
 	if err != nil || profile == nil {
 		return nil, err
 	}
 	return buildTaskItemsFromProfile(profile, now), nil
-}
-
-func buildMemoryItemsFromProfile(profile *assistant.AssistantLearningProfile, limit int) []assistant.AssistantUserMemoryView {
-	items := make([]assistant.AssistantUserMemoryView, 0, 3)
-	if profile == nil {
-		return items
-	}
-	if strings.TrimSpace(profile.LastFeedbackType) != "" || strings.TrimSpace(profile.LastFeedbackText) != "" {
-		snippet := strings.TrimSpace(profile.LastFeedbackText)
-		if snippet == "" {
-			snippet = fmt.Sprintf("最近一次反馈类型：%s，分值 %.1f。", profile.LastFeedbackType, profile.LastFeedbackScore)
-		}
-		items = append(items, assistant.AssistantUserMemoryView{
-			MemoryID:   "learning:last-feedback:" + profile.UserID,
-			Title:      "最近反馈偏好",
-			Snippet:    trimSnippetLocal(snippet, 80),
-			SourceType: "learning_profile",
-			CreatedAt:  profile.LastFeedbackAt.Format(time.RFC3339),
-			UpdatedAt:  profile.UpdatedAt.Format(time.RFC3339),
-		})
-	}
-	if len(profile.ReasonCodeCounts) > 0 {
-		topReasons := topReasonCodesLocal(profile.ReasonCodeCounts, 3)
-		items = append(items, assistant.AssistantUserMemoryView{
-			MemoryID:   "learning:reason-codes:" + profile.UserID,
-			Title:      "高频反馈原因",
-			Snippet:    "最近高频原因：" + strings.Join(topReasons, "、"),
-			SourceType: "learning_profile",
-			CreatedAt:  profile.UpdatedAt.Format(time.RFC3339),
-			UpdatedAt:  profile.UpdatedAt.Format(time.RFC3339),
-		})
-	}
-	if len(profile.LatestMetricScores) > 0 {
-		metricID, scoreValue := topLatestMetricLocal(profile.LatestMetricScores)
-		items = append(items, assistant.AssistantUserMemoryView{
-			MemoryID:   "learning:last-metric:" + profile.UserID,
-			Title:      "最近评分卡摘要",
-			Snippet:    fmt.Sprintf("%s 最新分值 %.1f。", metricID, scoreValue),
-			SourceType: "scorecard_projection",
-			CreatedAt:  profile.UpdatedAt.Format(time.RFC3339),
-			UpdatedAt:  profile.UpdatedAt.Format(time.RFC3339),
-		})
-	}
-	if limit > 0 && len(items) > limit {
-		items = items[:limit]
-	}
-	return items
 }
 
 func buildTaskItemsFromProfile(profile *assistant.AssistantLearningProfile, now time.Time) []assistant.AssistantUserTaskView {
@@ -391,39 +328,6 @@ func sanitizeReasonsLocal(items []string) []string {
 		}
 		seen[trimmed] = struct{}{}
 		out = append(out, trimmed)
-	}
-	return out
-}
-
-func trimSnippetLocal(raw string, limit int) string {
-	text := strings.TrimSpace(raw)
-	if limit <= 0 || len(text) <= limit {
-		return text
-	}
-	return text[:limit]
-}
-
-func topReasonCodesLocal(counts map[string]int64, limit int) []string {
-	type pair struct {
-		key   string
-		count int64
-	}
-	items := make([]pair, 0, len(counts))
-	for key, count := range counts {
-		items = append(items, pair{key: key, count: count})
-	}
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].count == items[j].count {
-			return items[i].key < items[j].key
-		}
-		return items[i].count > items[j].count
-	})
-	if limit <= 0 || limit > len(items) {
-		limit = len(items)
-	}
-	out := make([]string, 0, limit)
-	for _, item := range items[:limit] {
-		out = append(out, item.key)
 	}
 	return out
 }

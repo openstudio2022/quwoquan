@@ -35,6 +35,10 @@ type GetPostPublicationEligibilityQuery struct {
 	ContentDigest string
 }
 
+type GetCurrentPostModerationCaseQuery struct {
+	PostID string
+}
+
 type PostModerationCaseCommandResult struct {
 	CaseID   string
 	Version  int64
@@ -52,6 +56,27 @@ type PublicationEligibilitySlice struct {
 	CheckedAt     time.Time
 	DecisionAt    *time.Time
 	FailureReason string
+}
+
+type PostModerationCaseOpsSlice struct {
+	ID             string                 `json:"id"`
+	Version        int64                  `json:"version"`
+	PostID         string                 `json:"postId"`
+	PostVersion    int64                  `json:"postVersion"`
+	ContentDigest  string                 `json:"contentDigest"`
+	Status         moderationmodel.Status `json:"status"`
+	ReviewerID     string                 `json:"reviewerId,omitempty"`
+	DecisionReason string                 `json:"decisionReason,omitempty"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	UpdatedAt      time.Time              `json:"updatedAt"`
+	DecidedAt      *time.Time             `json:"decidedAt,omitempty"`
+}
+
+type CurrentPostModerationCaseReader interface {
+	FindCurrentByPostID(
+		ctx context.Context,
+		postID string,
+	) (PostModerationCaseOpsSlice, bool, error)
 }
 
 type PublicationEligibilityApplicationReader interface {

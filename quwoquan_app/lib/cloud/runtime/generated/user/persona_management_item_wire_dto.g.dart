@@ -15,7 +15,6 @@ class PersonaManagementItemWireDto {
   final bool isActive;
   final String status;
   final DateTime? retiredAt;
-  final bool hasAttributedHistory;
   final bool hasPublishedContent;
   final bool inheritsProfileFromOwner;
   final List<String> overriddenProfileFields;
@@ -39,7 +38,6 @@ class PersonaManagementItemWireDto {
     this.isActive = false,
     this.status = 'active',
     this.retiredAt,
-    this.hasAttributedHistory = false,
     this.hasPublishedContent = false,
     this.inheritsProfileFromOwner = true,
     this.overriddenProfileFields = const <String>[],
@@ -65,7 +63,6 @@ class PersonaManagementItemWireDto {
       isActive: m['isActive'] as bool? ?? false,
       status: m['status']?.toString() ?? 'active',
       retiredAt: _parseDateTime(m['retiredAt']) ?? null,
-      hasAttributedHistory: m['hasAttributedHistory'] as bool? ?? false,
       hasPublishedContent: m['hasPublishedContent'] as bool? ?? false,
       inheritsProfileFromOwner: m['inheritsProfileFromOwner'] as bool? ?? true,
       overriddenProfileFields: _parseStringList(m['overriddenProfileFields']) ?? const <String>[],
@@ -92,7 +89,6 @@ class PersonaManagementItemWireDto {
       'isActive': isActive,
       'status': status,
       'retiredAt': retiredAt,
-      'hasAttributedHistory': hasAttributedHistory,
       'hasPublishedContent': hasPublishedContent,
       'inheritsProfileFromOwner': inheritsProfileFromOwner,
       'overriddenProfileFields': overriddenProfileFields,
@@ -118,7 +114,6 @@ class PersonaManagementItemWireDto {
     bool? isActive,
     String? status,
     DateTime? retiredAt,
-    bool? hasAttributedHistory,
     bool? hasPublishedContent,
     bool? inheritsProfileFromOwner,
     List<String>? overriddenProfileFields,
@@ -142,7 +137,6 @@ class PersonaManagementItemWireDto {
       isActive: isActive ?? this.isActive,
       status: status ?? this.status,
       retiredAt: retiredAt ?? this.retiredAt,
-      hasAttributedHistory: hasAttributedHistory ?? this.hasAttributedHistory,
       hasPublishedContent: hasPublishedContent ?? this.hasPublishedContent,
       inheritsProfileFromOwner: inheritsProfileFromOwner ?? this.inheritsProfileFromOwner,
       overriddenProfileFields: overriddenProfileFields ?? this.overriddenProfileFields,

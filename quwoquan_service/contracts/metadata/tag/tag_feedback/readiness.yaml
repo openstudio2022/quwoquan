@@ -1,0 +1,27 @@
+object: TagFeedback
+operations:
+  - ReportTagFeedback
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/tag-service/internal/domain/tagfeedback/model/feedback.go
+    - quwoquan_service/services/tag-service/internal/application/tagfeedback/facade.go
+  store:
+    - quwoquan_service/services/tag-service/internal/infrastructure/tagfeedbackstore/mongo_sink.go
+  transport:
+    - quwoquan_service/services/tag-service/internal/adapters/http/tag_feedback_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/tag/tag_feedback_contracts.dart
+    - quwoquan_app/lib/cloud/remote/tag/tag_feedback_remote.dart
+  page:
+    - quwoquan_app/lib/ui/user/pages/career_interest_page.dart
+  outbox: []
+  reader: []
+tests:
+  local_contract:
+    - quwoquan_app/test/local_contract/ui/user/pages/career_interest_page__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/tag-service/tests/api_integration/tag_feedback_contract__api_integration_test.go
+  user_acceptance: []
+environments:
+  - name: gamma
+    artifact: specs/changelog/CR-20260719-120-business-object-batch-rollout.yaml

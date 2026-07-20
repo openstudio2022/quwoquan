@@ -39,15 +39,24 @@ def main() -> int:
         return 1
 
     violations: list[str] = []
+    hits: set[tuple[str, str]] = set()
     for path in sorted(APP_LIB.rglob("*.dart")):
         rel = path.relative_to(APP_LIB).as_posix()
         text = path.read_text(encoding="utf-8")
         for rx, sym in PATTERNS:
             if not rx.search(text):
                 continue
+            hits.add((rel, sym))
             per_file = allowed.get(rel, set())
             if sym not in per_file:
                 violations.append(f"{rel}: un-allowlisted {sym}")
+    allowed_pairs = {
+        (path, symbol)
+        for path, symbols in allowed.items()
+        for symbol in symbols
+    }
+    for path, symbol in sorted(allowed_pairs - hits):
+        violations.append(f"{path}: stale allowlist entry for {symbol}")
 
     if violations:
         print("lib_test_only_symbols: FAIL", file=sys.stderr)

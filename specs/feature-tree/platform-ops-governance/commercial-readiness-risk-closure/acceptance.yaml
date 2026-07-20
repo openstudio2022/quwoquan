@@ -1,0 +1,297 @@
+version: 2
+node:
+  id: commercial-readiness-risk-closure
+  level: L2_business_capability
+  path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure
+  title: commercial readiness risk closure
+  parent_domain_service: platform-ops-governance
+  parent_business_capability: commercial-readiness-risk-closure
+scope:
+  summary: 运维运营平台只有在仓内风险已解决且外部前置条件真实满足时才能进入生产；不接受风险豁免或伪造证据。
+  in_scope:
+    - R-OPS 风险清零、三层测试、供应链与 stackctl release 证据
+    - OIDC/RBAC、双签原子 receipt、遥测与日志可靠投递
+    - Build Once、灰度锁/CAS、SLO 回读、灾备容量与真实数据对账
+    - 配置 ACK、可信灰度维度与 acceptance 路径诚信
+  out_of_scope:
+    - 伪造 IdP、企业法务信息、生产凭据或云厂商恢复结果
+    - 未经批准执行 prod-hosted 放量、回滚或破坏性恢复
+sit_acceptance:
+  SIT1:
+    title: 遥测与日志在异常条件下不丢关键事实
+    given:
+      - startup、Behavior、RuntimeLogger 与服务日志使用 canonical metadata 契约。
+      - WARN/ERROR、永久 4xx、临时网络/5xx 和进程重启均可注入测试。
+    when:
+      - 发生重放、断网、422、队列拥塞或 exporter 重启。
+    then:
+      - startup 以 canonical body digest 幂等，同 proof 不同 body 不会误判重放。
+      - Behavior 正确处理 gzip、clientEventId、occurredAt 与事务 outbox。
+      - WARN/ERROR 优先、TTL/退避/DLQ/spool 生效，永久失败不堵塞后续记录。
+      - ANR/卡顿可查询、可 rollup、可告警。
+    done_when:
+      - 相关 local_contract 与 api_integration 全绿，日志链路不存在静默成功。
+    edge_cases:
+      - spool 达到容量上限时必须按优先级保护 ERROR/WARN 并产生结构化丢弃指标。
+      - DLQ 重放必须幂等。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/_shared/runtime_observability.yaml
+      - quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml
+    performance_points:
+      - 日志 exporter 不阻塞业务请求。
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_app/test/local_contract/core/observability/runtime_logger__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/core/observability/runtime_diagnostics__local_contract_test.dart
+        - file: quwoquan_service/services/product-ops-service/cmd/api/startup_telemetry_metrics__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+    status: pending
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: runtime_telemetry_delivery
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.runtime_telemetry_delivery
+          envs: [local]
+        - layer: api_integration
+          execution_profile: integration
+          suite: behavior_and_log_delivery
+          cases:
+            - api_integration.platform_ops_governance.commercial_readiness_risk_closure.behavior_and_log_delivery
+          envs: [gamma]
+      supporting: []
+    notes: []
+  SIT2:
+    title: 控制面身份和危险动作职责分离
+    given:
+      - Portal 使用 OIDC Authorization Code + PKCE。
+      - 服务端只信任已验证 principal。
+    when:
+      - operator 读取菜单或提交 premium takedown。
+    then:
+      - 菜单与 API 均按 scope fail-closed。
+      - X-Actor/X-User-Id 等客户端头不能构造 actor。
+      - 两个不同 principal 对同一 digest 双签后，状态、workflow、audit、outbox 和 receipt 原子提交。
+      - Portal 不暴露 release apply / rollback mutation；发布唯一执行面保持为受保护 CI/CD + stackctl。
+    done_when:
+      - 匿名、伪造头、同人双签、digest 漂移、事务失败与幂等重放负测全绿。
+    edge_cases:
+      - IdP/JWKS/MFA 未配置时 production composition 必须拒绝启动。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/_control_plane/portal_menu.yaml
+      - quwoquan_service/contracts/metadata/_control_plane/platform/control_plane.yaml
+      - quwoquan_service/contracts/metadata/_control_plane/product/control_plane.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
+        - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+        - file: quwoquan_service/services/product-ops-service/tests/api_integration/control_plane_postgres_store__api_integration_test.go
+        - file: quwoquan_ops/tests/local_contract/portal_control_plane__local_contract_test.mjs
+    status: pending
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: control_plane_security
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.control_plane_security
+          envs: [local]
+      supporting:
+        - layer: user_acceptance
+          execution_profile: release
+          suite: operator_oidc_scope
+          cases:
+            - user_acceptance.platform_ops_governance.commercial_readiness_risk_closure.operator_oidc_scope
+          envs: [prod]
+    notes: []
+  SIT3:
+    title: 构建一次与不可变制品
+    given:
+      - CI action 固定 commit SHA，工作流最小权限和 CODEOWNERS 已声明。
+    when:
+      - service/app/portal/config 进入 pre-release 与生产 rollout。
+    then:
+      - ReleaseManifest 绑定 git commit、OCI/config/portal/SBOM/provenance/signature/test evidence digest。
+      - gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
+    done_when:
+      - same-digest、Action pin、SBOM/provenance 和缺制品 fail-closed 门禁全绿。
+    edge_cases:
+      - GitHub 账号权益不支持 branch protection 时，release workflow 必须额外机器阻断且记录外部 entitlement blocker。
+    contract_refs:
+      - quwoquan_ops/policies/branch_policy.yaml
+      - .github/workflows/service_pipeline.yml
+      - .github/workflows/deploy-prod-auto.yml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_prod_rollout_stage__local_contract_test.py
+    status: pending
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: supply_chain_immutability
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.supply_chain_immutability
+          envs: [local]
+      supporting: []
+    notes: []
+  SIT4:
+    title: 灰度发布串行、真实 SLO 回读并可回滚
+    given:
+      - ReleaseManifest 与上一稳定 digest 已验证。
+      - 全局 lock 和 CAS release ledger 可用。
+    when:
+      - 执行 gray-initial、carry-on、full 或自动回滚。
+    then:
+      - 并发发布被拒绝，stage 只能按 CAS 顺序推进。
+      - SLO 只从 Prometheus 读取且满足最小样本/窗口。
+      - 超阈值自动回滚并生成不可变 receipt。
+    done_when:
+      - 本地失败注入和 prod-hosted 真实流量/回滚演练均有 report。
+    edge_cases:
+      - Prometheus、锁、release state 或回滚目标任一不可用时不得继续放量。
+    contract_refs:
+      - quwoquan_ops/environments/gray_rollout_stages.yaml
+      - quwoquan_ops/policies/config-release/slo_thresholds.yaml
+    performance_points:
+      - 回滚恢复时间满足声明的 RTO。
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_prod_rollout_stage__local_contract_test.py
+    status: pending
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: rollout_lock_cas_slo
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.rollout_lock_cas_slo
+          envs: [local]
+      supporting:
+        - layer: user_acceptance
+          execution_profile: release
+          suite: prod_hosted_rollback_drill
+          cases:
+            - user_acceptance.platform_ops_governance.commercial_readiness_risk_closure.prod_hosted_rollback_drill
+          envs: [prod]
+    notes: []
+  SIT5:
+    title: 观测、灾备和容量闭环
+    given:
+      - Prometheus、Alertmanager、OTel、exporter、备份目标和异地副本配置真实可用。
+    when:
+      - 触发服务/基础设施告警或执行 PostgreSQL/Mongo/SLS 恢复演练。
+    then:
+      - 告警完成 firing -> notify -> ack -> resolved。
+      - 备份按计划生成、校验并恢复到隔离目标，RPO/RTO/容量/成本水位有机器证据。
+    done_when:
+      - 生产演练 report 与 Portal 证据可追溯。
+    edge_cases:
+      - 无凭据、无异地副本、恢复校验失败时必须阻断 release。
+    contract_refs:
+      - quwoquan_ops/observability/monitoring/docker-compose.prod.yml
+      - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    performance_points:
+      - RPO/RTO 与容量预算不得只存在文档。
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
+    status: pending
+    test_evidence:
+      primary:
+        - layer: api_integration
+          execution_profile: release
+          suite: observability_and_restore_drill
+          cases:
+            - api_integration.platform_ops_governance.commercial_readiness_risk_closure.observability_and_restore_drill
+          envs: [prod]
+      supporting: []
+    notes: []
+  SIT6:
+    title: 配置 ACK、可信灰度维度与真实 Portal 数据
+    given:
+      - 全部 governed workloads 使用同一 ConfigSnapshot/ACK 契约。
+      - 可信边缘可解析 province/carrier。
+    when:
+      - 发布高版本并按 appVersion/userId/province/carrier 分流。
+    then:
+      - 所有实例 ACK 收敛，drift 为零。
+      - 客户端伪造 province/carrier 被覆盖，未知维度不命中。
+      - Portal 页面只展示真实控制面、SLS、Prometheus 或业务投影数据。
+    done_when:
+      - 四维分流、ACK 矩阵和 Portal 数据源对账 UAT 全绿。
+    edge_cases:
+      - 可信 IP 数据库不可用时不得信任客户端值。
+    contract_refs:
+      - quwoquan_ops/environments/gray_routing_policy.yaml
+      - quwoquan_service/contracts/metadata/ops/config_layer/service.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
+        - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
+    status: pending
+    test_evidence:
+      primary:
+        - layer: api_integration
+          execution_profile: integration
+          suite: config_ack_and_gray_routing
+          cases:
+            - api_integration.platform_ops_governance.commercial_readiness_risk_closure.config_ack_and_gray_routing
+          envs: [gamma]
+      supporting: []
+    notes: []
+  SIT7:
+    title: 验收路径和风险台账零漂移
+    given:
+      - feature-tree、acceptance、backlog 与磁盘测试文件已加载。
+    when:
+      - 运行 acceptance、tree index、single-track、全仓编译和 stackctl release gate。
+    then:
+      - planned/recorded 路径全部存在并可执行。
+      - 本 Story 负责的 backlog 项全部已关闭；外部前置条件缺失则 release 保持 GATE_BLOCK。
+    done_when:
+      - 全部触达范围门禁绿且无 warn-only/skip/allowlist 逃逸。
+    edge_cases:
+      - 并行脏工作树导致测试中间态时不得回滚他人改动，只能等待收敛或报告明确 blocker。
+    contract_refs:
+      - docs/outstanding_risks_backlog.md
+      - specs/feature-tree/tree_index.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
+    status: pending
+    test_evidence:
+      primary:
+        - layer: user_acceptance
+          execution_profile: release
+          suite: zero_risk_release_gate
+          cases:
+            - user_acceptance.platform_ops_governance.commercial_readiness_risk_closure.zero_risk_release_gate
+          envs: [prod]
+      supporting:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: acceptance_path_integrity
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.acceptance_path_integrity
+          envs: [local]
+    notes: []
+execution:
+  local_gate:
+    - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+    - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+    - python3 quwoquan_ops/cli/stackctl.py verify --kind all --profile baseline
+  profile_gates:
+    - python3 quwoquan_ops/cli/stackctl.py verify --env prod --kind all --profile release

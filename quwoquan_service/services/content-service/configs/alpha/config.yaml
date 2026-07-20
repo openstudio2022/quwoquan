@@ -6,6 +6,10 @@ service:
 mongo:
   uri: ""
 
+# alpha 使用确定性数据以稳定验证端云契约；非 alpha 环境由启动门禁拒绝此 provider。
+ip_location:
+  provider: "deterministic"
+
 redis:
   rec:
     mode: standalone

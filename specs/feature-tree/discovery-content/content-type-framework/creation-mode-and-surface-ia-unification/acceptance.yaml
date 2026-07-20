@@ -84,32 +84,38 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: creation_mixed_media_picker
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.mixed_picker_uses_next_step_and_type_lock
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: camera_capture_mode_switch
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.switchable_camera_defaults_photo_and_can_switch_video
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: create_video_entry_mode
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_entry_opens_image_picker_and_video_entry_opens_video_picker
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: create_entry_media_resolution
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_entry_image_result_enters_image_flow
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: creation_media_mode_split
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.image_mode_hides_video_actions
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: video_media_picker_dark_flow
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.video_grid_camera_one_tap_movie_and_video_assets
@@ -117,28 +123,33 @@ gwt_acceptance:
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: create_entry_sheet_widget
         cases:
         - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.entry_sheet_album_camera_write_and_social_actions
         envs:
         - gamma_local
       - layer: local_contract
+        execution_profile: baseline
         suite: photo_create_page_surface
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_title_semantic_and_hover_reorder
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: image_editor_thumbnail_reorder_widget
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_strip_left_align_reveal_not_center
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: photo_publish_upload_bind_roundtrip
         cases:
         - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
         envs:
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: photo_creation_journey
         cases:
         - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.user_distinguishes_photo_from_video_publish
@@ -187,7 +198,6 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/create_draft_autosave_timing__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
@@ -198,28 +208,33 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: create_local_draft_repository
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.local_draft_repository_preserves_flow_kind_and_order
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: create_local_draft_page
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.local_draft_page_reloads_and_preserves_missing_media_type
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: create_draft_autosave_timing
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.dirty_state_saves_every_10s_and_flushes_on_blur
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: draft_recovery_widget
         cases:
         - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.bottom_plus_write_saves_recovers_and_publish_clears_draft
         envs:
         - gamma_local
       - layer: api_integration
+        execution_profile: integration
         suite: post_crud_contract
         cases:
         - api_integration.discovery_content.publish_comment_reaction.post_create_update.post_crud_contract
@@ -232,5 +247,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

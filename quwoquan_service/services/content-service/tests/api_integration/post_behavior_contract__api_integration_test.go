@@ -18,27 +18,24 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"quwoquan_service/services/content-service/internal/application/authorimpact"
-	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
-	"quwoquan_service/services/content-service/internal/application/ports"
 	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rtimpact "quwoquan_service/runtime/impact"
+	rtoperation "quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
-	contentmessaging "quwoquan_service/services/content-service/internal/infrastructure/messaging"
+	"quwoquan_service/services/content-service/internal/application/authorimpact"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
-// TestLikePost verifies the like endpoint route is registered.
-// The handler currently returns 500 (operation not implemented) —
-// asserts the route exists and returns a structured error, not 404.
-// contract.yaml: react_with_counter_strategy / go_func: TestReactWithCounterStrategy
+// TestLikePost verifies persona/device actors occupy disjoint reaction identities.
 func TestLikePost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPost(t, `{"contentType":"image","title":"Like target"}`)
@@ -47,21 +44,67 @@ func TestLikePost(t *testing.T) {
 		t.Fatal("no _id in created post")
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	// Route is registered; expect either 2xx (implemented) or 5xx (not implemented).
-	if rec.Code == http.StatusNotFound {
-		t.Fatalf("like route not registered (got 404); expected 2xx or 5xx")
+	type actorCase struct {
+		name      string
+		principal rtauth.Principal
 	}
-	if rec.Code >= 400 {
-		var errResp map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
-			t.Fatalf("decode error response: %v", err)
+	cases := []actorCase{
+		{
+			name: "persona",
+			principal: rtauth.Principal{
+				Actor: rtoperation.ActorContext{
+					AccountID: "account_like_persona",
+					PersonaID: "persona_like_001",
+				},
+			},
+		},
+		{
+			name: "device",
+			principal: rtauth.Principal{
+				Actor: rtoperation.ActorContext{
+					DeviceActorID: "device_like_001",
+				},
+			},
+		},
+	}
+	reactionIDs := map[string]struct{}{}
+	for _, testCase := range cases {
+		req := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
+		req.Header.Set("Idempotency-Key", "like-identity-"+testCase.name)
+		req = req.WithContext(rtauth.WithPrincipal(req.Context(), testCase.principal))
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s like status=%d body=%s", testCase.name, rec.Code, rec.Body.String())
 		}
-		if errResp["code"] == nil {
-			t.Error("expected structured error response with code field")
+		var result struct {
+			ReactionID string `json:"reactionId"`
+			Liked      bool   `json:"liked"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode %s like response: %v", testCase.name, err)
+		}
+		if result.ReactionID == "" || !result.Liked {
+			t.Fatalf("%s like response is incomplete: %+v", testCase.name, result)
+		}
+		reactionIDs[result.ReactionID] = struct{}{}
+	}
+	if len(reactionIDs) != len(cases) {
+		t.Fatalf("persona/device identities collapsed into one reaction: %+v", reactionIDs)
+	}
+	for dimension, actorID := range map[string]string{
+		"persona": "persona_like_001",
+		"device":  "device_like_001",
+	} {
+		count, err := requireMongoDB(t).Collection("content_reaction_aggregates").
+			CountDocuments(t.Context(), bson.M{
+				"targetKind":     "post",
+				"targetId":       postID,
+				"actorDimension": dimension,
+				"actorId":        actorID,
+			})
+		if err != nil || count != 1 {
+			t.Fatalf("%s identity aggregate count=%d err=%v", dimension, count, err)
 		}
 	}
 }
@@ -96,15 +139,16 @@ func TestBehaviorBatchReport(t *testing.T) {
 		t.Fatal("no _id in created post")
 	}
 
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	payload := fmt.Sprintf(`{
 		"userId": "user_batch_001",
 		"sessionId": "sess_abc",
 		"events": [
-			{"contentId": %q, "action": "impression", "userId": "user_batch_001"},
-			{"contentId": %q, "action": "click",      "userId": "user_batch_001"},
-			{"contentId": %q, "action": "dwell",      "userId": "user_batch_001", "duration": 5.5}
+			{"clientEventId":"evt-batch-impression-001","occurredAt":%q,"contentId": %q, "action": "impression", "state": "impressed", "userId": "user_batch_001"},
+			{"clientEventId":"evt-batch-click-001","occurredAt":%q,"contentId": %q, "action": "click",      "userId": "user_batch_001"},
+			{"clientEventId":"evt-batch-dwell-001","occurredAt":%q,"contentId": %q, "action": "dwell",      "userId": "user_batch_001", "duration": 5.5}
 		]
-	}`, postID, postID, postID)
+	}`, occurredAt, postID, occurredAt, postID, occurredAt, postID)
 
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
@@ -116,6 +160,79 @@ func TestBehaviorBatchReport(t *testing.T) {
 	}
 	if body := strings.TrimSpace(rec.Body.String()); body != "" {
 		t.Fatalf("expected empty 204 body, got %q", body)
+	}
+}
+
+func TestBehaviorBatchRejectsImpressionWithoutCanonicalState(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Impression state target"}`)
+	postID, _ := created["postId"].(string)
+	if postID == "" {
+		t.Fatal("no postId in created post")
+	}
+
+	payload := fmt.Sprintf(
+		`{"events":[{"clientEventId":"evt-impression-missing-state","occurredAt":%q,"contentId":%q,"action":"impression"}]}`,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		postID,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var errResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if code, ok := errResp["code"].(string); !ok || code == "" {
+		t.Fatalf("expected structured error code, got %+v", errResp)
+	}
+}
+
+func TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := submitPublishedPost(t, `{"contentType":"video","title":"Effective play target"}`)
+	postID := asTestString(created["postId"])
+	if postID == "" {
+		t.Fatalf("missing post id: %+v", created)
+	}
+
+	request := func(state string) *httptest.ResponseRecorder {
+		occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
+		payload := fmt.Sprintf(`{
+			"userId":"effective_play_user",
+			"sessionId":"video-playback-session-1",
+			"events":[{
+				"clientEventId":%q,
+				"occurredAt":%q,
+				"contentId":%q,
+				"action":"effective_play",
+				"state":%q,
+				"effectivePlayMs":8000,
+				"consumedRatio":0.064,
+				"totalUnits":125
+			}]
+		}`, "evt-effective-play-"+state, occurredAt, postID, state)
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/content/behaviors",
+			strings.NewReader(payload),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := request("scrubbing"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("scrub evidence must fail closed, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := request("foreground_visible_playing"); rec.Code != http.StatusNoContent {
+		t.Fatalf("effective play evidence rejected, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -131,9 +248,9 @@ func TestGetMyFootprintContract(t *testing.T) {
 	payload := fmt.Sprintf(`{
 		"userId": %q,
 		"events": [
-			{"clientEventId": "evt-footprint-001", "contentId": %q, "contentType": "image", "action": "click", "userId": %q}
+			{"clientEventId": "evt-footprint-001", "occurredAt": %q, "contentId": %q, "contentType": "image", "action": "click", "userId": %q}
 		]
-	}`, userID, postID, userID)
+	}`, userID, time.Now().UTC().Format(time.RFC3339Nano), postID, userID)
 	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportReq.Header.Set("X-Client-User-Id", userID)
@@ -193,6 +310,9 @@ func TestBehaviorBatchEmpty(t *testing.T) {
 
 // TestBehaviorBatchCanonicalWire verifies the app-facing canonical wire used by
 // local gamma T3: postId/type/dwellMs.
+// TestBehaviorBatchCanonicalWire 冻结契约单轨：唯一 wire 键
+// contentId/action/duration/position 可解析；旧键
+// postId/type/dwellMs/feedPosition 已删除且不再被双读（安全负例）。
 func TestBehaviorBatchCanonicalWire(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPost(t, `{"contentType":"image","title":"Wire canonical target"}`)
@@ -201,17 +321,30 @@ func TestBehaviorBatchCanonicalWire(t *testing.T) {
 		t.Fatal("no _id in created post")
 	}
 
-	payload := fmt.Sprintf(
-		`{"userId":"user_reporter_001","events":[{"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
-		postID,
+	canonical := fmt.Sprintf(
+		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-canonical-wire-001","occurredAt":%q,"contentId":%q,"action":"dwell","duration":12,"userId":"user_reporter_001"}]}`,
+		time.Now().UTC().Format(time.RFC3339Nano), postID,
 	)
-	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(canonical))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("canonical wire expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 旧键 payload（postId/type/dwellMs）不再承载对象与动作语义：
+	// contentId/action 缺失必须被拒绝，服务端不得回退双读。
+	legacy := fmt.Sprintf(
+		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-legacy-wire-001","occurredAt":%q,"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
+		time.Now().UTC().Format(time.RFC3339Nano), postID,
+	)
+	legacyReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(legacy))
+	legacyReq.Header.Set("Content-Type", "application/json")
+	legacyRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(legacyRec, legacyReq)
+	if legacyRec.Code != http.StatusBadRequest {
+		t.Fatalf("legacy dual-read keys must be rejected with 400, got %d: %s", legacyRec.Code, legacyRec.Body.String())
 	}
 }
 
@@ -220,7 +353,7 @@ func TestBehaviorBatchCanonicalWire(t *testing.T) {
 // feedRequestId/referralSource/position/state 与交集分桶字段必须从批量 JSON
 // 正确解析进 BehaviorEventInput（端云 DTO↔struct↔YAML common_fields 对齐，R08）。
 func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
-	raw := `{"contentId":"post_attr_1","action":"impression","state":"impressed",` +
+	raw := `{"clientEventId":"evt-attr-001","occurredAt":"2026-07-19T07:00:00Z","contentId":"post_attr_1","action":"impression","state":"impressed",` +
 		`"feedRequestId":"frq_01H","referralSource":"organic_feed","position":7,` +
 		`"channelId":"following","rankingVersion":"rank-v3","reasonVersion":"reason-v2",` +
 		`"recallPath":"collab_i2i","contentVertical":"travel_photography","supplySource":"data_engineering",` +
@@ -276,6 +409,7 @@ func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 
 func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 	ctx := context.Background()
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
@@ -284,6 +418,7 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			ClientEventID: "evt-dedup-001",
+			OccurredAt:    occurredAt,
 			UserID:        "user_dedup_001",
 			SessionID:     "sess_dedup_001",
 			ContentID:     "post_dedup_001",
@@ -292,6 +427,7 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 		},
 		{
 			ClientEventID: "evt-dedup-001",
+			OccurredAt:    occurredAt,
 			UserID:        "user_dedup_001",
 			SessionID:     "sess_dedup_001",
 			ContentID:     "post_dedup_001",
@@ -321,17 +457,19 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 // flywheel contract: assistant_interest is a tag-only signal and must not be
 // rejected when contentId/postId are absent.
 func TestBehaviorBatchAssistantInterestAllowsEmptyContentID(t *testing.T) {
-	payload := `{
+	payload := fmt.Sprintf(`{
 		"userId":"user_assistant_interest_001",
 		"sessionId":"sess_assistant_interest_001",
 		"events":[
 			{
+				"clientEventId":"evt-assistant-interest-http-001",
+				"occurredAt":%q,
 				"action":"assistant_interest",
 				"userId":"user_assistant_interest_001",
 				"tagRefs":["Topic/旅行","Topic/景区"]
 			}
 		]
-	}`
+	}`, time.Now().UTC().Format(time.RFC3339Nano))
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -348,12 +486,13 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 	if _, err := coll.DeleteMany(ctx, bson.M{"userId": "user_wishlist_http_001"}); err != nil {
 		t.Fatalf("clean wishlist events: %v", err)
 	}
-	payload := `{
+	payload := fmt.Sprintf(`{
 		"userId":"user_wishlist_http_001",
 		"sessionId":"sess_wishlist_http_001",
 		"events":[
 			{
 				"clientEventId":"evt_wishlist_http_001",
+				"occurredAt":%q,
 				"action":"wishlist_add",
 				"objectId":"homepage_west_lake",
 				"objectKind":"homepage",
@@ -363,7 +502,7 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 			"feedRequestId":"frq_wishlist_http_001"
 			}
 		]
-	}`
+	}`, time.Now().UTC().Format(time.RFC3339Nano))
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_wishlist_http_001")
@@ -401,29 +540,29 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}); err != nil {
 		t.Fatalf("clean recommend feature: %v", err)
 	}
+	// 生产同构装配（N0-2）：行为写持久轨 rm_behavior_events，特征投影由
+	// BehaviorProjectionRelay 游标驱动（与 main.go 相同管线），不再经进程内
+	// publisher 直连 projector（那会掩盖生产 Pub/Sub 断链）。
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorEventPublisher(
-			contentmessaging.NewInProcessProjectorPublisher(
-				&recommendOnlyProjectorAdapter{
-					p: recinfra.NewRecommendFeatureProjector(mongoDB),
-				},
-			),
-		),
+		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
 	)
 
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
-			UserID:    "user_assistant_interest_projector_001",
-			SessionID: "sess_assistant_interest_projector_001",
-			Action:    "assistant_interest",
-			Tags:      []string{"Topic/旅行", "Topic/旅行主题"},
+			ClientEventID: "evt-assistant-interest-projector-001",
+			OccurredAt:    time.Now().UTC().Format(time.RFC3339Nano),
+			UserID:        "user_assistant_interest_projector_001",
+			SessionID:     "sess_assistant_interest_projector_001",
+			Action:        "assistant_interest",
+			Tags:          []string{"Topic/旅行", "Topic/旅行主题"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("process assistant_interest: %v", err)
 	}
+	drainBehaviorProjection(t, ctx)
 
 	var got struct {
 		UserFeatures struct {
@@ -449,26 +588,35 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": userID}); err != nil {
 		t.Fatalf("clean recommend feature: %v", err)
 	}
+	feedColl := mongoDB.Collection("rm_discovery_feed")
+	contentIDs := []string{"post_ss_visible", "post_ss_impressed", "post_ss_click"}
+	if _, err := feedColl.DeleteMany(ctx, bson.M{"postId": bson.M{"$in": contentIDs}}); err != nil {
+		t.Fatalf("clean DiscoveryFeed seven-state fixtures: %v", err)
+	}
+	fixtures := make([]any, 0, len(contentIDs))
+	for _, contentID := range contentIDs {
+		fixtures = append(fixtures, bson.M{"postId": contentID, "viewCount": int64(0)})
+	}
+	if _, err := feedColl.InsertMany(ctx, fixtures); err != nil {
+		t.Fatalf("seed DiscoveryFeed seven-state fixtures: %v", err)
+	}
+	// 生产同构装配（N0-2）：持久轨 + relay 驱动投影，与 main.go 一致。
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorEventPublisher(
-			contentmessaging.NewInProcessProjectorPublisher(
-				&recommendOnlyProjectorAdapter{
-					p: recinfra.NewRecommendFeatureProjector(mongoDB),
-				},
-			),
-		),
+		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
 	)
 
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{UserID: userID, ContentID: "post_ss_click", Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-visible-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-impressed-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-click-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_click", Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 	})
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)
 	}
+	drainBehaviorProjection(t, ctx)
 
 	var got struct {
 		UserFeatures struct {
@@ -484,6 +632,22 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	}
 	if got.UserFeatures.TypeEngagements["image"] < 1 {
 		t.Fatalf("typeEngagements[image] want >=1 (click counted as CTR numerator), got %d", got.UserFeatures.TypeEngagements["image"])
+	}
+	wantViews := map[string]int64{
+		"post_ss_visible":   0,
+		"post_ss_impressed": 1,
+		"post_ss_click":     0,
+	}
+	for contentID, want := range wantViews {
+		var row struct {
+			ViewCount int64 `bson:"viewCount"`
+		}
+		if err := feedColl.FindOne(ctx, bson.M{"postId": contentID}).Decode(&row); err != nil {
+			t.Fatalf("read DiscoveryFeed viewCount for %s: %v", contentID, err)
+		}
+		if row.ViewCount != want {
+			t.Fatalf("DiscoveryFeed viewCount[%s]=%d want=%d", contentID, row.ViewCount, want)
+		}
 	}
 }
 
@@ -503,8 +667,11 @@ func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *tes
 		behaviorapp.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
 	)
 
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
+			ClientEventID:         "evt-intersection-follow-001",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_intersection_001",
 			ContentID:             "post_follow_001",
 			Action:                "follow",
@@ -513,6 +680,8 @@ func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *tes
 			IntersectionTagRefs:   []string{"Audience/学生"},
 		},
 		{
+			ClientEventID:         "evt-intersection-join-circle-001",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_intersection_001",
 			ContentID:             "circle_intersection_001",
 			Action:                "join_circle",
@@ -521,6 +690,8 @@ func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *tes
 			IntersectionTagRefs:   []string{"Topic/旅行"},
 		},
 		{
+			ClientEventID:         "evt-intersection-add-contact-001",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_intersection_001",
 			ContentID:             "post_contact_001",
 			Action:                "add_contact",
@@ -576,6 +747,8 @@ func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
 		"userId": "viewer_impact_http_001",
 		"events": [
 			{
+				"clientEventId":"evt-impact-http-001",
+				"occurredAt":%q,
 				"contentId": "post_impact_http_001",
 				"action": "follow",
 				"authorId": %q,
@@ -583,7 +756,7 @@ func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
 				"intersectionTagRefs": ["Audience/学生"]
 			}
 		]
-	}`, authorID)
+	}`, time.Now().UTC().Format(time.RFC3339Nano), authorID)
 	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportRec := httptest.NewRecorder()
@@ -635,8 +808,11 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 
 	// viewer 在作者旅行攻略上的真实 decision 行为（entity_page_view → decision），
 	// 携带旅行 tagRef；两条同 route tag 聚合为 count=2。
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
+			ClientEventID:         "evt-travel-route-001",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_travel_impact_001",
 			ContentID:             "post_travel_route_001",
 			Action:                "entity_page_view",
@@ -645,6 +821,8 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 			IntersectionTagRefs:   []string{"tag/travel/route"},
 		},
 		{
+			ClientEventID:         "evt-travel-route-002",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_travel_impact_002",
 			ContentID:             "post_travel_route_001",
 			Action:                "entity_page_view",
@@ -653,6 +831,8 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 			IntersectionTagRefs:   []string{"tag/travel/route"},
 		},
 		{
+			ClientEventID:         "evt-travel-spot-001",
+			OccurredAt:            occurredAt,
 			UserID:                "viewer_travel_impact_003",
 			ContentID:             "post_travel_spot_001",
 			Action:                "entity_page_view",
@@ -698,26 +878,38 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 	}
 }
 
-type recommendOnlyProjectorAdapter struct {
-	p *recinfra.RecommendFeatureProjector
-}
-
 func nilLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
-	return a.p.Project(ctx, recinfra.ProjectorEvent{
-		Type:          event.Type,
-		AggregateType: event.AggregateType,
-		AggregateID:   event.AggregateID,
-		Payload:       event.Payload,
-		OccurredAt:    event.OccurredAt,
-	})
+// drainBehaviorProjection 以生产同构方式驱动行为→特征投影（N0-2）：
+// 循环 Drain 直到 rm_behavior_events 持久轨全部消费（checkpoint 为全局游标，
+// 需要清空积压才能保证本测试新写入的事件已投影）。
+func drainBehaviorProjection(t *testing.T, ctx context.Context) {
+	t.Helper()
+	recommendProjector := recinfra.NewRecommendFeatureProjector(mongoDB)
+	if err := recommendProjector.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure recommendation feature indexes: %v", err)
+	}
+	relay := recinfra.NewBehaviorProjectionRelay(
+		mongoDB,
+		recommendProjector,
+		recinfra.NewDiscoveryFeedProjector(mongoDB),
+	).WithWatermarkLag(0)
+	for {
+		n, err := relay.Drain(ctx, 500)
+		if err != nil {
+			t.Fatalf("behavior projection relay drain: %v", err)
+		}
+		if n == 0 {
+			return
+		}
+	}
 }
 
-// TestBehaviorBatchRejectsLike verifies that like must use the dedicated route
-// and is rejected by the generic behavior batch endpoint.
+// TestBehaviorBatchRejectsLike verifies that server-authoritative actions
+// (like/comment/report, N0-3) are rejected by the generic behavior batch
+// endpoint — they are injected from object command outbox facts instead.
 func TestBehaviorBatchRejectsLike(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPost(t, `{"contentType":"image","title":"Like batch target"}`)
@@ -726,20 +918,22 @@ func TestBehaviorBatchRejectsLike(t *testing.T) {
 		t.Fatal("no _id in created post")
 	}
 
-	payload := fmt.Sprintf(`{"events":[{"postId":%q,"type":"like"}]}`, postID)
-	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
+	for _, action := range []string{"like", "comment", "report"} {
+		payload := fmt.Sprintf(`{"events":[{"contentId":%q,"action":%q}]}`, postID, action)
+		req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var errResp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
-		t.Fatalf("decode error response: %v", err)
-	}
-	if code, ok := errResp["code"].(string); !ok || code == "" {
-		t.Fatalf("expected structured error code, got %+v", errResp)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("action %s: expected 400, got %d: %s", action, rec.Code, rec.Body.String())
+		}
+		var errResp map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+			t.Fatalf("action %s: decode error response: %v", action, err)
+		}
+		if code, ok := errResp["code"].(string); !ok || code == "" {
+			t.Fatalf("action %s: expected structured error code, got %+v", action, errResp)
+		}
 	}
 }

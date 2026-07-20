@@ -1,4 +1,4 @@
-# L3 组件：rec-model-service（模型服务）
+# L2 特性：rec-model-service（模型服务）
 
 ## 功能说明
 
@@ -30,4 +30,4 @@
 - A2：推理延迟满足约定。
 - A3：模型服务不可用时 Go 侧 CascadeScorer 回退。
 - A7：契约与 metadata/OpenAPI 一致。
-- A8：推理 API 与 Go 集成有测试；见 [readiness.md](readiness.md)。
+- A8：推理 API 与 Go 集成具备 `local_contract`、`api_integration` 与 acceptance 证据。

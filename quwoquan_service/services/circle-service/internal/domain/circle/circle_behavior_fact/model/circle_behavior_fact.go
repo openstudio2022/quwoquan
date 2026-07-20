@@ -25,6 +25,8 @@ const (
 
 	BehaviorEventTypeDislike BehaviorEventType = "dislike"
 
+	BehaviorEventTypeUndoDislike BehaviorEventType = "undo_dislike"
+
 	BehaviorEventTypeHideAuthor BehaviorEventType = "hide_author"
 
 	BehaviorEventTypeHideContentType BehaviorEventType = "hide_content_type"
@@ -49,9 +51,13 @@ const (
 
 	BehaviorEventTypeJoinCircle BehaviorEventType = "join_circle"
 
+	BehaviorEventTypeLeaveCircle BehaviorEventType = "leave_circle"
+
 	BehaviorEventTypeAddContact BehaviorEventType = "add_contact"
 
 	BehaviorEventTypeAuthorView BehaviorEventType = "author_view"
+
+	BehaviorEventTypeEntityPageView BehaviorEventType = "entity_page_view"
 
 	BehaviorEventTypeTagClick BehaviorEventType = "tag_click"
 
@@ -59,7 +65,11 @@ const (
 
 	BehaviorEventTypePlayProgress BehaviorEventType = "play_progress"
 
+	BehaviorEventTypeEffectivePlay BehaviorEventType = "effective_play"
+
 	BehaviorEventTypeAssistantInterest BehaviorEventType = "assistant_interest"
+
+	BehaviorEventTypeOnboardingInterest BehaviorEventType = "onboarding_interest"
 )
 
 // CircleBehaviorFact domain model.

@@ -47,6 +47,35 @@ func TestAddMembers_ExceedsMaxGroupSize(t *testing.T) {
 	}
 }
 
+func TestCreateConversation_GroupSizePolicyIsSingleTrack(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	group := createConversation(t, `{"type":"group","title":"default capacity"}`)
+	if group["maxGroupSize"] != float64(1000) {
+		t.Fatalf("group default maxGroupSize=%v want=1000", group["maxGroupSize"])
+	}
+	direct := createConversation(
+		t,
+		`{"type":"direct","title":"direct capacity","maxGroupSize":1000,"initialMemberIds":["user_test_002"]}`,
+	)
+	if direct["maxGroupSize"] != float64(2) {
+		t.Fatalf("direct maxGroupSize=%v want=2", direct["maxGroupSize"])
+	}
+
+	status, body := postExpectingError(
+		t,
+		"/chat/conversations",
+		`{"type":"group","title":"oversized","maxGroupSize":1001}`,
+		"user_test_001",
+	)
+	if status != http.StatusBadRequest {
+		t.Fatalf("oversized group status=%d body=%#v", status, body)
+	}
+	if code := errorCodeOf(t, body); code != "CHAT.USER.group_full" {
+		t.Fatalf("oversized group code=%s want=CHAT.USER.group_full", code)
+	}
+}
+
 func TestListContacts_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
@@ -77,14 +106,13 @@ func TestListGroupCandidates_Empty(t *testing.T) {
 	}
 }
 
-func TestSearchContacts_Empty(t *testing.T) {
+func TestSearchContacts_RouteRemovedWithLocalOnlySearch(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	code, result := doGet(t, "/chat/contacts/search?q=test", "user_test_001")
-	if code != 200 {
-		t.Fatalf("expected 200, got %d", code)
-	}
-	if result["items"] == nil {
-		t.Error("response missing items")
+	// chat 云侧搜索已随本地检索单轨裁决删除；路由必须不可用（404 未注册
+	// 或 400 被 operation guard 拒绝，都证明云侧搜索无入口）。
+	code, _ := doGet(t, "/chat/contacts/search?q=test", "user_test_001")
+	if code < 400 {
+		t.Fatalf("removed search route must not serve requests, got %d", code)
 	}
 }

@@ -1,4 +1,4 @@
-# L4 特性：followers-following-pagination
+# L3 特性：followers-following-pagination
 
 ## 功能说明
 - 细化 followers-following-pagination 特性的功能边界与端云协同行为。

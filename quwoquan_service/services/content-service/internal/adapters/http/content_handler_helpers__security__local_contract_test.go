@@ -56,3 +56,18 @@ func TestIntersectionActorUsesVerifiedPersonaRatherThanOwnerAccount(t *testing.T
 		t.Fatalf("intersection actor=%q, want verified persona", got)
 	}
 }
+
+func TestBlockedKeywordHeaderDecodesEachOpaqueValue(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest("GET", "/content/feed", nil)
+	request.Header.Set(
+		"X-Blocked-Keywords",
+		"%E9%87%8D%E5%A4%8D%2C%E8%90%A5%E9%94%80,%E5%89%A7%E9%80%8F",
+	)
+
+	got := resolveBlockedKeywords(request)
+	if len(got) != 2 || got[0] != "重复,营销" || got[1] != "剧透" {
+		t.Fatalf("decoded blocked keywords=%v", got)
+	}
+}

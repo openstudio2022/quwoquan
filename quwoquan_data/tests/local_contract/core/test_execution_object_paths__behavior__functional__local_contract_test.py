@@ -30,7 +30,6 @@ from core.paths import (  # noqa: E402
     publish_data,
     relative_execution_ref,
 )
-from content.execution.controller.publish import _execution_release_id  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-object-paths--cn-sichuan--canary-001"
 
@@ -72,8 +71,11 @@ def test_shared_runtime_state_is_not_a_root_level_batch_manifest():
     assert packet.relative_to(root).as_posix() == "_shared/command_packets/build_homepage.json"
 
 
-def test_single_execution_release_uses_the_readable_execution_id():
-    assert _execution_release_id(EXECUTION_ID) == EXECUTION_ID
+def test_single_execution_release_id_is_the_validated_execution_id():
+    """per-execution release 已退役；发布身份即 execution 身份（aggregate 唯一建 release）。"""
+    from content.execution.identity import validate_execution_id
+
+    assert validate_execution_id(EXECUTION_ID) == EXECUTION_ID
 
 
 def test_execution_collects_only_approved_entities():

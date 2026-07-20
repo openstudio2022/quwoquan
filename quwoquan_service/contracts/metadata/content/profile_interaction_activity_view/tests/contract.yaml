@@ -1,0 +1,35 @@
+entity: ProfileInteractionActivityView
+
+scenarios:
+  - name: durable_sources_materialize_activity_projection
+    operation: ListProfileInteractionActivitiesReceived
+    go_func: TestProfileInteractionDurableSourcesMaterializeProjection
+    evidence: api_integration
+    assertions:
+      - ContentReactionSet、CommentCreated、OutboundShareRecorded 只能经各自 durable outbox consumer 写入 projection
+      - 每源重放按 source event/version 幂等，received/sent 各一行
+      - 请求只读 profile_interaction_activity_views，不扫描 posts/comments/reactions/shares
+
+  - name: projection_failure_does_not_advance_checkpoint
+    operation: ListProfileInteractionActivitiesReceived
+    go_func: TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint
+    evidence: local_contract
+    assertions:
+      - projector 返回错误时 source checkpoint 保持原值
+      - 重试成功后只物化一份 activity
+
+  - name: projection_keyset_pagination
+    operation: ListProfileInteractionActivitiesSent
+    go_func: TestProfileInteractionProjectionKeysetPagination
+    evidence: api_integration
+    assertions:
+      - occurredAt+activityId 倒序分页无重叠遗漏
+      - 损坏 cursor 返回 CONTENT.USER.interaction_cursor_invalid
+
+  - name: deleted_target_keeps_honest_activity
+    operation: ListProfileInteractionActivitiesReceived
+    go_func: TestProfileInteractionDeletedTargetBecomesUnavailable
+    evidence: api_integration
+    assertions:
+      - PostDeleted 事实把既有 activity 标记 targetAvailability=deleted
+      - 活动历史保留但 preview 不可导航，不合成替代内容

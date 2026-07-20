@@ -26,7 +26,7 @@
     },
     "executionId": {
       "type": "string",
-      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-[0-9]{3,}$"
     },
     "executionBinding": {
       "enum": [
@@ -50,14 +50,20 @@
       "enum": [
         "wikipedia",
         "baidu_baike",
-        "toutiao_baike"
+        "toutiao_baike",
+        "douyin",
+        "tiktok",
+        "weibo",
+        "toutiao",
+        "tourism_video_site"
       ]
     },
     "extractor": {
       "enum": [
         "wikipedia_api",
-        "baidu_baike_openapi",
-        "toutiao_baike_html"
+        "baidu_baike_html",
+        "toutiao_baike_html",
+        "sourced_video_direct_download"
       ]
     },
     "canonicalUrl": {
@@ -96,12 +102,16 @@
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "policyRevision": {
-      "const": "encyclopedia-primary"
+      "enum": [
+        "encyclopedia-primary",
+        "sourced-video-attribution-v1"
+      ]
     },
     "rightsMode": {
       "enum": [
         "licensed_adaptation",
         "factual_reference_only",
+        "attribution_no_watermark",
         "blocked"
       ]
     },
@@ -129,7 +139,7 @@
           "const": "baidu_baike"
         },
         "extractor": {
-          "const": "baidu_baike_openapi"
+          "const": "baidu_baike_html"
         },
         "canonicalUrl": {
           "pattern": "^https://baike\\.baidu\\.com/item/"
@@ -146,6 +156,38 @@
         },
         "canonicalUrl": {
           "pattern": "^https://www\\.baike\\.com/"
+        }
+      }
+    },
+    {
+      "required": [
+        "researchLane",
+        "hasVideo"
+      ],
+      "properties": {
+        "sourceKind": {
+          "enum": [
+            "douyin",
+            "tiktok",
+            "weibo",
+            "toutiao",
+            "tourism_video_site"
+          ]
+        },
+        "extractor": {
+          "const": "sourced_video_direct_download"
+        },
+        "policyRevision": {
+          "const": "sourced-video-attribution-v1"
+        },
+        "rightsMode": {
+          "const": "attribution_no_watermark"
+        },
+        "researchLane": {
+          "const": "video"
+        },
+        "hasVideo": {
+          "const": true
         }
       }
     }

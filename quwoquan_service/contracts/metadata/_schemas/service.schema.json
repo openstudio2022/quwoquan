@@ -506,7 +506,7 @@
             "properties": {
               "dart_import": {
                 "type": "string",
-                "pattern": "^\\.\\./(content|integration|assistant|chat|circle|entity|notification|tag|user|rtc|realtime|media|behavior|ops)/[a-z0-9_]+\\.dart$"
+                "pattern": "^\\.\\./(content|integration|assistant|chat|circle|entity|notification|tag|user|rtc|realtime|media|behavior|ops|search)/[a-z0-9_]+\\.dart$"
               },
               "request_type": {
                 "type": "string",

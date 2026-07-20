@@ -122,6 +122,7 @@ type ReliableAsyncTask struct {
 	PartitionKey   string            `bson:"partitionKey" json:"partitionKey"`
 	ShardID        int               `bson:"shardId" json:"shardId"`
 	Payload        map[string]string `bson:"payload" json:"payload"`
+	Result         map[string]string `bson:"result,omitempty" json:"result,omitempty"`
 	Status         string            `bson:"status" json:"status"`
 	Attempts       int               `bson:"attempts" json:"attempts"`
 	NextAttemptAt  time.Time         `bson:"nextAttemptAt" json:"nextAttemptAt"`

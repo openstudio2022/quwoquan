@@ -5,8 +5,8 @@ service:
   description: ConversationMembership 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: CHAT_OBJECT_PACKET_WIRING
+    block_reason: operation 尚未逐项完成商业证据绑定
+    gap_id: CHAT_MEMBERSHIP_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
@@ -14,6 +14,8 @@ api_routes:
 
     operation: AddMembers
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationMemberCommandFacet
@@ -21,14 +23,45 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 添加成员（批量，检查 maxGroupSize 上限）
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      添加成员（批量）。操作者必须是该会话的活跃成员；新成员必须与操作者互关且无屏蔽关系
+      （圈子绑定群跳过互关校验，与建群同源）；检查 maxGroupSize 上限（超限返回 group_full）；
+      已在群成员重复添加为 no-op 并重放原回执。
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.conversation_dissolved, CHAT.USER.group_governance_forbidden, CHAT.USER.group_member_not_mutual, CHAT.USER.group_member_blocked, CHAT.USER.group_full, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: DELETE
     path: /chat/conversations/{conversationId}/members/{userId}
 
     operation: RemoveMember
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationMemberCommandFacet
@@ -36,9 +69,83 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 移除成员
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner_or_admin
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      移出成员（群治理动作，仅 owner/admin）。群主可移出任何非群主成员；
+      管理员只能移出普通成员（不可移出群主或其他管理员）；
+      自愿退出必须走 LeaveConversation，不复用本命令；成员已不在群为 no-op 并重放原回执。
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.conversation_dissolved, CHAT.USER.group_governance_forbidden, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /chat/conversations/{conversationId}/leave
+
+    operation: LeaveConversation
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationMemberCommandFacet
+      method: leaveConversation
+      aggregate_owner: ConversationMembership
+      mutation_target: ConversationMembership
+      invariant_target: ConversationMembership
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      主动退出群聊（自愿离开语义，区别于被移出）。仅群聊可退出；
+      群主必须先 TransferOwnership 再退出（否则返回 group_owner_must_transfer_before_leave）；
+      已不在群为 no-op 并重放原回执。产生 ConversationMemberLeft 事件。
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.conversation_dissolved, CHAT.USER.group_owner_must_transfer_before_leave, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   # ── 助手参与 ──────────────────────────────────
 
   - method: POST
@@ -46,6 +153,8 @@ api_routes:
 
     operation: InviteAssistant
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationAssistantCommandFacet
@@ -53,14 +162,41 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 邀请小趣助手加入会话（创建 memberType=assistant 的 ConversationMember），可指定 skillId
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 邀请小趣助手加入会话（创建 memberType=assistant 的 ConversationMember），可指定 skillId；助手已在会话为 no-op
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: DELETE
     path: /chat/conversations/{conversationId}/assistant
 
     operation: RemoveAssistant
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationAssistantCommandFacet
@@ -68,16 +204,43 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 移除小趣助手（删除 memberType=assistant 的成员）
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 移除小趣助手（删除 memberType=assistant 的成员；助手已不在会话为 no-op）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
-  # ── 用户设置 ──────────────────────────────────
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+  # ── 群治理 ──────────────────────────────────
 
   - method: PATCH
     path: /chat/conversations/{conversationId}/owner
 
     operation: TransferOwnership
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationGovernanceCommandFacet
@@ -85,14 +248,41 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 转让群主
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 转让群主（目标已是群主为 no-op 并重放原回执）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: PUT
     path: /chat/conversations/{conversationId}/admins
 
     operation: UpdateGroupAdmins
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationGovernanceCommandFacet
@@ -100,24 +290,77 @@ api_routes:
       aggregate_owner: ConversationMembership
       mutation_target: ConversationMembership
       invariant_target: ConversationMembership
-    description: 设置管理员列表
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 设置管理员列表（与当前列表一致为 no-op 并重放原回执）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /chat/conversations/{conversationId}/members
 
     operation: ListMembers
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ConversationMembershipQueryFacet
       method: listMembers
       reader: ConversationMembershipReader
       slice: ConversationMemberPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_membership_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: |
       成员列表只经 ConversationMembership named Reader 返回 typed Slice；不加载或暴露 Conversation 子对象。
-      排序由 query `sort` 控制，默认 joined_asc；可选 display_name_asc。
-    query_params: [cursor, limit, role, sort]
+      排序由 query `sort` 控制，默认 joined_asc；可选 display_name_asc。`query` 对 displayName/userId
+      做服务端字面量搜索，供大群成员搜索与 @选择器使用；调用者必须是当前活跃成员。
+    query_params: [cursor, limit, role, sort, query]
     response_entity: ConversationMember
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private

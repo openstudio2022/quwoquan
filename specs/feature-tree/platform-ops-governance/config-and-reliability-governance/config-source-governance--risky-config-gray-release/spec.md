@@ -1,4 +1,4 @@
-# L4 细节：risky-config-gray-release
+# L3 细节：risky-config-gray-release
 
 ## 功能说明
 

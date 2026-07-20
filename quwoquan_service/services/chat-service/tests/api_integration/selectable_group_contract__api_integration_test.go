@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+
 	chathttp "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/application"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
@@ -131,6 +133,25 @@ func seedSelectableGroup(
 	}
 }
 
+func bindSelectableGroupToCircle(
+	t *testing.T,
+	conversationID string,
+	circleID string,
+) {
+	t.Helper()
+	result, err := requireMongoDB(t).Collection("conversations").UpdateOne(
+		context.Background(),
+		bson.M{"_id": conversationID},
+		bson.M{"$set": bson.M{"circleId": circleID}},
+	)
+	if err != nil {
+		t.Fatalf("bind selectable group %s to circle: %v", conversationID, err)
+	}
+	if result.MatchedCount != 1 {
+		t.Fatalf("selectable group %s missing while binding circle", conversationID)
+	}
+}
+
 func newSelectableGroupHandler(t *testing.T, viewer string, mutual map[string]bool, contactIDs ...string) http.Handler {
 	t.Helper()
 	socialServer := socialMutualServer(viewer, contactIDs...)
@@ -182,6 +203,8 @@ func TestListSelectableGroupConversations_ReturnsGroupsWithFriendCount(t *testin
 	mutual := map[string]bool{"friend_a": true, "friend_b": true}
 	// 含 2 个互关好友 + 1 个非联系人成员 stranger_x。
 	seedSelectableGroup(t, "conv_sg_with_friends", viewer, "周末登山群", []string{"friend_a", "friend_b", "stranger_x"})
+	seedSelectableGroup(t, "conv_sg_circle", viewer, "摄影圈交流群", []string{"friend_a"})
+	bindSelectableGroupToCircle(t, "conv_sg_circle", "circle_photo")
 	// 无任何互关联系人成员，只有 stranger。
 	seedSelectableGroup(t, "conv_sg_no_friends", viewer, "陌生人群", []string{"stranger_y"})
 
@@ -194,15 +217,48 @@ func TestListSelectableGroupConversations_ReturnsGroupsWithFriendCount(t *testin
 	if !ok {
 		t.Fatalf("response missing items: %#v", payload)
 	}
-	if len(items) != 1 {
-		t.Fatalf("expected exactly 1 group with mutual friends, got %d: %#v", len(items), items)
+	if len(items) != 2 {
+		t.Fatalf("expected exactly 2 groups with mutual friends, got %d: %#v", len(items), items)
 	}
-	row := items[0].(map[string]any)
-	if row["conversationId"] != "conv_sg_with_friends" {
-		t.Fatalf("expected conv_sg_with_friends, got %v", row["conversationId"])
+	rowsByID := map[string]map[string]any{}
+	for _, item := range items {
+		row := item.(map[string]any)
+		rowsByID[row["conversationId"].(string)] = row
 	}
+	row := rowsByID["conv_sg_with_friends"]
 	if got := int(row["friendMemberCount"].(float64)); got != 2 {
 		t.Fatalf("expected friendMemberCount 2 (stranger excluded), got %d", got)
+	}
+	if got := rowsByID["conv_sg_circle"]["circleId"]; got != "circle_photo" {
+		t.Fatalf("circle-bound row circleId=%v want=circle_photo", got)
+	}
+
+	code, payload = getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations?source=group&limit=50",
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("group source expected 200, got %d: %#v", code, payload)
+	}
+	items = payload["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["conversationId"] != "conv_sg_with_friends" {
+		t.Fatalf("group source leaked circle-bound rows: %#v", items)
+	}
+
+	code, payload = getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations?source=circle&limit=50",
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("circle source expected 200, got %d: %#v", code, payload)
+	}
+	items = payload["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["conversationId"] != "conv_sg_circle" {
+		t.Fatalf("circle source did not isolate circle-bound rows: %#v", items)
 	}
 }
 

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/cursor_usage_event.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "executionId",
+    "invocationId",
+    "scope",
+    "resolvedModelId",
+    "status",
+    "turnCount",
+    "turns",
+    "aggregate",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan.cursor_usage_event"},
+    "executionId": {"type": "string", "minLength": 1},
+    "invocationId": {"type": "string", "minLength": 8},
+    "scope": {"enum": ["execution_stage", "content_object"]},
+    "contentObjectRef": {"type": ["string", "null"]},
+    "executionStage": {"type": ["string", "null"]},
+    "resolvedModelId": {"type": "string", "minLength": 1},
+    "pricingRevision": {"type": ["string", "null"]},
+    "status": {"enum": ["running", "finished", "failed", "cancelled", "abandoned"]},
+    "turnCount": {"type": "integer", "minimum": 0},
+    "turns": {"type": "array", "items": {"type": "object"}},
+    "aggregate": {"type": "object"},
+    "updatedAt": {"type": "string", "minLength": 1}
+  }
+}

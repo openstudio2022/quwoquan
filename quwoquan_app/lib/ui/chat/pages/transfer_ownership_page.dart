@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
@@ -35,9 +36,9 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
       context: context,
       builder: (_) => CupertinoAlertDialog(
         content: Text(
-          '${UITextConstants.transferOwnershipConfirmPrefix}'
+          '${ChatText.transferOwnershipConfirmPrefix}'
           '$name'
-          '${UITextConstants.transferOwnershipConfirmSuffix}',
+          '${ChatText.transferOwnershipConfirmSuffix}',
         ),
         actions: [
           CupertinoDialogAction(
@@ -70,7 +71,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                 final semantic = UiErrorSemantic(
                   category: resolved.category,
                   scope: resolved.scope,
-                  title: '转让群主未完成',
+                  title: ChatText.transferOwnershipIncompleteTitle,
                   message: resolved.message,
                   secondaryMessage: resolved.secondaryMessage,
                   primaryAction: const UiErrorAction(
@@ -121,14 +122,14 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.selectNewOwner,
+      title: ChatText.selectNewOwner,
       onBack: () => context.pop(),
       body: Column(
         children: [
           EmbeddedMemberSearchBarPlain(
             isDark: isDark,
             controller: _searchController,
-            placeholder: UITextConstants.searchGroupMembers,
+            placeholder: ChatText.searchGroupMembers,
             onChanged: (v) => setState(() => _searchQuery = v),
           ),
           Expanded(
@@ -161,7 +162,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                           padding: EdgeInsets.only(top: AppSpacing.xl),
                           child: Center(
                             child: Text(
-                              UITextConstants.noMatchingMembers,
+                              ChatText.noMatchingMembers,
                               style: TextStyle(
                                 fontSize: AppTypography.base,
                                 color: fgSecondary,

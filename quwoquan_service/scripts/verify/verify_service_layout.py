@@ -184,7 +184,7 @@ def verify_external_workload(root: Path, asset: dict) -> None:
 
 def verify_tracked_artifacts() -> None:
     result = subprocess.run(
-        ["git", "ls-files", "-z", "quwoquan_service/services"],
+        ["git", "ls-files", "-z", "quwoquan_service"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -192,7 +192,9 @@ def verify_tracked_artifacts() -> None:
     binary_magic = (
         b"\x7fELF",
         b"\xcf\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
         b"\xca\xfe\xba\xbe",
+        b"\xbe\xba\xfe\xca",
         b"MZ",
     )
     forbidden_names = {".coverage", "coverage.out"}
@@ -201,6 +203,8 @@ def verify_tracked_artifacts() -> None:
         if not raw:
             continue
         path = REPO_ROOT / raw.decode("utf-8")
+        if not path.exists():
+            continue
         if path.name in forbidden_names or path.suffix == ".test":
             violations.append(f"tracked test/coverage artifact: {rel(path)}")
             continue
@@ -219,8 +223,50 @@ def verify_tracked_artifacts() -> None:
             violations.append(
                 f"service-root build output is forbidden: {rel(root_api)}"
             )
+    for root_output in SERVICE_ROOT.iterdir():
+        if root_output.is_file() and (
+            root_output.name in {"api", "api_integration.test"}
+            or root_output.suffix == ".test"
+        ):
+            violations.append(
+                f"service-root build output is forbidden: {rel(root_output)}"
+            )
     if violations:
         fail("; ".join(violations))
+
+
+def verify_user_storage_generated_layout() -> None:
+    user_infra = SERVICES_ROOT / "user-service/internal/infrastructure"
+    empty_model = (
+        SERVICES_ROOT / "user-service/internal/domain/user/model/.g.go"
+    )
+    if empty_model.exists():
+        fail(f"user storage empty-name generated model returned: {rel(empty_model)}")
+    legacy_root = user_infra / "persistence"
+    canonical_root = user_infra / "user/persistence"
+    canonical_names = {
+        path.name
+        for pattern in ("pg_*_store.g.go", "pg_*_store_ext.go")
+        for path in canonical_root.glob(pattern)
+    }
+    for name in sorted(canonical_names):
+        if (legacy_root / name).exists():
+            fail(
+                "user storage duplicate flat implementation returned: "
+                f"{rel(legacy_root / name)}"
+            )
+
+    legacy_cache_root = user_infra / "cache"
+    canonical_cache_root = user_infra / "user/cache"
+    cache_names = {
+        path.name for path in canonical_cache_root.glob("*_cache.g.go")
+    }
+    for name in sorted(cache_names):
+        if (legacy_cache_root / name).exists():
+            fail(
+                "user storage stale flat generated cache returned: "
+                f"{rel(legacy_cache_root / name)}"
+            )
 
 
 def verify_source_build_workload_closure(assets: dict[str, dict]) -> None:
@@ -411,6 +457,7 @@ def main() -> None:
 
     assets = verify_profiles()
     verify_tracked_artifacts()
+    verify_user_storage_generated_layout()
     verify_source_build_workload_closure(assets)
     verify_seed_box_closure()
 

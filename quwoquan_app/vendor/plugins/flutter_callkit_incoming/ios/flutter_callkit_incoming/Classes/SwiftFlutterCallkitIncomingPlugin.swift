@@ -28,6 +28,7 @@ public class SwiftFlutterCallkitIncomingPlugin: NSObject, FlutterPlugin, CXProvi
     static let ACTION_CALL_TOGGLE_AUDIO_SESSION = "com.hiennv.flutter_callkit_incoming.ACTION_CALL_TOGGLE_AUDIO_SESSION"
     
     @objc public private(set) static var sharedInstance: SwiftFlutterCallkitIncomingPlugin!
+    private static var registeredMessengerIds = Set<ObjectIdentifier>()
     
     private var streamHandlers: WeakArray<EventCallbackHandler> = WeakArray([])
     
@@ -63,8 +64,14 @@ public class SwiftFlutterCallkitIncomingPlugin: NSObject, FlutterPlugin, CXProvi
     }
     
     public static func sharePluginWithRegister(with registrar: FlutterPluginRegistrar) {
+        let messenger = registrar.messenger()
+        let messengerId = ObjectIdentifier(messenger as AnyObject)
+        guard !registeredMessengerIds.contains(messengerId) else {
+            return
+        }
+        registeredMessengerIds.insert(messengerId)
         if(sharedInstance == nil){
-            sharedInstance = SwiftFlutterCallkitIncomingPlugin(messenger: registrar.messenger())
+            sharedInstance = SwiftFlutterCallkitIncomingPlugin(messenger: messenger)
         }
         sharedInstance.shareHandlers(with: registrar)
     }

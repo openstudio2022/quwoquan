@@ -6,6 +6,8 @@ final class CloudClientContextSnapshot {
     required this.appVersion,
     required this.locale,
     this.deviceActorId,
+    this.regionCode,
+    this.carrier,
   });
 
   final String sessionId;
@@ -13,6 +15,15 @@ final class CloudClientContextSnapshot {
   final String appVersion;
   final String locale;
   final String? deviceActorId;
+
+  /// GB/T 2260 六位省级行政区划码（如 330000=浙江）。
+  /// 来源为端侧真实定位/网络探测缓存；无真实来源时保持 null，
+  /// 灰度路由的地域维度对该请求不匹配（禁止填充猜测值）。
+  final String? regionCode;
+
+  /// 电信运营商枚举（chinamobile/chinaunicom/chinatelecom/chinabroadnet）。
+  /// 同 regionCode：无真实来源时保持 null。
+  final String? carrier;
 }
 
 abstract interface class CloudClientContextProvider {

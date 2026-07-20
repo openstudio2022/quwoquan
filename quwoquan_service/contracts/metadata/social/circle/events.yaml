@@ -7,7 +7,7 @@ events:
     consumers: [recommendation-engine, notification-service, chat-service]
     channel: event_store
     payload_entity: Circle
-    payload_fields: [_id, name, ownerId, category, tags]
+    payload_fields: [_id, name, ownerId, category, tags, rulesText, welcomeMessage, iconUrl, autoSyncChat]
     recommend_impact: circle_index_refresh
 
   - name: CircleUpdated
@@ -16,7 +16,7 @@ events:
     consumers: [recommendation-engine]
     channel: event_store
     payload_entity: Circle
-    payload_fields: [_id, name, description, tags, category]
+    payload_fields: [_id, name, description, rulesText, welcomeMessage, iconUrl, autoSyncChat, tags, category]
 
   - name: CircleArchived
     description: 圈子归档

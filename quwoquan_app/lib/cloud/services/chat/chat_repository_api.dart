@@ -1,10 +1,8 @@
-import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
@@ -15,7 +13,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 
 /// 与云侧 ListMembers `sort` 枚举对齐；非法值回退 `joined_asc`。
 List<ChatConversationMemberDto> sortChatMemberDtos(
@@ -69,11 +66,6 @@ abstract class ChatConversationRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<ConversationSearchItemView>> searchConversations({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
@@ -115,11 +107,6 @@ abstract class ChatMessageRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<MessageSearchItemView>> searchMessages({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-
   Future<void> recallMessage({
     required String conversationId,
     required String messageId,
@@ -158,15 +145,26 @@ abstract class ChatMemberRepository {
     String? sort,
   });
 
+  /// `ListMembers(query)` 的服务端字面量搜索；@选择器不得只过滤端侧已加载子集。
+  Future<List<ChatConversationMemberDto>> searchMembers({
+    required String conversationId,
+    required String query,
+    int limit = 50,
+  });
+
   Future<void> addMembers({
     required String conversationId,
     required List<String> userIds,
   });
 
+  /// 移出成员（群治理动作，仅 owner/admin；对齐 metadata RemoveMember）。
   Future<void> removeMember({
     required String conversationId,
     required String userId,
   });
+
+  /// 主动退出群聊（自愿离开语义；owner 须先转让，对齐 metadata LeaveConversation）。
+  Future<void> leaveConversation(String conversationId);
 
   /// 搜索联想等：会话成员 userId 列表（Mock：内存成员表；Remote：listMembers）。
   Future<List<String>> listMemberUserIds(String conversationId);
@@ -200,24 +198,17 @@ abstract class ChatContactRepository {
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   });
-
-  /// 联系人 Tab「圈子」行（Mock：canonical；Remote：空列表）。
-  Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
-    int limit = CloudApiDefaults.pageLimit,
-  });
-
-  /// 联系人 Tab「趣群」行（Mock：canonical；Remote：空列表）。
-  Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
-    int limit = CloudApiDefaults.pageLimit,
-  });
-
-  Future<List<ChatContactSearchItemDto>> searchContacts({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  });
 }
 
-/// Chat「从群聊中选择联系人」二级流程（图四群列表 / 图五群成员多选）。
+enum ChatSelectableGroupSource {
+  all,
+  group,
+  circle;
+
+  String? get wireValue => this == ChatSelectableGroupSource.all ? null : name;
+}
+
+/// Chat「从群聊/圈子中选择联系人」二级流程（图四来源列表 / 图五群成员多选）。
 ///
 /// 与 contracts/metadata/messages/conversation/service.yaml 的
 /// `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers`
@@ -230,6 +221,7 @@ abstract class ChatGroupSelectionRepository {
   Future<List<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
+    ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
     int limit = CloudApiDefaults.pageLimit,
   });
 
@@ -241,7 +233,7 @@ abstract class ChatGroupSelectionRepository {
   });
 }
 
-/// Chat 群管理（设置 / 转让 / 管理员 / 解散）。
+/// Chat 群管理（治理开关 / 公告 / 转让 / 管理员 / 解散）。
 ///
 /// R02：单接口 ≤10 方法。
 abstract class ChatGroupAdminRepository {
@@ -250,10 +242,13 @@ abstract class ChatGroupAdminRepository {
 
   Future<GroupHomeDto> getGroupHome(String conversationId);
 
+  /// 更新群治理开关（对齐 metadata UpdateGroupGovernanceSettings；owner/admin）。
   Future<void> updateGroupSettings(
     String conversationId,
     ChatGroupSettingsDto settings,
   );
+
+  Future<void> updateAnnouncement(String conversationId, String announcement);
 
   Future<void> transferOwnership(String conversationId, String newOwnerId);
 

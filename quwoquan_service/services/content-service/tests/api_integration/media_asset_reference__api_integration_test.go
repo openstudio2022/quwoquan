@@ -66,6 +66,22 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	if assetID == "" {
 		t.Fatalf("completed MediaUploadSession has no assetId: %#v", completed)
 	}
+	performMediaCommand(
+		t,
+		http.MethodPost,
+		"/internal/content/media/"+assetID+":processing-result",
+		fmt.Sprintf(`{
+			"processingStatus":"ready",
+			"processorProfile":"content_image_normalization_v1",
+			"imageWidth":540,
+			"imageHeight":960,
+			"imageDeliveryContentType":"image/png",
+			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.png",
+			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png"
+		}`, assetID, assetID),
+		ownerPersonaID,
+		"media-reference-processing-ready",
+	)
 	var persisted struct {
 		OwnerID          string `bson:"ownerId"`
 		ProcessingStatus string `bson:"processingStatus"`

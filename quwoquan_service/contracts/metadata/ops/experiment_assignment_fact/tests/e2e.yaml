@@ -2,24 +2,16 @@ entity: ExperimentAssignmentFact
 layer: e2e
 
 description: |
-  Product Ops 端到端接入场景（integration/staging）。
-  关注统一门户读取实验列表、查看分桶结果与放量后的状态一致性。
+  Product Ops 实验控制面冻结契约。推荐/搜索线上 runtime policy 与实际曝光/查询事实
+  是当前唯一商用轨；assignment fact 未完成 durable runtime binding 前不得对 Portal 暴露。
 
 scenarios:
-  - name: product_ops_portal_reads_experiment_stats
+  - name: product_ops_experiment_control_plane_stays_frozen
     steps:
-      - product ops opens experiments dashboard
-      - portal requests /control-plane/product/experiments
-      - operator opens one experiment detail and reads bucket stats
+      - generated commercial guard evaluates Experiment and ExperimentAssignmentFact operations
+      - operator opens Product Ops Portal
+      - recommendation and search serve traffic with runtime policy
     assertions:
-      - experiment_list_visible
-      - bucket_stats_visible
-      - policy_version_rendered
-
-  - name: assign_bucket_then_read_stats
-    steps:
-      - product ops assigns a subject into discovery_feed_v3
-      - operator refreshes experiment stats
-    assertions:
-      - assigned_subject_count_incremented
-      - assigned_bucket_visible
+      - experiment_operations_default_deny
+      - experiment_portal_surface_absent
+      - runtime_bucket_is_returned_and_persisted_with_actual_exposure_or_query_fact

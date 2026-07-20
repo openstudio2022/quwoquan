@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,9 +17,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
@@ -156,6 +160,7 @@ void main() {
         overrides: [
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
           intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(repo),
           behaviorRepositoryProvider.overrideWithValue(behaviorRepo),
           contentBehaviorTrackerProvider.overrideWithValue(tracker),
         ],
@@ -168,6 +173,20 @@ void main() {
     // 交集/打动已收敛到 nav center compact switch；body 不再重复一级 segmented。
     expect(find.text(UITextConstants.profileTabIntersection), findsOneWidget);
     expect(find.text(UITextConstants.profileTabImpact), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.text(UITextConstants.profileTabIntersection))
+          .style
+          ?.fontWeight,
+      AppTypography.regular,
+    );
+    expect(
+      tester
+          .widget<Text>(find.text(UITextConstants.profileTabImpact))
+          .style
+          ?.fontWeight,
+      AppTypography.regular,
+    );
     expect(
       find.byWidgetPredicate((widget) => widget is AppSegmentedChoiceBar),
       findsNothing,
@@ -217,6 +236,7 @@ void main() {
         overrides: [
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
           intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(repo),
           behaviorRepositoryProvider.overrideWithValue(behaviorRepo),
           contentBehaviorTrackerProvider.overrideWithValue(tracker),
         ],
@@ -277,6 +297,31 @@ void main() {
     expect(repo.requestedSourceRef, 'circle');
     expect(find.text('你和阿岚等4位用户都在「城市漫游圈」'), findsOneWidget);
     expect(find.text('你和小航等2位校友都去过「西湖」'), findsNothing);
+  });
+
+  testWidgets('我的交集页从加载态进入空态，并通过 typed writer 推进已读水位', (tester) async {
+    final repo = _DelayedEmptyIntersectionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(repo),
+        ],
+        child: const CupertinoApp(home: MyIntersectionInboxPage()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(IntersectionTimelineEmptyState), findsNothing);
+
+    repo.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byType(IntersectionTimelineEmptyState), findsOneWidget);
+    expect(repo.visitCount, 1);
   });
 
   testWidgets('我的交集时间轴：仅展示最近 5 个互斥时间桶，旧年份桶隐藏', (tester) async {
@@ -392,13 +437,13 @@ void main() {
     expect(find.text(DiscoveryFeedText.intersectionFilterPeople), findsNothing);
   });
 
-  testWidgets('我的交集页加载失败时展示统一页态', (tester) async {
+  testWidgets('我的交集页加载失败时展示统一页态，重试后恢复并清零红点', (tester) async {
+    final repo = _RecoveringIntersectionRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          intersectionRepositoryProvider.overrideWithValue(
-            _FailingIntersectionRepository(),
-          ),
+          intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(repo),
         ],
         child: const CupertinoApp(home: MyIntersectionInboxPage()),
       ),
@@ -408,9 +453,18 @@ void main() {
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(
-      find.text('${DiscoveryFeedText.myIntersectionsTitle}暂不可用'),
+      find.text(UITextConstants.objectIntersectionsUnavailableTitle),
       findsOneWidget,
     );
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(AppPageErrorState), findsNothing);
+    expect(find.textContaining('恢复后的交集'), findsOneWidget);
+    expect(repo.loadCount, 2);
+    expect(repo.visitCount, 1);
   });
 }
 
@@ -447,7 +501,8 @@ class _AuthenticatedSession extends AuthSessionController {
   }
 }
 
-class _RecordingIntersectionRepository implements IntersectionRepository {
+class _RecordingIntersectionRepository
+    implements IntersectionRepository, IntersectionVisitWriter {
   String? visitedDimension;
   String? requestedFilter;
 
@@ -541,9 +596,6 @@ class _SourceRefIntersectionRepository implements IntersectionRepository {
   }
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
-
-  @override
   Future<List<IntersectionReason>> getObjectIntersections({
     required String objectId,
     required String objectType,
@@ -600,9 +652,6 @@ class _FiveYearIntersectionRepository implements IntersectionRepository {
       ),
     ];
   }
-
-  @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({
@@ -701,9 +750,6 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
   }
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
-
-  @override
   Future<List<IntersectionReason>> getObjectIntersections({
     required String objectId,
     required String objectType,
@@ -711,7 +757,16 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
   }) async => const <IntersectionReason>[];
 }
 
-class _FailingIntersectionRepository implements IntersectionRepository {
+class _DelayedEmptyIntersectionRepository
+    implements IntersectionRepository, IntersectionVisitWriter {
+  final Completer<List<IntersectionReason>> _items =
+      Completer<List<IntersectionReason>>();
+  int visitCount = 0;
+
+  void complete() {
+    _items.complete(const <IntersectionReason>[]);
+  }
+
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
     return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
@@ -725,12 +780,7 @@ class _FailingIntersectionRepository implements IntersectionRepository {
     String? timeBucket,
     String? cursor,
     int limit = 50,
-  }) async {
-    throw StateError('intersection unavailable');
-  }
-
-  @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
+  }) => _items.future;
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({
@@ -738,4 +788,57 @@ class _FailingIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = 8,
   }) async => const <IntersectionReason>[];
+
+  @override
+  Future<void> markIntersectionsVisited({String? dimension}) async {
+    visitCount += 1;
+  }
+}
+
+class _RecoveringIntersectionRepository
+    implements IntersectionRepository, IntersectionVisitWriter {
+  int loadCount = 0;
+  int visitCount = 0;
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    return IntersectionInboxSummary(totalCount: 1, totalNewCount: 1);
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) async {
+    loadCount += 1;
+    if (loadCount == 1) {
+      throw StateError('intersection unavailable');
+    }
+    return <IntersectionReason>[
+      _displayableInboxReason(
+        dimension: 'relationship',
+        intersectionId: 'ix_recovered',
+        objectKind: 'person',
+        primaryText: '恢复后的交集',
+        actionTargetId: 'user_recovered',
+        source: 'sharedFollowees',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
+
+  @override
+  Future<void> markIntersectionsVisited({String? dimension}) async {
+    visitCount += 1;
+  }
 }

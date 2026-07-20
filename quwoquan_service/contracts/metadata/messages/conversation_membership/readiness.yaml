@@ -1,0 +1,40 @@
+object: ConversationMembership
+operations:
+  - AddMembers
+  - RemoveMember
+  - LeaveConversation
+  - InviteAssistant
+  - RemoveAssistant
+  - TransferOwnership
+  - UpdateGroupAdmins
+  - ListMembers
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/chat-service/internal/application/member_service.go
+  store:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_membership_store.go
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_aggregate_command_store.go
+  outbox:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_aggregate_command_store.go
+    - quwoquan_service/services/chat-service/internal/application/aggregate_outbox_relay.go
+  reader:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_membership_store.go
+  transport:
+    - quwoquan_service/services/chat-service/internal/adapters/http/chat_handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart
+    - quwoquan_app/lib/cloud/services/chat/remote/chat_repository_remote.dart
+  page:
+    - quwoquan_app/lib/ui/chat/pages/group_admins_page.dart
+    - quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/chat-service/internal/application/aggregate_command_contract__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/chat/dto/contract/member_dto_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/chat/chat_member_roster_consistency__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
+    - quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
+environments: []

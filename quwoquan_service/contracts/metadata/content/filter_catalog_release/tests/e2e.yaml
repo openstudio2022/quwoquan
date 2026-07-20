@@ -1,0 +1,30 @@
+entity: FilterCatalogRelease
+layer: e2e
+
+description: |
+  canonical catalog artifact → Stage → Activate → public GET → App verified cache →
+  Rollback → public GET 的端云发布闭环。
+
+execution:
+  environment: gamma_local
+  ci_strategy: advisory
+  trigger: pre-release
+  real_engines:
+    mongodb: testcontainer
+
+scenarios:
+  - name: filter_catalog_release_roundtrip
+    test_type: api_contract
+    go_func: TestFilterCatalogReleaseRoundTrip
+    actors:
+      importer: qwq-data filter-catalog publish
+      service: content-service FilterCatalogReleaseCommandFacet
+      app: RemoteFilterCatalogQuery
+      storage: MongoDB filter_catalog_releases + App verified cache
+    assertions:
+      - canonicalDigest 在 Data、Service、App 三侧一致
+      - 同一时刻只有一个 active release
+      - public GET 不暴露内部字段
+      - App 离线重启消费最近 verified release
+      - Rollback 后 App 下一次刷新消费目标 retired release
+

@@ -1,4 +1,4 @@
-# L4 特性：create-entry-location-visibility-circle
+# L3 特性：create-entry-location-visibility-circle
 
 ## 功能说明
 - 打通创作入口中的发布前关键选项：`所在位置`、`是否公开`、`发布到圈子（多选）`。

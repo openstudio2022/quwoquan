@@ -1,0 +1,15 @@
+aggregate: AuthenticationChallenge
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: otp_send_verify_login
+    steps:
+      - app requests otp for phone login
+      - app submits code and logs in
+    assertions:
+      - challenge_consumed_exactly_once
+      - login_succeeds_with_session_issued

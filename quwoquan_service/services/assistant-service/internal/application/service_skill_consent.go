@@ -40,7 +40,8 @@ func (s *AssistantService) GrantSkillConsent(ctx context.Context, userID string,
 	if s.consents == nil {
 		return assistant.SkillConsent{}, assistantConsentStoreUnavailable()
 	}
-	consent := assistant.SkillConsent{ID: consentID(userID, skillID), UserID: userID, SkillID: skillID, GrantedScope: grantedScope, GrantedAt: s.now()}
+	grantedAt := s.now()
+	consent := assistant.SkillConsent{ID: consentID(userID, skillID, grantedAt), UserID: userID, SkillID: skillID, GrantedScope: grantedScope, GrantedAt: grantedAt}
 	return s.consents.UpsertConsent(ctx, consent)
 }
 
@@ -62,4 +63,43 @@ func (s *AssistantService) RevokeSkillConsent(ctx context.Context, userID string
 
 func assistantConsentStoreUnavailable() error {
 	return rterr.NewUnavailable(rterr.ModuleAssistant, "授权服务暂不可用", "assistant consent store is not configured")
+}
+
+// SkillPersonalContentAccess 是唯一 RequiresConsent 的权限型技能；
+// 与 ListSkills 目录声明同源，新增 consent 技能时两处必须一起改并补合同测试。
+const SkillPersonalContentAccess = "personal_content_access"
+
+func skillRequiresConsent(skillID string) bool {
+	return strings.TrimSpace(skillID) == SkillPersonalContentAccess
+}
+
+// requireSkillConsent 是敏感技能执行点的强制门（R-CLOUD02）：
+// 未授权、已撤权、store 未装配或查询失败一律 fail-closed 拒绝执行。
+func (s *AssistantService) requireSkillConsent(ctx context.Context, userID, skillID string) error {
+	if !skillRequiresConsent(skillID) {
+		return nil
+	}
+	if s.consents == nil {
+		return assistantConsentStoreUnavailable()
+	}
+	consents, err := s.consents.ListActiveConsents(ctx, userID)
+	if err != nil {
+		return assistantConsentStoreUnavailable()
+	}
+	for _, consent := range consents {
+		if strings.TrimSpace(consent.SkillID) == strings.TrimSpace(skillID) {
+			return nil
+		}
+	}
+	return assistantSkillConsentRequired(skillID)
+}
+
+func assistantSkillConsentRequired(skillID string) *rterr.AppError {
+	appErr := rterr.NewAppError(
+		rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "skill_consent_required"),
+		"该能力需要先授权后使用",
+		"skill "+strings.TrimSpace(skillID)+" requires active consent",
+	)
+	appErr.HTTPStatus = 403
+	return appErr
 }

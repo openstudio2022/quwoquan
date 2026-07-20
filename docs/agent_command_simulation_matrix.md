@@ -16,8 +16,8 @@
 | `/plan-review` | “开发前再审一遍计划” | 多角色检视规划，不写实现 | 刷新目标、规格、任务清单和验收标准 | `.cursor/commands/plan-review.md`、`13-coding-discipline.mdc` | 空泛建议、无任务落点、跳过阻断项 | 角色检查结果、不符合项台账、刷新后任务清单 | `bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh` |
 | `/plan-next` | “完成后规划下一轮” | 先验收本轮，再生成下一轮 | 不用下一轮掩盖本轮未完成 | `.cursor/commands/plan-next.md`、原 acceptance/gate | 未达成无证据却开新规划 | 完成度自检、证据核对、下一轮规格/任务/验收 | `/verify` 对账结果 |
 | `/continue-dev` | “规划好了开始开发 / 这轮做完复盘后继续开发” | 规划就绪进入开发与验证；一轮完成后复盘、盘点遗留与风险、生成新一轮规划再开发 | 以最资深工程师标准裁决争议、零技术债、分层测试自顶向下闭环 | `.cursor/commands/continue-dev.md`、`dev.md`、`plan-next.md`、`docs/outstanding_risks_backlog.md` | v1/v2 并存、技术债不清、用新规划掩盖未完成、部分端/无证据停止 | 实现+Exit Review、三层测试证据、复盘与遗留/风险台账、下一轮规格/任务/验收 | 触达范围专项测试 + `make verify-agent-context-contract` |
-| `/deploy` | “部署 / 发布 / 放量 / 回滚” | 以 stackctl 为唯一环境入口，prod 操作需确认 | 读取 AGENTS + environment skill + stackctl 证据 | `.cursor/commands/deploy.md`、`quwoquan_ops/AGENTS.md` | prod-gray、手写 URL/端口、破坏性 repair 自行执行 | stackctl verify/health/inspect/deploy 报告、回滚证据 | `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all` |
-| `/infra` | “环境巡检 / 拓扑 / 健康检查” | 通过 stackctl 和 manifests 检查环境 | 不创建第二套拓扑或部署脚本 | `.cursor/commands/infra.md`、`environment-ops` skill | 手写 host/port、绕过 manifests | topology/config/packaging/health/inspect 证据 | `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all` |
+| `/deploy` | “部署 / 发布 / 放量 / 回滚” | 以 stackctl 为唯一环境入口，prod 操作需确认 | 读取 AGENTS + environment skill + stackctl 证据 | `.cursor/commands/deploy.md`、`quwoquan_ops/AGENTS.md` | prod-gray、手写 URL/端口、破坏性 repair 自行执行 | stackctl verify/health/inspect/deploy 报告、回滚证据 | `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>` |
+| `/infra` | “环境巡检 / 拓扑 / 健康检查” | 通过 stackctl 和 manifests 检查环境 | 不创建第二套拓扑或部署脚本 | `.cursor/commands/infra.md`、`environment-ops` skill | 手写 host/port、绕过 manifests | topology/config/packaging/health/inspect 证据 | `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>` |
 | `/obs` | “补观测 / 查指标 / 加告警” | 从业务验收反推指标、日志、trace、SLO 与告警 | 不把日志当完成，要求可查询、可告警、可回滚 | `.cursor/commands/obs.md`、`obs-*.md`、触达区域 AGENTS | 无 SLO、无采样/保留、无 dashboard/report | 指标/日志/trace 字段、告警阈值、查询或看板、三层测试证据 | 触达范围 `verify_*` + `make verify-agent-context-contract` |
 | `/rec` | “调推荐 / 补召回排序 / AB 反馈” | 检查信号来源、召回/排序/重排、AB、护栏与回滚 | 不新增双轨标识，不让推荐与行为反馈断链 | `.cursor/commands/rec.md`、`rec-*.md`、相关 acceptance | 缺行为归因、缺冷启动、缺护栏指标 | 推荐策略、反馈归因、AB 分桶、护栏指标、回滚证据 | 推荐专项 gate 或触达范围测试 |
 | `/audit` | “全栈审计 / 看代码库健康” | 代码库级发现结构、metadata、特性树和测试漂移 | 不用审计替代特性 `/verify`， findings 必须可定位 | `.cursor/commands/audit.md`、相关 rules/gates | 空泛建议、无文件行号、无修复路径 | Findings、严重度、文件行号、建议验证命令 | `make verify` 或专项审计命令 |
@@ -62,7 +62,7 @@
 - Cursor voice：我会读取 `.qwq_output/data/tasks/<executionId>/**` 运行证据、`quwoquan_data/publish/**` 发布真相源与环境 run，不把离线文件生成当完成。
 - Codex voice：我会只通过 `python3 quwoquan_data/scripts/cli.py` 和 stackctl 收集证据。
 - 出口证据：stage result、gate report、repair report、manifest、review、sample bundle、importer 结果、gamma verify。
-- 应跑门禁：`python3 quwoquan_data/scripts/cli.py verify all`、`stackctl verify --env gamma --kind all --tier all`。
+- 应跑门禁：`python3 quwoquan_data/scripts/cli.py verify all`、`stackctl verify --env gamma --kind all --profile integration`。
 
 ### Case 4: prod-hosted 小流量放量
 
@@ -74,7 +74,7 @@
 - Cursor voice：我会用 stackctl，不手写旧 deploy 脚本。
 - Codex voice：我会收集 `.qwq_output/env/prod/runs/**` 和 release state 作为证据。
 - 出口证据：stackctl deploy 报告、health/inspect/doctor、回滚路径。
-- 应跑门禁：`stackctl verify --env prod --kind all --tier all`。
+- 应跑门禁：`stackctl verify --env prod --kind all --profile release`。
 
 ### Case 5: 检查这一轮是否完成
 

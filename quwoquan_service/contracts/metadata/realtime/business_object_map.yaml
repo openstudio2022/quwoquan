@@ -24,6 +24,7 @@ objects:
   member_bounds: {}
   storage_role: runtime
   mutation_entrypoints:
+  - IssueConnectionTicket
   - WebSocketUpgrade
   event_consumers: []
   lifecycle_refs: []
@@ -50,8 +51,7 @@ objects:
   invariant_refs: []
   member_bounds: {}
   storage_role: append_only
-  mutation_entrypoints:
-  - ChannelWebhook
+  mutation_entrypoints: []
   event_consumers: []
   lifecycle_refs: []
   storage_backend: postgresql
@@ -82,7 +82,8 @@ objects:
   object_kind: projection
   identity:
     fields:
-    - userId
+    - personaId
+    - deviceId
     version_source: checkpoint
   invariant_refs: []
   member_bounds: {}
@@ -98,6 +99,24 @@ objects:
     queries: named_reader
     cross_context: public_contract_only
   relationships:
+  - name: account
+    target_object: user.UserAccount
+    reference_fields:
+    - accountId
+    kind: reference
+    cardinality: N:1
+    consistency: runtime
+    access: named_reader
+    on_delete: detach
+  - name: persona
+    target_object: user.Persona
+    reference_fields:
+    - personaId
+    kind: reference
+    cardinality: N:1
+    consistency: runtime
+    access: named_reader
+    on_delete: detach
   - name: connectionSession
     target_object: realtime.Connection
     reference_fields:
@@ -111,10 +130,14 @@ objects:
     authoritative_state: []
     owned_value: []
     reference:
+    - accountId
+    - personaId
     - connId
     append_only_fact: []
     projection:
-    - userId
+    - accountId
+    - personaId
+    - deviceId
     - connId
     - nodeId
     - transport

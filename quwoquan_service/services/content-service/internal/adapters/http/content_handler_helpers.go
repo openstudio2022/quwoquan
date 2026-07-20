@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	rtauth "quwoquan_service/runtime/auth"
@@ -127,24 +128,24 @@ func resolveDeviceActorID(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get("X-Client-Device-Actor-Id"))
 }
 
-// resolveBlockedUserIDs extracts blocked author IDs from:
-//  1. query: blockedUserIds=a,b
-//  2. header: X-Blocked-User-Ids: a,b
-func resolveBlockedUserIDs(r *http.Request) []string {
-	if v := strings.TrimSpace(r.URL.Query().Get("blockedUserIds")); v != "" {
-		return splitCSV(v)
-	}
-	return splitCSV(r.Header.Get("X-Blocked-User-Ids"))
-}
-
 // resolveBlockedKeywords extracts blocked keywords from:
 //  1. query: blockedKeywords=k1,k2
 //  2. header: X-Blocked-Keywords: k1,k2
 func resolveBlockedKeywords(r *http.Request) []string {
 	if v := strings.TrimSpace(r.URL.Query().Get("blockedKeywords")); v != "" {
-		return splitCSV(v)
+		return splitEncodedCSV(v)
 	}
-	return splitCSV(r.Header.Get("X-Blocked-Keywords"))
+	return splitEncodedCSV(r.Header.Get("X-Blocked-Keywords"))
+}
+
+func splitEncodedCSV(value string) []string {
+	values := splitCSV(value)
+	for index, item := range values {
+		if decoded, err := url.QueryUnescape(item); err == nil {
+			values[index] = strings.TrimSpace(decoded)
+		}
+	}
+	return values
 }
 
 func splitCSV(raw string) []string {

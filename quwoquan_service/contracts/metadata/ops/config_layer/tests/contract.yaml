@@ -1,0 +1,30 @@
+entity: ConfigSnapshot
+
+scenarios:
+  - name: config_resolve_reads_release_package_only
+    operation: ResolveEffectiveConfig
+    go_func: TestConfigSnapshotHTTPBoundary
+    evidence: api_integration
+    assertions:
+      - 有效值 = codegen 键目录 default 叠加发布包 config.yaml 顶层平铺 sys.* 覆盖
+      - 响应携带 effectiveHash/desiredHash 与来源；无任何写路径
+      - env 缺失返回 OPS.USER.config_invalid
+  - name: config_snapshot_files_and_versions
+    operation: GetConfigSnapshot
+    go_func: TestConfigSnapshotHTTPBoundary
+    evidence: api_integration
+    assertions:
+      - 快照包含 default/env/release 来源文件、sha256 与 release 版本清单
+      - 未知 service 返回 OPS.USER.config_snapshot_not_found
+  - name: config_domains_catalog
+    operation: ListConfigDomains
+    go_func: TestConfigSnapshotHTTPBoundary
+    evidence: api_integration
+    assertions:
+      - 域清单覆盖云侧服务、端侧 App、数据工程与平台自身
+  - name: config_write_routes_retired
+    operation: ListServiceConfigs
+    go_func: TestConfigWriteRoutesRetired
+    evidence: local_contract
+    assertions:
+      - POST /configs/{key}:update 与 GET /configs/layers 不再注册（404）

@@ -6,8 +6,46 @@ import (
 	"testing"
 
 	"quwoquan_service/services/user-service/internal/application"
+	accountsessionapp "quwoquan_service/services/user-service/internal/application/account/account_session"
+	credentialapp "quwoquan_service/services/user-service/internal/application/account/credential_binding"
+	registrationapp "quwoquan_service/services/user-service/internal/application/account/device_registration"
+	accountsessionpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence"
+	credentialpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/credential_binding/persistence"
+	registrationpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
+	userpersistence "quwoquan_service/services/user-service/internal/infrastructure/user/persistence"
 )
+
+func testAccountPacketOptions(t *testing.T) []application.AuthServiceOption {
+	t.Helper()
+	sessionStore, err := accountsessionpersistence.NewAccountSessionPostgresStore(
+		pgPool,
+	)
+	if err != nil {
+		t.Fatalf("account session store: %v", err)
+	}
+	registrationStore, err := registrationpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		t.Fatalf("device registration store: %v", err)
+	}
+	tokenCipher, err := registrationpersistence.NewAESGCMTokenCipher(
+		make([]byte, 32),
+	)
+	if err != nil {
+		t.Fatalf("device registration cipher: %v", err)
+	}
+	return []application.AuthServiceOption{
+		application.WithAccountSessionCommands(
+			accountsessionapp.NewAccountSessionCommandFacade(sessionStore),
+		),
+		application.WithDeviceRegistration(
+			registrationapp.NewCommandFacade(
+				registrationStore,
+				tokenCipher,
+			),
+		),
+	}
+}
 
 // T3 CredentialBinding 全场景契约测试
 
@@ -32,21 +70,33 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	profileStore := persistence.NewPgProfileStore(pgPool)
-	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
-	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
-	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	personaStore := userpersistence.NewPgPersonaStore(pgPool)
+	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		t.Fatalf("credential store: %v", err)
+	}
+	credentialCommands := credentialapp.NewCredentialCommandFacade(
+		credentialStore,
+	)
+	anonymousDeviceBindingStore := userpersistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
 		t.Fatalf("load shard directory: %v", err)
 	}
+	options := testAccountPacketOptions(t)
+	options = append(
+		options,
+		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
+		application.WithAccessTokenSigner(testAccessSigner),
+		application.WithCredentialCommands(credentialCommands),
+	)
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
 		shardDirectory,
-		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
-		application.WithAccessTokenSigner(testAccessSigner),
+		options...,
 	)
 
 	result, err := authService.LoginWithSocialProvider(
@@ -103,14 +153,27 @@ func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load shard directory: %v", err)
 	}
-	authService := application.NewAuthService(
-		persistence.NewPgProfileStore(pgPool),
-		persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB),
-		persistence.NewPgCredentialBindingStore(pgPool),
-		persistence.NewPgAnonymousDeviceBindingStore(pgPool),
-		shardDirectory,
+	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		t.Fatalf("credential store: %v", err)
+	}
+	credentialCommands := credentialapp.NewCredentialCommandFacade(
+		credentialStore,
+	)
+	options := testAccountPacketOptions(t)
+	options = append(
+		options,
 		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
+		application.WithCredentialCommands(credentialCommands),
+	)
+	authService := application.NewAuthService(
+		persistence.NewPgProfileStore(pgPool),
+		userpersistence.NewPgPersonaStore(pgPool),
+		credentialStore,
+		userpersistence.NewPgAnonymousDeviceBindingStore(pgPool),
+		shardDirectory,
+		options...,
 	)
 	firstLogin, err := authService.LoginWithSocialProvider(
 		context.Background(),
@@ -143,25 +206,20 @@ func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	}
 }
 
-func TestBindCredential_Success(t *testing.T) {
+func TestGenericCredentialBindRouteIsNotPublic(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "bind_owner", "bind_user")
 	createTestCredential(t, "cred_phone", "bind_owner", "phone", "hash_phone_bind")
 
-	rec := doRequest(t, http.MethodPost, "/user/credentials",
+	rec := doRequest(t, http.MethodPost, "/owner/credentials/bind",
 		`{"credentialType":"wechat","credentialKey":"wx_union_id_123","displayLabel":"微信账号"}`,
 		authHeaders("bind_owner"))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("bind credential: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// DB 验证
-	var count int
-	_ = pgPool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM credential_bindings WHERE owner_id = $1 AND credential_type = 'wechat'`,
-		"bind_owner").Scan(&count)
-	if count != 1 {
-		t.Errorf("expected wechat credential in DB, got count=%d", count)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf(
+			"generic bind must not accept client-supplied stable identity: got %d: %s",
+			rec.Code,
+			rec.Body.String(),
+		)
 	}
 }
 
@@ -171,7 +229,7 @@ func TestUnbindCredential_LastCredentialForbidden(t *testing.T) {
 	createTestCredential(t, "cred_only", "unbind_owner", "phone", "hash_only_phone")
 
 	// 尝试解绑唯一凭证应被拒绝
-	rec := doRequest(t, http.MethodDelete, "/user/credentials/phone", "", authHeaders("unbind_owner"))
+	rec := doRequest(t, http.MethodDelete, "/owner/credentials/phone", "", authHeaders("unbind_owner"))
 	if rec.Code == http.StatusOK {
 		t.Fatal("expected error when unbinding the last credential")
 	}
@@ -184,7 +242,7 @@ func TestUnbindCredential_KeepsRemaining(t *testing.T) {
 	createTestCredential(t, "c_wechat", "multi_cred_owner", "wechat", "wx_union_multi")
 
 	// 解绑微信（还有手机号剩余）
-	rec := doRequest(t, http.MethodDelete, "/user/credentials/wechat", "", authHeaders("multi_cred_owner"))
+	rec := doRequest(t, http.MethodDelete, "/owner/credentials/wechat", "", authHeaders("multi_cred_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("unbind wechat: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -205,7 +263,7 @@ func TestListCredentials(t *testing.T) {
 	createTestCredential(t, "lc1", "list_cred_owner", "phone", "hash_lc_phone")
 	createTestCredential(t, "lc2", "list_cred_owner", "apple", "apple_subject_123")
 
-	rec := doRequest(t, http.MethodGet, "/user/credentials", "", authHeaders("list_cred_owner"))
+	rec := doRequest(t, http.MethodGet, "/owner/credentials", "", authHeaders("list_cred_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list credentials: expected 200, got %d", rec.Code)
 	}

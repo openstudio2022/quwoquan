@@ -72,6 +72,8 @@ func TestCommentMetadataOwnsAllCanonicalOperationsWithReadyTransport(t *testing.
 	expectedKinds := map[string]string{
 		"CreateComment":             "command",
 		"DeleteComment":             "command",
+		"HideComment":               "command",
+		"RestoreComment":            "command",
 		"PinComment":                "command",
 		"UnpinComment":              "command",
 		"BindMediaAssetsToComment":  "command",
@@ -220,6 +222,7 @@ func TestCommentMetadataDeclaresTransactionalOutboxAndNamedReadModels(t *testing
 	for _, eventName := range []string{
 		"CommentCreated",
 		"CommentDeleted",
+		"CommentModerated",
 		"CommentPinChanged",
 		"CommentAttachmentsBound",
 	} {

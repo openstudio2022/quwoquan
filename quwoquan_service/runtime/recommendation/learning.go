@@ -2,8 +2,11 @@ package recommendation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	learning "quwoquan_service/runtime/learning"
@@ -18,6 +21,107 @@ const scoreTTL = 2 * time.Hour
 type FeedbackRecorder struct {
 	recorder   learning.Recorder
 	scoreCache RedisClient
+}
+
+// trainingFeatureSnapshot 是一次真正下发时的不可变训练输入。
+// 它只保留当前模型向量实际消费的稀疏字段，既保证与在线评分同源，也避免把整张
+// 用户特征宽表复制进每条曝光事实。
+type trainingFeatureSnapshot struct {
+	userFeatures map[string]any
+	itemFeatures map[string]any
+	capturedAt   time.Time
+}
+
+func newTrainingFeatureSnapshot(
+	user *UserFeatureVector,
+	candidate CandidateInput,
+	capturedAt time.Time,
+) *trainingFeatureSnapshot {
+	if capturedAt.IsZero() {
+		capturedAt = time.Now().UTC()
+	}
+	return &trainingFeatureSnapshot{
+		userFeatures: trainingUserFeatures(user, candidate),
+		itemFeatures: trainingItemFeatures(candidate),
+		capturedAt:   capturedAt.UTC(),
+	}
+}
+
+func trainingUserFeatures(user *UserFeatureVector, candidate CandidateInput) map[string]any {
+	if user == nil {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"tagAffinities":             selectFloatFeatures(user.TagAffinities, candidate.Tags),
+		"authorAffinities":          selectFloatFeatures(user.AuthorAffinities, []string{candidate.AuthorID}),
+		"engagementRate":            user.EngagementRate,
+		"totalLikes":                user.TotalLikes,
+		"totalShares":               user.TotalShares,
+		"totalEvents":               user.TotalEvents,
+		"topicAffinities":           selectFloatFeatures(user.TopicAffinities, candidate.Tags),
+		"audienceAffinities":        selectFloatFeatures(user.AudienceAffinities, candidate.Tags),
+		"formatAffinities":          selectFloatFeatures(user.FormatAffinities, candidate.Tags),
+		"entityAffinities":          selectFloatFeatures(user.EntityAffinities, candidate.Tags),
+		"entityInstanceAffinities":  selectFloatFeatures(user.EntityInstanceAffinities, candidate.EntityRefs),
+		"avgEngagementDepth":        user.AvgEngagementDepth,
+		"depthDistribution":         cloneIntFeatures(user.DepthDistribution),
+		"circleTagAffinities":       selectFloatFeatures(user.CircleTagAffinities, candidate.Tags),
+		"socialInterestScore":       user.SocialInterestScore,
+		"typeENER":                  selectFloatFeatures(user.TypeENER, []string{candidate.ContentType}),
+		"sharedFolloweesCount":      user.SharedFolloweesCount,
+		"sharedCircleCount":         user.SharedCircleCount,
+		"coCommentedCount":          user.CoCommentedCount,
+		"coVisitedEntityCount":      user.CoVisitedEntityCount,
+		"followeeInObjectActive":    user.FolloweeInObjectActive,
+		"followeeViewingActive":     user.FolloweeViewingActive,
+		"affinityIntersectionScore": user.AffinityIntersectionScore,
+		"intersectionSourceRefTop":  user.IntersectionSourceRefTop,
+	}
+}
+
+func trainingItemFeatures(candidate CandidateInput) map[string]any {
+	return map[string]any{
+		"contentId":                   candidate.ContentID,
+		"contentType":                 candidate.ContentType,
+		"authorId":                    candidate.AuthorID,
+		"tagRefs":                     append([]string(nil), candidate.Tags...),
+		"entityRefs":                  append([]string(nil), candidate.EntityRefs...),
+		"ageHours":                    candidate.AgeHours,
+		"publishHour":                 candidate.PublishHour,
+		"viewCount":                   candidate.ViewCount,
+		"likeCount":                   candidate.LikeCount,
+		"commentCount":                candidate.CommentCount,
+		"shareCount":                  candidate.ShareCount,
+		"tagCount":                    len(candidate.Tags),
+		"recallPath":                  candidate.RecallPath,
+		"qualityScore":                candidate.QualityScore,
+		"contentVertical":             candidate.ContentVertical,
+		"supplySource":                candidate.SupplySource,
+		"intersectionFactStrength":    candidate.IntersectionFactStrength,
+		"intersectionFreshness":       candidate.IntersectionFreshness,
+		"affinityIntersectionScore":   candidate.AffinityIntersectionScore,
+		"intersectionSourceRefTop":    candidate.IntersectionSourceRefTop,
+		"intersectionConfidenceLabel": candidate.IntersectionConfidenceLabel,
+		"intersectionClass":           candidate.IntersectionClass,
+	}
+}
+
+func selectFloatFeatures(source map[string]float64, keys []string) map[string]float64 {
+	selected := make(map[string]float64, len(keys))
+	for _, key := range keys {
+		if value, ok := source[key]; ok {
+			selected[key] = value
+		}
+	}
+	return selected
+}
+
+func cloneIntFeatures(source map[string]int) map[string]int {
+	cloned := make(map[string]int, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func NewFeedbackRecorder(recorder learning.Recorder, opts ...FeedbackRecorderOption) *FeedbackRecorder {
@@ -55,12 +159,28 @@ func (f *FeedbackRecorder) lookupImpressionScore(ctx context.Context, userID, co
 	return score
 }
 
+// deterministicEventID 从稳定归因输入派生 learning 事件 id（作为 Mongo _id 承载
+// dedupe，见 recommendation/rec_model/storage.yaml）。禁止时间戳参与派生。
+func deterministicEventID(prefix string, parts ...string) string {
+	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return prefix + "_" + hex.EncodeToString(digest[:16])
+}
+
 // recImpressionContext builds a typed context map for rec_impression events.
-func recImpressionContext(score float64, authorID string, tags []string) map[string]any {
+func recImpressionContext(
+	score float64,
+	authorID string,
+	tags []string,
+	feedRequestID, modelBucket, modelVersion, modelReleaseID string,
+) map[string]any {
 	return map[string]any{
-		"score":    score,
-		"authorId": authorID,
-		"tagRefs":  tags,
+		"score":          score,
+		"authorId":       authorID,
+		"tagRefs":        tags,
+		"feedRequestId":  feedRequestID,
+		"modelBucket":    modelBucket,
+		"modelVersion":   modelVersion,
+		"modelReleaseId": modelReleaseID,
 	}
 }
 
@@ -77,19 +197,63 @@ func recEngagementContext(duration float64, recScore float64, tags []string, fee
 	}
 }
 
+// ImpressionAttribution 是一次 feed 下发的曝光归因（fact 契约字段来源）。
+// FeedRequestID 是曝光批次的稳定归因键；ModelBucket/ModelVersion 是本次
+// 命中的评分轨道（rule 分桶时 ModelVersion 为空）。
+type ImpressionAttribution struct {
+	FeedRequestID  string
+	ModelBucket    string
+	ModelVersion   string
+	ModelReleaseID string
+}
+
+type impressionScoreCacheEntry struct {
+	contentID string
+	score     float64
+}
+
 // RecordImpression records that a feed item was shown to the user.
+// EventID 从 feedRequestId+targetId 确定性派生：同一 feed 批次同一内容重放
+// 不产生第二条曝光事实（Mongo _id dedupe）。
 // Also caches the recommendation score per content for later engagement lookups.
-func (f *FeedbackRecorder) RecordImpression(ctx context.Context, userID, sessionID string, items []FeedItem) error {
+func (f *FeedbackRecorder) RecordImpression(
+	ctx context.Context,
+	userID, sessionID string,
+	attribution ImpressionAttribution,
+	items []FeedItem,
+) error {
 	if f.recorder == nil {
 		return nil
 	}
+	batchKey := strings.TrimSpace(attribution.FeedRequestID)
+	if batchKey == "" {
+		// 无 feedRequestId 的调用方（如离线回放）按 user+session 批次收敛。
+		batchKey = userID + "|" + sessionID
+	}
+	scoreEntries := make([]impressionScoreCacheEntry, 0, len(items))
 	for _, item := range items {
-		f.cacheImpressionScore(ctx, userID, item.ContentID, item.Score)
-		_ = f.recorder.RecordEvent(ctx, learning.Event{
-			EventID:    fmt.Sprintf("rec_imp_%s_%s_%d", userID, item.ContentID, time.Now().UnixNano()),
-			EventType:  "rec_impression",
-			Scenario:   "content_feed",
-			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		occurredAt := time.Now().UTC()
+		contextMap := recImpressionContext(
+			item.Score,
+			item.AuthorID,
+			item.Tags,
+			attribution.FeedRequestID,
+			attribution.ModelBucket,
+			attribution.ModelVersion,
+			attribution.ModelReleaseID,
+		)
+		if snapshot := item.trainingFeatures; snapshot != nil {
+			contextMap["featureSnapshotAt"] = snapshot.capturedAt.Format(time.RFC3339Nano)
+			contextMap["userFeatureSnapshot"] = snapshot.userFeatures
+			contextMap["itemFeatureSnapshot"] = snapshot.itemFeatures
+		}
+		if err := f.recorder.RecordEvent(ctx, learning.Event{
+			EventID:   deterministicEventID("rec_imp", batchKey, item.ContentID),
+			EventType: "rec_impression",
+			Scenario:  "content_feed",
+			// 必须保留亚秒精度。FeatureSnapshotAt 使用 RFC3339Nano；若这里截断到秒，
+			// 同一秒内稍早生成的曝光会看似早于快照并被 PIT 门禁误判为未来特征。
+			OccurredAt: occurredAt.Format(time.RFC3339Nano),
 			UserID:     userID,
 			TargetID:   item.ContentID,
 			Labels: map[string]string{
@@ -97,8 +261,30 @@ func (f *FeedbackRecorder) RecordImpression(ctx context.Context, userID, session
 				"contentType": item.ContentType,
 				"recallPath":  item.RecallPath,
 			},
-			Context: recImpressionContext(item.Score, item.AuthorID, item.Tags),
+			Context: contextMap,
+		}); err != nil {
+			return fmt.Errorf("record recommendation impression %q: %w", item.ContentID, err)
+		}
+		scoreEntries = append(scoreEntries, impressionScoreCacheEntry{
+			contentID: item.ContentID,
+			score:     item.Score,
 		})
+	}
+	if f.scoreCache != nil && len(scoreEntries) > 0 {
+		// 训练事实先同步进入 BufferedRecorder；分数缓存只是后续 engagement
+		// 补分的可重建加速层，异步写入避免 N 个 Redis RTT 拉长 feed P95。
+		go func() {
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			for _, entry := range scoreEntries {
+				f.cacheImpressionScore(
+					cacheCtx,
+					userID,
+					entry.contentID,
+					entry.score,
+				)
+			}
+		}()
 	}
 	return nil
 }
@@ -121,11 +307,24 @@ func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal Behavior
 	contextMap["supplySource"] = signal.SupplySource
 	contextMap["intersectionSourceRef"] = signal.IntersectionSourceRef
 	contextMap["intersectionClass"] = signal.IntersectionClass
+	// 反馈事实的 dedupe 身份：feedRequestId+targetId+action；缺 feedRequestId 时
+	// 回退端侧 clientEventId（云侧已有 rec:event_dedup Redis 一级去重），两者都缺
+	// 时按 user+content+action+session 收敛（rec_model/storage.yaml 契约）。
+	engagementKey := []string{signal.FeedRequestID, signal.ContentID, signal.Action}
+	if strings.TrimSpace(signal.FeedRequestID) == "" {
+		if clientEventID := strings.TrimSpace(signal.ClientEventID); clientEventID != "" {
+			engagementKey = []string{clientEventID}
+		} else {
+			engagementKey = []string{
+				signal.UserID, signal.ContentID, signal.Action, signal.EffectiveSessionID(),
+			}
+		}
+	}
 	return f.recorder.RecordEvent(ctx, learning.Event{
-		EventID:    fmt.Sprintf("rec_eng_%s_%s_%d", signal.UserID, signal.ContentID, time.Now().UnixNano()),
+		EventID:    deterministicEventID("rec_eng", engagementKey...),
 		EventType:  "rec_engagement",
 		Scenario:   "content_feed",
-		OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
 		UserID:     signal.UserID,
 		TargetID:   signal.ContentID,
 		Labels: map[string]string{

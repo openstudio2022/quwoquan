@@ -14,14 +14,17 @@ var (
 	ErrOwnerCannotLeave    = errors.New("Circle owner cannot leave")
 	ErrInvalidRole         = errors.New("invalid CircleMembership role")
 	ErrIdempotencyConflict = errors.New("CircleMembership idempotency conflict")
+	ErrStateConflict       = errors.New("CircleMembership state conflict")
 )
 
 type ChangeKind string
 
 const (
-	ChangeJoin  ChangeKind = "join"
-	ChangeLeave ChangeKind = "leave"
-	ChangeRole  ChangeKind = "role"
+	ChangeJoin    ChangeKind = "join"
+	ChangeLeave   ChangeKind = "leave"
+	ChangeRole    ChangeKind = "role"
+	ChangeApprove ChangeKind = "approve"
+	ChangeReject  ChangeKind = "reject"
 )
 
 type ChangeSet struct {
@@ -31,7 +34,10 @@ type ChangeSet struct {
 	PersonaID       string
 	ExpectedVersion int64
 	Role            CircleMemberRole
-	OccurredAt      time.Time
+	// Pending 表示 joinPolicy=approval 圈子的加入意图：建 pending 档等待审批，
+	// 而不是直接达成 active。
+	Pending    bool
+	OccurredAt time.Time
 }
 
 func (change ChangeSet) Validate() error {
@@ -44,7 +50,11 @@ func (change ChangeSet) Validate() error {
 		if change.Role != CircleMemberRoleOwner && change.Role != CircleMemberRoleMember {
 			return ErrInvalidRole
 		}
-	case ChangeLeave:
+		if change.Pending && change.Role == CircleMemberRoleOwner {
+			// owner 加入自己的圈子不需要审批。
+			return ErrInvalidChange
+		}
+	case ChangeLeave, ChangeApprove, ChangeReject:
 	case ChangeRole:
 		if change.Role != CircleMemberRoleAdmin && change.Role != CircleMemberRoleMember {
 			return ErrInvalidRole
@@ -61,13 +71,23 @@ func (change ChangeSet) Apply(current *CircleMembership) (CircleMembership, stri
 	}
 	now := change.OccurredAt.UTC()
 	if change.Kind == ChangeJoin {
+		targetState := CircleMembershipStateActive
+		eventType := "CircleMembershipJoined"
+		if change.Pending {
+			targetState = CircleMembershipStatePending
+			eventType = "CircleMembershipRequested"
+		}
 		if current == nil {
-			return CircleMembership{
+			next := CircleMembership{
 				ID: change.MembershipID, Version: 1, CircleID: strings.TrimSpace(change.CircleID),
 				PersonaID: strings.TrimSpace(change.PersonaID), Role: change.Role,
-				State: CircleMembershipStateActive, JoinedAt: now, LastActiveAt: now,
+				State: targetState, LastActiveAt: now,
 				CreatedAt: now, UpdatedAt: now,
-			}, "CircleMembershipJoined", nil
+			}
+			if targetState == CircleMembershipStateActive {
+				next.JoinedAt = now
+			}
+			return next, eventType, nil
 		}
 		if current.ID != change.MembershipID || current.CircleID != change.CircleID || current.PersonaID != change.PersonaID {
 			return CircleMembership{}, "", ErrNotFound
@@ -81,15 +101,20 @@ func (change ChangeSet) Apply(current *CircleMembership) (CircleMembership, stri
 		if current.State == CircleMembershipStateRemoved {
 			return CircleMembership{}, "", ErrInvalidChange
 		}
+		if change.Pending && current.State == CircleMembershipStatePending {
+			return CircleMembership{}, "", ErrStateConflict
+		}
 		next := *current
 		next.Version++
 		next.Role = change.Role
-		next.State = CircleMembershipStateActive
-		next.JoinedAt = now
+		next.State = targetState
 		next.LeftAt = time.Time{}
 		next.LastActiveAt = now
 		next.UpdatedAt = now
-		return next, "CircleMembershipJoined", nil
+		if targetState == CircleMembershipStateActive {
+			next.JoinedAt = now
+		}
+		return next, eventType, nil
 	}
 	if current == nil || current.ID != change.MembershipID || current.CircleID != change.CircleID ||
 		current.PersonaID != change.PersonaID {
@@ -97,6 +122,22 @@ func (change ChangeSet) Apply(current *CircleMembership) (CircleMembership, stri
 	}
 	if current.Version != change.ExpectedVersion {
 		return CircleMembership{}, "", ErrVersionConflict
+	}
+	if change.Kind == ChangeApprove || change.Kind == ChangeReject {
+		if current.State != CircleMembershipStatePending {
+			return CircleMembership{}, "", ErrStateConflict
+		}
+		next := *current
+		next.Version++
+		next.UpdatedAt = now
+		if change.Kind == ChangeApprove {
+			next.State = CircleMembershipStateActive
+			next.JoinedAt = now
+			next.LastActiveAt = now
+			return next, "CircleMembershipJoined", nil
+		}
+		next.State = CircleMembershipStateRejected
+		return next, "CircleMembershipRejected", nil
 	}
 	if current.State != CircleMembershipStateActive {
 		return CircleMembership{}, "", ErrNotFound

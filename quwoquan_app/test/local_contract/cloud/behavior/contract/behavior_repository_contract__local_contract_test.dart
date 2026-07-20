@@ -66,6 +66,20 @@ void main() {
       expect(json['tagRefs'], ['Topic/旅行', 'Entity/地点/景区']);
       expect(json.containsKey('tags'), isFalse);
     });
+
+    test('toJson 固化 occurredAt 并生成稳定 clientEventId', () {
+      final occurredAt = DateTime.utc(2026, 7, 19, 6, 0, 0);
+      final event = BehaviorEvent(
+        contentId: 'post_stable_id',
+        action: BehaviorAction.click,
+        occurredAt: occurredAt,
+      );
+      final first = event.toJson();
+      final second = event.toJson();
+      expect(first['occurredAt'], occurredAt.toIso8601String());
+      expect(first['clientEventId'], startsWith('evt_'));
+      expect(second['clientEventId'], first['clientEventId']);
+    });
   });
 
   group('BehaviorRepository — 异常/边界契约', () {
@@ -90,7 +104,7 @@ void main() {
         var completed = false;
         remote
             .reportEvents(
-              events: const <BehaviorEvent>[
+              events: <BehaviorEvent>[
                 BehaviorEvent(
                   contentId: 'post_retry',
                   action: BehaviorAction.impression,
@@ -130,6 +144,7 @@ void main() {
         'entity_page_view',
         'tag_click',
         'play_progress',
+        'effective_play',
         'content_depth',
         'join_circle',
         'add_contact',

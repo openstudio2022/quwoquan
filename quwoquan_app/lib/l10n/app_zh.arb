@@ -63,10 +63,6 @@
 
   "welcomeTitle": "趣我圈",
   "welcomeMainSlogan": "遇见同趣，绽放热爱",
-  "welcomeButtonLabel": "开启发现之旅",
-  "assistantWhisperSignature": "小趣",
-  "assistantWhisperLine": "专注你的热爱，剩下的交给我",
-
   "commentPlaceholder": "添加评论...",
   "commentTooLong": "评论过长",
   "commentEmpty": "评论不能为空",
@@ -275,10 +271,6 @@
   "assistantDevReplayScore": "评分聚合快照",
   "assistantNoReplayData": "暂无回放数据",
   "assistantSkillCenterTitle": "技能中心",
-  "assistantSkillCenterDefaultAllSubscribedTitle": "默认全订阅已开启",
-  "assistantSkillCenterDefaultAllSubscribedDesc": "开箱即用全部助理能力；执行时仍受风险策略与场景闸门约束。",
-  "assistantSkillCenterRestoreDefaultAll": "恢复默认全订阅",
-  "assistantSkillCenterSimpleMode": "极简模式",
   "assistantSkillCenterPackagesTitle": "能力包",
   "assistantSkillCenterPackageLife": "生活助理",
   "assistantSkillCenterPackageWork": "工作助理",
@@ -293,23 +285,6 @@
       }
     }
   },
-  "assistantSkillCenterRiskPolicyTitle": "风险策略",
-  "assistantSkillCenterLowRiskAuto": "低风险自动执行",
-  "assistantSkillCenterLowRiskDesc": "检索、总结、问答默认执行",
-  "assistantSkillCenterMediumRiskConfirm": "中风险轻确认",
-  "assistantSkillCenterMediumRiskDesc": "创建提醒、生成待办需确认",
-  "assistantSkillCenterHighRiskDoubleConfirm": "高风险二次确认",
-  "assistantSkillCenterHighRiskDesc": "交易、外部提交等必须二次确认",
-  "assistantSkillCenterHighRiskRequired": "高风险动作必须保留二次确认",
-  "assistantSkillCenterSceneGateTitle": "场景闸门",
-  "assistantSkillCenterSceneDiscovery": "发现页",
-  "assistantSkillCenterSceneDiscoveryDesc": "浏览时仅轻提示，不主动打断",
-  "assistantSkillCenterSceneCircle": "圈子",
-  "assistantSkillCenterSceneCircleDesc": "圈内讨论建议按需触发",
-  "assistantSkillCenterSceneChat": "趣聊",
-  "assistantSkillCenterSceneChatDesc": "默认受邀参与（@小趣或手动点击）",
-  "assistantSkillCenterSceneSystem": "系统外场景",
-  "assistantSkillCenterSceneSystemDesc": "剪贴板、图片、外链等跨场景能力",
   "assistantSkillCenterRecentSessionsTitle": "最近会话",
   "assistantSkillCenterNoRecentSessions": "暂无会话记录",
   "assistantSkillCenterMessagesCount": "{count} 条消息",
@@ -317,6 +292,30 @@
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterSubscribedCount": "已订阅 {count} 项",
+  "@assistantSkillCenterSubscribedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantTaskDueAt": "计划时间：{dueAt}",
+  "@assistantTaskDueAt": {
+    "placeholders": {
+      "dueAt": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantMemoryUpdatedAt": "更新于 {date}",
+  "@assistantMemoryUpdatedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
       }
     }
   },

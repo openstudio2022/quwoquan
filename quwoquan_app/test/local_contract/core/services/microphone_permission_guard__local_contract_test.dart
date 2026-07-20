@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
@@ -10,8 +11,8 @@ void main() {
   group('MicrophonePermissionGuard.permissionSemantic — 统一语义', () {
     test('永久拒绝：permissionRequired + gateCard + openSettings', () {
       final semantic = MicrophonePermissionGuard.permissionSemantic(
-        title: UITextConstants.chatVoicePermissionPrimerTitle,
-        message: UITextConstants.chatVoicePermissionOpenSettings,
+        title: ChatText.chatVoicePermissionPrimerTitle,
+        message: ChatText.chatVoicePermissionOpenSettings,
         openSettings: true,
       );
 
@@ -28,7 +29,8 @@ void main() {
     setUp(() {
       coordinator = AppPermissionCoordinator.createForTest();
       AppPermissionCoordinator.debugInstance = coordinator;
-      coordinator.grantCheckers[AppPermissionKind.microphone] = () async => true;
+      coordinator.grantCheckers[AppPermissionKind.microphone] = () async =>
+          true;
     });
 
     tearDown(() {

@@ -223,7 +223,12 @@ func objectContractReady(
 	missing map[string]struct{},
 ) bool {
 	if len(operations) == 0 {
-		if object.Kind == ast.ObjectKindProjection || object.Kind == ast.ObjectKindExternalReference {
+		// append_only_fact 允许零公开 operation：服务端内生事实（如已读回执、
+		// 投递 attempt）由所属聚合命令在事务内追加，写入语义经 business_object_map
+		// 的 append_only_sink access 与 event_source 关系表达。
+		if object.Kind == ast.ObjectKindProjection ||
+			object.Kind == ast.ObjectKindExternalReference ||
+			object.Kind == ast.ObjectKindAppendOnlyFact {
 			return true
 		}
 		missing["operation.entrypoint"] = struct{}{}

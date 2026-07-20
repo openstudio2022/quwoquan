@@ -101,7 +101,7 @@ def _candidate_sources(spec: HomepageResearchInput) -> list[dict[str, Any]]:
             source_kind="baidu_baike",
             source_title=resolved.title,
             category="encyclopedia",
-            discovery_provider="baidu_baike_openapi_resolution",
+            discovery_provider="baidu_baike_html_resolution",
             match_confidence=resolved.match_confidence,
             evidence_reason=_evidence_reason(
                 spec.entity_id,

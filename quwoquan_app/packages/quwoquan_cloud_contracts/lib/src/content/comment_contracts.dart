@@ -1,7 +1,39 @@
 import '../operation_request_payload.dart';
 import 'content_reaction_contracts.dart';
 
-enum ContentCommentStatus { active, deleted }
+enum ContentCommentStatus { active, hidden, deleted, tombstoned }
+
+/// 一级评论服务端排序档位；排序真相源唯一在服务端，端侧不得本地重排。
+enum ContentCommentSort {
+  hot,
+  latest;
+
+  String get wireValue => name;
+}
+
+/// viewer 对评论作者的可证实关系事实投影（persona 关注事实），非推荐推断。
+enum ContentCommentViewerRelation {
+  none,
+  following,
+  friend;
+
+  static ContentCommentViewerRelation fromWire(String? raw) {
+    switch (raw?.trim()) {
+      case 'following':
+        return ContentCommentViewerRelation.following;
+      case 'friend':
+        return ContentCommentViewerRelation.friend;
+      case 'none':
+      case null:
+      case '':
+        return ContentCommentViewerRelation.none;
+      default:
+        throw FormatException(
+          'unsupported ContentCommentViewerRelation: $raw',
+        );
+    }
+  }
+}
 
 final class ContentCommentMention {
   ContentCommentMention({
@@ -122,6 +154,7 @@ final class ListContentCommentsQuery {
     required String postId,
     String? cursor,
     this.limit = 20,
+    this.sort = ContentCommentSort.hot,
   }) : postId = _requiredText(postId, 'postId'),
        cursor = _optionalText(cursor) {
     _requireLimit(limit);
@@ -130,6 +163,7 @@ final class ListContentCommentsQuery {
   final String postId;
   final String? cursor;
   final int limit;
+  final ContentCommentSort sort;
 }
 
 final class ListContentCommentRepliesQuery {
@@ -210,6 +244,9 @@ final class ContentCommentListItem {
     required this.canReply,
     required this.canReport,
     required this.canPin,
+    this.authorIpLocation,
+    this.authorLiked = false,
+    this.viewerRelation = ContentCommentViewerRelation.none,
   });
 
   final String id;
@@ -246,6 +283,15 @@ final class ContentCommentListItem {
   final bool canReply;
   final bool canReport;
   final bool canPin;
+
+  /// 评论创建时服务端解析的省级 IP 属地快照；空表示解析不出（不展示）。
+  final String? authorIpLocation;
+
+  /// Post 作者赞过这条评论的 ContentReaction 事实投影。
+  final bool authorLiked;
+
+  /// viewer 对评论作者的关注/互关事实投影；未登录恒 none。
+  final ContentCommentViewerRelation viewerRelation;
 
   ContentCommentListItem copyWith({
     int? version,
@@ -299,6 +345,9 @@ final class ContentCommentListItem {
       canReply: canReply,
       canReport: canReport,
       canPin: canPin,
+      authorIpLocation: authorIpLocation,
+      authorLiked: authorLiked,
+      viewerRelation: viewerRelation,
     );
   }
 }
@@ -398,6 +447,7 @@ CloudOperationRequestPayload encodeListContentCommentsQuery(
   queryParameters: <String, String>{
     'limit': '${query.limit}',
     if (query.cursor != null) 'cursor': query.cursor!,
+    'sort': query.sort.wireValue,
   },
 );
 
@@ -552,6 +602,11 @@ ContentCommentListItem _decodeCommentListItem(Object? value, String context) {
     canReply: _boolean(map, 'canReply'),
     canReport: _boolean(map, 'canReport'),
     canPin: _boolean(map, 'canPin'),
+    authorIpLocation: _optionalString(map, 'authorIpLocation'),
+    authorLiked: _optionalBoolean(map, 'authorLiked') ?? false,
+    viewerRelation: ContentCommentViewerRelation.fromWire(
+      _optionalString(map, 'viewerRelation'),
+    ),
   );
 }
 

@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 单张图片选择来源（相机 / 相册），领域无关。
 enum ImagePickSource { camera, photoLibrary }
@@ -23,7 +25,9 @@ abstract class ImagePickGateway {
 }
 
 class DefaultImagePickGateway implements ImagePickGateway {
-  const DefaultImagePickGateway();
+  const DefaultImagePickGateway(this._filterRepository);
+
+  final ImageEditorFilterRepository _filterRepository;
 
   @override
   Future<String?> pickImage(
@@ -38,8 +42,9 @@ class DefaultImagePickGateway implements ImagePickGateway {
           CupertinoPageRoute<CameraCaptureResult>(
             settings: RouteSettings(name: cameraRouteName),
             fullscreenDialog: true,
-            builder: (_) => const CameraCapturePage(
+            builder: (_) => CameraCapturePage(
               initialMode: MediaPickerEntryMode.image,
+              filterRepository: _filterRepository,
             ),
           ),
         );
@@ -49,9 +54,10 @@ class DefaultImagePickGateway implements ImagePickGateway {
           CupertinoPageRoute<CreateMediaPickerResult>(
             settings: RouteSettings(name: galleryRouteName),
             fullscreenDialog: true,
-            builder: (_) => const CreateMediaPickerPage(
+            builder: (_) => CreateMediaPickerPage(
               entryMode: MediaPickerEntryMode.image,
               maxSelection: 1,
+              filterRepository: _filterRepository,
             ),
           ),
         );
@@ -68,5 +74,7 @@ class DefaultImagePickGateway implements ImagePickGateway {
 }
 
 final imagePickGatewayProvider = Provider<ImagePickGateway>((ref) {
-  return const DefaultImagePickGateway();
+  return DefaultImagePickGateway(
+    ref.watch(imageEditorFilterRepositoryProvider),
+  );
 });

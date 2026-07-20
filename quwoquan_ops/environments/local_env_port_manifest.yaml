@@ -51,6 +51,26 @@
       "plane": "media",
       "slotOffset": 130
     },
+    "livekit-http": {
+      "plane": "media",
+      "slotOffset": 140
+    },
+    "livekit-rtc-tcp": {
+      "plane": "media",
+      "slotOffset": 150
+    },
+    "livekit-rtc-udp": {
+      "plane": "media",
+      "slotOffset": 160
+    },
+    "livekit-metrics": {
+      "plane": "media",
+      "slotOffset": 170
+    },
+    "coturn": {
+      "plane": "media",
+      "slotOffset": 180
+    },
     "chat-service": {
       "plane": "service",
       "slotOffset": 200

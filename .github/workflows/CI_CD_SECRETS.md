@@ -2,7 +2,8 @@
 
 本文档说明所有 Workflow 的触发条件、职责及需配置的 GitHub Secrets，与 `specs/00_MASTER_DEVELOPMENT_FLOW.md` 阶段对应。
 
-**当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署（integration/prod）。volcengine、huaweicloud 入口保留，暂不接入 CI。
+**当前部署目标**：CI/CD 的唯一生产执行面是 `prod-hosted` 的 SSH-hosted rootless
+Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，暂不接入 CI。
 
 ---
 
@@ -15,7 +16,7 @@
 | **app_pipeline.yml** | `v*` tag、手动 | macOS 构建（主干门禁已由 03/04/05 负责） | G2 / 发布 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
-| **deploy-prod.yml** | 手动 | 半自动 prod 发布 | G5c |
+| **deploy-prod-gray.yml** | 手动 | prod `gray-initial` 发布与验证 | G5c |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成复验 | G5c |
 
 ---
@@ -34,7 +35,6 @@
 |--------|------|--------|
 | **DOCKER_REGISTRY** | Docker 镜像仓库地址 | `ghcr.io` 或 `registry.example.com` |
 | **DOCKER_TOKEN** | 镜像仓库推送凭证（或使用 GITHUB_TOKEN） | `ghp_xxx` |
-| **KUBECONFIG** | 目标 K8s 集群 kubeconfig，**base64 编码** | `base64 -w0 ~/.kube/config` 输出 |
 
 ### 可选（替代 DOCKER_TOKEN）
 
@@ -87,7 +87,10 @@
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_TEST_AUTH_TOKEN** | beta/gamma 远端链路鉴权 |
+| ALPHA_TEST_AUTH_TOKEN | alpha-local 鉴权覆盖（可选；mock 默认无需配置） |
+| BETA_TEST_AUTH_TOKEN | beta-local 鉴权覆盖（可选） |
+| GAMMA_TEST_AUTH_TOKEN | gamma-local 鉴权覆盖（可选） |
+| PROD_TEST_AUTH_TOKEN | prod-sim/prod 鉴权覆盖（可选） |
 
 ### 说明
 
@@ -96,6 +99,7 @@
 - `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
 - `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
+- 四环境 token 严格按环境变量解析；禁止 alpha/beta/prod 回退复用 `GAMMA_TEST_AUTH_TOKEN`。
 - beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
 
 ### self-hosted runner 前提
@@ -130,6 +134,16 @@
 | **PROD_EDGE_SSH_KEY** | `edge` 平面账号 `prod-edge-svc` 的 SSH 私钥（realtime-gateway / rtc-service） |
 | **PROD_MEDIA_SSH_KEY** | `media` 平面账号 `prod-media-svc` 的 SSH 私钥（livekit-sfu / coturn） |
 | **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（seed-box 及同集群独立 workload） |
+| **PROD_PROMETHEUS_URL**（Environment variable） | 生产 Prometheus API base URL，供 `stackctl deploy` 自动回读 error rate/P95/Redis error rate |
+| **PROD_SERVICE_NETWORK**（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network 名称 |
+| **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端（`host:port`）；未设置时使用共享网络内 `otel-collector:4318` |
+| **PROD_OPS_OIDC_ISSUER**（Environment variable） | 运维运营 Portal 的生产 OIDC issuer（`build_portal_release.py` 构建期注入） |
+| **PROD_OPS_OIDC_CLIENT_ID**（Environment variable） | Portal 生产 OIDC 公共 client id（SPA，非机密） |
+| **PROD_OPS_OIDC_AUDIENCE**（Environment variable） | Portal 与 `product-ops-service` / `platform-ops-service` 共用的生产控制面 API audience |
+| **PROD_OPS_OIDC_SCOPE**（Environment variable） | IdP 为 Portal client 登记的最小 operator scope 集；必须包含 `openid` 与菜单所需权限 |
+| **OPS_OIDC_ISSUER / OPS_OIDC_AUDIENCE / OPS_OIDC_JWKS_URL**（prod-hosted 主机变量） | 两个 Ops 服务的服务端 OIDC 验签配置；任一缺失时 production composition 拒绝启动 |
+| **ALERT_INGEST_TOKEN**（prod-hosted 主机变量） | Alertmanager → platform-ops-service 告警回流 ingest 的机器 token；与观测栈 `ALERT_INGEST_TOKEN_SECRET_FILE` 内容一致 |
+| **RUNTIME_LOG_INGEST_TOKEN**（prod-hosted 主机变量） | 云侧服务日志上云内部通道（各服务 → product-ops `/ops/internal/runtime-logs:ingest`）的机器 token；服务端 fail-closed |
 
 ### 说明
 
@@ -141,6 +155,12 @@
 - `PROD_OPS_SSH_KEY`（relay）与 `PROD_DATA_SSH_KEY`（readonly audit）只在本地 bootstrap / 审计场景下按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
 - 账号一次性创建见 `quwoquan_ops/cli/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
 - 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者共享同一物理 ECS 为成本驱动保留项。
+- 非 dry-run 发布禁止使用 workflow 输入中的 SLO 数字；`stackctl deploy` 必须通过
+  `PROD_PROMETHEUS_URL` 查询生产窗口，并由
+  `quwoquan_ops/policies/config-release/slo_thresholds.yaml` 唯一决定
+  continue/pause/rollback。
+- 观测栈启动还需要 rootless 主机 Secret 文件
+  `ALERTMANAGER_WEBHOOK_SECRET_FILE`；通知 URL 不进入 GitHub 仓库或 workflow 日志。
 
 ---
 

@@ -9,7 +9,7 @@ node:
 scope:
   summary: full screen search shell and entry 验收范围，覆盖默认搜索页、输入过程、正式结果页固定 Tab 与连接/未连接分组规则。
   in_scope:
-  - 默认搜索页的最近搜索、今日交集、热门圈子、热门地点、同趣的人。
+  - 默认搜索页的最近搜索、猜你想搜、热门圈子、热门地点。
   - 输入过程的联系人、聊天记录、已加入圈子、已关注地点、已关注的人、推荐搜索词。
   - 正式结果页固定 Tab：小趣、全部、交集、图片、视频、长文。
   - 全部 Tab 的已连接区前置与未连接发现区按比例成组混排。
@@ -27,11 +27,12 @@ gwt_acceptance:
     when:
     - 最近搜索与默认推荐数据加载完成。
     then:
-    - 页面展示最近搜索、今日交集、热门圈子、热门地点、同趣的人。
-    - 最近搜索最多保留 15 条，默认最多 3 行；超过 3 行时右下角出现“查看更多”。
+    - 页面展示最近搜索、猜你想搜、热门圈子、热门地点。
+    - 最近搜索服务端最多保留 12 条，compact 默认 2 列 5 行；超过首屏容量时可展开。
+    - 猜你想搜来自 search-service term-heat 读模型；热门圈子/地点来自各对象 Remote query，不维护 UI 业务假数据。
     - 默认页不展示图片、视频、长文等正式结果流。
     done_when:
-    - 用户无需输入即可看到继续搜索和产生兴趣的五类启发内容。
+    - 用户无需输入即可看到继续搜索和产生兴趣的真实启发内容。
     edge_cases:
     - 最近搜索为空时隐藏最近搜索区，其他启发区仍可展示。
     - 默认推荐某一组为空时隐藏该组，不留空白标题。
@@ -42,17 +43,22 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/search/recent_search_contracts__local_contract_test.dart
+      - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/search/alpha_search_facets__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt1_local_contract
@@ -79,7 +85,7 @@ gwt_acceptance:
     - 单域失败显示 partial；所有域成功且为空才显示 empty；所有域失败才显示整页 error。
     - query 变化、清空、返回和 dispose 后旧 completion 不得回写。
     - 空白阻塞到 3 秒提示一次，6 秒取消 transport、停止 spinner 并显示重试，不得显示“暂无结果”。
-    - 联系人点击必须直达会话或按既有回退打开可用会话。
+    - 联系人点击有明确单聊时直达该会话；无单聊时进入联系人资料，禁止回退打开无关会话。
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
     - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
@@ -100,12 +106,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
@@ -147,12 +155,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
@@ -183,17 +193,20 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt4_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
@@ -203,5 +216,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

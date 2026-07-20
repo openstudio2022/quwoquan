@@ -38,7 +38,11 @@ class CoverageDiscoveryPolicy:
     rate_limit_per_second: float
     wiki_category_depth: int
     retry_backoff_multiplier: float
+    wikidata_sparql_endpoint: str
+    wikidata_result_limit: int
+    overpass_concurrency: int
     overpass_result_limit: int
+    overpass_endpoints: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +62,9 @@ class RuntimePolicy:
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
     default_object_token_budget: int
+    default_object_cost_budget_usd: float
+    max_batch_cost_usd: float
+    max_daily_cost_usd: float
     auth_retry_limit: int
     auth_retry_delay_seconds: int
     no_progress_round_limit: int
@@ -181,6 +188,18 @@ def _non_empty_string(value: object, *, label: str) -> str:
     return value.strip()
 
 
+def _non_empty_string_tuple(value: object, *, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"runtime policy {label} must be a non-empty list")
+    items = tuple(
+        _non_empty_string(item, label=f"{label}[{index}]")
+        for index, item in enumerate(value)
+    )
+    if len(set(items)) != len(items):
+        raise ValueError(f"runtime policy {label} must not contain duplicates")
+    return items
+
+
 def runtime_profile_path(profile_id: str) -> Path:
     normalized = str(profile_id or "").strip()
     if not normalized or not normalized.replace("_", "").isalnum():
@@ -241,6 +260,18 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         default_object_token_budget=_positive_int(
             budgets.get("defaultObjectTokenBudget"),
             label="budgets.defaultObjectTokenBudget",
+        ),
+        default_object_cost_budget_usd=_non_negative_float(
+            budgets.get("defaultObjectCostBudgetUsd"),
+            label="budgets.defaultObjectCostBudgetUsd",
+        ),
+        max_batch_cost_usd=_positive_float(
+            budgets.get("maxBatchCostUsd"),
+            label="budgets.maxBatchCostUsd",
+        ),
+        max_daily_cost_usd=_positive_float(
+            budgets.get("maxDailyCostUsd"),
+            label="budgets.maxDailyCostUsd",
         ),
         auth_retry_limit=_positive_int(budgets.get("authRetryLimit"), label="budgets.authRetryLimit"),
         auth_retry_delay_seconds=_positive_int(budgets.get("authRetryDelaySeconds"), label="budgets.authRetryDelaySeconds"),
@@ -369,9 +400,25 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
                 coverage.get("retryBackoffMultiplier"),
                 label="coverageDiscovery.retryBackoffMultiplier",
             ),
+            wikidata_sparql_endpoint=_non_empty_string(
+                coverage.get("wikidataSparqlEndpoint"),
+                label="coverageDiscovery.wikidataSparqlEndpoint",
+            ),
+            wikidata_result_limit=_positive_int(
+                coverage.get("wikidataResultLimit"),
+                label="coverageDiscovery.wikidataResultLimit",
+            ),
+            overpass_concurrency=_positive_int(
+                coverage.get("overpassConcurrency"),
+                label="coverageDiscovery.overpassConcurrency",
+            ),
             overpass_result_limit=_positive_int(
                 coverage.get("overpassResultLimit"),
                 label="coverageDiscovery.overpassResultLimit",
+            ),
+            overpass_endpoints=_non_empty_string_tuple(
+                coverage.get("overpassEndpoints"),
+                label="coverageDiscovery.overpassEndpoints",
             ),
         ),
     )

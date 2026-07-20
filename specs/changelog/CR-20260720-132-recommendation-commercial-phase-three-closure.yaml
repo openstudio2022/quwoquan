@@ -1,0 +1,67 @@
+id: CR-20260720-132-recommendation-commercial-phase-three-closure
+title: 推荐商用三期闭环与实验单轨收口
+slug: recommendation-commercial-phase-three-closure
+revision: 1
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine
+  - specs/feature-tree/runtime/runtime-experiments
+  - specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout
+entries:
+  - timestamp: "2026-07-20T23:30:00+08:00"
+    summary: |
+      收口推荐商用三期 N3-3 的训练/在线特征同构、PIT、最终下发记账与行为投影幂等；
+      同时关闭 R-OBJ-004 实验双轨：推荐与搜索只复用 runtime/experiments 的服务端
+      权威 hash resolver，审计只消费实际曝光/行为/查询事实，未绑定线上热路径的
+      Product Ops Experiment/ExperimentAssignmentFact 控制面 default-deny 且不进入 Portal。
+    reason: |
+      若曝光事实重新读取可变特征、PIT 延迟符号错误、relay 重放重复累加，离线样本会发生
+      时间旅行和重复污染；若未接入线上流量的 assignment 统计与 runtime policy 并存，
+      Portal 结论、回滚审计与用户实际命中桶会互相矛盾。
+    decisions:
+      - 在线评分时捕获 immutable user/item feature snapshot，并原样写入 rec_learning_events；
+        训练、evaluate、replay 对负 featureLagSeconds 统一 fail-closed。
+      - 推荐 served 只在真实 hydration、过滤和最终下发后记账；行为 relay 以 Mongo ObjectID
+        水位保证 rm_recommend_feature 与 rm_discovery_feed 幂等。
+      - runtime/experiments.AssignBucket 是推荐与搜索当前唯一分桶算法；客户端 bucket 不可信，
+        actual exposure/query facts 是效果审计源。
+      - Product Ops 实验控制面在 durable runtime binding、policyVersion 原子发布、实际流量回写
+        与 gamma 对账前保持冻结；删除 Portal 实验入口，禁止伪统计对外。
+      - 新增 verify_experiment_single_track.py 并接入 recommendation service contract gate，
+        阻断第二 resolver、热路径回接冻结 assignment API 或 Portal 入口回归。
+    change_type:
+      - specification
+      - metadata
+      - implementation
+      - local_contract
+      - api_integration
+      - user_acceptance
+      - reliability
+    tests:
+      - layer: local_contract
+        intent: GWT
+        evidence:
+          - quwoquan_service/runtime/recommendation/delivery_accounting__local_contract_test.go
+          - quwoquan_service/runtime/experiments/experiments_test.go
+          - quwoquan_service/runtime/recpolicy/policy_test.go
+          - quwoquan_service/services/search-service/internal/application/experiments_repeatability__local_contract_test.go
+          - quwoquan_service/services/rec-model-service/tests/local_contract/model_contract/test_training_chain_db__env_first__contract__local_contract_test.py
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_service/services/content-service/tests/api_integration/behavior_projection_idempotency__api_integration_test.go
+          - quwoquan_service/services/content-service/tests/api_integration/learning_event_dedupe__api_integration_test.go
+          - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_recommendation_feed_probe.py
+    rollout:
+      stages: [alpha, beta, gamma_local, prod_gray_initial, prod_full]
+      rollback:
+        - 保留 last-good recommendation/search runtime policy，禁用新实验或模型 bucket。
+        - 停止 relay 消费并保留持久队列游标，修复后从最后已提交水位重放。
+        - Product Ops Experiment/ExperimentAssignmentFact 始终 default-deny，不作为回滚旁路。
+    notes: |
+      精确测试、metadata/codegen 门禁与 gamma-local travel/premium/objectCards 黑盒探针全部通过后
+      改为 completed；环境未就绪不得用静态检查冒充 UAT。

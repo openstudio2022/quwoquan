@@ -16,6 +16,8 @@ client_projection:
   dart_class: ContactDiscoveryMatchWireDto
   base_class: ""
   output_path: cloud/runtime/generated/user/contact_discovery_match_wire_dto.g.dart
+  dart_imports:
+    - package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart
   fields:
     - name: hashedPhone
       dart_type: String
@@ -59,7 +61,7 @@ client_projection:
       default: "null"
 
     - name: relationshipCapability
-      dart_type: Map<String, dynamic>
+      dart_type: SocialRelationshipCapabilityWireDto
       nullable: true
       source: relationshipCapability
-      default: "null"
+      map_from_string_key_class: SocialRelationshipCapabilityWireDto

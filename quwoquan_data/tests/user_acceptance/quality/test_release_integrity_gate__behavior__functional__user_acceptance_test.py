@@ -81,7 +81,7 @@ def _seed_source(
     identities = {
         "维基百科": ("wikipedia", "wikipedia_api", f"https://zh.wikipedia.org/wiki/{entity}"),
         "今日头条百科": ("toutiao_baike", "toutiao_baike_html", f"https://www.baike.com/wiki/{entity}"),
-        "百度百科": ("baidu_baike", "baidu_baike_openapi", f"https://baike.baidu.com/item/{entity}"),
+        "百度百科": ("baidu_baike", "baidu_baike_html", f"https://baike.baidu.com/item/{entity}"),
     }
     source_kind, extractor, canonical_url = identities.get(
         kind,

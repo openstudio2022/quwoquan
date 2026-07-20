@@ -262,7 +262,8 @@ def test_parallel_image_auto_research_writes_availability_report():
     assert missing_payload["sourceUnavailable"][0]["lane"] == "image"
     diagnostics = missing_payload["imageDiscoveryDiagnostics"]
     assert diagnostics["desiredImageWorks"] >= 1
-    assert diagnostics["requiredImageWorks"] == 0
+    # 图作品批次为 hard_quota：图即产出本体，缺源实体必须按需求量（≥1）判不就绪。
+    assert diagnostics["requiredImageWorks"] == 1
     assert diagnostics["poolCounts"]["acceptedCollections"] == 0
     assert diagnostics["sourceUnavailable"][0]["code"] == DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE.value
     assert diagnostics["sourceUnavailable"][0]["recovery"] == DataRecoveryAction.STOP.value

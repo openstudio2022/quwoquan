@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -74,13 +75,28 @@ func run() error {
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "integration-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		return fmt.Errorf("runtime log exporter init failed: %w", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	kvFilter := robs.NewKVMetadataFilter(nil)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, kvFilter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, kvFilter)
 	if err != nil {
 		return fmt.Errorf("process logger init failed: %w", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, kvFilter)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, kvFilter)
 	if err != nil {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
@@ -182,6 +198,7 @@ func run() error {
 	externalProviders, policies, err := buildExternalProviders(
 		cfg,
 		externalObservedClient,
+		accessTokenConfig,
 		otpCodeSealer,
 		otpCodeReferenceStore,
 	)
@@ -315,101 +332,4 @@ func waitForWorkerShutdown(done <-chan struct{}, name string) {
 	case <-timer.C:
 		log.Printf("integration-service %s worker shutdown timed out", name)
 	}
-}
-
-func newExternalObservedHTTPClient(
-	cfg config,
-	ioLogger *robs.IOAccessLogger,
-	processLogger *robs.ProcessTraceLogger,
-	exceptionLogger *robs.ExceptionLogger,
-) *http.Client {
-	timeout := 2 * time.Second
-	for _, providerCfg := range []externalProviderConfig{
-		cfg.Integration.ExternalInteraction.SMS,
-		cfg.Integration.ExternalInteraction.Push,
-	} {
-		if providerCfg.Enabled && time.Duration(providerCfg.TimeoutMs)*time.Millisecond > timeout {
-			timeout = time.Duration(providerCfg.TimeoutMs) * time.Millisecond
-		}
-	}
-	factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
-	factoryCfg.Timeout = timeout
-	factoryCfg.MaxRetries = -1
-	factoryCfg.RetryBackoff = -1
-	factoryCfg.RetryOnCodes = map[int]struct{}{}
-	logCfg := rthttp.HTTPClientMiddlewareConfig{
-		Service:           "integration-service",
-		Origin:            "cloud",
-		Direction:         "outbound",
-		SourceID:          "integration-service.external-provider",
-		Src:               "integration-service",
-		ServiceName:       "integration-service",
-		ServiceInstanceID: "local",
-	}
-	return rthttp.NewObservedHTTPClient(
-		nil,
-		factoryCfg,
-		logCfg,
-		ioLogger,
-		processLogger,
-		exceptionLogger,
-	)
-}
-
-func buildExternalProviders(
-	cfg config,
-	client *http.Client,
-	otpCodeSealer *otpseal.Sealer,
-	otpCodeReferences otpseal.ReferenceStore,
-) (
-	map[string]reliabletask.ExternalProvider,
-	map[string]reliabletask.ProviderPolicy,
-	error,
-) {
-	providers := map[string]reliabletask.ExternalProvider{}
-	policies := map[string]reliabletask.ProviderPolicy{}
-	for _, item := range []struct {
-		operation string
-		config    externalProviderConfig
-	}{
-		{
-			operation: reliabletask.ExternalInteractionOperationSmsOTP,
-			config:    cfg.Integration.ExternalInteraction.SMS,
-		},
-		{
-			operation: reliabletask.ExternalInteractionOperationPush,
-			config:    cfg.Integration.ExternalInteraction.Push,
-		},
-	} {
-		if !item.config.Enabled {
-			continue
-		}
-		timeout := time.Duration(item.config.TimeoutMs) * time.Millisecond
-		externalProvider, err := provider.NewHTTPExternalProvider(
-			provider.HTTPExternalProviderConfig{
-				Name:              item.config.Provider,
-				Operation:         item.operation,
-				Endpoint:          item.config.Endpoint,
-				BearerToken:       item.config.Token,
-				Timeout:           timeout,
-				OTPCodeSealer:     otpCodeSealer,
-				OTPCodeReferences: otpCodeReferences,
-			},
-			client,
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf(
-				"external provider init failed for %s: %w",
-				item.operation,
-				err,
-			)
-		}
-		providers[item.config.Provider] = externalProvider
-		policies[item.operation] = reliabletask.ProviderPolicy{
-			Providers:   []string{item.config.Provider},
-			Timeout:     timeout,
-			RetryPolicy: reliabletask.DefaultRetryPolicy(),
-		}
-	}
-	return providers, policies, nil
 }

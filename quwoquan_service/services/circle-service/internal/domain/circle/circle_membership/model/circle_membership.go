@@ -30,6 +30,8 @@ const (
 
 	CircleMembershipStateActive CircleMembershipState = "active"
 
+	CircleMembershipStateRejected CircleMembershipState = "rejected"
+
 	CircleMembershipStateLeft CircleMembershipState = "left"
 
 	CircleMembershipStateRemoved CircleMembershipState = "removed"

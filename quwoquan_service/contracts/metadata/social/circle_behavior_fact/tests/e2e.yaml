@@ -1,0 +1,14 @@
+entity: CircleBehaviorFact
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: join_signal_reaches_recommendation
+    steps:
+      - persona joins circle in app
+      - app appends join_circle behavior fact
+    assertions:
+      - fact_persisted_with_dedupe_key
+      - weekly_active_projection_converges

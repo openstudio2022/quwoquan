@@ -37,7 +37,7 @@ repo verify/package
 约束：
 
 - PR 仍由 `03/04/05` 收敛，但 `07` 负责真正的自动 promotion，并在 `gray-initial` 承接真实远端集成复验。
-- `09` 保留为 local-gamma nightly full validation，不再与 `07` 竞争“权威主链”角色；远端 gamma 部署已退役。
+- local-gamma full validation 由 `05` 的 `manual_full` / `nightly_full` profile 承载；远端 gamma 部署已退役。
 
 ### 2. stackctl 为唯一命令面
 
@@ -57,15 +57,15 @@ repo verify/package
 
 ### 3. profile 分层与主链轻重分离
 
-`quwoquan_ops/environments/gamma_validation_suites.json` 统一定义所有 hosted / self-hosted profile：
+`quwoquan_ops/environments/gamma_validation_suites.json` 统一定义本地与 self-hosted profile：
 
 | Profile | 作用 | 阻断链职责 |
 |---|---|---|
-| `pr_light` | PR 默认 preflight | 共享 gamma readiness + advisory smoke |
-| `manual_full` | 手动完整 gamma 复验 | ECS deploy + api_integration + hosted/high-signal smoke |
-| `nightly_full` | 夜间全量验证 | hosted full + Patrol + 全设备矩阵 |
+| `pr_light` | PR 默认 preflight | alpha/beta 高信号设备抽样 |
+| `manual_full` | 手动完整 gamma-local 复验 | stackctl up + api_integration + high-signal smoke |
+| `nightly_full` | 手动或外部定时全量验证 | gamma-local full + Patrol + 全设备矩阵 |
 | `release_candidate` | 发布前回归 | 与 nightly_full 同级但更靠近发布 |
-| `mainline_auto_prod` | `main` 自动 promotion | beta matrix + prod gray-initial 阻断链（承接旧 gamma-hosted）+ prod initial checks |
+| `mainline_auto_prod` | `main` 自动 promotion | beta matrix + prod gray-initial 阻断链 + prod initial checks |
 
 设计要求：
 

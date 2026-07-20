@@ -20,6 +20,7 @@ type RawBehaviorEvent struct {
 	SessionID              string    `bson:"sessionId"`
 	ContentID              string    `bson:"contentId"`
 	Action                 string    `bson:"action"`
+	ContentType            string    `bson:"contentType,omitempty"`
 	Tags                   []string  `bson:"tagRefs,omitempty"`
 	Duration               float64   `bson:"duration,omitempty"`
 	AuthorID               string    `bson:"authorId,omitempty"`
@@ -27,6 +28,7 @@ type RawBehaviorEvent struct {
 	EngagementDepth        int       `bson:"engagementDepth,omitempty"`
 	ConsumedRatio          float64   `bson:"consumedRatio,omitempty"`
 	TotalUnits             int       `bson:"totalUnits,omitempty"`
+	EffectivePlayMS        int       `bson:"effectivePlayMs,omitempty"`
 	EntityRefs             []string  `bson:"entityRefs,omitempty"`
 	FeedRequestID          string    `bson:"feedRequestId,omitempty"`
 	Position               int       `bson:"position,omitempty"`
@@ -51,6 +53,17 @@ type RawBehaviorEvent struct {
 // This is the stable source consumed by coWishlistedEntity intersection facts.
 type WishlistEventStore interface {
 	UpsertWishlistEvent(ctx context.Context, event WishlistEvent) error
+}
+
+// WishlistStateReader 提供当前用户对 canonical object 的私有意图状态。
+// 查询只读 entity_wishlist_events，不加载 Post 聚合。
+type WishlistStateReader interface {
+	IsWishlisted(
+		ctx context.Context,
+		userID string,
+		objectID string,
+		objectKind string,
+	) (bool, error)
 }
 
 type WishlistEvent struct {

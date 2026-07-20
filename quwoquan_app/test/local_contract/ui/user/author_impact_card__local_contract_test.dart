@@ -9,7 +9,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -19,15 +18,26 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 Widget _host(AuthorImpactSummary summary, {required bool isMine}) {
-  return MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: AuthorImpactCard(
-          summary: summary,
-          isDark: false,
-          isMine: isMine,
+  return ProviderScope(
+    overrides: [
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWithValue(
+        const MockUserProfileRepository(),
+      ),
+    ],
+    child: MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: AuthorImpactCard(
+            summary: summary,
+            isDark: false,
+            isMine: isMine,
+          ),
         ),
       ),
     ),
@@ -285,6 +295,12 @@ void main() {
           overrides: [
             behaviorRepositoryProvider.overrideWithValue(behaviorRepo),
             contentBehaviorTrackerProvider.overrideWithValue(tracker),
+            profileQueryProvider.overrideWith(
+              (ref, surface) => const MockUserProfileRepository(),
+            ),
+            authorImpactQueryProvider.overrideWithValue(
+              const MockUserProfileRepository(),
+            ),
           ],
           child: MaterialApp.router(
             routerConfig: GoRouter(
@@ -345,7 +361,10 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            userProfileRepositoryProvider.overrideWithValue(
+            profileQueryProvider.overrideWith(
+              (ref, surface) => const MockUserProfileRepository(),
+            ),
+            authorImpactQueryProvider.overrideWithValue(
               const MockUserProfileRepository(),
             ),
           ],

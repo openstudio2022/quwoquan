@@ -1,0 +1,15 @@
+aggregate: UserSettings
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: appearance_change_survives_relogin
+    steps:
+      - user updates theme mode with applyScope=all_accounts
+      - user logs out and logs in again
+    assertions:
+      - appearance_read_back_matches_update
+      - settings_audit_event_recorded

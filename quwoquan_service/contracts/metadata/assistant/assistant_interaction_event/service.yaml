@@ -22,6 +22,31 @@ api_routes:
       mutation_target: AssistantInteractionEvent
       invariant_target: AssistantInteractionEvent
     request_entity: InteractionEvent
+    description: typed append；eventId 为唯一 dedupe key，重复上报幂等重放，不产生第二条事实。
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 3
+      idempotency: required
+    error_codes:
+      - ASSISTANT.USER.learning_event_invalid
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.learning_sink_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_learning_event_append
+      trace: true
+      attributes: [operation, outcome, error_code, deduped]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner

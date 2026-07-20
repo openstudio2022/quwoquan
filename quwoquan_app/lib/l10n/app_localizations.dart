@@ -434,24 +434,6 @@ abstract class AppLocalizations {
   /// **'遇见同趣，绽放热爱'**
   String get welcomeMainSlogan;
 
-  /// No description provided for @welcomeButtonLabel.
-  ///
-  /// In zh, this message translates to:
-  /// **'开启发现之旅'**
-  String get welcomeButtonLabel;
-
-  /// No description provided for @assistantWhisperSignature.
-  ///
-  /// In zh, this message translates to:
-  /// **'小趣'**
-  String get assistantWhisperSignature;
-
-  /// No description provided for @assistantWhisperLine.
-  ///
-  /// In zh, this message translates to:
-  /// **'专注你的热爱，剩下的交给我'**
-  String get assistantWhisperLine;
-
   /// No description provided for @commentPlaceholder.
   ///
   /// In zh, this message translates to:
@@ -1622,30 +1604,6 @@ abstract class AppLocalizations {
   /// **'技能中心'**
   String get assistantSkillCenterTitle;
 
-  /// No description provided for @assistantSkillCenterDefaultAllSubscribedTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'默认全订阅已开启'**
-  String get assistantSkillCenterDefaultAllSubscribedTitle;
-
-  /// No description provided for @assistantSkillCenterDefaultAllSubscribedDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'开箱即用全部助理能力；执行时仍受风险策略与场景闸门约束。'**
-  String get assistantSkillCenterDefaultAllSubscribedDesc;
-
-  /// No description provided for @assistantSkillCenterRestoreDefaultAll.
-  ///
-  /// In zh, this message translates to:
-  /// **'恢复默认全订阅'**
-  String get assistantSkillCenterRestoreDefaultAll;
-
-  /// No description provided for @assistantSkillCenterSimpleMode.
-  ///
-  /// In zh, this message translates to:
-  /// **'极简模式'**
-  String get assistantSkillCenterSimpleMode;
-
   /// No description provided for @assistantSkillCenterPackagesTitle.
   ///
   /// In zh, this message translates to:
@@ -1688,108 +1646,6 @@ abstract class AppLocalizations {
   /// **'包含 {count} 项'**
   String assistantSkillCenterContainsCount(int count);
 
-  /// No description provided for @assistantSkillCenterRiskPolicyTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'风险策略'**
-  String get assistantSkillCenterRiskPolicyTitle;
-
-  /// No description provided for @assistantSkillCenterLowRiskAuto.
-  ///
-  /// In zh, this message translates to:
-  /// **'低风险自动执行'**
-  String get assistantSkillCenterLowRiskAuto;
-
-  /// No description provided for @assistantSkillCenterLowRiskDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'检索、总结、问答默认执行'**
-  String get assistantSkillCenterLowRiskDesc;
-
-  /// No description provided for @assistantSkillCenterMediumRiskConfirm.
-  ///
-  /// In zh, this message translates to:
-  /// **'中风险轻确认'**
-  String get assistantSkillCenterMediumRiskConfirm;
-
-  /// No description provided for @assistantSkillCenterMediumRiskDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'创建提醒、生成待办需确认'**
-  String get assistantSkillCenterMediumRiskDesc;
-
-  /// No description provided for @assistantSkillCenterHighRiskDoubleConfirm.
-  ///
-  /// In zh, this message translates to:
-  /// **'高风险二次确认'**
-  String get assistantSkillCenterHighRiskDoubleConfirm;
-
-  /// No description provided for @assistantSkillCenterHighRiskDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'交易、外部提交等必须二次确认'**
-  String get assistantSkillCenterHighRiskDesc;
-
-  /// No description provided for @assistantSkillCenterHighRiskRequired.
-  ///
-  /// In zh, this message translates to:
-  /// **'高风险动作必须保留二次确认'**
-  String get assistantSkillCenterHighRiskRequired;
-
-  /// No description provided for @assistantSkillCenterSceneGateTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'场景闸门'**
-  String get assistantSkillCenterSceneGateTitle;
-
-  /// No description provided for @assistantSkillCenterSceneDiscovery.
-  ///
-  /// In zh, this message translates to:
-  /// **'发现页'**
-  String get assistantSkillCenterSceneDiscovery;
-
-  /// No description provided for @assistantSkillCenterSceneDiscoveryDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'浏览时仅轻提示，不主动打断'**
-  String get assistantSkillCenterSceneDiscoveryDesc;
-
-  /// No description provided for @assistantSkillCenterSceneCircle.
-  ///
-  /// In zh, this message translates to:
-  /// **'圈子'**
-  String get assistantSkillCenterSceneCircle;
-
-  /// No description provided for @assistantSkillCenterSceneCircleDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'圈内讨论建议按需触发'**
-  String get assistantSkillCenterSceneCircleDesc;
-
-  /// No description provided for @assistantSkillCenterSceneChat.
-  ///
-  /// In zh, this message translates to:
-  /// **'趣聊'**
-  String get assistantSkillCenterSceneChat;
-
-  /// No description provided for @assistantSkillCenterSceneChatDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'默认受邀参与（@小趣或手动点击）'**
-  String get assistantSkillCenterSceneChatDesc;
-
-  /// No description provided for @assistantSkillCenterSceneSystem.
-  ///
-  /// In zh, this message translates to:
-  /// **'系统外场景'**
-  String get assistantSkillCenterSceneSystem;
-
-  /// No description provided for @assistantSkillCenterSceneSystemDesc.
-  ///
-  /// In zh, this message translates to:
-  /// **'剪贴板、图片、外链等跨场景能力'**
-  String get assistantSkillCenterSceneSystemDesc;
-
   /// No description provided for @assistantSkillCenterRecentSessionsTitle.
   ///
   /// In zh, this message translates to:
@@ -1807,6 +1663,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{count} 条消息'**
   String assistantSkillCenterMessagesCount(int count);
+
+  /// No description provided for @assistantSkillCenterSubscribedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已订阅 {count} 项'**
+  String assistantSkillCenterSubscribedCount(int count);
+
+  /// No description provided for @assistantTaskDueAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'计划时间：{dueAt}'**
+  String assistantTaskDueAt(String dueAt);
+
+  /// No description provided for @assistantMemoryUpdatedAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新于 {date}'**
+  String assistantMemoryUpdatedAt(String date);
 
   /// No description provided for @assistantSkillCenterNoLastMessage.
   ///

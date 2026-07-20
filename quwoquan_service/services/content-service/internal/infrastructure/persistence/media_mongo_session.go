@@ -26,6 +26,7 @@ type mediaUploadSessionDocument struct {
 	ContentType    string                         `bson:"contentType"`
 	FileSize       int64                          `bson:"fileSize"`
 	ExpectedSHA256 string                         `bson:"expectedSha256"`
+	AssetID        string                         `bson:"assetId,omitempty"`
 	Status         mediamodel.UploadSessionStatus `bson:"status"`
 	CreatedAt      time.Time                      `bson:"createdAt"`
 	UpdatedAt      time.Time                      `bson:"updatedAt"`
@@ -83,6 +84,7 @@ func (s *MongoMediaStore) FindUploadSessionForOwner(
 		options.FindOne().SetProjection(bson.D{
 			{Key: "_id", Value: 1},
 			{Key: "version", Value: 1},
+			{Key: "assetId", Value: 1},
 			{Key: "objectKey", Value: 1},
 			{Key: "mediaType", Value: 1},
 			{Key: "contentType", Value: 1},
@@ -105,6 +107,7 @@ func (s *MongoMediaStore) FindUploadSessionForOwner(
 	return mediaapp.MediaUploadSessionSlice{
 		SessionID:   document.ID,
 		Version:     document.Version,
+		AssetID:     document.AssetID,
 		ObjectKey:   document.ObjectKey,
 		MediaType:   document.MediaType,
 		ContentType: document.ContentType,
@@ -355,6 +358,7 @@ func mediaUploadSessionDocumentFromModel(
 		ContentType:    snapshot.ContentType,
 		FileSize:       snapshot.FileSize,
 		ExpectedSHA256: snapshot.ExpectedSHA256,
+		AssetID:        snapshot.AssetID,
 		Status:         snapshot.Status,
 		CreatedAt:      snapshot.CreatedAt,
 		UpdatedAt:      snapshot.UpdatedAt,
@@ -376,6 +380,7 @@ func mediaUploadSessionFromDocument(
 		ContentType:    document.ContentType,
 		FileSize:       document.FileSize,
 		ExpectedSHA256: document.ExpectedSHA256,
+		AssetID:        document.AssetID,
 		Status:         document.Status,
 		CreatedAt:      document.CreatedAt,
 		UpdatedAt:      document.UpdatedAt,

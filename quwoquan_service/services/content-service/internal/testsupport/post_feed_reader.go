@@ -29,6 +29,27 @@ func (r *PostFeedReader) FindPublishedFeedPost(
 	return postFeedSliceFromModel(*post), true, nil
 }
 
+// FindPublishedFeedPosts 与生产 Mongo $in 批量读同语义（N3-1）：未命中缺席。
+func (r *PostFeedReader) FindPublishedFeedPosts(
+	ctx context.Context,
+	postIDs []postports.PostID,
+) (map[postports.PostID]postports.PostFeedItemSlice, error) {
+	out := make(map[postports.PostID]postports.PostFeedItemSlice, len(postIDs))
+	for _, id := range postIDs {
+		if _, exists := out[id]; exists {
+			continue
+		}
+		slice, ok, err := r.FindPublishedFeedPost(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out[id] = slice
+		}
+	}
+	return out, nil
+}
+
 func (r *PostFeedReader) ListPublishedFeedPosts(
 	ctx context.Context,
 	request postports.PostFeedReadRequest,

@@ -1,10 +1,10 @@
-// Command homepage-import 按 immutable release payload 把 entity snapshot 投影进 homepage_state
+// Command homepage-import 按 immutable release payload把 entity snapshot 投影进 homepages
 // （introductionMarkdown / introductionAssets），与 content-service cmd/import 平级：
 // content importer 负责 posts/entities 运行库，本命令负责主页读模型快照。
 //
 // 幂等语义由 application.ReconcileImportedHomepages 保证。来源身份固定为
 // qwq_data + entityRef；sync 只会下线该来源中未声明的主页，不会碰人工或官方 seed。
-// 快照持久化走与 entity-service 相同的 MongoHomepageStateStore，服务重启/冷启动时加载。
+// 持久化走 Homepage 对象 Store，以 sourceOwner+sourceEntityRef 幂等 upsert。
 //
 // Usage:
 //
@@ -28,7 +28,7 @@ import (
 
 	"quwoquan_service/services/entity-service/internal/application"
 	"quwoquan_service/services/entity-service/internal/homepageimport"
-	"quwoquan_service/services/entity-service/internal/infrastructure/persistence"
+	homepagepersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage/persistence"
 )
 
 type releaseDesiredState struct {
@@ -43,7 +43,6 @@ func main() {
 	releaseRoot := flag.String("release-root", "", "immutable release root with payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "", "mongo connection uri (required unless --dry-run)")
 	entityDB := flag.String("entity-db", "quwoquan_entity", "entity database name")
-	stateColl := flag.String("state-collection", "homepage_state", "homepage state collection name")
 	mediaBase := flag.String("media-base-url", "", "media origin/CDN base url for CAS objectKey mapping")
 	env := flag.String("env", "", "environment label (for logging/report)")
 	reportPath := flag.String("report", "", "write import report json to this path")
@@ -117,7 +116,13 @@ func main() {
 			defer cancel()
 			_ = client.Disconnect(shutdownCtx)
 		}()
-		store := persistence.NewMongoHomepageStateStore(client.Database(*entityDB).Collection(*stateColl))
+		store := homepagepersistence.NewMongoHomepageStore(
+			client.Database(*entityDB),
+			*env != "alpha",
+		)
+		if err := store.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("[homepage-import] ensure homepage indexes: %v", err)
+		}
 		service := application.NewHomepageServiceWithStore(ctx, store)
 		report, err = service.ReconcileImportedHomepages(ctx, application.HomepageImportRequest{
 			Mode:            importMode,

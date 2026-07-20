@@ -423,6 +423,7 @@ func newNotificationOperatorHTTPHandler(t *testing.T) http.Handler {
 		AppMessageQueries:  appMessageQueries,
 		DeliveryCommands:   deliveryCommands,
 		DeliveryQueries:    deliveryQueries,
+		IncomingCalls:      newTestIncomingCallCoordinator(t),
 	})
 	if err != nil {
 		t.Fatalf("construct notification handler: %v", err)

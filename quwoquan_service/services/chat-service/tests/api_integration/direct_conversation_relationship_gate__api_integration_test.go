@@ -1,7 +1,6 @@
 package api_integration
 
 import (
-	"context"
 	"testing"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -34,7 +33,7 @@ func TestCreateConversation_Direct_RequiresMutualOrFormal(t *testing.T) {
 		nil,
 	))
 
-	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "direct",
 		CreatorId:        "user_a",
 		InitialMemberIds: []string{"user_b"},
@@ -63,7 +62,7 @@ func TestCreateConversation_Direct_AllowsMutual(t *testing.T) {
 		nil,
 	))
 
-	conv, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	conv, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "direct",
 		CreatorId:        "user_a",
 		InitialMemberIds: []string{"user_b"},
@@ -86,7 +85,7 @@ func TestCreateConversation_Direct_Blocked(t *testing.T) {
 		nil,
 	))
 
-	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "direct",
 		CreatorId:        "user_a",
 		InitialMemberIds: []string{"user_b"},

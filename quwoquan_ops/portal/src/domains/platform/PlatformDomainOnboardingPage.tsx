@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-import { domainOnboardingDomains } from '../../generated/control-plane/domainOnboardingDomains.generated.js';
 import { domainOnboardingSchema } from '../../generated/control-plane/domainOnboardingSchema.generated.js';
 import { fetchOnboardingDomains, type OnboardingDomainItem } from '../../shared/api/controlPlane.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
@@ -40,14 +39,10 @@ export function PlatformDomainOnboardingPage() {
       });
   }, []);
 
-  const fallbackDomains = Object.values(domainOnboardingDomains) as unknown as DomainEntry[];
   const statusOrder = new Map<string, number>(
     domainOnboardingSchema.schema.acceptance_statuses.map((status, index) => [status, index]),
   );
-  const domains = (remoteDomains.length > 0
-    ? remoteDomains
-    : fallbackDomains
-  ).sort((a, b) => {
+  const domains = [...remoteDomains].sort((a, b) => {
     const statusDiff =
       (statusOrder.get(a.acceptance_status) ?? 999) - (statusOrder.get(b.acceptance_status) ?? 999);
     if (statusDiff !== 0) {
@@ -83,16 +78,9 @@ export function PlatformDomainOnboardingPage() {
           <span className="badge badge--success">{readyCount} 个领域已达 minimum_test_ready</span>
           <span className="badge badge--warning">{blockedCount} 个领域仍有 blocker</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
-            {remoteReady ? '真实接入矩阵已接入' : '当前展示回退到 codegen 快照'}
+            {remoteReady ? '真实接入矩阵已接入' : '等待平台控制面连接'}
           </span>
           <RuntimeErrorBadge error={runtimeError} />
-        </>
-      }
-      actions={<button className="button button--primary">导出接入报告</button>}
-      footer={
-        <>
-          <button className="button">查看 plane binding</button>
-          <button className="button button--primary">发起统一收口评审</button>
         </>
       }
     >
@@ -117,6 +105,15 @@ export function PlatformDomainOnboardingPage() {
 
       <SectionCard title="统一接入状态" subtitle="逐域展示当前完成度、绑定服务和剩余阻塞项">
         <div className="stack-list">
+          {domains.length === 0 ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">等待平台控制面连接</p>
+                <p className="item-subtitle">领域接入矩阵将在后端可达后展示，不使用本地快照兜底。</p>
+              </div>
+              <span className="badge badge--warning">offline</span>
+            </div>
+          ) : null}
           {domains.map((item) => (
             <div className="onboarding-item" key={item.domain}>
               <div className="onboarding-item__main">

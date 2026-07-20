@@ -42,11 +42,13 @@ sit_acceptance:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
-    status: completed
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit1.sit1_local_contract
@@ -54,24 +56,30 @@ sit_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit1.sit1_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit1.journey
         envs:
         - gamma_local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit1.sit1_api_integration
         envs:
         - beta
         - gamma
-    notes: []
+    notes:
+    - 2026-07-20 用户主页商用化收口：gamma-local Patrol 已落盘并接入 daily
+      device matrix；编辑资料入口与关注/取关往返均为确定性断言，不再以 finder
+      条件分支跳过。待真实 gamma-local 设备运行报告归档后恢复 completed。
   SIT2:
     title: 创作 SubTab/可见性、统计详情、互动内容与端云数据
     story_refs:
@@ -106,27 +114,27 @@ sit_acceptance:
       - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
         cases:
         - list followers/following/circles remote query+cursor+limit and relationshipCapability projection
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_stats_journey__user_acceptance_test.dart
-        cases:
-        - my fans follow-back
-        - other following action sheet
-        - other public circles browse
-        - private or blocked stats permission card
+      # stats 旅程 UA 用例（fans follow-back / action sheet / permission card）
+      # 已由 recorded 的 profile_stats_page__local_contract_test 页面级覆盖；
+      # 设备级旅程随 patrol/user/profile_journey 扩展（原 planned 幽灵路径已清理）。
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_stats_row__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/user_life_item_dto_contract__local_contract_test.dart
+      # user_life_item DTO 契约测试随 user_work/user_life_item deferred 退役
+      # （2026-07-19 批次 3 决策：作品 Tab 由 content 域 ListUserPosts 单轨承载）。
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit2.sit2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit2_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit2.sit2_api_integration
@@ -135,6 +143,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit2.sit2_local_contract
@@ -142,6 +151,17 @@ sit_acceptance:
     notes:
     - 2026-06-25 统计详情页口径刷新为 iOS toolbar segmented selector + 云侧分页搜索 + capability 驱动动作矩阵；local_contract 以 `profile_stats_page__local_contract_test.dart` 包装 `test/ui/user/pages/profile_stats_page_test.dart` 为当前真相。
     - 2026-06-25 /continue-dev 复盘：当前 App 本地契约已覆盖页面重设计，但 user-service followers/following handler 尚未读取 query，也未在 row 下发 viewer->row relationshipCapability；circle-service ListUserCircles 尚未消费 query，也未区分 owner/other 公开可见性。因此 SIT2 不再视为完成，下一轮先闭合端云契约与 api_integration/user_acceptance 证据。
+    - 2026-07-20 用户主页商用化收口：user-service followers/following handler 已消费
+      `query`（服务端子串过滤，与 overfetch+fill/block 过滤同循环）并在 row 下发
+      viewer→row 完整 `relationshipCapability`（复用 buildRelationshipCapabilityView，
+      blocked 行已被过滤故恒 false/false）；circle-service ListPersonaCircles 已消费
+      limit+cursor（owner/other 可见性区分随 circle membership 并行专项）。planned 三测
+      `TestListFollowRowsCarryViewerRelationshipCapability` /
+      `TestListFollowing_QueryFiltersWithinSubject` /
+      `TestListFollowers_QueryFiltersWithinSubject` 已落
+      follow_contract__api_integration_test.go 并编译通过；运行证据被 user-service
+      迁移编号冲突（005/006/007 多文件并行重排导致既有 TestFollow_Success 同样 500）
+      阻塞，基线恢复后回填 recorded，status 维持 pending_evidence。
   SIT3:
     title: 我与TA的交集卡真闭环 + 行为归因 + resonance 零残留
     story_refs:
@@ -162,33 +182,41 @@ sit_acceptance:
       - file: quwoquan_service/services/tag-service/internal/application/tag_service__local_contract_test.go
       - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
-    status: completed
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit3.sit3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit3_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit3.sit3_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit3.sit3_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit3.journey
         envs:
         - gamma_local
-    notes: []
+    notes:
+    - 2026-07-20 用户主页高保统一的设备级入口、编辑页可达与关系写往返已纳入
+      gamma-local Patrol；真实设备的视觉、VoiceOver 与运行报告尚未归档，因此不得以
+      local_contract 代替 release 证据。
   SIT4:
     title: 四类主页体系中的用户主页首屏高保统一
     story_refs:
@@ -211,34 +239,42 @@ sit_acceptance:
       - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
+      - file: quwoquan_ops/tests/local_contract/test_relationship_observability__contract__local_contract_test.py
     status: completed
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit4.sit4_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit4.sit4_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit4.journey
         envs:
         - gamma_local
       - layer: api_integration
+        execution_profile: integration
         suite: sit4_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit4.sit4_api_integration
         envs:
         - beta
         - gamma
-    notes: []
+    notes:
+    - 2026-07-20 M12 观测单轨：profile/edit/intersections/my-qr 的曝光、首帧 TTI 与停留由
+      `app_pages.yaml collect_page_access` 生成 page_open/page_return；JourneyEventTracker 只记录
+      保存/扫码等产品动作，ContentBehaviorTracker 只记录推荐/交集反馈，页面不再手工 enter/exit 双计。
   SIT5:
     title: 我的交集 / 我的影响力一流水准 UX 与接口扩展准出
     story_refs:
@@ -269,17 +305,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit5.sit5_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit5_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit5.sit5_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit5.sit5_local_contract
@@ -300,7 +339,7 @@ sit_acceptance:
     - 保存 P95 ≤ 800ms
     tests:
       planned:
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_career_interest_personalization__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/profile_career_interests/profile_career_interests_page__user_acceptance_test.dart
       - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/tag/profile_career_interest_catalog__local_contract_test.dart
@@ -311,17 +350,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: career_interest_catalog
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.catalog
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_edit_validation
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.validation
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: tag_service_children_validate_shared_tags
         cases:
         - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_service
@@ -332,5 +374,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

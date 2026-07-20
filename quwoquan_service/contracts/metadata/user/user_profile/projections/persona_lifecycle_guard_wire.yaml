@@ -19,28 +19,23 @@ client_projection:
       nullable: false
       source: subAccountId
       default: "''"
-    - name: canDelete
+    - name: requestedAction
+      dart_type: String
+      nullable: false
+      source: requestedAction
+      default: "'retire'"
+    - name: allowed
       dart_type: bool
       nullable: false
-      source: canDelete
+      source: allowed
       default: "false"
-    - name: canRetire
+    - name: reason
+      dart_type: String
+      nullable: false
+      source: reason
+      default: "'allowed'"
+    - name: requiresSuccessor
       dart_type: bool
       nullable: false
-      source: canRetire
+      source: requiresSuccessor
       default: "false"
-    - name: requiredAction
-      dart_type: String
-      nullable: false
-      source: requiredAction
-      default: "''"
-    - name: reasonCode
-      dart_type: String
-      nullable: false
-      source: reasonCode
-      default: "''"
-    - name: message
-      dart_type: String
-      nullable: false
-      source: message
-      default: "''"

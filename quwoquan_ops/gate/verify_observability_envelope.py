@@ -22,9 +22,6 @@ def envelope_issues(root: Path = OBSERVABILITY_ROOT, *, max_lines_per_file: int 
     env_root = root / "env"
     if env_root.exists():
         log_roots.extend(path / "observability" for path in env_root.iterdir() if path.is_dir())
-    data_observability = root / "data" / "observability"
-    if data_observability.exists():
-        log_roots.append(data_observability)
     for path in sorted(
         log_path
         for log_root in log_roots

@@ -52,6 +52,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt1_local_contract
@@ -59,6 +60,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt1_local_contract
@@ -97,6 +99,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt2_local_contract
@@ -135,11 +138,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt3_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt3_local_contract
@@ -183,6 +188,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt4_api_integration
         cases:
         - api_integration.runtime.runtime_client_foundation.app_remote_config.gwt4_api_integration
@@ -191,6 +197,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.app_remote_config.gwt4_local_contract
@@ -201,5 +208,5 @@ execution:
   - python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
   - cd quwoquan_app && flutter test test/core/providers/app_remote_config_provider_test.dart
     test/ui/content/providers/comment_provider_test.dart
-  full_gate:
+  profile_gates:
   - make gate

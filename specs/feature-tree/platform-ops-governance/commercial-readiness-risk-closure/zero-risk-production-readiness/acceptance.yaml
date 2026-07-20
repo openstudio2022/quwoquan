@@ -1,0 +1,98 @@
+version: 2
+node:
+  id: zero-risk-production-readiness
+  level: L3_story
+  path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness
+  title: zero risk production readiness
+  parent_domain_service: platform-ops-governance
+  parent_business_capability: commercial-readiness-risk-closure
+scope:
+  summary: 执行 RP1-RP7；仓内风险全部解决、外部前置条件真实满足后才允许 production release。
+  in_scope:
+    - 身份双签、遥测日志、供应链、灰度回滚、观测灾备、配置数据和验收清零
+    - local_contract、api_integration、user_acceptance 与 stackctl release 证据
+  out_of_scope:
+    - 伪造外部凭据、法务主体、IdP、GitHub entitlement 或 prod-hosted 结果
+gwt_acceptance:
+  GWT1:
+    title: 任一未解决风险阻断生产发布
+    given:
+      - 风险门读取 feature-tree acceptance、backlog、外部前置审计和测试证据。
+    when:
+      - 任一 RP 未完成，或 IdP/GitHub protection/法务主体/prod 凭据不可验证。
+    then:
+      - pre-release 与 deploy workflow fail-closed。
+      - 不存在 warn-only、skip、allowlist 或风险豁免参数。
+    done_when:
+      - 缺失项逐一有稳定错误与修复指引，发布不能继续。
+    edge_cases:
+      - GitHub API 返回 entitlement 403 时必须视为外部阻断，不得视为“未配置但可上线”。
+    contract_refs:
+      - specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md
+      - specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/design.md
+      - docs/outstanding_risks_backlog.md
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_ops/tests/local_contract/test_prod_rollout_stage__local_contract_test.py
+        - file: quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
+    status: pending
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: zero_risk_gate
+          cases:
+            - local_contract.platform_ops_governance.commercial_readiness_risk_closure.zero_risk_production_readiness.zero_risk_gate
+          envs: [local]
+      supporting:
+        - layer: user_acceptance
+          execution_profile: release
+          suite: prod_release_readiness
+          cases:
+            - user_acceptance.platform_ops_governance.commercial_readiness_risk_closure.zero_risk_production_readiness.prod_release_readiness
+          envs: [prod]
+    notes: []
+  GWT2:
+    title: 全部风险关闭后完成不可变灰度与恢复验证
+    given:
+      - RP1-RP7 全部完成，外部前置条件真实可用。
+    when:
+      - 运行 gray-initial、carry-on、full、告警闭环和隔离恢复演练。
+    then:
+      - 三阶段使用同一 ReleaseManifest digest。
+      - 真实 Prometheus SLO、锁/CAS、双签、config ACK、告警与恢复证据完整。
+      - 本 Story 负责的 backlog 项全部勾选关闭。
+    done_when:
+      - stackctl release report、health/inspect/doctor、rollback/restore receipt 均可复验。
+    edge_cases:
+      - 任一证据缺失时 Story 状态保持 pending。
+    contract_refs:
+      - quwoquan_ops/environments/environment_topology_manifest.yaml
+      - quwoquan_ops/environments/prod_plane_access_isolation.yaml
+    performance_points:
+      - 发布与恢复满足各 policy 声明的 SLO/RPO/RTO。
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
+        - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+        - file: quwoquan_ops/tests/local_contract/portal_control_plane__local_contract_test.mjs
+    status: pending
+    test_evidence:
+      primary:
+        - layer: api_integration
+          execution_profile: release
+          suite: immutable_rollout_and_restore
+          cases:
+            - api_integration.platform_ops_governance.commercial_readiness_risk_closure.zero_risk_production_readiness.immutable_rollout_and_restore
+          envs: [prod]
+      supporting: []
+    notes: []
+execution:
+  local_gate:
+    - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+    - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+    - python3 quwoquan_ops/cli/stackctl.py verify --env prod --kind all --profile release

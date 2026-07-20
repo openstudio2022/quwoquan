@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -23,12 +24,29 @@ RELEASE_SERVICES = (
     "chat-service",
     "user-service",
     "integration-service",
+    "notification-service",
     "circle-service",
     "recommendation-service",
     "product-ops-service",
+    "platform-ops-service",
     "assistant-service",
     "tag-service",
     "entity-service",
+)
+DEPLOYED_SERVICES = (
+    "rec-model-service",
+    "content-service",
+    "chat-service",
+    "user-service",
+    "assistant-service",
+    "product-ops-service",
+    "platform-ops-service",
+    "tag-service",
+    "entity-service",
+    "integration-service",
+    "notification-service",
+    "realtime-gateway",
+    "rtc-service",
 )
 
 
@@ -308,14 +326,20 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
 def write_summary(
     path: Path,
     *,
     image_version: str,
     config_version: str,
-    seed_box_repo: str,
-    recommendation_repo: str,
-    product_ops_repo: str,
+    image_repositories: dict[str, str],
 ) -> None:
     text = "\n".join(
         [
@@ -323,9 +347,13 @@ def write_summary(
             "",
             f"- `image_version`: `{image_version}`",
             f"- `config_version`: `{config_version}`",
-            f"- `seed-box`: `{seed_box_repo}:{image_version}`",
-            f"- `recommendation-service`: `{recommendation_repo}:{image_version}`",
-            f"- `product-ops-service`: `{product_ops_repo}:{image_version}`",
+            "- `status`: `build-input`（全部 OCI digest 与 attestations 收齐后才可部署）",
+            "",
+            "### Required images",
+            *[
+                f"- `{service}`: `{repository}:{image_version}`"
+                for service, repository in image_repositories.items()
+            ],
             "",
         ]
     )
@@ -344,11 +372,8 @@ def main() -> int:
         image_version, config_version = compute_versions(args.run_number)
     registry = args.registry.rstrip("/")
     repository = args.repository.strip("/")
-    seed_box_repo = f"{registry}/{repository}/seed-box"
-    recommendation_repo = f"{registry}/{repository}/recommendation-service"
-    product_ops_repo = f"{registry}/{repository}/product-ops-service"
-
     release_files: dict[str, str] = {}
+    release_file_digests: dict[str, str] = {}
     for service in RELEASE_SERVICES:
         relative_path = Path("releases") / "config" / service / f"{config_version}.yaml"
         snapshot_path = output_dir / relative_path
@@ -357,10 +382,21 @@ def main() -> int:
             render_release_snapshot(service, config_version),
         )
         release_files[service] = relative_path.as_posix()
+        release_file_digests[service] = sha256_file(snapshot_path)
+
+    image_repositories = {
+        service: (
+            f"{registry}/{repository}/recommendation-service"
+            if service == "rec-model-service"
+            else f"{registry}/{repository}/{service}"
+        )
+        for service in DEPLOYED_SERVICES
+    }
 
     manifest = {
         "schema": "mainline-release-artifact",
         "artifactName": ARTIFACT_NAME,
+        "status": "build-input",
         "generatedAt": utc_now(),
         "source": {
             "gitSha": args.git_sha,
@@ -371,33 +407,18 @@ def main() -> int:
             "imageVersion": image_version,
             "configVersion": config_version,
         },
-        "images": {
-            "seedBox": {
-                "repository": seed_box_repo,
-                "tag": image_version,
-                "ref": f"{seed_box_repo}:{image_version}",
-            },
-            "recommendationService": {
-                "repository": recommendation_repo,
-                "tag": image_version,
-                "ref": f"{recommendation_repo}:{image_version}",
-            },
-            "productOpsService": {
-                "repository": product_ops_repo,
-                "tag": image_version,
-                "ref": f"{product_ops_repo}:{image_version}",
-            },
-        },
+        "requiredImages": list(DEPLOYED_SERVICES),
+        "imageRepositories": image_repositories,
+        "images": {},
         "releaseFiles": release_files,
+        "releaseFileDigests": release_file_digests,
     }
     write_json(output_dir / "manifest.json", manifest)
     write_summary(
         output_dir / "summary.md",
         image_version=image_version,
         config_version=config_version,
-        seed_box_repo=seed_box_repo,
-        recommendation_repo=recommendation_repo,
-        product_ops_repo=product_ops_repo,
+        image_repositories=image_repositories,
     )
     return 0
 

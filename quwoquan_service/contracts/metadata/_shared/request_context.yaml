@@ -28,9 +28,6 @@ domain_operation_page_ids:
     RecallMessage: chat.message.recall
     RemoveAssistant: chat.assistant.remove
     RemoveMember: chat.member.remove
-    SearchConversations: chat.conversation.search
-    SearchContacts: chat.contacts.search
-    SearchMessages: chat.message.search
     SendMessage: chat.message.send
     SyncMessages: chat.message.sync
     TransferOwnership: chat.owner.transfer
@@ -45,6 +42,7 @@ domain_operation_page_ids:
     FeatureCirclePost: circle.post.feature
     GetCircle: circle.get
     GetCircleFeed: circle.feed.list
+    ListCircleDiscoveryFeed: circle.discovery.feed.list
     GetCircleFile: circle.files.get
     GetCircleStats: circle.stats
     GetMyCircleMembership: circle.members.self
@@ -88,7 +86,7 @@ domain_operation_page_ids:
     ReportBehaviors: content.behaviors.report
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual
-    SearchPosts: content.search
+    SearchQuery: search.query
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
     UpdatePostSettings: content.post.settings
@@ -138,7 +136,6 @@ domain_operation_page_ids:
     ClearRecentSearches: user.search.history.clear
     CreatePersona: user.personas.create
     DeleteRecentSearch: user.search.history.delete
-    DeleteEmptyPersona: user.personas.delete_empty
     GetActivePersonaContext: user.personas.active_context
     FollowUser: user.follow
     GetAppearanceSettings: user.settings.appearance.get
@@ -159,9 +156,6 @@ domain_operation_page_ids:
     ListFollowing: user.following
     ListRecentSearches: user.search.history.list
     ListPersonas: user.personas
-    ListUserLifeItems: user.lifeItems
-    ListUserLikes: user.likes
-    ListUserWorks: user.works
     RetirePersona: user.personas.retire
     SearchSocialRelations: user.social.search
     UnblockUser: user.block.delete

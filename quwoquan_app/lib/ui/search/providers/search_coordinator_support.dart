@@ -56,7 +56,10 @@ class SearchRecentHistoryStore {
           )
           .where((item) => item.query.trim().isNotEmpty)
           .toList(growable: false);
-    } catch (_) {
+    } on Object catch (error) {
+      if (kDebugMode) {
+        debugPrint('recent search local cache decode failed: $error');
+      }
       return const <RecentSearchEntryView>[];
     }
   }
@@ -98,7 +101,7 @@ class _ChatRecordAccumulator {
       matchedPreview:
           conversation.highlightText ??
           conversation.lastMessagePreview ??
-          '打开聊天',
+          ChatText.searchOpenChat,
       matchCount: 1,
       timestamp: conversation.lastMessageTime,
     );
@@ -113,7 +116,9 @@ class _ChatRecordAccumulator {
     return _ChatRecordAccumulator(
       conversationId: message.conversationId,
       conversationTitle:
-          message.conversationTitle ?? seedConversation?.title ?? '聊天记录',
+          message.conversationTitle ??
+          seedConversation?.title ??
+          ChatText.searchChatRecord,
       conversationType: seedConversation?.type ?? 'group',
       avatarUrl: message.conversationAvatarUrl ?? seedConversation?.avatarUrl,
       matchedPreview: message.highlightText ?? message.contentPreview,

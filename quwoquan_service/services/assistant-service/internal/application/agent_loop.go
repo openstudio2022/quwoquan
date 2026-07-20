@@ -38,12 +38,21 @@ func (l *AgentLoop) RunTurn(ctx context.Context, turn assistant.AssistantTurn) (
 }
 
 func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.AssistantTurn, emit func(streaming.Envelope) error) ([]streaming.Envelope, *rtfailures.Failure, error) {
+	return l.RunTurnWithSinkAfterSeq(ctx, turn, 0, emit)
+}
+
+func (l *AgentLoop) RunTurnWithSinkAfterSeq(
+	ctx context.Context,
+	turn assistant.AssistantTurn,
+	afterSeq uint64,
+	emit func(streaming.Envelope) error,
+) ([]streaming.Envelope, *rtfailures.Failure, error) {
 	if l == nil {
 		l = NewAgentLoop(nil, ReactRuntime{}, nil)
 	}
 	turnStartedAt := time.Now()
 	log.Printf("assistant agent turn_started conversationId=%s turnId=%s traceId=%s", turn.ConversationID, turn.TurnID, turn.TraceID)
-	projector := NewStreamProjector(turn, l.Now)
+	projector := NewStreamProjectorAt(turn, l.Now, afterSeq)
 	events := []streaming.Envelope{}
 	appendEvent := func(envelope streaming.Envelope, err error) error {
 		if err != nil {
@@ -69,7 +78,13 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	if err != nil {
 		log.Printf("assistant agent orchestrator_failed turnId=%s durationMs=%d err=%v", turn.TurnID, orchestratorDurationMs, err)
 		failure := modelFailure("phase_orchestrator", err)
-		events = appendFailureEvents(projector, events, failure)
+		if appendErr := appendEvent(projector.Failure(
+			"assistant.turn.failed",
+			map[string]any{"status": "failed", "stage": "phase_orchestrator"},
+			failure,
+		)); appendErr != nil {
+			return events, nil, appendErr
+		}
 		return events, &failure, nil
 	}
 	log.Printf("assistant agent orchestrator_done turnId=%s traceEvents=%d processFrames=%d journeyEntries=%d durationMs=%d", turn.TurnID, len(runState.TraceEvents), len(runState.ProcessTimeline), len(runState.Journey.Entries), orchestratorDurationMs)
@@ -96,7 +111,13 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	if err != nil {
 		log.Printf("assistant agent skill_select_failed turnId=%s durationMs=%d err=%v", turn.TurnID, skillDurationMs, err)
 		failure := modelFailure("skill_runtime", err)
-		events = appendFailureEvents(projector, events, failure)
+		if appendErr := appendEvent(projector.Failure(
+			"assistant.turn.failed",
+			map[string]any{"status": "failed", "stage": "skill_runtime"},
+			failure,
+		)); appendErr != nil {
+			return events, nil, appendErr
+		}
 		return events, &failure, nil
 	}
 	log.Printf("assistant agent skill_selected turnId=%s skillId=%s domainId=%s displayName=%s durationMs=%d", turn.TurnID, skill.SkillID, skill.DomainID, skill.DisplayName, skillDurationMs)
@@ -115,8 +136,9 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 		return nil, nil, err
 	}
 	var streamedFailure *rtfailures.Failure
+	var answerStreamStartedAt time.Time
 	reactStartedAt := time.Now()
-	result, err := l.React.RunWithSinks(ctx, turn, skill, func(step ReactStepResult) error {
+	result, err := l.React.RunWithFinalTextSink(ctx, turn, skill, func(step ReactStepResult) error {
 		return emitReactReasoning(ctx, projector, appendEvent, turn, skill, step, emit != nil)
 	}, func(step ReactStepResult) error {
 		failure, err := emitReactObservation(ctx, projector, appendEvent, turn, skill, step, emit != nil)
@@ -124,12 +146,25 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 			streamedFailure = failure
 		}
 		return err
+	}, func(delta ModelTextDelta) error {
+		if answerStreamStartedAt.IsZero() {
+			answerStreamStartedAt = time.Now()
+		}
+		return appendEvent(projector.Event("assistant.answer.delta", map[string]any{
+			"text": delta.Text,
+		}))
 	})
 	reactDurationMs := time.Since(reactStartedAt).Milliseconds()
 	if err != nil {
 		log.Printf("assistant agent react_failed turnId=%s skillId=%s durationMs=%d err=%v", turn.TurnID, skill.SkillID, reactDurationMs, err)
 		failure := modelFailure("react_runtime", err)
-		events = appendFailureEvents(projector, events, failure)
+		if appendErr := appendEvent(projector.Failure(
+			"assistant.turn.failed",
+			map[string]any{"status": "failed", "stage": "react_runtime"},
+			failure,
+		)); appendErr != nil {
+			return events, nil, appendErr
+		}
 		return events, &failure, nil
 	}
 	log.Printf("assistant agent react_done turnId=%s skillId=%s steps=%d modelInteractions=%d finalLen=%d stopReason=%s durationMs=%d", turn.TurnID, skill.SkillID, len(result.Steps), resultModelInteractionCount(result), len([]rune(result.FinalText)), result.StopReason, reactDurationMs)
@@ -151,21 +186,13 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 			return nil, nil, err
 		}
 	}
-	answerStreamStartedAt := time.Now()
-	answerDeltas := splitAnswerDeltas(result.FinalText)
-	if err := appendEvent(projector.Event("assistant.answer.delta", map[string]any{
-		"text": answerDeltas[0],
-	})); err != nil {
-		return nil, nil, err
-	}
-	pauseForVisibleStream(ctx, emit)
-	for _, delta := range answerDeltas[1:] {
+	if !result.FinalStreamed {
+		answerStreamStartedAt = time.Now()
 		if err := appendEvent(projector.Event("assistant.answer.delta", map[string]any{
-			"text": delta,
+			"text": result.FinalText,
 		})); err != nil {
 			return nil, nil, err
 		}
-		pauseForVisibleStream(ctx, emit)
 	}
 	if err := appendEvent(projector.Event("assistant.answer.final", map[string]any{
 		"text":       result.FinalText,
@@ -198,18 +225,6 @@ func resultModelInteractionCount(result ReactResult) int {
 		count++
 	}
 	return count
-}
-
-func pauseForVisibleStream(ctx context.Context, emit func(streaming.Envelope) error) {
-	if emit == nil {
-		return
-	}
-	timer := time.NewTimer(220 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-	case <-timer.C:
-	}
 }
 
 func pauseForVisibleProjection(ctx context.Context, enabled bool) {
@@ -904,54 +919,4 @@ func stringValue(value any) string {
 		return ""
 	}
 	return text
-}
-
-func splitAnswerDeltas(text string) []string {
-	if text == "" {
-		return []string{""}
-	}
-	runes := []rune(text)
-	chunks := []string{}
-	const targetChunkSize = 36
-	const maxChunkSize = 52
-	for start := 0; start < len(runes); {
-		end := start + targetChunkSize
-		if end >= len(runes) {
-			chunks = append(chunks, string(runes[start:]))
-			break
-		}
-		limit := start + maxChunkSize
-		if limit > len(runes) {
-			limit = len(runes)
-		}
-		if boundary := answerChunkBoundary(runes, start, end, limit); boundary > start {
-			end = boundary
-		}
-		chunks = append(chunks, string(runes[start:end]))
-		start = end
-	}
-	return chunks
-}
-
-func answerChunkBoundary(runes []rune, start, preferred, limit int) int {
-	for i := preferred; i < limit; i++ {
-		if isAnswerChunkBoundaryRune(runes[i]) {
-			return i + 1
-		}
-	}
-	for i := preferred; i > start; i-- {
-		if isAnswerChunkBoundaryRune(runes[i-1]) {
-			return i
-		}
-	}
-	return preferred
-}
-
-func isAnswerChunkBoundaryRune(r rune) bool {
-	switch r {
-	case '\n', '。', '！', '？', '；', ';', '.', '!', '?':
-		return true
-	default:
-		return false
-	}
 }

@@ -9,22 +9,25 @@ class EntityRequestPageIds {
     'CreateHomepageReview': 'entity.create.homepage.review',
     'CreateHomepageStatusReport': 'entity.homepage.status_report.create',
     'DeleteHomepageReview': 'entity.delete.homepage.review',
-    'FollowHomepage': 'entity.follow.homepage',
     'GetEntityImpact': 'entity.get.entity.impact',
     'GetHomepageDetail': 'entity.homepage.detail',
     'GetHomepageIntroduction': 'entity.homepage.introduction',
     'GetHomepageRelatedGroups': 'entity.homepage.related_groups',
     'GetHomepageReviewSummary': 'entity.homepage.review_summary',
     'GetHomepageShell': 'entity.homepage.shell',
+    'GetMyHomepageReview': 'entity.get.my.homepage.review',
     'GetObjectPageBundle': 'entity.get.object.page.bundle',
     'IntakeHomepageCandidate': 'entity.homepage.candidate.intake',
+    'ListHomepageCandidates': 'entity.list.homepage.candidates',
+    'ListHomepageClaimRequests': 'entity.list.homepage.claim.requests',
+    'ListHomepageReviews': 'entity.list.homepage.reviews',
+    'ListHomepageStatusReports': 'entity.list.homepage.status.reports',
     'PublishHomepageCandidate': 'entity.homepage.candidate.publish',
     'ReloadHomepageState': 'entity.reload.homepage.state',
     'ReviewHomepageClaimRequest': 'entity.homepage.claim.review',
     'ReviewHomepageStatusReport': 'entity.homepage.status_report.review',
     'SearchHomepages': 'entity.homepage.search',
     'SuggestHomepageCandidate': 'entity.homepage.suggest',
-    'UnfollowHomepage': 'entity.unfollow.homepage',
     'UpdateClaimedHomepageBasics': 'entity.homepage.basics.update',
     'UpdateHomepageReview': 'entity.update.homepage.review',
   };
@@ -33,22 +36,25 @@ class EntityRequestPageIds {
   static const String createHomepageReview = 'entity.create.homepage.review';
   static const String createHomepageStatusReport = 'entity.homepage.status_report.create';
   static const String deleteHomepageReview = 'entity.delete.homepage.review';
-  static const String followHomepage = 'entity.follow.homepage';
   static const String getEntityImpact = 'entity.get.entity.impact';
   static const String getHomepageDetail = 'entity.homepage.detail';
   static const String getHomepageIntroduction = 'entity.homepage.introduction';
   static const String getHomepageRelatedGroups = 'entity.homepage.related_groups';
   static const String getHomepageReviewSummary = 'entity.homepage.review_summary';
   static const String getHomepageShell = 'entity.homepage.shell';
+  static const String getMyHomepageReview = 'entity.get.my.homepage.review';
   static const String getObjectPageBundle = 'entity.get.object.page.bundle';
   static const String intakeHomepageCandidate = 'entity.homepage.candidate.intake';
+  static const String listHomepageCandidates = 'entity.list.homepage.candidates';
+  static const String listHomepageClaimRequests = 'entity.list.homepage.claim.requests';
+  static const String listHomepageReviews = 'entity.list.homepage.reviews';
+  static const String listHomepageStatusReports = 'entity.list.homepage.status.reports';
   static const String publishHomepageCandidate = 'entity.homepage.candidate.publish';
   static const String reloadHomepageState = 'entity.reload.homepage.state';
   static const String reviewHomepageClaimRequest = 'entity.homepage.claim.review';
   static const String reviewHomepageStatusReport = 'entity.homepage.status_report.review';
   static const String searchHomepages = 'entity.homepage.search';
   static const String suggestHomepageCandidate = 'entity.homepage.suggest';
-  static const String unfollowHomepage = 'entity.unfollow.homepage';
   static const String updateClaimedHomepageBasics = 'entity.homepage.basics.update';
   static const String updateHomepageReview = 'entity.update.homepage.review';
 }

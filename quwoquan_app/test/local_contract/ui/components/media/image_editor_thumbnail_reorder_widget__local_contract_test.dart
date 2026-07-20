@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 图片编辑器缩略图条接入统一拖拽组件后的回归守卫。
 ///

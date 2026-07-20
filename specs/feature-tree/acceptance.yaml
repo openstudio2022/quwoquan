@@ -23,11 +23,12 @@ uat_acceptance:
       - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_share_interaction__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
-      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat1.user_journey
@@ -35,6 +36,7 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat1.cross_service_integration
@@ -42,11 +44,97 @@ uat_acceptance:
         - beta
         - gamma
       - layer: local_contract
+        execution_profile: baseline
         suite: user_journey_contract
         cases:
         - local_contract.specs.feature_tree.uat1.user_journey_contract
         envs:
         - local
+    notes: []
+  UAT_CONTENT_CREATION_TO_PUBLICATION:
+    title: 文字、照片与视频创作、发布和结果回流
+    journey: 用户从全局加号选择写文字、发照片或发视频，完成编辑、草稿恢复、原媒体上传、视频处理、安全发布和结果回流；网络、登录、频控、媒体处理中、安全拒绝与审核下架均有可解释可恢复终态。
+    scenario_refs:
+    - text-post-create-publish-return
+    - photo-post-create-publish-return
+    - video-post-create-process-publish-return
+    done_when:
+    - 游客关闭登录回安全首页不循环，登录成功继续进入写文字。
+    - micro/article 两种形态由用户显式确认并分别回流详情或作品浏览器。
+    - 断网、杀进程、限流和依赖恢复后同一 intent 最多创建一个 Post。
+    - 长度/频控或安全 reject 不创建 Post；review/unavailable 只创建不可公开 pending_review
+      Post 并进入人工 Case，未获批准的公开 Post 数恒为零。
+    - 发布后内容立即在作者可见读模型出现，公开性和圈子分发符合真实设置。
+    - 照片保持用户排序，原图按流上传，发布命令只携带 MediaAsset ID。
+    - 视频原片按流上传；worker 生成 H.264/AAC fast-start MP4、封面和预览轨道后才允许公开发布。
+    - 已发布、待审核和待重试均进入明确结果面；用户可查看作品或发布任务，不以 Toast 代替终态。
+    - 发布漏斗、服务 SLI、审核决定和作者侧结果可在运营面追踪。
+    experience_points:
+    - 正文优先和标题渐进披露。
+    - 发布任务状态可见、可重试、可放弃。
+    - 发布成功立即进入真实内容，不以 Toast 代替结果。
+    - 大媒体上传不整文件常驻 Dart heap，并显示可取消的上传阶段。
+    - 视频处理与审核等待在发布任务中可见，失败可继续编辑或放弃。
+    performance_points:
+    - 编辑器 warm 可交互 P95 <= 1.2s。
+    - 发布回执到内容可见 P95 <= 2s。
+    - SubmitPostPublication P95 <= 800ms。
+    tests:
+      planned:
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_text_publication__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: content_publication_roundtrip
+        cases:
+        - user_acceptance.content.create.micro_publish_and_return
+        - user_acceptance.content.create.article_publish_and_return
+        - user_acceptance.content.create.photo_publish_and_return
+        - user_acceptance.content.create.video_process_publish_and_return
+        envs: [gamma_local, prod]
+        rollout_stages: [gray_initial]
+        test_object: workflow
+        quality_facet: experience
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: post_text_publication
+        cases:
+        - api_integration.content.post.text_publication_commercial_roundtrip
+        envs: [beta, gamma]
+        test_object: workflow
+        quality_facet: data_consistency
+      - layer: api_integration
+        execution_profile: integration
+        suite: photo_publish_atomic_roundtrip
+        cases:
+        - api_integration.content.post.photo_upload_bind_publish_roundtrip
+        envs: [beta, gamma]
+        test_object: workflow
+        quality_facet: data_consistency
+      - layer: local_contract
+        execution_profile: baseline
+        suite: text_publication_contract
+        cases:
+        - local_contract.content.post.text_publication_contract
+        envs: [local]
+        test_object: application_service
+        quality_facet: contract
+      - layer: local_contract
+        execution_profile: baseline
+        suite: image_editor_commercial_baseline
+        cases:
+        - local_contract.content.image_editing.commercial_baseline
+        envs: [local]
+        test_object: page
+        quality_facet: functional
     notes: []
   UAT_COLD_START_SAFE_HANDOFF:
     title: 冷启动安全交接与可观测恢复
@@ -68,25 +156,26 @@ uat_acceptance:
     - startup telemetry end-to-cloud visibility P95 <= 5min
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/app/startup_recovery__local_contract_test.dart
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
       - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: cold_start_fault_recovery
         cases:
         - user_acceptance.app_root.cold_start_safe_handoff.cross_platform
         envs: [gamma_local]
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: cold_start_failure_state_machine
         cases:
         - local_contract.app_root.cold_start_safe_handoff.recovery
         envs: [local]
       - layer: api_integration
+        execution_profile: integration
         suite: cold_start_telemetry_ingress
         cases:
         - api_integration.app_root.cold_start_safe_handoff.telemetry
@@ -121,6 +210,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: profile_share_journey
         cases:
         - user_acceptance.user.profile.interaction.share.full_journey
@@ -131,6 +221,7 @@ uat_acceptance:
         quality_facet: experience
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: profile_share_api
         cases:
         - api_integration.content.profile_share.contract
@@ -139,6 +230,7 @@ uat_acceptance:
         test_object: api_operation
         quality_facet: security
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_contract
         cases:
         - local_contract.user.profile.interaction.share.widget
@@ -180,6 +272,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_edge_swipe.user_journey
@@ -187,12 +280,14 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_edge_swipe_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_edge_swipe.uat_edge_swipe_local_contract
         envs: &id002
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: route_integration
         cases:
         - api_integration.specs.feature_tree.uat_edge_swipe.route_integration
@@ -234,6 +329,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_external_acquisition.user_journey
@@ -241,16 +337,19 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_external_acquisition_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_external_acquisition.uat_external_acquisition_local_contract
         envs: *id002
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_external_acquisition_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_external_acquisition.uat_external_acquisition_local_contract
         envs: *id002
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_external_acquisition.cross_service_integration
@@ -307,6 +406,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_message_social_connection.user_journey
@@ -314,16 +414,19 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_message_social_connection_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_message_social_connection.uat_message_social_connection_local_contract
         envs: *id002
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_message_social_connection_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_message_social_connection.uat_message_social_connection_local_contract
         envs: *id002
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_message_social_connection.cross_service_integration
@@ -374,6 +477,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_assistant_omnipresent_private_assistant.user_journey
@@ -381,16 +485,19 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_assistant_omnipresent_private_assistant_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_assistant_omnipresent_private_assistant.uat_assistant_omnipresent_private_assistant_local_contract
         envs: *id002
       - layer: local_contract
+        execution_profile: baseline
         suite: uat_assistant_omnipresent_private_assistant_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_assistant_omnipresent_private_assistant.uat_assistant_omnipresent_private_assistant_local_contract
         envs: *id002
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_assistant_omnipresent_private_assistant.cross_service_integration
@@ -435,6 +542,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: business_object_commercial_journeys
         cases:
         - user_acceptance.app_root.business_object_commercialization.ten_journeys
@@ -444,6 +552,7 @@ uat_acceptance:
         quality_facet: experience
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: object_operation_storage_event_chain
         cases:
         - api_integration.app_root.business_object_commercialization.operation_store_event
@@ -453,6 +562,7 @@ uat_acceptance:
         test_object: api_operation
         quality_facet: reliability
       - layer: local_contract
+        execution_profile: baseline
         suite: contract_graph_coverage
         cases:
         - local_contract.app_root.business_object_commercialization.contract_graph_coverage
@@ -466,5 +576,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata verify-openapi verify-contract-graph verify-contract-graph-commercial verify-registry-contract-graph-single-track verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-content-architecture codegen codegen-openapi codegen-contract-graph codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata verify-openapi verify-contract-graph verify-contract-graph-commercial verify-registry-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-content-architecture codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -71,9 +71,15 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/domain/report/... ./services/content-service/internal/application/report
 
-verify-metadata: verify-codegen-contract-graph-source verify-registry-contract-graph-single-track
+verify-metadata: verify-codegen-contract-graph-source verify-registry-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ contracts/metadata
+
+verify-observability-catalog:
+	go run ./tools/codegen_observability_catalog --metadata-dir contracts/metadata --repo-root "$(REPO_ROOT)" --check
+
+verify-assistant-service-errors:
+	go run ./tools/codegen_service_errors --metadata-dir contracts/metadata --domain assistant --output services/assistant-service/internal/generated/errors.go --check
 
 verify-openapi:
 	go run ./tools/qwq_contract check-openapi --metadata-dir contracts/metadata
@@ -106,13 +112,16 @@ verify-production-wiring-purity:
 verify-content-architecture:
 	python3 scripts/verify/verify_content_application_boundaries.py
 
-codegen: codegen-contract-graph codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-contract-graph codegen-observability-catalog codegen-assistant-service-errors codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 
 codegen-openapi:
 	go run ./tools/qwq_contract generate-openapi --metadata-dir contracts/metadata
 
 codegen-contract-graph: codegen-openapi
 	go run ./tools/qwq_contract generate --metadata-dir contracts/metadata --profile commercial --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
+
+codegen-observability-catalog:
+	go run ./tools/codegen_observability_catalog --metadata-dir contracts/metadata --repo-root "$(REPO_ROOT)"
 
 codegen-rec-intersection:
 	go run ./tools/codegen_rec_intersection --metadata-dir contracts/metadata --output-dir services/content-service/internal/generated
@@ -129,6 +138,9 @@ codegen-ops-portal:
 codegen-control-plane-runtime:
 	go run ./tools/codegen_control_plane_runtime --metadata-dir contracts/metadata --go-out-dir ./generated/control_plane --python-out-dir ./services/rec-model-service/generated/control_plane
 
+codegen-assistant-service-errors:
+	go run ./tools/codegen_service_errors --metadata-dir contracts/metadata --domain assistant --output services/assistant-service/internal/generated/errors.go
+
 codegen-content-service:
 	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post --route-service content-service
 
@@ -140,6 +152,15 @@ codegen-entity-service:
 
 codegen-notification-service:
 	go run ./tools/codegen_notification_service --metadata-dir contracts/metadata --output-dir services/notification-service/internal
+
+codegen-rtc-service:
+	go run ./tools/codegen_rtc_service --metadata-dir contracts/metadata --output-dir services/rtc-service/internal
+
+codegen-realtime-gateway:
+	go run ./tools/codegen_realtime_gateway --metadata-dir contracts/metadata --output-dir services/realtime-gateway/internal
+
+codegen-integration-service:
+	go run ./tools/codegen_integration_service --metadata-dir contracts/metadata --output-dir services/integration-service/internal
 
 codegen-product-ops-service:
 	go run ./tools/codegen_product_ops_service --metadata-dir contracts/metadata --output-dir services/product-ops-service/internal

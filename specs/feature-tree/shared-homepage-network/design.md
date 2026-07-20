@@ -57,16 +57,15 @@
 
 #### 方案 A：单域聚合 + 模板驱动读模型（推荐）
 
-在 `entity-service` 中建立：
+在 `entity-service` 中建立四个独立聚合：
 
-- `EntityProfile`：主页主档聚合
-- `EntityTypeTemplate`：类目模板
-- `EntityReviewTemplate`：口碑模板
-- `EntityClaimRequest`：认领申请
-- `EntityStatusReport`：下线/错误上报
-- `EntitySourceEvidence`：来源与可信度证据
+- `Homepage`：主页主档与 candidate → published → offline 生命周期。
+- `HomepageReview`：一人一主页一条评价，软删后复活同一聚合。
+- `HomepageClaimRequest`：认领申请与终态审核。
+- `HomepageStatusReport`：下线/纠错上报与终态审核。
 
-主页详情页由 `EntityProfile + 模板 + 聚合摘要` 组成。
+来源证据是 Homepage 的值对象；搜索项、详情壳层、评价摘要、内容/问答预览和相关群组
+均为可重建查询 Slice，不是 Homepage 的无界 owned member。
 
 **优点**：领域边界清晰，主页生命周期统一，口碑、认领、下线可复用。  
 **缺点**：需要新增完整业务域和 metadata。  
@@ -179,26 +178,14 @@
 
 ---
 
-### D-7：baseline 类目范围
+### D-7：类目范围
 
-#### 方案 A：只做 4 类高价值主页（推荐）
+类目闭集以 `_shared/types.yaml#HomepageType` 为唯一真相源，当前覆盖交通、住宿餐饮、
+景区与文化地点、校园、旅行摄影、自然与休闲设施。新增类目必须先补 metadata、
+模板/空态验收与 seed，不允许页面或服务维护第二套枚举。
 
-- 车型
-- 酒店/民宿
-- 餐厅
-- 景点
-
-**优点**：口碑模板、认领逻辑、下线治理和商业承接边界清晰。  
-**缺点**：首版范围收缩。  
-**适用条件**：需要先形成可落地闭环的 baseline。
-
-#### 方案 B：同时纳入学校、公司、院系、班级
-
-**优点**：看起来覆盖更全。  
-**缺点**：会把组织型关系主页与共享主页混为一谈，范围失控。  
-**适用条件**：不适合当前“群组主线单独推进”的要求。
-
-**选型决策**：**方案 A**。
+公司、院系、班级等强组织关系对象仍不自动并入共享主页；只有在生命周期、权限与
+内容锚点符合 Homepage 聚合契约后才能经 metadata 扩展。
 
 ## 关键设计决策汇总
 
@@ -210,52 +197,44 @@
 | D-4 | 认领模型 | 分层验证认领 | 已定 |
 | D-5 | 下线合同 | 软下线并保留记录 | 已定 |
 | D-6 | 内容/群组集成 | 主页作为锚点，其他域消费摘要 | 已定 |
-| D-7 | baseline 类目范围 | 车型/酒店民宿/餐厅/景点 | 已定 |
+| D-7 | 类目范围 | `_shared/types.yaml#HomepageType` metadata 闭集 | 已定 |
+| D-8 | 持久化与跨聚合一致性 | 四聚合 per-object Store；CAS + actor-scoped receipt + 同事务 outbox；claim/report 审核经事件最终一致推进 Homepage | 已定 |
 
 ## 整体架构图
 
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                         端侧 (Flutter/Dart)                          │
-│                                                                      │
-│  lib/ui/entity/                                                      │
-│  ├── pages/                                                          │
-│  │   ├── entity_detail_page.dart      ← 主页详情                      │
-│  │   ├── entity_claim_page.dart       ← 认领申请                      │
-│  │   ├── entity_suggest_page.dart     ← 补充主页                      │
-│  │   └── entity_status_report_page.dart ← 下线/错误上报               │
-│  ├── providers/                                                      │
-│  │   ├── entity_page_provider.dart                                    │
-│  │   └── entity_search_provider.dart                                  │
-│  └── widgets/                                                        │
-│      ├── entity_header.dart                                           │
-│      ├── entity_rating_summary.dart                                   │
-│      ├── entity_content_section.dart                                  │
-│      └── entity_related_groups.dart                                   │
-│                                                                      │
-│  lib/cloud/services/entity/                                          │
-│  ├── entity_repository.dart        ← Abstract + Mock + Remote         │
-│  └── mock/entity_mock_data.dart                                      │
-│                                                                      │
-├──────────────────────────────────────────────────────────────────────┤
-│                        云侧 (Go / metadata / storage)                │
-│                                                                      │
-│  entity-service                                                      │
-│  ├── EntityProfile                                                   │
-│  ├── EntityTypeTemplate                                              │
-│  ├── EntityReviewTemplate                                            │
-│  ├── EntityClaimRequest                                              │
-│  ├── EntityStatusReport                                              │
-│  └── EntitySourceEvidence                                            │
-│                                                                      │
-│  content-service  ─────▶ 主页内容聚合（通过 primary_entity_id 等挂载） │
-│  circle-service   ─────▶ 主页相关群组摘要消费                         │
-│  search / gateway  ─────▶ 主页搜索与详情路由                          │
-│                                                                      │
-│  _shared/app_routes.yaml     ← 主页 route 真相源                     │
-│  _shared/ui_surfaces.yaml    ← 主页 surface 真相源                   │
-│  _shared/request_context.yaml ← 主页请求上下文真相源                 │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph app [Flutter App]
+        pages["entity pages<br/>detail / picker / suggest / claim / maintenance / report"]
+        facets["对象级 typed Facet<br/>Homepage / Review / Claim / Report"]
+        pages --> facets
+    end
+    subgraph service [entity-service]
+        hp[Homepage]
+        review[HomepageReview]
+        claim[HomepageClaimRequest]
+        report[HomepageStatusReport]
+        hpReader["Homepage named Readers / Slice"]
+    end
+    subgraph mongo [MongoDB]
+        hpStore["homepages + receipts + outbox"]
+        reviewStore["homepage_reviews + receipts + outbox"]
+        claimStore["homepage_claim_requests + receipts + outbox"]
+        reportStore["homepage_status_reports + receipts + outbox"]
+    end
+    facets --> hp
+    facets --> review
+    facets --> claim
+    facets --> report
+    hp --> hpStore
+    review --> reviewStore
+    claim --> claimStore
+    report --> reportStore
+    claimStore -->|"ClaimReviewed approved"| hp
+    reportStore -->|"StatusReportReviewed confirmed_offline"| hp
+    reviewStore -->|"Review facts"| hpReader
+    hpStore --> hpReader
+    hpReader --> pages
 ```
 
 ## 跨域数据流
@@ -307,24 +286,15 @@
 
 ### 新增或扩展 metadata
 
-建议新增域：
+对象 packet 的唯一真相源：
 
-- `quwoquan_service/contracts/metadata/entity/homepage/`
+- `contracts/metadata/entity/homepage/`
+- `contracts/metadata/entity/homepage_review/`
+- `contracts/metadata/entity/homepage_claim_request/`
+- `contracts/metadata/entity/homepage_status_report/`
 
-建议至少包含：
-
-- `aggregate.yaml`
-- `fields.yaml`
-- `service.yaml`
-- `ui_config.yaml`
-- `errors.yaml`
-- `storage.yaml`
-
-建议新增共享配置：
-
-- `_shared/app_routes.yaml`：主页详情、认领页、补充页、状态上报页
-- `_shared/ui_surfaces.yaml`：主页详情、主页搜索选择器、认领流程、下线报告流程
-- `_shared/request_context.yaml`：主页读取、主页搜索、认领、状态上报的 page context
+每个聚合目录必须包含 fields/entity（或 aggregate）、service、events、storage、errors、
+tests 三件套与 readiness；route/surface/page context 只从 `_shared` metadata/codegen 消费。
 
 ### 端侧 codegen/目录约束
 
@@ -334,14 +304,12 @@
 
 ### 关键 contract 方向
 
-- `SearchEntities`
-- `GetEntityPage`
-- `GetEntityReviewTemplate`
-- `SuggestEntity`
-- `RequestEntityClaim`
-- `ReportEntityOfflineStatus`
-- `ListEntityContents`
-- `ListRelatedCircles`
+- `SearchHomepages` / `GetHomepageDetail` / `GetHomepageShell`
+- `SuggestHomepageCandidate` / `UpdateClaimedHomepageBasics`
+- `CreateHomepageReview` / `UpdateHomepageReview` / `DeleteHomepageReview`
+- `ListHomepageReviews` / `GetMyHomepageReview`
+- `CreateHomepageClaimRequest` / `ReviewHomepageClaimRequest`
+- `CreateHomepageStatusReport` / `ReviewHomepageStatusReport`
 
 ## iOS 体验基线
 
@@ -349,7 +317,7 @@
 
 - 大标题 + 沉浸式头图
 - 首屏优先展示名称、评分、认领状态与关键操作
-- 口碑评分采用半星交互与轻触觉反馈
+- 口碑评分采用 1–5 整星交互；端云统一整数约束
 - 发布器中的主页选择器采用搜索优先、单手友好的原生 sheet/fullscreen flow
 - 已下线提示采用非打断式 banner，不用强弹窗
 - 内容、口碑、问答区块支持 skeleton 和分模块降级

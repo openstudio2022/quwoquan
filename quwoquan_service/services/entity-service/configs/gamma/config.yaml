@@ -14,5 +14,8 @@ es:
   enabled: true
   endpoints: []
   index: "quwoquan_objects"
+  # gamma-local ES 为 amd64 模拟（R-S06-S-1），冷启动/单请求可超默认 800ms；
+  # 放宽硬超时避免 EnsureIndex fail-fast 把服务打死，真集群另行校准。
+  requestTimeoutMs: 5000
   shards: 1
   replicas: 1

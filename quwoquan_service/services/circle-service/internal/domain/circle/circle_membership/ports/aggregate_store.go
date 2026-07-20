@@ -48,7 +48,9 @@ type MembershipSlice struct {
 type MembershipReader interface {
 	ReadCircleMembership(context.Context, string, string) (membershipmodel.CircleMembership, bool, error)
 	ListCircleMemberships(context.Context, string, int, string) (MembershipSlice, error)
-	ListPersonaMemberships(context.Context, string, int, string) (MembershipSlice, error)
+	// ListPendingCircleMemberships 返回待审批（state=pending）成员申请队列，
+	// 仅供 owner/admin 审批面消费。
+	ListPendingCircleMemberships(context.Context, string, int, string) (MembershipSlice, error)
 }
 
 // CircleSummary is a named read projection; it is not the Circle aggregate
@@ -81,8 +83,21 @@ type CircleSummary struct {
 	UpdatedAt                time.Time `json:"updatedAt"`
 }
 
-type CircleSummaryReader interface {
-	ReadCircleSummaries(context.Context, []string) ([]CircleSummary, error)
+type PersonaCircleQuery struct {
+	PersonaID       string
+	ViewerPersonaID string
+	Query           string
+	Limit           int
+	Cursor          string
+}
+
+type PersonaCircleSlice struct {
+	Items  []CircleSummary
+	Cursor string
+}
+
+type PersonaCircleReader interface {
+	ListPersonaCircles(context.Context, PersonaCircleQuery) (PersonaCircleSlice, error)
 }
 
 type OutboxEvent struct {

@@ -12,6 +12,8 @@ type Facades struct {
 type CommentCommandFacade interface {
 	CreateComment(context.Context, CreateCommentCommand) (CommentCommandResult, error)
 	DeleteComment(context.Context, DeleteCommentCommand) (CommentCommandResult, error)
+	HideComment(context.Context, HideCommentCommand) (CommentCommandResult, error)
+	RestoreComment(context.Context, RestoreCommentCommand) (CommentCommandResult, error)
 	PinComment(context.Context, ChangeCommentPinCommand) (CommentCommandResult, error)
 	UnpinComment(context.Context, ChangeCommentPinCommand) (CommentCommandResult, error)
 	BindAttachments(context.Context, BindCommentAttachmentsCommand) (CommentCommandResult, error)

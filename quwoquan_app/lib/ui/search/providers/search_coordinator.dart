@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -17,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 part 'search_coordinator_support.dart';
 part 'search_coordinator_execution.dart';
+part 'search_coordinator_suggestion_builders.dart';
 part 'search_coordinator_suggestions.dart';
 
 final searchCoordinatorProvider = NotifierProvider.autoDispose
@@ -59,12 +61,33 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   static const int _localMatchLimit = 3;
   static const int _conversationSearchLimit = 12;
   static const int _maxNetworkSuggestions = 6;
+  static const int _guessKeywordBatchSize = 10;
+  static const Set<String> _locationHomepageTypes = <String>{
+    'hotel',
+    'restaurant',
+    'sight',
+    'university',
+    'museum',
+    'heritage_site',
+    'ancient_town',
+    'religious_site',
+    'check_in_spot',
+    'natural_landscape',
+    'park',
+    'hot_spring',
+    'theme_park',
+  };
 
   final SearchRecentHistoryStore _localStore = const SearchRecentHistoryStore();
   final AppRequestWaitController _waitController = AppRequestWaitController();
 
   Timer? _debounceTimer;
   int _searchRequestToken = 0;
+  List<NetworkSearchSuggestion> _hotQueryPool =
+      const <NetworkSearchSuggestion>[];
+
+  bool get canRefreshGuessKeywords =>
+      _hotQueryPool.length > _guessKeywordBatchSize;
 
   static SearchObjectSelection _resolveInitialSelection(
     SearchLaunchContext launchContext,
@@ -213,14 +236,19 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
 
   Future<void> hydrateRecentSearches() async {
     _setState(state.copyWith(isHydratingHistory: true));
+    // 本地 SharedPreferences 是游客态/离线的表现层缓存；
+    // 登录态以 search 域 RecentSearchState 远端为真相源。
     final localEntries = await _localStore.load();
     if (ref.mounted && localEntries.isNotEmpty) {
       _setState(state.copyWith(recentSearches: localEntries));
     }
     try {
-      final remoteEntries = await ref
-          .read(userProfileRepositoryProvider)
-          .listRecentSearches();
+      final slice = await ref
+          .read(recentSearchQueryProvider)
+          .listRecentSearches(ListRecentSearchesQuery());
+      final remoteEntries = slice.items
+          .map(_recentEntryFromContract)
+          .toList(growable: false);
       final merged = _mergeHistory(localEntries, remoteEntries);
       if (!ref.mounted) {
         return;
@@ -230,25 +258,40 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       );
       await _localStore.save(merged);
       final remoteKeys = remoteEntries.map(_historyKeyForEntry).toSet();
+      final writer = ref.read(recentSearchCommandWriterProvider);
       for (final entry in localEntries) {
         if (remoteKeys.contains(_historyKeyForEntry(entry))) {
           continue;
         }
         unawaited(
-          ref
-              .read(userProfileRepositoryProvider)
-              .upsertRecentSearch(
-                query: entry.query,
-                scope: entry.scope,
-                facet: entry.facet,
-              ),
+          writer.upsertRecentSearch(
+            UpsertRecentSearchCommand(
+              query: entry.query,
+              scope: entry.scope.wireValue,
+              facet: entry.facet,
+            ),
+          ),
         );
       }
-    } catch (_) {
+    } on Object catch (error) {
+      // 游客态/断网降级本地缓存；失败保留结构化日志，不合成远端成功。
+      if (kDebugMode) {
+        debugPrint('recent search hydrate degraded to local cache: $error');
+      }
       if (!ref.mounted) {
         return;
       }
       _setState(state.copyWith(isHydratingHistory: false));
     }
+  }
+
+  RecentSearchEntryView _recentEntryFromContract(RecentSearchEntry entry) {
+    return RecentSearchEntryView(
+      entryId: entry.entryId,
+      query: entry.query,
+      scope: SearchScope.fromWire(entry.scope),
+      facet: entry.facet,
+      updatedAt: entry.updatedAt ?? DateTime.now(),
+    );
   }
 }

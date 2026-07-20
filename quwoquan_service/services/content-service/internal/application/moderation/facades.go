@@ -4,6 +4,7 @@ import "context"
 
 type Facades struct {
 	PostModerationCaseCommandFacet
+	PostModerationCaseQueryFacet
 	PublicationEligibilityQueryFacet
 }
 
@@ -30,12 +31,20 @@ type PublicationEligibilityQueryFacet interface {
 	PublicationEligibilityApplicationReader
 }
 
+type PostModerationCaseQueryFacet interface {
+	GetCurrentPostModerationCase(
+		context.Context,
+		GetCurrentPostModerationCaseQuery,
+	) (PostModerationCaseOpsSlice, error)
+}
+
 func BindFacades(service *ModerationService) *Facades {
 	if service == nil {
 		return nil
 	}
 	return &Facades{
 		PostModerationCaseCommandFacet:   service,
+		PostModerationCaseQueryFacet:     service,
 		PublicationEligibilityQueryFacet: service,
 	}
 }

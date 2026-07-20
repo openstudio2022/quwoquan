@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"quwoquan_service/runtime/search/es"
@@ -41,8 +42,27 @@ type fakeLister struct {
 	homepages []application.Homepage
 }
 
-func (l fakeLister) ListHomepagesForIndex(_ context.Context) []application.Homepage {
-	return l.homepages
+func (l fakeLister) ScanHomepagesForIndex(
+	_ context.Context,
+	cursor string,
+	limit int,
+) ([]application.Homepage, string, error) {
+	start := 0
+	if cursor != "" {
+		start, _ = strconv.Atoi(cursor)
+	}
+	if limit <= 0 {
+		limit = len(l.homepages)
+	}
+	end := start + limit
+	if end > len(l.homepages) {
+		end = len(l.homepages)
+	}
+	next := ""
+	if end < len(l.homepages) {
+		next = strconv.Itoa(end)
+	}
+	return append([]application.Homepage(nil), l.homepages[start:end]...), next, nil
 }
 
 func mkHomepage(id, status string) application.Homepage {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/user-service/internal/generated"
 )
 
@@ -67,12 +68,24 @@ func pathParam(r *http.Request, name string) string {
 
 func isParamSlot(_ []string, _ int, _ string) bool { return false }
 
+// userIDFromHeader 保留旧调用点名称，身份真相源已切换为鉴权中间件注入的
+// operation.Context。客户端上送的 X-Client-User-Id 会在 middleware 入口被清除，
+// handler 不得再直接信任任何身份 header。
 func userIDFromHeader(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+	current, ok := operation.FromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(current.Actor.AccountID)
 }
 
+// subAccountIDFromHeader 与 userIDFromHeader 同理，仅消费可信 Persona actor。
 func subAccountIDFromHeader(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+	current, ok := operation.FromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(current.Actor.PersonaID)
 }
 
 func personaContextVersionFromHeader(r *http.Request) string {

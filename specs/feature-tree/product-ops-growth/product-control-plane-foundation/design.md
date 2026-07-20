@@ -503,4 +503,4 @@ sla_policy:
 - 从统一工作流细化到审核、申诉、恢复、双签的状态机模板
 - 从推荐运营总模型细化到召回 / 粗排 / 精排的参数空间与回滚模型
 - 从 IA 配置总边界细化到 app shell / route / surface / page 级 schema
-- 将高风险治理动作、推荐运营动作与审计动作接入统一集成验收与 `make gate-full`
+- 将高风险治理动作、推荐运营动作与审计动作接入统一集成验收与 `make gate-release ENV=gamma`

@@ -169,7 +169,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 
 ```bash
 python3 quwoquan_ops/cli/stackctl.py package --env <alpha|beta|gamma|prod>
-python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>
 python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
 python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```

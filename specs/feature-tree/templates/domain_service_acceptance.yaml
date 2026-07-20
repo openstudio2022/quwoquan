@@ -36,6 +36,7 @@ domain_acceptance:
           cases:
             - local_contract.domain.boundary.static_contract
           envs: [local]
+          execution_profile: baseline
           test_object: metadata
           quality_facet: contract
         - layer: api_integration
@@ -43,6 +44,7 @@ domain_acceptance:
           cases:
             - api_integration.domain.service.contract
           envs: [beta, gamma]
+          execution_profile: integration
           test_object: api_operation
           quality_facet: contract
       supporting:
@@ -51,6 +53,7 @@ domain_acceptance:
           cases:
             - user_acceptance.journey-id.scenario-id.domain_effect
           envs: [gamma_local, prod]
+          execution_profile: release
           rollout_stages: [gray_initial]
           test_object: page
           quality_facet: experience
@@ -63,5 +66,9 @@ domain_acceptance:
 execution:
   local_gate:
     - make gate
-  full_gate:
-    - make gate-full
+  smoke_gate:
+    - make gate-smoke
+  integration_gate:
+    - make gate-integration ENV=beta
+  release_gate:
+    - make gate-release ENV=gamma

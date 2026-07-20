@@ -5,9 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -15,6 +13,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// user_001（chat mock 当前用户 id）档案昵称。
 /// 真相源：`resolveMockUserProfileWire('user_001')`。user_001 不在 contract seed
@@ -249,8 +249,8 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -258,14 +258,11 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -311,8 +308,8 @@ void main() {
   Widget buildTestApp() {
     return ProviderScope(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          const MockUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => const MockUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _ThrowingCapabilityRepository(),
@@ -332,8 +329,8 @@ void main() {
   Widget buildTestAppWithOverrides(List overrides) {
     return ProviderScope(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          const MockUserProfileRepository(),
+        profileQueryProvider.overrideWith(
+          (ref, surface) => const MockUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _ThrowingCapabilityRepository(),
@@ -371,8 +368,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            userProfileRepositoryProvider.overrideWithValue(
-              const MockUserProfileRepository(),
+            profileQueryProvider.overrideWith(
+              (ref, surface) => const MockUserProfileRepository(),
             ),
             relationshipCapabilityRepositoryProvider.overrideWithValue(
               _ThrowingCapabilityRepository(),

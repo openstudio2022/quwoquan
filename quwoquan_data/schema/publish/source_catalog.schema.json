@@ -67,7 +67,7 @@
         "extractor": {
           "enum": [
             "wikipedia_api",
-            "baidu_baike_openapi",
+            "baidu_baike_html",
             "toutiao_baike_html"
           ]
         },

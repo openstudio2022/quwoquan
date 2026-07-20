@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -27,12 +30,16 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
   @override
   void initState() {
     super.initState();
-    _future = ref.read(userProfileRepositoryProvider).getProfileQrCard();
+    _future = ref
+        .read(profileEditQueryProvider(AppUiSurfaces.myQrCode))
+        .getProfileQrCard();
   }
 
   void _reload() {
     setState(() {
-      _future = ref.read(userProfileRepositoryProvider).getProfileQrCard();
+      _future = ref
+          .read(profileEditQueryProvider(AppUiSurfaces.myQrCode))
+          .getProfileQrCard();
     });
   }
 
@@ -81,7 +88,18 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
           }
           return MyQrCardView(
             card: snapshot.data!,
-            onScanPressed: () => context.push(AppRoutePaths.addContactScan),
+            onScanPressed: () {
+              unawaited(
+                ref
+                    .read(journeyEventTrackerProvider)
+                    .trackAction(
+                      journey: 'contact_add',
+                      action: 'open_scanner_from_my_qr',
+                      pageName: 'MyQrCodePage',
+                    ),
+              );
+              context.push(AppRoutePaths.addContactScan);
+            },
           );
         },
       ),

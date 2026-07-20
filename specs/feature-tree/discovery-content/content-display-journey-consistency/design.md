@@ -440,7 +440,7 @@ G1 校验结果：
 | --- | --- | --- |
 | `transport` | `initializing` / `ready` / `playing` / `paused` / `scrubbing` / `buffering` / `ended` / `failure` | 原生事件唯一驱动，页面不自行推断第二状态机 |
 | `playIntent` | `manualPlay` / `manualPause` / `autoEligible` / `interrupted` / `awaitingUserGesture` | `manualPause` 永远压过焦点、前后台和自动恢复 |
-| `controls` | `hidden` / `transient` / `pinned` | transient 固定 5 秒，暂停和拖动固定为 pinned |
+| `controls` | `hidden` / `transient` / `pinned` | 仅控制辅助 chrome；两种 profile 的极简时间轴始终可见，暂停和拖动固定为 pinned |
 | `pauseReason` | `user` / `focusLost` / `offscreen` / `appLifecycle` / `audioInterruption` / `episodeChange` / `failure` | 仅用于恢复判定与受限观测 |
 | 时间 | native position、buffered、native duration、verified duration、scrub target | verified duration 为媒体真相；native duration 只用于 seek 边界和一致性校验 |
 
@@ -451,14 +451,21 @@ G1 校验结果：
 
 | 场景 | 轨道/圆点 | 时间文案 | 控制与位置 |
 | --- | --- | --- | --- |
-| `feedInline + playing + transient` | `2dp` / 无视觉圆点 | 真实总时长右对齐于视频右 rail，首帧后 5 秒淡出 | 半透明细轨贴视频底边；背景不使用黑色胶囊 |
-| `immersiveWorkBrowser + playingIdle` | `3dp` / 小圆点 | 首次入详情不显示；视频集在首帧、恢复、切集后 transient 5 秒 | 时间轴位于底部互动工具栏上方，左右与 caption rail 对齐 |
-| `paused` | `4dp` / `8dp` | 不额外显示总时长 | 控制 pinned，媒体中央显示半透明播放按钮，非控件区域可续播 |
-| `scrubbing` | `6dp` / `12dp` | 显示“目标时间 / 有效总时长” | 只变更虚拟 target；上方按 descriptor 的 storyboard 显示预览帧 |
+| `feedInline + playing` | `2dp` / 无视觉圆点 | 真实总时长常驻轨道右上方 | 被动细轨视觉底边贴视频底边；无左侧播放按钮，背景不使用黑色胶囊 |
+| `immersiveWorkBrowser + playingIdle` | `2dp` / 无视觉圆点 | 真实总时长只在首次进入或切集后最多显示 `5s`，作为轨道右上方 overlay；与标题、正文或交集句实际碰撞时立即隐藏 | 轨道视觉底边紧贴底部互动工具栏上沿，左右与 caption/互动栏的 bottom-safe rail 对齐，无左侧播放按钮；时长不占独立行 |
+| `paused` | `4dp` / `8dp` | 仅在同一个 entry-only `5s` 窗口尚未结束且无碰撞时显示 | 控制 pinned，轨道本体仍贴互动栏；媒体中央只显示无背景、无边框、三个角圆润的放大播放三角，非控件区域可续播 |
+| `scrubbing` | `6dp` / `12dp` | 以更大等宽数字显示“目标时间 / 有效总时长” | 只变更虚拟 target；P0 只显示时间浮标，P1-A 在浮标上方按 descriptor 的 storyboard 显示预览帧 |
 
 `durationUnknown` 禁用拖动；`buffering` 冻结最后位置并轻量提示；`ended` 停在末帧显示
 replay；`failure` 保留同源封面和结构化恢复动作。轨道、文本和预览均不得压住互动栏、
-safe area 或跨越 rail。
+safe area 或跨越 rail。caption 的标题、正文、交集说明等实际 `RenderParagraph`
+字形矩形与右侧总时长 `RenderBox` 在同一全局坐标系做碰撞判定；不得用整条 rail
+包围盒、“是否有文案”或字符数等启发式替代。隐藏视觉时长后，时间轴的
+current/total 无障碍语义仍须完整。
+
+P0 只承诺 progressive MP4/Range 的安全拖动；storyboard 是可独立关闭的 P1-A，ABR
+HLS/CMAF 是可独立关闭的 P1-B。两项增强失败时都只能降级自身，不得改变 P0 播放、暂停、
+拖动、恢复或错误语义。
 
 ### 手势、声音和生命周期
 
@@ -466,11 +473,19 @@ safe area 或跨越 rail。
   互动、视频集横滑和作品纵滑是互斥 hit region；超过 touch-slop 后取消 tap，单次意图只记录一次。
 - 拖动期间不得连续 seek；释放时只提交一次 seek，取消回到拖动前位置。进入拖动前正在播放，
   仅在 seek settle 成功且仍前台可见时恢复；原本暂停始终保持暂停。
+- WorkBrowser 的 active video binding 必须把 `viewportEpoch + postId + media delivery identity
+  + episodeIndex + session` 原子绑定；评论分屏、筛选或异步投影重建先失效旧 binding，再按
+  delivery identity 恢复当前集。评论开关、过滤临时移除/恢复、普通重建和列表重排不得重启
+  总时长窗口；只有作品首次进入或真实切到另一集（包括切回既有集）才开启新的最多 `5s`
+  窗口。
 - Android/iOS 默认开声播放，申请短暂音频焦点；失焦、来电、离屏、后台和切集立即暂停。
   短暂中断只有 session 仍可见、仍获焦点且不是 `manualPause` 时恢复。
 - Web 被浏览器拒绝的有声自动播放进入 `awaitingUserGesture`，不是 RuntimeFailure。平台能力
   必须经 `PlatformCapabilities` / platform port 暴露；业务层不得使用 `Platform.is*` 或
   `kIsWeb`。
+- Android 兼容不按品牌或具体机型维护条件分支。平台层以最低支持 API、内存等级、decoder
+  capability 与运行时失败证据选择广覆盖安全默认值和结构化降级，并以早期/低端物理机矩阵
+  证明，而不是为单一厂商建立长期旁路。
 
 ### 可访问性与性能边界
 

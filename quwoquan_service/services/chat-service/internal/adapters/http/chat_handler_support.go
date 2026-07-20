@@ -181,7 +181,7 @@ func (h *ChatHandler) groupHomeToWire(ctx context.Context, conv model.Conversati
 		"sourceEntityTitle":  conv.EntityId,
 		"sourceCircleTitle":  conv.CircleId,
 		"memberCount":        conv.MemberCount,
-		"announcement":       "",
+		"announcement":       conv.Announcement,
 		"capabilities":       []string{"album", "file", "event", "member"},
 		"originType":         conv.OriginType,
 		"bindingType":        conv.BindingType,
@@ -289,33 +289,47 @@ func parseOptionalRFC3339(value string) *time.Time {
 
 func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Conversation) map[string]any {
 	avatarURL := h.resolveConversationAvatarURL(ctx, conv)
-	return map[string]any{
-		"id":                    conv.ID,
-		"conversationId":        conv.ID,
-		"type":                  conv.Type,
-		"title":                 conv.Title,
-		"avatarUrl":             avatarURL,
-		"groupAvatarVersion":    conv.GroupAvatarVersion,
-		"creatorId":             conv.CreatorId,
-		"circleId":              conv.CircleId,
-		"circleGroupId":         conv.CircleGroupId,
-		"entityId":              conv.EntityId,
-		"originType":            conv.OriginType,
-		"bindingType":           conv.BindingType,
-		"lifecyclePolicy":       conv.LifecyclePolicy,
-		"maxSeq":                conv.MaxSeq,
-		"memberCount":           conv.MemberCount,
-		"membersRosterRevision": conv.MembersRosterRevision,
-		"maxGroupSize":          conv.MaxGroupSize,
-		"receiptEnabled":        conv.ReceiptEnabled,
-		"lastMessageId":         conv.LastMessageId,
-		"lastMessagePreview":    conv.LastMessagePreview,
-		"lastMessageTime":       conv.LastMessageTime,
-		"messageCount":          conv.MessageCount,
-		"status":                conv.Status,
-		"createdAt":             conv.CreatedAt,
-		"updatedAt":             conv.UpdatedAt,
+	wire := map[string]any{
+		"id":                      conv.ID,
+		"conversationId":          conv.ID,
+		"type":                    conv.Type,
+		"title":                   conv.Title,
+		"avatarUrl":               avatarURL,
+		"groupAvatarVersion":      conv.GroupAvatarVersion,
+		"creatorId":               conv.CreatorId,
+		"circleId":                conv.CircleId,
+		"circleGroupId":           conv.CircleGroupId,
+		"entityId":                conv.EntityId,
+		"originType":              conv.OriginType,
+		"bindingType":             conv.BindingType,
+		"lifecyclePolicy":         conv.LifecyclePolicy,
+		"maxSeq":                  conv.MaxSeq,
+		"memberCount":             conv.MemberCount,
+		"membersRosterRevision":   conv.MembersRosterRevision,
+		"maxGroupSize":            conv.MaxGroupSize,
+		"receiptEnabled":          conv.ReceiptEnabled,
+		"announcement":            conv.Announcement,
+		"announcementUpdatedBy":   conv.AnnouncementUpdatedBy,
+		"nameEditableByAdminOnly": conv.NameEditableByAdminOnly,
+		"lastMessageId":           conv.LastMessageId,
+		"lastMessagePreview":      conv.LastMessagePreview,
+		"lastMessageTime":         conv.LastMessageTime,
+		"messageCount":            conv.MessageCount,
+		"status":                  conv.Status,
+		"createdAt":               conv.CreatedAt,
+		"updatedAt":               conv.UpdatedAt,
 	}
+	if conv.AnnouncementUpdatedAt != nil {
+		wire["announcementUpdatedAt"] = conv.AnnouncementUpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return wire
+}
+
+func formatOptionalTime(value time.Time) any {
+	if value.IsZero() {
+		return nil
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func (h *ChatHandler) resolveConversationAvatarURL(ctx context.Context, conv model.Conversation) string {

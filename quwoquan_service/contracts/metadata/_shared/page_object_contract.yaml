@@ -154,10 +154,12 @@ pages:
     route_id: createEditImage
     surface_ids: [imageEditor]
     experience_owner: content
-    data_owners: [app]
-    object_ids: []
-    query_slices: [local.image_edit_session]
-    typed_presentation: [CreateMediaItem]
+    data_owners: [app, content]
+    object_ids: [content.filter_catalog_release]
+    query_slices:
+      - local.image_edit_session
+      - content.filter_catalog_release.projection.filter_catalog_slice
+    typed_presentation: [CreateMediaItem, FilterCatalogSnapshot]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.media.image_editor, lifecycle: [enter, exit, submit, failure] }
@@ -272,11 +274,12 @@ pages:
     surface_ids: [assistantSkills]
     experience_owner: assistant
     data_owners: [assistant]
-    object_ids: [assistant.assistant_run, assistant.skill_consent]
+    object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent]
     query_slices:
       - assistant.assistant_run.aggregate
+      - assistant.assistant_conversation.aggregate
       - assistant.skill_consent.entity
-    typed_presentation: [SkillSubscriptionWire, AssistantLocalSessionSummaryView]
+    typed_presentation: [SkillSubscriptionWire, AssistantConversationWire]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.skill_center, lifecycle: [enter, exit, refresh, update, failure] }
@@ -288,17 +291,20 @@ pages:
     page_kind: routed
     route_id: assistantPersonal
     additional_route_ids: [chatDetail]
-    surface_ids: [personalAssistantDialog, personalAssistantChatAlias]
+    surface_ids: [personalAssistantDialog, personalAssistantChatAlias, assistantHistory]
     experience_owner: assistant
     data_owners: [assistant, notification]
-    object_ids: [assistant.assistant_run, assistant.skill_consent, notification.notification]
+    object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent, notification.notification]
     query_slices:
       - assistant.assistant_run.aggregate
+      - assistant.assistant_conversation.aggregate
       - assistant.skill_consent.entity
       - notification.notification.entity
     typed_presentation:
       - AssistantConversationWire
+      - AssistantConversationListPage
       - AssistantTurnEnvelopeWire
+      - AssistantTurnListView
       - AssistantStreamEventWire
       - SkillSubscriptionWire
     auth_requirement: optional
@@ -346,6 +352,22 @@ pages:
       - lib/app/navigation/app_router.dart
       - lib/app/shell/main_app_shell.dart
 
+  - page_id: chat.greeting_inbox
+    source_path: lib/ui/chat/pages/greeting_inbox_page.dart
+    page_kind: routed
+    route_id: greetingInbox
+    surface_ids: [greetingInbox]
+    experience_owner: chat
+    data_owners: [user, chat]
+    object_ids: [user.greeting_request, chat.conversation]
+    query_slices: [user.greeting_request.entity]
+    typed_presentation: [GreetingRequestDto, GreetingReplyResultDto]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.chat.greeting_inbox, lifecycle: [enter, exit, segment_change, reply, ignore, cancel, failure] }
+    entry_widget: GreetingInboxPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
   - page_id: chat.settings
     source_path: lib/ui/chat/pages/chat_settings_page.dart
     page_kind: routed
@@ -363,6 +385,24 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.settings, lifecycle: [enter, exit, update, failure] }
     entry_widget: ChatSettingsPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: chat.announcement
+    source_path: lib/ui/chat/pages/chat_announcement_page.dart
+    page_kind: routed
+    route_id: chatAnnouncement
+    surface_ids: [chatAnnouncement]
+    experience_owner: chat
+    data_owners: [chat]
+    object_ids: [chat.conversation]
+    query_slices:
+      - chat.conversation.projection.group_home
+      - chat.conversation.projection.conversation_member_list_row
+    typed_presentation: [GroupHomeDto, ChatConversationMemberDto]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.chat.announcement, lifecycle: [enter, exit, publish, failure] }
+    entry_widget: ChatAnnouncementPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: chat.group_admins
@@ -488,6 +528,22 @@ pages:
     entry_widget: CircleEditSettingsPage
     mount_evidence: [lib/ui/circle/widgets/circle_shell.dart]
 
+  - page_id: circle.membership_approval
+    source_path: lib/ui/circle/pages/circle_membership_approval_page.dart
+    page_kind: embedded
+    parent_page_id: circle.detail
+    surface_ids: [circleDetail]
+    experience_owner: circle
+    data_owners: [circle]
+    object_ids: [circle.circle_membership]
+    query_slices: [circle.circle_membership.aggregate]
+    typed_presentation: [CircleMembershipSlice, CircleMembershipPageSlice]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { inherit_from: circle.detail }
+    entry_widget: CircleMembershipApprovalPage
+    mount_evidence: [lib/ui/circle/widgets/circle_shell.dart]
+
   - page_id: circle.stats
     source_path: lib/ui/circle/pages/circle_stats_page.dart
     page_kind: routed
@@ -585,7 +641,12 @@ pages:
     surface_ids: [createWorkspace]
     experience_owner: content
     data_owners: [content, circle, entity]
-    object_ids: [content.post, circle.circle, entity.homepage]
+    object_ids:
+      - content.post
+      - content.media_upload_session
+      - content.media_asset
+      - circle.circle
+      - entity.homepage
     query_slices:
       - content.post.aggregate
       - content.post.projection.post_read_presentation
@@ -674,14 +735,36 @@ pages:
     surface_ids: [homeFeed]
     experience_owner: content
     data_owners: [content]
-    object_ids: [content.post]
+    object_ids:
+      - content.post
+      - content.comment
+      - content.content_reaction
+      - content.report
+      - content.media_asset
+      - content.media_upload_session
+      - content.outbound_share_fact
     query_slices:
       - content.post.projection.discovery_feed
       - content.post.projection.post_read_presentation
     typed_presentation: [PostBaseDto, PostReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.content.home, lifecycle: [enter, exit, refresh, failure] }
+    telemetry_descriptor:
+      event_namespace: page.content.home
+      lifecycle: [enter, exit, refresh, failure]
+      product_actions:
+        - journey: content_share
+          telemetry_page_name: content_share_sheet
+          object_ids: [content.outbound_share_fact]
+          actions: [copy_link, system_share, save_poster, wechat_friend, wechat_moments]
+          instrumentation_evidence:
+            - lib/ui/content/share/content_share_sheet.dart
+            - lib/ui/content/share/content_share_actions.dart
+            - lib/ui/content/share/content_share_template.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-share-action-failure-rate-high
     entry_widget: HomePage
     route_registration_evidence:
       - lib/app/navigation/app_router.dart
@@ -694,7 +777,15 @@ pages:
     surface_ids: [workBrowser]
     experience_owner: content
     data_owners: [content]
-    object_ids: [content.post]
+    object_ids:
+      - content.post
+      - content.comment
+      - content.content_reaction
+      - content.report
+      - content.media_asset
+      - content.media_upload_session
+      - content.media_original_access_fact
+      - content.outbound_share_fact
     query_slices:
       - content.post.projection.post_read_presentation
       - content.post.projection.work_browser_item
@@ -712,14 +803,29 @@ pages:
     surface_ids: [workBrowser]
     experience_owner: content
     data_owners: [content]
-    object_ids: [content.post]
+    object_ids: [content.post, content.outbound_share_fact]
     query_slices:
       - content.post.projection.work_browser_item
       - content.post.projection.post_read_presentation
     typed_presentation: [WorkBrowserItemDto, PostReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.content.work_browser_entry, lifecycle: [enter, exit, load, failure] }
+    telemetry_descriptor:
+      event_namespace: page.content.work_browser_entry
+      lifecycle: [enter, exit, load, failure]
+      product_actions:
+        - journey: content_share
+          telemetry_page_name: content_share_sheet
+          object_ids: [content.outbound_share_fact]
+          actions: [copy_link, system_share, save_poster, wechat_friend, wechat_moments]
+          instrumentation_evidence:
+            - lib/ui/content/share/content_share_sheet.dart
+            - lib/ui/content/share/content_share_actions.dart
+            - lib/ui/content/share/content_share_template.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-share-action-failure-rate-high
     entry_widget: WorkBrowserEntryPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
@@ -756,7 +862,46 @@ pages:
     typed_presentation: [ObjectPageBundle, PostReadPresentation, IntersectionReason]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.entity.detail, lifecycle: [enter, exit, refresh, failure] }
+    telemetry_descriptor:
+      event_namespace: page.entity.detail
+      lifecycle: [enter, exit, refresh, failure]
+      product_actions:
+        - journey: entity_homepage
+          telemetry_page_name: homepageDetail
+          object_ids:
+            - entity.homepage
+            - content.post
+            - circle.circle
+          actions:
+            - share_open
+            - follow
+            - unfollow
+            - message_owner
+            - tab_change
+            - open_record
+            - open_related_circle
+            - open_introduction
+            - create_content
+          instrumentation_evidence:
+            - lib/ui/entity/pages/homepage_detail_page.dart
+            - lib/ui/entity/widgets/homepage_detail_shell.dart
+            - lib/ui/entity/models/homepage_action_observability.dart
+          required_dimensions:
+            - surfaceId
+            - objectType
+            - objectId
+            - targetType
+            - targetId
+            - environment
+            - result
+            - durationMs
+            - failReasonCode
+            - recoveryAction
+            - requestId
+            - traceId
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-entity-homepage-action-failure-rate-high
     entry_widget: HomepageDetailPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
@@ -896,7 +1041,7 @@ pages:
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
     telemetry_descriptor: { event_namespace: page.rtc.participant_picker, lifecycle: [enter, exit, submit, failure] }
     entry_widget: CallParticipantPickerPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_rtc_routes.dart]
 
   - page_id: rtc.incoming
     source_path: lib/ui/rtc/pages/incoming_call_page.dart
@@ -912,7 +1057,7 @@ pages:
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
     telemetry_descriptor: { event_namespace: page.rtc.incoming, lifecycle: [enter, exit, accept, reject, failure] }
     entry_widget: IncomingCallPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_rtc_routes.dart]
 
   - page_id: rtc.outgoing
     source_path: lib/ui/rtc/pages/outgoing_call_page.dart
@@ -928,7 +1073,7 @@ pages:
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
     telemetry_descriptor: { event_namespace: page.rtc.outgoing, lifecycle: [enter, exit, cancel, failure] }
     entry_widget: OutgoingCallPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_rtc_routes.dart]
 
   - page_id: rtc.video
     source_path: lib/ui/rtc/pages/video_call_page.dart
@@ -944,7 +1089,7 @@ pages:
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
     telemetry_descriptor: { event_namespace: page.rtc.video, lifecycle: [enter, exit, media_toggle, failure] }
     entry_widget: VideoCallPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_rtc_routes.dart]
 
   - page_id: rtc.voice
     source_path: lib/ui/rtc/pages/voice_call_page.dart
@@ -960,7 +1105,7 @@ pages:
     capability_requirements: { all_of: [realtimeCommunication], any_of: [] }
     telemetry_descriptor: { event_namespace: page.rtc.voice, lifecycle: [enter, exit, media_toggle, failure] }
     entry_widget: VoiceCallPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_rtc_routes.dart]
 
   - page_id: search.global
     source_path: lib/ui/search/pages/global_search_page.dart
@@ -969,10 +1114,10 @@ pages:
     surface_ids: [globalSearchLanding, globalSearchSuggestions]
     experience_owner: search
     data_owners: [search, user, chat, circle]
-    object_ids: [search.search_query, user.user_account, chat.conversation, circle.circle]
+    object_ids: [search.search_query, search.recent_search_state, chat.conversation, circle.circle]
     query_slices:
       - search.search_query.projection.search_response_view
-      - user.user_account.projection.recent_search_entry_wire
+      - search.recent_search_state.projection.recent_search_entry_wire
     typed_presentation: [SearchHit, RecentSearchReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -1007,7 +1152,7 @@ pages:
     query_slices:
       - search.search_query.projection.search_response_view
       - content.post.projection.post_read_presentation
-    typed_presentation: [SearchHit, PostReadPresentation]
+    typed_presentation: [SearchHit, CanonicalSearchContentHit, PostReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.search.network_results, lifecycle: [enter, exit, query, result_click, failure] }
@@ -1038,13 +1183,109 @@ pages:
     surface_ids: [settingsDarkMode]
     experience_owner: settings
     data_owners: [user]
-    object_ids: [user.user_account]
-    query_slices: [user.user_account.projection.appearance_settings_wire]
-    typed_presentation: [AppearanceSettingsWireDto]
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.appearance_settings_view]
+    typed_presentation: [AppearanceSettingsView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.settings.dark_mode, lifecycle: [enter, exit, update, failure] }
     entry_widget: SettingsDarkModePage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.notifications
+    source_path: lib/ui/settings/pages/settings_notifications_page.dart
+    page_kind: routed
+    route_id: settingsNotifications
+    surface_ids: [settingsNotifications]
+    experience_owner: settings
+    data_owners: [user]
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.notification_settings_view]
+    typed_presentation: [NotificationSettingsView]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.notifications, lifecycle: [enter, exit, update, failure] }
+    entry_widget: SettingsNotificationsPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.privacy
+    source_path: lib/ui/settings/pages/settings_privacy_page.dart
+    page_kind: routed
+    route_id: settingsPrivacy
+    surface_ids: [settingsPrivacy]
+    experience_owner: settings
+    data_owners: [user]
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.privacy_settings_view]
+    typed_presentation: [PrivacySettingsView]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.privacy, lifecycle: [enter, exit, update, failure] }
+    entry_widget: SettingsPrivacyPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.calls
+    source_path: lib/ui/settings/pages/settings_calls_page.dart
+    page_kind: routed
+    route_id: settingsCalls
+    surface_ids: [settingsCalls]
+    experience_owner: settings
+    data_owners: [user]
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.call_settings_view]
+    typed_presentation: [CallSettingsView]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.calls, lifecycle: [enter, exit, update, failure] }
+    entry_widget: SettingsCallsPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.account_security
+    source_path: lib/ui/settings/pages/settings_account_security_page.dart
+    page_kind: routed
+    route_id: settingsAccountSecurity
+    surface_ids: [settingsAccountSecurity]
+    experience_owner: settings
+    data_owners: [user]
+    object_ids: [user.user_account, user.credential_binding, user.account_session]
+    query_slices: [user.user_account.projection.owner_credential_row]
+    typed_presentation: [OwnerCredentialRowDto, CredentialBindingCommandResult, CloseAccountResult]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.account_security, lifecycle: [enter, exit, bind, unbind, logout, close_account, failure] }
+    entry_widget: SettingsAccountSecurityPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.blocked_keywords
+    source_path: lib/ui/settings/pages/blocked_keywords_page.dart
+    page_kind: routed
+    route_id: blockedKeywords
+    surface_ids: [blockedKeywords]
+    experience_owner: settings
+    data_owners: [user]
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.privacy_settings_view]
+    typed_presentation: [PrivacySettingsView, UpdatePrivacySettingsCommand]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.blocked_keywords, lifecycle: [enter, exit, update, failure] }
+    entry_widget: BlockedKeywordsPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: settings.my_reports
+    source_path: lib/ui/settings/pages/my_reports_page.dart
+    page_kind: routed
+    route_id: myReports
+    surface_ids: [myReports]
+    experience_owner: content
+    data_owners: [content]
+    object_ids: [content.report]
+    query_slices: [content.report.entity]
+    typed_presentation: [ContentMyReportItem]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.settings.my_reports, lifecycle: [enter, exit, load_more, failure] }
+    entry_widget: MyReportsPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: settings.home
@@ -1054,10 +1295,9 @@ pages:
     surface_ids: [settingsHome]
     experience_owner: settings
     data_owners: [app, user]
-    object_ids: []
-    query_slices: none
-    typed_presentation: none
-    data_contract_reason: 设置导航与账号动作中枢，不展示独立业务对象列表。
+    object_ids: [user.user_settings]
+    query_slices: [user.user_settings.projection.appearance_settings_view]
+    typed_presentation: [AppearanceSettingsView]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.settings.home, lifecycle: [enter, exit, action, failure] }
@@ -1079,6 +1319,22 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.settings.permissions, lifecycle: [enter, exit] }
     entry_widget: SettingsPermissionsPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: user.blocked_users
+    source_path: lib/ui/user/pages/blocked_users_page.dart
+    page_kind: routed
+    route_id: blockedUsers
+    surface_ids: [blockedUsers]
+    experience_owner: user
+    data_owners: [user]
+    object_ids: [user.persona_relationship]
+    query_slices: [user.persona_relationship.projection.blocked_list_item_view]
+    typed_presentation: [BlockedUserListItem]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.user.blocked_users, lifecycle: [enter, exit, paginate, unblock, failure] }
+    entry_widget: BlockedUsersPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: user.add_contact
@@ -1104,11 +1360,11 @@ pages:
     surface_ids: [profileCareerInterests]
     experience_owner: user
     data_owners: [user, tag]
-    object_ids: [user.user_account, user.profile_update_proposal, tag.tag_node_view]
+    object_ids: [user.user_account, user.persona, user.profile_update_proposal, tag.tag_node_view]
     query_slices:
       - user.user_account.projection.profile_edit_snapshot_wire
       - tag.tag_node_view.entity
-    typed_presentation: [ProfileEditSnapshotData, ProfileEditUpdatePayload]
+    typed_presentation: [ProfileEditSnapshotData, UpdateUserProfileCommand]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.career_interest, lifecycle: [enter, exit, submit, failure] }
@@ -1158,13 +1414,13 @@ pages:
     surface_ids: [profileEdit]
     experience_owner: user
     data_owners: [user, tag]
-    object_ids: [user.user_account, user.profile_update_proposal, tag.tag_node_view]
+    object_ids: [user.user_account, user.persona, user.profile_update_proposal, tag.tag_node_view]
     query_slices:
       - user.user_account.projection.profile_edit_snapshot_wire
       - user.user_account.projection.profile_qr_card_wire
       - user.profile_update_proposal.projection.profile_update_proposal_view
       - tag.tag_node_view.entity
-    typed_presentation: [ProfileEditSnapshotData, ProfileQrCardData, ProfileEditUpdatePayload, ProfileUpdateProposalView]
+    typed_presentation: [ProfileEditSnapshotData, ProfileQrCardData, UpdateUserProfileCommand, ProfileUpdateProposalView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.edit_profile, lifecycle: [enter, exit, submit, failure] }
@@ -1187,7 +1443,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.legal_document, lifecycle: [enter, exit, load_failure] }
     entry_widget: LegalDocumentPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_legal_routes.dart]
 
   - page_id: user.login
     source_path: lib/ui/user/pages/login_page.dart
@@ -1196,7 +1452,9 @@ pages:
     surface_ids: [login]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.user_account]
+    # 登录页真实操作聚合是 AccountSession（六路登录）与 AuthenticationChallenge
+    # （OTP/一键 hint）；user_account 仅承载登录结果投影。
+    object_ids: [user.account_session, user.authentication_challenge, user.user_account]
     query_slices:
       - user.user_account.projection.auth_login_result
       - user.user_account.projection.one_tap_login_hint
@@ -1215,7 +1473,9 @@ pages:
     experience_owner: user
     data_owners: [content]
     object_ids: [content.post]
-    query_slices: [content.post.aggregate]
+    # 私有足迹经 GetMyFootprint（ContentFootprintQueryFacet/ContentFootprintPageSlice）
+    # 具名 slice 读取，不加载 post aggregate；入口=主页足迹 tab「查看全部」+ 深链。
+    query_slices: [content.post.projection.content_footprint_entry]
     typed_presentation: [FootprintEntry]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -1230,7 +1490,10 @@ pages:
     surface_ids: [myIntersections]
     experience_owner: user
     data_owners: [recommendation, content]
-    object_ids: [recommendation.recommendation_model_release, content.post]
+    object_ids:
+      - recommendation.recommendation_model_release
+      - content.intersection_visit_state
+      - content.post
     query_slices:
       - recommendation.recommendation_model_release.projection.intersection_reason
       - recommendation.recommendation_model_release.projection.intersection_inbox_summary
@@ -1250,16 +1513,37 @@ pages:
     surface_ids: [profileHome, userProfile]
     experience_owner: user
     data_owners: [user, content, circle]
-    object_ids: [user.user_account, content.post, circle.circle]
+    object_ids:
+      - user.user_account
+      - content.post
+      - content.profile_interaction_activity_view
+      - content.profile_interaction_read_fact
+      - content.report
+      - circle.circle
     query_slices:
       - user.user_account.projection.user_homepage_bundle_wire
-      - user.user_account.projection.profile_interaction_activity_wire
+      - content.profile_interaction_activity_view.projection.profile_interaction_activity_view
       - content.post.projection.post_read_presentation
       - circle.circle.aggregate
-    typed_presentation: [UserHomepageBundleViewData, ProfileInteractionActivityViewData, PostReadPresentation]
+    typed_presentation: [UserHomepageBundleViewData, ContentProfileInteractionActivity, ProfileInteractionActivityViewData, PostReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.my_profile, lifecycle: [enter, exit, tab_change, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.my_profile
+      lifecycle: [enter, exit, tab_change, failure]
+      product_actions:
+        - journey: profile_interaction
+          telemetry_page_name: profile_interaction_tab
+          object_ids:
+            - content.profile_interaction_activity_view
+            - content.profile_interaction_read_fact
+          actions: [mark_seen, mark_read]
+          instrumentation_evidence:
+            - lib/ui/user/providers/share_interaction_provider.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-profile-interaction-state-failure-rate-high
     entry_widget: MyProfilePage
     route_registration_evidence:
       - lib/app/shell/main_app_shell.dart
@@ -1307,7 +1591,9 @@ pages:
     surface_ids: [profilePersonas]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.user_account]
+    # 生命周期命令（创建/激活/退役/删除空分身）作用于 Persona 聚合；
+    # user_account 只承载管理台汇总投影。
+    object_ids: [user.persona, user.user_account]
     query_slices:
       - user.user_account.projection.persona_management_summary_wire
       - user.user_account.projection.persona_management_item_wire
@@ -1317,6 +1603,22 @@ pages:
     telemetry_descriptor: { event_namespace: page.user.persona_management, lifecycle: [enter, exit, create, update, failure] }
     entry_widget: PersonaManagementPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
+
+  - page_id: user.persona_management_form
+    source_path: lib/ui/user/pages/persona_management_form_page.dart
+    page_kind: embedded
+    parent_page_id: user.persona_management
+    surface_ids: [profilePersonas]
+    experience_owner: user
+    data_owners: [user]
+    object_ids: [user.persona]
+    query_slices: [user.persona.aggregate]
+    typed_presentation: [PersonaManagementItemViewData, PersonaIsolationLevel, PersonaFormResult]
+    auth_requirement: inherited
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { inherit_from: user.persona_management }
+    entry_widget: PersonaFormPage
+    mount_evidence: [lib/ui/user/pages/persona_management_page.dart]
 
   - page_id: user.phone_contacts
     source_path: lib/ui/user/pages/phone_contacts_page.dart
@@ -1335,24 +1637,6 @@ pages:
     telemetry_descriptor: { event_namespace: page.user.phone_contacts, lifecycle: [enter, exit, discovery, follow, failure] }
     entry_widget: PhoneContactsPage
     route_registration_evidence: [lib/app/navigation/app_router_contact_routes.dart]
-
-  - page_id: user.profile_comments
-    source_path: lib/ui/user/pages/profile_comments_page.dart
-    page_kind: routed
-    route_id: profileComments
-    surface_ids: [profileComments]
-    experience_owner: user
-    data_owners: [content]
-    object_ids: [content.comment, content.content_reaction]
-    query_slices:
-      - content.comment.projection.author_comment_page_slice
-      - content.comment.projection.received_comment_page_slice
-    typed_presentation: [ContentCommentListItem]
-    auth_requirement: required
-    capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.profile_comments, lifecycle: [enter, exit, paginate, failure] }
-    entry_widget: ProfileCommentsPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: user.profile_stats
     source_path: lib/ui/user/pages/profile_stats_page.dart

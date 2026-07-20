@@ -1,4 +1,4 @@
-# L4 特性：security-event-log-schema
+# L3 特性：security-event-log-schema
 
 ## 功能说明
 - 待补充

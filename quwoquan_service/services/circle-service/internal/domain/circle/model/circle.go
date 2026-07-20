@@ -58,11 +58,11 @@ type CircleSectionType string
 const (
 	CircleSectionTypeWorks CircleSectionType = "works"
 
+	CircleSectionTypeMembers CircleSectionType = "members"
+
 	CircleSectionTypeChat CircleSectionType = "chat"
 
 	CircleSectionTypeStorage CircleSectionType = "storage"
-
-	CircleSectionTypeInteraction CircleSectionType = "interaction"
 
 	CircleSectionTypeCustom CircleSectionType = "custom"
 )
@@ -129,6 +129,8 @@ type Circle struct {
 	ID                       string                   `json:"id" bson:"_id"`
 	Name                     string                   `json:"name" bson:"name"`
 	Description              string                   `json:"description" bson:"description"`
+	RulesText                string                   `json:"rulesText" bson:"rulesText"`
+	WelcomeMessage           string                   `json:"welcomeMessage" bson:"welcomeMessage"`
 	CoverUrl                 string                   `json:"coverUrl" bson:"coverUrl"`
 	IconUrl                  string                   `json:"iconUrl" bson:"iconUrl"`
 	OwnerID                  string                   `json:"ownerId" bson:"ownerId"`
@@ -139,6 +141,7 @@ type Circle struct {
 	MemberCount              int64                    `json:"memberCount" bson:"memberCount"`
 	PostCount                int64                    `json:"postCount" bson:"postCount"`
 	WeeklyActiveCount        int64                    `json:"weeklyActiveCount" bson:"weeklyActiveCount"`
+	Version                  int64                    `json:"version" bson:"version"`
 	Status                   CircleStatus             `json:"status" bson:"status"`
 	Visibility               CircleVisibility         `json:"visibility" bson:"visibility"`
 	JoinPolicy               CircleJoinPolicy         `json:"joinPolicy" bson:"joinPolicy"`

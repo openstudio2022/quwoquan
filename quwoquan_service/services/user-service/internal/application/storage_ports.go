@@ -25,13 +25,6 @@ type ProfileCacheInvalidator interface {
 	Del(ctx context.Context, userID string) error
 }
 
-// SettingCache 是用户设置读写缓存端口。
-type SettingCache interface {
-	Get(ctx context.Context, userID string) (*model.UserSetting, error)
-	Set(ctx context.Context, userID string, setting *model.UserSetting) error
-	Del(ctx context.Context, userID string) error
-}
-
 // BlockRelationshipCache 是拉黑关系集合的缓存端口。
 type BlockRelationshipCache interface {
 	IsMember(ctx context.Context, blockerID, blockedID string) (bool, error)

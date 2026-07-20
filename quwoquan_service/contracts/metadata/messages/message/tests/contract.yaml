@@ -1,0 +1,75 @@
+aggregate: Message
+layer: service_side
+
+description: |
+  Message 聚合云侧契约测试场景（真实 MongoDB + Redis）。
+  执行：go test ./services/chat-service/...
+
+real_engines:
+  mongodb: testcontainers (mongo:7)
+  redis: miniredis/v2
+
+spy_targets: [event_publisher]
+mock_targets: [cross_service_clients]
+
+scenarios:
+  - name: send_message_seq_assignment
+    command: SendMessage
+    assertions:
+      - db_message_exists
+      - seq_monotonically_increasing_within_transaction
+      - conversation_last_message_updated
+      - event_MessageSent_written_to_messages_outbox_same_transaction
+      - messages_sequences_advanced_with_commit
+
+  - name: send_message_clientmsgid_dedup
+    command: SendMessage (duplicate clientMsgId)
+    assertions:
+      - replay_returns_first_message_id_and_seq
+      - single_document_per_clientMsgId
+      - single_command_receipt
+      - no_duplicate_outbox_events
+
+  - name: send_message_idempotency_key_must_equal_clientmsgid
+    command: SendMessage (Idempotency-Key != clientMsgId)
+    assertions:
+      - request_rejected_with_message_idempotency_conflict
+      - no_state_change
+
+  - name: send_message_clientmsgid_conflict
+    command: SendMessage (same clientMsgId, different semantic payload)
+    assertions:
+      - http_409
+      - error_CHAT.USER.message_idempotency_conflict
+      - first_message_unchanged
+
+  - name: send_message_rate_limit
+    command: SendMessage > rate limit
+    assertions:
+      - error_CHAT.USER.rate_limited
+
+  - name: recall_within_time_limit_and_noop_replay
+    command: RecallMessage
+    assertions:
+      - status_recalled_with_recalledAt
+      - event_MessageRecalled_written_to_outbox_same_transaction
+      - repeat_recall_persists_noop_receipt_and_replays_original_result
+
+  - name: recall_after_time_limit
+    command: RecallMessage (timestamp older than window)
+    assertions:
+      - error_CHAT.USER.message_recall_expired
+      - message_status_unchanged
+
+  - name: recall_forbidden_for_non_sender
+    command: RecallMessage (actor != sender)
+    assertions:
+      - error_CHAT.USER.message_recall_forbidden
+      - no_state_change
+
+  - name: sync_messages_gap_fill
+    command: SyncMessages(lastSeq=50)
+    assertions:
+      - returns_messages_after_lastSeq
+      - hasMore_flag_correct
+      - single_page_bounded_at_500

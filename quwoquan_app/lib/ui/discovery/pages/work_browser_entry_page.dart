@@ -25,12 +25,16 @@ class WorkBrowserEntryPage extends ConsumerStatefulWidget {
     super.key,
     required this.workId,
     this.source = 'workBrowser',
+    this.referralSource = ReferralSource.deepLink,
+    this.feedRequestId,
     this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
     this.commentContext = const MediaViewerCommentContext(),
   });
 
   final String workId;
   final String source;
+  final ReferralSource referralSource;
+  final String? feedRequestId;
   final UiErrorAppearanceMode sourceAppearanceMode;
   final MediaViewerCommentContext commentContext;
 
@@ -71,14 +75,15 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
         return;
       }
       applyConfirmedInteractionPost(ref, detail.post);
-      final feedRequestId = ref
-          .read(feedSessionProvider.notifier)
-          .newFeedRequestId();
+      final inheritedFeedRequestId = (widget.feedRequestId ?? '').trim();
+      final feedRequestId = inheritedFeedRequestId.isNotEmpty
+          ? inheritedFeedRequestId
+          : ref.read(feedSessionProvider.notifier).newFeedRequestId();
       final extra = buildSinglePostMediaViewerExtra(
         ref,
         detail: detail,
         source: widget.source,
-        referralSource: ReferralSource.deepLink,
+        referralSource: widget.referralSource,
         feedRequestId: feedRequestId,
         commentContext: widget.commentContext,
       );

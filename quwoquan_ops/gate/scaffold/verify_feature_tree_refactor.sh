@@ -12,6 +12,8 @@ ruby -ryaml -e '
   index_file = File.join(ft_root, "tree_index.yaml")
 
   abort("[verify] FAIL: missing specs/feature-tree/tree_index.yaml") unless File.exist?(index_file)
+  retired_tree_files = Dir[File.join(ft_root, "*", "tree.yaml")]
+  abort("[verify] FAIL: retired L1 tree.yaml mirrors must not return: #{retired_tree_files.join(", ")}") unless retired_tree_files.empty?
 
   %w[spec.md design.md acceptance.yaml journey_scenario_registry.yaml].each do |name|
     path = File.join(ft_root, name)
@@ -22,6 +24,13 @@ ruby -ryaml -e '
     idx = YAML.load_file(index_file, permitted_classes: [Time], aliases: true) || {}
   rescue ArgumentError
     idx = YAML.load_file(index_file) || {}
+  end
+  Dir[File.join(root, "specs/changelog/CR-*.yaml")].sort.each do |path|
+    begin
+      YAML.parse_file(path)
+    rescue Psych::SyntaxError => error
+      abort("[verify] FAIL: invalid changelog YAML #{path}: #{error.message}")
+    end
   end
   nodes = idx["features"] || []
   abort("[verify] FAIL: tree_index features empty") unless nodes.is_a?(Array) && !nodes.empty?
@@ -38,8 +47,14 @@ ruby -ryaml -e '
     abort("[verify] FAIL: #{name} is not a formal feature-tree document in #{dir}") if File.exist?(File.join(dir, name))
   end
 
-  def require_domain_or_capability_docs!(dir)
+  def require_spec_heading!(dir, level)
+    first_line = File.open(File.join(dir, "spec.md"), &:readline).strip
+    abort("[verify] FAIL: spec heading must start with # #{level} in #{dir}") unless first_line.start_with?("# #{level} ")
+  end
+
+  def require_domain_or_capability_docs!(dir, level)
     require_file!(dir, "spec.md")
+    require_spec_heading!(dir, level)
     require_file!(dir, "design.md")
     require_file!(dir, "acceptance.yaml")
     forbid_file!(dir, "plan.yaml")
@@ -48,6 +63,7 @@ ruby -ryaml -e '
 
   def require_story_docs!(dir)
     require_file!(dir, "spec.md")
+    require_spec_heading!(dir, "L3")
     require_file!(dir, "acceptance.yaml")
     forbid_file!(dir, "design.md")
     forbid_file!(dir, "plan.yaml")
@@ -67,7 +83,7 @@ ruby -ryaml -e '
 
     dir = File.expand_path(node["path"], ft_root)
     abort("[verify] FAIL: missing domain directory #{dir}") unless Dir.exist?(dir)
-    require_domain_or_capability_docs!(dir)
+    require_domain_or_capability_docs!(dir, "L1")
 
     (node["children"] || []).each do |child|
       validate_required_node_keys!(child)
@@ -76,7 +92,7 @@ ruby -ryaml -e '
 
       child_dir = File.expand_path(child["path"], ft_root)
       abort("[verify] FAIL: missing capability directory #{child_dir}") unless Dir.exist?(child_dir)
-      require_domain_or_capability_docs!(child_dir)
+      require_domain_or_capability_docs!(child_dir, "L2")
 
       story_dirs = Dir[File.join(child_dir, "*")].select { |p| File.directory?(p) }
       story_dirs.each do |story_dir|

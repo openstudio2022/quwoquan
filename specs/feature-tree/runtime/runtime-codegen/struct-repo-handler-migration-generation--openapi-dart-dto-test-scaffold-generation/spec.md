@@ -1,4 +1,4 @@
-# L5 横切：openapi-dart-dto-test-scaffold-generation
+# L3 特性：openapi-dart-dto-test-scaffold-generation
 
 ## 功能说明
 - **OpenAPI 生成**：根据 service.yaml 的 API 定义生成 OpenAPI 3.0 schema，供 API 文档和客户端生成使用。

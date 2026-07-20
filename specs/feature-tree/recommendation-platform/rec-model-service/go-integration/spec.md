@@ -1,4 +1,4 @@
-# L4 对象任务：go-integration（与 Go 业务服务集成）
+# L3 对象任务：go-integration（与 Go 业务服务集成）
 
 ## 功能说明
 

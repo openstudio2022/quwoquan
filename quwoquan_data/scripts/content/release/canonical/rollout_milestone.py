@@ -45,6 +45,50 @@ def _read_object(path: Path, *, label: str) -> Mapping[str, Any]:
     return payload
 
 
+def _retry_target_selection_path(retry_of: str) -> Path:
+    """Resolve only the immutable target set of a prior execution.
+
+    Invalidated executions are never release evidence. Their frozen target set
+    remains valid solely for binding a mandatory ``retryOf`` to the same
+    objects after source-digest invalidation.
+    """
+    active = execution_root(retry_of) / "_shared/target_selection.json"
+    if active.is_file():
+        return active
+
+    invalidated_root = OUTPUT_ROOT / "data/local/workspace/invalidated"
+    candidates: list[Path] = []
+    if invalidated_root.is_dir():
+        for receipt_path in sorted(
+            invalidated_root.glob(
+                f"*/tasks/{retry_of}/invalidation_receipt.json"
+            )
+        ):
+            receipt = _read_object(
+                receipt_path,
+                label="retryOf invalidation receipt",
+            )
+            expected_original = f".qwq_output/data/tasks/{retry_of}"
+            if (
+                receipt.get("schema") != "quwoquan_data.local_evidence_invalidation"
+                or receipt.get("evidenceType") != "execution"
+                or receipt.get("evidenceId") != retry_of
+                or receipt.get("originalPath") != expected_original
+                or receipt.get("admission") != "invalidated_not_release_evidence"
+            ):
+                raise RolloutMilestoneError(
+                    f"retryOf invalidation receipt is not trustworthy: {receipt_path}"
+                )
+            selection = receipt_path.parent / "_shared/target_selection.json"
+            if selection.is_file():
+                candidates.append(selection)
+    if len(candidates) != 1:
+        raise RolloutMilestoneError(
+            f"retryOf target selection must resolve exactly once, got {len(candidates)}"
+        )
+    return candidates[0]
+
+
 
 
 
@@ -167,7 +211,7 @@ def _retry_target_names(
     if identity.sequence <= previous.sequence:
         raise RolloutMilestoneError("retry execution sequence must increase")
     selection = _read_object(
-        execution_root(retry_of) / "_shared/target_selection.json",
+        _retry_target_selection_path(retry_of),
         label="retryOf target selection",
     )
     rows = selection.get("targets")
@@ -233,7 +277,7 @@ def geo_rollout_parameters(
     execution_id: str,
     retry_of: str | None = None,
 ) -> tuple[str, int, str | None, tuple[str, ...]]:
-    """Resolve fixed two-province canary/M1/M2 parameters before manifest creation."""
+    """Resolve fixed two-province canary/M1/M2/M3/H10K parameters before manifest creation."""
     identity = parse_execution_id(execution_id)
     contract = load_rollout_contract()
     if not identity_matches(identity, contract):

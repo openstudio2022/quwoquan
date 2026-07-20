@@ -15,6 +15,10 @@ type SyncConfig struct {
 	// Interval is the reload poll period. Defaults to 30s; a short interval in
 	// dev gives near-immediate "edit yaml -> takes effect" behavior.
 	Interval time.Duration
+	// OnReload（可选）在每次 reload 尝试后回调（N1-2 观测挂点：成功传
+	// (policyVersion, nil)，失败传 ("", err)）。recpolicy 不反向依赖
+	// recommendation 指标包，经装配回调解耦。
+	OnReload func(version string, err error)
 }
 
 // StartSyncLoop reloads the policy file on a ticker, applying it through the
@@ -49,6 +53,9 @@ func StartSyncLoop(ctx context.Context, store *Store, logger *slog.Logger, cfg S
 		hash, err := store.ApplyFile(cfg.Path)
 		if err != nil {
 			// last-good retained; surface the rejection but keep serving.
+			if cfg.OnReload != nil {
+				cfg.OnReload("", err)
+			}
 			logger.Error("recpolicy.sync.rejected",
 				slog.String("reason", reason),
 				slog.String("path", cfg.Path),
@@ -57,6 +64,9 @@ func StartSyncLoop(ctx context.Context, store *Store, logger *slog.Logger, cfg S
 			return
 		}
 		lastMod = info.ModTime()
+		if cfg.OnReload != nil {
+			cfg.OnReload(store.Current().PolicyVersion, nil)
+		}
 		logger.Info("recpolicy.sync.applied",
 			slog.String("reason", reason),
 			slog.String("path", cfg.Path),

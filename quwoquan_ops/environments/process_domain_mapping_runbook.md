@@ -67,7 +67,7 @@ environments:
 1) 确认映射配置合法：
 
 ```bash
-bash scripts/verify_deployment_domain_mapping.sh
+bash quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh
 ```
 
 2) 按服务名启动独立进程（示例）：
@@ -108,7 +108,7 @@ alpha 默认允许单服务 all-in-one package，例如 `chat-service` 可以在
 1) 先验证映射（必须通过）：
 
 ```bash
-bash scripts/verify_deployment_domain_mapping.sh
+bash quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh
 ```
 
 2) 使用组合进程 `seed-box` 启动 Go 聚合进程，Python 的 `recommendation-service` 保持独立进程（由部署编排注入环境变量）：
@@ -127,13 +127,13 @@ APP_ENV=prod SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSI
 运行口径补充：
 
 - `beta` 在开发机本地联调时只允许一套组合拓扑，重新启动前必须停止旧实例。
-- `gamma` 在 ECS 或 local-gamma mirror 中都只允许一套组合拓扑；部署 / mirror 切换应先清理既有实例再启动新实例。
+- `gamma` 仅使用 `gamma-local` target，且只允许一套组合拓扑；重新启动前必须停止旧实例。
 - 多实例能力只属于端侧 App 进程，不属于 `seed-box` / `recommendation-service` 这类组合进程。
 
 3) 发布前全量门禁：
 
 ```bash
-make gate-full
+make gate-release ENV=gamma
 ```
 
 4) 模块化 onebox 约束：
@@ -167,7 +167,7 @@ make gate-full
 4. App 以 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` 连接本地 mirror endpoint，测试数据来自 `app_gamma_seed_manifest.json`。
 5. 每次提交前运行 `make gate-local-gamma`，报告写入 `.qwq_output/env/gamma/local/gamma-local/process/report.json`；缺少 DNS、TLS、设备或服务依赖时状态为 `GATE_BLOCK`。
 
-本地通过只证明提交前左移质量，不代表云侧 gamma 或 prod 的发布真实性已通过。
+本地通过只证明提交前左移质量，不代表 `prod-hosted` 的发布真实性已通过。
 
 ---
 
@@ -255,11 +255,10 @@ chat-avatar-worker-package:
 1) 修改 `quwoquan_ops/environments/process_domain_mapping.yaml`  
 2) 修改 `quwoquan_ops/environments/module_package_mapping.yaml`、`quwoquan_ops/environments/reliable_task_module_catalog.yaml` 或 `quwoquan_ops/environments/reliable_task_retention_policy.yaml`（如涉及模块/任务/保留策略）
 3) 若涉及部署形态 / 新增 workload / Strangler 拆分，修改 `quwoquan_ops/environments/workload_topology_inventory.yaml`（三态分类 + 标准原语 + `wired_to_prod_root`）
-4) 执行 `bash scripts/verify_deployment_domain_mapping.sh`
-5) 执行 `python3 scripts/verify_module_package_mapping.py`
+4) 执行 `bash quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh`
+5) 执行 `python3 quwoquan_app/scripts/runtime/verify_module_package_mapping.py`
 6) 执行 `python3 quwoquan_ops/environments/verify/verify_workload_topology_inventory.py`
 7) 执行 `python3 scripts/verify_reliable_task_catalog.py`
 8) 执行 `python3 scripts/verify_reliable_task_retention_policy.py`
 9) 执行 `make verify`（至少）
-10) 提交前执行 `make gate-full`
-
+10) 提交前执行适用 profile：`make gate`，以及环境可用时 `make gate-smoke`、`make gate-integration ENV=beta|gamma` 或 `make gate-release ENV=gamma|prod`。

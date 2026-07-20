@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	rterr "quwoquan_service/runtime/errors"
 	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
 	relports "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/ports"
 	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 type ProfileCacheInvalidator interface {
@@ -26,7 +26,6 @@ type GreetingBlockCascade interface {
 // repositories and accidentally violate the aggregate rules.
 type PersonaRelationshipService struct {
 	store     relports.PersonaRelationshipStore
-	profiles  userrepo.UserProfileStore
 	personas  userrepo.PersonaReader
 	cache     ProfileCacheInvalidator
 	greetings GreetingBlockCascade
@@ -34,7 +33,6 @@ type PersonaRelationshipService struct {
 
 func NewPersonaRelationshipService(
 	store relports.PersonaRelationshipStore,
-	profiles userrepo.UserProfileStore,
 	personas userrepo.PersonaReader,
 	cache ProfileCacheInvalidator,
 	greetings GreetingBlockCascade,
@@ -44,7 +42,6 @@ func NewPersonaRelationshipService(
 	}
 	return &PersonaRelationshipService{
 		store:     store,
-		profiles:  profiles,
 		personas:  personas,
 		cache:     cache,
 		greetings: greetings,
@@ -111,13 +108,18 @@ func (s *PersonaRelationshipService) execute(ctx context.Context, command relmod
 	if command.SourcePersonaID == command.TargetPersonaID {
 		return relmodel.MutationResult{}, invalidRelationshipArgument("persona cannot relate to itself")
 	}
+	// Follow/Block 建立新语义边前必须证明 target 存在且未退役（404 掩蔽存在性）；
+	// Unfollow/Unblock 是 unset 幂等清理，目标消失后仍允许收敛。
+	if command.Kind == relmodel.CommandFollow || command.Kind == relmodel.CommandBlock {
+		if err := s.ensureTargetPersonaFollowable(ctx, command.TargetPersonaID); err != nil {
+			return relmodel.MutationResult{}, err
+		}
+	}
 	result, err := s.store.Apply(ctx, command)
 	if err != nil {
 		if errors.Is(err, relmodel.ErrFollowBlocked) {
 			reltelemetry.Collector().RecordBlockRejection()
-			return relmodel.MutationResult{}, rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleUser, rterr.KindUser, "forbidden"),
-				"当前关系不可关注",
+			return relmodel.MutationResult{}, generated.AppErrorFromRelationshipFollowBlocked(
 				"persona relationship contains a block direction",
 			)
 		}
@@ -136,7 +138,6 @@ func (s *PersonaRelationshipService) execute(ctx context.Context, command relmod
 	}
 
 	s.invalidateProfileCaches(ctx, command.SourcePersonaID, command.TargetPersonaID)
-	s.applyCounterEffects(ctx, command, result)
 	if command.Kind == relmodel.CommandBlock && s.greetings != nil {
 		_ = s.greetings.MarkPendingBlockedBetween(ctx, command.SourcePersonaID, command.TargetPersonaID)
 	}
@@ -144,11 +145,28 @@ func (s *PersonaRelationshipService) execute(ctx context.Context, command relmod
 }
 
 func invalidRelationshipArgument(debugMessage string) error {
-	return rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleUser, rterr.KindUser, "invalid_argument"),
-		"关系主体无效",
-		debugMessage,
-	)
+	return generated.AppErrorFromRelationshipInvalidPair(debugMessage)
+}
+
+// ensureTargetPersonaFollowable 校验目标 persona 存在且未退役。
+// personas reader 缺席（个别轻量测试装配）时跳过，由存储层兜底。
+func (s *PersonaRelationshipService) ensureTargetPersonaFollowable(
+	ctx context.Context,
+	targetPersonaID string,
+) error {
+	if s.personas == nil {
+		return nil
+	}
+	persona, err := s.personas.FindBySubAccountID(ctx, targetPersonaID)
+	if err != nil {
+		return err
+	}
+	if persona == nil || strings.EqualFold(strings.TrimSpace(persona.Status), "retired") {
+		return generated.AppErrorFromRelationshipTargetNotFound(
+			"target persona missing or retired",
+		)
+	}
+	return nil
 }
 
 func (s *PersonaRelationshipService) GetRelationship(
@@ -182,25 +200,12 @@ func (s *PersonaRelationshipService) ListFollowers(ctx context.Context, targetPe
 	return s.store.ListFollowers(ctx, strings.TrimSpace(targetPersonaID), cursor, limit)
 }
 
-func (s *PersonaRelationshipService) ListBlocked(ctx context.Context, sourcePersonaID, cursor string, limit int) ([]relmodel.Direction, string, error) {
-	return s.store.ListBlocked(ctx, strings.TrimSpace(sourcePersonaID), cursor, limit)
-}
-
-func (s *PersonaRelationshipService) applyCounterEffects(
+func (s *PersonaRelationshipService) ListBlocked(
 	ctx context.Context,
-	command relmodel.Command,
-	result relmodel.MutationResult,
-) {
-	switch command.Kind {
-	case relmodel.CommandFollow:
-		s.incrementCounters(ctx, command.TargetPersonaID, command.SourcePersonaID, 1)
-	case relmodel.CommandUnfollow:
-		s.incrementCounters(ctx, command.TargetPersonaID, command.SourcePersonaID, -1)
-	case relmodel.CommandBlock:
-		for _, direction := range result.ClearedFollowing {
-			s.incrementCounters(ctx, direction.TargetPersonaID, direction.SourcePersonaID, -1)
-		}
-	}
+	sourcePersonaID, cursor string,
+	limit int,
+) ([]relports.BlockedListItem, string, error) {
+	return s.store.ListBlocked(ctx, strings.TrimSpace(sourcePersonaID), cursor, limit)
 }
 
 func (s *PersonaRelationshipService) invalidateProfileCaches(ctx context.Context, personaIDs ...string) {
@@ -216,22 +221,6 @@ func (s *PersonaRelationshipService) invalidateProfileCaches(ctx context.Context
 	}
 }
 
-func (s *PersonaRelationshipService) incrementCounters(ctx context.Context, targetPersonaID, sourcePersonaID string, delta int64) {
-	if s.profiles == nil {
-		return
-	}
-	targetOwnerID := s.counterOwnerID(ctx, targetPersonaID)
-	sourceOwnerID := s.counterOwnerID(ctx, sourcePersonaID)
-	if err := s.profiles.IncrementCounter(ctx, targetOwnerID, "follower_count", delta); err != nil {
-		reltelemetry.Collector().RecordCounterMismatch()
-	}
-	if err := s.profiles.IncrementCounter(ctx, sourceOwnerID, "following_count", delta); err != nil {
-		reltelemetry.Collector().RecordCounterMismatch()
-	}
-	s.reconcileCounter(ctx, targetOwnerID, "follower_count")
-	s.reconcileCounter(ctx, sourceOwnerID, "following_count")
-}
-
 func (s *PersonaRelationshipService) counterOwnerID(ctx context.Context, personaID string) string {
 	personaID = strings.TrimSpace(personaID)
 	if personaID == "" || s.personas == nil {
@@ -242,66 +231,4 @@ func (s *PersonaRelationshipService) counterOwnerID(ctx context.Context, persona
 		return personaID
 	}
 	return persona.UserID
-}
-
-func (s *PersonaRelationshipService) reconcileCounter(ctx context.Context, ownerID, field string) {
-	if s.profiles == nil || strings.TrimSpace(ownerID) == "" {
-		return
-	}
-	profile, err := s.profiles.FindByID(ctx, ownerID)
-	if err != nil || profile == nil {
-		return
-	}
-	expected, err := s.expectedCounterValue(ctx, ownerID, field)
-	if err != nil {
-		return
-	}
-	current := profile.FollowerCount
-	if field == "following_count" {
-		current = profile.FollowingCount
-	}
-	if current == expected {
-		return
-	}
-	reltelemetry.Collector().RecordCounterMismatch()
-	if err := s.profiles.IncrementCounter(ctx, ownerID, field, expected-current); err != nil {
-		reltelemetry.Collector().RecordCounterMismatch()
-	}
-}
-
-func (s *PersonaRelationshipService) expectedCounterValue(ctx context.Context, ownerID, field string) (int64, error) {
-	personaIDs := []string{ownerID}
-	if s.personas != nil {
-		personas, err := s.personas.FindByUserID(ctx, ownerID)
-		if err != nil {
-			return 0, err
-		}
-		personaIDs = personaIDs[:0]
-		for _, persona := range personas {
-			if persona.SubAccountID == "" || strings.EqualFold(persona.Status, "retired") {
-				continue
-			}
-			personaIDs = append(personaIDs, persona.SubAccountID)
-		}
-		if len(personaIDs) == 0 {
-			personaIDs = []string{ownerID}
-		}
-	}
-	var total int64
-	for _, personaID := range personaIDs {
-		var (
-			value int64
-			err   error
-		)
-		if field == "follower_count" {
-			value, err = s.store.CountFollowers(ctx, personaID)
-		} else {
-			value, err = s.store.CountFollowing(ctx, personaID)
-		}
-		if err != nil {
-			return 0, err
-		}
-		total += value
-	}
-	return total, nil
 }

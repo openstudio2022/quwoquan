@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import json
 import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 LIB = ROOT / "quwoquan_app/lib"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+CHAT_FIXTURE = (
+    ROOT
+    / "quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json"
+)
 
 violations = []
-group_avatar_call_re = re.compile(r"groupAvatarFor\('([^']+)'\)")
 
 if (LIB / "components/avatar/group_avatar_grid.dart").exists():
     violations.append("components/avatar/group_avatar_grid.dart must be removed")
@@ -26,64 +30,26 @@ if production_refs:
         + ", ".join(sorted(production_refs))
     )
 
-chat_mock_data = LIB / "cloud/services/chat/mock/chat_mock_data.dart"
-if chat_mock_data.exists():
-    text = chat_mock_data.read_text(errors="ignore")
-    forbidden_mock_patterns = (
-        "avatarFor('grid_",
-        "avatarFor('hiking')",
-        "avatarFor('photo')",
-        "avatarFor('product-collab')",
-    )
-    for pattern in forbidden_mock_patterns:
-        if pattern in text:
+if CHAT_FIXTURE.is_file():
+    payload = json.loads(CHAT_FIXTURE.read_text(encoding="utf-8"))
+    seed_sets = payload.get("seedSets") or {}
+    chat_core = seed_sets.get("chat_core") or {}
+    for conversation in chat_core.get("conversations") or []:
+        if conversation.get("type") != "group":
+            continue
+        object_key = str(conversation.get("avatarUrl") or "").strip()
+        conversation_id = str(conversation.get("id") or "").strip()
+        if not object_key.startswith("media/avatar/"):
             violations.append(
-                "chat mock group conversations must use groupAvatarFor(), "
-                f"found {pattern}"
+                "chat contract group avatar must use media/avatar: "
+                f"{conversation_id}={object_key}"
             )
-    conversation_ids = {
-        match.group(1)
-        for match in group_avatar_call_re.finditer(text)
-        if "$" not in match.group(1)
-    }
-    if "groupAvatarFor('conv_grid_$n')" in text:
-        conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
-    for conversation_id in sorted(conversation_ids):
-        object_key = (
-            "media/avatar/s/archived-avatar/conversation/"
-            f"{conversation_id}/v1/mock.png"
-        )
+            continue
         if not (MEDIA_ROOT / object_key).is_file():
             violations.append(
-                "chat mock group avatar must be materialized in shared media "
-                f"fixtures: {object_key}"
+                "chat contract group avatar must be materialized in shared "
+                f"media fixtures: {object_key}"
             )
-    contact_groups = re.search(
-        r"contactTabFunGroups[\s\S]*?=>\s*\[[\s\S]*?\n\s*\];",
-        text,
-    )
-    if contact_groups and "media/image/" in contact_groups.group(0):
-        violations.append(
-            "contactTabFunGroups group avatars must use media/avatar object "
-            "keys, not media/image placeholders"
-        )
-    contact_circles = re.search(
-        r"contactTabCircles[\s\S]*?=>\s*\[[\s\S]*?\n\s*\];",
-        text,
-    )
-    if contact_circles and "media/image/" in contact_circles.group(0):
-        violations.append(
-            "contactTabCircles avatars must use media/avatar object keys, "
-            "not media/image placeholders"
-        )
-
-mock_repo = LIB / "cloud/services/chat/mock/chat_repository_mock.dart"
-if mock_repo.exists():
-    mock_text = mock_repo.read_text(errors="ignore")
-    if "AppContentPrototypeBundle" in mock_text:
-        violations.append(
-            "MockChatRepository must not merge AppContentPrototypeBundle contacts"
-        )
 
 prototype = LIB / "core/mock/prototype_mock_data.dart"
 if prototype.exists():

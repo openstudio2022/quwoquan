@@ -24,6 +24,9 @@ var aggregateTopLevelKeys = stringSet(
 	"capabilities", "taggable", "vector_enabled", "members", "ddd_layer_mapping",
 	"counter_strategy", "join_paths", "livekit_integration", "seq_strategy",
 	"dedup_strategy", "business_rules", "lifecycle",
+	// deferred_operations 是文档性声明：登记对象显式推迟的公开命令与恢复前置条件，
+	// 不进入 ContractGraph operation 集合。
+	"deferred_operations",
 )
 
 var entityTopLevelKeys = stringSet(
@@ -195,6 +198,32 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 		object.Members, err = decodeMembers(members)
 		if err != nil {
 			return ast.Object{}, fmt.Errorf("%s: members: %w", path, err)
+		}
+	}
+	if deferred := top["deferred_operations"]; deferred != nil {
+		mapping, err := mappingFromNode(deferred)
+		if err != nil {
+			return ast.Object{}, fmt.Errorf("%s: deferred_operations: %w", path, err)
+		}
+		if operations := mapping["operations"]; operations != nil {
+			if operations.Kind != yaml.SequenceNode {
+				return ast.Object{}, fmt.Errorf(
+					"%s: deferred_operations.operations must be a sequence",
+					path,
+				)
+			}
+			for _, item := range operations.Content {
+				if name := strings.TrimSpace(item.Value); name != "" {
+					object.DeferredOperations = append(object.DeferredOperations, name)
+				}
+			}
+		}
+		if strings.TrimSpace(scalarString(mapping["reason"])) == "" ||
+			len(object.DeferredOperations) == 0 {
+			return ast.Object{}, fmt.Errorf(
+				"%s: deferred_operations requires a non-empty reason and operations",
+				path,
+			)
 		}
 	}
 	return object, nil

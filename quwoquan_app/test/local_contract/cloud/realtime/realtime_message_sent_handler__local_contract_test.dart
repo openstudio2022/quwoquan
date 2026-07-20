@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -58,7 +58,9 @@ void main() {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          chatRepositoryCompositionProvider.overrideWithValue(repository),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);

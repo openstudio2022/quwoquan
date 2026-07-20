@@ -37,6 +37,7 @@ func (h *UserHandler) handleSendGreeting(w http.ResponseWriter, r *http.Request)
 		TargetSubAccountID:    targetID,
 		RequestMessage:        anyString(body["requestMessage"]),
 		Source:                anyString(body["source"]),
+		IdempotencyKey:        h.commandIdempotencyKey(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -92,7 +93,7 @@ func (h *UserHandler) handleReplyGreeting(w http.ResponseWriter, r *http.Request
 		return
 	}
 	requestID := strings.TrimSpace(r.PathValue("requestId"))
-	greeting, err := h.greeting.Reply(r.Context(), actorID, requestID)
+	greeting, err := h.greeting.Reply(r.Context(), actorID, requestID, h.commandIdempotencyKey(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -107,7 +108,7 @@ func (h *UserHandler) handleIgnoreGreeting(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	requestID := strings.TrimSpace(r.PathValue("requestId"))
-	greeting, err := h.greeting.Ignore(r.Context(), actorID, requestID)
+	greeting, err := h.greeting.Ignore(r.Context(), actorID, requestID, h.commandIdempotencyKey(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -122,7 +123,7 @@ func (h *UserHandler) handleCancelGreeting(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	requestID := strings.TrimSpace(r.PathValue("requestId"))
-	greeting, err := h.greeting.Cancel(r.Context(), actorID, requestID)
+	greeting, err := h.greeting.Cancel(r.Context(), actorID, requestID, h.commandIdempotencyKey(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

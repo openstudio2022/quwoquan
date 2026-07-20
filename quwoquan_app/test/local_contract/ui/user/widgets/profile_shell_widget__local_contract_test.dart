@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
+import 'package:quwoquan_app/application/user/profile/profile_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
@@ -16,10 +19,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wi
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -34,11 +39,16 @@ import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/other_profile_intersection_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/fakes/test_profile_interaction_facets.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -74,6 +84,80 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
+class _MutualCallCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => false;
+
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto(
+      viewerSubAccountId: 'viewer-profile',
+      targetSubAccountId: targetUserId,
+      relationState: 'mutual',
+      canStartVoiceCall: true,
+      canStartVideoCall: true,
+      isBlocked: false,
+      isBlockedBy: false,
+    );
+  }
+}
+
+class _FlippableProfileAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+
+  void loginNow() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'access-token',
+      ownerId: 'viewer-profile',
+      activeSubAccountId: 'viewer-profile',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'install-id',
+    );
+  }
+}
+
+class _AuthenticatedProfileAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    ownerId: 'viewer-profile',
+    activeSubAccountId: 'viewer-profile',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+  );
+}
+
+class _RecordingBlockWriter implements BlockCommandWriter {
+  String? blockedTarget;
+
+  @override
+  Future<BlockCommandResult> blockUser(BlockUserCommand command) async {
+    blockedTarget = command.targetSubAccountId;
+    return BlockCommandResult(
+      targetSubAccountId: command.targetSubAccountId,
+      blocked: true,
+      idempotentReplay: false,
+      updatedAt: DateTime.utc(2026, 7, 20),
+    );
+  }
+
+  @override
+  Future<BlockCommandResult> unblockUser(UnblockUserCommand command) async {
+    return BlockCommandResult(
+      targetSubAccountId: command.targetSubAccountId,
+      blocked: false,
+      idempotentReplay: false,
+      updatedAt: DateTime.utc(2026, 7, 20),
+    );
+  }
+}
+
 /// 首屏聚合失败仓库：getUserHomepageBundle 抛错，用于验证 ProfileShell 结构化错误态。
 class _FailingHomepageBundleRepository extends MockUserProfileRepository {
   const _FailingHomepageBundleRepository();
@@ -86,15 +170,42 @@ class _FailingHomepageBundleRepository extends MockUserProfileRepository {
   }
 }
 
+abstract class _ProfileBundleOverrideRepository
+    extends MockUserProfileRepository {
+  const _ProfileBundleOverrideRepository();
+
+  Future<SubAccountProfileViewData> profileFor(String userId);
+
+  @override
+  Future<SubAccountProfileViewData> getUserProfile(String userId) =>
+      profileFor(userId);
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String subAccountId,
+  ) async {
+    final base = await super.getUserHomepageBundle(subAccountId);
+    return UserHomepageBundleViewData(
+      profile: await profileFor(subAccountId),
+      stats: base.stats,
+      relationshipCapability: base.relationshipCapability,
+      tabCounts: base.tabCounts,
+      viewerContext: base.viewerContext,
+      cacheVersion: base.cacheVersion,
+    );
+  }
+}
+
 /// 默认昵称态（未编辑）本人档案：昵称即默认用户名、未自定义、无头像/封面/简介/标签。
 /// 用于验证我的主页空态引导，并断言不再回退到「探索者 / 趣我圈号」占位。
-class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
+class _DefaultNicknameProfileRepository
+    extends _ProfileBundleOverrideRepository {
   const _DefaultNicknameProfileRepository();
 
   static const String defaultNickname = '新同学_260622_6698692';
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> profileFor(String userId) async {
     return SubAccountProfileViewData.fromSubAccountProfileWire(
       SubAccountProfileWireDto(
         subAccountId: userId,
@@ -114,11 +225,12 @@ class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
 }
 
 /// 已自定义昵称的本人档案：nicknameCustomized=true，用于断言昵称行编辑入口不回归。
-class _CustomizedNicknameProfileRepository extends MockUserProfileRepository {
+class _CustomizedNicknameProfileRepository
+    extends _ProfileBundleOverrideRepository {
   const _CustomizedNicknameProfileRepository();
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> profileFor(String userId) async {
     return SubAccountProfileViewData.fromSubAccountProfileWire(
       SubAccountProfileWireDto(
         subAccountId: userId,
@@ -137,12 +249,17 @@ class _CustomizedNicknameProfileRepository extends MockUserProfileRepository {
   }
 }
 
-/// 云侧只给 object key 的本人头像：主头像与吸顶头像应共用同一可解析源。
-class _AvatarObjectKeyProfileRepository extends MockUserProfileRepository {
-  const _AvatarObjectKeyProfileRepository();
+/// Query ViewData 已解析的头像源：主头像与吸顶头像必须共用同一值。
+class _ResolvedAvatarProfileRepository
+    extends _ProfileBundleOverrideRepository {
+  const _ResolvedAvatarProfileRepository();
+
+  static const String resolvedAvatar =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+      'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> profileFor(String userId) async {
     return SubAccountProfileViewData.fromSubAccountProfileWire(
       SubAccountProfileWireDto(
         subAccountId: userId,
@@ -152,8 +269,7 @@ class _AvatarObjectKeyProfileRepository extends MockUserProfileRepository {
         displayName: '头像同源用户',
         nickname: '头像同源用户',
         nicknameCustomized: true,
-        avatarUrl:
-            'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        avatarUrl: resolvedAvatar,
         backgroundUrl: '',
         bio: '头像同源回归',
         identityTags: const <String>['摄影'],
@@ -218,16 +334,24 @@ Widget _scopedApp({
   String? initialDisplayName,
   String? initialBackgroundUrl,
   RelationshipCapabilityRepository? capabilityRepository,
-  UserProfileRepository userProfileRepository =
-      const MockUserProfileRepository(),
+  ProfileQuery profileQuery = const MockUserProfileRepository(),
+  AuthorImpactQuery authorImpactQuery = const MockUserProfileRepository(),
   MockContentRepository? contentRepository,
+  VoidCallback? onBack,
   List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
+      profileQueryProvider.overrideWith((ref, surface) => profileQuery),
+      authorImpactQueryProvider.overrideWithValue(authorImpactQuery),
       ...mockContentFacetOverrides(
         contentRepository ?? MockContentRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(
+        const TestProfileInteractionFacets(),
+      ),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        const TestProfileInteractionFacets(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _ThrowingCapabilityRepository(),
@@ -253,6 +377,7 @@ Widget _scopedApp({
         initialAvatarUrl: initialAvatarUrl,
         initialDisplayName: initialDisplayName,
         initialBackgroundUrl: initialBackgroundUrl,
+        onBack: onBack,
       ),
     ),
   );
@@ -317,7 +442,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
-          userProfileRepository: const _DefaultNicknameProfileRepository(),
+          profileQuery: const _DefaultNicknameProfileRepository(),
           contentRepository: _NoUserPostsContentRepository(),
         ),
       );
@@ -360,7 +485,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
-          userProfileRepository: const _CustomizedNicknameProfileRepository(),
+          profileQuery: const _CustomizedNicknameProfileRepository(),
         ),
       );
       await _pumpFrames(tester);
@@ -372,7 +497,7 @@ void main() {
       );
     });
 
-    testWidgets('头像 object key 在主头像与吸顶头像使用同一可加载组件渲染', (tester) async {
+    testWidgets('已解析头像源在主头像与吸顶头像使用同一可加载组件渲染', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -381,7 +506,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
-          userProfileRepository: const _AvatarObjectKeyProfileRepository(),
+          profileQuery: const _ResolvedAvatarProfileRepository(),
         ),
       );
       await _pumpFrames(tester, count: 20);
@@ -396,9 +521,7 @@ void main() {
               find.byKey(const ValueKey<String>('profile-header-avatar-image')),
             )
             .imageUrl,
-        endsWith(
-          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
-        ),
+        _ResolvedAvatarProfileRepository.resolvedAvatar,
       );
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
@@ -417,9 +540,7 @@ void main() {
               ),
             )
             .imageUrl,
-        endsWith(
-          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
-        ),
+        _ResolvedAvatarProfileRepository.resolvedAvatar,
       );
     });
 
@@ -433,7 +554,7 @@ void main() {
           mode: ProfileMode.other,
           userId: 'fixture_user_current',
           initialAvatarUrl: '',
-          userProfileRepository: const _AvatarObjectKeyProfileRepository(),
+          profileQuery: const _ResolvedAvatarProfileRepository(),
         ),
       );
       await _pumpFrames(tester, count: 20);
@@ -444,9 +565,7 @@ void main() {
               find.byKey(const ValueKey<String>('profile-header-avatar-image')),
             )
             .imageUrl,
-        endsWith(
-          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
-        ),
+        _ResolvedAvatarProfileRepository.resolvedAvatar,
       );
     });
 
@@ -459,7 +578,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
-          userProfileRepository: const _DefaultNicknameProfileRepository(),
+          profileQuery: const _DefaultNicknameProfileRepository(),
           contentRepository: MockContentRepository(
             seedPosts: <PostBaseDto>[
               _profileBackgroundPost('fixture_user_current'),
@@ -481,7 +600,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
-          userProfileRepository: const _DefaultNicknameProfileRepository(),
+          profileQuery: const _DefaultNicknameProfileRepository(),
           contentRepository: _NoUserPostsContentRepository(),
         ),
       );
@@ -577,7 +696,7 @@ void main() {
       );
       expect(_inlinePrimaryTab('圈子'), findsNothing);
       expect(_inlinePrimaryTab('生活'), findsNothing);
-      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+      expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
     });
 
     testWidgets('other 仅渲染记录、互动主 Tab，足迹隐私门控不出现', (tester) async {
@@ -631,6 +750,9 @@ void main() {
           capabilityRepository: _StaticCapabilityRepository(),
           overrides: [
             currentUserIdProvider.overrideWithValue('viewer-profile'),
+            objectSharedReasonsProvider.overrideWith(
+              (ref, query) async => const <IntersectionReason>[],
+            ),
           ],
         ),
       );
@@ -1013,7 +1135,7 @@ void main() {
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
       expect(_inlinePrimaryTab('圈子'), findsNothing);
-      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+      expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
     });
 
     testWidgets('切换到互动 Tab 渲染 ProfileInteractionTab', (tester) async {
@@ -1086,6 +1208,99 @@ void main() {
 
       expect(find.byType(AppBottomModalSurface), findsNothing);
       await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('拉黑成功后失效主页缓存并离开受限主页', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final writer = _RecordingBlockWriter();
+      var leaveCount = 0;
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'u_block_target',
+          onBack: () => leaveCount += 1,
+          overrides: [
+            authSessionControllerProvider.overrideWith(
+              _AuthenticatedProfileAuthSession.new,
+            ),
+            personaRelationshipBlockWriterProvider.overrideWith(
+              (ref, surface) => writer,
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(UITextConstants.profileBlockUser));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(UITextConstants.profileBlockUser));
+      await _pumpFrames(tester);
+
+      expect(writer.blockedTarget, 'u_block_target');
+      expect(leaveCount, 1);
+      expect(find.text(UITextConstants.profileBlockSuccess), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('登录成功后一次性续接原 Persona 视频呼叫', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final startedIntents = <RtcCallEntryIntent>[];
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'u_lin',
+          capabilityRepository: _MutualCallCapabilityRepository(),
+          overrides: [
+            authSessionControllerProvider.overrideWith(
+              _FlippableProfileAuthSession.new,
+            ),
+            rtcCallEntryPresenterProvider.overrideWithValue(
+              RtcCallEntryPresenter(
+                permissionRequest: (_, _) async =>
+                    CallPermissionOutcome.granted,
+                callStarter: (_, intent, _, _) async {
+                  startedIntents.add(intent);
+                  return 'fixture-call-id';
+                },
+                outgoingNavigator: (_, _) {},
+              ),
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileShell)),
+      );
+      container
+          .read(authContinuationProvider.notifier)
+          .set(
+            const StartDirectCallContinuation(
+              targetUserId: 'u_lin',
+              callType: 'video',
+            ),
+            ownerToken: 'profile-call-entry',
+          );
+
+      (container.read(authSessionControllerProvider.notifier)
+              as _FlippableProfileAuthSession)
+          .loginNow();
+      await _pumpFrames(tester);
+
+      expect(startedIntents, hasLength(1));
+      expect(startedIntents.single.mediaType, RtcCallEntryMediaType.video);
+      expect(startedIntents.single.targetUserId, 'u_lin');
+      expect(container.read(authContinuationProvider), isNull);
+      await _pumpFrames(tester);
+      expect(startedIntents, hasLength(1), reason: '续接必须 one-shot，不能重复发起');
     });
 
     testWidgets('互动二级 Tab 跟随内容滚动并可回显', (tester) async {
@@ -1294,7 +1509,7 @@ void main() {
         _scopedApp(
           mode: ProfileMode.other,
           userId: 'stranger_failing',
-          userProfileRepository: const _FailingHomepageBundleRepository(),
+          profileQuery: const _FailingHomepageBundleRepository(),
         ),
       );
       await _pumpFrames(tester);

@@ -1,13 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   group('Content facets 装配契约 (D2a/D2b)', () {
     test('Post Mock 只实现非 Comment 细粒度 Facet', () {
       final repo = MockContentRepository();
+      expect(repo, isA<ContentDiscoveryFeedQuery>());
       expect(repo, isA<ContentReadRepository>());
       expect(repo, isA<ContentPostDetailReader>());
       expect(repo, isA<ContentAuthorPostsReader>());
@@ -18,12 +22,12 @@ void main() {
     });
 
     test('组合根按 facet 装配缓存与直连 adapter', () {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [...mockContentFacetOverrides(MockContentRepository())],
+      );
       addTearDown(container.dispose);
-      // 测试环境（非 release、非 beta/gamma）默认数据源为 mock。
-      expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
 
-      final read = container.read(contentReadRepositoryProvider);
+      final feed = container.read(contentDiscoveryFeedQueryProvider);
       final write = container.read(contentWriteRepositoryProvider);
       final engagement = container.read(contentEngagementRepositoryProvider);
       final config = container.read(contentConfigRepositoryProvider);
@@ -34,21 +38,35 @@ void main() {
         userProfileContentAuthorPostsReaderProvider,
       );
 
-      expect(write, same(read));
-      expect(engagement, same(config));
-      expect(engagement, isNot(same(read)));
+      expect(feed, isA<ContentDiscoveryFeedQuery>());
+      expect(write, isA<ContentWriteRepository>());
+      expect(engagement, isA<ContentEngagementRepository>());
+      expect(config, isA<ContentConfigRepository>());
       expect(workBrowserDetail, isA<ContentPostDetailReader>());
       expect(userProfilePosts, isA<ContentAuthorPostsReader>());
       expect(
-        () => container.read(workBrowserContentCommentFacetProvider),
-        throwsA(
-          predicate<Object>(
-            (error) => error.toString().contains(
-              'ContentCommentFacet is Remote-only in production composition',
-            ),
-          ),
-        ),
+        container.read(workBrowserContentCommentFacetProvider),
+        isA<ContentCommentFacet>(),
       );
+    });
+
+    test('production content composition 不读取 AppDataSourceMode', () {
+      final composition = <String>[
+        File(
+          'lib/core/providers/app_providers_content_facets.dart',
+        ).readAsStringSync(),
+        File(
+          'lib/core/providers/app_providers_content_extras.dart',
+        ).readAsStringSync(),
+      ].join('\n');
+      final discovery = File(
+        'lib/ui/discovery/providers/discovery_feed_provider.dart',
+      ).readAsStringSync();
+
+      expect(composition, isNot(contains('appDataSourceModeProvider')));
+      expect(composition, isNot(contains('AppDataSourceMode')));
+      expect(discovery, contains('contentDiscoveryFeedQueryProvider'));
+      expect(discovery, isNot(contains('contentReadRepositoryProvider')));
     });
   });
 

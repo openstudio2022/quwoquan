@@ -5,6 +5,7 @@ class SelectableGroupConversationRowDto {
   final String conversationId;
   final String title;
   final String avatarUrl;
+  final String circleId;
   final int friendMemberCount;
   final int memberCount;
 
@@ -12,6 +13,7 @@ class SelectableGroupConversationRowDto {
     this.conversationId = '',
     this.title = '',
     this.avatarUrl = '',
+    this.circleId = '',
     this.friendMemberCount = 0,
     this.memberCount = 0,
   });
@@ -21,6 +23,7 @@ class SelectableGroupConversationRowDto {
       conversationId: m['conversationId']?.toString() ?? '',
       title: m['title']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
+      circleId: m['circleId']?.toString() ?? '',
       friendMemberCount: (m['friendMemberCount'] as num?)?.toInt() ?? 0,
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
     );
@@ -31,6 +34,7 @@ class SelectableGroupConversationRowDto {
       'conversationId': conversationId,
       'title': title,
       'avatarUrl': avatarUrl,
+      'circleId': circleId,
       'friendMemberCount': friendMemberCount,
       'memberCount': memberCount,
     };
@@ -40,6 +44,7 @@ class SelectableGroupConversationRowDto {
     String? conversationId,
     String? title,
     String? avatarUrl,
+    String? circleId,
     int? friendMemberCount,
     int? memberCount,
   }) {
@@ -47,6 +52,7 @@ class SelectableGroupConversationRowDto {
       conversationId: conversationId ?? this.conversationId,
       title: title ?? this.title,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      circleId: circleId ?? this.circleId,
       friendMemberCount: friendMemberCount ?? this.friendMemberCount,
       memberCount: memberCount ?? this.memberCount,
     );

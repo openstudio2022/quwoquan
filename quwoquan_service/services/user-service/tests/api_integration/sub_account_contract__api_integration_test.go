@@ -71,15 +71,15 @@ func TestSubAccount_ActivateSwitchesExclusively(t *testing.T) {
 	}
 }
 
-func TestSubAccount_DeleteForbidsLast(t *testing.T) {
+func TestSubAccount_RetireForbidsLast(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "sub_owner_3", "sub_owner3")
 	createTestPersonaFull(t, "only_sub", "sub_owner_3", "sa_only", "OnlySub", "open", true, true)
 
-	// 删除唯一的分身应该被拒绝
-	rec := doRequest(t, http.MethodDelete, "/user/personas/sa_only/delete-empty", "", authHeaders("sub_owner_3"))
+	// 退役唯一的分身应该被拒绝
+	rec := doRequest(t, http.MethodPost, "/user/personas/sa_only/retire", "", authHeaders("sub_owner_3"))
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when deleting the last persona, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 when retiring the last persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

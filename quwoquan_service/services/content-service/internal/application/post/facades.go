@@ -12,8 +12,8 @@ import (
 type Facades struct {
 	PostPublicationCommandFacade
 	PostLifecycleCommandFacade
+	PostModerationDecisionCommandFacet
 	PostReadFacade
-	ProfileInteractionFacade
 	ContentUtilityQueryFacade
 	SemanticGovernanceCommandFacade
 }
@@ -33,14 +33,7 @@ type PostLifecycleCommandFacade interface {
 
 type PostReadFacade interface {
 	GetPostOrTombstone(context.Context, string) (*postmodel.Post, bool, bool)
-	SearchPosts(context.Context, SearchPostsRequest) ([]postmodel.PostSearchItemView, string, error)
 	GetHelperRead(context.Context, string) (map[string]any, error)
-}
-
-type ProfileInteractionFacade interface {
-	ListProfileInteractionActivities(context.Context, string, string, string, string, int) ([]postmodel.ProfileInteractionActivityView, string, bool, error)
-	ListProfileShareInteractions(context.Context, string, string, string, int) ([]postmodel.ProfileInteractionActivityView, string, bool, error)
-	MarkProfileShareInteractionState(context.Context, string, string, string) error
 }
 
 type ContentUtilityQueryFacade interface {
@@ -59,11 +52,11 @@ func BindFacades(service *PostService) *Facades {
 		return nil
 	}
 	return &Facades{
-		PostPublicationCommandFacade:    service,
-		PostLifecycleCommandFacade:      service,
-		PostReadFacade:                  service,
-		ProfileInteractionFacade:        service,
-		ContentUtilityQueryFacade:       service,
-		SemanticGovernanceCommandFacade: service,
+		PostPublicationCommandFacade:       service,
+		PostLifecycleCommandFacade:         service,
+		PostModerationDecisionCommandFacet: service,
+		PostReadFacade:                     service,
+		ContentUtilityQueryFacade:          service,
+		SemanticGovernanceCommandFacade:    service,
 	}
 }

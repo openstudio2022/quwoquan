@@ -50,6 +50,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_risky_config_gray_release.contract
@@ -57,6 +58,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_risky_config_gray_release.integration
@@ -69,5 +71,5 @@ execution:
   - bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
   - bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - bash quwoquan_ops/gate/gate_repo.sh --scope service

@@ -26,6 +26,8 @@ objects:
     - _id
     - name
     - description
+    - rulesText
+    - welcomeMessage
     - coverUrl
     - iconUrl
     - ownerDisplayNameSnapshot
@@ -35,6 +37,7 @@ objects:
     - memberCount
     - postCount
     - weeklyActiveCount
+    - version
     - status
     - visibility
     - joinPolicy
@@ -203,6 +206,8 @@ objects:
   - JoinCircle
   - LeaveCircle
   - UpdateCircleMembershipRole
+  - ApproveCircleMember
+  - RejectCircleMember
   object_kind: aggregate_root
   relationships:
   - access: command_facade
@@ -414,8 +419,7 @@ objects:
     queries: named_reader
   bounded_context: Circle
   canonical_object: CircleFile
-  event_consumers:
-  - MediaAssetDeleted
+  event_consumers: []
   field_roles:
     append_only_fact: []
     authoritative_state:

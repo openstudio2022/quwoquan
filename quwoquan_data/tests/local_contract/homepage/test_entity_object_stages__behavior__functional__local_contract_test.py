@@ -12,7 +12,7 @@ for _path in (DATA_ROOT, DATA_ROOT / "tests", DATA_ROOT / "scripts"):
         sys.path.insert(0, str(_path))
 
 _TMP = Path(tempfile.mkdtemp(prefix="entity_object_stages_"))
-os.environ["QWQ_RUNTIME_ROOT"] = str(_TMP / "runtime")
+os.environ["QWQ_OUTPUT_ROOT"] = str(_TMP / ".qwq_output")
 
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from core.io import read_json  # noqa: E402

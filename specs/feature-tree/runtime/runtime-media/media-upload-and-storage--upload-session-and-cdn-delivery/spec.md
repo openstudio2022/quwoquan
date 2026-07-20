@@ -1,4 +1,4 @@
-# 上传会话与 CDN 分发（Upload Session and CDN Delivery）
+# L3 特性：上传会话与 CDN 分发（Upload Session and CDN Delivery）
 
 > **层级**：L3_story（隶属 L2 `runtime-media`）
 > **状态**：specified

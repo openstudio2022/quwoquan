@@ -1,16 +1,15 @@
 """Typed human-review decisions for an execution review ledger."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from core.control_types import (
+    ReviewItemKind,
+    ReviewJudgment,
+    ReviewOverride,
+    ReviewPublishState,
+)
 from content.review.ledger import (
-    JUDGE_CREDIBLE,
-    JUDGE_DOUBTFUL,
-    KIND_ARTICLE,
-    KIND_FACT,
-    KIND_IMAGE,
-    OVERRIDE_DISCARD,
-    OVERRIDE_PUBLISHABLE,
     iter_ledgers,
     load_ledger,
     needs_human,
@@ -18,21 +17,22 @@ from content.review.ledger import (
     resolve_publish_state,
     save_ledger,
 )
+from content.review.policy import review_policy
 
-KINDS = (KIND_IMAGE, KIND_FACT, KIND_ARTICLE)
-JUDGMENTS = (JUDGE_CREDIBLE, JUDGE_DOUBTFUL)
-OVERRIDES = (OVERRIDE_PUBLISHABLE, OVERRIDE_DISCARD)
+KINDS = tuple(ReviewItemKind)
+JUDGMENTS = (ReviewJudgment.CREDIBLE, ReviewJudgment.DOUBTFUL)
+OVERRIDES = tuple(ReviewOverride)
 
 
 @dataclass(frozen=True)
 class AnnotationDecision:
     execution_id: str
     ref: str
-    kind: str
+    kind: ReviewItemKind
     target: str
-    judgment: str | None = None
+    judgment: ReviewJudgment | None = None
     score: int | None = None
-    override: str | None = None
+    override: ReviewOverride | None = None
     reprocess: bool = False
     note: str | None = None
 
@@ -46,13 +46,14 @@ def print_pending_queue(execution_id: str, refs: list[str] | None = None) -> int
             continue
         rows = []
         for item in ledger.all_items():
-            state = resolve_publish_state(item, ledger.policy)
-            if needs_human(item, ledger.policy) or state != "publishable":
-                exhausted = reprocess_exhausted(item, ledger.policy)
+            state = resolve_publish_state(item)
+            if needs_human(item) or state is not ReviewPublishState.PUBLISHABLE:
+                exhausted = reprocess_exhausted(item)
                 rows.append(
-                    f"    [{item.kind}] {item.target} :: state={state} "
-                    f"agent={item.agentJudgment}/{item.agentScore} human={item.humanJudgment}/{item.humanScore} "
-                    f"reprocess={item.reprocessCount}{' EXHAUSTED' if exhausted else ''}"
+                    f"    [{item.kind.value}] {item.target} :: state={state.value} "
+                    f"agent={item.agent_judgment.value}/{item.agent_score} "
+                    f"human={item.human_judgment.value}/{item.human_score} "
+                    f"reprocess={item.reprocess_count}{' EXHAUSTED' if exhausted else ''}"
                     + (f" reasons={item.reasons}" if item.reasons else "")
                 )
         if rows:
@@ -74,8 +75,8 @@ def apply_annotation(decision: AnnotationDecision) -> str:
         raise ValueError(f"unsupported annotation judgment: {decision.judgment!r}")
     if decision.override is not None and decision.override not in OVERRIDES:
         raise ValueError(f"unsupported annotation override: {decision.override!r}")
-    if decision.score is not None and decision.score not in {1, 2, 3, 4, 5}:
-        raise ValueError(f"annotation score must be 1..5: {decision.score!r}")
+    if decision.score is not None:
+        review_policy().validate_score(decision.score, label="annotation score")
 
     ledger = load_ledger(decision.execution_id, decision.ref)
     if ledger is None:
@@ -85,28 +86,26 @@ def apply_annotation(decision: AnnotationDecision) -> str:
     if item is None:
         raise KeyError(f"review item not found: kind={decision.kind!r} target={decision.target!r}")
 
-    changed = False
+    replacement = item
     if decision.judgment:
-        item.humanJudgment = decision.judgment
-        changed = True
+        replacement = replace(replacement, human_judgment=decision.judgment)
     if decision.score is not None:
-        item.humanScore = decision.score
-        changed = True
+        replacement = replace(replacement, human_score=decision.score)
     if decision.override:
-        item.humanOverride = decision.override
-        changed = True
+        replacement = replace(replacement, human_override=decision.override)
     if decision.reprocess:
-        item.reprocessCount += 1
-        changed = True
+        replacement = replace(
+            replacement,
+            reprocess_count=replacement.reprocess_count + 1,
+        )
     if decision.note:
-        item.notes = decision.note
-        changed = True
+        replacement = replace(replacement, notes=decision.note)
 
-    if not changed:
+    if replacement == item:
         raise ValueError("annotation decision has no change")
 
-    save_ledger(ledger)
-    return resolve_publish_state(item, ledger.policy)
+    save_ledger(ledger.replace_item(replacement))
+    return resolve_publish_state(replacement).value
 
 
 __all__ = ["AnnotationDecision", "apply_annotation", "print_pending_queue"]

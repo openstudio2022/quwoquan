@@ -5,6 +5,9 @@ service:
   http:
     addr: ":18095"
 
+contentService:
+  baseUrl: "http://content-service:18080"
+
 es:
   enabled: true
   endpoints: []

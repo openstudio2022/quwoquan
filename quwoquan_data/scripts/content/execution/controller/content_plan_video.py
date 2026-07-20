@@ -17,9 +17,11 @@ from content.execution.workspace import relative_execution_ref
 from content.post.object_index import write_brief_object
 from content.source.source_unit import iter_source_units
 from core.image_safety import assess_image_publish_prefilter
+from core.article_package import sha256_file
 from core.io import read_json
 from governance.coverage.cold_start_supply import load_cold_start_supply_policy
 from core.paths import execution_root
+from content.post.video.source_video import SourcedVideoEvidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +48,14 @@ class VideoFrameCandidate:
             "caption": self.caption,
             "sourceCollectionId": self.source_collection_id,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class SourcedVideoCandidate:
+    evidence: SourcedVideoEvidence
+
+    def as_brief_value(self) -> dict[str, object]:
+        return self.evidence.to_dict()
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +143,61 @@ def _source_frames(
     return candidates, rejects
 
 
+def _sourced_videos(
+    ctx: ExecutionContext,
+    object_dir: Path,
+) -> tuple[list[SourcedVideoCandidate], dict[str, int]]:
+    root = execution_root(ctx.execution_id)
+    candidates: list[SourcedVideoCandidate] = []
+    rejects: dict[str, int] = {}
+    seen_sha: set[str] = set()
+
+    def reject(reason: str) -> None:
+        rejects[reason] = rejects.get(reason, 0) + 1
+
+    for source_dir in iter_source_units(object_dir):
+        evidence_path = source_dir / "sourced_video_evidence.json"
+        if not evidence_path.is_file():
+            continue
+        try:
+            payload = read_json(evidence_path)
+        except (OSError, TypeError, ValueError):
+            reject("sourced_video_evidence_unreadable")
+            continue
+        if not isinstance(payload, dict):
+            reject("sourced_video_evidence_invalid")
+            continue
+        evidence, issues = SourcedVideoEvidence.from_mapping(payload)
+        if issues:
+            reject("sourced_video_admission_blocked")
+            continue
+        refs = (
+            evidence.asset_ref,
+            evidence.rights_ref,
+            evidence.media_probe_ref,
+            evidence.watermark_evidence_ref,
+            evidence.audio_rights_evidence_ref,
+        )
+        paths = [(root / relative).resolve() for relative in refs]
+        if any(
+            not path.is_file()
+            or not path.is_relative_to(root.resolve())
+            for path in paths
+        ):
+            reject("sourced_video_evidence_missing")
+            continue
+        if sha256_file(paths[0]) != evidence.sha256:
+            reject("sourced_video_sha_mismatch")
+            continue
+        if evidence.sha256 in seen_sha:
+            reject("duplicate_sourced_video")
+            continue
+        seen_sha.add(evidence.sha256)
+        candidates.append(SourcedVideoCandidate(evidence=evidence))
+    candidates.sort(key=lambda item: item.evidence.asset_ref)
+    return candidates, rejects
+
+
 def build_video_plan_for_target(
     *,
     ctx: ExecutionContext,
@@ -143,6 +208,79 @@ def build_video_plan_for_target(
     videos_per_target: int,
 ) -> VideoPlanOutcome:
     policy = load_cold_start_supply_policy().video_delivery
+    sourced_videos, sourced_rejects = _sourced_videos(ctx, object_dir)
+    if len(sourced_videos) >= videos_per_target:
+        items: list[dict[str, Any]] = []
+        entity_ref = f"/entity/{entity_type}/{target}"
+        for index, candidate in enumerate(
+            sourced_videos[:videos_per_target],
+            start=1,
+        ):
+            ref = (
+                f"{target}_video"
+                if videos_per_target == 1
+                else f"{target}_video_{index}"
+            )
+            creator_assignment = scheduler.assign(
+                carrier="video",
+                target=target,
+                intent="video",
+            )
+            publish_schedule = scheduler.schedule(creator_assignment)
+            source_video = candidate.as_brief_value()
+            brief = {
+                "titleHint": target,
+                "carrier": "video",
+                "entityRefs": [entity_ref],
+                "entityTags": [target],
+                "templateId": "travel.entity.short_video",
+                "sourceMode": "sourced_video",
+                "sourceVideo": source_video,
+                "assetRefs": [candidate.evidence.asset_ref],
+                "publishSchedule": publish_schedule,
+                **creator_assignment,
+            }
+            write_brief_object(
+                ctx.execution_id,
+                ref,
+                brief,
+                content_type="video",
+            )
+            items.append(
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "video",
+                    "researchLane": "video",
+                    "title": target,
+                    "entityRefs": [entity_ref],
+                    "entityTags": [target],
+                    "evidenceRefs": [candidate.evidence.source_ref],
+                    "rationale": (
+                        "Agent-authored caption for one admitted sourced video"
+                    ),
+                    "sourceMode": "sourced_video",
+                    "sourceVideo": source_video,
+                    "assetRefs": [candidate.evidence.asset_ref],
+                    "sourceUseMode": (
+                        candidate.evidence.publication_admission
+                    ),
+                    "publishSchedule": publish_schedule,
+                    **creator_assignment,
+                }
+            )
+        return VideoPlanOutcome(
+            items=tuple(items),
+            issues=(),
+            diagnostic={
+                "desiredVideoWorks": videos_per_target,
+                "qualifiedSourcedVideos": len(sourced_videos),
+                "pickedVideoWorks": len(items),
+                "sourcedVideoRejects": sourced_rejects,
+                "sourceMode": "sourced_video",
+                "minimumQualityPassed": True,
+            },
+        )
     frames, rejects = _source_frames(ctx, object_dir)
     frames_per_work = policy.minimum_segment_count
     required_frames = videos_per_target * frames_per_work
@@ -192,6 +330,7 @@ def build_video_plan_for_target(
             "entityRefs": [entity_ref],
             "entityTags": [target],
             "templateId": "travel.entity.short_video",
+            "sourceMode": "rights_cleared_image_sequence",
             "sourceFrames": source_frames,
             "assetRefs": [frame.asset_ref for frame in selected],
             "publishSchedule": publish_schedule,
@@ -209,6 +348,7 @@ def build_video_plan_for_target(
                 "entityTags": [target],
                 "evidenceRefs": evidence_refs,
                 "rationale": "Agent-authored short video from rights-cleared source frames",
+                "sourceMode": "rights_cleared_image_sequence",
                 "assetRefs": [frame.asset_ref for frame in selected],
                 "sourceFrames": source_frames,
                 "sourceUseMode": "licensed_adaptation",

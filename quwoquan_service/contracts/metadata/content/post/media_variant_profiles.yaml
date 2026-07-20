@@ -56,12 +56,6 @@ video_profiles:
     scene: video_player_poster
     direct_load: true
     original_access: false
-  adaptive:
-    format: hls_or_dash
-    scene: video_playback
-    direct_load: true
-    original_access: false
-    fallback_to_original: true
   preview:
     format: mp4
     scene: short_preview

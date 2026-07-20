@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
@@ -27,6 +28,7 @@ void main() {
             'title': '正文标题',
             'body': '正文',
             'articleMarkdown': '# 正文标题',
+            'status': 'published',
           };
         }),
         invocationContext: _contextFor(AppUiSurfaces.workBrowser),
@@ -74,6 +76,7 @@ void main() {
             'width': 1280,
             'height': 720,
             'durationMs': 45000,
+            'status': 'published',
             'mediaItems': <Object?>[
               <String, Object?>{
                 'kind': 'video',
@@ -114,6 +117,47 @@ void main() {
         },
       ]);
     });
+
+    test(
+      'GetEntityWishlistState 经 generated client 使用 homepageDetail surface',
+      () async {
+        late http.Request captured;
+        final adapter = RemoteContentPostReaderAdapter(
+          client: _client((request) {
+            captured = request;
+            return <String, Object?>{
+              'objectId': 'homepage-west-lake',
+              'objectKind': 'homepage',
+              'wishlisted': true,
+            };
+          }),
+          invocationContext: _contextFor(AppUiSurfaces.homepageDetail),
+        );
+
+        final result = await adapter.getEntityWishlistState(
+          objectId: 'homepage-west-lake',
+          objectKind: 'homepage',
+        );
+
+        expect(captured.method, 'GET');
+        expect(captured.url.path, '/content/entity-wishlist-state');
+        expect(captured.url.queryParameters, <String, String>{
+          'objectId': 'homepage-west-lake',
+          'objectKind': 'homepage',
+        });
+        expect(
+          captured.headers['X-Client-Operation-Id'],
+          AppCloudOperationIds.contentPostGetEntityWishlistState,
+        );
+        expect(
+          captured.headers['X-Client-Surface-Id'],
+          AppUiSurfaces.homepageDetail.id,
+        );
+        expect(result.objectId, 'homepage-west-lake');
+        expect(result.objectKind, 'homepage');
+        expect(result.wishlisted, isTrue);
+      },
+    );
 
     test('ListUserPosts 经 generated client 使用 userProfile surface', () async {
       late http.Request captured;
@@ -183,6 +227,7 @@ GeneratedCloudOperationClient _client(
           headers: const <String, String>{'content-type': 'application/json'},
         );
       }),
+      authTokenProvider: const _TestAuthTokenProvider(),
     ),
     clientContextProvider: const _TestCloudClientContext(),
     telemetrySink: const _NoopTelemetrySink(),
@@ -198,8 +243,18 @@ ContentPostReaderInvocationContextFactory _contextFor(AppUiSurface surface) {
     surfaceId: surface.id,
     routeId: surface.routeId,
     clientPageId: clientPageId,
-    actor: const CloudOperationActorContext(),
+    actor: const CloudOperationActorContext(
+      accountId: 'fixture-user',
+      personaId: 'fixture-persona',
+    ),
   );
+}
+
+final class _TestAuthTokenProvider implements CloudAuthTokenProvider {
+  const _TestAuthTokenProvider();
+
+  @override
+  Future<String?> getAccessToken() async => 'post-reader-contract-token';
 }
 
 final class _TestCloudClientContext implements CloudClientContextProvider {

@@ -8,7 +8,7 @@ affected_nodes:
   - specs/feature-tree/discovery-content/content-display-journey-consistency
   - specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
   - specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
-  - specs/feature-tree/discovery-content/tree.yaml
+  - specs/feature-tree/tree_index.yaml
   - specs/feature-tree/tree_index.yaml
 
 entries:
@@ -60,7 +60,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/discovery-content/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - content-display-journey-consistency.l3
       - path: specs/feature-tree/tree_index.yaml
@@ -187,5 +187,5 @@ entries:
       breaking_contract: false
     notes:
       - 聚焦 Flutter Red/Green 测试已通过：runtime config、post body projection、outbox coalesce、profile follow sync、circle result absorb。
-      - `make -C quwoquan_service build && make -C quwoquan_service test-contract` 已通过。
+      - "`make -C quwoquan_service build && make -C quwoquan_service test-contract` 已通过。"
       - 全量 `flutter test test/cloud/ test/components/ test/ui/` 存在仓库既有失败，主因是 `retrieval_design_phase.dart` 缺少 `AnswerShape` / `FreshnessNeed` 符号，不由本次改动引入。

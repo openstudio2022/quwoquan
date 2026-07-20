@@ -14,15 +14,13 @@ import (
 	"net/url"
 	"strings"
 
+	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/assistant-service/internal/application"
 )
 
-const (
-	createAppMessagePath = "/internal/app-messages"
-	responseBodyLimit    = 1 << 20
-)
+const responseBodyLimit = 1 << 20
 
 type Client struct {
 	endpoint    string
@@ -47,7 +45,7 @@ func NewClient(
 		return nil, fmt.Errorf("notification service credentials are required")
 	}
 	return &Client{
-		endpoint:    strings.TrimRight(parsed.String(), "/") + createAppMessagePath,
+		endpoint:    strings.TrimRight(parsed.String(), "/") + serviceclients.NotificationCreateAppMessagePath,
 		http:        httpClient,
 		credentials: credentials,
 	}, nil

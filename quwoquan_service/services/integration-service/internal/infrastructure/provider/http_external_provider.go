@@ -24,8 +24,6 @@ const (
 	externalProviderRejectedCode = "INTEGRATION.MIDDLEWARE.provider_rejected"
 	smsProviderTimeoutCode       = "INTEGRATION.MIDDLEWARE.sms_provider_timeout"
 	smsProviderRejectedCode      = "INTEGRATION.MIDDLEWARE.sms_provider_rejected"
-	pushProviderTimeoutCode      = "INTEGRATION.MIDDLEWARE.push_provider_timeout"
-	pushProviderRejectedCode     = "INTEGRATION.MIDDLEWARE.push_provider_rejected"
 	smsOTPCodeRefInvalidCode     = "INTEGRATION.SYSTEM.sms_otp_code_ref_invalid"
 )
 
@@ -340,8 +338,6 @@ func (p *HTTPExternalProvider) timeoutCode() string {
 	switch p.operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
 		return smsProviderTimeoutCode
-	case reliabletask.ExternalInteractionOperationPush:
-		return pushProviderTimeoutCode
 	default:
 		return externalProviderTimeoutCode
 	}
@@ -351,8 +347,6 @@ func (p *HTTPExternalProvider) rejectedCode() string {
 	switch p.operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
 		return smsProviderRejectedCode
-	case reliabletask.ExternalInteractionOperationPush:
-		return pushProviderRejectedCode
 	default:
 		return externalProviderRejectedCode
 	}
@@ -363,11 +357,6 @@ func validateProviderName(operation string, name string) error {
 		reliabletask.ExternalInteractionOperationSmsOTP: {
 			"aliyun_sms":  {},
 			"tencent_sms": {},
-		},
-		reliabletask.ExternalInteractionOperationPush: {
-			"apns":        {},
-			"fcm":         {},
-			"vendor_push": {},
 		},
 	}
 	providers, ok := allowed[operation]
@@ -385,8 +374,6 @@ func providerPayload(operation string, source map[string]string) map[string]stri
 	switch operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
 		allowlist = []string{"challengeId", "phoneHash", "maskedRecipient", "templateId"}
-	case reliabletask.ExternalInteractionOperationPush:
-		allowlist = []string{"notificationId", "recipientId", "providerHint", "deeplink"}
 	default:
 		return map[string]string{}
 	}
@@ -434,8 +421,6 @@ func validateProviderPayload(operation string, payload map[string]string) error 
 	switch operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
 		required = []string{"recipient", "code", "templateId"}
-	case reliabletask.ExternalInteractionOperationPush:
-		required = []string{"notificationId", "recipientId"}
 	default:
 		return fmt.Errorf("provider payload operation %q is not supported", operation)
 	}

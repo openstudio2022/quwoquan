@@ -5,12 +5,19 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 
-RelationshipCapabilityDto _cap(String relationState) {
+RelationshipCapabilityDto _cap(
+  String relationState, {
+  bool canStartVoiceCall = false,
+  bool canStartVideoCall = false,
+  bool isBlocked = false,
+}) {
   return RelationshipCapabilityDto(
     viewerSubAccountId: 'viewer',
     targetSubAccountId: 'target',
     relationState: relationState,
-    isBlocked: false,
+    canStartVoiceCall: canStartVoiceCall,
+    canStartVideoCall: canStartVideoCall,
+    isBlocked: isBlocked,
     isBlockedBy: false,
   );
 }
@@ -108,6 +115,55 @@ void main() {
       await tester.pump();
 
       expect(followed, isTrue);
+    });
+
+    testWidgets('mutual 且未拉黑时按能力位显示并触发语音/视频入口', (tester) async {
+      var voiceCallCount = 0;
+      var videoCallCount = 0;
+      await tester.pumpWidget(
+        _wrap(
+          ProfileActionBar(
+            mode: ProfileMode.other,
+            isDark: false,
+            isFollowing: true,
+            capability: _cap(
+              'mutual',
+              canStartVoiceCall: true,
+              canStartVideoCall: true,
+            ),
+            onVoiceCall: () => voiceCallCount += 1,
+            onVideoCall: () => videoCallCount += 1,
+          ),
+        ),
+      );
+
+      expect(find.text(UITextConstants.callVoice), findsOneWidget);
+      expect(find.text(UITextConstants.callVideo), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.callVoice));
+      await tester.tap(find.text(UITextConstants.callVideo));
+      expect(voiceCallCount, 1);
+      expect(videoCallCount, 1);
+    });
+
+    testWidgets('blocked 即使 mutual 且能力位开启也隐藏通话入口', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          ProfileActionBar(
+            mode: ProfileMode.other,
+            isDark: false,
+            isFollowing: true,
+            capability: _cap(
+              'mutual',
+              canStartVoiceCall: true,
+              canStartVideoCall: true,
+              isBlocked: true,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text(UITextConstants.callVoice), findsNothing);
+      expect(find.text(UITextConstants.callVideo), findsNothing);
     });
   });
 }

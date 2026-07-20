@@ -110,6 +110,9 @@ func (facade *CommandFacade) Update(ctx context.Context, command UpdateCommand) 
 	if err != nil {
 		return CommandResult{}, err
 	}
+	if command.ExpectedVersion <= 0 {
+		return CommandResult{}, generated.AppErrorFromInvalidArgument("If-Match version is required")
+	}
 	if err := facade.validateParent(ctx, file.CircleID, file.GroupID, file.ID, command.ParentFolderID); err != nil {
 		return CommandResult{}, err
 	}
@@ -136,17 +139,34 @@ func (facade *CommandFacade) Delete(ctx context.Context, command DeleteCommand) 
 	if err != nil {
 		return CommandResult{}, err
 	}
-	if file.Status == filemodel.CircleFileStatusDeleted {
-		return CommandResult{
-			FileID:  file.ID,
-			Version: file.Version,
-			Status:  string(file.Status),
-		}, nil
-	}
-	return facade.commit(ctx, current, actorID, filemodel.ChangeSet{
+	change := filemodel.ChangeSet{
 		Kind: filemodel.ChangeDelete, FileID: file.ID, CircleID: file.CircleID,
 		ExpectedVersion: file.Version, OccurredAt: facade.now().UTC(),
-	}, policy.QuotaBytes)
+	}
+	if file.Status == filemodel.CircleFileStatusDeleted {
+		return facade.recordNoop(ctx, current, actorID, file, change)
+	}
+	return facade.commit(ctx, current, actorID, change, policy.QuotaBytes)
+}
+
+// recordNoop 持久化"目标状态已满足"回执；首个 Idempotency-Key 也能重放原始结果。
+func (facade *CommandFacade) recordNoop(ctx context.Context, current operation.Context, actorID string, file filemodel.CircleFile, change filemodel.ChangeSet) (CommandResult, error) {
+	digest, err := fileCommandDigest(actorID, change)
+	if err != nil {
+		return CommandResult{}, generated.AppErrorFromFileStorageWriteFailed(err.Error())
+	}
+	receipt, err := facade.store.RecordNoopReceipt(ctx, fileports.NoopReceipt{
+		FileID: file.ID, Version: file.Version, Status: file.Status,
+		ReceiptKey:    fileReceiptKey(actorID, current.IdempotencyKey),
+		CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(fileReceiptRetention),
+	})
+	if err != nil {
+		return CommandResult{}, mapFileCommitError(err)
+	}
+	return CommandResult{
+		FileID: receipt.FileID, Version: receipt.Version,
+		Status: string(receipt.Status), IdempotentReplay: true,
+	}, nil
 }
 
 func (facade *CommandFacade) requireSpaceAccess(ctx context.Context, circleID, groupID, personaID string, elevated bool) (fileports.CircleStoragePolicySlice, error) {
@@ -229,11 +249,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 			return CommandResult{}, mapFileCommitError(filemodel.ErrNotFound)
 		}
 		if latest.Status == filemodel.CircleFileStatusDeleted {
-			return CommandResult{
-				FileID:  latest.ID,
-				Version: latest.Version,
-				Status:  string(latest.Status),
-			}, nil
+			return facade.recordNoop(ctx, current, actorID, latest, change)
 		}
 		change.ExpectedVersion = latest.Version
 	}

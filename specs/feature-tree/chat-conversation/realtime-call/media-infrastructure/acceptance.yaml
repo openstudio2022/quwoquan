@@ -7,102 +7,159 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: SFU/TURN/录制媒体基础设施与三端来电推送通道（VoIP/FCM/Web Push）。
+  summary: LiveKit Room/token、TURN、realtime-gateway 事件、离线来电与 RTC media QoE 运行准出。
   in_scope:
-  - LiveKit SFU 房间生命周期与 Token 签发
-  - WS 信令 wire type 端云一致
-  - 来电推送负载契约（VoIP/FCM/Web Push）
+  - server-issued LiveKit token/livekitUrl 与 ReportMediaConnected
+  - realtime-gateway call/participant/screen_share wire
+  - PushKit/FCM 商用来电链与 Web 前台 realtime 降级
+  - QoE emitter、rollup、dashboard/alert 与灰度 readback
   out_of_scope:
-  - 端侧通话 UI（见 call-experience）
+  - 通话录制媒体管道、本期 E2EE、P2P 双路径
 gwt_acceptance:
-  GWT1_signaling_wire_type:
-    title: WS 信令 wire type 端云一致
+  GWT1_room_token_realtime:
+    title: Room/token 与 realtime-gateway 单通道对齐
     given:
-    - events.yaml 已声明 client_ws_type（call.ringing 等）。
+    - 合法 persona 发起或接听 CallSession。
     when:
-    - rtc-service 发布 CallRinging/ParticipantJoined 等事件。
+    - rtc-service 创建 Room、签发 token 并发布 CallRinging/CallConnected/CallEnded。
     then:
-    - 推送的 WS type 为 wire type，端侧 parseRtcWsPayload 可解析，无 domain 常量泄漏到线协议。
+    - App 从响应消费 livekitUrl/token，在线事件只经可信 realtime connection 投递并按 client_ws_type 解析。
     done_when:
-    - 端云信令 type 完全对齐且来电可被端侧识别。
+    - Room、token、auth_ack、wire type、ReportMediaConnected 与状态机有端云证据。
     edge_cases:
-    - 未知 type 端侧降级为 unknown payload 不崩溃。
+    - ticket 伪造/重放、token 过期、LiveKit 不可用、未知 wire type。
     contract_refs:
-    - rtc/call_session events.yaml client_ws_type
+    - rtc/call_session/aggregate.yaml#livekit_integration
+    - rtc/call_session/events.yaml
+    - rtc/call_session/service.yaml#ReportMediaConnected
     performance_points:
-    - 信令延迟（发起→来电通知）≤1s。
+    - rtc command P95 300ms；realtime 状态同步目标 500ms/1s。
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      recorded:
+      - file: quwoquan_service/services/rtc-service/internal/application/signal_wire_type__local_contract_test.go
+      - file: quwoquan_service/services/realtime-gateway/tests/local_contract/gateway__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_signaling_wire__local_contract_test.dart
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: gwt1_signaling_wire_type_local_contract
+        execution_profile: baseline
+        suite: media_realtime_local_contract
         cases:
-        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_local_contract
-        envs: &id001
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.realtime
+        envs: &local_envs
         - local
       - layer: api_integration
-        suite: gwt1_signaling_wire_type_api_integration
+        execution_profile: integration
+        suite: media_realtime_api_integration
         cases:
-        - api_integration.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_api_integration
-        envs: &id002
+        - api_integration.chat_conversation.realtime_call.media_infrastructure.room_connected
+        envs: &integration_envs
         - beta
         - gamma
-      supporting:
-      - layer: local_contract
-        suite: gwt1_signaling_wire_type_local_contract
-        cases:
-        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_local_contract
-        envs: *id001
+      supporting: []
     notes:
-    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/ws_event_wire_type_contract_test.go'
-    - '[migrated_from_planned] quwoquan_app/test/cloud/rtc/rtc_signaling_wire_type_test.dart'
-  GWT2_incoming_push_payload:
-    title: 三端来电推送负载契约
+    - 信令 local contract 不能替代 Gamma LiveKit 运行制品。
+  GWT2_offline_incoming_push:
+    title: 离线来电 provider 与平台唤醒
     given:
-    - 一通呼叫发起，被叫离线或后台。
+    - 被叫离线/后台/锁屏/被系统终止，且设备注册有效。
     when:
-    - rtc-service 在 call.initiated/ringing 投递推送。
+    - CallRinging 进入平台 push provider。
     then:
-    - VoIP/FCM/Web Push 负载含 callId/发起人/来源/类型/信任标记/过期，端侧据此唤起来电页。
+    - iOS/Android 按 capability 唤醒或明确降级；Web 仅以前台 realtime 站内来电承载，
+      过期/重复/cancelled call 不重复响铃。
     done_when:
-    - 三端推送负载契约一致且可驱动来电唤醒。
+    - provider receipt、设备回调、来电 UI、Answer/Reject 与真实设备 readback 闭环。
     edge_cases:
-    - 推送过期或重复时端侧幂等处理。
+    - token 失效、全屏意图权限关闭、Web 后台明确不可用、push 到达时 CallSession 已 ended。
     contract_refs:
-    - rtc/call_session events.yaml CallRinging push_policy
+    - rtc/call_session/events.yaml#CallRinging
     performance_points:
-    - 离线推送到达 ≤5s。
+    - 离线来电到达 P95 目标 ≤5s。
     tests:
-      planned: []
-      recorded: []
+      planned:
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_call_ringing_payload_contract__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
       - layer: api_integration
-        suite: gwt2_incoming_push_payload_api_integration
+        execution_profile: integration
+        suite: media_offline_push_api_integration
         cases:
-        - api_integration.chat_conversation.realtime_call.media_infrastructure.gwt2_incoming_push_payload_api_integration
-        envs: *id002
+        - api_integration.chat_conversation.realtime_call.media_infrastructure.offline_push
+        envs: *integration_envs
       - layer: user_acceptance
-        suite: e2e_journey
+        execution_profile: release
+        suite: media_offline_push_user_acceptance
         cases:
-        - user_acceptance.chat_conversation.realtime_call.media_infrastructure.e2e_journey
+        - user_acceptance.chat_conversation.realtime_call.media_infrastructure.offline_push
         envs:
         - gamma_local
+        - prod
+        rollout_stages:
+        - gray_initial
       supporting:
       - layer: local_contract
-        suite: gwt2_incoming_push_payload_local_contract
+        execution_profile: baseline
+        suite: media_offline_push_local_contract
         cases:
-        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt2_incoming_push_payload_local_contract
-        envs: *id001
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.offline_push_payload
+        envs: *local_envs
     notes:
-    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/incoming_push_payload_contract_test.go'
+    - R-RTC01 未关闭，本项不得从 pending 提升。
+  GWT3_media_qoe:
+    title: 媒体 QoE 黄金指标可查询并驱动灰度
+    given:
+    - audio/video 通话在强网、弱网、重连与异常中断场景运行。
+    when:
+    - App/LiveKit adapter 结算 rtc_media_qoe，rollup 与观测栈处理该事实。
+    then:
+    - 可查询有效媒体接通率、接听到媒体可用 P95、非预期媒体中断率，并按低基数维度下钻。
+    done_when:
+    - emitter、去重、rollup、series、dashboard/alert、Gamma/Prod readback 与恢复演练齐全。
+    edge_cases:
+    - 取消/拒绝不进入接通分母；主动挂断不计非预期中断；重连不重复结算 session。
+    contract_refs:
+    - ops/event_record/event_catalog.yaml#rtc_media_qoe
+    performance_points:
+    - 建议门槛：接通率 ≥98%、connect P95 ≤3s、非预期中断率 ≤2%；最终由 metadata/SLO 冻结。
+    tests:
+      planned:
+      recorded:
+      - file: quwoquan_app/test/local_contract/core/rtc_media_qoe_emission__observability__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/telemetry/app_telemetry_reporter__local_contract_test.dart
+      - file: quwoquan_ops/tests/local_contract/test_rtc_media_qoe_observability__observability_reliability__local_contract_test.py
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: media_qoe_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.qoe
+        envs: *local_envs
+      - layer: user_acceptance
+        execution_profile: release
+        suite: media_qoe_user_acceptance
+        cases:
+        - user_acceptance.chat_conversation.realtime_call.media_infrastructure.qoe
+        envs:
+        - gamma_local
+        - prod
+        rollout_stages:
+        - gray_initial
+      supporting: []
+    notes:
+    - 本地 emitter/去重、RTC hourly rollup、SLS 黄金指标告警、LiveKit 官方指标告警与
+      低基数合同已通过；接听前终止即使本地已连 SFU 也归为 abandoned。
+    - Gamma/Prod 尚无真实 SLS series、可执行查询面板或触发/恢复回滚证据，故保持 partial。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

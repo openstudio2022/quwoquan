@@ -1,18 +1,18 @@
-"""Resolve and decode exact Baidu Baike card API pages."""
+"""Resolve and decode exact public Baidu Baike entry pages."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import html
-import json
 import re
 import urllib.parse
 
-from core.baike_source_contract import BAIDU_BAIKE_API_POLICY
+from core.baike_source_contract import BAIDU_BAIKE_CANONICAL_RESOLUTION
 from core.runtime_policy import active_runtime_policy
+from content.source.html_text import _html_to_plain_text
 from content.source.research import network_io
 from content.source.research.text_match import (
     _dedupe_terms,
-    _normalized_title,
+    _geo_context_matches,
     _wiki_resolved_title_matches_entity,
     _wiki_title_matches_entity,
 )
@@ -38,36 +38,33 @@ def _clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def decode_baidu_baike_payload(body: bytes) -> BaiduBaikePage | None:
-    try:
-        payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+def decode_baidu_baike_html(body: bytes, *, url: str) -> BaiduBaikePage | None:
+    raw = body.decode("utf-8", errors="replace")
+    title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", raw)
+    title = _clean_text(title_match.group(1) if title_match else "")
+    title = re.sub(r"[_\-|]\s*百度百科.*$", "", title).strip()
+    text = _html_to_plain_text(raw, url).strip()
+    if not title or len(text) < 40:
         return None
-    if not isinstance(payload, dict):
-        return None
-    title = _clean_text(payload.get("title"))
-    abstract = _clean_text(payload.get("abstract"))
-    if not title or not abstract:
-        return None
-    facts: list[str] = []
-    for row in payload.get("card") or []:
-        if not isinstance(row, dict):
-            continue
-        name = _clean_text(row.get("name"))
-        raw_values = row.get("value")
-        values = raw_values if isinstance(raw_values, list) else [raw_values]
-        value = "、".join(filter(None, (_clean_text(item) for item in values)))
-        if name and value:
-            facts.append(f"{name}：{value}")
-    text = "\n\n".join([f"# {title}", abstract, *facts])
     return BaiduBaikePage(title=title, text=text)
 
 
-def baidu_baike_api_url(term: str) -> str:
-    policy = BAIDU_BAIKE_API_POLICY
-    query = dict(policy.fixed_query)
-    query["bk_key"] = term
-    return f"{policy.base_url}?{urllib.parse.urlencode(query)}"
+def baidu_baike_search_url(term: str) -> str:
+    return (
+        BAIDU_BAIKE_CANONICAL_RESOLUTION.base_url
+        + urllib.parse.quote(str(term or "").strip(), safe="")
+    )
+
+
+def _canonical_entry_url(final_url: str) -> str | None:
+    parsed = urllib.parse.urlsplit(final_url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "baike.baidu.com"
+        or not parsed.path.startswith("/item/")
+    ):
+        return None
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def _page_matches_entity(
@@ -83,15 +80,15 @@ def _page_matches_entity(
         entity_aliases=aliases,
     ):
         return False
+    if not _geo_context_matches(
+        " ".join((page.title, page.text, entity_id)),
+        geo_context_terms,
+    ):
+        return False
     if _wiki_title_matches_entity(page.title, entity_id):
         return True
-    if not BAIDU_BAIKE_API_POLICY.require_geo_context_for_alias:
-        return True
-    normalized_text = _normalized_title(page.text)
-    return any(
-        _normalized_title(term) in normalized_text
-        for term in geo_context_terms
-        if _normalized_title(term)
+    return not BAIDU_BAIKE_CANONICAL_RESOLUTION.require_geo_context_for_alias or bool(
+        geo_context_terms
     )
 
 
@@ -101,18 +98,23 @@ def resolve_baidu_baike_page(
     entity_aliases: tuple[str, ...] = (),
     geo_context_terms: tuple[str, ...] = (),
 ) -> BaiduBaikeResolution | None:
-    policy = BAIDU_BAIKE_API_POLICY
+    policy = BAIDU_BAIKE_CANONICAL_RESOLUTION
     candidates = _dedupe_terms(
         [entity_id, *entity_aliases],
         limit=policy.candidate_limit,
     )
     timeout = active_runtime_policy().provider_timeouts.encyclopedia_seconds
     for candidate in candidates:
-        url = baidu_baike_api_url(candidate)
-        response = network_io.fetch_http(url, timeout=timeout)
+        response = network_io.fetch_http(
+            baidu_baike_search_url(candidate),
+            timeout=timeout,
+        )
         if not response.ok or not response.body:
             continue
-        page = decode_baidu_baike_payload(response.body)
+        canonical_url = _canonical_entry_url(response.final_url)
+        if canonical_url is None:
+            continue
+        page = decode_baidu_baike_html(response.body, url=canonical_url)
         if page is None or not _page_matches_entity(
             page,
             entity_id=entity_id,
@@ -121,7 +123,7 @@ def resolve_baidu_baike_page(
         ):
             continue
         return BaiduBaikeResolution(
-            url=f"https://baike.baidu.com/item/{urllib.parse.quote(page.title)}",
+            url=canonical_url,
             title=page.title,
             matched_term=candidate,
             match_confidence=(
@@ -136,7 +138,7 @@ def resolve_baidu_baike_page(
 __all__ = [
     "BaiduBaikePage",
     "BaiduBaikeResolution",
-    "baidu_baike_api_url",
-    "decode_baidu_baike_payload",
+    "baidu_baike_search_url",
+    "decode_baidu_baike_html",
     "resolve_baidu_baike_page",
 ]

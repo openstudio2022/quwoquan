@@ -6,6 +6,31 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	healthCheckStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "runtime",
+		Subsystem: "health",
+		Name:      "check_status",
+		Help:      "Latest health check result (1=healthy, 0=unhealthy).",
+	}, []string{"check"})
+	healthCheckLastSuccess = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "runtime",
+		Subsystem: "health",
+		Name:      "check_last_success_timestamp_seconds",
+		Help:      "Unix timestamp of the latest successful health check.",
+	}, []string{"check"})
+	healthCheckDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "runtime",
+		Subsystem: "health",
+		Name:      "check_duration_seconds",
+		Help:      "Health check execution duration in seconds.",
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2},
+	}, []string{"check"})
 )
 
 type CheckFunc func(ctx context.Context) error
@@ -42,26 +67,39 @@ func (c *Checker) Check(ctx context.Context) Result {
 	allOK := true
 
 	type checkResult struct {
-		name string
-		err  error
+		name     string
+		duration time.Duration
+		err      error
 	}
 
 	ch := make(chan checkResult, len(checks))
 	for name, fn := range checks {
 		go func(n string, f CheckFunc) {
+			startedAt := time.Now()
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
-			ch <- checkResult{name: n, err: f(checkCtx)}
+			err := f(checkCtx)
+			ch <- checkResult{
+				name:     n,
+				duration: time.Since(startedAt),
+				err:      err,
+			}
 		}(name, fn)
 	}
 
 	for range checks {
 		r := <-ch
+		healthCheckDuration.WithLabelValues(r.name).Observe(r.duration.Seconds())
 		if r.err != nil {
 			results[r.name] = r.err.Error()
+			healthCheckStatus.WithLabelValues(r.name).Set(0)
 			allOK = false
 		} else {
 			results[r.name] = "ok"
+			healthCheckStatus.WithLabelValues(r.name).Set(1)
+			healthCheckLastSuccess.WithLabelValues(r.name).Set(
+				float64(time.Now().UTC().Unix()),
+			)
 		}
 	}
 

@@ -15,7 +15,6 @@ class ChatApiMetadata {
     '/chat/groups',
     '/chat/inbox',
     '/chat/message-home',
-    '/chat/messages',
     '/chat/selectable-group-conversations',
   ];
 
@@ -28,6 +27,7 @@ class ChatApiMetadata {
     'GetGroupHome': '/chat/groups/{conversationId}/home',
     'GetReceipts': '/chat/conversations/{conversationId}/messages/{messageId}/receipts',
     'InviteAssistant': '/chat/conversations/{conversationId}/assistant',
+    'LeaveConversation': '/chat/conversations/{conversationId}/leave',
     'ListContactHome': '/chat/contact-home',
     'ListContacts': '/chat/contacts',
     'ListConversationTimestamps': '/chat/conversations/timestamps',
@@ -43,15 +43,14 @@ class ChatApiMetadata {
     'RecallMessage': '/chat/conversations/{conversationId}/messages/{messageId}/recall',
     'RemoveAssistant': '/chat/conversations/{conversationId}/assistant',
     'RemoveMember': '/chat/conversations/{conversationId}/members/{userId}',
-    'SearchContacts': '/chat/contacts/search',
-    'SearchConversations': '/chat/conversations/search',
-    'SearchMessages': '/chat/messages/search',
     'SendMessage': '/chat/conversations/{conversationId}/messages',
     'SyncMessages': '/chat/conversations/{conversationId}/sync',
     'TransferOwnership': '/chat/conversations/{conversationId}/owner',
+    'UpdateAnnouncement': '/chat/conversations/{conversationId}/announcement',
     'UpdateConversationSettings': '/chat/conversations/{conversationId}/settings',
     'UpdateConversationTitle': '/chat/conversations/{conversationId}',
     'UpdateGroupAdmins': '/chat/conversations/{conversationId}/admins',
+    'UpdateGroupGovernanceSettings': '/chat/conversations/{conversationId}/governance',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -63,6 +62,7 @@ class ChatApiMetadata {
     'GetGroupHome': 'GET',
     'GetReceipts': 'GET',
     'InviteAssistant': 'POST',
+    'LeaveConversation': 'POST',
     'ListContactHome': 'GET',
     'ListContacts': 'GET',
     'ListConversationTimestamps': 'GET',
@@ -78,15 +78,14 @@ class ChatApiMetadata {
     'RecallMessage': 'POST',
     'RemoveAssistant': 'DELETE',
     'RemoveMember': 'DELETE',
-    'SearchContacts': 'GET',
-    'SearchConversations': 'GET',
-    'SearchMessages': 'GET',
     'SendMessage': 'POST',
     'SyncMessages': 'POST',
     'TransferOwnership': 'PATCH',
+    'UpdateAnnouncement': 'PATCH',
     'UpdateConversationSettings': 'PATCH',
     'UpdateConversationTitle': 'PATCH',
     'UpdateGroupAdmins': 'PUT',
+    'UpdateGroupGovernanceSettings': 'PATCH',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
@@ -99,6 +98,7 @@ class ChatApiMetadata {
     'GetGroupHome': 'required',
     'GetReceipts': 'required',
     'InviteAssistant': 'required',
+    'LeaveConversation': 'required',
     'ListContactHome': 'required',
     'ListContacts': 'required',
     'ListConversationTimestamps': 'required',
@@ -114,15 +114,14 @@ class ChatApiMetadata {
     'RecallMessage': 'required',
     'RemoveAssistant': 'required',
     'RemoveMember': 'required',
-    'SearchContacts': 'required',
-    'SearchConversations': 'required',
-    'SearchMessages': 'required',
     'SendMessage': 'required',
     'SyncMessages': 'required',
     'TransferOwnership': 'required',
+    'UpdateAnnouncement': 'required',
     'UpdateConversationSettings': 'required',
     'UpdateConversationTitle': 'required',
     'UpdateGroupAdmins': 'required',
+    'UpdateGroupGovernanceSettings': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -141,6 +140,7 @@ class ChatApiMetadata {
   static const String getGroupHomeOperation = 'GetGroupHome';
   static const String getReceiptsOperation = 'GetReceipts';
   static const String inviteAssistantOperation = 'InviteAssistant';
+  static const String leaveConversationOperation = 'LeaveConversation';
   static const String listContactHomeOperation = 'ListContactHome';
   static const String listContactsOperation = 'ListContacts';
   static const String listConversationTimestampsOperation = 'ListConversationTimestamps';
@@ -156,15 +156,14 @@ class ChatApiMetadata {
   static const String recallMessageOperation = 'RecallMessage';
   static const String removeAssistantOperation = 'RemoveAssistant';
   static const String removeMemberOperation = 'RemoveMember';
-  static const String searchContactsOperation = 'SearchContacts';
-  static const String searchConversationsOperation = 'SearchConversations';
-  static const String searchMessagesOperation = 'SearchMessages';
   static const String sendMessageOperation = 'SendMessage';
   static const String syncMessagesOperation = 'SyncMessages';
   static const String transferOwnershipOperation = 'TransferOwnership';
+  static const String updateAnnouncementOperation = 'UpdateAnnouncement';
   static const String updateConversationSettingsOperation = 'UpdateConversationSettings';
   static const String updateConversationTitleOperation = 'UpdateConversationTitle';
   static const String updateGroupAdminsOperation = 'UpdateGroupAdmins';
+  static const String updateGroupGovernanceSettingsOperation = 'UpdateGroupGovernanceSettings';
 
   static const String addMembersPathTemplate = '/chat/conversations/{conversationId}/members';
   static String addMembersPath({required String conversationId}) {
@@ -202,6 +201,12 @@ class ChatApiMetadata {
   static const String inviteAssistantPathTemplate = '/chat/conversations/{conversationId}/assistant';
   static String inviteAssistantPath({required String conversationId}) {
     return _fillPath(inviteAssistantPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String leaveConversationPathTemplate = '/chat/conversations/{conversationId}/leave';
+  static String leaveConversationPath({required String conversationId}) {
+    return _fillPath(leaveConversationPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }
@@ -258,9 +263,6 @@ class ChatApiMetadata {
       'userId': userId,
     });
   }
-  static const String searchContactsPath = '/chat/contacts/search';
-  static const String searchConversationsPath = '/chat/conversations/search';
-  static const String searchMessagesPath = '/chat/messages/search';
   static const String sendMessagePathTemplate = '/chat/conversations/{conversationId}/messages';
   static String sendMessagePath({required String conversationId}) {
     return _fillPath(sendMessagePathTemplate, <String, String>{
@@ -279,6 +281,12 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String updateAnnouncementPathTemplate = '/chat/conversations/{conversationId}/announcement';
+  static String updateAnnouncementPath({required String conversationId}) {
+    return _fillPath(updateAnnouncementPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
   static const String updateConversationSettingsPathTemplate = '/chat/conversations/{conversationId}/settings';
   static String updateConversationSettingsPath({required String conversationId}) {
     return _fillPath(updateConversationSettingsPathTemplate, <String, String>{
@@ -294,6 +302,12 @@ class ChatApiMetadata {
   static const String updateGroupAdminsPathTemplate = '/chat/conversations/{conversationId}/admins';
   static String updateGroupAdminsPath({required String conversationId}) {
     return _fillPath(updateGroupAdminsPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String updateGroupGovernanceSettingsPathTemplate = '/chat/conversations/{conversationId}/governance';
+  static String updateGroupGovernanceSettingsPath({required String conversationId}) {
+    return _fillPath(updateGroupGovernanceSettingsPathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }

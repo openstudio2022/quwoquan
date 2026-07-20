@@ -18,7 +18,9 @@ from governance.coverage.coverage_matrix import (  # noqa: E402
     DISCOVERY_SOURCES,
     ENTITY_TYPES,
     _runtime_root,
+    completed_discovery_shards,
     coverage_matrix_status,
+    finalize_discovery_source_cells,
     resumable_cells,
     prepare_coverage_matrix,
     record_cell_page,
@@ -169,6 +171,97 @@ def test_failed_or_truncated_page_never_counts_as_empty_or_saturated(tmp_path: P
         truncated=True,
     )
     assert partial["status"] == "partial"
+
+
+def test_source_finalization_partitions_candidates_and_closes_all_type_cells(
+    tmp_path: Path,
+) -> None:
+    report = prepare_coverage_matrix(
+        run_id="matrix-source-finalize",
+        provinces=["浙江省"],
+        sources=["wikidata_geo"],
+        admin_tree={"浙江省": {"杭州市": ["西湖区"]}},
+        runtime_root=tmp_path,
+        guardrails=_guardrails(),
+    )
+    result = finalize_discovery_source_cells(
+        run_dir=Path(report["runDir"]),
+        source="wikidata_geo",
+        candidates=[
+            {
+                "name": "中国湿地博物馆",
+                "province": "浙江省",
+                "city": "杭州市",
+                "district": "西湖区",
+                "source": "wikidata_geo",
+                "identityRefs": {"qid": "Q22100874"},
+                "coordinates": {"lat": 30.26, "lon": 120.08},
+                "typeTagRefs": ["Entity/地点/博物馆"],
+            }
+        ],
+    )
+
+    assert result["updatedCells"] == len(ENTITY_TYPES)
+    status = result["status"]
+    assert status["cellStatuses"]["pending"] == 0
+    assert status["provinces"]["浙江省"]["allCellsTerminal"] is True
+    checkpoint = json.loads(
+        (
+            Path(report["runDir"]) / "checkpoint_浙江省_杭州市.json"
+        ).read_text(encoding="utf-8")
+    )
+    museum = next(
+        cell
+        for cell in checkpoint["cells"]
+        if cell["identity"]["entityType"] == "地点/博物馆"
+    )
+    assert museum["status"] == "exhausted"
+    assert museum["counts"]["dedupUnique"] == 1
+    assert all(
+        cell["status"] == "empty"
+        for cell in checkpoint["cells"]
+        if cell["identity"]["entityType"] != "地点/博物馆"
+    )
+
+
+def test_incremental_source_finalization_persists_completed_shards_for_resume(
+    tmp_path: Path,
+) -> None:
+    report = prepare_coverage_matrix(
+        run_id="matrix-incremental",
+        provinces=["浙江省"],
+        sources=["osm_poi"],
+        admin_tree={"浙江省": {"杭州市": ["西湖区", "余杭区"]}},
+        runtime_root=tmp_path,
+        guardrails=_guardrails(),
+    )
+    run_dir = Path(report["runDir"])
+    finalize_discovery_source_cells(
+        run_dir=run_dir,
+        source="osm_poi",
+        candidates=[
+            {
+                "name": "中国湿地博物馆",
+                "province": "浙江省",
+                "city": "杭州市",
+                "district": "西湖区",
+                "source": "osm_poi",
+                "identityRefs": {"osmType": "node", "osmId": "1"},
+                "typeTagRefs": ["Entity/地点/博物馆"],
+            }
+        ],
+        province_filter="浙江省",
+        city_filter="杭州市",
+        district_filter="西湖区",
+    )
+
+    assert completed_discovery_shards(
+        run_dir=run_dir,
+        sources=["osm_poi"],
+    ) == {("浙江省", "杭州市", "西湖区", "osm_poi")}
+    assert coverage_matrix_status(run_dir=run_dir)["cellStatuses"]["pending"] == len(
+        ENTITY_TYPES
+    )
 
 
 def test_resume_rejects_guardrail_drift(tmp_path: Path) -> None:

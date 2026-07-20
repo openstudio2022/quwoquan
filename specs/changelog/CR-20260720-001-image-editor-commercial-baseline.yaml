@@ -1,0 +1,56 @@
+id: CR-20260720-001
+title: 图片编辑器商用化基线：占位清零 + 曲线/白平衡/马赛克/文字真实现 + 全局撤销与观测
+date: 2026-07-20
+status: implemented
+feature_tree:
+  domain_service: discovery-content
+  business_capability: publish-comment-reaction
+  story: image-editing
+motivation: >
+  排查确认图片编辑器约半数工具为占位/空壳（曲线、白平衡、透视、修复、色调对比度、
+  魅力光晕点开即占位文案；马赛克、文字、相框确认后不改像素），back=保存无放弃保护，
+  历史删除不重算画布，页面零埋点。按 Snapseed 3.0 / 醒图基础盘对标进行商用化收敛。
+changes:
+  app:
+  - 移除全部占位/空壳入口：相框、透视、修复、色调对比度、魅力光晕、工具箱重复锐化、
+    美颜残留标签、imageEditorPanelPlaceholder 等占位文案与死常量；删除死文件
+    image_editor_pro_tool_list.dart / image_editor_curve_overlay_bar.dart。
+  - 新建统一像素引擎 shared/image_editor_export_engine.dart（约束解码上限 4096、
+    矩阵/曲线 LUT/马赛克/文字合成、PNG 编码），预览与导出同源。
+  - 曲线真实现：panels/curves/（Fritsch–Carlson 单调三次插值 256 LUT、四通道控制点
+    编辑器、直方图背景、降采样 CPU 实时预览）。
+  - 白平衡真实现：色温/色调矩阵 + 灰世界自动白平衡。
+  - 马赛克真实现：像素化/模糊涂抹画布、笔刷大小、笔画撤销、预览/导出同一笔画几何。
+  - 文字真实现：图上文字图层（纯色/描边/底纹样式、8 色板、拖动/双指缩放旋转、双击重编）。
+  - 编辑模型统一为「确认即烘焙 + 文件快照」：ImageEditorStep 增加
+    imageIndex/beforePath/afterPath；ImageEditorStepStack 提供全局撤销/重做/回退到某步之前；
+    历史面板删除「删除单步不重算」的欺骗语义。
+  - back 有修改时弹破坏性放弃确认（返回 null 宿主不更新）；顶栏新增撤销/重做/完成。
+  - 落地 page.media.image_editor enter/exit/submit/failure 埋点与 image_editor_tool_used
+    工具分布事件；失败路径统一上报。
+  - operation_panel 按 controls/filter/pro 拆分（2051 行 → 347+747+491+587）；
+    工具常量重构为类型化 kImageEditorToolEntries 单一真相源。
+  - 移除滤镜仓库 scheduleUpdateCheckPlaceholder no-op（云端下发归 M2 真实实现）。
+  specs:
+  - 新建 specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/
+    （spec.md + acceptance.yaml，GWT1-4 + 三层测试证据）。
+  - 页面横向质量矩阵 image_editor_page 行更新（P4 埋点由 — 转 ✓）；
+    metadata_driven_ui_gap_inventory 注记 M2 云端化转 tracked 计划。
+tests:
+  recorded:
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_curve_engine__functional__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_step_stack__functional__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_annotation_models__functional__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_export_pipeline__functional__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_discard_confirm__functional__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_operation_panel__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_invalid_image_decode__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+  verification:
+  - command: flutter test --no-pub --concurrency=1 <8 image_editor local_contract files>
+    result: 52 tests passed
+risks: []
+out_of_scope:
+  - FilterCatalogRelease 云目录、MediaAsset 图片多规格处理和 CONTENT_MEDIA_GAMMA_UAT
+    属于独立端云 Story，不计入本地编辑器基线完成度。
+  - EditRecipe、FilterUsageFact 与圈子热度投影属于独立交集 Story。

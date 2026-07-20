@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/chat_mention_text.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
@@ -13,6 +14,8 @@ Widget _wrapBubble({
   required ChatMessageDisplayItem message,
   bool isRight = false,
   VoidCallback? onTap,
+  ValueChanged<String>? onMentionTap,
+  Map<String, String> mentionDisplayNames = const <String, String>{},
   void Function(LongPressStartDetails)? onLongPressStart,
 }) {
   return ProviderScope(
@@ -28,6 +31,8 @@ Widget _wrapBubble({
             isSelected: false,
             onLongPressStart: onLongPressStart ?? (_) {},
             onTap: onTap,
+            onMentionTap: onMentionTap,
+            mentionDisplayNames: mentionDisplayNames,
           ),
         ),
       ),
@@ -57,6 +62,70 @@ void main() {
         text.style?.fontFamilyFallback,
         contains(BundledFontFamilies.notoColorEmoji),
       );
+    });
+
+    testWidgets('只高亮契约 mentions 对应 token 并保持稳定点击目标', (tester) async {
+      String? tappedTarget;
+      final message = _message(
+        content: '普通@符号 @张三 你好',
+        mentions: const <String>['user_zhang'],
+      );
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          mentionDisplayNames: const <String, String>{'user_zhang': '张三'},
+          onMentionTap: (target) => tappedTarget = target,
+        ),
+      );
+      await tester.pump();
+
+      final richTexts = tester
+          .widgetList<ChatMentionText>(find.byType(ChatMentionText))
+          .toList(growable: false);
+      expect(
+        richTexts,
+        hasLength(1),
+        reason: '单条文本消息只能存在一个提及正文：'
+            '${richTexts.map((item) => item.content).join('|')}',
+      );
+      final richText = richTexts.single;
+      final segments = resolveChatMentionTextSegments(
+        content: richText.content,
+        mentions: richText.mentions,
+        displayNames: richText.displayNames,
+      );
+      expect(
+        segments.where((segment) => segment.isMention).map((e) => e.text),
+        <String>['@张三'],
+      );
+      richText.onMentionTap?.call('user_zhang');
+      expect(tappedTarget, 'user_zhang');
+    });
+
+    test('同名成员与离群成员按 mentions/token 顺序保持 ID 稳定', () {
+      final segments = resolveChatMentionTextSegments(
+        content: '@同名 @同名 @旧名字',
+        mentions: const <String>['user_a', 'user_b', 'user_left'],
+        displayNames: const <String, String>{'user_a': '同名', 'user_b': '同名'},
+      ).where((segment) => segment.isMention).toList(growable: false);
+
+      expect(segments.map((segment) => segment.targetId), <String>[
+        'user_a',
+        'user_b',
+        'user_left',
+      ]);
+    });
+
+    test('显示名包含空格时完整 token 仍绑定稳定 ID', () {
+      final segments = resolveChatMentionTextSegments(
+        content: '你好 @张 三 欢迎',
+        mentions: const <String>['user_zhang'],
+        displayNames: const <String, String>{'user_zhang': '张 三'},
+      ).where((segment) => segment.isMention).toList(growable: false);
+
+      expect(segments, hasLength(1));
+      expect(segments.single.text, '@张 三');
+      expect(segments.single.targetId, 'user_zhang');
     });
 
     testWidgets('发送者名称正确显示（左侧气泡）', (tester) async {
@@ -109,10 +178,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('会议纪要.pdf'), findsAtLeastNWidgets(1));
-      expect(
-        find.text(UITextConstants.chatPreviewFile),
-        findsAtLeastNWidgets(1),
-      );
+      expect(find.text(ChatText.chatPreviewFile), findsAtLeastNWidgets(1));
     });
 
     testWidgets('视频消息展示视频卡片', (tester) async {
@@ -132,10 +198,7 @@ void main() {
         find.byIcon(Icons.play_circle_fill_rounded),
         findsAtLeastNWidgets(1),
       );
-      expect(
-        find.text(UITextConstants.chatPreviewVideo),
-        findsAtLeastNWidgets(1),
-      );
+      expect(find.text(ChatText.chatPreviewVideo), findsAtLeastNWidgets(1));
     });
 
     testWidgets('强类型分享卡片展示标题、摘要和缩略图', (tester) async {
@@ -175,8 +238,8 @@ void main() {
       await tester.pump();
 
       expect(find.byType(AppCachedNetworkImage), findsOneWidget);
-      expect(find.text(UITextConstants.chatPreviewFile), findsNothing);
-      expect(find.text(UITextConstants.chatPreviewVideo), findsNothing);
+      expect(find.text(ChatText.chatPreviewFile), findsNothing);
+      expect(find.text(ChatText.chatPreviewVideo), findsNothing);
     });
 
     testWidgets('图片消息缺少原图时回退到缩略图', (tester) async {
@@ -205,10 +268,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(VoiceMessageBubble), findsNothing);
-      expect(
-        find.text(UITextConstants.chatPreviewRecalled),
-        findsAtLeastNWidgets(1),
-      );
+      expect(find.text(ChatText.chatPreviewRecalled), findsAtLeastNWidgets(1));
     });
 
     testWidgets('语音 URL 为空时展示发送中不可播放态', (tester) async {
@@ -223,7 +283,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(VoiceMessageBubble), findsOneWidget);
-      expect(find.text(UITextConstants.chatVoiceSending), findsOneWidget);
+      expect(find.text(ChatText.chatVoiceSending), findsOneWidget);
     });
   });
 
@@ -308,6 +368,7 @@ ChatMessageDisplayItem _message({
   String imageUrl = '',
   String thumbnailUrl = '',
   int audioDurationMs = 0,
+  List<String> mentions = const <String>[],
   ChatMessageCardDto? card,
 }) {
   return ChatMessageDisplayItem(
@@ -331,6 +392,7 @@ ChatMessageDisplayItem _message({
     thumbnailUrl: thumbnailUrl,
     audioDurationMs: audioDurationMs,
     audioWaveform: const <double>[0.1, 0.4, 0.2, 0.8],
+    mentions: mentions,
     card: card,
   );
 }

@@ -1,0 +1,20 @@
+aggregate: AssistantPreferenceFact
+events:
+  - name: AssistantPreferenceSet
+    producer: assistant-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: AssistantPreferenceFact
+    payload_fields: [preferenceId, userId, scope, conversationId, kind, value, sourceType, status, version, updatedAt]
+  - name: AssistantPreferenceRevoked
+    producer: assistant-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: AssistantPreferenceFact
+    payload_fields: [preferenceId, userId, status, revokedAt, revocationDeadline, version, updatedAt]
+  - name: AssistantPreferenceRestored
+    producer: assistant-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_entity: AssistantPreferenceFact
+    payload_fields: [preferenceId, userId, status, version, updatedAt]

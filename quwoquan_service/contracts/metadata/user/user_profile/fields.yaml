@@ -28,7 +28,7 @@ entities:
         api_exposure: read
         ops_exposure: read_write
         recommend_feature: false
-        description: 账号生命周期状态：anonymous | active | suspended | deleted
+        description: 账号生命周期状态：anonymous | active | suspended | closed（closed 为注销终态）
 
       - name: identityOrigin
         source: identityOrigin
@@ -380,7 +380,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: avatarAssetId
         source: avatarAssetId
         type: string
@@ -389,7 +388,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: maskedPhone
         source: maskedPhone
         type: string
@@ -408,7 +406,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: lastLoginAt
         source: lastLoginAt
         type: timestamp
@@ -417,7 +414,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
   OneTapLoginHintResponse:
     description: 运营商一键登录提示响应；不签发 token，只返回脱敏号码和账号摘要
     cache_excluded: true
@@ -431,7 +427,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: maskedPhone
         source: maskedPhone
         type: string
@@ -449,7 +444,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: accountHint
         source: accountHint
         type: object
@@ -468,7 +462,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: providerRequestId
         source: providerRequestId
         type: string
@@ -477,7 +470,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
     enums:
       OneTapLoginHintState:
         values: [registered, new_phone, unavailable]
@@ -495,7 +487,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: providerRequestId
         source: providerRequestId
         type: string
@@ -504,7 +495,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: latencyMs
         source: latencyMs
         type: int
@@ -513,7 +503,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: resultCode
         source: resultCode
         type: string
@@ -522,7 +511,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: occurredAt
         source: occurredAt
         type: timestamp
@@ -531,7 +519,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
   ConsentRecord:
     description: 登录前用户协议与隐私政策同意记录；用于登录、数据权利与法务审计
     cache_excluded: true
@@ -544,7 +531,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: ownerId
         source: ownerId
         type: string
@@ -553,7 +539,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: agreementVersion
         source: agreementVersion
         type: string
@@ -562,7 +547,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: privacyVersion
         source: privacyVersion
         type: string
@@ -571,7 +555,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: acceptedAt
         source: acceptedAt
         type: timestamp
@@ -580,7 +563,6 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
-
       - name: deviceId
         source: deviceId
         type: string
@@ -923,7 +905,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: fontSizePreset
         source: fontSizePreset
         type: enum
@@ -933,7 +914,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: source
         source: source
         type: enum
@@ -943,7 +923,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: ownerDefaultThemeMode
         source: ownerDefaultThemeMode
         type: enum
@@ -953,7 +932,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: ownerDefaultFontSizePreset
         source: ownerDefaultFontSizePreset
         type: enum
@@ -963,7 +941,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
       - name: hasSubAccountOverride
         source: hasSubAccountOverride
         type: bool
@@ -1080,6 +1057,51 @@ entities:
         source: subAccountId
         type: string
         constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: subjectType
+        source: subjectType
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayName
+        source: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarVersion
+        source: avatarVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isPrimary
+        source: isPrimary
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -1272,10 +1294,39 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: inheritsFromOwner
-        source: inheritsFromOwner
+      - name: inheritsProfileFromOwner
+        source: inheritsProfileFromOwner
         type: bool
         constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 与 Persona 实体同名字段单轨对齐；wire 不得输出 inheritsFromOwner 旧键
+
+      - name: overriddenProfileFields
+        source: overriddenProfileFields
+        type: "string[]"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 分身已覆写、不再随 owner 同步的资料字段列表
+
+      - name: lastProfileSyncAt
+        source: lastProfileSyncAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastProfileSyncSource
+        source: lastProfileSyncSource
+        type: string
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -1297,15 +1348,6 @@ entities:
         constraints: [NULLABLE]
         classification: PII
         log_policy: mask
-        api_exposure: read
-        ops_exposure: read
-
-      - name: hasAttributedHistory
-        source: hasAttributedHistory
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
         api_exposure: read
         ops_exposure: read
 
@@ -1385,7 +1427,7 @@ entities:
         ops_exposure: read
 
   PersonaLifecycleGuardView:
-    description: owner 在删除/退役前读取的生命周期保护视图
+    description: owner 在退役前读取的生命周期保护视图
     fields:
       - name: subAccountId
         source: subAccountId
@@ -1420,15 +1462,6 @@ entities:
         type: enum
         enum_ref: PersonaLifecycleGuardReason
         constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: hasAttributedHistory
-        source: hasAttributedHistory
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -2011,6 +2044,52 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+  CloseAccountRequestWire:
+    description: 账号注销命令请求（App 内自助发起，Apple 5.1.1(v)；确认交互在客户端完成）
+    fields:
+      - name: clientRequestId
+        source: clientRequestId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+        description: 客户端幂等重放键；与 Idempotency-Key header 二选一
+
+  CloseAccountResultWire:
+    description: 账号注销命令结果；closed 为终态，重放返回幂等成功
+    fields:
+      - name: accountState
+        source: accountState
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 注销后账号状态；恒为 closed
+
+      - name: closedAt
+        source: closedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 注销生效时间（UTC RFC3339）
+
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否为已 closed 账号的幂等重放
+
   ProfileEditSnapshotWire:
     description: 本人资料编辑页私有快照，合并 owner/profile、active persona、凭证摘要、QR 摘要和标签选择
     fields:
@@ -2340,51 +2419,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  RecentSearchEntryView:
-    description: 最近搜索记录视图，供本地与云端同步对齐
+  UserAccountClosedPayload:
+    description: 账号注销 durable 事件；personaIds 供下游删除或匿名化归属数据
     fields:
-      - name: entryId
-        source: entryId
+      - name: userId
+        source: userId
         type: string
         constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
+        classification: PRIVATE
+        log_policy: hash
 
-      - name: query
-        source: query
+      - name: personaIds
+        source: personaIds
+        type: "[]string"
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: metadata_only
+
+      - name: accountState
+        source: accountState
         type: string
         constraints: [NOT_NULL]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: scope
-        source: scope
-        type: enum
-        enum_ref: SearchScope
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: facet
-        source: facet
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
 
       - name: updatedAt
         source: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read

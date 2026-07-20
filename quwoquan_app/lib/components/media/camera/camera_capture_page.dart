@@ -93,7 +93,7 @@ class CameraCapturePage extends StatefulWidget {
     this.caller = CameraPhotoCaller.picker,
     this.entrySource = CameraPhotoEntrySource.photoPicker,
     this.selectedCountBeforeCapture = 0,
-    this.filterRepository,
+    required this.filterRepository,
     this.imageEditorLauncher,
     this.photoCapture,
     this.previewBuilder,
@@ -116,7 +116,7 @@ class CameraCapturePage extends StatefulWidget {
   final CameraPhotoCaller caller;
   final CameraPhotoEntrySource entrySource;
   final int selectedCountBeforeCapture;
-  final ImageEditorFilterRepository? filterRepository;
+  final ImageEditorFilterRepository filterRepository;
   final CameraPhotoEditorLauncher? imageEditorLauncher;
   final CameraPhotoCapture? photoCapture;
   final CameraPreviewBuilder? previewBuilder;

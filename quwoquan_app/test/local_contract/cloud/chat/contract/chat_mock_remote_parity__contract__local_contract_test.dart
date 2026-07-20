@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
+import 'package:quwoquan_cloud_mock/chat_fixture.dart';
+
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 
 void main() {
   group('chat mock remote parity contract', () {
@@ -49,5 +52,47 @@ void main() {
         expect(rows, isEmpty);
       },
     );
+
+    test('repository 与发送命令共享同一个 pure state engine', () async {
+      final engine = AlphaChatStateEngine();
+      final repo = MockChatRepository(engine: engine);
+      final writer = AlphaChatMessageCommandWriter(engine: engine);
+      final before = await repo.listMessages(
+        conversationId: 'fixture_conv_direct',
+        limit: 500,
+      );
+
+      final result = await writer.sendMessage(
+        ChatSendMessageCommand(
+          conversationId: 'fixture_conv_direct',
+          type: 'text',
+          content: '共享状态消息',
+          clientMsgId: 'shared-engine-message-1',
+        ),
+      );
+      final replay = await writer.sendMessage(
+        ChatSendMessageCommand(
+          conversationId: 'fixture_conv_direct',
+          type: 'text',
+          content: '共享状态消息',
+          clientMsgId: 'shared-engine-message-1',
+        ),
+      );
+      final after = await repo.listMessages(
+        conversationId: 'fixture_conv_direct',
+        limit: 500,
+      );
+      final inbox = await repo.listInbox(limit: 500);
+
+      expect(replay.messageId, result.messageId);
+      expect(after.length, before.length + 1);
+      expect(after.last.id, result.messageId);
+      expect(
+        inbox
+            .firstWhere((item) => item.id == 'fixture_conv_direct')
+            .lastMessagePreview,
+        '共享状态消息',
+      );
+    });
   });
 }

@@ -32,6 +32,7 @@ type Post struct {
 	CreatorArchetype          string         `json:"creatorArchetype" bson:"creatorArchetype"`
 	CreatorProfileVersion     string         `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
 	CreatorDisclosure         map[string]any `json:"creatorDisclosure" bson:"creatorDisclosure"`
+	SourceAttribution         any            `json:"sourceAttribution" bson:"sourceAttribution"`
 	ExperienceClaimMode       string         `json:"experienceClaimMode" bson:"experienceClaimMode"`
 	AuthorQualitySignals      map[string]any `json:"authorQualitySignals" bson:"authorQualitySignals"`
 	AuthorDisplayNameSnapshot string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
@@ -59,6 +60,9 @@ type Post struct {
 	ArticleTemplate           string         `json:"articleTemplate" bson:"articleTemplate"`
 	ArticleFontPreset         string         `json:"articleFontPreset" bson:"articleFontPreset"`
 	VideoUrl                  string         `json:"videoUrl" bson:"videoUrl"`
+	Width                     int64          `json:"width" bson:"width"`
+	Height                    int64          `json:"height" bson:"height"`
+	DurationMs                int64          `json:"durationMs" bson:"durationMs"`
 	CoverStrategy             string         `json:"coverStrategy" bson:"coverStrategy"`
 	CoverFrameTimeMs          int64          `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
 	Location                  GeoPoint       `json:"location" bson:"location"`
@@ -90,70 +94,4 @@ type Post struct {
 	LastActiveAt              time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
 	SourceTaskId              string         `json:"sourceTaskId" bson:"sourceTaskId"`
 	DeletedAt                 time.Time      `json:"deletedAt" bson:"deletedAt"`
-}
-
-// PostSearchItemView domain model.
-type PostSearchItemView struct {
-	PostId             string         `json:"postId" bson:"postId"`
-	ContentType        string         `json:"contentType" bson:"contentType"`
-	ContentIdentity    string         `json:"contentIdentity" bson:"contentIdentity"`
-	Title              string         `json:"title" bson:"title"`
-	Summary            string         `json:"summary" bson:"summary"`
-	CoverUrl           string         `json:"coverUrl" bson:"coverUrl"`
-	AuthorId           string         `json:"authorId" bson:"authorId"`
-	AuthorDisplayName  string         `json:"authorDisplayName" bson:"authorDisplayName"`
-	AuthorAvatarUrl    string         `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
-	CategoryId         string         `json:"categoryId" bson:"categoryId"`
-	SubCategory        string         `json:"subCategory" bson:"subCategory"`
-	LikeCount          int64          `json:"likeCount" bson:"likeCount"`
-	HighlightText      string         `json:"highlightText" bson:"highlightText"`
-	MatchedField       string         `json:"matchedField" bson:"matchedField"`
-	PublishedAt        time.Time      `json:"publishedAt" bson:"publishedAt"`
-	ConnectionState    string         `json:"connectionState" bson:"connectionState"`
-	IntersectionReason map[string]any `json:"intersectionReason" bson:"intersectionReason"`
-}
-
-// ProfileInteractionActivityView domain model.
-type ProfileInteractionActivityView struct {
-	ActivityId              string    `json:"activityId" bson:"activityId"`
-	ActivityType            string    `json:"activityType" bson:"activityType"`
-	Direction               string    `json:"direction" bson:"direction"`
-	CommentKind             string    `json:"commentKind" bson:"commentKind"`
-	ActorSubAccountId       string    `json:"actorSubAccountId" bson:"actorSubAccountId"`
-	ActorDisplayName        string    `json:"actorDisplayName" bson:"actorDisplayName"`
-	ActorAvatarUrl          string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
-	CounterpartSubAccountId string    `json:"counterpartSubAccountId" bson:"counterpartSubAccountId"`
-	CounterpartDisplayName  string    `json:"counterpartDisplayName" bson:"counterpartDisplayName"`
-	CounterpartAvatarUrl    string    `json:"counterpartAvatarUrl" bson:"counterpartAvatarUrl"`
-	TargetSubAccountId      string    `json:"targetSubAccountId" bson:"targetSubAccountId"`
-	TargetContentId         string    `json:"targetContentId" bson:"targetContentId"`
-	TargetContentType       string    `json:"targetContentType" bson:"targetContentType"`
-	TargetContentSummary    string    `json:"targetContentSummary" bson:"targetContentSummary"`
-	TargetKind              string    `json:"targetKind" bson:"targetKind"`
-	TargetAvailability      string    `json:"targetAvailability" bson:"targetAvailability"`
-	TargetReplyCount        int64     `json:"targetReplyCount" bson:"targetReplyCount"`
-	DisplaySubAccountId     string    `json:"displaySubAccountId" bson:"displaySubAccountId"`
-	DisplayName             string    `json:"displayName" bson:"displayName"`
-	DisplayAvatarUrl        string    `json:"displayAvatarUrl" bson:"displayAvatarUrl"`
-	DisplayUserRouteId      string    `json:"displayUserRouteId" bson:"displayUserRouteId"`
-	PrimaryText             string    `json:"primaryText" bson:"primaryText"`
-	ContextText             string    `json:"contextText" bson:"contextText"`
-	PreviewMediaKind        string    `json:"previewMediaKind" bson:"previewMediaKind"`
-	PreviewImageUrl         string    `json:"previewImageUrl" bson:"previewImageUrl"`
-	PreviewText             string    `json:"previewText" bson:"previewText"`
-	PreviewUnavailable      bool      `json:"previewUnavailable" bson:"previewUnavailable"`
-	PreviewObjectId         string    `json:"previewObjectId" bson:"previewObjectId"`
-	PreviewRouteId          string    `json:"previewRouteId" bson:"previewRouteId"`
-	OutboundShareEventId    string    `json:"outboundShareEventId" bson:"outboundShareEventId"`
-	ShareText               string    `json:"shareText" bson:"shareText"`
-	ImpactPrimaryText       string    `json:"impactPrimaryText" bson:"impactPrimaryText"`
-	ImpactDeepLink          string    `json:"impactDeepLink" bson:"impactDeepLink"`
-	CommentId               string    `json:"commentId" bson:"commentId"`
-	ParentCommentId         string    `json:"parentCommentId" bson:"parentCommentId"`
-	ViewerReaction          string    `json:"viewerReaction" bson:"viewerReaction"`
-	FilterKeys              []string  `json:"filterKeys" bson:"filterKeys"`
-	CreatedAt               time.Time `json:"createdAt" bson:"createdAt"`
-	OccurredAt              time.Time `json:"occurredAt" bson:"occurredAt"`
-	SeenAt                  time.Time `json:"seenAt" bson:"seenAt"`
-	ReadAt                  time.Time `json:"readAt" bson:"readAt"`
 }

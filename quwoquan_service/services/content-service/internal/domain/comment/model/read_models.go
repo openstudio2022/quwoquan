@@ -25,12 +25,15 @@ type ReadModel struct {
 	AssistantMentioned        bool
 	AssistantReplySource      string
 	AssistantCorrectionStatus string
+	AuthorIPLocation          string
 	Status                    Status
 	IsPinned                  bool
 	PinnedAt                  *time.Time
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
-	DeletedAt                 *time.Time
+	// HotScore 是 hotScore relay 维护的确定性投影分，仅用于服务端 sort=hot keyset。
+	HotScore  int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
 }
 
 func (r ReadModel) Clone() ReadModel {
@@ -39,6 +42,13 @@ func (r ReadModel) Clone() ReadModel {
 	r.PinnedAt = cloneTime(r.PinnedAt)
 	r.DeletedAt = cloneTime(r.DeletedAt)
 	return r
+}
+
+// HotScoreFor 是 hotScore 投影分的唯一计算公式：
+// (likeCount - dislikeCount) + 2 * replyCount。
+// relay 增量更新与全量重算都必须经由本函数，保证可从权威数据重放。
+func HotScoreFor(likeCount, dislikeCount, replyCount int64) int64 {
+	return (likeCount - dislikeCount) + 2*replyCount
 }
 
 type Page struct {
@@ -112,10 +122,46 @@ type CountsDelta struct {
 	Watermark         time.Time
 }
 
+// ViewerRelation 是 viewer 对评论作者的可证实关系事实投影
+// （persona_follow_projection），不是推荐推断；未登录恒 none。
+type ViewerRelation string
+
+const (
+	ViewerRelationNone ViewerRelation = "none"
+	// ViewerRelationFollowing：viewer 单向关注评论作者。
+	ViewerRelationFollowing ViewerRelation = "following"
+	// ViewerRelationFriend：viewer 与评论作者互相关注。
+	ViewerRelationFriend ViewerRelation = "friend"
+)
+
+// SortMode 是一级评论的服务端排序档位；排序真相源唯一在服务端。
+type SortMode string
+
+const (
+	// SortHot 为默认档：isPinned desc, pinnedAt desc, hotScore desc, createdAt desc, id desc。
+	SortHot SortMode = "hot"
+	// SortLatest：isPinned desc, pinnedAt desc, createdAt desc, id desc。
+	SortLatest SortMode = "latest"
+)
+
+// ParseSortMode 解析请求 sort 参数；空值默认 hot，未知值返回 false。
+func ParseSortMode(raw string) (SortMode, bool) {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", string(SortHot):
+		return SortHot, true
+	case string(SortLatest):
+		return SortLatest, true
+	default:
+		return "", false
+	}
+}
+
 // Cursor 是强类型不透明 keyset 游标，携带 CommentPageReader 置顶优先排序需要的全部元组值。
+// HotScore 仅在 sort=hot 档参与比较；latest 档忽略该字段。
 type Cursor struct {
 	Pinned        bool   `json:"p"`
 	PinnedAtNano  int64  `json:"a"`
+	HotScore      int64  `json:"h,omitempty"`
 	CreatedAtNano int64  `json:"c"`
 	ID            string `json:"i"`
 }
@@ -155,6 +201,7 @@ func CursorFor(item ReadModel) Cursor {
 	return Cursor{
 		Pinned:        item.IsPinned,
 		PinnedAtNano:  pinnedAt,
+		HotScore:      item.HotScore,
 		CreatedAtNano: item.CreatedAt.UTC().UnixNano(),
 		ID:            item.ID,
 	}

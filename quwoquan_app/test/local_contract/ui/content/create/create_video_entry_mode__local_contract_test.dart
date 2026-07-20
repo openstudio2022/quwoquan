@@ -3,17 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   setUp(() {
@@ -165,8 +165,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markLaunchPromptDismissed() async {}
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -174,14 +174,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

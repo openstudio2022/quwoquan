@@ -7,11 +7,11 @@ cd "$ROOT"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap_service_config_layout.sh --service <service-name> [--force]
+  quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh --service <service-name> [--force]
 
 Examples:
-  scripts/bootstrap_service_config_layout.sh --service content-service
-  scripts/bootstrap_service_config_layout.sh --service user-service --force
+  quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh --service content-service
+  quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh --service user-service --force
 
 Behavior:
   - Creates per-service env-split config layout:

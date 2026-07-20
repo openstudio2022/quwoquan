@@ -1,4 +1,4 @@
-# 语音录制与发送（Voice Record and Send）
+# L3 特性：语音录制与发送（Voice Record and Send）
 
 > **层级**：L4_story（隶属 L3 `voice-message`）
 > **状态**：specified

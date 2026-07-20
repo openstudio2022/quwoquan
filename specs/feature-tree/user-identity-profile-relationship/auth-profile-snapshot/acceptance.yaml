@@ -35,9 +35,9 @@ sit_acceptance:
       - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/chat/chat_message_snapshot_contract__local_contract_test.dart
@@ -46,6 +46,7 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.sit1.sit1_api_integration
@@ -53,24 +54,28 @@ sit_acceptance:
         - beta
         - gamma
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_identity_sync
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.sit1.profile_identity_sync
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: user_profile_creation
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.sit1.user_profile_creation
         envs:
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: profile_identity_sync
         cases:
         - user_acceptance.user_identity_profile_relationship.auth_profile_snapshot.sit1.profile_identity_sync
@@ -78,6 +83,7 @@ sit_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.sit1.sit1_local_contract
@@ -90,5 +96,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

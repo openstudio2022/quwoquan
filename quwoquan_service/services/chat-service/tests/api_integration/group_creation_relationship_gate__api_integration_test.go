@@ -98,7 +98,7 @@ func TestCreateConversation_Group_RequiresMutualMembers(t *testing.T) {
 		nil,
 	))
 
-	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "group",
 		Title:            "非互关群",
 		MaxGroupSize:     500,
@@ -125,7 +125,7 @@ func TestCreateConversation_Group_BlockedMember(t *testing.T) {
 		nil,
 	))
 
-	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "group",
 		Title:            "拉黑群",
 		MaxGroupSize:     500,
@@ -151,7 +151,7 @@ func TestCreateConversation_Group_AllowsMutualMembers(t *testing.T) {
 		relationshipGateForContractTest(t, mutualCapability(), nil),
 	)
 
-	conv, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	conv, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "group",
 		Title:            "互关群",
 		MaxGroupSize:     500,
@@ -180,7 +180,7 @@ func TestCreateConversation_Group_MixedMembersRejectsNonMutual(t *testing.T) {
 		},
 	))
 
-	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "group",
 		Title:            "混合群",
 		MaxGroupSize:     500,
@@ -207,7 +207,7 @@ func TestCreateConversation_Group_CircleBoundSkipsMutualGate(t *testing.T) {
 		nil,
 	))
 
-	conv, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	conv, err := svc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:             "group",
 		Title:            "圈子群",
 		CircleId:         "circle_001",

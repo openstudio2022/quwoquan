@@ -6,6 +6,55 @@ description: |
   覆盖流式执行、Markdown 结构块解析、技能授权与推荐动作链路。
 
 errors:
+  - code: ASSISTANT.USER.run_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: runNotFound
+    go_const: ErrRunNotFound
+    l10n_key: assistant.error.run_not_found
+    user_message:
+      zh: "本次执行不存在或已失效"
+      en: "Assistant run not found or expired"
+
+  - code: ASSISTANT.USER.run_invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: runInvalidArgument
+    go_const: ErrRunInvalidArgument
+    l10n_key: assistant.error.run_invalid_argument
+    user_message:
+      zh: "执行请求参数有误"
+      en: "Assistant run request is invalid"
+
+  - code: ASSISTANT.USER.run_idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: runIdempotencyConflict
+    go_const: ErrRunIdempotencyConflict
+    l10n_key: assistant.error.run_idempotency_conflict
+    user_message:
+      zh: "请求重复提交，请刷新后重试"
+      en: "Duplicate request, please refresh and retry"
+
+  - code: ASSISTANT.SYSTEM.run_storage_unavailable
+    kind: SYSTEM
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: runStorageUnavailable
+    go_const: ErrRunStorageUnavailable
+    l10n_key: assistant.error.run_storage_unavailable
+    user_message:
+      zh: "助手执行服务暂不可用，请稍后重试"
+      en: "Assistant run service is temporarily unavailable"
+
   - code: ASSISTANT.USER.skill_consent_required
     kind: USER
     reason: forbidden

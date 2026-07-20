@@ -13,6 +13,16 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: version
+        source: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Homepage 聚合乐观并发版本；每次命令事实提交时原子递增
+
       - name: title
         source: title
         type: string
@@ -51,6 +61,16 @@ entities:
         ops_exposure: read
         recommend_feature: true
         description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键
+
+      - name: lookupAliases
+        source: lookupAliases
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 存量 homepageId、canonicalEntityId、sourceEntityRef 与受控旧链接的精确查找别名；禁止运行时模糊扫描
 
       - name: objectPageTemplate
         source: objectPageTemplate
@@ -197,7 +217,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 当前 viewer 是否关注该实体主页；为空 viewer 时恒为 false
+        description: 当前 viewer 是否关注该实体主页；为空 viewer 时恒为 false。真相源为 user.SubjectFollow，本字段由 SubjectFollowStateChanged 事件驱动的本地投影提供（最终一致）
 
       - name: followerCount
         source: followerCount
@@ -249,7 +269,7 @@ entities:
 
       - name: reviewSummary
         source: reviewSummary
-        type: object
+        type: HomepageReviewSummaryView
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
@@ -258,7 +278,7 @@ entities:
 
       - name: contentPreview
         source: contentPreview
-        type: "[]object"
+        type: "[]HomepageContentPreview"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
@@ -267,7 +287,7 @@ entities:
 
       - name: questionPreview
         source: questionPreview
-        type: "[]object"
+        type: "[]HomepageQuestionPreview"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
@@ -276,7 +296,7 @@ entities:
 
       - name: relatedGroups
         source: relatedGroups
-        type: "[]object"
+        type: "[]HomepageRelatedGroupSummary"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
@@ -521,242 +541,25 @@ entities:
         api_exposure: read
         ops_exposure: read
         tag_ref: true
-        description: 路径制 tagRef 列表（对象亮点锚点）；真相源 control_plane/governance/taxonomy
-
-      - name: dimensionScores
-        source: dimensionScores
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+        description: 路径制 tagRef 列表（对象亮点锚点，从真实 review tagRefs 聚合）；真相源 control_plane/governance/taxonomy
 
   HomepageRelatedGroupSummaryView:
     description: 共享主页下相关群组摘要
     fields:
       - name: groups
         source: groups
-        type: "[]object"
+        type: "[]HomepageRelatedGroupSummary"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
 
-  HomepageClaimRequest:
-    description: 共享主页认领申请
+  HomepageFollowerProjection:
+    description: user.SubjectFollow 事实在 entity 域的可重建关注投影；只服务 viewer 态与 followerCount 聚合
     fields:
-      - name: _id
-        source: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: homepageId
-        source: homepageId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: requesterUserId
-        source: requesterUserId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: claimTier
-        source: claimTier
-        type: enum
-        enum_ref: HomepageClaimTier
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: businessLicenseUrl
-        source: businessLicenseUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: SENSITIVE
-        log_policy: mask
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: contactPhone
-        source: contactPhone
-        type: string
-        constraints: [NULLABLE]
-        classification: PII
-        log_policy: mask
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: identityCardFrontUrl
-        source: identityCardFrontUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: SENSITIVE
-        log_policy: drop
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: identityCardBackUrl
-        source: identityCardBackUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: SENSITIVE
-        log_policy: drop
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: note
-        source: note
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: status
-        source: status
-        type: enum
-        enum_ref: HomepageClaimReviewStatus
-        constraints: [NOT_NULL, DEFAULT_PENDING_REVIEW]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: reviewNote
-        source: reviewNote
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: createdAt
-        source: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: reviewedAt
-        source: reviewedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  HomepageStatusReport:
-    description: 共享主页下线与纠错上报
-    fields:
-      - name: _id
-        source: _id
-        type: ObjectId
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: homepageId
-        source: homepageId
-        type: ObjectId
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: reporterUserId
-        source: reporterUserId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: reason
-        source: reason
-        type: enum
-        enum_ref: HomepageStatusReportReason
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: description
-        source: description
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: evidenceUrls
-        source: evidenceUrls
-        type: "[]string"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: status
-        source: status
-        type: enum
-        enum_ref: HomepageStatusReportStatus
-        constraints: [NOT_NULL, DEFAULT_PENDING_REVIEW]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: reviewNote
-        source: reviewNote
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read_write
-
-      - name: createdAt
-        source: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: reviewedAt
-        source: reviewedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+      - { name: homepageId, source: homepageId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: personaId, source: personaId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: following, source: following, type: bool, constraints: [NOT_NULL, DEFAULT_FALSE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: sourceVersion, source: sourceVersion, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }

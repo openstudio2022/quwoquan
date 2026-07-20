@@ -1,0 +1,68 @@
+domain: ASSISTANT
+aggregate: SkillSubscription
+
+description: |
+  SkillSubscription 聚合错误码。格式：MODULE.KIND.REASON。
+  覆盖订阅创建、状态迁移与调度租约。
+
+errors:
+  - code: ASSISTANT.USER.subscription_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: subscriptionNotFound
+    go_const: ErrSubscriptionNotFound
+    l10n_key: assistant.error.subscription_not_found
+    user_message:
+      zh: "订阅不存在或已删除"
+      en: "Subscription not found or removed"
+
+  - code: ASSISTANT.USER.subscription_invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: subscriptionInvalidArgument
+    go_const: ErrSubscriptionInvalidArgument
+    l10n_key: assistant.error.subscription_invalid_argument
+    user_message:
+      zh: "订阅请求参数有误"
+      en: "Subscription request is invalid"
+
+  - code: ASSISTANT.USER.subscription_invalid_transition
+    kind: USER
+    reason: invalid_transition
+    http_status: 409
+    recovery_action: refresh
+    dart_const: subscriptionInvalidTransition
+    go_const: ErrSubscriptionInvalidTransition
+    l10n_key: assistant.error.subscription_invalid_transition
+    user_message:
+      zh: "订阅状态已变化，请刷新后重试"
+      en: "Subscription state changed, please refresh and retry"
+
+  - code: ASSISTANT.USER.subscription_idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: subscriptionIdempotencyConflict
+    go_const: ErrSubscriptionIdempotencyConflict
+    l10n_key: assistant.error.subscription_idempotency_conflict
+    user_message:
+      zh: "请求重复提交，请刷新后重试"
+      en: "Duplicate request, please refresh and retry"
+
+  - code: ASSISTANT.SYSTEM.subscription_storage_unavailable
+    kind: SYSTEM
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: subscriptionStorageUnavailable
+    go_const: ErrSubscriptionStorageUnavailable
+    l10n_key: assistant.error.subscription_storage_unavailable
+    user_message:
+      zh: "订阅服务暂不可用，请稍后重试"
+      en: "Subscription service is temporarily unavailable"

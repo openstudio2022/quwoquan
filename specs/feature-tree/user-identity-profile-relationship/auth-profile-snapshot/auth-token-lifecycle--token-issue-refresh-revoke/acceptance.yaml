@@ -41,7 +41,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/platform/native_auth_bridge__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
@@ -51,6 +51,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.gwt1_api_integration
@@ -58,6 +59,7 @@ gwt_acceptance:
         - beta
         - gamma
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.gwt1_local_contract
@@ -65,6 +67,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.contract
@@ -75,5 +78,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

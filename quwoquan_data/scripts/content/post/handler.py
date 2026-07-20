@@ -86,6 +86,8 @@ def _apply_writing_intent_override(brief, override):
         "sourceCollectionId",
         "assetRefs",
         "sourceFrames",
+        "sourceVideo",
+        "sourceMode",
         "tagRefs",
         "authorId",
         "creatorProfileId",

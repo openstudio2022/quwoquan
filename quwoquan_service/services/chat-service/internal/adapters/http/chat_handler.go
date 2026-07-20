@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	runtimesync "quwoquan_service/runtime/sync"
@@ -38,9 +39,9 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealthz)
 	mux.HandleFunc("POST /user/sync", h.handlePullUserSync)
-	mux.HandleFunc("GET /chat/conversations/search", h.handleSearchConversations)
-	mux.HandleFunc("GET /chat/messages/search", h.handleSearchMessages)
 	mux.HandleFunc("PATCH /chat/conversations/{conversationId}", h.handleUpdateConversationTitle)
+	mux.HandleFunc("GET /chat/conversations/timestamps", h.handleListConversationTimestamps)
+	mux.HandleFunc("POST /chat/conversations/batch", h.handleBatchGetConversations)
 	mux.HandleFunc("GET /chat/message-home", h.handleListMessageHome)
 	mux.HandleFunc("GET /chat/contact-home", h.handleListContactHome)
 	mux.HandleFunc("GET /chat/groups/{conversationId}/home", h.handleGetGroupHome)
@@ -326,13 +327,24 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
 	role := r.URL.Query().Get("role")
+	query := r.URL.Query().Get("query")
 
 	sort := r.URL.Query().Get("sort")
 	members, err := h.memberService.ListMembers(r.Context(), application.ListMembersRequest{
-		ConversationId: convId, Cursor: cursor, Limit: limit, Role: role, Sort: sort,
+		ConversationId: convId,
+		ViewerId:       resolveUserID(r),
+		Cursor:         cursor,
+		Limit:          limit,
+		Role:           role,
+		Query:          query,
+		Sort:           sort,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
+		return
+	}
+	if members == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": members})
@@ -362,7 +374,27 @@ func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request)
 	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "conversationId")
 	userId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "userId")
 
-	err := h.memberService.RemoveMember(r.Context(), convId, userId)
+	// 治理语义：操作者只能是已认证身份，不再缺省为被移除人；
+	// 自愿退出走 LeaveConversation。
+	err := h.memberService.RemoveMember(r.Context(), application.RemoveMemberRequest{
+		ConversationId: convId,
+		UserId:         userId,
+		OperatorId:     resolveUserID(r),
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *ChatHandler) handleLeaveConversation(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/leave", "conversationId")
+
+	err := h.memberService.LeaveConversation(r.Context(), application.LeaveConversationRequest{
+		ConversationId: convId,
+		UserId:         resolveUserID(r),
+	})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -476,6 +508,123 @@ func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
+
+func (h *ChatHandler) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/announcement", "conversationId")
+	var body struct {
+		Announcement string `json:"announcement"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	conv, err := h.conversationService.UpdateAnnouncement(r.Context(), application.UpdateAnnouncementRequest{
+		ConversationId: convId,
+		OperatorId:     resolveUserID(r),
+		Announcement:   body.Announcement,
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
+}
+
+func (h *ChatHandler) handleUpdateGroupGovernanceSettings(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/governance", "conversationId")
+	var body struct {
+		NameEditableByAdminOnly *bool `json:"nameEditableByAdminOnly"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	conv, err := h.conversationService.UpdateGroupGovernanceSettings(
+		r.Context(),
+		application.UpdateGroupGovernanceSettingsRequest{
+			ConversationId:          convId,
+			OperatorId:              resolveUserID(r),
+			NameEditableByAdminOnly: body.NameEditableByAdminOnly,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
+}
+
+func (h *ChatHandler) handleListConversationTimestamps(w http.ResponseWriter, r *http.Request) {
+	userId := resolveUserID(r)
+	items, err := h.inboxService.ListInbox(r.Context(), application.ListInboxRequest{
+		UserId: userId,
+		Limit:  conversationTimestampPageLimit,
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	rows := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, map[string]any{
+			"conversationId":     item.Conversation.ID,
+			"type":               item.Conversation.Type,
+			"updatedAt":          item.Conversation.UpdatedAt.UTC().Format(time.RFC3339Nano),
+			"settingsUpdatedAt":  item.UserState.UpdatedAt.UTC().Format(time.RFC3339Nano),
+			"lastMessageAt":      formatOptionalTime(item.Conversation.LastMessageTime),
+			"lastMessageTime":    formatOptionalTime(item.Conversation.LastMessageTime),
+			"lastMessagePreview": item.Conversation.LastMessagePreview,
+			"unreadCount":        item.UserState.UnreadCount,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+}
+
+func (h *ChatHandler) handleBatchGetConversations(w http.ResponseWriter, r *http.Request) {
+	userId := resolveUserID(r)
+	var body struct {
+		Ids []string `json:"ids"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	if len(body.Ids) > batchGetConversationsLimit {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"批量查询数量超过上限",
+			"batch conversation lookup exceeds limit",
+		))
+		return
+	}
+	items := make([]map[string]any, 0, len(body.Ids))
+	seen := make(map[string]struct{}, len(body.Ids))
+	for _, rawID := range body.Ids {
+		convID := strings.TrimSpace(rawID)
+		if convID == "" {
+			continue
+		}
+		if _, dup := seen[convID]; dup {
+			continue
+		}
+		seen[convID] = struct{}{}
+		conv, err := h.conversationService.GetConversation(r.Context(), convID)
+		if err != nil {
+			continue
+		}
+		// 仅返回请求者为成员的会话（conversation_member ownership）。
+		if _, err := h.memberService.GetMember(r.Context(), convID, userId); err != nil {
+			continue
+		}
+		items = append(items, h.conversationToWire(r.Context(), *conv))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+const (
+	conversationTimestampPageLimit = 500
+	batchGetConversationsLimit     = 100
+)
 
 // ── Inbox ────────────────────────────────────────────────────────────────────
 
@@ -620,118 +769,4 @@ func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": candidates, "cursor": ""})
-}
-
-func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("query")
-	if query == "" {
-		query = r.URL.Query().Get("q")
-	}
-	limit := queryInt(r, "limit", 20)
-	contacts, err := h.memberService.SearchContacts(
-		r.Context(),
-		resolveUserID(r),
-		query,
-		limit,
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	items := make([]map[string]any, 0, len(contacts))
-	cursor := ""
-	for _, contact := range contacts {
-		cursor = contact.ContactID
-		items = append(items, map[string]any{
-			"contactId":        contact.ContactID,
-			"displayName":      contact.DisplayName,
-			"avatarUrl":        contact.AvatarURL,
-			"conversationId":   contact.ConversationID,
-			"conversationType": contact.ConversationType,
-			"source":           contact.Source,
-			"subtitle":         contact.Subtitle,
-			"highlightText":    contact.HighlightText,
-			"matchedField":     contact.MatchedField,
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
-}
-
-func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("query")
-	limit := queryInt(r, "limit", 20)
-	conversations, err := h.conversationService.SearchConversations(
-		r.Context(),
-		application.SearchConversationsRequest{
-			UserId: resolveUserID(r),
-			Query:  query,
-			Cursor: r.URL.Query().Get("cursor"),
-			Limit:  limit,
-		},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	items := make([]map[string]any, 0, len(conversations))
-	cursor := ""
-	for _, conversation := range conversations {
-		cursor = conversation.ID
-		highlight := strings.TrimSpace(conversation.LastMessagePreview)
-		if highlight == "" {
-			highlight = conversation.Title
-		}
-		items = append(items, map[string]any{
-			"conversationId":     conversation.ID,
-			"type":               conversation.Type,
-			"title":              conversation.Title,
-			"avatarUrl":          h.resolveConversationAvatarURL(r.Context(), conversation),
-			"groupAvatarVersion": conversation.GroupAvatarVersion,
-			"lastMessagePreview": conversation.LastMessagePreview,
-			"lastMessageTime":    conversation.LastMessageTime,
-			"memberCount":        conversation.MemberCount,
-			"circleId":           conversation.CircleId,
-			"highlightText":      highlight,
-			"matchedField":       "title",
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
-}
-
-func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("query")
-	limit := queryInt(r, "limit", 20)
-	hits, err := h.messageService.SearchMessages(
-		r.Context(),
-		application.SearchMessagesRequest{
-			UserId: resolveUserID(r),
-			Query:  query,
-			Cursor: r.URL.Query().Get("cursor"),
-			Limit:  limit,
-		},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	items := make([]map[string]any, 0, len(hits))
-	cursor := ""
-	for _, hit := range hits {
-		cursor = hit.Message.ID
-		items = append(items, map[string]any{
-			"messageId":             hit.Message.ID,
-			"conversationId":        hit.Conversation.ID,
-			"conversationTitle":     hit.Conversation.Title,
-			"conversationAvatarUrl": h.resolveConversationAvatarURL(r.Context(), hit.Conversation),
-			"senderPersonaId":       hit.Message.SenderID,
-			"senderDisplayName":     hit.Message.SenderID,
-			"senderAvatarUrl":       "",
-			"messageType":           hit.Message.Type,
-			"contentSnippet":        hit.Message.Content,
-			"highlightText":         hit.Message.Content,
-			"matchedField":          "content",
-			"timestamp":             hit.Message.Timestamp,
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
 }

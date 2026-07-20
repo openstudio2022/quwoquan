@@ -1,4 +1,4 @@
-# L3：分享归因与口令（share-attribution-and-token）
+# L3 特性：分享归因与口令（share-attribution-and-token）
 
 > 归属：product-ops-growth / outbound-share-distribution / share-attribution-and-token
 

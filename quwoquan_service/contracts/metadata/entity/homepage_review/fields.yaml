@@ -4,13 +4,22 @@ entities:
   HomepageReview:
     description: Persona 对 Homepage 的独立评价聚合
     fields:
-      - { name: _id, type: ObjectId, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - name: reviewId
+        source: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
       - { name: homepageId, type: ObjectId, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: authorPersonaId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read }
+      - { name: authorDisplayNameSnapshot, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read, description: 发表/更新时的作者昵称快照，列表展示用，不回填 }
+      - { name: authorAvatarUrlSnapshot, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read, description: 发表/更新时的作者头像快照，列表展示用，不回填 }
       - { name: rating, type: int, constraints: [NOT_NULL, MIN_1, MAX_5], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
       - { name: body, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: mask, api_exposure: read_write, ops_exposure: read }
-      - { name: tagRefs, type: "[]string", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
-      - { name: status, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read_write }
+      - { name: tagRefs, type: "[]string", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read, tag_ref: true }
+      - { name: status, type: enum, enum_ref: HomepageReviewStatus, constraints: [NOT_NULL, DEFAULT_ACTIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read_write }
       - { name: version, type: int, constraints: [NOT_NULL, DEFAULT_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }

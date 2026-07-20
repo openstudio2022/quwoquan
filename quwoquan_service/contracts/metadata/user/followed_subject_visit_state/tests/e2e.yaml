@@ -1,0 +1,15 @@
+aggregate: FollowedSubjectVisitState
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: red_dot_clear_survives_restart
+    steps:
+      - user taps a following subject with unread changes
+      - user restarts app and reopens following channel
+    assertions:
+      - unread_dot_stays_cleared
+      - watermark_persisted_server_side

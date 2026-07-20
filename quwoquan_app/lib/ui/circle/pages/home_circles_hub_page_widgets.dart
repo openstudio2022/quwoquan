@@ -132,8 +132,12 @@ class _CirclesGlobalHeader extends StatelessWidget {
                   circle: circle,
                   width: circleCardWidth,
                   isDark: isDark,
-                  onTap: () =>
-                      context.push(AppRoutePaths.circleDetail(id: circle.id)),
+                  onTap: () => context.push(
+                    AppRoutePaths.circleDetail(id: circle.id),
+                    extra: const CircleDetailPageRouteExtra(
+                      referralSource: ReferralSource.organicFeed,
+                    ),
+                  ),
                 );
               },
             ),
@@ -552,7 +556,7 @@ class _CirclesHubTopBar extends StatelessWidget {
                   ),
                   SizedBox(width: AppSpacing.intraGroupSm),
                   GlobalAssistantEntryButton(
-                    semanticLabel: UITextConstants.assistantEntryXiaoqu,
+                    semanticLabel: AssistantText.assistantEntryXiaoqu,
                     onTap: onAssistantTap,
                   ),
                 ],

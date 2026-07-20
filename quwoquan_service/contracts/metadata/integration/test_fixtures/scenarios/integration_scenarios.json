@@ -42,8 +42,18 @@
         {
           "requestId": "fixture_ext_push_001",
           "operation": "push_delivery.send",
-          "idempotencyKey": "push:notification-fixture:device-fixture",
-          "callbackEvent": "PushDeliverySucceeded",
+          "idempotencyKey": "push:fixture-delivery-001",
+          "callbackEvent": "IncomingCallPushDeliveryResult",
+          "payload": {
+            "endpointRef": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "deliveryKey": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "callId": "fixture-call-001",
+            "callType": "audio",
+            "callerName": "契约来电",
+            "sourceLabel": "契约会话",
+            "trustRelation": "known",
+            "expiresAt": "2030-01-01T00:00:00Z"
+          },
           "status": "accepted"
         }
       ],
@@ -54,9 +64,8 @@
           "maxAttempts": 3
         },
         "push_delivery.send": {
-          "primaryProvider": "mock_push",
-          "backupProvider": "mock_push",
-          "maxAttempts": 3
+          "primaryProvider": "alpha_fake",
+          "maxAttempts": 5
         }
       }
     }

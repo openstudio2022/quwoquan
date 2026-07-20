@@ -5,15 +5,32 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from quwoquan_ops.gate.runtime_media_t4_artifacts import validate_report_artifacts
 
 REPORT_SCHEMA = "runtime-media-video-playback-t4-report"
 MATRIX_SCHEMA = "runtime-media-video-playback-t4-matrix-report"
 SCENARIO = "runtime_media.video_playback_t4"
 MATRIX_SCENARIO = "runtime_media.video_playback_t4_matrix"
 PRODUCTION_FORBIDDEN_TOKENS = frozenset({"fixture", "mock", "seed", "test"})
+REQUIRED_MATRIX_KEYS = frozenset(
+    {
+        ("alpha-local", "local"),
+        ("beta-local", "local"),
+        ("gamma-local", "local"),
+        ("prod-hosted", "gray-initial"),
+        ("prod-hosted", "carry-on"),
+        ("prod-hosted", "full"),
+    },
+)
 
 
 def _non_empty_string(value: object) -> str:
@@ -60,9 +77,13 @@ def _validate_target(
         issues.append(
             f"{prefix}.env 与 target 不一致: target={target} expected={expected_env} got={env}",
         )
-    if target == "prod-hosted" and stage != "gray-initial":
+    if target == "prod-hosted" and stage not in {
+        "gray-initial",
+        "carry-on",
+        "full",
+    }:
         issues.append(
-            f"{prefix}.rolloutStage 必须为 gray-initial，当前为 {stage or '<empty>'}",
+            f"{prefix}.rolloutStage 必须为 gray-initial|carry-on|full，当前为 {stage or '<empty>'}",
         )
     elif target and target != "prod-hosted" and stage not in {"local", "not-applicable"}:
         issues.append(
@@ -71,7 +92,13 @@ def _validate_target(
     return target, env
 
 
-def _validate_single_report(report: object, *, index: int) -> list[str]:
+def _validate_single_report(
+    report: object,
+    *,
+    index: int,
+    check_artifacts: bool,
+    artifact_root: Path,
+) -> list[str]:
     issues: list[str] = []
     prefix = f"reports[{index}]"
     if not isinstance(report, dict):
@@ -105,6 +132,18 @@ def _validate_single_report(report: object, *, index: int) -> list[str]:
 
     media = _mapping(report.get("media"))
     public_slice_key = _require_string(media, "publicSliceKey", issues, prefix=f"{prefix}.media")
+    _require_string(media, "assetId", issues, prefix=f"{prefix}.media")
+    probe_hash = _require_string(media, "probeHash", issues, prefix=f"{prefix}.media")
+    try:
+        asset_version = int(media.get("assetVersion"))
+    except (TypeError, ValueError):
+        asset_version = 0
+    if asset_version <= 0:
+        issues.append(f"{prefix}.media.assetVersion 必须为正整数")
+    if probe_hash and (
+        not probe_hash.startswith("sha256:") or len(probe_hash) != len("sha256:") + 64
+    ):
+        issues.append(f"{prefix}.media.probeHash 必须为 sha256 digest")
     if public_slice_key and not public_slice_key.startswith("media/video/s/"):
         issues.append(f"{prefix}.media.publicSliceKey 必须是 canonical video public slice")
     if target == "prod-hosted" and public_slice_key:
@@ -112,6 +151,14 @@ def _validate_single_report(report: object, *, index: int) -> list[str]:
         if any(token in lowered for token in PRODUCTION_FORBIDDEN_TOKENS):
             issues.append(
                 f"{prefix}.media.publicSliceKey 不得引用 fixture/mock/seed/test production canary",
+            )
+    post = _mapping(report.get("post"))
+    post_id = _require_string(post, "postId", issues, prefix=f"{prefix}.post")
+    if target == "prod-hosted" and post_id:
+        lowered_post_id = post_id.lower()
+        if any(token in lowered_post_id for token in PRODUCTION_FORBIDDEN_TOKENS):
+            issues.append(
+                f"{prefix}.post.postId 不得引用 fixture/mock/seed/test production canary",
             )
 
     service = _mapping(report.get("serviceEvidence"))
@@ -125,6 +172,12 @@ def _validate_single_report(report: object, *, index: int) -> list[str]:
     mime_type = _non_empty_string(range_evidence.get("mimeType")).lower()
     if not mime_type.startswith("video/"):
         issues.append(f"{prefix}.serviceEvidence.videoRange.mimeType 必须为 video/*")
+    _require_string(
+        range_evidence,
+        "reportPath",
+        issues,
+        prefix=f"{prefix}.serviceEvidence.videoRange",
+    )
 
     ui = _mapping(report.get("uiEvidence"))
     if ui.get("stageRendered") is not True:
@@ -133,34 +186,149 @@ def _validate_single_report(report: object, *, index: int) -> list[str]:
         issues.append(f"{prefix}.uiEvidence.playerReady 必须为 true")
     if ui.get("playerError") is not False:
         issues.append(f"{prefix}.uiEvidence.playerError 必须为 false")
-    _require_string(ui, "reportPath", issues, prefix=f"{prefix}.uiEvidence")
-    _require_string(ui, "screenshotPath", issues, prefix=f"{prefix}.uiEvidence")
+    ui_prefix = f"{prefix}.uiEvidence"
+    for artifact_field in (
+        "reportPath",
+        "screenshotPath",
+        "recordingPath",
+        "nativePlaybackRawLogPath",
+        "qoeReadbackPath",
+        "perfettoTracePath",
+        "perfettoSummaryPath",
+    ):
+        _require_string(ui, artifact_field, issues, prefix=ui_prefix)
+    if ui.get("seekTargetsVerified") is not True:
+        issues.append(f"{prefix}.uiEvidence.seekTargetsVerified 必须为 true")
+    if ui.get("nativeFirstFrame") is not True:
+        issues.append(f"{prefix}.uiEvidence.nativeFirstFrame 必须为 true")
+    if ui.get("nativeSeekSettled") is not True:
+        issues.append(f"{prefix}.uiEvidence.nativeSeekSettled 必须为 true")
+    if ui.get("nativeEvidenceFromPhysicalAndroidDevice") is not True:
+        issues.append(
+            f"{prefix}.uiEvidence.nativeEvidenceFromPhysicalAndroidDevice 必须为 true",
+        )
+    if _non_empty_string(ui.get("nativeEvidenceDevicePlatform")) != "android":
+        issues.append(
+            f"{prefix}.uiEvidence.nativeEvidenceDevicePlatform 必须为 android",
+        )
+    if ui.get("nativeEvidenceDeviceEmulator") is not False:
+        issues.append(
+            f"{prefix}.uiEvidence.nativeEvidenceDeviceEmulator 必须为 false",
+        )
+    if ui.get("physicalIosPatrolPassed") is not True:
+        issues.append(f"{prefix}.uiEvidence.physicalIosPatrolPassed 必须为 true")
+    if _non_empty_string(ui.get("seekEvidenceSource")) != "native_settled":
+        issues.append(f"{prefix}.uiEvidence.seekEvidenceSource 必须为 native_settled")
+    if check_artifacts:
+        validate_report_artifacts(report, artifact_root, issues, prefix)
     return issues
 
 
-def validate_evidence_document(document: object) -> list[str]:
+def validate_evidence_document(
+    document: object,
+    *,
+    require_matrix: bool = False,
+    check_artifacts: bool = False,
+    artifact_root: Path | None = None,
+) -> list[str]:
     """返回所有违反 T4 视频证据合同的原因；空列表表示通过。"""
 
     if not isinstance(document, dict):
         return ["T4 evidence 根对象必须为 JSON object"]
+    resolved_artifact_root = artifact_root or REPO_ROOT
 
-    if _non_empty_string(document.get("scenario")) == MATRIX_SCENARIO:
+    is_matrix = _non_empty_string(document.get("scenario")) == MATRIX_SCENARIO
+    if require_matrix and not is_matrix:
+        return [
+            "发布级 T4 门禁必须提供四环境矩阵报告，单环境报告不能作为商用准入证据",
+        ]
+
+    if is_matrix:
         if document.get("schema") != MATRIX_SCHEMA:
             return [f"matrix.schema 必须为 {MATRIX_SCHEMA}"]
         reports = document.get("reports")
         if not isinstance(reports, list) or not reports:
             return ["matrix.reports 必须为非空列表"]
         issues: list[str] = []
+        seen_keys: set[tuple[str, str]] = set()
+        commits: set[str] = set()
+        media_identities: set[tuple[str, int, str]] = set()
+        prod_config_hashes: set[str] = set()
+        prod_post_ids: set[str] = set()
         for index, report in enumerate(reports):
-            issues.extend(_validate_single_report(report, index=index))
+            issues.extend(
+                _validate_single_report(
+                    report,
+                    index=index,
+                    check_artifacts=check_artifacts,
+                    artifact_root=resolved_artifact_root,
+                ),
+            )
+            if not isinstance(report, dict):
+                continue
+            environment = _mapping(report.get("environment"))
+            key = (
+                _non_empty_string(environment.get("target")),
+                _non_empty_string(environment.get("rolloutStage")),
+            )
+            if key in seen_keys:
+                issues.append(
+                    f"matrix.reports 存在重复 target/stage: {key[0]}/{key[1]}",
+                )
+            seen_keys.add(key)
+            commit = _non_empty_string(environment.get("commitSha"))
+            if commit:
+                commits.add(commit)
+            config_hash = _non_empty_string(environment.get("configHash"))
+            if key[0] == "prod-hosted" and config_hash:
+                prod_config_hashes.add(config_hash)
+            post_id = _non_empty_string(_mapping(report.get("post")).get("postId"))
+            if key[0] == "prod-hosted" and post_id:
+                prod_post_ids.add(post_id)
+            media = _mapping(report.get("media"))
+            try:
+                version = int(media.get("assetVersion"))
+            except (TypeError, ValueError):
+                version = 0
+            identity = (
+                _non_empty_string(media.get("assetId")),
+                version,
+                _non_empty_string(media.get("probeHash")),
+            )
+            if all((identity[0], identity[2])) and identity[1] > 0:
+                media_identities.add(identity)
+        missing = REQUIRED_MATRIX_KEYS - seen_keys
+        for target, stage in sorted(missing):
+            issues.append(f"matrix.reports 缺少 {target}/{stage} 证据")
+        unexpected = seen_keys - REQUIRED_MATRIX_KEYS
+        for target, stage in sorted(unexpected):
+            issues.append(f"matrix.reports 包含非准入 target/stage: {target}/{stage}")
+        if len(commits) > 1:
+            issues.append("matrix.reports 必须绑定同一 commitSha")
+        if len(media_identities) > 1:
+            issues.append("matrix.reports 必须绑定同一 assetId/assetVersion/probeHash")
+        if len(prod_config_hashes) > 1:
+            issues.append("prod-hosted 三阶段必须绑定同一 production configHash")
+        if len(prod_post_ids) > 1:
+            issues.append("prod-hosted 三阶段必须绑定同一 postId")
         return issues
 
-    return _validate_single_report(document, index=0)
+    return _validate_single_report(
+        document,
+        index=0,
+        check_artifacts=check_artifacts,
+        artifact_root=resolved_artifact_root,
+    )
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", required=True, help="T4 JSON report 或 matrix manifest")
+    parser.add_argument(
+        "--require-matrix",
+        action="store_true",
+        help="发布级门禁要求 alpha/beta/gamma/prod 三阶段完整矩阵",
+    )
     return parser.parse_args()
 
 
@@ -176,7 +344,12 @@ def main() -> int:
         print(f"[verify_runtime_media_t4_evidence] FAIL: unable to read JSON: {exc}")
         return 2
 
-    issues = validate_evidence_document(document)
+    issues = validate_evidence_document(
+        document,
+        require_matrix=args.require_matrix,
+        check_artifacts=True,
+        artifact_root=REPO_ROOT,
+    )
     if issues:
         print("[verify_runtime_media_t4_evidence] FAIL")
         for issue in issues:

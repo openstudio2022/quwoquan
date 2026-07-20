@@ -28,6 +28,7 @@ type ReactResult struct {
 	Tool             ToolExecution
 	Steps            []ReactStepResult
 	FinalText        string
+	FinalStreamed    bool
 	StopReason       string
 	FinalClientTrace map[string]any
 }
@@ -56,6 +57,17 @@ func (r ReactRuntime) RunWithStepSink(ctx context.Context, turn assistant.Assist
 }
 
 func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.AssistantTurn, skill SkillSelection, reasoningSink func(ReactStepResult) error, stepSink func(ReactStepResult) error) (ReactResult, error) {
+	return r.RunWithFinalTextSink(ctx, turn, skill, reasoningSink, stepSink, nil)
+}
+
+func (r ReactRuntime) RunWithFinalTextSink(
+	ctx context.Context,
+	turn assistant.AssistantTurn,
+	skill SkillSelection,
+	reasoningSink func(ReactStepResult) error,
+	stepSink func(ReactStepResult) error,
+	finalTextSink func(ModelTextDelta) error,
+) (ReactResult, error) {
 	model := r.Model
 	if model == nil {
 		model = DeterministicModelProvider{}
@@ -250,29 +262,37 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 		}
 		stopReason = "replan_budget_exhausted"
 	}
-	finalResp, err := model.Complete(ctx, ModelRequest{
-		TurnID:       turn.TurnID,
-		TraceID:      turn.TraceID,
-		SkillID:      skill.SkillID,
-		Stage:        "final",
-		Prompt:       "结合工具观察生成最终回答",
-		Observation:  buildFinalObservationPayload(finalObservation, stepsOut),
-		UserQuestion: turn.Input.Text,
-		ContextTurns: turn.ContextTurns,
-	})
+	finalRequest := ModelRequest{
+		TurnID:                  turn.TurnID,
+		TraceID:                 turn.TraceID,
+		SkillID:                 skill.SkillID,
+		Stage:                   "final",
+		Prompt:                  "结合工具观察生成最终回答",
+		Observation:             buildFinalObservationPayload(finalObservation, stepsOut),
+		UserQuestion:            turn.Input.Text,
+		ContextTurns:            turn.ContextTurns,
+		SessionPreferenceFacts:  turn.SessionPreferenceFacts,
+		LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
+	}
+	finalResp, finalStreamed, err := completeFinalModelResponse(ctx, model, finalRequest, finalTextSink)
 	if err != nil {
 		return ReactResult{}, err
 	}
 	if !finalAnswerUsable(finalResp) {
+		if finalStreamed {
+			return ReactResult{}, fmt.Errorf("streamed final answer is not displayable")
+		}
 		finalResp, err = model.Complete(ctx, ModelRequest{
-			TurnID:       turn.TurnID,
-			TraceID:      turn.TraceID,
-			SkillID:      skill.SkillID,
-			Stage:        "final",
-			Prompt:       "上一次 final 输出不可用于展示。请基于同一输入证据重新生成非空 userMarkdown，直接回答用户问题；开头不要提内部证据来源或生成过程。",
-			Observation:  buildFinalObservationPayload(finalObservation, stepsOut),
-			UserQuestion: turn.Input.Text,
-			ContextTurns: turn.ContextTurns,
+			TurnID:                  turn.TurnID,
+			TraceID:                 turn.TraceID,
+			SkillID:                 skill.SkillID,
+			Stage:                   "final",
+			Prompt:                  "上一次 final 输出不可用于展示。请基于同一输入证据重新生成非空 userMarkdown，直接回答用户问题；开头不要提内部证据来源或生成过程。",
+			Observation:             buildFinalObservationPayload(finalObservation, stepsOut),
+			UserQuestion:            turn.Input.Text,
+			ContextTurns:            turn.ContextTurns,
+			SessionPreferenceFacts:  turn.SessionPreferenceFacts,
+			LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
 		})
 		if err != nil {
 			return ReactResult{}, err
@@ -291,9 +311,46 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 		Tool:             toolExecution,
 		Steps:            stepsOut,
 		FinalText:        finalResp.Text,
+		FinalStreamed:    finalStreamed,
 		StopReason:       stopReason,
 		FinalClientTrace: finalResp.ClientModelInteraction,
 	}, nil
+}
+
+func completeFinalModelResponse(
+	ctx context.Context,
+	model ModelProvider,
+	request ModelRequest,
+	finalTextSink func(ModelTextDelta) error,
+) (ModelResponse, bool, error) {
+	streamingModel, ok := model.(StreamingModelProvider)
+	if !ok {
+		response, err := model.Complete(ctx, request)
+		return response, false, err
+	}
+	streamed := false
+	response, err := streamingModel.Stream(ctx, request, func(delta ModelTextDelta) error {
+		if delta.Text == "" {
+			return nil
+		}
+		streamed = true
+		if finalTextSink == nil {
+			return nil
+		}
+		return finalTextSink(delta)
+	})
+	if err != nil && !streamed {
+		fallback, fallbackErr := model.Complete(ctx, request)
+		if fallbackErr != nil {
+			return ModelResponse{}, false, fmt.Errorf(
+				"stream final response failed: %v; non-stream final response failed: %w",
+				err,
+				fallbackErr,
+			)
+		}
+		return fallback, false, nil
+	}
+	return response, streamed, err
 }
 
 func finalAnswerUsable(resp ModelResponse) bool {

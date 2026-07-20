@@ -3,11 +3,6 @@ service:
   name: user-service
   domain: user
   owner: app-foundation
-  commercial_defaults:
-    status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: USER_FOLLOWED_SUBJECT_VISIT_STATE_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
   description: FollowedSubjectVisitState 私有水位命令操作包。
 
 api_routes:
@@ -23,12 +18,44 @@ api_routes:
       aggregate_owner: FollowedSubjectVisitState
       mutation_target: FollowedSubjectVisitState
       invariant_target: FollowedSubjectVisitState
-    description: 标记关注对象已访问，清除“上次访问后变化”提示
+    description: 标记关注对象已访问，清除“上次访问后变化”提示；lastVisitedAt 单调推进，重复 clientRequestId 返回同一 receipt
     path_params: [subjectType, subjectId]
     request_entity: MarkFollowedSubjectVisitedRequest
     request_fields: [subjectId, subjectType, visitedAt, clientRequestId]
     response_entity: FollowedSubjectVisitResult
     response_fields: [subjectId, subjectType, lastVisitedAt, hasUnreadChanges]
+    client_contract:
+      dart_import: ../user/following_subject_contracts.dart
+      request_type: MarkFollowedSubjectVisitedCommand
+      response_type: FollowedSubjectVisitResult
+      request_encoder: encodeMarkFollowedSubjectVisitedCommand
+      response_decoder: decodeFollowedSubjectVisitResult
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_followed_subject_visit_command
+      trace: true
+      attributes: [operation, subject_type, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner

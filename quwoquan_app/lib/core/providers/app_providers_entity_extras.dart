@@ -1,13 +1,9 @@
 part of 'app_providers.dart';
 
+/// production 恒为 Remote-only；alpha runner 与测试经 override 注入 mock 装配。
 final homepageIntroductionRepositoryProvider =
     Provider<HomepageIntroductionRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteHomepageIntroductionRepository(
-          queryAdapter: ref.watch(_homepageQueryAdapterProvider),
-        ),
-        mock: () => const MockHomepageIntroductionRepository(),
+      return RemoteHomepageIntroductionRepository(
+        queryAdapter: ref.watch(_homepageQueryAdapterProvider),
       );
     });

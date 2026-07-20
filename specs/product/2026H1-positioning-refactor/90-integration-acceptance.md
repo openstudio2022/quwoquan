@@ -78,10 +78,11 @@
 - Work Browser 输入边界纯化（当前仍为 `rawPostsById + PostBaseDto -> WorkBrowserItemDto` 兼容态，后续收敛为 `WorkBrowserItemDto` 单一输入）
 - `works_immersive_viewer.dart` / `article_read_only_book_deck.dart` 等超大文件的持续拆分
 
-## 6. C5 环境留证（2026-06-12）
+## 6. 环境准入（待重验）
 
-- [x] 本地 gamma T3/T4-dry-run 门禁：`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 通过，报告 `.qwq_output/env/gamma/runs/20260612T162426Z-verify-gamma-local`。
-- [ ] hosted gamma full health：仍 BLOCK，`stackctl health --target gamma-hosted --scope full` 仅 `1/7 healthy`，报告 `.qwq_output/env/gamma/runs/20260612T161458Z-health-gamma-hosted`。
-- [ ] hosted gamma doctor：仍 BLOCK，`stackctl doctor --target gamma-hosted` 报 `health checks are failing`，报告 `.qwq_output/env/gamma/runs/20260612T162504Z-doctor-gamma-hosted`。
-- [ ] hosted gamma restart：仍 BLOCK，`stackctl roll --target gamma-hosted --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`，报告 `.qwq_output/env/gamma/runs/20260612T163152Z-roll-gamma-hosted`。
-- [ ] GHA 恢复：最近 5 个 GitHub Actions run 仍为 failure，需环境恢复后重跑并留证。
+2026-06 的运行输出已按可删除产物规则清理，不再构成验收证据。环境验证只按当前 profile 重新产生：
+
+- [ ] Alpha：`make gate-smoke`。
+- [ ] Beta：`make gate-integration ENV=beta`，验证内容数据平面的 full-sync、API、媒体、幂等与回滚/replay。
+- [ ] Gamma：先执行 `make gate-integration ENV=gamma`，再执行 `make gate-release ENV=gamma`；后者才要求真机 UAT、trace、SLO 与 SLS。
+- [ ] Prod：仅在审批齐全后执行 `make gate-release ENV=prod` 与逐档灰度证据。

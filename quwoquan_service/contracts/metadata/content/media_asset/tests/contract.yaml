@@ -2,7 +2,7 @@ entity: MediaAsset
 tests:
   - name: media_asset_owner_contract
     operation: UpdateMediaAssetAccessPolicy
-    go_func: TestMediaCompleteIsIdempotentAndOutboxVersionsAreAtomic
+    go_func: TestMediaAssetAccessPolicyNoopPersistsReceipt
     command: UpdateMediaAssetAccessPolicy
   - name: media_asset_http_contract
     operation: GetMediaAsset
@@ -12,3 +12,7 @@ tests:
     operation: SubmitPostPublication
     go_func: TestSubmitPostPublicationBindsReadyOwnedMedia
     command: SubmitPostPublication
+  - name: media_asset_image_processing_contract
+    operation: RecordMediaProcessingResult
+    go_func: TestMediaProcessingWorkerNormalizesImageAndProjectsDimensions
+    command: RecordMediaProcessingResult

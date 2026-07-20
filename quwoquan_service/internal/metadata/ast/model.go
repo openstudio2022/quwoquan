@@ -79,6 +79,9 @@ type Object struct {
 	SourcePath     string          `json:"sourcePath"`
 	Members        []Member        `json:"members,omitempty"`
 	DDDLayer       DDDLayerMapping `json:"dddLayerMapping,omitempty"`
+	// DeferredOperations 登记对象显式推迟的公开命令（V1 不实现且不进入
+	// ContractGraph operation 集合），用于豁免 aggregate root 的零入口校验。
+	DeferredOperations []string `json:"deferredOperations,omitempty"`
 }
 
 // DDDLayerMapping is the generated-code and ownership routing contract. The

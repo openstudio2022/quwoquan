@@ -2,11 +2,14 @@ package feed
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	runtimelearning "quwoquan_service/runtime/learning"
 	rtrec "quwoquan_service/runtime/recommendation"
+	recpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/content-service/internal/application/intersection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
@@ -30,6 +33,23 @@ func (r fixtureFeedReader) FindPublishedFeedPost(
 		}
 	}
 	return postports.PostFeedItemSlice{}, false, nil
+}
+
+func (r fixtureFeedReader) FindPublishedFeedPosts(
+	ctx context.Context,
+	postIDs []postports.PostID,
+) (map[postports.PostID]postports.PostFeedItemSlice, error) {
+	out := make(map[postports.PostID]postports.PostFeedItemSlice, len(postIDs))
+	for _, id := range postIDs {
+		slice, ok, err := r.FindPublishedFeedPost(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out[id] = slice
+		}
+	}
+	return out, nil
 }
 
 func (r fixtureFeedReader) ListPublishedFeedPosts(
@@ -248,6 +268,126 @@ func TestListFeed_PostReaderQuery_FiltersDislikedContent(t *testing.T) {
 	}
 }
 
+// TestListFeed_ChannelRecommendRoutesEngine 守护 B1 频道语义收口：首页 recommend 频道
+// 以 channelId 路由，必须进推荐引擎（FeedDiscovery + home surface + channelId 归因），
+// 绝不落入 PostReader 时间线具名查询。
+func TestListFeed_ChannelRecommendRoutesEngine(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_rec", ContentType: "image", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fixtureFeedReader{posts: []postmodel.Post{
+		{ID: "p_rec", ContentType: "image", AuthorId: "author_a", Status: "published", Visibility: "public"},
+		{ID: "p_reader_only", ContentType: "image", AuthorId: "author_b", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_channel", SessionID: "s_channel", ChannelID: "recommend", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.FeedType != rtrec.FeedDiscovery || source.last.Surface != "home" {
+		t.Fatalf("recommend channel must route recommendation engine, got %+v", source.last)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_rec" {
+		t.Fatalf("recommend channel must serve engine items only (no post reader fill), got %+v", resp.Items)
+	}
+	if resp.Items[0].RecallPath == "post_query" {
+		t.Fatalf("recommend channel item must carry engine recall attribution, got %+v", resp.Items[0])
+	}
+}
+
+// TestListFeed_ChannelIgnoresLegacyIdentityType 守护频道推荐主链路与浏览流互斥：
+// channelId 存在时 identity/type 被忽略，不得据此改走 PostReader 时间流。
+func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_engine", ContentType: "micro", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fixtureFeedReader{posts: []postmodel.Post{
+		{ID: "p_engine", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_a", Status: "published", Visibility: "public"},
+		{ID: "p_timeline", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_b", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{
+		UserID: "u_mixed", SessionID: "s_mixed",
+		ChannelID: "recommend", Identity: "moment", Type: "micro", Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.FeedType != rtrec.FeedDiscovery || source.last.Surface != "home" {
+		t.Fatalf("channelId must win over legacy identity/type, got %+v", source.last)
+	}
+	for _, item := range resp.Items {
+		if item.PostID == "p_timeline" {
+			t.Fatalf("channel request must not fill from post reader timeline, got %+v", resp.Items)
+		}
+	}
+}
+
+// TestListFeed_ChannelFollowingRoutesFollowFeed 守护 B16：following 频道走 FeedFollow
+// 关注召回主路；候选池 fail-closed（由 GateFollowFeedSource 保证只有关注召回可供给）。
+func TestListFeed_ChannelFollowingRoutesFollowFeed(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_followed", ContentType: "image", RecallPath: "author_recall", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fixtureFeedReader{posts: []postmodel.Post{
+		{ID: "p_followed", ContentType: "image", AuthorId: "author_followed", Status: "published", Visibility: "public"},
+		{ID: "p_stranger", ContentType: "image", AuthorId: "author_stranger", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_follow", SessionID: "s_follow", ChannelID: "following", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.FeedType != rtrec.FeedFollow {
+		t.Fatalf("following channel must route FeedFollow, got %+v", source.last)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_followed" {
+		t.Fatalf("following channel must not fill from post reader timeline, got %+v", resp.Items)
+	}
+}
+
+// TestListFeed_ChannelTravelRoutesVertical 守护 W2：travel 频道经 channelId 路由到
+// travel_photography 垂类（与既有 type/subCategory token 同一 feedRoute 真相源）。
+func TestListFeed_ChannelTravelRoutesVertical(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_travel_ch", ContentType: "image", ContentVertical: "travel_photography", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fixtureFeedReader{posts: []postmodel.Post{
+		{ID: "p_travel_ch", ContentType: "image", AuthorId: "author_a", ContentVertical: "travel_photography", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_travel_ch", SessionID: "s_travel_ch", ChannelID: "travel", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.Vertical != "travel_photography" || source.last.Surface != "travel_photography" {
+		t.Fatalf("travel channel route not propagated: %+v", source.last)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_travel_ch" {
+		t.Fatalf("travel channel feed mismatch: %+v", resp.Items)
+	}
+}
+
 func TestListFeed_TravelVerticalRoutesRecommendation(t *testing.T) {
 	ctx := context.Background()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
@@ -320,6 +460,173 @@ func TestListFeed_PremiumStreamDoesNotUsePostReaderQuery(t *testing.T) {
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_premium_eligible" {
 		t.Fatalf("premium stream must not fill from post reader query, got %+v", resp.Items)
 	}
+}
+
+func TestListFeed_RecordsOnlyHydratedItemsAsServed(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
+	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 1000)
+	now := time.Now()
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_delivered", ContentType: "image", PublishedAt: now},
+		{ContentID: "p_hydration_missing", ContentType: "image", PublishedAt: now},
+	}}
+	engine := rtrec.NewEngine(
+		sessionCache,
+		[]rtrec.CandidateSource{source},
+		rtrec.WithExposureGovernance(sessionCache, sessionCache),
+	)
+	reader := fixtureFeedReader{posts: []postmodel.Post{
+		{
+			ID:          "p_delivered",
+			ContentType: "image",
+			AuthorId:    "author-delivered",
+			Status:      "published",
+			Visibility:  "public",
+		},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	response, err := svc.ListFeed(ctx, ListFeedRequest{
+		UserID: "u-final-delivery", SessionID: "s-final-delivery",
+		ChannelID: "recommend", Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].PostID != "p_delivered" {
+		t.Fatalf("only hydrated item may enter response: %+v", response.Items)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		filtered, filterErr := hotPath.FilterCandidates(
+			ctx,
+			"u-final-delivery",
+			source.candidates,
+			time.Now(),
+		)
+		if filterErr != nil {
+			t.Fatalf("FilterCandidates: %v", filterErr)
+		}
+		survivors := make(map[string]bool, len(filtered))
+		for _, candidate := range filtered {
+			survivors[candidate.ContentID] = true
+		}
+		if !survivors["p_delivered"] && survivors["p_hydration_missing"] {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("served memory must contain only final response items: %+v", filtered)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestListFeed_PreservesPerAttemptModelReleaseAttribution(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))),
+		2*time.Second,
+		1000,
+	)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_first_missing", ContentType: "image", PublishedAt: time.Now()},
+		{ContentID: "p_second_delivered", ContentType: "image", PublishedAt: time.Now()},
+	}}
+	scorer := &releaseByScoreCallScorer{}
+	learning := &feedLearningRecorder{events: make(chan runtimelearning.Event, 1)}
+	policy := recpolicy.Baseline()
+	policy.Scorer.ExploreFraction = 0
+	for i := range policy.Experiments {
+		if policy.Experiments[i].ID == recpolicy.ExpModelVsRule {
+			policy.Experiments[i].Enabled = true
+			policy.Experiments[i].Buckets = []recpolicy.ExperimentBucket{
+				{Name: "model", WeightPct: 100},
+				{Name: "rule", WeightPct: 0},
+			}
+		}
+	}
+	engine := rtrec.NewEngine(
+		sessionCache,
+		[]rtrec.CandidateSource{source},
+		rtrec.WithScorer(scorer),
+		rtrec.WithFeedbackRecorder(rtrec.NewFeedbackRecorder(learning)),
+		rtrec.WithPolicyStore(recpolicy.NewStore(policy)),
+	)
+	reader := fixtureFeedReader{posts: []postmodel.Post{{
+		ID:          "p_second_delivered",
+		ContentType: "image",
+		AuthorId:    "author-delivered",
+		Status:      "published",
+		Visibility:  "public",
+	}}}
+
+	response, err := NewFeedService(engine, reader).ListFeed(ctx, ListFeedRequest{
+		UserID: "u-release", SessionID: "s-release",
+		ChannelID: "recommend", FeedRequestID: "frq-release", Limit: 1,
+	})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].PostID != "p_second_delivered" {
+		t.Fatalf("second engine page must provide the final response: %+v", response.Items)
+	}
+	if scorer.calls != 2 {
+		t.Fatalf("hydration miss must advance to a second scoring attempt, calls=%d", scorer.calls)
+	}
+
+	select {
+	case event := <-learning.events:
+		if got := event.Context["modelReleaseId"]; got != "model_release_call_2" {
+			t.Fatalf("delivered item must retain its own scoring-attempt release, got=%v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for delivered impression")
+	}
+}
+
+type releaseByScoreCallScorer struct {
+	calls int
+}
+
+func (s *releaseByScoreCallScorer) ScoreBatch(
+	_ context.Context,
+	_ *rtrec.ScoringFeatures,
+	candidates []rtrec.ContentCandidate,
+) ([]rtrec.ScoredCandidate, error) {
+	s.calls++
+	releaseID := fmt.Sprintf("model_release_call_%d", s.calls)
+	scored := make([]rtrec.ScoredCandidate, 0, len(candidates))
+	for i, candidate := range candidates {
+		scored = append(scored, rtrec.ScoredCandidate{
+			Candidate:      candidate,
+			Score:          float64(len(candidates) - i),
+			ModelReleaseID: releaseID,
+		})
+	}
+	return scored, nil
+}
+
+type feedLearningRecorder struct {
+	events chan runtimelearning.Event
+}
+
+func (r *feedLearningRecorder) RecordEvent(
+	_ context.Context,
+	event runtimelearning.Event,
+) error {
+	r.events <- event
+	return nil
+}
+
+func (*feedLearningRecorder) RecordScorecard(
+	context.Context,
+	runtimelearning.Scorecard,
+) error {
+	return nil
 }
 
 func TestPostReaderFeedCursorHasOneOpaqueWireFormat(t *testing.T) {

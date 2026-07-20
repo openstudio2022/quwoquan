@@ -37,7 +37,7 @@ Step 4: 输出结论与下一步建议
 环境验证、打包、健康检查、巡检和修复统一经 `stackctl`：
 
 ```bash
-python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>
 python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
 python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```

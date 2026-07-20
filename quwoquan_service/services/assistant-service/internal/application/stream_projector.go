@@ -15,7 +15,15 @@ type StreamProjector struct {
 }
 
 func NewStreamProjector(turn assistant.AssistantTurn, now func() time.Time) *StreamProjector {
-	return &StreamProjector{Turn: turn, Now: now}
+	return NewStreamProjectorAt(turn, now, 0)
+}
+
+func NewStreamProjectorAt(
+	turn assistant.AssistantTurn,
+	now func() time.Time,
+	afterSeq uint64,
+) *StreamProjector {
+	return &StreamProjector{Turn: turn, Now: now, seq: afterSeq}
 }
 
 func (p *StreamProjector) Event(eventType string, payload map[string]any) (streaming.Envelope, error) {
@@ -93,10 +101,14 @@ func canonicalStreamEventType(eventType string) string {
 		return "turn_failed"
 	case "assistant.answer.delta":
 		return "partial_answer"
+	case "assistant.answer.reset":
+		return "answer_reset"
 	case "assistant.answer.final":
 		return "final_answer"
 	case "assistant.turn.completed":
 		return "turn_completed"
+	case "assistant.turn.cancelled":
+		return "turn_cancelled"
 	default:
 		return eventType
 	}

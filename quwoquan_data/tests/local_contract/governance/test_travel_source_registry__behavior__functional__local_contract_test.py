@@ -29,7 +29,7 @@ def test_repository_travel_source_registry_is_valid():
     assert verify_travel_source_registry(
         allowed_extractors={
             "wikipedia_api",
-            "baidu_baike_openapi",
+            "baidu_baike_html",
             "toutiao_baike_html",
             "qunar_html",
             "static_official_html",
@@ -81,7 +81,7 @@ def test_registry_matches_runtime_sites_and_extractors():
     baidu = resolve_travel_source_runtime(
         "https://baike.baidu.com/item/稻城亚丁"
     )
-    assert baidu["extractor"] == "baidu_baike_openapi"
+    assert baidu["extractor"] == "baidu_baike_html"
     assert baidu["fetchable"] is True
     assert resolve_travel_source_runtime(
         "https://www.baike.com/wikiid/7360066735180479986"

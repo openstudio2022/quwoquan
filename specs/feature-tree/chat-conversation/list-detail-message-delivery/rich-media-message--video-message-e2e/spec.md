@@ -1,4 +1,4 @@
-# 视频消息端到端（Video Message E2E）
+# L3 特性：视频消息端到端（Video Message E2E）
 
 > **层级**：L4_story（隶属 L3 `rich-media-message`）
 > **状态**：specified

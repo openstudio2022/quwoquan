@@ -13,13 +13,18 @@ class ImageEditorFilterSceneClassifier {
         type: ImageEditorFilterSceneType.portrait,
         score: _clamp01(
           0.52 * features.skinRatio +
-              0.16 * (1 - (features.texture - 0.11).abs() / 0.11).clamp(0.0, 1.0) +
+              0.16 *
+                  (1 - (features.texture - 0.11).abs() / 0.11).clamp(0.0, 1.0) +
               0.18 *
-                  (1 - (features.meanLuma - 0.56).abs() / 0.44)
-                      .clamp(0.0, 1.0) +
+                  (1 - (features.meanLuma - 0.56).abs() / 0.44).clamp(
+                    0.0,
+                    1.0,
+                  ) +
               0.14 *
-                  (1 - (features.meanSaturation - 0.42).abs() / 0.42)
-                      .clamp(0.0, 1.0),
+                  (1 - (features.meanSaturation - 0.42).abs() / 0.42).clamp(
+                    0.0,
+                    1.0,
+                  ),
         ),
       ),
       ImageEditorFilterSceneRecognition(
@@ -38,8 +43,10 @@ class ImageEditorFilterSceneClassifier {
           0.36 * features.warmColorRatio +
               0.30 * features.meanSaturation +
               0.18 *
-                  (1 - (features.meanLuma - 0.55).abs() / 0.45)
-                      .clamp(0.0, 1.0) +
+                  (1 - (features.meanLuma - 0.55).abs() / 0.45).clamp(
+                    0.0,
+                    1.0,
+                  ) +
               0.16 * features.texture,
         ),
       ),
@@ -58,9 +65,15 @@ class ImageEditorFilterSceneClassifier {
           0.30 * features.contrast +
               0.28 * features.texture +
               0.20 *
-                  (1 - (features.meanSaturation - 0.35).abs() / 0.35)
-                      .clamp(0.0, 1.0) +
-              0.22 * (1 - (features.aspectRatio - 1.5).abs() / 1.5).clamp(0.0, 1.0),
+                  (1 - (features.meanSaturation - 0.35).abs() / 0.35).clamp(
+                    0.0,
+                    1.0,
+                  ) +
+              0.22 *
+                  (1 - (features.aspectRatio - 1.5).abs() / 1.5).clamp(
+                    0.0,
+                    1.0,
+                  ),
         ),
       ),
       ImageEditorFilterSceneRecognition(

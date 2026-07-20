@@ -25,6 +25,7 @@ final class AlphaRealtimeConnectionDelegate
 
   TransportState _state = TransportState.disconnected;
   Timer? _eventPushTimer;
+  bool _didPushIncomingCall = false;
 
   @override
   TransportState get state => _state;
@@ -34,6 +35,11 @@ final class AlphaRealtimeConnectionDelegate
     if (_state == TransportState.disconnected) {
       _setState(TransportState.idle);
     }
+    if (_didPushIncomingCall) return;
+    _didPushIncomingCall = true;
+    final event = _AlphaRealtimeEventCatalog.incomingCallEvent();
+    if (event == null) return;
+    _eventPushTimer = Timer(eventPushDelay, () => _handler.handle(event));
   }
 
   @override
@@ -123,5 +129,53 @@ final class _AlphaRealtimeEventCatalog {
         .whereType<Map>()
         .map((row) => row.cast<String, dynamic>())
         .toList(growable: false);
+  }
+
+  static Map<String, dynamic>? incomingCallEvent() {
+    final asset = alphaFixtureBundle.assets['rtc'];
+    if (asset == null) return null;
+    final decoded = jsonDecode(asset.sourceJson);
+    if (decoded is! Map) return null;
+    final seedSets = decoded['seedSets'];
+    if (seedSets is! Map) return null;
+    final core = seedSets['rtc_core'];
+    if (core is! Map) return null;
+    final sessions = core['sessions'];
+    final participants = core['participants'];
+    if (sessions is! List || participants is! List) return null;
+    Map? incoming;
+    for (final row in sessions.whereType<Map>()) {
+      if (row['state'] == 'incoming') {
+        incoming = row;
+        break;
+      }
+    }
+    if (incoming == null) return null;
+    final callerId = incoming['callerUserId']?.toString() ?? '';
+    String? callerName;
+    String? avatarUrl;
+    for (final row in participants.whereType<Map>()) {
+      if (row['userId'] == callerId) {
+        callerName = row['displayName']?.toString();
+        avatarUrl = row['avatarUrl']?.toString();
+        break;
+      }
+    }
+    return <String, dynamic>{
+      'type': 'call.ringing',
+      'callId': incoming['sessionId']?.toString() ?? '',
+      'actorId': callerId,
+      'payload': <String, dynamic>{
+        'callType': incoming['type'] == 'video' ? 'video' : 'audio',
+        'initiatorId': callerId,
+        if (callerName != null) 'callerName': callerName,
+        if (avatarUrl != null) 'callerAvatarUrl': avatarUrl,
+        'trustRelation': 'known',
+        'expiresAt': DateTime.now()
+            .add(const Duration(seconds: 30))
+            .toUtc()
+            .toIso8601String(),
+      },
+    };
   }
 }

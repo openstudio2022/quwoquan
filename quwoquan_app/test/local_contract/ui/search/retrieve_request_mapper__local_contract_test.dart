@@ -7,26 +7,29 @@ import 'package:quwoquan_app/core/services/search_repository.dart';
 
 void main() {
   group('RetrieveRequest.fromSearchRequest', () {
-    test('maps content post + content types to article/photo/video targets', () {
-      final request = SearchRequest(
-        query: '四川 露营 攻略',
-        mode: SearchMode.result,
-        objectTypes: const <SearchObjectType>{SearchObjectType.contentPost},
-        contentTypes: const <SearchContentTypeFilter>{
-          SearchContentTypeFilter.article,
-          SearchContentTypeFilter.image,
-        },
-      );
+    test(
+      'maps content post + content types to article/photo/video targets',
+      () {
+        final request = SearchRequest(
+          query: '四川 露营 攻略',
+          mode: SearchMode.result,
+          objectTypes: const <SearchObjectType>{SearchObjectType.contentPost},
+          contentTypes: const <SearchContentTypeFilter>{
+            SearchContentTypeFilter.article,
+            SearchContentTypeFilter.image,
+          },
+        );
 
-      final retrieve = RetrieveRequest.fromSearchRequest(request);
+        final retrieve = RetrieveRequest.fromSearchRequest(request);
 
-      expect(retrieve.targets, contains(RetrieveTarget.article));
-      expect(retrieve.targets, contains(RetrieveTarget.photo));
-      expect(retrieve.targets, isNot(contains(RetrieveTarget.video)));
-      // terms keep the whole query plus split tokens.
-      expect(retrieve.terms.first, '四川 露营 攻略');
-      expect(retrieve.terms, containsAll(<String>['四川', '露营', '攻略']));
-    });
+        expect(retrieve.targets, contains(RetrieveTarget.article));
+        expect(retrieve.targets, contains(RetrieveTarget.photo));
+        expect(retrieve.targets, isNot(contains(RetrieveTarget.video)));
+        // terms keep the whole query plus split tokens.
+        expect(retrieve.terms.first, '四川 露营 攻略');
+        expect(retrieve.terms, containsAll(<String>['四川', '露营', '攻略']));
+      },
+    );
 
     test('maps chat object types to a single chat target', () {
       final request = SearchRequest(

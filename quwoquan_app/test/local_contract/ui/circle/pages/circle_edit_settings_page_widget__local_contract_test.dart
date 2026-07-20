@@ -2,15 +2,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _app({
   CircleEditSettingsTab initialTab = CircleEditSettingsTab.info,
   bool createMode = false,
-  CircleRepository? repository,
+  CircleLifecycleCommandWriter? lifecycleWriter,
   ImagePickGateway? mediaPicker,
 }) {
   final circle = CircleDto(
@@ -25,13 +26,30 @@ Widget _app({
     autoSyncChat: true,
     sectionConfig: const [
       CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
-      CircleSectionConfigDto(sectionType: 'interaction', visible: true, order: 1),
+      CircleSectionConfigDto(
+        sectionType: 'interaction',
+        visible: true,
+        order: 1,
+      ),
     ],
     createdAt: DateTime(2024, 1, 1),
     updatedAt: DateTime(2024, 1, 2),
   );
   final overrides = [
-    if (repository != null) circleRepositoryProvider.overrideWithValue(repository),
+    if (lifecycleWriter != null)
+      circlesListCircleLifecycleCommandWriterProvider.overrideWithValue(
+        lifecycleWriter,
+      ),
+    if (lifecycleWriter != null)
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          subAccountId: 'user_001',
+          ownerUserId: 'user_001',
+          displayName: '圈子编辑测试用户',
+          avatarUrl: '',
+          personaContextVersion: 'fixture-circle-edit',
+        ),
+      ),
     if (mediaPicker != null)
       imagePickGatewayProvider.overrideWithValue(mediaPicker),
   ];
@@ -49,13 +67,31 @@ Widget _app({
   );
 }
 
-class _RecordingCircleRepository extends MockCircleRepository {
-  Map<String, dynamic>? createdPayload;
+/// 记录创建命令的 typed fake（与 Remote lifecycle facet 同接口）。
+class _RecordingCircleLifecycleWriter implements CircleLifecycleCommandWriter {
+  CreateCircleCommand? createdCommand;
 
   @override
-  Future<CircleDto> createCircle(CircleCreateWireDto data) async {
-    createdPayload = data.toMockMergeMap();
-    return super.createCircle(data);
+  Future<CircleCommandResult> createCircle(CreateCircleCommand command) async {
+    createdCommand = command;
+    return const CircleCommandResult(
+      circleId: 'created_circle_1',
+      version: 1,
+      status: CircleLifecycleStatus.active,
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<CircleCommandResult> updateCircle(UpdateCircleCommand command) async {
+    throw UnsupportedError('update is out of scope for this fake');
+  }
+
+  @override
+  Future<CircleCommandResult> archiveCircle(
+    ArchiveCircleCommand command,
+  ) async {
+    throw UnsupportedError('archive is out of scope for this fake');
   }
 }
 
@@ -102,17 +138,15 @@ void main() {
     });
 
     testWidgets('创建模式提交真实圈子表单', (tester) async {
-      final repository = _RecordingCircleRepository();
-      final mediaPicker = _FakeImagePickGateway(
-        const {
-          ImagePickSource.photoLibrary: '/tmp/circle-cover.png',
-          ImagePickSource.camera: '/tmp/circle-avatar.png',
-        },
-      );
+      final lifecycleWriter = _RecordingCircleLifecycleWriter();
+      final mediaPicker = _FakeImagePickGateway(const {
+        ImagePickSource.photoLibrary: '/tmp/circle-cover.png',
+        ImagePickSource.camera: '/tmp/circle-avatar.png',
+      });
       await tester.pumpWidget(
         _app(
           createMode: true,
-          repository: repository,
+          lifecycleWriter: lifecycleWriter,
           mediaPicker: mediaPicker,
         ),
       );
@@ -151,20 +185,15 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 4));
 
-      expect(repository.createdPayload?['name'], '夜跑搭子');
-      expect(
-        repository.createdPayload?['categoryId'] ??
-            repository.createdPayload?['category'],
-        isNotNull,
-      );
-      expect(repository.createdPayload?['coverUrl'], '/tmp/circle-cover.png');
-      expect(repository.createdPayload?['avatar'], '/tmp/circle-avatar.png');
+      final command = lifecycleWriter.createdCommand;
+      expect(command, isNotNull);
+      expect(command!.name, '夜跑搭子');
+      expect(command.category, isNotNull);
+      expect(command.coverUrl, '/tmp/circle-cover.png');
     });
 
     testWidgets('切换到管理中心后展示访问设置', (tester) async {
-      await tester.pumpWidget(
-        _app(initialTab: CircleEditSettingsTab.settings),
-      );
+      await tester.pumpWidget(_app(initialTab: CircleEditSettingsTab.settings));
       await tester.pump();
 
       expect(find.text('可见范围'), findsOneWidget);

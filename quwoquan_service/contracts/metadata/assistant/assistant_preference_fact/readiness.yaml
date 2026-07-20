@@ -1,0 +1,38 @@
+object: AssistantPreferenceFact
+operations:
+  - SetAssistantPreference
+  - ListAssistantPreferences
+  - RevokeAssistantPreference
+  - RestoreAssistantPreference
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/assistant-service/internal/domain/assistant/preference_fact/model/model.go
+    - quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact/preference_command_facade.go
+    - quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact/preference_query_facade.go
+    - quwoquan_service/services/assistant-service/internal/application/conversation_service.go
+    - quwoquan_service/services/assistant-service/internal/application/model_provider.go
+  store:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/assistant/preference_fact/persistence/mongo_store.go
+  outbox: []
+  reader:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/assistant/preference_fact/persistence/mongo_store.go
+  transport:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart
+    - quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
+    - quwoquan_app/lib/ui/assistant/providers/personal_assistant_stream_controller.dart
+  page:
+    - quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact/preference_fact_service__local_contract_test.go
+    - quwoquan_service/services/assistant-service/internal/application/preference_injection__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/assistant/assistant_preference_fact__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/assistant-service/tests/api_integration/preference_fact__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+environments: []

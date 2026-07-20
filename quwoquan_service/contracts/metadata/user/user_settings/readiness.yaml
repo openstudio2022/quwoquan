@@ -1,0 +1,47 @@
+object: UserSettings
+operations:
+  - GetNotificationSettings
+  - GetPrivacySettings
+  - GetCallSettings
+  - GetAppearanceSettings
+  - UpdateNotificationSettings
+  - UpdatePrivacySettings
+  - UpdateCallSettings
+  - UpdateAppearanceSettings
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/domain/account/user_settings/model/user_settings.go
+    - quwoquan_service/services/user-service/internal/application/account/user_settings/command_facade.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/user_settings/persistence/postgres_store.go
+  outbox:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/user_settings/persistence/postgres_store.go
+  reader:
+    - quwoquan_service/services/user-service/internal/application/account/user_settings/query_facade.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/user_settings_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/user/user_settings_contracts.dart
+    - quwoquan_app/lib/cloud/remote/user/user_settings/user_settings_remote.dart
+  page:
+    - quwoquan_app/lib/ui/settings/pages/settings_page.dart
+    - quwoquan_app/lib/ui/settings/pages/settings_dark_mode_page.dart
+    - quwoquan_app/lib/ui/settings/pages/settings_notifications_page.dart
+    - quwoquan_app/lib/ui/settings/pages/settings_privacy_page.dart
+    - quwoquan_app/lib/ui/settings/pages/settings_calls_page.dart
+    - quwoquan_app/lib/ui/settings/pages/blocked_keywords_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/user-service/tests/local_contract/internal/application/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/settings/pages/b1_settings_pages__local_contract_test.dart
+    - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/user/alpha_b1_identity_facets__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/user_profile_dto_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/user_settings_packet__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/settings_contract__api_integration_test.go
+    - quwoquan_app/test/api_integration/cloud/user/user_api_contract_runner.dart
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/user/user_settings_save_reopen_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/settings/blocked_keywords/blocked_keywords_page__user_acceptance_test.dart
+environments: []

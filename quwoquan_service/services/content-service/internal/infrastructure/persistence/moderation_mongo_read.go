@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
 	moderationmodel "quwoquan_service/services/content-service/internal/domain/moderation/model"
 	moderationports "quwoquan_service/services/content-service/internal/domain/moderation/ports"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
@@ -63,6 +64,49 @@ func (s *MongoPostModerationCaseStore) GetPublicationEligibility(
 		DecisionAt:    cloneModerationTime(document.DecidedAt),
 		FailureReason: failureReason,
 	}, nil
+}
+
+func (s *MongoPostModerationCaseStore) FindCurrentByPostID(
+	ctx context.Context,
+	postID string,
+) (moderationapp.PostModerationCaseOpsSlice, bool, error) {
+	var document postModerationCaseDocument
+	err := s.cases.FindOne(
+		ctx,
+		bson.D{
+			{Key: "postId", Value: strings.TrimSpace(postID)},
+			{Key: "status", Value: bson.D{{Key: "$ne", Value: moderationmodel.StatusSuperseded}}},
+		},
+		options.FindOne().SetSort(
+			bson.D{
+				{Key: "postVersion", Value: -1},
+				{Key: "updatedAt", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+		),
+	).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return moderationapp.PostModerationCaseOpsSlice{}, false, nil
+	}
+	if err != nil {
+		return moderationapp.PostModerationCaseOpsSlice{}, false, fmt.Errorf(
+			"read current post moderation case: %w",
+			err,
+		)
+	}
+	return moderationapp.PostModerationCaseOpsSlice{
+		ID:             document.ID,
+		Version:        document.Version,
+		PostID:         document.PostID,
+		PostVersion:    document.PostVersion,
+		ContentDigest:  document.ContentDigest,
+		Status:         document.Status,
+		ReviewerID:     document.ReviewerID,
+		DecisionReason: document.DecisionReason,
+		CreatedAt:      document.CreatedAt,
+		UpdatedAt:      document.UpdatedAt,
+		DecidedAt:      document.DecidedAt,
+	}, true, nil
 }
 
 func (s *MongoPostModerationCaseStore) ReadModerationOutboxAfter(

@@ -47,18 +47,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt_edge_back_local_contract
         cases:
         - local_contract.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.gwt_edge_back_local_contract
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.user_journey
@@ -71,5 +74,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

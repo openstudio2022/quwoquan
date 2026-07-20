@@ -1,0 +1,32 @@
+domain: ASSISTANT
+aggregate: AssistantScorecardFact
+
+description: |
+  AssistantScorecardFact append-only fact 错误码。格式：MODULE.KIND.REASON。
+  重复 scoreId 是幂等重放（非错误），只声明校验与可用性错误。
+
+errors:
+  - code: ASSISTANT.USER.scorecard_invalid
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: scorecardInvalid
+    go_const: ErrScorecardInvalid
+    l10n_key: assistant.error.scorecard_invalid
+    user_message:
+      zh: "评分数据格式有误"
+      en: "Scorecard payload is invalid"
+
+  - code: ASSISTANT.SYSTEM.scorecard_sink_unavailable
+    kind: SYSTEM
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: scorecardSinkUnavailable
+    go_const: ErrScorecardSinkUnavailable
+    l10n_key: assistant.error.scorecard_sink_unavailable
+    user_message:
+      zh: "评分通道暂不可用，稍后会自动重试"
+      en: "Scorecard channel is unavailable; will retry automatically"

@@ -154,9 +154,9 @@ scenarios:
     go_func: TestBehaviorBatchReport
     command: ReportBehaviors (batch of impression+dwell+click)
     assertions:
-      - http_status == 200
-      - response.status == "ok"
-      - response.accepted == 3
+      - http_status == 204
+      - response body is empty
+      - canonical events use type/targetId/duration and reject retired keys
 
   - name: behavior_batch_empty
     operation: ReportBehaviors
@@ -166,49 +166,16 @@ scenarios:
       - response.code == "CONTENT.USER.invalid_argument"
       - http_status == 400
 
-  # ── 计数回写场景 ──────────────────────────────────────────────────
-  - name: counter_flush
-    go_func: TestCounterFlush
-    status: pending
-    command: FlushCounters (timer-triggered)
-    seed: [fixture.NewPost()]
-    setup:
-      - miniredis.Set('counter:{postId}:like', '42')
-    assertions:
-      - db.posts.FindOne({_id}).likeCount → 42 (flushed from Redis)
-      - miniredis.Exists('counter:{postId}:like') → false or reset
-
   # ── 内容审核流转场景 ──────────────────────────────────────────────
   - name: post_moderation_flow
-    go_func: TestPostModerationFlow
-    status: pending
+    go_func: TestPostModerationWorkflowEligibilityAndIdempotency
+    evidence: local_contract
     command: ModeratePost (pending → approved → rejected)
-    seed: [fixture.NewPost(moderationStatus=pending)]
     assertions:
-      - after approve: db.posts.FindOne.moderationStatus → 'approved'
-      - after reject: db.posts.FindOne.moderationStatus → 'rejected'
-      - eventSpy.AssertPublished("ContentModerated") for each transition
+      - BeginReview/Resolve use server-owned CAS and idempotent receipt
+      - stale decision fails closed and does not mutate publication eligibility
+      - moderation decision event is emitted at committed version
 
-  # ── 未覆盖 API 占位（status: pending，实施时补 go_func）────────────────
-  - name: search_posts_contract
-    operation: SearchPosts
-    go_func: TestSearchPostsContract
-    status: pending
-    command: SearchPosts
-  - name: list_profile_interaction_activities_received_contract
-    operation: ListProfileInteractionActivitiesReceived
-    go_func: TestListProfileInteractionActivitiesReceivedContract
-    status: pending
-    command: ListProfileInteractionActivitiesReceived
-  - name: list_profile_interaction_activities_sent_contract
-    operation: ListProfileInteractionActivitiesSent
-    go_func: TestListProfileInteractionActivitiesSentContract
-    status: pending
-    command: ListProfileInteractionActivitiesSent
-  - name: update_profile_interaction_state_contract
-    operation: UpdateProfileInteractionState
-    go_func: TestProfileShareInteractionDurableHTTPContract
-    command: UpdateProfileInteractionState(read, idempotent)
   - name: submit_post_publication_replay_contract
     operation: SubmitPostPublication
     go_func: TestPostPublicationIntentConcurrentReplayCreatesOnePost
@@ -238,8 +205,7 @@ scenarios:
     command: GenerateArticleSummary
   - name: get_helper_read_contract
     operation: GetHelperRead
-    go_func: TestGetHelperReadContract
-    status: pending
+    go_func: TestGetHelperRead_Article
     command: GetHelperRead
   - name: update_post_settings_contract
     operation: UpdatePostSettings
@@ -303,10 +269,6 @@ scenarios:
     operation: GetMyFootprint
     go_func: TestGetMyFootprintContract
     command: GetMyFootprint
-  - name: request_original_image_access_contract
-    operation: RequestOriginalImageAccess
-    go_func: TestRequestOriginalImageAccessContract
-    command: RequestOriginalImageAccess
   - name: submit_post_publication_with_media_contract
     operation: SubmitPostPublication
     go_func: TestSubmitPostPublicationBindsReadyOwnedMedia
@@ -319,10 +281,6 @@ scenarios:
     operation: ListMyIntersections
     go_func: TestIntersectionService_ListFiltersAndPaginates
     command: ListMyIntersections
-  - name: mark_intersections_visited_contract
-    operation: MarkIntersectionsVisited
-    go_func: TestIntersectionService_SummaryNewCountAndVisitClears
-    command: MarkIntersectionsVisited
   - name: get_object_intersections_contract
     operation: GetObjectIntersections
     go_func: TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength

@@ -15,7 +15,7 @@ _AGENT_FUTURE_POLL_TIMEOUT_SECONDS = active_runtime_policy().agent_future_poll_t
 
 def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
     """Close canonical publish evidence when an object Agent finished first."""
-    from content.execution.controller.publish import _publishable_homepage_refs, _execution_release_id
+    from content.execution.controller.publish import _publishable_homepage_refs
     state = load_execution_state(ctx.execution_id)
     if "publish" not in set(state.completed or []):
         return True
@@ -56,31 +56,21 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
         )
         save_execution_state(state)
         return True
-    release_id = _execution_release_id(ctx.execution_id)
-    release_dir = release_root(release_id)
-    from content.release.canonical.gate import gate_publish
+    # posts execution：canonical publish 是唯一发布真相源；promotion 幂等地
+    # 复验 object transaction、closure 并回写 publish_ref。
+    from content.release.canonical.post_promotion import promote_execution_posts
 
-    issues = gate_publish(release_id) if release_dir.is_dir() else ["release directory missing"]
-    if issues:
+    try:
+        promote_execution_posts(ctx.execution_id)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
         state.completed = [
             stage for stage in (state.completed or []) if stage != "publish"
         ]
         state.status = ExecutionStateStatus.RUNNING
-        state.failed_objects = list(issues)
-        state.next_action = "rebuild invalid or missing immutable release"
+        state.failed_objects = [str(exc)]
+        state.next_action = "repair canonical post promotion before publish"
         save_execution_state(state)
         return False
-    entities = sum(1 for path in (release_dir / "objects/entities").rglob("manifest.json"))
-    posts = sum(1 for path in (release_dir / "objects/posts").rglob("manifest.json"))
-    ship_report = execution_root(ctx.execution_id) / "_shared" / "ship_report.json"
-    if not ship_report.is_file():
-        from content.release.environment.handler import write_release_only_ship_report
-
-        write_release_only_ship_report(
-            output_path=ship_report,
-            release_id=release_id,
-            summary={"entityCount": entities, "postCount": posts},
-        )
     save_execution_state(state)
     return True
 
@@ -91,6 +81,7 @@ def _managed_checkpoint_repair_budget_exhausted(used_attempts: int) -> bool:
 def run_managed_controller(ctx: ExecutionContext) -> int:
     """父进程消费全部 Agent checkpoint，直到 release verify 通过或转人工。"""
     from content.execution.agent.agent_checkpoint import _checkpoint_is_done, _handle_managed_infra_budget_exhausted, _managed_author_failure_refs, _managed_consecutive_no_start_infra_failures
+    from content.execution.agent.history import last_managed_agent_run
     from content.execution.recovery.download_unresolved import _download_plan_unresolved_entities, _write_download_availability
     from content.execution.controller.control import _recover_stale_controller_yield
     from content.execution.controller.orchestrator import run_controller
@@ -104,6 +95,14 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             return code
         state = load_execution_state(ctx.execution_id)
         stage = str(state.waiting_checkpoint or "")
+        from content.execution.reliabletask_jobs import uses_reliabletask
+
+        if uses_reliabletask(ctx) and stage in {"build_homepage", "post_author", "publish"}:
+            print(
+                f"[task execute] ReliableTask 外部 worker 等待态：{stage}；"
+                "对象任务完成后以同一 executionId resume"
+            )
+            return 10
         if isinstance(state.controller_yield, Mapping):
             if _recover_stale_controller_yield(ctx, state):
                 continue
@@ -114,14 +113,13 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
         retry_blocked_author_progress = (
             stage == "post_author"
             and used >= MAX_REACT_REWINDS
-            and isinstance(state.last_agent_run, Mapping)
-            and str((state.last_agent_run or {}).get("stage") or "") == stage
-            and int((state.last_agent_run or {}).get("finishedCount") or 0) > 0
+            and (last_run := last_managed_agent_run(state)) is not None
+            and last_run.stage.value == stage
+            and last_run.finished_count > 0
         )
         if retry_blocked_author_progress:
-            last_run = state.last_agent_run or {}
             failed_refs = _managed_author_failure_refs(
-                list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
+                last_run.outcomes
             )
             retries.pop(stage, None)
             state.retry_counts = retries
@@ -129,7 +127,7 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             state.failed_objects = failed_refs or list(_checkpoint_is_done(ctx, stage)[1])
             state.next_action = (
                 f"retry remaining {stage} refs after partial author progress; "
-                f"finished={int((last_run or {}).get('finishedCount') or 0)}, "
+                f"finished={last_run.finished_count}, "
                 f"remaining={len(state.failed_objects)}"
             )
             state.heartbeat_at = store.now_iso()
@@ -155,8 +153,8 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             stage=stage,
         )
         if consecutive_no_start_failures >= MAX_MANAGED_INFRA_RETRIES:
-            last_run = state.last_agent_run or {}
-            infrastructure_failures = int((last_run or {}).get("infrastructureFailures") or 0)
+            last_run = last_managed_agent_run(state)
+            infrastructure_failures = last_run.infrastructure_failures if last_run else 0
             result = _handle_managed_infra_budget_exhausted(
                 ctx,
                 state,
@@ -184,8 +182,8 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
                 return 10
             continue
         state = load_execution_state(ctx.execution_id)
-        last_run = state.last_agent_run or {}
-        finished_count = int(last_run.get("finishedCount") or 0)
+        last_run = last_managed_agent_run(state)
+        finished_count = last_run.finished_count if last_run else 0
         if stage == "post_author" and finished_count > 0:
             retries = state.retry_counts
             retries.pop(stage, None)
@@ -194,7 +192,7 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             infra.pop(stage, None)
             state.infrastructure_retry_counts = infra
             failed_refs = _managed_author_failure_refs(
-                list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
+                last_run.outcomes if last_run else ()
             )
             state.status = ExecutionStateStatus.REPAIRING
             state.failed_objects = failed_refs or list(_checkpoint_is_done(ctx, stage)[1])
@@ -217,7 +215,7 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
             save_execution_state(state)
             time.sleep(2)
             continue
-        infrastructure_failures = int(last_run.get("infrastructureFailures") or 0)
+        infrastructure_failures = last_run.infrastructure_failures if last_run else 0
         if infrastructure_failures:
             infra = state.infrastructure_retry_counts
             if stage == "post_author" and finished_count > 0:
@@ -228,7 +226,7 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
                 infra.pop(stage, None)
                 state.infrastructure_retry_counts = infra
                 failed_refs = _managed_author_failure_refs(
-                    list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
+                    last_run.outcomes if last_run else ()
                 )
                 state.status = ExecutionStateStatus.REPAIRING
                 state.failed_objects = failed_refs

@@ -1,0 +1,29 @@
+object: FollowingSubject
+operations:
+  - ListFollowingSubjects
+implementation:
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/persistence/mongo_following_subject_store.go
+  reader:
+    # projector 是投影写入器，与 query_service 同按 reader 证据登记。
+    - quwoquan_service/services/user-service/internal/application/relationship/following_subject/projector.go
+    - quwoquan_service/services/user-service/internal/application/relationship/following_subject/query_service.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/subject_follow_handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/user/following_subject_repository.dart
+  page:
+    - quwoquan_app/lib/ui/discovery/widgets/following_subject_strip.dart
+  domain_behavior:
+    # 投影对象的领域行为=事件应用与单调收敛规则（projector）。
+    - quwoquan_service/services/user-service/internal/application/relationship/following_subject/projector.go
+  outbox: []
+tests:
+  local_contract:
+    - quwoquan_app/test/local_contract/ui/discovery/following_subject_strip__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/following_subject_repository_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/subject_follow_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/discovery/following_channel_red_dot_journey__user_acceptance_test.dart
+environments: []

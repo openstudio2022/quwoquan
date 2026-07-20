@@ -1,51 +1,80 @@
-import 'dart:io';
-
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-File _repoFile(String path) {
-  final direct = File(path);
-  if (direct.existsSync()) {
-    return direct;
-  }
-  return File('../$path');
-}
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/user/pages/contact_confirm_page.dart';
+import '../../../../support/fakes/contact_profile_queries.dart';
 
 void main() {
-  test('addContactConfirm page coverage evidence is declared', () {
-    const surfaceId = 'addContactConfirm';
-    const owner = 'user';
-    const routeId = 'addContactConfirm';
-    const sourceEvidence = <String>[
-    'quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart',
-    'quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart',
-  ];
-    const apiEvidence = <String>[
-    'quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go',
-    'quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go',
-  ];
-    const requiredCaseIds = <String>[
-    'user_acceptance.page.addContactConfirm.load_success',
-    'user_acceptance.page.addContactConfirm.empty_permission_error',
-    'user_acceptance.page.addContactConfirm.primary_cta',
-    'user_acceptance.page.addContactConfirm.trace_context',
-    'user_acceptance.page.addContactConfirm.request_wait_recovery',
-  ];
+  testWidgets('联系人确认页真实展示目标资料、来源和能力位主动作', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          personaQueryProvider.overrideWith(
+            (ref, surface) => ContactPersonaQueryFake(
+              profile: SubAccountProfileViewData(
+                subAccountId: 'persona-alice',
+                ownerUserId: 'owner-alice',
+                subjectType: 'persona',
+                userHandle: 'alice',
+                username: 'alice',
+                displayName: 'Alice',
+                avatarUrl: '',
+                backgroundUrl: '',
+                bio: '摄影作者',
+                followerCount: 12,
+                followingCount: 8,
+                postCount: 3,
+                circleCount: 1,
+                likeCount: 20,
+                isolationLevel: 'open',
+                profileVisibility: 'public',
+                inheritsFromOwner: false,
+                overriddenFields: const <String>[],
+                updatedAt: DateTime.utc(2026, 7, 20),
+              ),
+            ),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _ConfirmCapabilityRepository(),
+          ),
+        ],
+        child: const CupertinoApp(
+          home: ContactConfirmPage(
+            targetUserId: 'persona-alice',
+            handle: 'alice',
+            source: 'scan',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    expect(surfaceId, isNotEmpty);
-    expect(owner, isNotEmpty);
-    expect(routeId, isNotEmpty);
-    expect(sourceEvidence, isNotEmpty);
-    expect(apiEvidence, isNotEmpty);
-    expect(requiredCaseIds, containsAll(<String>[
-      'user_acceptance.page.$surfaceId.load_success',
-      'user_acceptance.page.$surfaceId.empty_permission_error',
-      'user_acceptance.page.$surfaceId.primary_cta',
-      'user_acceptance.page.$surfaceId.trace_context',
-      'user_acceptance.page.$surfaceId.request_wait_recovery',
-    ]));
-
-    for (final path in <String>[...sourceEvidence, ...apiEvidence]) {
-      expect(_repoFile(path).existsSync(), isTrue, reason: path);
-    }
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.textContaining('alice'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.addContactConfirmSourceScan),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.addContactSheetTitle), findsWidgets);
   });
+}
+
+final class _ConfirmCapabilityRepository
+    implements RelationshipCapabilityRepository {
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => true;
+
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto(
+      viewerSubAccountId: 'persona-current',
+      targetSubAccountId: targetUserId,
+      relationState: 'not_following',
+      canFollow: true,
+    );
+  }
 }

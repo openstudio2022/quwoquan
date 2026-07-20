@@ -1,4 +1,4 @@
-# L4 特性：budget-burn-policy
+# L3 特性：budget-burn-policy
 
 ## 功能说明
 - 待补充

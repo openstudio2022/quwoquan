@@ -3,11 +3,11 @@ events:
   - name: AccountSessionAuthenticated
     producer: user-service
     consumers: [user-account-projector]
-    channel: event_store
+    channel: transactional_outbox
     description: 首次成功认证触发 UserAccount provision；重复消费按 authentication subject 去重。
     payload_fields: [sessionId, authenticationSubject, identityOrigin, deviceId, issuedAt]
   - name: AccountSessionRevoked
     producer: user-service
     consumers: [realtime-service, notification-service, user-account-projector]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields: [sessionId, accountId, deviceId, revokedAt, reason]

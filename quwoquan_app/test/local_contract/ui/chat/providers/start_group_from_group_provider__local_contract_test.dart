@@ -1,49 +1,52 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
 void main() {
   group('从群聊中选择联系人 · Provider local_contract', () {
-    test('resolveSelectableGroupAvatar 保留云侧 conversation 预合成路径', () {
+    test('缺少 media endpoint 时预合成头像引用 fail-closed', () {
       const raw =
-          'media/avatar/s/archived-avatar/conversation/conv_002/v1/mock.png';
+          'media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png';
       final resolved = resolveSelectableGroupAvatar(raw);
-      expect(resolved, isNotEmpty);
-      expect(resolved, contains('conv_002'));
+      expect(resolved, isEmpty);
     });
 
-    test('startGroupFromGroupProvider 不下 strip 群 avatarUrl', () async {
+    test('startGroupFromGroupProvider 保留 canonical 群身份并呈现头像空态', () async {
       final repo = MockChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
       final groups = await container.read(startGroupFromGroupProvider.future);
       expect(groups, isNotEmpty);
 
-      final conv002 = groups.firstWhere(
-        (g) => g.conversationId == 'conv_002',
-        orElse: () =>
-            throw StateError('conv_002 missing from selectable groups'),
+      final canonicalGroup = groups.firstWhere(
+        (g) => g.conversationId == 'fixture_conv_group',
+        orElse: () => throw StateError(
+          'fixture_conv_group missing from selectable groups',
+        ),
       );
-      expect(conv002.avatarUrl, isNotEmpty);
-      expect(conv002.avatarUrl, contains('conv_002'));
+      expect(canonicalGroup.title, '契约周末群');
+      expect(canonicalGroup.avatarUrl, isEmpty);
       expect(
         resolveSelectableGroupAvatar(
-          'media/avatar/s/archived-avatar/conversation/conv_002/v1/mock.png',
+          'media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png',
         ),
-        conv002.avatarUrl,
+        canonicalGroup.avatarUrl,
       );
     });
 
     test('图四群列表只暴露含 mutual 成员的群且 friendCount = 成员交集大小', () async {
       final repo = MockChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -64,10 +67,43 @@ void main() {
       }
     });
 
+    test('私建群与圈子绑定群由服务端 source 分流且共享成员交集链', () async {
+      final repo = _SourceAwareGroupSelectionRepository();
+      final container = ProviderContainer(
+        overrides: [
+          chatGroupSelectionRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final groups = await container.read(startGroupFromGroupProvider.future);
+      final circles = await container.read(startGroupFromCircleProvider.future);
+
+      expect(groups.map((row) => row.conversationId), <String>[
+        'conversation_private',
+      ]);
+      expect(groups.single.circleId, isEmpty);
+      expect(circles.map((row) => row.conversationId), <String>[
+        'conversation_circle',
+      ]);
+      expect(circles.single.circleId, 'circle_photo');
+      expect(repo.requestedSources, <ChatSelectableGroupSource>[
+        ChatSelectableGroupSource.group,
+        ChatSelectableGroupSource.circle,
+      ]);
+
+      final members = await loadGroupContactMembers(
+        repo,
+        circles.single,
+        <String>{},
+      );
+      expect(members.map((member) => member.userId), <String>['friend_circle']);
+    });
+
     test('图五成员交集排除当前用户、按名排序且锁定成员被过滤', () async {
       final repo = MockChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -99,4 +135,57 @@ void main() {
       expect(afterLock.length, members.length - 1);
     });
   });
+}
+
+final class _SourceAwareGroupSelectionRepository
+    implements ChatGroupSelectionRepository {
+  final List<ChatSelectableGroupSource> requestedSources =
+      <ChatSelectableGroupSource>[];
+
+  @override
+  Future<List<SelectableGroupConversationRowDto>>
+  listSelectableGroupConversations({
+    String? query,
+    ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    int limit = 20,
+  }) async {
+    requestedSources.add(source);
+    return switch (source) {
+      ChatSelectableGroupSource.group => <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conversation_private',
+          title: '周末同行群',
+          circleId: '',
+          friendMemberCount: 1,
+          memberCount: 3,
+        ),
+      ],
+      ChatSelectableGroupSource.circle => <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conversation_circle',
+          title: '摄影圈交流群',
+          circleId: 'circle_photo',
+          friendMemberCount: 1,
+          memberCount: 8,
+        ),
+      ],
+      ChatSelectableGroupSource.all => <SelectableGroupConversationRowDto>[],
+    };
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+    required String conversationId,
+    String? query,
+    int limit = 20,
+  }) async => <ChatContactRowDto>[
+    ChatContactRowDto(
+      userId: conversationId == 'conversation_circle'
+          ? 'friend_circle'
+          : 'friend_private',
+      displayName: conversationId == 'conversation_circle' ? '圈友' : '群友',
+      relationState: 'mutual',
+      source: 'mutual_follow',
+    ),
+  ];
 }

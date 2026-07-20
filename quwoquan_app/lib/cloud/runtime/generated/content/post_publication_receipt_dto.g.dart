@@ -36,7 +36,7 @@ class PostPublicationReceiptDto {
       'postId': source['id'],
       'state': source['status'],
       'committedVersion': source['version'],
-      'acceptedAt': source['publishedAt'],
+      'acceptedAt': source['createdAt'],
     });
   }
 

@@ -11,7 +11,8 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - `python3 quwoquan_ops/cli/stackctl.py package --env <alpha|beta|gamma|prod>`
 - `python3 quwoquan_ops/cli/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]`
 - `make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<id>]`
-- `python3 quwoquan_ops/cli/stackctl.py verify [--env <env>] [--kind <topology|config|packaging|all>] [--tier <t1|t2|t3|t4|all>]`
+- `python3 quwoquan_ops/cli/stackctl.py verify --kind all --profile baseline`
+- `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>`
 - `python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope <edge|media|service|full>`
 - `python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind <logs|network|data|metrics|config|security|all>`
 - `python3 quwoquan_ops/cli/stackctl.py doctor --target <target>`
@@ -23,7 +24,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 1. 不要把 `prod-gray` 当成额外环境。生产灰度是 `prod` 下的 rollout stage。
 2. 不要手写本地 canonical 端口；读取 `quwoquan_ops/environments/local_env_port_manifest.yaml` 对应 profile。
 3. 不要手写 public topology；读取 `quwoquan_ops/environments/environment_topology_manifest.yaml`。
-4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再跑 `stackctl verify --kind ...`；需要 T1~T4 证据时再显式追加 `--tier ...`。
+4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再按证明边界选择 profile：无环境依赖为 `baseline`，Alpha mock 投影为 `smoke`，Beta/Gamma 内容数据平面为 `integration`，Gamma 商业观测和 Prod 为 `release`。
 5. 需要诊断时，先 `health`，再 `inspect`，最后 `doctor`。只有白名单问题才执行 `repair`。
 6. 远端/hosted 目标只有 `prod-hosted`（backend SSH 托管，gray 与 full 共享同一集群）；`gamma` 仅本地（`gamma-local`），不存在远端 gamma。`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 `gray-initial / carry-on / full` rollout stage，真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成；不要跳回旧脚本，除非是在修 `stackctl` 本身。
 
@@ -51,7 +52,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 ### hosted prod rollout（唯一远端目标）
 
-1. 先确认 `stackctl verify --env prod --kind all` 通过。
+1. 先确认 `stackctl verify --env prod --kind all --profile release` 通过。
 2. 使用 `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`。
 3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage；真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成（不再有独立的远端 gamma-hosted 阶段）。
 4. 每步运行证据以 `.qwq_output/env/prod/runs/**` 为准；prod 发布状态固定为 `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state`。

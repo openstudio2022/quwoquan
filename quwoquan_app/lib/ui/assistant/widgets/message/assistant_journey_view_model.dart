@@ -1,11 +1,11 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 enum AssistantJourneyBlockKind {
   narrative,
@@ -635,7 +635,7 @@ String _referenceDigestLabel({
   if (searchedCount <= 0 && acceptedCount <= 0) {
     return '';
   }
-  return UITextConstants.assistantProcessReferenceDigestTemplate
+  return AssistantText.assistantProcessReferenceDigestTemplate
       .replaceFirst('%s', searchedCount.toString())
       .replaceFirst('%s', acceptedCount.toString());
 }
@@ -909,7 +909,7 @@ String _referenceLabelForFrame(
   if (searchedCount <= 0 && acceptedCount <= 0) {
     return '';
   }
-  return UITextConstants.assistantProcessReferenceDigestTemplate
+  return AssistantText.assistantProcessReferenceDigestTemplate
       .replaceFirst('%s', searchedCount.toString())
       .replaceFirst('%s', acceptedCount.toString());
 }
@@ -917,15 +917,15 @@ String _referenceLabelForFrame(
 String _processStepLabel(ProcessStepId stepId) {
   switch (stepId) {
     case ProcessStepId.understanding:
-      return UITextConstants.assistantProcessStageUnderstand;
+      return AssistantText.assistantProcessStageUnderstand;
     case ProcessStepId.retrievalDesign:
-      return UITextConstants.assistantProcessStageRetrievalDesign;
+      return AssistantText.assistantProcessStageRetrievalDesign;
     case ProcessStepId.retrievalProcessing:
-      return UITextConstants.assistantProcessStageRetrievalProcessing;
+      return AssistantText.assistantProcessStageRetrievalProcessing;
     case ProcessStepId.answerOrganization:
-      return UITextConstants.assistantProcessStageAnswer;
+      return AssistantText.assistantProcessStageAnswer;
     case ProcessStepId.unknown:
-      return UITextConstants.assistantProcessStageUnderstand;
+      return AssistantText.assistantProcessStageUnderstand;
   }
 }
 
@@ -977,7 +977,5 @@ String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
 bool _isLowSignalRetrievalProcessSummary(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
-  return normalized == '已完成处理' ||
-      normalized == '处理完成' ||
-      normalized == '已完成资料筛选并进入成答';
+  return normalized == AssistantText.assistantProcessCompletedSummary;
 }

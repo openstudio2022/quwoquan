@@ -17,10 +17,9 @@ errors_yaml: messages/conversation/errors.yaml
 errors_output: generated/errors.go
 
 manual_operations:
-  # 声明但暂未实现 handler（不进入生成分发，避免引用不存在的方法）
+  # Routes() 中以 Go 1.22 method-pattern 显式注册（方法歧义/后加）
   - ListConversationTimestamps
   - BatchGetConversations
-  # Routes() 中以 Go 1.22 method-pattern 显式注册（方法歧义/后加）
   - UpdateConversationTitle
   - TransferOwnership
   - UpdateGroupAdmins
@@ -28,5 +27,3 @@ manual_operations:
   - ListMessageHome
   - ListContactHome
   - GetGroupHome
-  - SearchConversations
-  - SearchMessages

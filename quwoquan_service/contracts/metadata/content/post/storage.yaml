@@ -70,6 +70,44 @@ collections:
     indexes:
       - { name: idx_projection_checkpoint_consumer, keys: { _id: 1 }, unique: true }
 
+  user_account_closed_inbox:
+    entity: UserAccountClosedProjectionInbox
+    role: append_only
+    description: Content（含 recommendation-engine）按 eventId+digest 幂等清理的 durable inbox。
+    indexes:
+      - { name: idx_user_account_closed_completed, keys: { completedAt: -1 } }
+
+  user_account_closed_failures:
+    entity: UserAccountClosedProjectionFailure
+    role: append_only
+    description: pending reclaim 有限重试状态；仅保存 event/error digest。
+    indexes:
+      - { name: idx_user_account_closed_failure_expire, keys: { expireAt: 1 }, expireAfterSeconds: 0 }
+
+  user_account_closed_search_work:
+    entity: UserAccountClosedSearchWork
+    role: projection
+    description: Content 搜索文档删除工作项；外部索引成功后才推进 inbox 完成。
+    indexes:
+      - { name: idx_user_account_closed_search_work, keys: { eventId: 1, doneAt: 1, _id: 1 } }
+      - { name: idx_user_account_closed_search_work_expire, keys: { expireAt: 1 }, expireAfterSeconds: 0 }
+
+  closed_account_subjects:
+    entity: ClosedAccountAudit
+    role: append_only
+    description: 不含账号原始标识的注销事件审计摘要，不作为写入防复活查询源。
+    indexes:
+      - { name: idx_closed_account_event_digest, keys: { eventDigest: 1 }, unique: true }
+
+  closed_account_subject_tombstones:
+    entity: ClosedAccountSubjectTombstone
+    role: append_only
+    description: >
+      按独立密钥 HMAC-SHA256(subjectId) 标识的永久防复活栅栏；不得保存原始
+      userId/personaId，不设 TTL。所有推荐状态写入、训练和 replay 冻结必须先检查。
+    indexes:
+      - { name: idx_closed_account_subject_closed_at, keys: { closedAt: -1 } }
+
 redis_cache:
   - key: "cache:post:{postId}"
     ttl_seconds: 300

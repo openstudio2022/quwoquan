@@ -2,7 +2,7 @@ aggregate: UserSettings
 events:
   - name: UserSettingsChanged
     producer: user-service
-    consumers: [projection-workers]
-    channel: event_store
+    consumers: [settings-audit]
+    channel: transactional_outbox
     payload_entity: UserSetting
     payload_fields: [userId]

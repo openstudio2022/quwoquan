@@ -24,6 +24,8 @@ _INPUT_ROOTS = (
     "quwoquan_data/verticals/travel",
     "quwoquan_data/requirements.txt",
 )
+# Data execution identity is deliberately environment-neutral. Environment
+# topology and readiness policy apply only when an immutable release is shipped.
 _DIGEST_PREFIX = "sha256:"
 _EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".DS_Store"}
 

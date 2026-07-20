@@ -1,0 +1,185 @@
+version: 2
+node:
+  id: conversation-entry-matrix
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix
+  title: 关系能力与正式会话入口矩阵
+  parent_domain_service: chat-conversation
+  parent_business_capability: contact-and-session-governance
+scope:
+  summary: 统一主页、联系人、会话与一对一通话的关系能力展示和服务端强门禁。
+  journey_scenarios:
+  - message-direct-and-greeting-upgrade
+  out_of_scope:
+  - 群对象拉黑
+  - 额外关系等级
+  - 打招呼请求箱内部状态机
+gwt_acceptance:
+  GWT1:
+    title: 五态能力矩阵单一真相源
+    given:
+    - viewer 与 target 处于 self/not_following/following/followed_by/mutual 之一。
+    when:
+    - 主页、联系人或会话入口读取关系能力。
+    then:
+    - 页面只消费 RelationshipCapabilityView 的结构化状态与能力位。
+    - mutual 只由双向关注边派生，不持久化第二套关系实体。
+    - 端侧不以按钮隐藏替代服务端授权。
+    done_when:
+    - 五态、能力位、主页动作和会话入口具有端云一致性测试。
+    edge_cases:
+    - viewer 等于 target
+    - 能力缓存失效
+    - 任一方向拉黑覆盖关注态
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/persona_relationship/fields.yaml
+    - quwoquan_service/contracts/metadata/user/persona_relationship/service.yaml
+    performance_points:
+    - 关系能力读取 p95 <= 150ms。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_relationship_lifecycle__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/contact_relationship_lifecycle_journey__user_acceptance_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: relationship_capability
+        cases:
+        - api_integration.chat_conversation.contact_and_session_governance.relationship_capability
+        envs: &integration_envs
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: relationship_capability
+        cases:
+        - local_contract.chat_conversation.contact_and_session_governance.relationship_capability
+        envs: &local_env
+        - local
+  GWT2:
+    title: 拉黑级联并阻断全部直接联系入口
+    given:
+    - 双方存在关注、pending 打招呼或正式 direct conversation。
+    when:
+    - 任一方拉黑对方。
+    then:
+    - 双向关注边被清除，pending 请求变为 blocked。
+    - 建会话、发消息和一对一 RTC 均由服务端拒绝。
+    - 既有消息只读保留；取消拉黑不恢复关注或请求。
+    done_when:
+    - 拉黑级联与三处服务端门禁均有真实存储/API 证据。
+    edge_cases:
+    - 重复拉黑或取消拉黑
+    - block 与 follow 并发
+    - 已存在 direct conversation
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/persona_relationship/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/rtc/call_session/service.yaml
+    performance_points:
+    - 拉黑写入到全部门禁生效 p95 <= 1s。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_relationship_lifecycle__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_page_widget__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: relationship_gate
+        cases:
+        - api_integration.chat_conversation.contact_and_session_governance.relationship_gate
+        envs: *integration_envs
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: blocked_conversation
+        cases:
+        - local_contract.chat_conversation.contact_and_session_governance.blocked_conversation
+        envs: *local_env
+  GWT3:
+    title: 正式会话与一对一通话入口不可绕过
+    given:
+    - 双方未拉黑。
+    when:
+    - 用户创建 direct conversation、发送消息或发起一对一通话。
+    then:
+    - mutual 可直接进入正式会话和通话。
+    - 非 mutual 且无 replied greeting 时建会话返回 greeting_required。
+    - replied greeting 只解锁正式会话，不自动解锁一对一通话。
+    done_when:
+    - CreateConversation、SendMessage 与 RTC 三个服务端边界均覆盖正反例。
+    edge_cases:
+    - 单向关注
+    - replied greeting 但非 mutual
+    - 会话成员身份失效
+    contract_refs:
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/rtc/call_session/service.yaml
+    performance_points:
+    - SendMessage 关系门禁额外耗时 p95 <= 20ms。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: direct_entry_gate
+        cases:
+        - api_integration.chat_conversation.contact_and_session_governance.direct_entry_gate
+        envs: *integration_envs
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: direct_entry_ui
+        cases:
+        - local_contract.chat_conversation.contact_and_session_governance.direct_entry_ui
+        envs: *local_env
+contract_acceptance:
+  CONTRACT1:
+    title: 关系、会话、消息与 RTC 错误语义单轨
+    metadata_refs:
+    - quwoquan_service/contracts/metadata/user/persona_relationship/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/rtc/call_session/service.yaml
+    done_when:
+    - 能力位和 relationship/blocked 错误从 metadata 生成，端云不维护第二套判断表。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/contracts/chat/message_contracts__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: relationship_gate_contract
+        cases:
+        - local_contract.chat_conversation.contact_and_session_governance.relationship_gate_contract
+        envs: *local_env
+      supporting: []
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

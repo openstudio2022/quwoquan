@@ -14,14 +14,35 @@ entities:
         ops_exposure: read
         description: 连接唯一标识（UUID）
 
-      - name: userId
-        source: userId
+      - name: accountId
+        source: accountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
+        description: 可信 access principal 的账号安全主体，只用于账号级通道与审计
+
+      - name: personaId
+        source: personaId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 可信 access principal 的当前公开业务主体，RTC 与 presence 只按此身份路由
+
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+        description: 可信设备主体；presentation ACK 与 PresenceView 的设备级 identity
 
       - name: transport
         source: transport
@@ -73,14 +94,32 @@ entities:
         ops_exposure: read
 
   PresenceEntry:
-    description: 用户在线状态（Redis Hash，多节点共享）
+    description: Persona 的设备级在线状态（Redis Hash，多节点共享）
     fields:
-      - name: userId
-        source: userId
+      - name: personaId
+        source: personaId
         type: string
         constraints: [PK]
         classification: PUBLIC
         log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: accountId
+        source: accountId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: hash
         api_exposure: drop
         ops_exposure: read
 
@@ -119,4 +158,25 @@ entities:
         classification: PUBLIC
         log_policy: allow
         api_exposure: drop
+        ops_exposure: read
+
+  PresenceView:
+    description: notification-service 使用的设备级内部 named reader 结果
+    fields:
+      - name: personaId
+        source: personaId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: devices
+        source: devices
+        type: embedded_list
+        item_entity: PresenceEntry
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: metadata_only
+        api_exposure: read
         ops_exposure: read

@@ -1,13 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -34,7 +39,7 @@ const _qrCard = ProfileQrCardData(
 Widget _wrap(_ForwardJourneyChatRepository repository) {
   return ProviderScope(
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repository),
+      chatRepositoryCompositionProvider.overrideWithValue(repository),
       chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
@@ -63,15 +68,15 @@ void main() {
 
     await tester.tap(find.text(UITextConstants.editProfileQrShareAction));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.forwardMostContacted), findsOneWidget);
+    expect(find.text(ChatText.forwardMostContacted), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.forwardActionAppContacts));
+    await tester.tap(find.text(ChatText.forwardActionAppContacts));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.forwardSelectChatTitle), findsOneWidget);
+    expect(find.text(ChatText.forwardSelectChatTitle), findsOneWidget);
 
     await tester.tap(find.text('会话 2').first);
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.forwardSendToLabel), findsOneWidget);
+    expect(find.text(ChatText.forwardSendToLabel), findsOneWidget);
     expect(
       tester
           .widget<CupertinoTextField>(find.byType(CupertinoTextField).last)
@@ -80,7 +85,7 @@ void main() {
     );
 
     await tester.enterText(find.byType(CupertinoTextField).last, '发给你看看');
-    await tester.tap(find.text(UITextConstants.send).last);
+    await tester.tap(find.text(ChatText.send).last);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 4));
 
@@ -120,7 +125,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(repository),
+          chatRepositoryCompositionProvider.overrideWithValue(repository),
           chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
@@ -147,15 +152,15 @@ void main() {
 
     await tester.tap(find.text('open-post-share'));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.shareInternalTitle), findsOneWidget);
-    expect(find.text(UITextConstants.shareExternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareInternalTitle), findsOneWidget);
+    expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.shareTargetGroup));
+    await tester.tap(find.text(ChatText.shareTargetGroup));
     await tester.pumpAndSettle();
     await tester.tap(find.text('会话 1').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(CupertinoTextField).last, '群里一起看看');
-    await tester.tap(find.text(UITextConstants.send).last);
+    await tester.tap(find.text(ChatText.send).last);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 4));
 
@@ -170,6 +175,111 @@ void main() {
           .value,
       'post_share_journey',
     );
+  });
+
+  testWidgets('游客选择群聊分享后登录成功续接原目标且关闭策略安全', (tester) async {
+    final repository = _ForwardJourneyChatRepository();
+    final template = ContentShareTemplateBuilder.build(
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        MicroPostDto(
+          id: 'post_share_auth_resume',
+          type: 'micro',
+          identity: 'moment',
+          assistantUsePolicy: 'inherit',
+          authorId: 'author_share_auth_resume',
+          displayName: '续接作者',
+          avatarUrl: '',
+          authorRoleLabel: '',
+          authorIdentityTags: const <String>[],
+          authorVerified: false,
+          body: '登录后继续分享到群聊',
+          imageUrls: const <String>[],
+          likeCount: 0,
+          commentCount: 0,
+          shareCount: 0,
+          createdAt: DateTime.utc(2026, 7, 19),
+        ),
+      ),
+      enableIdentityTemplate: true,
+    );
+    final container = ProviderContainer(
+      overrides: [
+        chatRepositoryCompositionProvider.overrideWithValue(repository),
+        chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
+        activePersonaContextProvider.overrideWith(
+          (ref) async => ActivePersonaContextViewData.fallback(
+            subAccountId: 'persona_forward',
+            ownerUserId: 'fixture_user_current',
+            displayName: '转发测试分身',
+            avatarUrl: '',
+            personaContextVersion: 'ctx_forward',
+          ),
+        ),
+        authSessionControllerProvider.overrideWith(
+          _FlippableForwardSession.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (context, state) => CupertinoButton(
+            onPressed: () =>
+                ContentShareSheet.show(context, template: template),
+            child: const Text('open-guest-post-share'),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) =>
+              const SizedBox(key: ValueKey<String>('share-login-sentinel')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: CupertinoApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('open-guest-post-share'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(ChatText.shareTargetGroup));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('share-login-sentinel')),
+      findsOneWidget,
+    );
+    final pending = container.read(authContinuationProvider);
+    expect(pending, isA<ShareContentContinuation>());
+    expect(
+      (pending! as ShareContentContinuation).target,
+      ContentShareContinuationTarget.groupChat,
+    );
+    expect(
+      GoRouterState.of(
+        tester.element(
+          find.byKey(const ValueKey<String>('share-login-sentinel')),
+        ),
+      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.safeFallback.name,
+    );
+
+    (container.read(authSessionControllerProvider.notifier)
+            as _FlippableForwardSession)
+        .loginNow();
+    router.pop();
+    await tester.pumpAndSettle();
+
+    expect(container.read(authContinuationProvider), isNull);
+    expect(find.text('会话 1'), findsOneWidget);
   });
 }
 
@@ -230,6 +340,21 @@ class _AuthenticatedSession extends AuthSessionController {
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'share-journey-token',
+      activeSubAccountId: 'persona_forward',
+      ownerId: 'fixture_user_current',
+    );
+  }
+}
+
+class _FlippableForwardSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+
+  void loginNow() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'share-resume-token',
       activeSubAccountId: 'persona_forward',
       ownerId: 'fixture_user_current',
     );

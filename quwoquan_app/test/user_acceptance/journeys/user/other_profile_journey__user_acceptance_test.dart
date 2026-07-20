@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// T4 旅程：他人主页（other 模式）头部操作（返回/更多）可达，
 /// 更多面板提供 分享/拉黑/举报；交集区不崩溃（无交集不占位）。
@@ -41,7 +41,10 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWithValue(
         const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(

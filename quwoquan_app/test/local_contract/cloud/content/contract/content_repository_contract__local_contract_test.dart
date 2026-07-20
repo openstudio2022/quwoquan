@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   group('Content facets — 常规契约', () {

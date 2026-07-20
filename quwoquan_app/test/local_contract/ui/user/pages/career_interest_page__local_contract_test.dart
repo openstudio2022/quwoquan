@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_tag.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/career_interest_page.dart';
@@ -13,10 +15,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(
-            const MockUserProfileRepository(),
+          profileEditQueryProvider.overrideWith(
+            (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagRepositoryProvider.overrideWithValue(MockTagRepository()),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
+          tagFeedbackCommandWriterProvider.overrideWithValue(
+            AlphaTagFeedbackWriter(),
+          ),
         ],
         child: const MaterialApp(home: _CareerInterestHost()),
       ),
@@ -82,10 +87,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(
-            const MockUserProfileRepository(),
+          profileEditQueryProvider.overrideWith(
+            (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagRepositoryProvider.overrideWithValue(MockTagRepository()),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
+          tagFeedbackCommandWriterProvider.overrideWithValue(
+            AlphaTagFeedbackWriter(),
+          ),
         ],
         child: const MaterialApp(home: _CareerInterestHost()),
       ),
@@ -109,6 +117,45 @@ void main() {
     expect(find.text('打开职业与兴趣'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+class _CareerProfileEditQuery implements ProfileEditQuery {
+  const _CareerProfileEditQuery();
+
+  @override
+  Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
+    return const ProfileEditSnapshotData(
+      ownerUserId: 'owner-1',
+      subAccountId: 'persona-1',
+      avatarUrl: '',
+      avatarAssetId: '',
+      avatarVersion: 0,
+      backgroundUrl: '',
+      backgroundAssetId: '',
+      nickname: '测试用户',
+      gender: 'unspecified',
+      birthDate: '',
+      region: '',
+      regionTagRef: '',
+      userHandle: 'test_user',
+      bio: '',
+      occupationTagRef: '',
+      interestTagRefs: <String>[],
+    );
+  }
+
+  @override
+  Future<ProfileQrCardData> getProfileQrCard() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+    required String token,
+    String handle = '',
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 class _CareerInterestHost extends StatefulWidget {

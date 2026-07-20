@@ -3,13 +3,10 @@ backend: mongodb
 
 collections:
   external_provider_attempt_ledger:
-    entity: PushDeliveryCallback
+    entity: PushDeliveryAttempt
+    role: append_only
+    secret_fields: []
+    prohibited_fields: [token]
     indexes:
       - { name: idx_push_attempt_request_created, keys: { requestId: 1, createdAt: 1 } }
       - { name: idx_push_attempt_provider_status, keys: { provider: 1, status: 1 } }
-
-redis_cache:
-  - key: "ready:integration:push_delivery:{provider}:{shard}"
-    ttl_seconds: 60
-    entity: PushDeliveryRequest
-    invalidate_on: [PushDeliverySucceeded, PushDeliveryFailed]

@@ -24,7 +24,7 @@ This script enforces the architectural rules in
 7. `ArticlePageBackwardProjectedFrame` must NOT re-introduce polygon fields.
 
 Exits non-zero on any violation. Designed to be cheap and run from
-`scripts/gate_repo.sh` `run_app`.
+`quwoquan_ops/gate/gate_repo.sh` 的 `run_app`.
 """
 
 from __future__ import annotations
@@ -173,6 +173,10 @@ def _iter_dart_files() -> list[Path]:
 
 _LINE_COMMENT_RX = re.compile(r"^\s*//")
 _BLOCK_COMMENT_RX = re.compile(r"/\*[\s\S]*?\*/")
+_PART_DIRECTIVE_RX = re.compile(
+    r"^\s*part\s+['\"](?P<uri>[^'\"]+)['\"]\s*;",
+    re.MULTILINE,
+)
 
 
 def _strip_comments(src: str) -> str:
@@ -191,6 +195,64 @@ def _strip_comments(src: str) -> str:
         else:
             out_lines.append(line)
     return "\n".join(out_lines)
+
+
+def _host_library_paths() -> tuple[list[Path], list[str]]:
+    """解析 host 根文件以及它实际声明的 part 文件。"""
+
+    if not HOST_PATH.exists():
+        return [], [f"missing host: {HOST_PATH.relative_to(ROOT)}"]
+    root_source = HOST_PATH.read_text(encoding="utf-8")
+    host_dir = HOST_PATH.parent.resolve()
+    declared_paths: list[Path] = []
+    violations: list[str] = []
+    seen: set[Path] = set()
+    for match in _PART_DIRECTIVE_RX.finditer(root_source):
+        uri = match.group("uri")
+        candidate = (HOST_PATH.parent / uri).resolve()
+        if candidate.parent != host_dir:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: part `{uri}` must stay in the host directory"
+            )
+            continue
+        if candidate in seen:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: duplicate part declaration `{uri}`"
+            )
+            continue
+        seen.add(candidate)
+        if not candidate.is_file():
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: declared part `{uri}` is missing"
+            )
+            continue
+        declared_paths.append(candidate)
+
+    deck_parts = set(
+        HOST_PATH.parent.glob(f"{HOST_PATH.stem}_*.dart"),
+    )
+    for orphan in sorted(deck_parts - seen):
+        violations.append(
+            f"{orphan.relative_to(ROOT)}: deck part exists but is not declared by "
+            f"{HOST_PATH.relative_to(ROOT)}"
+        )
+    return [HOST_PATH, *declared_paths], violations
+
+
+def _host_library_text() -> str:
+    paths, _ = _host_library_paths()
+    return "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+
+def _check_host_library_parts() -> list[str]:
+    _, violations = _host_library_paths()
+    return violations
+
+
+def _read_scan_source(path: Path) -> str:
+    if path == HOST_PATH:
+        return _host_library_text()
+    return path.read_text(encoding="utf-8")
 
 
 def _check_forbidden_symbols() -> list[str]:
@@ -282,7 +344,7 @@ def _check_native_back_draw_soft_in_host_helpers() -> list[str]:
     if not HOST_PATH.exists():
         violations.append(f"missing host: {HOST_PATH.relative_to(ROOT)}")
         return violations
-    text = _strip_comments(HOST_PATH.read_text(encoding="utf-8"))
+    text = _strip_comments(_host_library_text())
 
     soft_body = _extract_method_body(
         text,
@@ -359,7 +421,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
     if not HOST_PATH.exists():
         violations.append(f"missing host: {HOST_PATH.relative_to(ROOT)}")
         return violations
-    text = _strip_comments(HOST_PATH.read_text(encoding="utf-8"))
+    text = _strip_comments(_host_library_text())
     required_markers = (
         "_buildSoftFlippingPageSurface(",
         "_buildBackwardFullSheetBackSurface(",
@@ -690,7 +752,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
     for path in (HOST_PATH, DEBUG_MAPPER_PATH, SOFT_GEOMETRY_PATH):
         if not path.exists():
             continue
-        text_for_width = _strip_comments(path.read_text(encoding="utf-8"))
+        text_for_width = _strip_comments(_read_scan_source(path))
         if "versoRevealWidthNormalized:" in text_for_width:
             violations.append(
                 f"{path.relative_to(ROOT)}: BACK partition/painter path must not pass "
@@ -973,7 +1035,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
     for path in (uv_mesh_path, uv_pixel_probe_path, HOST_PATH):
         if not path.exists():
             continue
-        source_paper_text = _strip_comments(path.read_text(encoding="utf-8"))
+        source_paper_text = _strip_comments(_read_scan_source(path))
         for forbidden in (
             "BackwardVersoTextureDomain",
             "backwardVersoTexturePoint",
@@ -1270,6 +1332,7 @@ def main() -> int:
     violations.extend(_check_forbidden_symbols())
     violations.extend(_check_no_previous_front_baseline())
     violations.extend(_check_no_retired_backward_leaf_renderer())
+    violations.extend(_check_host_library_parts())
     violations.extend(_check_frame_builder_native_back())
     violations.extend(_check_native_back_draw_soft_in_host_helpers())
     violations.extend(_check_recto_verso_split_in_host())

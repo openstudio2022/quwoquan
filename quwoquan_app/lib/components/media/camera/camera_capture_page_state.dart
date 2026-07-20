@@ -29,7 +29,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   Timer? _recordTimer;
 
   ImageEditorFilterRepository get _filterRepository =>
-      widget.filterRepository ?? ImageEditorFilterRepository();
+      widget.filterRepository;
 
   bool get _isVideoMode => _mode == MediaPickerEntryMode.video;
 
@@ -395,6 +395,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
           source: request.entrySource.telemetryValue,
           initialFilterPresetId: request.filterPresetId,
           initialFilterStrength: request.filterStrength,
+          filterRepository: _filterRepository,
         ),
       ),
     );

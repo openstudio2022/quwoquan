@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -107,14 +108,19 @@ func (s *PgConsentStore) ListActiveConsents(ctx context.Context, userID string) 
 	return items, rows.Err()
 }
 
+// UpsertConsent 以版本化流水语义授权：已有 active 行时幂等返回现有事实
+// （不覆盖 granted_at，保留审计真相）；无 active 行时插入新行，历史撤权行
+// 永久保留。并发重复授权由 partial unique index 兜底后读回。
 func (s *PgConsentStore) UpsertConsent(ctx context.Context, consent assistant.SkillConsent) (assistant.SkillConsent, error) {
+	if existing, found, err := s.findActiveConsent(ctx, consent.UserID, consent.SkillID); err != nil {
+		return assistant.SkillConsent{}, err
+	} else if found {
+		return existing, nil
+	}
 	query := `
 INSERT INTO skill_consents (id, user_id, skill_id, granted_scope, granted_at, revoked_at)
 VALUES ($1, $2, $3, $4, $5, NULL)
-ON CONFLICT (id) DO UPDATE SET
-  granted_scope = EXCLUDED.granted_scope,
-  granted_at = EXCLUDED.granted_at,
-  revoked_at = NULL
+ON CONFLICT (user_id, skill_id) WHERE revoked_at IS NULL DO NOTHING
 RETURNING id, user_id, skill_id, granted_scope, granted_at, revoked_at`
 	var out assistant.SkillConsent
 	err := s.pool.QueryRow(ctx, query, consent.ID, consent.UserID, consent.SkillID, consent.GrantedScope, consent.GrantedAt).Scan(
@@ -125,10 +131,40 @@ RETURNING id, user_id, skill_id, granted_scope, granted_at, revoked_at`
 		&out.GrantedAt,
 		&out.RevokedAt,
 	)
-	if err != nil {
-		return assistant.SkillConsent{}, rterr.NewUnavailable(rterr.ModuleAssistant, "写入授权失败", err.Error())
+	if err == nil {
+		return out, nil
 	}
-	return out, nil
+	// DO NOTHING 命中（并发已授权）时 RETURNING 无行，读回现有 active 事实。
+	existing, found, findErr := s.findActiveConsent(ctx, consent.UserID, consent.SkillID)
+	if findErr != nil {
+		return assistant.SkillConsent{}, findErr
+	}
+	if found {
+		return existing, nil
+	}
+	return assistant.SkillConsent{}, rterr.NewUnavailable(rterr.ModuleAssistant, "写入授权失败", err.Error())
+}
+
+func (s *PgConsentStore) findActiveConsent(ctx context.Context, userID, skillID string) (assistant.SkillConsent, bool, error) {
+	var out assistant.SkillConsent
+	err := s.pool.QueryRow(ctx, `
+SELECT id, user_id, skill_id, granted_scope, granted_at, revoked_at
+FROM skill_consents
+WHERE user_id = $1 AND skill_id = $2 AND revoked_at IS NULL`, userID, skillID).Scan(
+		&out.ID,
+		&out.UserID,
+		&out.SkillID,
+		&out.GrantedScope,
+		&out.GrantedAt,
+		&out.RevokedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return assistant.SkillConsent{}, false, nil
+		}
+		return assistant.SkillConsent{}, false, rterr.NewUnavailable(rterr.ModuleAssistant, "读取授权失败", err.Error())
+	}
+	return out, true, nil
 }
 
 func (s *PgConsentStore) RevokeConsent(ctx context.Context, userID string, skillID string, revokedAt time.Time) error {
@@ -161,19 +197,25 @@ func (s *MemoryConsentStore) ListActiveConsents(_ context.Context, userID string
 }
 
 func (s *MemoryConsentStore) UpsertConsent(_ context.Context, consent assistant.SkillConsent) (assistant.SkillConsent, error) {
+	// 与 PgConsentStore 同语义：已有 active 事实时幂等返回，不覆盖历史。
+	for _, item := range s.items {
+		if item.UserID == consent.UserID && item.SkillID == consent.SkillID && item.RevokedAt == nil {
+			return item, nil
+		}
+	}
 	consent.RevokedAt = nil
 	s.items[consent.ID] = consent
 	return consent, nil
 }
 
 func (s *MemoryConsentStore) RevokeConsent(_ context.Context, userID string, skillID string, revokedAt time.Time) error {
-	key := userID + ":" + skillID
-	item, ok := s.items[key]
-	if !ok {
-		return nil
+	for key, item := range s.items {
+		if item.UserID == userID && item.SkillID == skillID && item.RevokedAt == nil {
+			at := revokedAt
+			item.RevokedAt = &at
+			s.items[key] = item
+		}
 	}
-	item.RevokedAt = &revokedAt
-	s.items[key] = item
 	return nil
 }
 

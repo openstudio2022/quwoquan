@@ -92,12 +92,11 @@ tables:
     entity: UserAuth
     pk: user_id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    description: 仅承载登录失败计数与锁定状态；refresh 会话归 account_sessions（只存哈希）。
     columns:
       - { name: user_id, type: VARCHAR(96), constraints: [PK] }
       - { name: password_hash, type: VARCHAR(256), constraints: [NOT_NULL] }
       - { name: otp_secret, type: VARCHAR(128) }
-      - { name: refresh_token, type: VARCHAR(512) }
-      - { name: refresh_token_expires_at, type: TIMESTAMPTZ }
       - { name: last_login_at, type: TIMESTAMPTZ }
       - { name: last_login_ip, type: VARCHAR(45) }
       - { name: login_fail_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
@@ -128,11 +127,6 @@ redis_cache:
     ttl_seconds: 600
     entity: UserAccount
     invalidate_on: [UserProfileUpdated]
-
-  - key: "cache:user_setting:{userId}"
-    ttl_seconds: 600
-    entity: UserSetting
-    invalidate_on: [UserSettingUpdated]
 
   - key: "device_tokens:{userId}"
     ttl_seconds: 3600

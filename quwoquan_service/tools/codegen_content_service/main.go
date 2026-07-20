@@ -49,6 +49,12 @@ func main() {
 	if err := generateContracts(source, routeService, outputDir); err != nil {
 		exitErr(fmt.Errorf("generate contracts for service routes %s: %w", routeService, err))
 	}
+	if err := generatePostPublicationPolicy(source, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate Post publication policy: %w", err))
+	}
+	if err := generateContentMediaUploadPolicy(source, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate content media upload policy: %w", err))
+	}
 	if err := generateHTTPScaffold(source, routeService, outputDir); err != nil {
 		exitErr(fmt.Errorf("generate http scaffold for service routes %s: %w", routeService, err))
 	}
@@ -321,8 +327,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "{{ . }}":
 		{{- if eq . "GetFeed" }}
 		h.handleGetFeed(w, r)
-		{{- else if eq . "SearchPosts" }}
-		h.handleSearchPosts(w, r)
 		{{- else if eq . "GetPost" }}
 		h.handleGetPost(w, r)
 		{{- else if eq . "ListUserPosts" }}
@@ -333,10 +337,14 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleCreateReport(w, r)
 		{{- else if eq . "ListReports" }}
 		h.handleListReports(w, r)
+		{{- else if eq . "ListMyReports" }}
+		h.handleListMyReports(w, r)
 		{{- else if eq . "GetReport" }}
 		h.handleGetReport(w, r)
 		{{- else if eq . "BeginReportReview" }}
 		h.handleBeginReportReview(w, r)
+		{{- else if eq . "DismissReport" }}
+		h.handleDismissReport(w, r)
 		{{- else if eq . "ResolveReport" }}
 		h.handleResolveReport(w, r)
 		{{- else if eq . "UpdatePostSettings" }}
@@ -354,6 +362,18 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 			w,
 			r,
 			strings.TrimSpace(r.PathValue("postId")),
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
+		{{- else if eq . "HideComment" }}
+		h.handleHideComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
+		{{- else if eq . "RestoreComment" }}
+		h.handleRestoreComment(
+			w,
+			r,
 			strings.TrimSpace(r.PathValue("commentId")),
 		)
 		{{- else if eq . "PinComment" }}
@@ -441,6 +461,34 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleSelectManualVideoCover(w, r)
 		{{- else if eq . "CreateOutboundShare" }}
 		h.handleCreateOutboundShare(w, r)
+		{{- else if eq . "LikePost" }}
+		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		{{- else if eq . "UnlikePost" }}
+		h.handleUnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		{{- else if eq . "GetContentReactionState" }}
+		h.handleGetReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
+		{{- else if eq . "GetCounters" }}
+		h.handleGetCounters(w, r, strings.TrimSpace(r.PathValue("postId")))
+		{{- else if eq . "GetMyFootprint" }}
+		h.handleGetMyFootprint(w, r)
+		{{- else if eq . "GetEntityWishlistState" }}
+		h.handleGetEntityWishlistState(w, r)
+		{{- else if eq . "GenerateArticleSummary" }}
+		h.handleGenerateArticleSummary(w, r)
+		{{- else if eq . "GetHelperRead" }}
+		h.handleGetHelperRead(w, r)
+		{{- else if eq . "OpenPostModerationCase" }}
+		h.handleOpenPostModerationCase(w, r)
+		{{- else if eq . "ReviewPostModerationCase" }}
+		h.handleReviewPostModerationCase(w, r)
+		{{- else if eq . "DecidePostModeration" }}
+		h.handleDecidePostModeration(w, r)
+		{{- else if eq . "SupersedePostModerationCase" }}
+		h.handleSupersedePostModerationCase(w, r)
+		{{- else if eq . "GetCurrentPostModerationCase" }}
+		h.handleGetCurrentPostModerationCase(w, r)
+		{{- else if eq . "GetPostPublicationEligibility" }}
+		h.handleGetPostPublicationEligibility(w, r)
 		{{- else }}
 		h.handleNotImplemented(w, r, operation)
 		{{- end }}
@@ -741,22 +789,54 @@ type errorsYAML struct {
 	Errors []errorEntryYAML `yaml:"errors"`
 }
 
+// contentDomainErrorsPaths 与 tools/codegen_app_metadata 的同名列表保持一致：
+// content 域错误码按对象目录拆分登记，Go 侧合并生成单一 generated/errors.go。
+func contentDomainErrorsPaths() []string {
+	return []string{
+		"content/post/errors.yaml",
+		"content/comment/errors.yaml",
+		"content/content_reaction/errors.yaml",
+		"content/deleted_post_tombstone/errors.yaml",
+		"content/filter_catalog_release/errors.yaml",
+		"content/media_asset/errors.yaml",
+		"content/media_original_access_fact/errors.yaml",
+		"content/media_upload_session/errors.yaml",
+		"content/outbound_share_fact/errors.yaml",
+		"content/post_moderation_case/errors.yaml",
+		"content/report/errors.yaml",
+	}
+}
+
 func generateErrorConstants(
 	source *contractcodegen.Source,
 	aggregate,
 	outputDir string,
 ) error {
-	aggLower := strings.ToLower(aggregate)
-	errsPath := filepath.Join(aggLower, "errors.yaml")
-	if !source.Has(errsPath) {
-		errsPath = filepath.Join("content", aggLower, "errors.yaml")
-	}
-	if !source.Has(errsPath) {
-		return nil
-	}
 	var spec errorsYAML
-	if err := source.Decode(errsPath, &spec); err != nil {
-		return fmt.Errorf("parse errors.yaml: %w", err)
+	seen := map[string]string{}
+	for _, errsPath := range contentDomainErrorsPaths() {
+		if !source.Has(errsPath) {
+			return fmt.Errorf("content errors metadata missing: %s", errsPath)
+		}
+		var part errorsYAML
+		if err := source.Decode(errsPath, &part); err != nil {
+			return fmt.Errorf("parse %s: %w", errsPath, err)
+		}
+		if spec.Domain == "" {
+			spec.Domain = part.Domain
+		}
+		for _, entry := range part.Errors {
+			if previous, exists := seen[entry.Code]; exists {
+				return fmt.Errorf(
+					"duplicate content error code %s in %s (already in %s)",
+					entry.Code,
+					errsPath,
+					previous,
+				)
+			}
+			seen[entry.Code] = errsPath
+			spec.Errors = append(spec.Errors, entry)
+		}
 	}
 	if len(spec.Errors) == 0 {
 		return nil

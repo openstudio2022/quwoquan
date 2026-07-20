@@ -12,7 +12,9 @@ class ContentApiMetadata {
     '/content/articles',
     '/content/behaviors',
     '/content/comments',
+    '/content/entity-wishlist-state',
     '/content/feed',
+    '/content/filter-catalog',
     '/content/footprint',
     '/content/helper-read',
     '/content/intersections',
@@ -27,6 +29,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortMediaUpload': '/content/media/uploads/{sessionId}:abort',
+    'ActivateFilterCatalogRelease': '/internal/content/filter-catalog-releases/{releaseId}:activate',
     'BeginReportReview': '/content/reports/{reportId}/review',
     'BindMediaAssetsToComment': '/content/comments/{commentId}/media:bind',
     'CompleteMediaUpload': '/content/media/uploads/{sessionId}:complete',
@@ -36,11 +39,15 @@ class ContentApiMetadata {
     'DecidePostModeration': '/internal/content/posts/{postId}:moderate',
     'DeleteComment': '/content/posts/{postId}/comments/{commentId}',
     'DeletePost': '/content/posts/{postId}',
+    'DismissReport': '/content/reports/{reportId}:dismiss',
     'GenerateArticleSummary': '/content/articles/summary:generate',
+    'GetActiveFilterCatalog': '/content/filter-catalog',
     'GetAppConfig': '/config/app',
     'GetAuthorImpact': '/content/sub-accounts/{subAccountId}/author-impact',
     'GetContentReactionState': '/content/posts/{postId}/reactions',
     'GetCounters': '/content/posts/{postId}/counters',
+    'GetCurrentPostModerationCase': '/internal/content/posts/{postId}/moderation-case',
+    'GetEntityWishlistState': '/content/entity-wishlist-state',
     'GetFeed': '/content/feed',
     'GetHelperRead': '/content/helper-read/{contentId}',
     'GetMediaAsset': '/content/media/{mediaId}',
@@ -54,6 +61,7 @@ class ContentApiMetadata {
     'GetPost': '/content/posts/{postId}',
     'GetPostPublicationEligibility': '/internal/content/posts/{postId}/publication-eligibility',
     'GetReport': '/content/reports/{reportId}',
+    'HideComment': '/internal/content/comments/{commentId}:hide',
     'InitMediaUpload': '/content/media/uploads:init',
     'LikePost': '/content/posts/{postId}/like',
     'ListAuthorImpactEvidence': '/content/sub-accounts/{subAccountId}/author-impact/evidence',
@@ -62,10 +70,12 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': '/content/users/me/comments',
     'ListCommentsForPostAuthor': '/content/users/me/received-comments',
     'ListMyIntersections': '/content/intersections',
+    'ListMyReports': '/content/users/me/reports',
     'ListProfileInteractionActivitiesReceived': '/content/sub-accounts/{subAccountId}/interactions/received',
     'ListProfileInteractionActivitiesSent': '/content/sub-accounts/{subAccountId}/interactions/sent',
     'ListReports': '/content/reports',
     'ListUserPosts': '/content/sub-accounts/{subAccountId}/posts',
+    'MarkIntersectionsVisited': '/content/intersections/visit',
     'OpenPostModerationCase': '/internal/content/posts/{postId}:open-moderation-case',
     'PinComment': '/content/posts/{postId}/comments/{commentId}/pin',
     'PromotePostToWork': '/content/posts/{postId}:promoteToWork',
@@ -74,21 +84,24 @@ class ContentApiMetadata {
     'ReportBehaviors': '/content/behaviors',
     'RequestOriginalImageAccess': '/content/media/{mediaId}/original:access',
     'ResolveReport': '/content/reports/{reportId}',
+    'RestoreComment': '/internal/content/comments/{commentId}:restore',
     'ReviewPostModerationCase': '/internal/content/posts/{postId}:review-moderation',
-    'SearchPosts': '/content/posts/search',
+    'RollbackFilterCatalogRelease': '/internal/content/filter-catalog-releases/{releaseId}:rollback',
     'SelectAutoVideoCover': '/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/content/media/{mediaId}/cover:manual',
+    'StageFilterCatalogRelease': '/internal/content/filter-catalog-releases',
     'SubmitPostPublication': '/content/posts:publish',
     'SupersedePostModerationCase': '/internal/content/posts/{postId}:supersede-moderation',
     'UnlikePost': '/content/posts/{postId}/like',
     'UnpinComment': '/content/posts/{postId}/comments/{commentId}/pin',
     'UpdateMediaAssetAccessPolicy': '/internal/content/media/{mediaId}:access-policy',
     'UpdatePostSettings': '/content/posts/{postId}/settings',
-    'UpdateProfileInteractionState': '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state',
+    'UpdateProfileInteractionState': '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
+    'ActivateFilterCatalogRelease': 'POST',
     'BeginReportReview': 'POST',
     'BindMediaAssetsToComment': 'POST',
     'CompleteMediaUpload': 'POST',
@@ -98,11 +111,15 @@ class ContentApiMetadata {
     'DecidePostModeration': 'POST',
     'DeleteComment': 'DELETE',
     'DeletePost': 'DELETE',
+    'DismissReport': 'POST',
     'GenerateArticleSummary': 'POST',
+    'GetActiveFilterCatalog': 'GET',
     'GetAppConfig': 'GET',
     'GetAuthorImpact': 'GET',
     'GetContentReactionState': 'GET',
     'GetCounters': 'GET',
+    'GetCurrentPostModerationCase': 'GET',
+    'GetEntityWishlistState': 'GET',
     'GetFeed': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
@@ -116,6 +133,7 @@ class ContentApiMetadata {
     'GetPost': 'GET',
     'GetPostPublicationEligibility': 'GET',
     'GetReport': 'GET',
+    'HideComment': 'POST',
     'InitMediaUpload': 'POST',
     'LikePost': 'POST',
     'ListAuthorImpactEvidence': 'GET',
@@ -124,10 +142,12 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': 'GET',
     'ListCommentsForPostAuthor': 'GET',
     'ListMyIntersections': 'GET',
+    'ListMyReports': 'GET',
     'ListProfileInteractionActivitiesReceived': 'GET',
     'ListProfileInteractionActivitiesSent': 'GET',
     'ListReports': 'GET',
     'ListUserPosts': 'GET',
+    'MarkIntersectionsVisited': 'POST',
     'OpenPostModerationCase': 'POST',
     'PinComment': 'POST',
     'PromotePostToWork': 'POST',
@@ -136,22 +156,25 @@ class ContentApiMetadata {
     'ReportBehaviors': 'POST',
     'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
+    'RestoreComment': 'POST',
     'ReviewPostModerationCase': 'POST',
-    'SearchPosts': 'GET',
+    'RollbackFilterCatalogRelease': 'POST',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
+    'StageFilterCatalogRelease': 'POST',
     'SubmitPostPublication': 'POST',
     'SupersedePostModerationCase': 'POST',
     'UnlikePost': 'DELETE',
     'UnpinComment': 'DELETE',
     'UpdateMediaAssetAccessPolicy': 'PATCH',
     'UpdatePostSettings': 'PATCH',
-    'UpdateProfileInteractionState': 'PATCH',
+    'UpdateProfileInteractionState': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AbortMediaUpload': 'required',
+    'ActivateFilterCatalogRelease': 'required',
     'BeginReportReview': 'required',
     'BindMediaAssetsToComment': 'required',
     'CompleteMediaUpload': 'required',
@@ -161,13 +184,17 @@ class ContentApiMetadata {
     'DecidePostModeration': 'required',
     'DeleteComment': 'required',
     'DeletePost': 'required',
+    'DismissReport': 'required',
     'GenerateArticleSummary': 'required',
+    'GetActiveFilterCatalog': 'public',
     'GetAppConfig': 'public',
     'GetAuthorImpact': 'required',
     'GetContentReactionState': 'optional',
-    'GetCounters': 'required',
+    'GetCounters': 'public',
+    'GetCurrentPostModerationCase': 'required',
+    'GetEntityWishlistState': 'required',
     'GetFeed': 'optional',
-    'GetHelperRead': 'required',
+    'GetHelperRead': 'public',
     'GetMediaAsset': 'optional',
     'GetMediaAssetDeliveryReference': 'required',
     'GetMediaAssetReference': 'required',
@@ -179,6 +206,7 @@ class ContentApiMetadata {
     'GetPost': 'optional',
     'GetPostPublicationEligibility': 'required',
     'GetReport': 'required',
+    'HideComment': 'required',
     'InitMediaUpload': 'required',
     'LikePost': 'optional',
     'ListAuthorImpactEvidence': 'required',
@@ -187,10 +215,12 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': 'required',
     'ListCommentsForPostAuthor': 'required',
     'ListMyIntersections': 'required',
+    'ListMyReports': 'required',
     'ListProfileInteractionActivitiesReceived': 'required',
     'ListProfileInteractionActivitiesSent': 'required',
     'ListReports': 'required',
     'ListUserPosts': 'optional',
+    'MarkIntersectionsVisited': 'required',
     'OpenPostModerationCase': 'required',
     'PinComment': 'required',
     'PromotePostToWork': 'required',
@@ -199,10 +229,12 @@ class ContentApiMetadata {
     'ReportBehaviors': 'required',
     'RequestOriginalImageAccess': 'required',
     'ResolveReport': 'required',
+    'RestoreComment': 'required',
     'ReviewPostModerationCase': 'required',
-    'SearchPosts': 'required',
+    'RollbackFilterCatalogRelease': 'required',
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
+    'StageFilterCatalogRelease': 'required',
     'SubmitPostPublication': 'required',
     'SupersedePostModerationCase': 'required',
     'UnlikePost': 'optional',
@@ -214,7 +246,9 @@ class ContentApiMetadata {
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
+    'GetActiveFilterCatalog': 'FilterCatalogSnapshot',
     'GetAuthorImpact': 'AuthorImpactSummary',
+    'GetEntityWishlistState': 'EntityWishlistState',
     'GetMyFootprint': 'ContentFootprintEntry',
     'GetMyIntersectionSummary': 'IntersectionInboxSummary',
     'GetObjectIntersections': 'IntersectionReason',
@@ -225,16 +259,18 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': 'ContentAuthorCommentPageSlice',
     'ListCommentsForPostAuthor': 'ContentReceivedCommentPageSlice',
     'ListMyIntersections': 'IntersectionReason',
-    'ListProfileInteractionActivitiesReceived': 'ProfileInteractionActivityWireDto',
-    'ListProfileInteractionActivitiesSent': 'ProfileInteractionActivityWireDto',
+    'ListMyReports': 'ContentMyReportItem',
     'ListUserPosts': 'ContentPostProjection',
-    'SearchPosts': 'PostSearchItemView',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
     'BeginReportReview': 'object',
+    'DismissReport': 'object',
+    'GetActiveFilterCatalog': 'object',
     'GetAuthorImpact': 'object',
+    'GetCurrentPostModerationCase': 'object',
+    'GetEntityWishlistState': 'object',
     'GetMyFootprint': 'page',
     'GetMyIntersectionSummary': 'object',
     'GetObjectIntersections': 'page',
@@ -246,15 +282,18 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': 'page',
     'ListCommentsForPostAuthor': 'page',
     'ListMyIntersections': 'page',
+    'ListMyReports': 'page',
     'ListProfileInteractionActivitiesReceived': 'page',
     'ListProfileInteractionActivitiesSent': 'page',
     'ListReports': 'page',
     'ListUserPosts': 'page',
+    'MarkIntersectionsVisited': 'ack',
     'ResolveReport': 'object',
-    'SearchPosts': 'page',
+    'UpdateProfileInteractionState': 'object',
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String activateFilterCatalogReleaseOperation = 'ActivateFilterCatalogRelease';
   static const String beginReportReviewOperation = 'BeginReportReview';
   static const String bindMediaAssetsToCommentOperation = 'BindMediaAssetsToComment';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
@@ -264,11 +303,15 @@ class ContentApiMetadata {
   static const String decidePostModerationOperation = 'DecidePostModeration';
   static const String deleteCommentOperation = 'DeleteComment';
   static const String deletePostOperation = 'DeletePost';
+  static const String dismissReportOperation = 'DismissReport';
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
+  static const String getActiveFilterCatalogOperation = 'GetActiveFilterCatalog';
   static const String getAppConfigOperation = 'GetAppConfig';
   static const String getAuthorImpactOperation = 'GetAuthorImpact';
   static const String getContentReactionStateOperation = 'GetContentReactionState';
   static const String getCountersOperation = 'GetCounters';
+  static const String getCurrentPostModerationCaseOperation = 'GetCurrentPostModerationCase';
+  static const String getEntityWishlistStateOperation = 'GetEntityWishlistState';
   static const String getFeedOperation = 'GetFeed';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
@@ -282,6 +325,7 @@ class ContentApiMetadata {
   static const String getPostOperation = 'GetPost';
   static const String getPostPublicationEligibilityOperation = 'GetPostPublicationEligibility';
   static const String getReportOperation = 'GetReport';
+  static const String hideCommentOperation = 'HideComment';
   static const String initMediaUploadOperation = 'InitMediaUpload';
   static const String likePostOperation = 'LikePost';
   static const String listAuthorImpactEvidenceOperation = 'ListAuthorImpactEvidence';
@@ -290,10 +334,12 @@ class ContentApiMetadata {
   static const String listCommentsByAuthorOperation = 'ListCommentsByAuthor';
   static const String listCommentsForPostAuthorOperation = 'ListCommentsForPostAuthor';
   static const String listMyIntersectionsOperation = 'ListMyIntersections';
+  static const String listMyReportsOperation = 'ListMyReports';
   static const String listProfileInteractionActivitiesReceivedOperation = 'ListProfileInteractionActivitiesReceived';
   static const String listProfileInteractionActivitiesSentOperation = 'ListProfileInteractionActivitiesSent';
   static const String listReportsOperation = 'ListReports';
   static const String listUserPostsOperation = 'ListUserPosts';
+  static const String markIntersectionsVisitedOperation = 'MarkIntersectionsVisited';
   static const String openPostModerationCaseOperation = 'OpenPostModerationCase';
   static const String pinCommentOperation = 'PinComment';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
@@ -302,10 +348,12 @@ class ContentApiMetadata {
   static const String reportBehaviorsOperation = 'ReportBehaviors';
   static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
+  static const String restoreCommentOperation = 'RestoreComment';
   static const String reviewPostModerationCaseOperation = 'ReviewPostModerationCase';
-  static const String searchPostsOperation = 'SearchPosts';
+  static const String rollbackFilterCatalogReleaseOperation = 'RollbackFilterCatalogRelease';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
+  static const String stageFilterCatalogReleaseOperation = 'StageFilterCatalogRelease';
   static const String submitPostPublicationOperation = 'SubmitPostPublication';
   static const String supersedePostModerationCaseOperation = 'SupersedePostModerationCase';
   static const String unlikePostOperation = 'UnlikePost';
@@ -318,6 +366,12 @@ class ContentApiMetadata {
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String activateFilterCatalogReleasePathTemplate = '/internal/content/filter-catalog-releases/{releaseId}:activate';
+  static String activateFilterCatalogReleasePath({required String releaseId}) {
+    return _fillPath(activateFilterCatalogReleasePathTemplate, <String, String>{
+      'releaseId': releaseId,
     });
   }
   static const String beginReportReviewPathTemplate = '/content/reports/{reportId}/review';
@@ -370,7 +424,14 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
+  static const String dismissReportPathTemplate = '/content/reports/{reportId}:dismiss';
+  static String dismissReportPath({required String reportId}) {
+    return _fillPath(dismissReportPathTemplate, <String, String>{
+      'reportId': reportId,
+    });
+  }
   static const String generateArticleSummaryPath = '/content/articles/summary:generate';
+  static const String getActiveFilterCatalogPath = '/content/filter-catalog';
   static const String getAppConfigPath = '/config/app';
   static const String getAuthorImpactPathTemplate = '/content/sub-accounts/{subAccountId}/author-impact';
   static String getAuthorImpactPath({required String subAccountId}) {
@@ -390,6 +451,13 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
+  static const String getCurrentPostModerationCasePathTemplate = '/internal/content/posts/{postId}/moderation-case';
+  static String getCurrentPostModerationCasePath({required String postId}) {
+    return _fillPath(getCurrentPostModerationCasePathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
+  static const String getEntityWishlistStatePath = '/content/entity-wishlist-state';
   static const String getFeedPath = '/content/feed';
   static const String getHelperReadPathTemplate = '/content/helper-read/{contentId}';
   static String getHelperReadPath({required String contentId}) {
@@ -448,6 +516,12 @@ class ContentApiMetadata {
       'reportId': reportId,
     });
   }
+  static const String hideCommentPathTemplate = '/internal/content/comments/{commentId}:hide';
+  static String hideCommentPath({required String commentId}) {
+    return _fillPath(hideCommentPathTemplate, <String, String>{
+      'commentId': commentId,
+    });
+  }
   static const String initMediaUploadPath = '/content/media/uploads:init';
   static const String likePostPathTemplate = '/content/posts/{postId}/like';
   static String likePostPath({required String postId}) {
@@ -477,6 +551,7 @@ class ContentApiMetadata {
   static const String listCommentsByAuthorPath = '/content/users/me/comments';
   static const String listCommentsForPostAuthorPath = '/content/users/me/received-comments';
   static const String listMyIntersectionsPath = '/content/intersections';
+  static const String listMyReportsPath = '/content/users/me/reports';
   static const String listProfileInteractionActivitiesReceivedPathTemplate = '/content/sub-accounts/{subAccountId}/interactions/received';
   static String listProfileInteractionActivitiesReceivedPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
@@ -496,6 +571,7 @@ class ContentApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String markIntersectionsVisitedPath = '/content/intersections/visit';
   static const String openPostModerationCasePathTemplate = '/internal/content/posts/{postId}:open-moderation-case';
   static String openPostModerationCasePath({required String postId}) {
     return _fillPath(openPostModerationCasePathTemplate, <String, String>{
@@ -540,13 +616,24 @@ class ContentApiMetadata {
       'reportId': reportId,
     });
   }
+  static const String restoreCommentPathTemplate = '/internal/content/comments/{commentId}:restore';
+  static String restoreCommentPath({required String commentId}) {
+    return _fillPath(restoreCommentPathTemplate, <String, String>{
+      'commentId': commentId,
+    });
+  }
   static const String reviewPostModerationCasePathTemplate = '/internal/content/posts/{postId}:review-moderation';
   static String reviewPostModerationCasePath({required String postId}) {
     return _fillPath(reviewPostModerationCasePathTemplate, <String, String>{
       'postId': postId,
     });
   }
-  static const String searchPostsPath = '/content/posts/search';
+  static const String rollbackFilterCatalogReleasePathTemplate = '/internal/content/filter-catalog-releases/{releaseId}:rollback';
+  static String rollbackFilterCatalogReleasePath({required String releaseId}) {
+    return _fillPath(rollbackFilterCatalogReleasePathTemplate, <String, String>{
+      'releaseId': releaseId,
+    });
+  }
   static const String selectAutoVideoCoverPathTemplate = '/content/media/{mediaId}/cover:auto';
   static String selectAutoVideoCoverPath({required String mediaId}) {
     return _fillPath(selectAutoVideoCoverPathTemplate, <String, String>{
@@ -559,6 +646,7 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String stageFilterCatalogReleasePath = '/internal/content/filter-catalog-releases';
   static const String submitPostPublicationPath = '/content/posts:publish';
   static const String supersedePostModerationCasePathTemplate = '/internal/content/posts/{postId}:supersede-moderation';
   static String supersedePostModerationCasePath({required String postId}) {
@@ -591,7 +679,7 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String updateProfileInteractionStatePathTemplate = '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state';
+  static const String updateProfileInteractionStatePathTemplate = '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts';
   static String updateProfileInteractionStatePath({required String subAccountId, required String interactionId}) {
     return _fillPath(updateProfileInteractionStatePathTemplate, <String, String>{
       'subAccountId': subAccountId,

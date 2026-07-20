@@ -52,20 +52,23 @@ class ActiveCallState {
 
   @override
   int get hashCode => Object.hash(
-        callId,
-        callType,
-        isInCall,
-        isPipMode,
-        elapsed,
-        participants.length,
-      );
+    callId,
+    callType,
+    isInCall,
+    isPipMode,
+    elapsed,
+    participants.length,
+  );
 }
 
 class ActiveCallNotifier extends Notifier<ActiveCallState> {
   Timer? _elapsedTimer;
 
   @override
-  ActiveCallState build() => const ActiveCallState();
+  ActiveCallState build() {
+    ref.onDispose(_stopTimer);
+    return const ActiveCallState();
+  }
 
   void startCall({
     required String callId,
@@ -124,5 +127,5 @@ class ActiveCallNotifier extends Notifier<ActiveCallState> {
 
 final activeCallProvider =
     NotifierProvider<ActiveCallNotifier, ActiveCallState>(
-  ActiveCallNotifier.new,
-);
+      ActiveCallNotifier.new,
+    );

@@ -579,7 +579,7 @@ class LoginAgreementRow extends StatelessWidget {
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(top: AppSpacing.containerSm),
             child: Wrap(
               children: <Widget>[
                 Text(

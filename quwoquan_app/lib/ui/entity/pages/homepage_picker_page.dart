@@ -8,7 +8,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 
 class HomepagePickerPage extends ConsumerStatefulWidget {
@@ -99,11 +101,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         cancelButtonKey: TestKeys.homepagePickerCancelButton,
         confirmButtonKey: TestKeys.homepagePickerConfirmButton,
         onCancel: () => Navigator.of(context).pop(),
-        onConfirm: () => Navigator.of(context).pop(
-          _selected == null
-              ? const HomepagePickerSelectionResult.clear()
-              : HomepagePickerSelectionResult.selected(_selected!),
-        ),
+        onConfirm: _confirmSelection,
       ),
     );
   }
@@ -157,7 +155,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       children: <Widget>[
         if (selected != null && !selectedVisibleInResults) ...<Widget>[
           const IosSelectionSectionHeader(
-            title: '当前关联',
+            title: UITextConstants.attachHomepageCurrentSection,
             padding: EdgeInsets.fromLTRB(
               AppSpacing.containerMd,
               AppSpacing.intraGroupXs,
@@ -169,7 +167,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
           const SizedBox(height: AppSpacing.interGroupSm),
         ],
         const IosSelectionSectionHeader(
-          title: '搜索结果',
+          title: UITextConstants.attachHomepageResultsSection,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerMd,
             AppSpacing.intraGroupXs,
@@ -216,6 +214,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
   }
 
   Future<void> _loadResults() async {
+    final startedAt = DateTime.now();
     final token = ++_requestToken;
     setState(() {
       _isLoading = true;
@@ -223,7 +222,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     });
     try {
       final items = await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageQueryProvider)
           .searchHomepages(query: _query.trim(), limit: 12);
       if (!mounted || token != _requestToken) {
         return;
@@ -234,6 +233,13 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             .toList(growable: false);
         _isLoading = false;
       });
+      await trackHomepageProductAction(
+        ref,
+        action: 'picker_search',
+        pageName: 'homepagePicker',
+        result: 'success',
+        startedAt: startedAt,
+      );
     } catch (error) {
       if (!mounted || token != _requestToken) {
         return;
@@ -247,6 +253,14 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         );
         _isLoading = false;
       });
+      await trackHomepageProductAction(
+        ref,
+        action: 'picker_search',
+        pageName: 'homepagePicker',
+        result: 'failure',
+        startedAt: startedAt,
+        error: error,
+      );
     }
   }
 
@@ -259,7 +273,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupLg),
       children: <Widget>[
         const IosSelectionSectionHeader(
-          title: '当前关联',
+          title: UITextConstants.attachHomepageCurrentSection,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerMd,
             AppSpacing.intraGroupXs,
@@ -316,7 +330,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       ),
       subtitle: Text(
         [
-          _homepageTypeLabel(selected.homepageType),
+          homepageTypeLabel(selected.homepageType),
           if ((selected.subtitle ?? '').trim().isNotEmpty)
             selected.subtitle!.trim(),
         ].join(' · '),
@@ -501,7 +515,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
   }
 
   String _buildSummaryLine(HomepageSummary summary) {
-    final typeLabel = _homepageTypeLabel(summary.homepageType);
+    final typeLabel = homepageTypeLabel(summary.homepageType);
     final detail = (summary.subtitle ?? '').trim().isNotEmpty
         ? summary.subtitle!.trim()
         : <String>[
@@ -523,19 +537,23 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       _scheduleRefresh(immediate: true);
     }
   }
-}
 
-String _homepageTypeLabel(String type) {
-  switch (type.trim()) {
-    case 'hotel':
-      return '酒店';
-    case 'restaurant':
-      return '餐厅';
-    case 'vehicle':
-      return '车型';
-    case 'sight':
-      return '景点';
-    default:
-      return '主页';
+  void _confirmSelection() {
+    final startedAt = DateTime.now();
+    unawaited(
+      trackHomepageProductAction(
+        ref,
+        action: 'picker_confirm',
+        pageName: 'homepagePicker',
+        result: 'success',
+        startedAt: startedAt,
+        homepageId: _selected?.id ?? '',
+      ),
+    );
+    Navigator.of(context).pop(
+      _selected == null
+          ? const HomepagePickerSelectionResult.clear()
+          : HomepagePickerSelectionResult.selected(_selected!),
+    );
   }
 }

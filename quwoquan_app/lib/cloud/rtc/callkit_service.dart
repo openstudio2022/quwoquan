@@ -2,95 +2,64 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
-import 'package:flutter_callkit_incoming/entities/android_params.dart';
-import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/rtc/official_call_ringtone_catalog.dart';
+import 'package:quwoquan_app/core/platform/incoming_call_envelope.dart';
+import 'package:quwoquan_app/core/platform/incoming_call_native_bridge.dart';
+import 'package:quwoquan_app/core/platform/incoming_call_native_presenter.dart';
 
 enum CallKitAction { accept, decline, end, timeout }
 
+final class CallKitActionEvent {
+  const CallKitActionEvent({required this.callId, required this.action});
+
+  final String callId;
+  final CallKitAction action;
+}
+
 class CallKitService {
-  CallKitService({Stream<CallEvent?>? eventStream})
-    : _eventStream = eventStream ?? FlutterCallkitIncoming.onEvent;
+  CallKitService({
+    Stream<CallEvent?>? eventStream,
+    IncomingCallNativePresenter? presenter,
+    IncomingCallNativeBridge? nativeBridge,
+  }) : _eventStream = eventStream ?? FlutterCallkitIncoming.onEvent,
+       _presenter = presenter ?? const CallKitIncomingNativePresenter(),
+       _nativeBridge =
+           nativeBridge ?? const MethodChannelIncomingCallNativeBridge();
 
   final Stream<CallEvent?> _eventStream;
+  final IncomingCallNativePresenter _presenter;
+  final IncomingCallNativeBridge _nativeBridge;
   StreamSubscription<CallEvent?>? _eventSub;
-  final _actions = StreamController<CallKitAction>.broadcast();
+  final _actions = StreamController<CallKitActionEvent>.broadcast();
   bool _nativeEventStreamAvailable = true;
 
-  Stream<CallKitAction> get actions => _actions.stream;
+  Stream<CallKitActionEvent> get actions => _actions.stream;
 
   String? _activeCallId;
   String? get activeCallId => _activeCallId;
   @visibleForTesting
   bool get nativeEventStreamAvailable => _nativeEventStreamAvailable;
 
-  Future<bool> showIncomingCall({
-    required String callId,
-    required String callerName,
-    required bool isVideo,
-    String? avatarUrl,
+  Future<IncomingCallPresentationResult> showIncomingCall({
+    required IncomingCallEnvelope envelope,
     String? ringtoneId,
   }) async {
-    _activeCallId = callId;
+    _activeCallId = envelope.callId;
     final ringtonePath = OfficialCallRingtoneCatalog.resolveCallkitPath(
       ringtoneId,
     );
-
-    final params = CallKitParams(
-      id: callId,
-      nameCaller: callerName,
-      appName: '趣我圈',
-      avatar: avatarUrl,
-      handle: callerName,
-      type: isVideo ? 1 : 0,
-      duration: 30000,
-      // CallKitParams.extra / headers 类型由 flutter_callkit_incoming 固定为 Map<String, dynamic>?
-      extra: <String, dynamic>{'callId': callId},
-      headers: const <String, dynamic>{},
-      android: AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: false,
-        ringtonePath: ringtonePath,
-        backgroundColor: '#0955fa',
-        actionColor: '#0955fa',
-        isShowFullLockedScreen: true,
-        textAccept: UITextConstants.callAccept,
-        textDecline: UITextConstants.callReject,
-      ),
-      ios: IOSParams(
-        iconName: 'CallKitLogo',
-        handleType: 'generic',
-        supportsVideo: true,
-        maximumCallGroups: 1,
-        maximumCallsPerCallGroup: 1,
-        audioSessionMode: 'default',
-        audioSessionActive: true,
-        audioSessionPreferredSampleRate: 44100.0,
-        audioSessionPreferredIOBufferDuration: 0.005,
-        supportsDTMF: false,
-        supportsHolding: false,
-        supportsGrouping: false,
-        supportsUngrouping: false,
-        ringtonePath: ringtonePath,
-      ),
+    final capability = await _nativeBridge.readCapability();
+    final result = await _presenter.present(
+      envelope,
+      fullScreenAllowed: capability.fullScreenPresentationAllowed,
+      ringtonePath: ringtonePath,
     );
-
-    try {
-      await FlutterCallkitIncoming.showCallkitIncoming(params);
-      return true;
-    } on MissingPluginException catch (error) {
+    if (!result.presented) {
       _activeCallId = null;
-      _markNativeEventStreamUnavailable(error);
-      return false;
-    } on PlatformException catch (error) {
-      _activeCallId = null;
-      _markNativeEventStreamUnavailable(error);
-      return false;
     }
+    return result;
   }
 
   void startListening() {
@@ -127,19 +96,24 @@ class CallKitService {
 
   void _handleCallKitEvent(CallEvent? event) {
     if (event == null) return;
-    debugPrint('CallKit event: $event');
 
     switch (event) {
-      case CallEventActionCallAccept():
-        _actions.add(CallKitAction.accept);
-      case CallEventActionCallDecline():
-        _actions.add(CallKitAction.decline);
+      case CallEventActionCallAccept(:final id):
+        _actions.add(
+          CallKitActionEvent(callId: id, action: CallKitAction.accept),
+        );
+      case CallEventActionCallDecline(:final id):
+        _actions.add(
+          CallKitActionEvent(callId: id, action: CallKitAction.decline),
+        );
         _activeCallId = null;
-      case CallEventActionCallEnded():
-        _actions.add(CallKitAction.end);
+      case CallEventActionCallEnded(:final id):
+        _actions.add(CallKitActionEvent(callId: id, action: CallKitAction.end));
         _activeCallId = null;
-      case CallEventActionCallTimeout():
-        _actions.add(CallKitAction.timeout);
+      case CallEventActionCallTimeout(:final id):
+        _actions.add(
+          CallKitActionEvent(callId: id, action: CallKitAction.timeout),
+        );
         _activeCallId = null;
       default:
         break;
@@ -153,22 +127,15 @@ class CallKitService {
     _nativeEventStreamAvailable = false;
     _eventSub?.cancel();
     _eventSub = null;
-    debugPrint(
-      'CallKit native event stream unavailable; '
-      'incoming call UI will use app-level fallback. error=$error',
-    );
     return true;
   }
 
-  Future<void> endCall() async {
-    if (_activeCallId != null) {
-      try {
-        await FlutterCallkitIncoming.endCall(_activeCallId!);
-      } on MissingPluginException catch (error) {
-        _markNativeEventStreamUnavailable(error);
-      } on PlatformException catch (error) {
-        _markNativeEventStreamUnavailable(error);
-      }
+  Future<void> endCall(String callId) async {
+    final normalized = callId.trim();
+    if (normalized.isNotEmpty) {
+      await _nativeBridge.endNativeCall(normalized);
+    }
+    if (_activeCallId == normalized) {
       _activeCallId = null;
     }
   }

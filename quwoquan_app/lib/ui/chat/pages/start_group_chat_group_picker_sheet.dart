@@ -1,20 +1,22 @@
 part of 'start_group_chat_page.dart';
 
-/// 图四：从群聊中选择联系人 — 群聊列表（按群名首字母分区）。
+/// 图四：从群聊 / 圈子中选择联系人（按名称首字母分区）。
 ///
-/// 数据由 [startGroupFromGroupProvider] 编排（listConversations ∩ listContacts），
-/// 每个群展示「(N个朋友)」即群成员中与当前用户 mutual 的联系人数。点击某群
-/// 进入图五 [_MemberSelectSheet] 选具体成员，选中项通过同一 wizardId 并入向导。
+/// 数据由服务端 `source=group|circle` 在分页前区分来源，并统一计算会话成员与
+/// mutual 联系人的交集。点击来源后进入图五 [_MemberSelectSheet] 选具体成员，
+/// 选中项通过同一 wizardId 并入向导。
 class _GroupPickerSheet extends ConsumerStatefulWidget {
   const _GroupPickerSheet({
     super.key,
     required this.wizardId,
     required this.isDark,
+    required this.source,
     required this.onBack,
   });
 
   final String wizardId;
   final bool isDark;
+  final StartGroupSource source;
   final VoidCallback onBack;
 
   @override
@@ -68,12 +70,13 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
       ),
     );
     if (completed == true && mounted) {
-      navigator.pop();
+      navigator.pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isCircleSource = widget.source == StartGroupSource.circle;
     final isDark = widget.isDark;
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -94,12 +97,17 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
     final listHorizontalPadding =
         SettingsSemanticConstants.insetFormListHorizontalPadding;
 
-    final asyncGroups = ref.watch(startGroupFromGroupProvider);
+    final sourceProvider = isCircleSource
+        ? startGroupFromCircleProvider
+        : startGroupFromGroupProvider;
+    final asyncGroups = ref.watch(sourceProvider);
     final normalizedQuery = _query.trim().toLowerCase();
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.startGroupChatGroupPickerTitle,
+      title: isCircleSource
+          ? ChatText.startGroupChatCirclePickerTitle
+          : ChatText.startGroupChatGroupPickerTitle,
       onBack: widget.onBack,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -113,7 +121,9 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.startGroupChatPickFromGroupSearch,
+              placeholder: isCircleSource
+                  ? ChatText.startGroupChatPickFromCircleSearch
+                  : ChatText.startGroupChatPickFromGroupSearch,
               onChanged: (value) => setState(() => _query = value),
             ),
           ),
@@ -130,7 +140,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
                 onAction: (action) async {
                   if (action.type == UiErrorActionType.retry ||
                       action.type == UiErrorActionType.resubmit) {
-                    ref.invalidate(startGroupFromGroupProvider);
+                    ref.invalidate(sourceProvider);
                   }
                 },
               ),
@@ -143,7 +153,9 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
                 if (filtered.isEmpty) {
                   return Center(
                     child: Text(
-                      UITextConstants.startGroupChatGroupPickerEmpty,
+                      isCircleSource
+                          ? ChatText.startGroupChatCirclePickerEmpty
+                          : ChatText.startGroupChatGroupPickerEmpty,
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         color: fgSecondary,
@@ -288,7 +300,7 @@ class _GroupPickerRow extends StatelessWidget {
                         ),
                         SizedBox(width: AppSpacing.xs),
                         Text(
-                          '（${UITextConstants.startGroupChatFriendsCount(group.friendCount)}）',
+                          '（${ChatText.startGroupChatFriendsCount(group.friendCount)}）',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

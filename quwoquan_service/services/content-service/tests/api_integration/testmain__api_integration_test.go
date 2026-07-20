@@ -26,17 +26,21 @@ import (
 	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
 	outboundshareapp "quwoquan_service/services/content-service/internal/application/content/outbound_share_fact/command"
+	profileinteractionapp "quwoquan_service/services/content-service/internal/application/content/profile_interaction"
 	feedapp "quwoquan_service/services/content-service/internal/application/feed"
 	"quwoquan_service/services/content-service/internal/application/identity"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
+	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
 	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
 	outboundshareinfra "quwoquan_service/services/content-service/internal/infrastructure/content/outbound_share_fact/persistence"
+	profileinteractioninfra "quwoquan_service/services/content-service/internal/infrastructure/content/profile_interaction/persistence"
 	contentmessaging "quwoquan_service/services/content-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/testsupport"
 )
 
 var (
@@ -47,14 +51,25 @@ var (
 	postOutboxRelay             *postapp.OutboxRelay
 	postProjectionRelay         *postapp.OutboxRelay
 	postReactionLifecycleRelay  *postapp.OutboxRelay
+	postCommentTombstoneRelay   *postapp.OutboxRelay
 	commentOutboxRelay          *commentapp.OutboxRelay
 	commentCountProjectionRelay *commentapp.OutboxRelay
+	commentFeedCountRelay       *commentapp.OutboxRelay
 	reactionOutboxRelay         *reactionapp.OutboxRelay
 	reactionPostProjectionRelay *reactionapp.OutboxRelay
 	reactionFeedProjectionRelay *reactionapp.OutboxRelay
 	reactionRecommendRelay      *reactionapp.OutboxRelay
+	profileReactionRelay        *reactionapp.OutboxRelay
+	profileCommentRelay         *commentapp.OutboxRelay
+	profileShareRelay           *outboundshareapp.OutboxRelay
+	sharePostCountRelay         *outboundshareapp.OutboxRelay
+	shareFeedCountRelay         *outboundshareapp.OutboxRelay
+	profileReadFactRelay        *profileinteractionapp.ReadFactOutboxRelay
+	profilePostTargetRelay      *postapp.OutboxRelay
 	testReactionStore           *persistence.MongoContentReactionStore
 	testReactionService         *reactionapp.Service
+	testModerationStore         *persistence.MongoPostModerationCaseStore
+	testModerationFacades       *moderationapp.Facades
 	eventSpy                    *testinfra.EventSpy
 	mongoDB                     *mongo.Database
 	mongoClient                 *mongo.Client
@@ -88,7 +103,9 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 	if postOutboxRelay == nil {
 		return fmt.Errorf("content-service api_integration requires a Post outbox relay")
 	}
-	if postProjectionRelay == nil || postReactionLifecycleRelay == nil {
+	if postProjectionRelay == nil || postReactionLifecycleRelay == nil ||
+		postCommentTombstoneRelay == nil ||
+		profilePostTargetRelay == nil {
 		return fmt.Errorf("content-service api_integration requires a Post projection relay")
 	}
 	if _, err := postOutboxRelay.Drain(ctx, 100); err != nil {
@@ -100,13 +117,20 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 	if _, err := postReactionLifecycleRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Post ContentReaction lifecycle: %w", err)
 	}
+	if _, err := postCommentTombstoneRelay.Drain(ctx, 100); err != nil {
+		return fmt.Errorf("drain Post Comment tombstone projection: %w", err)
+	}
+	if _, err := profilePostTargetRelay.Drain(ctx, 100); err != nil {
+		return fmt.Errorf("drain Post profile interaction target projection: %w", err)
+	}
 	return nil
 }
 
 func drainReactionOutbox(t *testing.T) {
 	t.Helper()
 	if reactionOutboxRelay == nil || reactionPostProjectionRelay == nil ||
-		reactionFeedProjectionRelay == nil || reactionRecommendRelay == nil {
+		reactionFeedProjectionRelay == nil || reactionRecommendRelay == nil ||
+		profileReactionRelay == nil {
 		t.Fatal("content-service api_integration requires ContentReaction outbox relays")
 	}
 	if _, err := reactionOutboxRelay.Drain(context.Background(), 100); err != nil {
@@ -121,10 +145,14 @@ func drainReactionOutbox(t *testing.T) {
 	if _, err := reactionRecommendRelay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("drain ContentReaction RecommendFeature projection outbox: %v", err)
 	}
+	if _, err := profileReactionRelay.Drain(context.Background(), 100); err != nil {
+		t.Fatalf("drain ContentReaction profile interaction projection outbox: %v", err)
+	}
 }
 
 func drainCommentOutboxForHarness(ctx context.Context) error {
-	if commentOutboxRelay == nil || commentCountProjectionRelay == nil {
+	if commentOutboxRelay == nil || commentCountProjectionRelay == nil ||
+		commentFeedCountRelay == nil || profileCommentRelay == nil {
 		return fmt.Errorf("content-service api_integration requires Comment outbox relays")
 	}
 	if _, err := commentOutboxRelay.Drain(ctx, 100); err != nil {
@@ -132,6 +160,12 @@ func drainCommentOutboxForHarness(ctx context.Context) error {
 	}
 	if _, err := commentCountProjectionRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Comment count projection outbox: %w", err)
+	}
+	if _, err := commentFeedCountRelay.Drain(ctx, 100); err != nil {
+		return fmt.Errorf("drain Comment DiscoveryFeed count projection outbox: %w", err)
+	}
+	if _, err := profileCommentRelay.Drain(ctx, 100); err != nil {
+		return fmt.Errorf("drain Comment profile interaction projection outbox: %w", err)
 	}
 	return nil
 }
@@ -204,16 +238,25 @@ func TestMain(m *testing.M) {
 	if err := testReactionStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize ContentReaction aggregate/outbox indexes: " + err.Error())
 	}
-	testCommentService = commentapp.NewCommentService(commentapp.BindDataPorts(
-		commentStore,
-		persistence.NewCommentAttachmentReader(mediaStore, mediaObjects),
-		testReactionStore,
-	))
-	postTargetReader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	testCommentService = commentapp.NewCommentService(
+		commentapp.BindDataPorts(
+			commentStore,
+			persistence.NewCommentAttachmentReader(mediaStore, mediaObjects),
+			testReactionStore,
+			persistence.NewCommentViewerRelationMongoReader(mongoDB),
+			recinfra.NewPersonaBlockReader(mongoDB),
+		),
+		// fixture seed 是受控测试装配（同一 author 批量种评论），关闭滑动窗口
+		// 频控避免与生产默认（30s ≤ 5 条）冲突；频控行为本身由专属
+		// comment rate-limit 测试用显式窗口覆盖验证。
+		commentapp.WithRateLimitConfig(commentapp.RateLimitConfig{}),
+	)
+	// 与生产 main.go 对齐：posts/comments 目标读取都由 comment data adapter 承载
+	// （MongoPostQueryReader 不再提供 FindPostOwnership 所有权读端口）。
 	reactionService := reactionapp.NewService(
 		reactionapp.BindDataPorts(
 			testReactionStore,
-			persistence.NewReactionTargetReader(postTargetReader, commentStore),
+			persistence.NewReactionTargetReader(commentStore, commentStore),
 		),
 	)
 	testReactionService = reactionService
@@ -222,6 +265,12 @@ func TestMain(m *testing.M) {
 		postStore,
 		reactionapp.NewPostDeletionConsumer(reactionService, testReactionStore),
 		"api-integration-post-deletion-reaction-lifecycle",
+	)
+	postCommentTombstoneRelay = postapp.NewOutboxRelay(
+		postStore,
+		postStore,
+		commentapp.NewCommentTombstoneProjector(commentStore),
+		"api-integration-post-comment-tombstone",
 	)
 	reactionOutboxRelay = reactionapp.NewOutboxRelay(
 		testReactionStore,
@@ -273,12 +322,12 @@ func TestMain(m *testing.M) {
 	feedService := feedapp.NewFeedService(
 		engine,
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
+		feedapp.WithFeedViewerBlockReader(recinfra.NewPersonaBlockReader(mongoDB)),
 	)
 	testFeedService = feedService
 
 	// Comment 与 ContentReaction 使用各自对象聚合、事务 outbox 和具名 Reader；
 	// Post 只消费投影，不持有评论命令或反应写入口。
-	shareInteractionStore := persistence.NewMongoShareInteractionStore(mongoDB, slog.Default())
 	postQueryReader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
 	outboundShareSink := outboundshareinfra.NewMongoAppendSink(mongoDB)
 	if err := outboundShareSink.EnsureIndexes(context.Background()); err != nil {
@@ -289,6 +338,70 @@ func TestMain(m *testing.M) {
 		outboundshareinfra.NewShareablePostReader(postQueryReader),
 	)
 	outboundShareFacades := outboundshareapp.BindFacades(outboundShareService)
+	profileActivityStore := profileinteractioninfra.NewMongoActivityStore(mongoDB)
+	if err := profileActivityStore.EnsureIndexes(ctx); err != nil {
+		panic(fmt.Errorf("ensure ProfileInteractionActivityView indexes: %w", err))
+	}
+	profileReadFactStore := profileinteractioninfra.NewMongoReadFactStore(mongoDB)
+	if err := profileReadFactStore.EnsureIndexes(ctx); err != nil {
+		panic(fmt.Errorf("ensure ProfileInteractionReadFact indexes: %w", err))
+	}
+	profileProjector := profileinteractionapp.NewProjector(
+		profileinteractioninfra.NewMongoProjectionSourceReader(mongoDB),
+		profileActivityStore,
+	)
+	profileInteractionFacades := profileinteractionapp.BindFacades(
+		profileinteractionapp.NewActivityQueryService(profileActivityStore),
+		profileinteractionapp.NewReadFactService(
+			profileActivityStore,
+			profileReadFactStore,
+		),
+	)
+	profileReactionRelay = reactionapp.NewOutboxRelay(
+		testReactionStore,
+		testReactionStore,
+		profileinteractionapp.NewReactionProjector(profileProjector),
+		"api-integration-reaction-profile-interaction",
+	)
+	profileCommentRelay = commentapp.NewOutboxRelay(
+		commentStore,
+		commentStore,
+		profileinteractionapp.NewCommentProjector(profileProjector),
+		"api-integration-comment-profile-interaction",
+	)
+	profileShareRelay = outboundshareapp.NewOutboxRelay(
+		outboundShareSink,
+		outboundShareSink,
+		profileinteractionapp.NewOutboundShareProjector(profileProjector),
+		"api-integration-share-profile-interaction",
+	)
+	sharePostCountRelay = outboundshareapp.NewOutboxRelay(
+		outboundShareSink,
+		outboundShareSink,
+		outboundshareapp.NewShareCountProjector(outboundShareSink, postStore),
+		"api-integration-share-post-count",
+	)
+	shareFeedCountRelay = outboundshareapp.NewOutboxRelay(
+		outboundShareSink,
+		outboundShareSink,
+		outboundshareapp.NewShareCountProjector(
+			outboundShareSink,
+			persistence.NewMongoDiscoveryFeedShareCountWriter(mongoDB),
+		),
+		"api-integration-share-feed-count",
+	)
+	profileReadFactRelay = profileinteractionapp.NewReadFactOutboxRelay(
+		profileReadFactStore,
+		profileReadFactStore,
+		profileinteractionapp.NewReadFactProjector(profileActivityStore),
+		"api-integration-profile-interaction-read",
+	)
+	profilePostTargetRelay = postapp.NewOutboxRelay(
+		postStore,
+		postStore,
+		profileinteractionapp.NewPostTargetProjector(profileActivityStore),
+		"api-integration-post-profile-interaction-target",
+	)
 	postServiceCore := postapp.NewPostService(
 		postapp.WithMediaAssetBindingReader(
 			postapp.BindDataPorts(postStore),
@@ -296,9 +409,10 @@ func TestMain(m *testing.M) {
 		),
 		postapp.WithEventPublisher(eventSpy),
 		postapp.WithCommentReaders(commentStore),
-		postapp.WithShareInteractionStore(shareInteractionStore),
-		postapp.WithProfileReactionActivityReader(testReactionStore),
-		postapp.WithProfileCommentReactionValueReader(testReactionStore),
+		postapp.WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
 	)
 	testPostService = postServiceCore
 	postOutboxRelay = postapp.NewOutboxRelay(
@@ -329,9 +443,31 @@ func TestMain(m *testing.M) {
 		commentapp.NewCommentCountProjector(commentStore, postStore),
 		"api-integration-comment-count",
 	)
+	commentFeedCountRelay = commentapp.NewOutboxRelay(
+		commentStore,
+		commentStore,
+		commentapp.NewCommentCountProjector(
+			commentStore,
+			persistence.NewMongoDiscoveryFeedCommentCountWriter(mongoDB),
+		),
+		"api-integration-comment-feed-count",
+	)
 	dailyMetricsStore := persistence.NewDailyMetricsStore(mongoDB, slog.Default())
 	authorImpactStore := persistence.NewAuthorImpactStore(mongoDB, slog.Default())
 	authorImpactEvidenceStore := persistence.NewAuthorImpactEvidenceStore(mongoDB, slog.Default())
+	testModerationStore = persistence.NewMongoPostModerationCaseStore(
+		mongoDB.Collection("post_moderation_cases"),
+	)
+	if err := testModerationStore.EnsureIndexes(ctx); err != nil {
+		panic(fmt.Errorf("ensure post moderation indexes: %w", err))
+	}
+	testModerationFacades = moderationapp.BindFacades(moderationapp.NewModerationService(
+		moderationapp.DataPorts{
+			Aggregate:   testModerationStore,
+			Eligibility: testModerationStore,
+			CurrentCase: testModerationStore,
+		},
+	))
 	behaviorService := behaviorapp.NewBehaviorService(
 		hotPath,
 		postStore,
@@ -345,15 +481,19 @@ func TestMain(m *testing.M) {
 		feedService,
 		postapp.BindFacades(postServiceCore),
 		postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-			Detail: postQueryReader,
-			Author: postQueryReader,
+			Detail:       postQueryReader,
+			Author:       postQueryReader,
+			Tombstones:   postStore,
+			ViewerBlocks: recinfra.NewPersonaBlockReader(mongoDB),
 		}),
 		commentapp.BindFacades(testCommentService),
 		reactionapp.BindFacades(reactionService),
 		nil,
 		behaviorService,
 		contenhttp.WithOutboundShareService(outboundShareFacades),
+		contenhttp.WithProfileInteractionService(profileInteractionFacades),
 		contenhttp.WithMediaService(mediaapp.BindFacades(mediaService)),
+		contenhttp.WithModerationService(testModerationFacades),
 		contenhttp.WithAuthorImpactStore(authorImpactStore),
 		contenhttp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	).Routes()
@@ -412,6 +552,21 @@ func TestMain(m *testing.M) {
 			if _, err := reactionPostProjectionRelay.Drain(r.Context(), 100); err != nil {
 				panic(fmt.Errorf("drain ContentReaction Post projection outbox: %w", err))
 			}
+			if _, err := profileReactionRelay.Drain(r.Context(), 100); err != nil {
+				panic(fmt.Errorf("drain ContentReaction profile interaction projection: %w", err))
+			}
+			if _, err := profileShareRelay.Drain(r.Context(), 100); err != nil {
+				panic(fmt.Errorf("drain OutboundShareFact profile interaction projection: %w", err))
+			}
+			if _, err := sharePostCountRelay.Drain(r.Context(), 100); err != nil {
+				panic(fmt.Errorf("drain OutboundShareFact Post count projection: %w", err))
+			}
+			if _, err := shareFeedCountRelay.Drain(r.Context(), 100); err != nil {
+				panic(fmt.Errorf("drain OutboundShareFact feed count projection: %w", err))
+			}
+			if _, err := profileReadFactRelay.Drain(r.Context(), 100); err != nil {
+				panic(fmt.Errorf("drain ProfileInteractionReadFact projection: %w", err))
+			}
 		}
 	})
 
@@ -467,7 +622,8 @@ func (g *apiIntegrationMediaObjectGateway) PublishPublicSlice(
 	sourceObjectKey string,
 	publicSliceKey string,
 ) error {
-	if !strings.HasPrefix(sourceObjectKey, "media/objects/") {
+	if !strings.HasPrefix(sourceObjectKey, "media/objects/") &&
+		!strings.HasPrefix(sourceObjectKey, "media/processed/image/") {
 		return fmt.Errorf("object %s was not completed", sourceObjectKey)
 	}
 	g.mu.Lock()
@@ -517,8 +673,19 @@ func cleanPosts(t *testing.T) {
 		"content_reaction_outbox_sequences",
 		"content_reaction_projection_checkpoints",
 		"comment_command_receipts",
+		"comment_author_rate_limit_locks",
 		"comment_outbox",
 		"comment_projection_checkpoints",
+		"outbound_share_facts",
+		"outbound_share_receipts",
+		"outbound_share_outbox",
+		"outbound_share_outbox_sequences",
+		"outbound_share_projection_checkpoints",
+		"profile_interaction_activity_views",
+		"profile_interaction_read_facts",
+		"profile_interaction_read_fact_outbox",
+		"profile_interaction_read_fact_outbox_sequences",
+		"profile_interaction_read_fact_projection_checkpoints",
 		"rm_discovery_feed",
 		"rm_recommend_feature",
 		"comments",
@@ -530,7 +697,6 @@ func cleanPosts(t *testing.T) {
 		"media_asset_outbox",
 		"media_original_access_facts",
 		"media_original_access_receipts",
-		"media_original_access_outbox",
 		"rm_behavior_events",
 	} {
 		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, bson.M{}); err != nil {

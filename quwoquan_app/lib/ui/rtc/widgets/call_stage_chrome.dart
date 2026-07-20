@@ -6,20 +6,16 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 /// 与 [ColorType.callStageGradientStart] / [ColorType.callStageGradientEnd] 一致。
 abstract final class CallStageChrome {
   static List<Color> backgroundGradient(bool isDark) => [
-        AppColorsFunctional.getColor(isDark, ColorType.callStageGradientStart),
-        AppColorsFunctional.getColor(isDark, ColorType.callStageGradientEnd),
-      ];
+    AppColorsFunctional.getColor(isDark, ColorType.callStageGradientStart),
+    AppColorsFunctional.getColor(isDark, ColorType.callStageGradientEnd),
+  ];
 
-  /// 渐变上的主文案（等价于原 welcome 白字）
-  static Color primaryOnGradient(bool isDark) =>
-      AppColorsFunctional.getColor(
-        isDark,
-        ColorType.mediaThumbnailOverlayForeground,
-      );
+  /// 渐变上的主文案使用 RTC 自有前景色，不依赖 welcome 品牌调色。
+  static Color primaryOnGradient(bool isDark) => AppColors.callStageForeground;
 
   static Color secondaryOnGradient(bool isDark) =>
       primaryOnGradient(isDark).withValues(alpha: 0.7);
 
   static Color timerOnGradient(bool isDark) =>
-      AppColors.welcomeForeground.withValues(alpha: 0.5);
+      AppColors.callStageForeground.withValues(alpha: 0.5);
 }

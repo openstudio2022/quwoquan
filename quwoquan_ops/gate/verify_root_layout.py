@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -39,6 +41,7 @@ FORBIDDEN_TOP_LEVEL = frozenset(
 FORBIDDEN_TOP_LEVEL_FILES = frozenset(
     {
         ".DS_Store",
+        ".gitmodules",
         ".env",
         ".env.local",
         ".env.beta.local",
@@ -80,6 +83,14 @@ FORBIDDEN_PORTAL_GENERATED_DIRS = frozenset(
         "quwoquan_ops/portal/.test-dist",
     }
 )
+SOURCE_DOMAIN_ROOTS = (
+    "quwoquan_app",
+    "quwoquan_service",
+    "quwoquan_data",
+    "quwoquan_ops",
+)
+FORBIDDEN_SOURCE_CACHE_DIR_NAMES = frozenset({"__pycache__", ".pytest_cache"})
+FORBIDDEN_SOURCE_CACHE_SUFFIXES = frozenset({".pyc", ".pyo"})
 
 
 def _rel(path: Path) -> str:
@@ -87,6 +98,35 @@ def _rel(path: Path) -> str:
         return path.relative_to(ROOT).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def source_cache_issues(root: Path = ROOT) -> list[str]:
+    """Reject interpreter and test caches that leak back into source domains."""
+    issues: list[str] = []
+    for domain_name in SOURCE_DOMAIN_ROOTS:
+        domain_root = root / domain_name
+        if not domain_root.is_dir():
+            continue
+        for current, dirnames, filenames in os.walk(domain_root):
+            current_path = Path(current)
+            retained: list[str] = []
+            for name in dirnames:
+                child = current_path / name
+                if name in FORBIDDEN_SOURCE_CACHE_DIR_NAMES:
+                    issues.append(
+                        f"{_rel(child)}: source cache is forbidden; "
+                        "write disposable caches under .qwq_output/env/repo/local/**"
+                    )
+                    continue
+                retained.append(name)
+            dirnames[:] = retained
+            for name in filenames:
+                if Path(name).suffix in FORBIDDEN_SOURCE_CACHE_SUFFIXES:
+                    issues.append(
+                        f"{_rel(current_path / name)}: Python bytecode is forbidden in source domains; "
+                        "write disposable caches under .qwq_output/env/repo/local/**"
+                    )
+    return issues
 
 
 def root_layout_issues(root: Path = ROOT) -> list[str]:
@@ -123,6 +163,7 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
             issues.append(f"{_rel(path)}: Portal generated output must not live in source tree")
     if (root / ".qwq_state").exists():
         issues.append(".qwq_state: retired; use .qwq_output/env/<env>/local/<target>")
+    issues.extend(source_cache_issues(root))
     issues.extend(output_layout_issues(root / ".qwq_output"))
     return issues
 

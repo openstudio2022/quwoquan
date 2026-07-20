@@ -1,4 +1,4 @@
-# 个人主页全面重构（我的 + 他人主页统一化）
+# L2 特性：个人主页全面重构（我的 + 他人主页统一化）
 
 > 2026-06-14 高保统一落地补充
 >
@@ -101,7 +101,9 @@
 - 数据源：复用既有浏览历史能力（`GET /content/footprint`），**不新增后端 API、不读取 `UserLifeItem`**。
 - 列表视图；所有文案语义化（`UITextConstants`/l10n），零硬编码中文。
 - 废止历史孤儿 `ProfileLifestyleTab` 手写模型与脱离 ui_config 的 `LifestyleSubTab` 实现；`UserProfileUIConfig.lifestyleSubTabs` 在 V5 为空。
-- 说明：`user/user_life_item`（书影音/味蕾/爱物）**保留为独立后端能力域**，但在 V5 **不作为 profile 一级 Tab 暴露**，避免在主页制造第二套 Tab 真相源。
+- 说明：`user/user_life_item` 与 `user/user_work` 曾只有对象声明、没有真实 operation
+  或页面消费者，已从对象图退役；未来若重启书影音/味蕾/爱物能力，必须作为独立
+  metadata-first 增量重新定义对象、operation、生命周期与三层测试，不恢复空壳对象。
 
 ### F7: 目录迁移与 features/ 清退
 
@@ -135,7 +137,7 @@
 
 ### F11: 四层测试覆盖（三层测试）
 
-- local_contract: 契约/单测（UserProfile DTO、`profile_tabs` 收敛为 `记录/互动/足迹` 且 footprint 隐私门控、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等；`UserLifeItem` DTO 作为保留后端域单独契约测试，不作为 profile 一级 Tab）
+- local_contract: 契约/单测（UserProfile DTO、`profile_tabs` 收敛为 `记录/互动/足迹` 且 footprint 隐私门控、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等；对象图不再包含无 operation 的 `UserLifeItem` / `UserWork` 空壳）
 - local_contract: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、互动 Tab、足迹 Tab 隐私门控 mine 渲染/other 不渲染、交集卡 mine 不展示/other 有交集展示/无交集稳定空态、`ProfileActionBar` 五态、Mock 异常/边界）
 - api_integration: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、ProfileInteractionActivities keyset 分页、relationship 五态；每条 api_integration 断言在 local_contract 有对应 Mock 断言）
 - user_acceptance: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、`记录/互动/足迹` 一级 Tab 切换、足迹他人主页不可见、可见性过滤）
@@ -241,7 +243,8 @@
 
 ### 数据生命周期
 
-- `UserLifeItem`：用户主动创建/编辑/删除；删除即从列表移除（无软删保留承诺）。
+- 浏览足迹：由 content 域 `ContentFootprintEntry` 维护私有浏览历史生命周期；profile
+  仅消费只读列表，不拥有第二套 `UserLifeItem` 数据。
 - `occupationTagRef / interestTags`：声明式用户职业与兴趣，用户可改；变更后经 user-service 写时投影或离线 backfill 刷新 `object_tag_index`，标签定义只来自 tag-service 导入产物。
 - `object_tag_index`：派生倒排数据，源对象删除/改标后由回填管道幂等 upsert 修正；非权威真相，可重建。
 - 行为归因事件（`BehaviorEvent`）：按现有 behavior 域保留策略与 TTL，不在本 spec 新增留存承诺。
@@ -267,7 +270,7 @@
 3. 创作（记录）Tab 二级分类（图片/视频/文字，无微趣）与可见性过滤
 4. 圈子统计详情页展示已加入圈子卡片与跳转（圈子非一级 Tab）
 5. 足迹 Tab：浏览历史只读列表 + 隐私门控（`modes: [mine]`，他人主页不可见）+ 零硬编码
-6. 端云 DTO codegen 对齐（含 `UserProfile` DTO；`UserLifeItem` 域保留为独立后端能力，不作为 profile 一级 Tab）
+6. 端云 DTO codegen 对齐（含 `UserProfile` DTO；对象图无 `UserLifeItem` / `UserWork` 空壳）
 7. 我与TA的交集卡真闭环（shared-tags 真数据 + 归因）
 8. resonance 旧链路零残留
 9. 四层测试覆盖（三层测试）

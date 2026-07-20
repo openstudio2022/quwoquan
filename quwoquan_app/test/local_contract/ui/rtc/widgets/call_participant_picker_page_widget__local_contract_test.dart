@@ -4,9 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
@@ -67,6 +68,20 @@ class _PickerChatRepository extends MockChatRepository {
     String? role,
     String? sort,
   }) async {
+    if (conversationId == 'conv_initial_large') {
+      return List<ChatConversationMemberDto>.generate(
+        35,
+        (index) => ChatConversationMemberDto(
+          userId: 'initial-user-$index',
+          displayName: '初始成员 $index',
+          avatarUrl: '',
+          role: 'member',
+          memberType: 'user',
+          joinedAt: null,
+          isCurrentUser: false,
+        ),
+      );
+    }
     if (conversationId == 'conv_002') {
       return [
         ChatConversationMemberDto(
@@ -81,6 +96,15 @@ class _PickerChatRepository extends MockChatRepository {
         ChatConversationMemberDto(
           userId: 'user_003',
           displayName: '当前群成员 B',
+          avatarUrl: '',
+          role: 'member',
+          memberType: 'user',
+          joinedAt: null,
+          isCurrentUser: false,
+        ),
+        ChatConversationMemberDto(
+          userId: 'user_008',
+          displayName: '当前群成员 C',
           avatarUrl: '',
           role: 'member',
           memberType: 'user',
@@ -184,6 +208,43 @@ void _suppressImageErrors() {
 
 void main() {
   group('CallParticipantPickerPage — 渲染契约', () {
+    testWidgets('初始通话只显示 canonical 会话成员且默认全选不超过 31 人', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(
+              _MockAppDataSourceModeNotifier.new,
+            ),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
+          ],
+          child: const CupertinoApp(
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.initialCall(
+                conversationId: 'conv_initial_large',
+                maxParticipants: 32,
+                defaultSelectAll: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.callSourceMutualFollow), findsNothing);
+      expect(find.text(UITextConstants.callSourceOtherGroups), findsNothing);
+      expect(
+        find.text(UITextConstants.callParticipantLimit(31)),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.callConfirmSelected(31)),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('群聊场景显示来源切换：当前会话 / 互相关注 / 其他群', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
@@ -192,10 +253,18 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(_PickerChatRepository()),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
           ],
           child: const CupertinoApp(
-            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-picker-contract',
+                currentParticipantCount: 1,
+                conversationId: 'conv_002',
+              ),
+            ),
           ),
         ),
       );
@@ -214,10 +283,18 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(_PickerChatRepository()),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
           ],
           child: const CupertinoApp(
-            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-picker-contract',
+                currentParticipantCount: 1,
+                conversationId: 'conv_002',
+              ),
+            ),
           ),
         ),
       );
@@ -234,6 +311,46 @@ void main() {
   });
 
   group('CallParticipantPickerPage — 交互契约', () {
+    testWidgets('已有通话 30/32 人时最多再选择 2 人', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(
+              _MockAppDataSourceModeNotifier.new,
+            ),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
+          ],
+          child: const CupertinoApp(
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-nearly-full',
+                currentParticipantCount: 30,
+                maxParticipants: 32,
+                conversationId: 'conv_002',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.callParticipantLimit(2)),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('当前群成员 A'));
+      await tester.pump();
+      await tester.tap(find.text('当前群成员 B'));
+      await tester.pump();
+      await tester.tap(find.text('当前群成员 C'));
+      await tester.pump();
+
+      expect(find.text(UITextConstants.callConfirmSelected(2)), findsOneWidget);
+    });
+
     testWidgets('切换到互相关注来源后展示联系人成员', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
@@ -242,10 +359,18 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(_PickerChatRepository()),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
           ],
           child: const CupertinoApp(
-            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-picker-contract',
+                currentParticipantCount: 1,
+                conversationId: 'conv_002',
+              ),
+            ),
           ),
         ),
       );
@@ -268,10 +393,18 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(_PickerChatRepository()),
+            chatRepositoryCompositionProvider.overrideWithValue(
+              _PickerChatRepository(),
+            ),
           ],
           child: const CupertinoApp(
-            home: CallParticipantPickerPage(conversationId: 'conv_missing'),
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-picker-contract',
+                currentParticipantCount: 1,
+                conversationId: 'conv_missing',
+              ),
+            ),
           ),
         ),
       );
@@ -288,12 +421,18 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(
+            chatRepositoryCompositionProvider.overrideWithValue(
               _FailingPickerChatRepository(),
             ),
           ],
           child: const CupertinoApp(
-            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+            home: CallParticipantPickerPage(
+              routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
+                callId: 'call-picker-contract',
+                currentParticipantCount: 1,
+                conversationId: 'conv_002',
+              ),
+            ),
           ),
         ),
       );

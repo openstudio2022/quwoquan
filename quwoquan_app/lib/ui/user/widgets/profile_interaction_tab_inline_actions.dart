@@ -265,7 +265,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     }
     setState(() => _directMessageInFlight.add(item.activityId));
     try {
-      final chat = ref.read(chatRepositoryProvider);
+      final chat = ref.read(chatConversationRepositoryProvider);
       final conversation = await chat.createConversation(
         type: 'direct',
         initialMemberIds: <String>[userId],

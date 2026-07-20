@@ -197,7 +197,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": "千岛湖"
+          "locationName": "千岛湖",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_video_001",
@@ -220,10 +221,10 @@
           "title": "杭州一日游契约视频",
           "summary": "杭州一日游契约视频。",
           "body": "杭州一日游契约视频。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "coverUrl": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+          "thumbnailUrl": "media/video/s/media-canary-seek-125s/v1/cover.webp",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "circleIds": [
@@ -234,8 +235,8 @@
           ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
-          "width": 1280,
-          "height": 720,
+          "width": 540,
+          "height": 960,
           "likeCount": 131,
           "commentCount": 1,
           "favoriteCount": 43,
@@ -247,14 +248,14 @@
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
           "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "coverObjectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+          "thumbnailObjectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "tagRefs": [
@@ -263,8 +264,13 @@
             "videoCoverPost"
           ],
           "locationName": "杭州",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "videoUrl": "media/video/s/media-canary-seek-125s/v1/source.mp4",
+          "durationMs": 125000,
+          "mediaAssetId": "media-canary-seek-125s",
+          "mediaAssetVersion": 1,
+          "previewTrackManifestUrl": "media/video/s/media-canary-seek-125s/v1/preview/manifest.json",
+          "previewTrackVersion": 1,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_video_002",
@@ -287,10 +293,10 @@
           "title": "城市街头慢镜头",
           "summary": "城市街头慢镜头。",
           "body": "城市街头慢镜头。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_video_002/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_002/cover.png",
+          "coverUrl": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
+          "thumbnailUrl": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_video_002/cover.png",
+            "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_002/image-2.png"
           ],
           "circleIds": [
@@ -301,8 +307,8 @@
           ],
           "circleId": "fixture_circle_city",
           "circleName": "契约城市漫步",
-          "width": 1280,
-          "height": 720,
+          "width": 540,
+          "height": 960,
           "likeCount": 148,
           "commentCount": 1,
           "favoriteCount": 49,
@@ -314,14 +320,14 @@
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_video/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_video/avatar.png",
           "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_video/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_video_002/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_video_002/cover.png",
+          "coverObjectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
+          "thumbnailObjectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_002/cover.png",
+            "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_002/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_002/cover.png",
+            "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_002/image-2.png"
           ],
           "tagRefs": [
@@ -330,8 +336,12 @@
             "videoCoverPost"
           ],
           "locationName": "上海",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "videoUrl": "media/video/s/media-canary-hour-boundary-3595s/v1/source.mp4",
+          "durationMs": 3595000,
+          "mediaAssetId": "media-canary-hour-boundary-3595s",
+          "mediaAssetVersion": 1,
+          "previewTrackManifestUrl": null,
+          "previewTrackVersion": null
         },
         {
           "postId": "fixture_article_001",
@@ -3012,7 +3022,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_002",
@@ -3083,7 +3094,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_003",
@@ -3145,7 +3157,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_004",
@@ -3236,7 +3249,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_005",
@@ -3303,7 +3317,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_006",
@@ -3365,7 +3380,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_007",
@@ -3436,7 +3452,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_008",
@@ -3498,7 +3515,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_009",
@@ -3589,7 +3607,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_010",
@@ -3656,7 +3675,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_011",
@@ -3718,7 +3738,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_012",
@@ -3789,7 +3810,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_013",
@@ -3851,7 +3873,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_014",
@@ -3942,7 +3965,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_015",
@@ -4009,7 +4033,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_016",
@@ -4071,7 +4096,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_017",
@@ -4142,7 +4168,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_018",
@@ -4204,7 +4231,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_019",
@@ -4295,7 +4323,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_020",
@@ -4362,7 +4391,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_021",
@@ -4424,7 +4454,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_022",
@@ -4495,7 +4526,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_023",
@@ -4557,7 +4589,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_024",
@@ -4648,7 +4681,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_025",
@@ -4715,7 +4749,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_026",
@@ -4777,7 +4812,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_027",
@@ -4848,7 +4884,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_028",
@@ -4910,7 +4947,8 @@
             "travel",
             "momentPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_029",
@@ -5001,7 +5039,8 @@
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_030",
@@ -5068,7 +5107,8 @@
           ],
           "locationName": "",
           "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_031",
@@ -5130,7 +5170,8 @@
             "travel",
             "heroPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_travel_032",
@@ -5201,7 +5242,8 @@
             "travel",
             "galleryPost"
           ],
-          "locationName": ""
+          "locationName": "",
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_post_citywalk_001",
@@ -34633,12 +34675,12 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
           "content": "主评论示例",
           "createdAt": "2026-06-05T12:00:00Z",
-          "ipLocation": "浙江",
+          "authorIpLocation": "浙江",
           "isPinned": true,
           "pinnedAt": "2026-06-05T12:30:00Z",
           "authorLiked": true,
           "likeCount": 128,
-          "recommendedScore": 128.0,
+          "hotScore": 128.0,
           "replyCount": 1
         },
         {
@@ -34651,7 +34693,7 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/avatar.png",
           "content": "回复示例",
           "createdAt": "2026-06-05T12:05:00Z",
-          "ipLocation": "广东",
+          "authorIpLocation": "广东",
           "parentCommentId": "fixture_comment_parent_001",
           "replyToCommentId": "fixture_comment_parent_001",
           "replyToUserId": "fixture_user_current",
@@ -34667,9 +34709,9 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
           "content": "零回复评论示例",
           "createdAt": "2026-06-05T12:10:00Z",
-          "ipLocation": "北京",
+          "authorIpLocation": "北京",
           "likeCount": 3,
-          "recommendedScore": 3.0
+          "hotScore": 3.0
         },
         {
           "commentId": "fixture_comment_thread_five",
@@ -34681,9 +34723,9 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
           "content": "五条回复评论示例",
           "createdAt": "2026-06-05T12:20:00Z",
-          "ipLocation": "上海",
+          "authorIpLocation": "上海",
           "likeCount": 12,
-          "recommendedScore": 12.0,
+          "hotScore": 12.0,
           "replyCount": 5
         },
         {
@@ -34771,9 +34813,9 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/avatar.png",
           "content": "十条回复评论示例",
           "createdAt": "2026-06-05T12:30:00Z",
-          "ipLocation": "江苏",
+          "authorIpLocation": "江苏",
           "likeCount": 24,
-          "recommendedScore": 24.0,
+          "hotScore": 24.0,
           "replyCount": 10
         },
         {
@@ -34948,9 +34990,9 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
           "content": "五十条回复评论示例",
           "createdAt": "2026-06-05T12:40:00Z",
-          "ipLocation": "四川",
+          "authorIpLocation": "四川",
           "likeCount": 56,
-          "recommendedScore": 56.0,
+          "hotScore": 56.0,
           "replyCount": 50
         },
         {
@@ -35713,9 +35755,9 @@
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
           "content": "上百条回复评论示例",
           "createdAt": "2026-06-05T12:50:00Z",
-          "ipLocation": "广东",
+          "authorIpLocation": "广东",
           "likeCount": 210,
-          "recommendedScore": 210.0,
+          "hotScore": 210.0,
           "replyCount": 110
         },
         {
@@ -37431,6 +37473,29 @@
         "fixture_post_photography_029",
         "fixture_post_cross_photography_travel_001",
         "fixture_post_cross_photography_travel_015"
+      ],
+      "objectCards": [
+        {
+          "objectKind": "entity_homepage",
+          "objectId": "homepage_sight_dongqian_lake",
+          "title": "东钱湖",
+          "tagRefs": [
+            "Topic/旅行/宁波",
+            "Topic/旅行/湖泊"
+          ],
+          "reasonText": "wishlist",
+          "recallPath": "entity_card_affinity"
+        },
+        {
+          "objectKind": "entity_homepage",
+          "objectId": "fixture_homepage_poi",
+          "title": "杭州西湖契约主页",
+          "tagRefs": [
+            "Topic/旅行/杭州"
+          ],
+          "reasonText": "affinity",
+          "recallPath": "entity_card_affinity"
+        }
       ]
     },
     "content_detail_core": {

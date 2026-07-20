@@ -5,15 +5,15 @@ service:
   description: AccountSession 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: ACCOUNT_OBJECT_PACKET_WIRING
+    block_reason: operation must carry explicit commercial evidence before enablement
+    gap_id: USER_ACCOUNT_SESSION_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
     path: /auth/login/phone
 
     operation: LoginWithPhone
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -63,12 +63,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginWithPhoneCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginWithPhoneCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/login/wechat
 
     operation: LoginWithWechat
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -119,12 +125,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginWithWechatCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginWithWechatCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/login/alipay
 
     operation: LoginWithAlipay
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -175,12 +187,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginWithAlipayCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginWithAlipayCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/login/qq
 
     operation: LoginWithQq
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -231,12 +249,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginWithQqCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginWithQqCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/login/one-tap
 
     operation: LoginOneTap
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -289,6 +313,12 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginOneTapCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginOneTapCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/login/anonymous
@@ -341,12 +371,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LoginAnonymousCommand
+      response_type: AuthSessionGrant
+      request_encoder: encodeLoginAnonymousCommand
+      response_decoder: decodeAuthSessionGrant
 
   - method: POST
     path: /auth/token/refresh
 
     operation: RefreshToken
-    actor: account
+    actor: none
     application:
       kind: command
       facet: AccountSessionCommandFacade
@@ -356,11 +392,48 @@ api_routes:
       invariant_target: AccountSession
     # 云侧子任务：登录/刷新响应需下发 sessionRememberTtlSeconds（快速登录有效期，秒，
     # 默认 2592000=30 天，可由系统配置调整）；端侧据此推算软退出后免验证码快速登录过期时间。
-    description: 刷新 access token（滑动延期）
+    description: 刷新 access token（滑动延期；rotation 重放吊销 lineage）
     security:
       auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
     request_fields: [refreshToken]
     response_fields: [accessToken, refreshToken, sessionRememberTtlSeconds]
+    authorization:
+      principal: public
+      ownership_policy: session_refresh_token_holder
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.token_expired
+      - USER.AUTH.account_suspended
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_auth_token_refresh
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.95
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: RefreshTokenCommand
+      response_type: TokenRefreshGrant
+      request_encoder: encodeRefreshTokenCommand
+      response_decoder: decodeTokenRefreshGrant
 
   - method: POST
     path: /auth/logout
@@ -382,5 +455,35 @@ api_routes:
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
-
-  # ── 凭证管理（OwnerAccount 视图，需登录） ────────────────────────────────
+    authorization:
+      principal: account
+      ownership_policy: session_owner
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_auth_logout
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/account_session_contracts.dart
+      request_type: LogoutCommand
+      response_type: LogoutAck
+      request_encoder: encodeLogoutCommand
+      response_decoder: decodeLogoutAck

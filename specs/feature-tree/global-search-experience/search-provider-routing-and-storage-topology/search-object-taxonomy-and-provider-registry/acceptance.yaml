@@ -46,6 +46,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
@@ -53,6 +54,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt1_local_contract
@@ -90,12 +92,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
@@ -133,12 +137,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
@@ -150,5 +156,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

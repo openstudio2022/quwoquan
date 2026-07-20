@@ -149,7 +149,7 @@ func p0SkillToolPolicy(skillID string) []string {
 	case SkillTravelJourneyManager:
 		return []string{"web_search", "app_search"}
 	default:
-		return []string{"mock_search"}
+		return []string{}
 	}
 }
 

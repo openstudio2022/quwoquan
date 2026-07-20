@@ -1,4 +1,4 @@
-# L4 特性：activity-cursor-contract
+# L3 特性：activity-cursor-contract
 
 ## 功能说明
 - 细化 activity-cursor-contract 特性的功能边界与端云协同行为。

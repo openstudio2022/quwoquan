@@ -7,45 +7,61 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: media-processing-helper-read
 scope:
-  summary: media failure recovery  recovery and rollback policy 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: Worker checkpoint 恢复、版本化派生物、回滚安全和审计观测。
+  in_scope:
+  - checkpoint、重放、health、Prometheus 指标与告警。
+  out_of_scope:
+  - 独立媒体服务部署。
 gwt_acceptance:
   GWT1:
-    title: media failure recovery  recovery and rollback policy GWT
+    title: Worker 故障与回滚不丢事件、不破坏已发布媒体
     given:
-    - 前置条件明确。
+    - outbox 存在待处理事实且 Worker 使用持久 checkpoint。
     when:
-    - 用户或系统动作发生。
+    - checkpoint 保存失败、Worker 重启或发布版本回滚。
     then:
-    - 可观察结果符合预期。
+    - 事实可重放，派生物按版本保留，已发布 Post 继续可读。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 故障注入证明首次 checkpoint 失败后第二次处理成功。
+    - health、jobs、duration、连续满批和 outbox lag 有自动化断言。
+    - 回滚流程不把 processing 强改 ready，不删除已发布版本 slice。
+    edge_cases:
+    - Worker 空闲时没有新事实。
+    - 连续满批但单个 job 均成功。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/observability.yaml
+    - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    performance_points:
+    - 最近成功扫描超过 15 分钟时 health 不健康。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_checkpoint__data_consistency__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/media/media_processing_worker__reliability__local_contract_test.go
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
+      - layer: api_integration
+        execution_profile: integration
+        suite: media_processing_checkpoint
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_failure_recovery_recovery_and_rollback_policy.contract
-        envs: &id001
-        - local
+        - api_integration.content.media.checkpoint_failure_replay
+        envs: [beta, gamma]
+        test_object: workflow
+        quality_facet: reliability
       - layer: local_contract
-        suite: gwt1_local_contract
+        execution_profile: baseline
+        suite: media_processing_observability
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_failure_recovery_recovery_and_rollback_policy.gwt1_local_contract
-        envs: *id001
+        - local_contract.content.media.worker_health_and_metrics
+        envs: [local]
+        test_object: observability_collector
+        quality_facet: observability
       supporting: []
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -24,6 +24,18 @@ type DeleteCommentCommand struct {
 	ActorID   string
 }
 
+type HideCommentCommand struct {
+	CommentID  string
+	OperatorID string
+	Reason     string
+}
+
+type RestoreCommentCommand struct {
+	CommentID  string
+	OperatorID string
+	Reason     string
+}
+
 type ChangeCommentPinCommand struct {
 	PostID    string
 	CommentID string
@@ -42,6 +54,9 @@ type ListCommentsQuery struct {
 	ActorID string
 	Cursor  string
 	Limit   int
+	// Sort 是服务端排序档位原始参数（hot|latest，空值默认 hot）；
+	// 未知值返回 CONTENT.USER.comment_sort_invalid。
+	Sort string
 }
 
 type ListCommentRepliesQuery struct {
@@ -99,6 +114,7 @@ type CommentListItem struct {
 	AssistantMentioned        bool                     `json:"assistantMentioned"`
 	AssistantReplySource      string                   `json:"assistantReplySource,omitempty"`
 	AssistantCorrectionStatus string                   `json:"assistantCorrectionStatus,omitempty"`
+	AuthorIPLocation          string                   `json:"authorIpLocation,omitempty"`
 	Status                    commentmodel.Status      `json:"status"`
 	IsPinned                  bool                     `json:"isPinned"`
 	PinnedAt                  *time.Time               `json:"pinnedAt,omitempty"`
@@ -111,11 +127,15 @@ type CommentListItem struct {
 	LikeCount                 int64                    `json:"likeCount"`
 	DislikeCount              int64                    `json:"dislikeCount"`
 	ViewerReaction            string                   `json:"viewerReaction"`
-	IsAuthor                  bool                     `json:"isAuthor"`
-	CanDelete                 bool                     `json:"canDelete"`
-	CanReply                  bool                     `json:"canReply"`
-	CanReport                 bool                     `json:"canReport"`
-	CanPin                    bool                     `json:"canPin"`
+	// AuthorLiked 是「Post 作者赞过这条评论」的 ContentReaction 事实投影。
+	AuthorLiked bool `json:"authorLiked"`
+	// ViewerRelation 是 viewer 对评论作者的关注/互关事实投影（none/following/friend）。
+	ViewerRelation string `json:"viewerRelation"`
+	IsAuthor       bool   `json:"isAuthor"`
+	CanDelete      bool   `json:"canDelete"`
+	CanReply       bool   `json:"canReply"`
+	CanReport      bool   `json:"canReport"`
+	CanPin         bool   `json:"canPin"`
 }
 
 type CommentPageSlice struct {

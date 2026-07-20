@@ -1,4 +1,4 @@
-# L4 特性：profile-apply-and-versioning
+# L3 特性：profile-apply-and-versioning
 
 ## 功能说明
 - 细化提案应用后的资料更新、版本递增与审计快照记录。

@@ -136,3 +136,12 @@ func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experime
 	stats, err := f.reader.Stats(ctx, experimentID, fmt.Sprintf("%d", experiment.Version))
 	return experiment, stats, err
 }
+
+// StatsFor 按目录已加载的实验（含当前 policyVersion）读取分配统计，
+// 供列表页避免逐实验重复 Load 聚合（listExperiments N+1 收敛）。
+func (f *Facade) StatsFor(
+	ctx context.Context,
+	experiment model.Experiment,
+) (ports.AssignmentStats, error) {
+	return f.reader.Stats(ctx, experiment.ID, fmt.Sprintf("%d", experiment.Version))
+}

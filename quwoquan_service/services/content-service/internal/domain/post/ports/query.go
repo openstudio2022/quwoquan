@@ -35,6 +35,24 @@ func NewPersonaID(raw string) PersonaID {
 	return PersonaID(strings.TrimSpace(raw))
 }
 
+// PostRevisionSlice 是跨对象审核入口唯一允许读取的 Post 快照。
+// 它刻意不暴露正文、作者、互动计数或完整聚合，避免 Report consumer
+// 为绑定审核 revision 而依赖 postmodel.Post。
+type PostRevisionSlice struct {
+	PostID        PostID `bson:"_id"`
+	Version       int64  `bson:"version"`
+	ContentDigest string `bson:"contentDigest"`
+}
+
+// PostRevisionSliceReader 对“未找到”和“读取/解码失败”作严格区分。
+// consumer 只能在 found=false 时确认事实；任一 error 必须阻止 checkpoint 推进。
+type PostRevisionSliceReader interface {
+	FindPostRevision(
+		ctx context.Context,
+		postID PostID,
+	) (PostRevisionSlice, bool, error)
+}
+
 // PostFeedReadRequest 是首页/发现流读取已发布 Post 卡片的具名查询。
 // identity/type 在进入 Reader 前已由 Feed application 归一；cursor 只允许
 // 引用上一页最后一个 Post，不能承载任意 Mongo filter 或排序表达式。
@@ -169,73 +187,6 @@ func (q AuthorPostPageQuery) Limit() int {
 	return q.limit
 }
 
-// PostSearchQuery 是 SearchPosts 的 transport-neutral 输入。Search reader
-// 仅接收解析后的 PostSearchReadRequest，不能获得未经校验的 cursor。
-type PostSearchQuery struct {
-	viewer      ViewerContext
-	terms       string
-	identity    ContentIdentity
-	contentType ContentType
-	categoryID  string
-	subCategory string
-	cursor      string
-	limit       int
-}
-
-func NewPostSearchQuery(
-	viewer ViewerContext,
-	terms string,
-	identity ContentIdentity,
-	contentType ContentType,
-	categoryID string,
-	subCategory string,
-	cursor string,
-	limit int,
-) PostSearchQuery {
-	return PostSearchQuery{
-		viewer:      viewer,
-		terms:       strings.TrimSpace(terms),
-		identity:    ContentIdentity(strings.TrimSpace(string(identity))),
-		contentType: ContentType(strings.TrimSpace(string(contentType))),
-		categoryID:  strings.TrimSpace(categoryID),
-		subCategory: strings.TrimSpace(subCategory),
-		cursor:      strings.TrimSpace(cursor),
-		limit:       limit,
-	}
-}
-
-func (q PostSearchQuery) Viewer() ViewerContext {
-	return q.viewer
-}
-
-func (q PostSearchQuery) Terms() string {
-	return q.terms
-}
-
-func (q PostSearchQuery) Identity() ContentIdentity {
-	return q.identity
-}
-
-func (q PostSearchQuery) ContentType() ContentType {
-	return q.contentType
-}
-
-func (q PostSearchQuery) CategoryID() string {
-	return q.categoryID
-}
-
-func (q PostSearchQuery) SubCategory() string {
-	return q.subCategory
-}
-
-func (q PostSearchQuery) Cursor() string {
-	return q.cursor
-}
-
-func (q PostSearchQuery) Limit() int {
-	return q.limit
-}
-
 // PostCreatorDisclosureSlice 是用户可见的虚拟创作者披露，排除作者质量和
 // 风险调度等内部信号。
 type PostCreatorDisclosureSlice struct {
@@ -260,13 +211,17 @@ type PostSemanticMentionSlice struct {
 
 // PostMediaItemSlice 对齐 Work Browser 的统一媒体序列。
 type PostMediaItemSlice struct {
-	Kind       string `json:"kind" bson:"kind"`
-	URL        string `json:"url" bson:"url"`
-	CoverURL   string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	DurationMS int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
-	Width      int64  `json:"width,omitempty" bson:"width,omitempty"`
-	Height     int64  `json:"height,omitempty" bson:"height,omitempty"`
-	Title      string `json:"title,omitempty" bson:"title,omitempty"`
+	Kind                    string `json:"kind" bson:"kind"`
+	MediaAssetID            string `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
+	MediaAssetVersion       int64  `json:"mediaAssetVersion,omitempty" bson:"mediaAssetVersion,omitempty"`
+	URL                     string `json:"url" bson:"url"`
+	CoverURL                string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	DurationMS              int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
+	Width                   int64  `json:"width,omitempty" bson:"width,omitempty"`
+	Height                  int64  `json:"height,omitempty" bson:"height,omitempty"`
+	PreviewTrackManifestURL string `json:"previewTrackManifestUrl,omitempty" bson:"previewTrackManifestUrl,omitempty"`
+	PreviewTrackVersion     int64  `json:"previewTrackVersion,omitempty" bson:"previewTrackVersion,omitempty"`
+	Title                   string `json:"title,omitempty" bson:"title,omitempty"`
 }
 
 // PostArticleAssetSlice 是文章 manifest 中可被客户端消费的资源信息。
@@ -329,8 +284,9 @@ type PostHomepageSnapshotSlice struct {
 }
 
 // PostDetailSlice 是 GetPost 的显式 read model。它有意不含 Version、
-// embedding、moderationStatus、contentDigest、authorQualitySignals 以及 PII
-// 发布位置/设备信息，不能被误作 Post 聚合继续写回。
+// embedding、contentDigest、authorQualitySignals 以及 PII 发布位置/设备信息，
+// 不能被误作 Post 聚合继续写回。ModerationStatus 只供 application 做
+// 服务端可见性判定，json:"-" 保证它不进入任何客户端响应。
 type PostDetailSlice struct {
 	PostID                  PostID                         `json:"postId" bson:"_id"`
 	AuthorPersonaID         PersonaID                      `json:"authorId" bson:"authorId"`
@@ -378,6 +334,7 @@ type PostDetailSlice struct {
 	PrimaryHomepageSnapshot *PostHomepageSnapshotSlice     `json:"primaryHomepageSnapshot,omitempty" bson:"primaryHomepageSnapshot,omitempty"`
 	Status                  PostStatus                     `json:"status" bson:"status"`
 	Visibility              PostVisibility                 `json:"visibility" bson:"visibility"`
+	ModerationStatus        string                         `json:"-" bson:"moderationStatus"`
 	AssistantUsePolicy      string                         `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
 	SourcePostID            string                         `json:"sourcePostId,omitempty" bson:"sourcePostId,omitempty"`
 	SourceType              string                         `json:"sourceType,omitempty" bson:"sourceType,omitempty"`
@@ -476,47 +433,8 @@ type PostFeedSlice struct {
 	Items []PostFeedItemSlice
 }
 
-type PostIntersectionReasonSlice struct {
-	PrimaryText       string `json:"primaryText,omitempty" bson:"primaryText,omitempty"`
-	SourceRef         string `json:"sourceRef,omitempty" bson:"sourceRef,omitempty"`
-	Dimension         string `json:"dimension,omitempty" bson:"dimension,omitempty"`
-	IntersectionClass string `json:"intersectionClass,omitempty" bson:"intersectionClass,omitempty"`
-	ObjectKind        string `json:"objectKind,omitempty" bson:"objectKind,omitempty"`
-	AvatarURL         string `json:"avatarUrl,omitempty" bson:"avatarUrl,omitempty"`
-	DisplayName       string `json:"displayName,omitempty" bson:"displayName,omitempty"`
-	ConfidenceLabel   string `json:"confidenceLabel,omitempty" bson:"confidenceLabel,omitempty"`
-}
-
-// PostSearchItemSlice 与 metadata 中 PostSearchItemView 的公开字段一一对应；
-// 不携带聚合、Embedding、审核或动态索引文档。
-type PostSearchItemSlice struct {
-	PostID             PostID                       `json:"postId" bson:"postId"`
-	ContentType        ContentType                  `json:"contentType" bson:"contentType"`
-	ContentIdentity    ContentIdentity              `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
-	Title              string                       `json:"title,omitempty" bson:"title,omitempty"`
-	Summary            string                       `json:"summary,omitempty" bson:"summary,omitempty"`
-	CoverURL           string                       `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	AuthorPersonaID    PersonaID                    `json:"authorId,omitempty" bson:"authorId,omitempty"`
-	AuthorDisplayName  string                       `json:"authorDisplayName,omitempty" bson:"authorDisplayName,omitempty"`
-	AuthorAvatarURL    string                       `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrl,omitempty"`
-	CategoryID         string                       `json:"categoryId,omitempty" bson:"categoryId,omitempty"`
-	SubCategory        string                       `json:"subCategory,omitempty" bson:"subCategory,omitempty"`
-	LikeCount          int64                        `json:"likeCount" bson:"likeCount"`
-	HighlightText      string                       `json:"highlightText,omitempty" bson:"highlightText,omitempty"`
-	MatchedField       string                       `json:"matchedField,omitempty" bson:"matchedField,omitempty"`
-	PublishedAt        time.Time                    `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
-	ConnectionState    string                       `json:"connectionState,omitempty" bson:"connectionState,omitempty"`
-	IntersectionReason *PostIntersectionReasonSlice `json:"intersectionReason,omitempty" bson:"intersectionReason,omitempty"`
-}
-
-type PostSearchResultSlice struct {
-	Items      []PostSearchItemSlice `json:"items"`
-	NextCursor string                `json:"nextCursor,omitempty"`
-	HasMore    bool                  `json:"hasMore"`
-}
-
-// PostDetailReader、AuthorPostReader 与 PostSearchReader 是三个独立 query
-// port。Post aggregate store 只能服务命令路径，不能替代任何一个 reader。
+// PostDetailReader 与 AuthorPostReader 是两个独立 query port。Post
+// aggregate store 只能服务命令路径，不能替代任何一个 reader。
 type PostDetailReader interface {
 	FindPostDetail(ctx context.Context, postID PostID) (PostDetailSlice, bool, error)
 }
@@ -525,17 +443,21 @@ type AuthorPostReader interface {
 	ListAuthorPosts(ctx context.Context, request AuthorPostReadRequest) (AuthorPostPageSlice, error)
 }
 
+// ViewerBlockReader 暴露 user 域 PersonaBlocked 事实投影的只读判定，用于
+// 作者读路径的服务端 block 强制。它不信任客户端 header，也不回读 user 域存储。
+type ViewerBlockReader interface {
+	IsBlockedBetween(ctx context.Context, viewer PersonaID, author PersonaID) (bool, error)
+}
+
 // PostFeedReader 只读取公开且已发布的 Feed 卡片 Slice。生产实现必须在存储侧
 // 应用 identity/type/keyset 条件；禁止先扫 ListPublished 再在内存中过滤。
 type PostFeedReader interface {
 	FindPublishedFeedPost(ctx context.Context, postID PostID) (PostFeedItemSlice, bool, error)
+	// FindPublishedFeedPosts 按 ids 批量读取（N3-1 消除 feed 装配 N+1）：
+	// 生产实现必须单次 $in 查询取回；返回 map 以 PostID 为键，未命中
+	// （不存在/未发布/不可见）的 id 直接缺席，调用方按召回顺序自行装配。
+	FindPublishedFeedPosts(ctx context.Context, postIDs []PostID) (map[PostID]PostFeedItemSlice, error)
 	ListPublishedFeedPosts(ctx context.Context, request PostFeedReadRequest) (PostFeedSlice, error)
-}
-
-// PostSearchReader 必须由专用搜索索引/服务实现；它不允许以 Mongo
-// CollectionReader 或 ListPublished 的内存遍历作为降级实现。
-type PostSearchReader interface {
-	SearchPosts(ctx context.Context, request PostSearchReadRequest) (PostSearchResultSlice, error)
 }
 
 type AuthorPostAccessScope string
@@ -700,153 +622,6 @@ func (r AuthorPostReadRequest) CursorScope() string {
 		string(r.identity),
 		string(r.contentType),
 		string(r.visibility),
-	)
-}
-
-// PostSearchCursor 的 token 由专用搜索 reader 生成；application 只校验
-// envelope 和 query scope，不解析搜索后端的内部 search-after 格式。
-type PostSearchCursor struct {
-	scope string
-	token string
-}
-
-func NewPostSearchCursor(scope, token string) PostSearchCursor {
-	return PostSearchCursor{
-		scope: strings.TrimSpace(scope),
-		token: strings.TrimSpace(token),
-	}
-}
-
-func (c PostSearchCursor) IsSet() bool {
-	return c.scope != "" || c.token != ""
-}
-
-func (c PostSearchCursor) Scope() string {
-	return c.scope
-}
-
-func (c PostSearchCursor) Token() string {
-	return c.token
-}
-
-type postSearchCursorWire struct {
-	Version int    `json:"v"`
-	Scope   string `json:"s"`
-	Token   string `json:"t"`
-}
-
-func (c PostSearchCursor) Encode() string {
-	if !c.IsSet() {
-		return ""
-	}
-	wire, _ := json.Marshal(postSearchCursorWire{
-		Version: 1,
-		Scope:   c.scope,
-		Token:   c.token,
-	})
-	return base64.RawURLEncoding.EncodeToString(wire)
-}
-
-func ParsePostSearchCursor(raw string) (PostSearchCursor, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return PostSearchCursor{}, nil
-	}
-	if len(raw) > 4096 {
-		return PostSearchCursor{}, fmt.Errorf("post search cursor exceeds maximum length")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return PostSearchCursor{}, fmt.Errorf("decode post search cursor: %w", err)
-	}
-	var wire postSearchCursorWire
-	if err := json.Unmarshal(payload, &wire); err != nil {
-		return PostSearchCursor{}, fmt.Errorf("decode post search cursor payload: %w", err)
-	}
-	if wire.Version != 1 ||
-		strings.TrimSpace(wire.Scope) == "" ||
-		strings.TrimSpace(wire.Token) == "" {
-		return PostSearchCursor{}, fmt.Errorf("post search cursor has invalid shape")
-	}
-	return NewPostSearchCursor(wire.Scope, wire.Token), nil
-}
-
-// PostSearchReadRequest 是 SearchReader 的唯一定义输入；没有任何 Post
-// aggregate 或 Mongo collection reader 可从此请求取得。
-type PostSearchReadRequest struct {
-	viewerPersonaID PersonaID
-	terms           string
-	identity        ContentIdentity
-	contentType     ContentType
-	categoryID      string
-	subCategory     string
-	cursor          PostSearchCursor
-	limit           int
-}
-
-func NewPostSearchReadRequest(
-	viewerPersonaID PersonaID,
-	terms string,
-	identity ContentIdentity,
-	contentType ContentType,
-	categoryID string,
-	subCategory string,
-	cursor PostSearchCursor,
-	limit int,
-) PostSearchReadRequest {
-	return PostSearchReadRequest{
-		viewerPersonaID: NewPersonaID(string(viewerPersonaID)),
-		terms:           strings.TrimSpace(terms),
-		identity:        identity,
-		contentType:     contentType,
-		categoryID:      strings.TrimSpace(categoryID),
-		subCategory:     strings.TrimSpace(subCategory),
-		cursor:          cursor,
-		limit:           limit,
-	}
-}
-
-func (r PostSearchReadRequest) ViewerPersonaID() PersonaID {
-	return r.viewerPersonaID
-}
-
-func (r PostSearchReadRequest) Terms() string {
-	return r.terms
-}
-
-func (r PostSearchReadRequest) Identity() ContentIdentity {
-	return r.identity
-}
-
-func (r PostSearchReadRequest) ContentType() ContentType {
-	return r.contentType
-}
-
-func (r PostSearchReadRequest) CategoryID() string {
-	return r.categoryID
-}
-
-func (r PostSearchReadRequest) SubCategory() string {
-	return r.subCategory
-}
-
-func (r PostSearchReadRequest) Cursor() PostSearchCursor {
-	return r.cursor
-}
-
-func (r PostSearchReadRequest) Limit() int {
-	return r.limit
-}
-
-func (r PostSearchReadRequest) CursorScope() string {
-	return cursorScope(
-		"post-search",
-		string(r.viewerPersonaID),
-		r.terms,
-		string(r.identity),
-		string(r.contentType),
-		r.categoryID,
-		r.subCategory,
 	)
 }
 

@@ -1,24 +1,42 @@
-# L3 规格：one-to-one-call — 1v1 语音/视频通话
+# L3 Story：one-to-one-call — 1v1 实时通话
 
-> **层级**：L3_subfeature（隶属 L2 `realtime-call`）
-> **状态**：specified
-> **父节点**：`chat-conversation/realtime-call`
+> **层级**：L3_story（隶属 L2 `realtime-call`）
+> **状态**：specified；商用验收 pending/partial
+> **真相源**：`contracts/metadata/rtc/call_session/**`
 
-## 定位
+## 最小价值
 
-1v1 语音/视频通话的端到端闭环：发起→呼叫→接听→通话→挂断→通话记录。
-包含来电推送（在线 WS + 离线 VoIP Push）和通话控制（静音/关摄像头/翻转/扬声器）。
+互相关注且未拉黑的双方可从合法入口发起 `audio` 或 `video` 通话，完成
+发起→振铃→接听/拒绝/取消/无应答→媒体建连→挂断，并在关联 Conversation 中看到
+`system_call_log`。
 
-## 职责边界
+## Canonical 合同
 
-- 覆盖 Phase 1 全部功能（F1~F5）
-- 呼叫状态机：INITIATED→RINGING→CONNECTING→IN_CALL→ENDED
-- 来电唤醒：iOS CallKit / Android FullScreen Intent
-- 通话结束→chat-service 插入通话记录消息
+- CallSession 状态只允许
+  `initiated -> ringing -> connecting -> in_call -> ended`。
+- `callType` 只允许 `audio | video`，不接受其他别名。
+- 发起/接听分别调用 `InitiateCall` / `AnswerCall`；响应直接携带短期 LiveKit token 与
+  `livekitUrl`。
+- LiveKit 媒体可用后调用 `ReportMediaConnected`；不能把 AnswerCall 成功等同媒体已接通。
+- 拒绝、取消、挂断分别调用 `RejectCall`、`CancelCall`、`HangupCall`。
+- 30 秒无应答写 `endReason=no_answer`；`timeout` 保留给系统超时语义。
+- 在线 CallRinging/CallEnded 只经 realtime-gateway 单通道投递。
+- 离线 Push 是商用必需但当前未实现，不能用在线事件或本地通知冒充。
+- CallEnded durable event 由 chat-service 幂等投影为 `system_call_log`。
 
-## 与父/子节点关系
+## 关系与交集
 
-- 父节点 `realtime-call` 定义全局 spec、acceptance、constraints
-- 子节点 `call-lifecycle-contract`（L4 Story）承载呼叫状态机契约的可验收交付
+- UI 只消费 relationship capability 决定入口，rtc-service 最终复核。
+- Conversation 存在、在线 presence 或交集分数都不能放宽门禁。
+- 来电页可展示 `known | possibly_unknown` 与来源作为接听信任证据；通话中不机械展示交集。
 
-详细规格见父节点 `realtime-call/spec.md` §3.1 Phase 1。
+## Out of Scope
+
+- 多人房间行为（归 `group-call`）。
+- 通话录制、本期 E2EE、独立通话历史聚合页。
+- RTC 私有信令连接、聚合 Repository 或 production Mock。
+
+## 验收
+
+以本节点 `acceptance.yaml` 的 GWT 为准；真实媒体接通、timeout/connected、离线来电与
+Conversation 回流必须分别有可定位的三层证据，缺失时保持 pending。

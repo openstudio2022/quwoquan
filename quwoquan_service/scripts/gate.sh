@@ -25,6 +25,8 @@ python3 scripts/verify/verify_go_single_module.py \
   || fail "nested Go module detected"
 python3 scripts/verify/verify_codegen_contract_graph_source.py \
   || fail "codegen bypasses ContractGraph Source"
+python3 scripts/codegen/gen_redis_router_config.py --check \
+  || fail "Redis keyspace metadata or generated prefix routes drifted"
 
 has_rg() {
   command -v rg >/dev/null 2>&1
@@ -179,15 +181,16 @@ ruby -ryaml -e '
   schema = YAML.load_file("contracts/observability/io_access_log_baseline.yaml") || {}
   required = (schema["required_fields"] || []).map(&:to_s)
   forbidden = (schema["forbidden_fields"] || []).map(&:to_s)
+  fail("io_access_log_baseline must use observability.slim") unless schema["catalog"] == "observability.slim"
 
   must_have = %w[
-    ts level route status durMs msg
+    schema occurredAt observedAt logKind severity signal message resource method route status durationMs
   ]
   must_have.each do |f|
     fail("io_access_log_baseline missing required field: #{f}") unless required.include?(f)
   end
 
-  %w[schema signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers logType phase parentTraceId causationId].each do |f|
+  %w[schemaVersion eventVersion contractVersion releaseId dataReleaseId sessionId headers logType statusCode].each do |f|
     fail("io_access_log_baseline missing forbidden field: #{f}") unless forbidden.include?(f)
   end
 
@@ -212,14 +215,16 @@ ruby -ryaml -e '
   exception_required = (exception_schema["required_fields"] || []).map(&:to_s)
   process_forbidden = (process_schema["forbidden_fields"] || []).map(&:to_s)
   exception_forbidden = (exception_schema["forbidden_fields"] || []).map(&:to_s)
+  fail("process_trace_log_baseline must use observability.slim") unless process_schema["catalog"] == "observability.slim"
+  fail("exception_log_baseline must use observability.slim") unless exception_schema["catalog"] == "observability.slim"
 
-  %w[ts level event result msg].each do |f|
+  %w[schema occurredAt observedAt logKind severity signal message resource event result].each do |f|
     fail("process_trace_log_baseline missing required field: #{f}") unless process_required.include?(f)
   end
-  %w[ts level err msg].each do |f|
+  %w[schema occurredAt observedAt logKind severity signal message resource errorCode].each do |f|
     fail("exception_log_baseline missing required field: #{f}") unless exception_required.include?(f)
   end
-  %w[schema signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers statusCode logType phase parentTraceId causationId].each do |f|
+  %w[schemaVersion eventVersion contractVersion releaseId dataReleaseId sessionId headers statusCode logType].each do |f|
     fail("process_trace_log_baseline missing forbidden field: #{f}") unless process_forbidden.include?(f)
     fail("exception_log_baseline missing forbidden field: #{f}") unless exception_forbidden.include?(f)
   end
@@ -305,10 +310,6 @@ ruby -ryaml -rdate -e '
     exit 1
   end
 
-  def warn(msg)
-    STDERR.puts("[gate] WARN: #{msg}")
-  end
-
   def load_yaml(path)
     YAML.safe_load(
       File.read(path),
@@ -323,7 +324,6 @@ ruby -ryaml -rdate -e '
   specs_root = File.expand_path("../specs/feature-tree", __dir__)
   exit 0 unless Dir.exist?(specs_root)
 
-  warnings = []
   blocking = []
 
   # ── 5.1 每个节点目录必须具备 L3 约定文档（spec.md + acceptance.yaml）──
@@ -383,7 +383,7 @@ ruby -ryaml -rdate -e '
             tests = criterion["tests"].is_a?(Hash) ? criterion["tests"] : {}
             recorded = tests["recorded"] || []
             if recorded.empty?
-              warnings << "#{feature}/#{an}: status=#{status} but tests.recorded is empty (#{acceptance_path})"
+              blocking << "#{feature}/#{an}: status=#{status} but tests.recorded is empty (#{acceptance_path})"
             else
               recorded.each do |t|
                 test_file = t.is_a?(Hash) ? t["file"].to_s : t.to_s
@@ -433,13 +433,9 @@ ruby -ryaml -rdate -e '
           abs_path = resolve_feature_dir.call(rel_path)
           indexed_dirs << abs_path
 
-          # ① tree_index 引用的目录必须存在（planned 节点目录未创建时为 WARNING）
+          # ① tree_index 引用的目录必须存在。
           unless Dir.exist?(abs_path)
-            if status == "planned"
-              warnings << "tree_index planned node directory not yet created: #{rel_path}"
-            else
-              blocking << "tree_index.yaml references non-existent directory: #{rel_path}"
-            end
+            blocking << "tree_index.yaml references non-existent directory: #{rel_path}"
           end
         end
 
@@ -456,7 +452,7 @@ ruby -ryaml -rdate -e '
           if File.exist?(acc)
             acc_doc = load_yaml(acc) || {}
             unless acc_doc["archived"] == true
-              warnings << "tree_index status=completed but acceptance.yaml missing archived:true — #{rel_path}"
+              blocking << "tree_index status=completed but acceptance.yaml missing archived:true — #{rel_path}"
             end
           end
         end
@@ -470,7 +466,7 @@ ruby -ryaml -rdate -e '
             acc_block = acc_doc["gwt_acceptance"] || acc_doc["sit_acceptance"] ||
                         acc_doc["uat_acceptance"] || acc_doc["domain_acceptance"] || {}
             if acc_block.is_a?(Hash) && acc_block.values.any? { |c| c.is_a?(Hash) && c["status"].to_s == "pending" }
-              warnings << "#{status} node still has pending acceptance items (consider clearing): #{rel_path}"
+              blocking << "#{status} node still has pending acceptance items: #{rel_path}"
             end
           end
         end
@@ -484,11 +480,10 @@ ruby -ryaml -rdate -e '
     actual_node_dirs = Dir.glob("#{specs_root}/**/*/").map { |d| d.chomp("/") }
     orphaned = actual_node_dirs.reject { |d| indexed_dirs.include?(d) }
     orphaned.each do |d|
-      warnings << "feature tree orphan directory (not in tree_index.yaml): #{d.sub(specs_root + "/", "")}"
+      blocking << "feature tree orphan directory (not in tree_index.yaml): #{d.sub(specs_root + "/", "")}"
     end
   end
 
-  warnings.each { |w| STDERR.puts("[gate] WARN: #{w}") }
   unless blocking.empty?
     STDERR.puts("[gate] FAIL: feature tree consistency check failed:")
     blocking.each { |b| STDERR.puts("  - #{b}") }
@@ -512,11 +507,11 @@ if [ -f "$CONTENT_POST_DIR/errors.yaml" ] && [ -f "$CONTENT_POST_DIR/tests/mock.
     err_scenarios = (mock_doc["error_scenarios"] || mock_doc["scenarios"] || [])
     mock_codes = err_scenarios.flat_map { |s| s.values.select { |v| v.is_a?(String) } }.compact
     missing = codes.reject { |c| mock_codes.any? { |mc| mc.include?(c) } }
-    # Soft check: warn if any code has zero coverage
     if missing.any?
-      STDERR.puts("[gate] WARN G4: errors.yaml codes without mock scenarios: #{missing.join(", ")}")
+      STDERR.puts("[gate] FAIL G4: errors.yaml codes without mock scenarios: #{missing.join(", ")}")
+      exit 1
     end
-  ' "$CONTENT_POST_DIR/errors.yaml" "$CONTENT_POST_DIR/tests/mock.yaml" || true
+  ' "$CONTENT_POST_DIR/errors.yaml" "$CONTENT_POST_DIR/tests/mock.yaml"
 fi
 
 # G5: behaviors.yaml batch_route paths ⊆ service.yaml api_routes
@@ -568,9 +563,10 @@ if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ] && [ -f "$CONTENT_POST_DIR/ser
     covered  = (contract["scenarios"] || []).map { |s| s["operation"] }.compact
     missing  = ops.reject { |op| covered.include?(op) }
     if missing.any?
-      STDERR.puts("[gate] WARN G7: service.yaml operations without contract scenarios: #{missing.join(", ")}")
+      STDERR.puts("[gate] FAIL G7: service.yaml operations without contract scenarios: #{missing.join(", ")}")
+      exit 1
     end
-  ' "$CONTENT_POST_DIR/tests/contract.yaml" "$CONTENT_POST_DIR/service.yaml" || true
+  ' "$CONTENT_POST_DIR/tests/contract.yaml" "$CONTENT_POST_DIR/service.yaml"
 fi
 
 # G8: PII/SENSITIVE fields declared in privacy.yaml app_log_policy
@@ -589,9 +585,10 @@ if [ -f "$CONTENT_POST_DIR/fields.yaml" ] && [ -f "$CONTENT_POST_DIR/privacy.yam
     policy_fields = (privacy["app_log_policy"] || []).map { |p| p["field"] }.compact
     missing = pii_fields.reject { |f| policy_fields.include?(f) }
     if missing.any?
-      STDERR.puts("[gate] WARN G8: PII/SENSITIVE fields without privacy.yaml policy: #{missing.join(", ")}")
+      STDERR.puts("[gate] FAIL G8: PII/SENSITIVE fields without privacy.yaml policy: #{missing.join(", ")}")
+      exit 1
     end
-  ' "$CONTENT_POST_DIR/fields.yaml" "$CONTENT_POST_DIR/privacy.yaml" || true
+  ' "$CONTENT_POST_DIR/fields.yaml" "$CONTENT_POST_DIR/privacy.yaml"
 fi
 
 # G9: behaviors.yaml behavior_event types ⊆ _shared/types.yaml BehaviorEventType
@@ -608,10 +605,11 @@ if [ -f "$CONTENT_POST_DIR/behaviors.yaml" ] && [ -f "$SHARED_TYPES" ]; then
     (beh["behavior_events"] || []).each do |ev|
       t = ev["type"].to_s
       unless valid_types.include?(t)
-        STDERR.puts("[gate] WARN G9: behavior_event type \"#{t}\" not in _shared/types.yaml BehaviorEventType enum")
+        STDERR.puts("[gate] FAIL G9: behavior_event type \"#{t}\" not in _shared/types.yaml BehaviorEventType enum")
+        exit 1
       end
     end
-  ' "$CONTENT_POST_DIR/behaviors.yaml" "$SHARED_TYPES" || true
+  ' "$CONTENT_POST_DIR/behaviors.yaml" "$SHARED_TYPES"
 fi
 
 # G10: ui_config feature_flags keys cross-checked (advisory)
@@ -761,7 +759,7 @@ echo "[gate] running tag-service contract tests"
 go test ./services/tag-service/... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT" \
   || fail "tag-service go tests failed"
 
-# ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
+# ── T38: e2e.yaml patrol_flow 文件存在性检查 ───────────────────────────────
 # 确保 e2e.yaml 中每个 ui_journey 场景的 patrol_flow 引用文件在 quwoquan_app 中存在。
 E2E_YAML="contracts/metadata/content/post/tests/e2e.yaml"
 APP_DIR="../quwoquan_app"
@@ -772,18 +770,20 @@ if [ -f "$E2E_YAML" ] && command -v grep >/dev/null 2>&1; then
     flow=$(echo "$flow" | tr -d '[:space:]')
     target="$APP_DIR/$flow"
     if [ ! -f "$target" ]; then
-      echo "[gate] WARN: patrol_flow 引用文件不存在: $target"
-      echo "[gate] WARN: 请创建该文件或更新 e2e.yaml 中的 patrol_flow 路径"
+      fail "patrol_flow 引用文件不存在: $target"
     else
       echo "[gate] OK: patrol_flow 文件存在: $flow"
     fi
   done
 fi
 
-# ── T39: api_contract_runner.dart 场景覆盖率检查（warn 级别）────────────────
+# ── T39: api_contract_runner.dart 场景覆盖率检查 ───────────────────────────
 # 检查 e2e.yaml 中每个 api_contract 场景在 api_contract_runner.dart 中有 test() 调用。
 # 场景名在 test_type: api_contract 之前的 name: 行，用 -B2 反向查找。
-RUNNER="$APP_DIR/test/cloud/content/api_contract_runner.dart"
+RUNNER="$APP_DIR/test/api_integration/cloud/content/api_contract_runner.dart"
+if [ -f "$E2E_YAML" ] && [ ! -f "$RUNNER" ]; then
+  fail "api_contract runner 不存在: $RUNNER"
+fi
 if [ -f "$E2E_YAML" ] && [ -f "$RUNNER" ]; then
   echo "[gate] checking api_contract scenario coverage in $RUNNER"
   # grep -B2 找 test_type: api_contract 的前 2 行，再从中提取 name 字段（保留换行）
@@ -795,7 +795,8 @@ if [ -f "$E2E_YAML" ] && [ -f "$RUNNER" ]; then
     echo "$api_names" | while IFS= read -r scenario; do
       [ -z "$scenario" ] && continue
       if ! grep -q "$scenario" "$RUNNER" 2>/dev/null; then
-        echo "[gate] WARN: api_contract 场景未在 api_contract_runner.dart 中找到: $scenario"
+        echo "[gate] FAIL: api_contract 场景未在 api_contract_runner.dart 中找到: $scenario" >&2
+        exit 1
       else
         echo "[gate] OK: api_contract 场景已覆盖: $scenario"
       fi

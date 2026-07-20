@@ -609,7 +609,7 @@
             "displayName": "契约同伴一",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
-            "role": "member",
+            "role": "admin",
             "isCurrentUser": false
           },
           {
@@ -668,7 +668,7 @@
       },
       "userStates": [
         {
-          "_id": "fixture_state_fixture_conv_direct_current",
+          "id": "fixture_state_fixture_conv_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct",
           "readSeq": 5,
@@ -679,7 +679,7 @@
           "updatedAt": "2026-06-10T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_group_current",
+          "id": "fixture_state_fixture_conv_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_group",
           "readSeq": 7,
@@ -690,7 +690,7 @@
           "updatedAt": "2026-06-10T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photo_group_current",
+          "id": "fixture_state_fixture_conv_photo_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photo_group",
           "readSeq": 7,
@@ -701,7 +701,7 @@
           "updatedAt": "2026-06-10T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_article_direct_current",
+          "id": "fixture_state_fixture_conv_article_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_article_direct",
           "readSeq": 5,

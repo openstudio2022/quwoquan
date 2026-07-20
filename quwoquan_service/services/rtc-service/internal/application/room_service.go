@@ -49,20 +49,3 @@ func (s *RoomService) RemoveParticipant(ctx context.Context, roomName string, id
 
 	return s.manager.RemoveParticipant(ctx, roomName, identity)
 }
-
-func (s *RoomService) StartRecordingEgress(ctx context.Context, roomName, outputBucket string) (_ string, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "rtc.StartRecordingEgress",
-		attribute.String("room.name", roomName),
-		attribute.String("egress.bucket", outputBucket))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	return s.manager.StartRoomCompositeEgress(ctx, roomName, outputBucket)
-}
-
-func (s *RoomService) StopRecordingEgress(ctx context.Context, egressID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "rtc.StopRecordingEgress",
-		attribute.String("egress.id", egressID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	return s.manager.StopEgress(ctx, egressID)
-}

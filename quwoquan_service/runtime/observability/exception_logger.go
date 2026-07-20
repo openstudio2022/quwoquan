@@ -37,6 +37,6 @@ func (l *ExceptionLogger) Write(entry ExceptionLog, model string, operation stri
 	if err := entry.Validate(); err != nil {
 		return err
 	}
-	payload := formatDelimitedLog("exception", compactExceptionLog(entry))
+	payload := formatRuntimeLog("exception", compactExceptionLog(entry))
 	return l.router.WriteError([]byte(payload + "\n"))
 }

@@ -248,7 +248,7 @@ def normalize_execution_workspace_command(command: str) -> str:
 # Content execution has one identity and one runtime work package.
 _EXECUTION_ID_PATH_RE = re.compile(
     r"^20\d{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-"
-    r"[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-\d{3,}$"
+    r"[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3|h10k)-\d{3,}$"
 )
 
 

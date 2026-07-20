@@ -1,0 +1,16 @@
+read_model: AckIncomingCallPresentationResult
+
+description: 设备级来电展示 ACK 的 CAS 结果。
+
+source_entities:
+  - NotificationDeliveryJob
+
+consumers:
+  - app
+
+fields:
+  - { name: deliveryKey, type: string }
+  - { name: deviceId, type: string }
+  - { name: status, type: string }
+  - { name: raced, type: bool }
+  - { name: acknowledgedAt, type: timestamp }

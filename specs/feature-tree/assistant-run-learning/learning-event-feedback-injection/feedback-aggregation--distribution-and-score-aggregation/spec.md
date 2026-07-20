@@ -1,4 +1,4 @@
-# L4 特性：distribution-and-score-aggregation
+# L3 特性：distribution-and-score-aggregation
 
 ## 功能说明
 - 细化反馈分布聚合、评分统计和窗口计算逻辑。

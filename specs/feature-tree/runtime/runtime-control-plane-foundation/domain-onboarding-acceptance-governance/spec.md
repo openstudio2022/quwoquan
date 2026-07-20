@@ -125,7 +125,7 @@
   - 校验 codegen 消费完整性、缺失对象/动作/route/schema
 - `L2 / gate`
   - 校验领域是否具备最低 `local_contract / local_contract / api_integration`
-- `L3 / gate-full`
+- `L3 / gate-release`
   - 聚合所有目标领域的接入状态，判断是否进入最终集中验收
 
 约束：

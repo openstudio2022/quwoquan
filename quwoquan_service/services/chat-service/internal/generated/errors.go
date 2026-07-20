@@ -11,23 +11,27 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrConversationNotFound       = errors.New("CHAT.USER.conversation_not_found")
-	ErrUnauthorized               = errors.New("CHAT.USER.unauthorized")
-	ErrMessageNotFound            = errors.New("CHAT.USER.message_not_found")
-	ErrMessageRecallForbidden     = errors.New("CHAT.USER.message_recall_forbidden")
-	ErrMessageRecallExpired       = errors.New("CHAT.USER.message_recall_expired")
-	ErrMessageIdempotencyConflict = errors.New("CHAT.USER.message_idempotency_conflict")
-	ErrMessageTooLong             = errors.New("CHAT.USER.message_too_long")
-	ErrMessageInvalid             = errors.New("CHAT.USER.message_invalid")
-	ErrMessageMediaInvalid        = errors.New("CHAT.USER.message_media_invalid")
-	ErrMessageMediaUnavailable    = errors.New("CHAT.SYSTEM.message_media_unavailable")
-	ErrRateLimited                = errors.New("CHAT.USER.rate_limited")
-	ErrNotMutual                  = errors.New("CHAT.USER.not_mutual")
-	ErrGreetingRequired           = errors.New("CHAT.USER.greeting_required")
-	ErrBlocked                    = errors.New("CHAT.USER.blocked")
-	ErrGroupMemberNotMutual       = errors.New("CHAT.USER.group_member_not_mutual")
-	ErrGroupMemberBlocked         = errors.New("CHAT.USER.group_member_blocked")
-	ErrInternalError              = errors.New("CHAT.SYSTEM.internal_error")
+	ErrConversationNotFound              = errors.New("CHAT.USER.conversation_not_found")
+	ErrUnauthorized                      = errors.New("CHAT.USER.unauthorized")
+	ErrMessageNotFound                   = errors.New("CHAT.USER.message_not_found")
+	ErrMessageRecallForbidden            = errors.New("CHAT.USER.message_recall_forbidden")
+	ErrMessageRecallExpired              = errors.New("CHAT.USER.message_recall_expired")
+	ErrMessageIdempotencyConflict        = errors.New("CHAT.USER.message_idempotency_conflict")
+	ErrMessageTooLong                    = errors.New("CHAT.USER.message_too_long")
+	ErrMessageInvalid                    = errors.New("CHAT.USER.message_invalid")
+	ErrMessageMediaInvalid               = errors.New("CHAT.USER.message_media_invalid")
+	ErrMessageMediaUnavailable           = errors.New("CHAT.SYSTEM.message_media_unavailable")
+	ErrRateLimited                       = errors.New("CHAT.USER.rate_limited")
+	ErrNotMutual                         = errors.New("CHAT.USER.not_mutual")
+	ErrGreetingRequired                  = errors.New("CHAT.USER.greeting_required")
+	ErrBlocked                           = errors.New("CHAT.USER.blocked")
+	ErrGroupMemberNotMutual              = errors.New("CHAT.USER.group_member_not_mutual")
+	ErrGroupMemberBlocked                = errors.New("CHAT.USER.group_member_blocked")
+	ErrGroupGovernanceForbidden          = errors.New("CHAT.USER.group_governance_forbidden")
+	ErrGroupFull                         = errors.New("CHAT.USER.group_full")
+	ErrConversationDissolved             = errors.New("CHAT.USER.conversation_dissolved")
+	ErrGroupOwnerMustTransferBeforeLeave = errors.New("CHAT.USER.group_owner_must_transfer_before_leave")
+	ErrInternalError                     = errors.New("CHAT.SYSTEM.internal_error")
 )
 
 // AppErrorFromConversationNotFound returns *AppError for CHAT.USER.conversation_not_found (user_message from errors.yaml).
@@ -124,6 +128,30 @@ func AppErrorFromGroupMemberNotMutual(debugMessage string) *rerrors.AppError {
 func AppErrorFromGroupMemberBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMemberBlocked.Error()))
 	return rerrors.NewAppError(code, "存在已屏蔽的成员，无法发起群聊", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGroupGovernanceForbidden returns *AppError for CHAT.USER.group_governance_forbidden (user_message from errors.yaml).
+func AppErrorFromGroupGovernanceForbidden(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupGovernanceForbidden.Error()))
+	return rerrors.NewAppError(code, "只有群主或管理员可以执行该操作", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGroupFull returns *AppError for CHAT.USER.group_full (user_message from errors.yaml).
+func AppErrorFromGroupFull(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupFull.Error()))
+	return rerrors.NewAppError(code, "群成员已达上限", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromConversationDissolved returns *AppError for CHAT.USER.conversation_dissolved (user_message from errors.yaml).
+func AppErrorFromConversationDissolved(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConversationDissolved.Error()))
+	return rerrors.NewAppError(code, "该群聊已解散", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGroupOwnerMustTransferBeforeLeave returns *AppError for CHAT.USER.group_owner_must_transfer_before_leave (user_message from errors.yaml).
+func AppErrorFromGroupOwnerMustTransferBeforeLeave(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupOwnerMustTransferBeforeLeave.Error()))
+	return rerrors.NewAppError(code, "群主退群前需先转让群主", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CHAT.SYSTEM.internal_error (user_message from errors.yaml).

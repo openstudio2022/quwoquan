@@ -1,0 +1,13 @@
+entity: OutboundShareFact
+layer: app_side
+
+description: |
+  端侧独立测试场景。出站分享确认后经 ContentOutboundShareAppendWriter 追加事实
+  （幂等键 outbound-share:{referralId}）；分享面板本体不直接依赖云。
+
+command_scenarios:
+  - name: share_sheet_confirmed_delivery_append
+    description: 仅确认出站投递的动作追加事实；复制链接等本地动作不追加
+    dart_tests:
+      - quwoquan_app/test/local_contract/ui/content/share/share_template_by_identity_widget__local_contract_test.dart
+      - quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart

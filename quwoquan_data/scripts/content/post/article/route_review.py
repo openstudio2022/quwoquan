@@ -1,6 +1,7 @@
 """Review gates and human-review ledger persistence for route production."""
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
@@ -27,14 +28,14 @@ from content.post.article.draft_io import (
 from governance.coverage.entity_extract import build_entities_sidecar
 from core.image_safety import assess_asset_sources
 from content.review.ledger import (
-    ReviewItem,
     ReviewLedger,
-    agent_article_item,
-    agent_fact_item,
-    agent_image_item,
-    load_policy,
+    ReviewVerdict,
+    agent_article_verdict,
+    agent_fact_verdict,
+    agent_image_verdict,
     save_ledger,
 )
+from content.review.policy import review_policy
 from content.execution.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from core.style_catalog import detect_opening_strategy, family_allowed_openings
 from core.template_fingerprints import template_fingerprint_issues
@@ -302,13 +303,7 @@ def _persisted_review_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _score_from_quality(quality_score: float) -> int:
-    if quality_score >= 85:
-        return 5
-    if quality_score >= 75:
-        return 4
-    if quality_score >= 60:
-        return 3
-    return 2
+    return review_policy().score_for_quality(quality_score)
 
 
 def _persist_review_ledger(
@@ -322,62 +317,76 @@ def _persist_review_ledger(
     quality_score: float,
 ) -> None:
     """构建并落 human-in-loop 账本 + 实体 sidecar（agent 判定来源）。"""
-    policy = load_policy(execution_id)
-
     # 文章项：非图片质量门是否全过（图片/事实另列项）。
     narrative_passed = all(
         v.get("passed", True)
         for k, v in route_checks.items()
         if k not in ("imageGate", "factTraceability")
     )
-    article_item = agent_article_item(ref, passed=narrative_passed, score=_score_from_quality(quality_score))
+    article_item = agent_article_verdict(
+        ref,
+        passed=narrative_passed,
+        score=_score_from_quality(quality_score),
+    )
 
     # 图片项：逐图 image_safety verdict → agent 判定/打分。
-    image_items: list[ReviewItem] = []
+    image_items: list[ReviewVerdict] = []
     assets = [a for a in (compose_payload.get("assets") or []) if a.get("sourcePath")]
     if assets:
         report = assess_asset_sources(assets)
         for v in report.get("verdicts", []):
             asset_id = str(v.get("assetId") or "")
             if asset_id:
-                image_items.append(agent_image_item(asset_id, v))
+                image_items.append(agent_image_verdict(asset_id, v))
 
     # 事实项：mustIncludeFacts 是否可回溯（traceability 中命中即存疑）。
-    fact_items: list[ReviewItem] = []
+    fact_items: list[ReviewVerdict] = []
     must_facts = []
     spine = compose_payload.get("storySpine") or {}
     if isinstance(spine, Mapping):
         must_facts = list(spine.get("mustIncludeFacts") or [])
     trace_blob = " ".join(traceability)
     for fact in must_facts:
-        fact_items.append(agent_fact_item(str(fact), traceable=str(fact) not in trace_blob))
+        fact_items.append(
+            agent_fact_verdict(str(fact), traceable=str(fact) not in trace_blob)
+        )
 
     ledger = ReviewLedger(
-        executionId=execution_id,
+        execution_id=execution_id,
         ref=ref,
-        policy=policy,
         article=article_item,
-        images=image_items,
-        facts=fact_items,
+        images=tuple(image_items),
+        facts=tuple(fact_items),
     )
     # 合并已存在的人判定（annotate 写过的 human* 不被 review 覆盖）。
-    _merge_human_decisions(execution_id, ref, ledger)
-    save_ledger(ledger)
+    save_ledger(_merge_human_decisions(execution_id, ref, ledger))
 
     build_entities_sidecar(execution_id, ref, draft_meta)
 
 
-def _merge_human_decisions(execution_id: str, ref: str, ledger: ReviewLedger) -> None:
+def _merge_human_decisions(
+    execution_id: str,
+    ref: str,
+    ledger: ReviewLedger,
+) -> ReviewLedger:
     from content.review.ledger import load_ledger
 
     prev = load_ledger(execution_id, ref)
     if prev is None:
-        return
+        return ledger
+    merged = ledger
     for item in ledger.all_items():
         old = prev.find_item(item.kind, item.target)
         if old is None:
             continue
-        item.humanJudgment = old.humanJudgment
-        item.humanScore = old.humanScore
-        item.humanOverride = old.humanOverride
-        item.reprocessCount = old.reprocessCount
+        merged = merged.replace_item(
+            dataclasses.replace(
+                item,
+                human_judgment=old.human_judgment,
+                human_score=old.human_score,
+                human_override=old.human_override,
+                reprocess_count=old.reprocess_count,
+                notes=old.notes,
+            )
+        )
+    return merged

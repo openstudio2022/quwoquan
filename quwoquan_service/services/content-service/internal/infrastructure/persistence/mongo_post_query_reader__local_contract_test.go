@@ -15,6 +15,12 @@ import (
 func TestMongoPostQueryReaderProjectionMatchesTypedSliceWhitelist(t *testing.T) {
 	assertProjectionMatchesSlice(
 		t,
+		"PostRevisionSlice",
+		postRevisionProjection(),
+		postports.PostRevisionSlice{},
+	)
+	assertProjectionMatchesSlice(
+		t,
 		"PostDetailSlice",
 		postDetailProjection(),
 		postports.PostDetailSlice{},
@@ -29,7 +35,6 @@ func TestMongoPostQueryReaderProjectionMatchesTypedSliceWhitelist(t *testing.T) 
 	for _, forbidden := range []string{
 		"version",
 		"embedding",
-		"moderationStatus",
 		"contentDigest",
 		"authorQualitySignals",
 		"publishLocation",
@@ -38,6 +43,10 @@ func TestMongoPostQueryReaderProjectionMatchesTypedSliceWhitelist(t *testing.T) 
 		assertProjectionExcludes(t, postDetailProjection(), forbidden)
 		assertProjectionExcludes(t, authorPostProjection(), forbidden)
 	}
+	if got := bsonFieldValue(postDetailProjection(), "moderationStatus"); got != 1 {
+		t.Fatalf("PostDetailSlice must read internal moderationStatus gate, got %#v", got)
+	}
+	assertProjectionExcludes(t, authorPostProjection(), "moderationStatus")
 }
 
 func TestPostDetailSliceDropsAggregateOnlyFieldsDuringDirectBSONDecode(t *testing.T) {
@@ -102,6 +111,9 @@ func TestAuthorPostFilterSeparatesPublicAndOwnerVisibility(t *testing.T) {
 	}
 	if got := bsonFieldValue(publicFilter, "visibility"); got != "public" {
 		t.Fatalf("public filter visibility = %#v, want public", got)
+	}
+	if got := bsonFieldValue(publicFilter, "moderationStatus"); got != "approved" {
+		t.Fatalf("public filter moderationStatus = %#v, want approved", got)
 	}
 
 	ownerFilter, err := authorPostFilter(postports.NewAuthorPostReadRequest(

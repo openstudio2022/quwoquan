@@ -3,15 +3,21 @@ events:
   - name: ConversationMemberAdded
     producer: chat-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields: [conversationId, memberId, userId, displayName, memberType, role, assistantSkillId, invitedBy, memberCount, joinedAt]
   - name: ConversationMemberRemoved
     producer: chat-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields: [conversationId, memberId, userId, memberType, assistantSkillId, removedBy, memberCount]
+  - name: ConversationMemberLeft
+    description: 成员自愿退出群聊（与被移出 ConversationMemberRemoved 语义区分）
+    producer: chat-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
+    payload_fields: [conversationId, memberId, userId, memberType, memberCount, leftAt]
   - name: ConversationMemberRoleChanged
     producer: chat-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields: [conversationId, memberId, userId, role, changedBy]

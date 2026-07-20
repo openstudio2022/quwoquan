@@ -5,7 +5,7 @@ service:
   description: CircleFile 对象专属 command/query packet；上传统一由 Media bounded context 完成。
   commercial_defaults:
     status: blocked
-    block_reason: Gamma 真实上传、下载、目录导航、BOLA 与恢复 Journey 及 production 工件证据尚未闭环
+    block_reason: 新增 operation 需按 B4 商用水位补齐三层证据后逐个翻牌
     gap_id: CIRCLE_FILE_COMMERCIAL_CLOSURE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
@@ -13,6 +13,8 @@ api_routes:
     path: /circles/{circleId}/files
 
     operation: ListCircleFiles
+    commercial:
+      status: ready
     actor: persona
     security:
       auth_mode: required
@@ -40,6 +42,8 @@ api_routes:
     path: /circles/{circleId}/files
 
     operation: CreateCircleFile
+    commercial:
+      status: ready
     actor: persona
     security:
       auth_mode: required
@@ -69,6 +73,8 @@ api_routes:
     path: /circles/{circleId}/files/{fileId}
 
     operation: GetCircleFile
+    commercial:
+      status: ready
     actor: persona
     security:
       auth_mode: required
@@ -95,6 +101,8 @@ api_routes:
     path: /circles/{circleId}/files/{fileId}
 
     operation: UpdateCircleFile
+    commercial:
+      status: ready
     actor: persona
     security:
       auth_mode: required
@@ -125,6 +133,8 @@ api_routes:
     path: /circles/{circleId}/files/{fileId}
 
     operation: DeleteCircleFile
+    commercial:
+      status: ready
     actor: persona
     security:
       auth_mode: required

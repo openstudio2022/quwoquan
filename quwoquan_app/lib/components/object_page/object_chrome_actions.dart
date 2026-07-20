@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 对象页顶栏右侧动作组（实体 / 圈子主页共享）。
@@ -45,7 +47,7 @@ class ObjectChromeActions extends ConsumerWidget {
         _action(
           keyValue: 'object-chrome-assistant',
           icon: CupertinoIcons.sparkles,
-          label: UITextConstants.assistantEntryXiaoqu,
+          label: AssistantText.assistantEntryXiaoqu,
           onPressed: () => onAssistant(ref),
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
@@ -60,7 +62,7 @@ class ObjectChromeActions extends ConsumerWidget {
           _action(
             keyValue: 'object-chrome-more',
             icon: CupertinoIcons.gear,
-            label: UITextConstants.more,
+            label: ChatText.more,
             onPressed: onMore!,
           ),
         ],

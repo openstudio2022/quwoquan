@@ -21,3 +21,7 @@ spec:
       protocol: UDP
       port: 7882
       targetPort: rtc-udp
+    - name: metrics
+      protocol: TCP
+      port: 6789
+      targetPort: metrics

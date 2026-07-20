@@ -2,13 +2,16 @@ package httpadapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/notification-service/internal/application"
+	notification "quwoquan_service/services/notification-service/internal/domain/notification"
 	generated "quwoquan_service/services/notification-service/internal/generated"
 )
 
@@ -17,6 +20,7 @@ type Handler struct {
 	appMessageQueries  *application.AppMessageQueryFacade
 	deliveryCommands   *application.NotificationDeliveryJobCommandFacade
 	deliveryQueries    *application.NotificationDeliveryJobQueryFacade
+	incomingCalls      *application.IncomingCallDeliveryCoordinator
 }
 
 type HandlerDependencies struct {
@@ -24,6 +28,7 @@ type HandlerDependencies struct {
 	AppMessageQueries  *application.AppMessageQueryFacade
 	DeliveryCommands   *application.NotificationDeliveryJobCommandFacade
 	DeliveryQueries    *application.NotificationDeliveryJobQueryFacade
+	IncomingCalls      *application.IncomingCallDeliveryCoordinator
 }
 
 func NewHandler(dependencies HandlerDependencies) (*Handler, error) {
@@ -39,11 +44,15 @@ func NewHandler(dependencies HandlerDependencies) (*Handler, error) {
 	if dependencies.DeliveryQueries == nil {
 		return nil, fmt.Errorf("notification delivery query facade is required")
 	}
+	if dependencies.IncomingCalls == nil {
+		return nil, fmt.Errorf("incoming call delivery coordinator is required")
+	}
 	return &Handler{
 		appMessageCommands: dependencies.AppMessageCommands,
 		appMessageQueries:  dependencies.AppMessageQueries,
 		deliveryCommands:   dependencies.DeliveryCommands,
 		deliveryQueries:    dependencies.DeliveryQueries,
+		incomingCalls:      dependencies.IncomingCalls,
 	}, nil
 }
 
@@ -55,6 +64,10 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /app-messages/{messageId}", h.handleGetAppMessage)
 	mux.HandleFunc("POST /app-messages/{messageId}/ack", h.handleAckAppMessage)
 	mux.HandleFunc("POST /app-messages/{messageId}/read", h.handleReadAppMessage)
+	mux.HandleFunc(
+		"POST /notifications/incoming-calls/presentation:ack",
+		h.handleAckIncomingCallPresentation,
+	)
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/metrics", h.handleMetrics)
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/dead-letters", h.handleListDeadLetters)
 	mux.HandleFunc(
@@ -62,6 +75,67 @@ func (h *Handler) Routes() http.Handler {
 		h.handleRecoverDeliveryJob,
 	)
 	return mux
+}
+
+func (h *Handler) handleAckIncomingCallPresentation(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok ||
+		strings.TrimSpace(principal.Actor.AccountID) == "" ||
+		strings.TrimSpace(principal.Actor.PersonaID) == "" ||
+		strings.TrimSpace(principal.Actor.DeviceActorID) == "" {
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromUnauthorized(
+				"incoming call presentation ACK requires trusted persona and device",
+			),
+		)
+		return
+	}
+	var command struct {
+		DeliveryKey string `json:"deliveryKey"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&command); err != nil ||
+		strings.TrimSpace(command.DeliveryKey) == "" {
+		debugMessage := "deliveryKey is required"
+		if err != nil {
+			debugMessage = err.Error()
+		}
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromInvalidArgument(debugMessage),
+		)
+		return
+	}
+	result, err := h.incomingCalls.AckPresentation(
+		r.Context(),
+		principal.Actor.PersonaID,
+		principal.Actor.DeviceActorID,
+		command.DeliveryKey,
+	)
+	if err != nil {
+		if errors.Is(err, notification.ErrDeliveryJobNotFound) {
+			writeHTTPError(
+				w,
+				r,
+				generated.AppErrorFromDeliveryNotFound(err.Error()),
+			)
+			return
+		}
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromStorageWriteFailed(err.Error()),
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleCreateAppMessage(w http.ResponseWriter, r *http.Request) {

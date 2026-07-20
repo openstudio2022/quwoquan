@@ -1,0 +1,25 @@
+aggregate: ConversationMembership
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/chat/
+
+scenarios:
+  - name: member_dto_parse
+    description: ConversationMemberDto 解析（role、memberType、joinedAt、displayName 快照）
+    assertions:
+      - required_fields_non_empty
+      - assistant_member_type_supported
+      - role_enum_valid
+
+  - name: member_list_pagination
+    description: 成员列表分页与排序（joined_asc 默认、display_name_asc 可选）
+    assertions:
+      - pagination_works
+      - sort_variants_respected
+
+  - name: governance_command_encode
+    description: 添加/移除/转让/设管理员命令编码携带幂等键
+    assertions:
+      - idempotency_key_present
+      - path_only_targets_from_route_params

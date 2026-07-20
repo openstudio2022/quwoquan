@@ -1,20 +1,31 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 私人助理管理页
 ///
-/// 性格选择（温柔/严厉/极简）、隐私权限、记忆管理、技能生效时间
+/// 隐私权限、只读记忆列表与技能中心入口均消费真实云端能力。
+/// 无后端支撑的本地假开关（性格/读聊天/位置/通知）已随 B8 阶段 3b 删除。
 class AssistantManagementPage extends ConsumerStatefulWidget {
   const AssistantManagementPage({super.key, required this.onBack});
 
@@ -27,15 +38,34 @@ class AssistantManagementPage extends ConsumerStatefulWidget {
 
 class _AssistantManagementPageState
     extends ConsumerState<AssistantManagementPage> {
-  String _personality = 'gentle'; // gentle | strict | minimal
-  bool _permChat = true;
-  bool _permLocation = false;
-  bool _permNotifications = true;
+  Object? _preferenceMutationError;
+  bool _preferenceMutationInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      // 页面曝光（R20）：GoRoute 无 name 不经 pageAccess observer，页面自身
+      // 直调现行 pageAccess 通道。
+      unawaited(
+        writeAppPageAccessOpen(
+          location: AppRoutePaths.assistantManagement,
+          pageVisitId: AppTraceContextStore.instance.newPageVisitId(),
+          visitRecorder: ref.read(visitRecorderServiceProvider),
+          telemetryReporter: ref.read(appTelemetryReporterProvider),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     final contentAccessState = ref.watch(personalContentAccessProvider);
+    final preferencesAsync = ref.watch(assistantPreferencesProvider);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
 
@@ -55,134 +85,74 @@ class _AssistantManagementPageState
           children: [
             SettingsInsetGroupedSection(
               isDark: isDark,
-              header: '性格选择',
-              child: Row(
-                children: [
-                  _buildPersonalityChip('gentle', '温柔', '情感关怀', Icons.face),
-                  SizedBox(width: AppSpacing.interGroupSm),
-                  _buildPersonalityChip('strict', '严厉', '强力催促', Icons.face_3),
-                  SizedBox(width: AppSpacing.interGroupSm),
-                  _buildPersonalityChip(
-                    'minimal',
-                    '极简',
-                    '言简意赅',
-                    Icons.flash_on,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: '隐私权限',
+              header: AssistantText.assistantPrivacyPermissions,
               child: Column(
                 children: [
                   _buildPermissionRow(
-                    '允许读取聊天',
-                    _permChat,
-                    (v) => setState(() => _permChat = v),
-                    Icons.lock_outline,
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _buildPermissionRow(
-                    '允许${AppConceptConstants.assistantLabel}使用我的创作内容',
+                    AssistantText.assistantContentAccessPermission,
                     contentAccessState.granted,
-                    (v) {
+                    (value) {
                       if (contentAccessState.isHydrating ||
                           contentAccessState.isSyncing) {
                         return;
                       }
-                      ref
-                          .read(personalContentAccessProvider.notifier)
-                          .setGranted(v);
+                      unawaited(
+                        ref
+                            .read(personalContentAccessProvider.notifier)
+                            .setGranted(value),
+                      );
                     },
-                    Icons.memory,
+                    CupertinoIcons.lock_shield,
                     enabled:
                         !contentAccessState.isHydrating &&
                         !contentAccessState.isSyncing,
                     detail: contentAccessState.isSyncing
-                        ? '同步中'
+                        ? AssistantText.assistantSyncing
                         : (contentAccessState.isHydrating
-                              ? '加载中'
-                              : contentAccessState.summaryLabel),
+                              ? AssistantText.assistantLoading
+                              : (contentAccessState.granted
+                                    ? AssistantText
+                                          .assistantContentAccessGranted
+                                    : AssistantText
+                                          .assistantContentAccessNotGranted)),
                   ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _buildPermissionRow(
-                    '允许访问位置',
-                    _permLocation,
-                    (v) => setState(() => _permLocation = v),
-                    Icons.location_on_outlined,
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _buildPermissionRow(
-                    '系统通知',
-                    _permNotifications,
-                    (v) => setState(() => _permNotifications = v),
-                    Icons.notifications_outlined,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupXl),
-            _buildSectionTitle(Icons.delete_outline, '记忆管理', fgSecondary),
-            SizedBox(height: AppSpacing.interGroupMd),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: () {
-                AppToast.show(context, '一键清除记忆（确认逻辑待接入）');
-              },
-              child: Container(
-                padding: EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(
-                    SettingsSemanticConstants.blockBorderRadius,
-                  ),
-                  border: Border.all(
-                    color: AppColors.error.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.delete_outline,
-                      color: AppColors.error,
-                      size: AppSpacing.twenty,
-                    ),
-                    SizedBox(width: AppSpacing.interGroupSm),
-                    Text(
-                      '一键清除记忆',
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.error,
+                  if ((contentAccessState.errorMessage ?? '').trim().isNotEmpty)
+                    AppSectionErrorCard(
+                      margin: EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.zero,
+                        AppSpacing.md,
+                        AppSpacing.interGroupSm,
                       ),
+                      semantic: _consentErrorSemantic(
+                        contentAccessState.errorMessage!.trim(),
+                      ),
+                      onAction: (action) async {
+                        if (action.type == UiErrorActionType.retry ||
+                            action.type == UiErrorActionType.resubmit) {
+                          await ref
+                              .read(personalContentAccessProvider.notifier)
+                              .refresh();
+                        }
+                      },
                     ),
-                    const Spacer(),
-                    Icon(
-                      CupertinoIcons.chevron_forward,
-                      color: AppColors.error.withValues(alpha: 0.7),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupSm),
-            Text(
-              AppConceptConstants.assistantClearMemoryWarning,
-              style: TextStyle(
-                fontSize: AppTypography.xsPlus,
-                color: fgSecondary,
-                height: AppTypography.bodyLineHeight,
+                ],
               ),
             ),
             SizedBox(height: AppSpacing.interGroupXl),
             SettingsInsetGroupedSection(
               isDark: isDark,
-              header: '配套能力',
+              header: AssistantText.assistantMemorySectionTitle,
+              child: _buildPreferencesSection(
+                preferencesAsync,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+              ),
+            ),
+            SizedBox(height: AppSpacing.interGroupXl),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: AssistantText.assistantSupportingCapabilities,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () => context.push(AppRoutePaths.assistantSkills),
@@ -196,7 +166,7 @@ class _AssistantManagementPageState
                     SizedBox(width: AppSpacing.interGroupSm),
                     Expanded(
                       child: Text(
-                        '技能中心',
+                        AssistantText.assistantSkillCenter,
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontSize: AppTypography.base,
@@ -205,56 +175,9 @@ class _AssistantManagementPageState
                         ),
                       ),
                     ),
-                    Icon(
-                      CupertinoIcons.chevron_forward,
-                      color: fgSecondary,
-                    ),
+                    Icon(CupertinoIcons.chevron_forward, color: fgSecondary),
                   ],
                 ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupXl),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: '技能生效时间',
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '日报生成时间',
-                        style: TextStyle(
-                          fontSize: AppTypography.base,
-                          fontWeight: FontWeight.w700,
-                          color: fgPrimary,
-                        ),
-                      ),
-                      Text(
-                        '22:00',
-                        style: TextStyle(
-                          fontSize: AppTypography.base,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.borderRadius,
-                    ),
-                    child: LinearProgressIndicator(
-                      value: 0.85,
-                      backgroundColor: fgSecondary.withValues(alpha: 0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primaryColor,
-                      ),
-                      minHeight: AppSpacing.six,
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -263,90 +186,324 @@ class _AssistantManagementPageState
     );
   }
 
-  Widget _buildSectionTitle(IconData icon, String label, Color fgSecondary) {
-    return Row(
+  UiErrorSemantic _consentErrorSemantic(String message) {
+    return UiErrorSemantic(
+      category: UiErrorCategory.sectionLoad,
+      scope: UiErrorScope.section,
+      title: AssistantText.assistantConsentLoadFailedTitle,
+      message: message,
+      primaryAction: const UiErrorAction(
+        type: UiErrorActionType.retry,
+        label: UITextConstants.tryAgain,
+      ),
+      presentation: UiErrorPresentation.sectionSoftCard,
+      tone: UiErrorTone.caution,
+    );
+  }
+
+  Widget _buildPreferencesSection(
+    AsyncValue<List<AssistantPreferenceFact>> preferencesAsync, {
+    required Color fgPrimary,
+    required Color fgSecondary,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(icon, size: AppSpacing.iconSmall, color: fgSecondary),
-        SizedBox(width: AppSpacing.intraGroupMd),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.base,
-            fontWeight: FontWeight.w700,
-            color: fgSecondary,
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.interGroupSm,
+            AppSpacing.md,
+            AppSpacing.intraGroupSm,
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                AssistantText.assistantPreferenceDefaultsTitle,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: FontWeight.w700,
+                  color: fgPrimary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              Wrap(
+                spacing: AppSpacing.intraGroupSm,
+                runSpacing: AppSpacing.intraGroupSm,
+                children: [
+                  _preferenceChoiceButton(
+                    AssistantText.assistantPreferenceConcise,
+                    AssistantPreferenceKind.replyLength,
+                    'concise',
+                  ),
+                  _preferenceChoiceButton(
+                    AssistantText.assistantPreferenceDetailed,
+                    AssistantPreferenceKind.replyLength,
+                    'detailed',
+                  ),
+                  _preferenceChoiceButton(
+                    AssistantText.assistantPreferenceCasual,
+                    AssistantPreferenceKind.tone,
+                    'casual',
+                  ),
+                  _preferenceChoiceButton(
+                    AssistantText.assistantPreferenceDeepThink,
+                    AssistantPreferenceKind.responseStyle,
+                    'deep_think',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (_preferenceMutationError != null)
+          AppSectionErrorCard(
+            margin: EdgeInsets.all(AppSpacing.md),
+            semantic: runtimeErrorSemantic(
+              context,
+              error: _preferenceMutationError!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+            ),
+            onAction: (_) async {
+              if (mounted) {
+                setState(() => _preferenceMutationError = null);
+              }
+            },
+          ),
+        preferencesAsync.when(
+          loading: () => Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: const Center(child: CupertinoActivityIndicator()),
+          ),
+          error: (error, _) => AppSectionErrorCard(
+            margin: EdgeInsets.all(AppSpacing.md),
+            semantic: runtimeErrorSemantic(
+              context,
+              error: error,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                ref.invalidate(assistantPreferencesProvider);
+              }
+            },
+          ),
+          data: (preferences) {
+            final active = preferences
+                .where(
+                  (preference) =>
+                      preference.status ==
+                      AssistantPreferenceStatus.active.wireName,
+                )
+                .toList(growable: false);
+            final revocable = preferences
+                .where(
+                  (preference) =>
+                      preference.status ==
+                      AssistantPreferenceStatus.revoked.wireName,
+                )
+                .toList(growable: false);
+            if (active.isEmpty && revocable.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.all(AppSpacing.md),
+                child: Text(
+                  AssistantText.assistantMemoryEmpty,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: <Widget>[
+                ...revocable.map(
+                  (preference) => _preferenceRow(
+                    preference,
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    statusLabel: AssistantText.assistantPreferenceForgot,
+                    actionLabel: AssistantText.assistantPreferenceUndo,
+                    onAction: () => _restorePreference(preference),
+                  ),
+                ),
+                ...active.map(
+                  (preference) => _preferenceRow(
+                    preference,
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    statusLabel: _preferenceDetail(preference),
+                    actionLabel: AssistantText.assistantPreferenceForget,
+                    onAction: () => _revokePreference(preference),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildPersonalityChip(
-    String id,
-    String label,
-    String desc,
-    IconData icon,
-  ) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final active = _personality == id;
-    return Expanded(
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        minimumSize: Size.zero,
-        onPressed: () => setState(() => _personality = id),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.primaryColor.withValues(alpha: 0.1)
-                : (isDark
-                      ? AppColors.white.withValues(alpha: 0.05)
-                      : AppColors.black.withValues(alpha: 0.03)),
-            borderRadius: BorderRadius.circular(
-              SettingsSemanticConstants.blockBorderRadius,
-            ),
-            border: Border.all(
-              color: active
-                  ? AppColors.primaryColor
-                  : AppColors.transparent,
-              width: AppSpacing.toolPanelItemBorderWidthSelected,
-            ),
+  Widget _preferenceRow(
+    AssistantPreferenceFact preference, {
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required String statusLabel,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.interGroupSm,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            CupertinoIcons.slider_horizontal_3,
+            size: AppSpacing.iconSmall,
+            color: fgSecondary,
           ),
-          child: Column(
+          SizedBox(width: AppSpacing.interGroupSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  size: AppSpacing.iconMedium,
-                  color: active ? AppColors.primaryColor : fgSecondary,
-                ),
-                SizedBox(height: AppSpacing.intraGroupMd),
                 Text(
-                  label,
+                  _preferenceTitle(preference),
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     fontWeight: FontWeight.w700,
-                    color: active ? AppColors.primaryColor : fgPrimary,
+                    color: fgPrimary,
                   ),
                 ),
+                SizedBox(height: AppSpacing.two),
                 Text(
-                  desc,
+                  statusLabel,
                   style: TextStyle(
-                    fontSize: AppTypography.xs,
+                    fontSize: AppTypography.xsPlus,
                     color: fgSecondary,
                   ),
                 ),
               ],
             ),
           ),
-        ),
+          CupertinoButton(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupSm),
+            onPressed: _preferenceMutationInFlight ? null : onAction,
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _preferenceChoiceButton(
+    String label,
+    AssistantPreferenceKind kind,
+    String value,
+  ) {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      onPressed: _preferenceMutationInFlight
+          ? null
+          : () => _setLongTermPreference(kind, value),
+      child: Text(label),
+    );
+  }
+
+  String _preferenceTitle(AssistantPreferenceFact preference) {
+    return switch (preference.value.trim()) {
+      'concise' => AssistantText.assistantPreferenceConcise,
+      'detailed' => AssistantText.assistantPreferenceDetailed,
+      'casual' => AssistantText.assistantPreferenceCasual,
+      'deep_think' => AssistantText.assistantPreferenceDeepThink,
+      'professional' => AssistantText.assistantPreferenceProfessional,
+      'warm' => AssistantText.assistantPreferenceWarm,
+      _ => AssistantText.assistantMemoryUntitled,
+    };
+  }
+
+  String _preferenceDetail(AssistantPreferenceFact preference) {
+    final scope = preference.scope == AssistantPreferenceScope.session.wireName
+        ? AssistantText.assistantPreferenceSessionScope
+        : AssistantText.assistantPreferenceLongTermScope;
+    final updatedAt = _formattedPreferenceUpdatedAt(preference.updatedAt);
+    return <String>[
+      scope,
+      if (updatedAt.isNotEmpty)
+        context.l10n.assistantMemoryUpdatedAt(updatedAt),
+    ].join(' · ');
+  }
+
+  String _formattedPreferenceUpdatedAt(String raw) {
+    final parsed = DateTime.tryParse(raw.trim());
+    if (parsed == null) {
+      return '';
+    }
+    final local = parsed.toLocal();
+    return context.l10n.monthDayTemplate(local.month, local.day);
+  }
+
+  Future<void> _setLongTermPreference(
+    AssistantPreferenceKind kind,
+    String value,
+  ) async {
+    await _runPreferenceMutation(() async {
+      await ref
+          .read(assistantPreferenceFactFacetProvider)
+          .setAssistantPreference(
+            scope: AssistantPreferenceScope.longTerm,
+            kind: kind,
+            value: value,
+            sourceType: AssistantPreferenceSourceType.management,
+          );
+    });
+  }
+
+  Future<void> _revokePreference(AssistantPreferenceFact preference) async {
+    await _runPreferenceMutation(() async {
+      await ref
+          .read(assistantPreferenceFactFacetProvider)
+          .revokeAssistantPreference(preferenceId: preference.preferenceId);
+    });
+  }
+
+  Future<void> _restorePreference(AssistantPreferenceFact preference) async {
+    await _runPreferenceMutation(() async {
+      await ref
+          .read(assistantPreferenceFactFacetProvider)
+          .restoreAssistantPreference(preferenceId: preference.preferenceId);
+    });
+  }
+
+  Future<void> _runPreferenceMutation(Future<void> Function() action) async {
+    if (_preferenceMutationInFlight) {
+      return;
+    }
+    setState(() {
+      _preferenceMutationInFlight = true;
+      _preferenceMutationError = null;
+    });
+    try {
+      await action();
+      ref.invalidate(assistantPreferencesProvider);
+    } catch (error) {
+      _preferenceMutationError = error;
+    } finally {
+      if (mounted) {
+        setState(() => _preferenceMutationInFlight = false);
+      }
+    }
   }
 
   Widget _buildPermissionRow(
@@ -388,7 +545,7 @@ class _AssistantManagementPageState
                   ),
                 ),
                 if (detail != null && detail.trim().isNotEmpty) ...[
-                  SizedBox(height: AppSpacing.xs / 2),
+                  SizedBox(height: AppSpacing.two),
                   Text(
                     detail,
                     style: TextStyle(
@@ -404,7 +561,8 @@ class _AssistantManagementPageState
             value: value,
             onChanged: enabled ? onChanged : null,
             activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-            inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+            inactiveTrackColor:
+                SettingsSemanticConstants.switchInactiveTrackColor(isDark),
           ),
         ],
       ),

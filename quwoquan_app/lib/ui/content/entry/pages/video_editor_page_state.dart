@@ -108,7 +108,14 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       });
       await _loadFrames();
       await _seekToCurrentRangeStart();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.video_editor.initialize',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       if (!mounted) {
         return;
       }
@@ -154,7 +161,14 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         _framesLoading = false;
         _sectionErrorSemantic = null;
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.video_editor.extract_frames',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       if (!mounted) {
         return;
       }

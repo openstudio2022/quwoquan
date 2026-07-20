@@ -798,52 +798,76 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  AssistantUserMemoryView:
-    description: 助手记忆条目（用户可见摘要，非底层向量块）
+  AssistantTurnSummaryView:
+    description: 会话轮次摘要（transcript 恢复主体；过程时间线按需走 GetAssistantRun）
     fields:
-      - name: memoryId
-        source: memoryId
+      - name: turnId
+        source: turnId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: title
-        source: title
+      - name: conversationId
+        source: conversationId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: snippet
-        source: snippet
+      - name: status
+        source: status
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: completed/failed/cancelled 终态
+      - name: inputText
+        source: inputText
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: deny
+        api_exposure: read
+        ops_exposure: none
+      - name: answerText
+        source: answerText
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: deny
+        api_exposure: read
+        ops_exposure: none
+      - name: skillId
+        source: skillId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: sourceType
-        source: sourceType
+      - name: domainId
+        source: domainId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: conversation | post | manual 等
       - name: createdAt
         source: createdAt
         type: string
-        constraints: [NULLABLE]
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: updatedAt
-        source: updatedAt
+      - name: completedAt
+        source: completedAt
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -851,17 +875,26 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  AssistantUserMemoryListView:
-    description: ListAssistantMemories 响应体
+  AssistantTurnListView:
+    description: ListConversationTurns 响应体（createdAt desc keyset 分页切片）
     fields:
       - name: items
         source: items
-        type: "[]AssistantUserMemoryView"
+        type: "[]AssistantTurnSummaryView"
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: nextCursor
+        source: nextCursor
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 不透明 keyset 游标；空表示无更多数据
 
   AssistantSkillCatalogItemView:
     description: 技能目录项（与 ListSkills 对齐的可展示元数据）
@@ -1174,6 +1207,52 @@ entities:
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  AssistantPreferenceSnapshot:
+    description: AssistantRun 创建时固化的 active 偏好值对象
+    fields:
+      - name: preferenceId
+        source: preferenceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: scope
+        source: scope
+        type: enum
+        enum_ref: AssistantPreferenceScope
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: kind
+        source: kind
+        type: enum
+        enum_ref: AssistantPreferenceKind
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: value
+        source: value
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: read
+      - name: version
+        source: version
+        type: int
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
         api_exposure: read
         ops_exposure: read
 
@@ -1535,20 +1614,20 @@ entities:
 
       - name: sessionPreferenceFacts
         source: sessionPreferenceFacts
-        type: "[]object"
+        type: "[]AssistantPreferenceSnapshot"
         constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
+        classification: SENSITIVE
+        log_policy: metadata_only
         api_exposure: read
         ops_exposure: read
         description: 本会话即时生效的偏好事实快照
 
       - name: longTermPreferenceFacts
         source: longTermPreferenceFacts
-        type: "[]object"
+        type: "[]AssistantPreferenceSnapshot"
         constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
+        classification: SENSITIVE
+        log_policy: metadata_only
         api_exposure: read
         ops_exposure: read
         description: 长期偏好事实快照（可见、可撤销）
@@ -1611,16 +1690,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-      - name: contextEmbedding
-        source: contextEmbedding
-        type: "[]float32"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: drop
-        api_exposure: drop
-        ops_exposure: drop
-        description: 上下文向量（RAG 检索用，1536维）
 
       - name: createdAt
         source: createdAt

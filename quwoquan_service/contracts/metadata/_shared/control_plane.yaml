@@ -86,6 +86,9 @@ operation_schema:
     - audit_required
     - rollback_supported
     - rollout_guard
+    - idempotency
+    - auth_mode
+    - principal
 
 http_methods:
   - GET

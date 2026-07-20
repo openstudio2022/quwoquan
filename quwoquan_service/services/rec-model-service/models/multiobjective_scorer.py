@@ -55,10 +55,11 @@ def _resolve_cached_artifact_path(artifact_path: str) -> Path | None:
     return None
 
 
-def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, float] | None]:
+def _load_multiobjective_models(
+) -> tuple[dict[str, Any] | None, dict[str, float] | None, str | None]:
     """Load multi-objective models and optional fusion weights from registry."""
     if lgb is None or MongoClient is None:
-        return None, None
+        return None, None, None
     uri = os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true")
     db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_content")
     try:
@@ -74,7 +75,8 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
                     sort=[("createdAt", -1)],
                 )
         if not doc:
-            return None, None
+            return None, None, None
+        model_release_id = str(doc.get("_id") or "").strip() or None
 
         artifact_uri = doc.get("artifactUri", "")
         artifact_path = doc.get("artifactPath", "")
@@ -93,7 +95,7 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
                 load_path = str(resolved_path)
 
         if not load_path:
-            return None, None
+            return None, None, None
 
         load_path = Path(load_path)
         load_dir = load_path.parent if load_path.is_file() else load_path
@@ -107,6 +109,8 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
                 pass
 
         model_files_map = fusion_config.get("model_files", {}) if fusion_config else {}
+        # N0-5：config 携带子模型远端地址；本地（同目录）不存在时按 uri 拉取。
+        model_uri_map = fusion_config.get("model_artifact_uris", {}) if fusion_config else {}
 
         models = {}
         for obj_name in OBJECTIVES:
@@ -118,27 +122,44 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
                 if candidate.name and candidate.exists():
                     models[obj_name] = lgb.Booster(model_file=str(candidate))
                     break
+            if obj_name not in models and model_uri_map.get(obj_name):
+                try:
+                    import artifact_store
+                    sub_path = artifact_store.download(model_uri_map[obj_name])
+                    models[obj_name] = lgb.Booster(model_file=str(sub_path))
+                except Exception:
+                    pass
 
         fusion_weights = None
         if fusion_config:
             obj_cfgs = fusion_config.get("objectives", {})
             fusion_weights = {k: v.get("weight", OBJECTIVES.get(k, {}).get("weight", 0)) for k, v in obj_cfgs.items()}
 
-        return (models, fusion_weights) if models else (None, None)
+        if models:
+            return models, fusion_weights, model_release_id
+        return None, None, None
     except Exception:
-        return None, None
+        return None, None, None
 
 
 class MultiObjectiveScorer:
     """Scorer that fuses per-objective LightGBM predictions."""
 
     def __init__(self):
-        self._models, self._fusion_weights = _load_multiobjective_models()
+        (
+            self._models,
+            self._fusion_weights,
+            self._model_release_id,
+        ) = _load_multiobjective_models()
         self._model_version = "multi_obj" if self._models else "rule"
 
     @property
     def model_version(self) -> str:
         return self._model_version
+
+    @property
+    def model_release_id(self) -> str | None:
+        return self._model_release_id
 
     def _get_weight(self, obj_name: str) -> float:
         if self._fusion_weights and obj_name in self._fusion_weights:
@@ -146,7 +167,11 @@ class MultiObjectiveScorer:
         return OBJECTIVES.get(obj_name, {}).get("weight", 0)
 
     def reload(self):
-        self._models, self._fusion_weights = _load_multiobjective_models()
+        (
+            self._models,
+            self._fusion_weights,
+            self._model_release_id,
+        ) = _load_multiobjective_models()
         self._model_version = "multi_obj" if self._models else "rule"
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
@@ -203,4 +228,7 @@ class MultiObjectiveScorer:
                 detail["total"] = sc
                 scores_list.append(CandidateScore(contentId=content_id, score=sc, detail=detail))
 
-        return ModelScoreResponse(scores=scores_list)
+        return ModelScoreResponse(
+            scores=scores_list,
+            modelReleaseId=self._model_release_id,
+        )

@@ -1,0 +1,76 @@
+id: CR-20260720-126-search-commercial-maturity-review
+title: 搜索（M5）商用成熟度全面排查、契约漂移修复与收口工作包冻结
+slug: search-commercial-maturity-review
+revision: 1
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/global-search-experience
+  - specs/feature-tree/global-search-experience/cross-domain-search-journey
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology
+entries:
+  - timestamp: "2026-07-20T12:30:00+08:00"
+    summary: |
+      按「业务目标 → 业务对象 → 对象关系/生命周期 → 用户旅程 → 页面承载 →
+      交集差异化 → 运营指标 → 测试验证」主线完成 M5 搜索专项审查，交付
+      docs/search-commercial-maturity-plan.md（对象全景表、聚合边界、状态机、
+      对象—功能—页面双向矩阵、P0–P5 评级、标杆对比、交集规划矩阵、GATE 清单、
+      WP-H~L 工作包）。真实核验：gamma-local search-service 直连冒烟
+      （/search 200 + 5 hits + rankingVersion=search-v1；feedback 202；
+      hot-queries 200；recent 401 fail-closed；空 query 400；suggest 200）。
+      随排查完成三组断链/契约 bug 修复：
+      (1) quwoquan_app/lib/core/services/remote_search_repository.dart 半重构
+      断链（缺 search_models import，SearchMode/SearchResolvedFrom 未定义）；
+      (2) quwoquan_service/runtime/search/core.go 的 Reason/Evidence/Facet/
+      DegradeSignal/Provenance/Citation 六个 wire struct 缺 json tag，实测
+      rankReasons 输出大写 Go 导出名（{"Code","Label","Weight"}），App 契约包
+      按小写解码导致排序理由/降级信号在 remote 端到端静默全丢，已补小写 tag；
+      (3) gamma 五服务（search/circle/entity/user/content）ES 段缺
+      requestTimeoutMs，默认 800ms 被 amd64 模拟 ES 打穿——search 全量 503、
+      circle-service EnsureIndex fail-fast crash，已统一放宽 5000ms。
+      关键裁定：交集 connectionState/intersectionReason 为死契约字段（云侧无
+      attach 生产者，交集 Tab remote 呈假空态），修复路径为 search-service
+      接 content-service IntersectionService.ObjectIntersections（WP-J），
+      不在 search 域新建交集模型；user 对象已投影可召回但端侧无结果承载、
+      tag 完全缺席检索（WP-K）；beta/gamma 无搜索 seed（WP-I）；页面评级
+      global_search=P3、network_results=P2+、location_landing=P3，全部保留
+      收口不重构。
+    reason: |
+      用户判定搜索「界面简陋基本不可用，功能没有端到端和四个环境验证通过」，
+      要求按业务对象中心方法建立可商用完整规划。排查证实"文档绿 vs 体验不可
+      用"的矛盾来自四个真实断点：remote 适配器编译断链、wire 契约大小写漂移、
+      gamma ES 超时全量 503、交集死字段，前三者已随排查修复，其余冻结为
+      WP-H~L 工作包。
+    change_type:
+      - analysis
+      - implementation
+      - spec
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_service/services/search-service/tests/local_contract
+          - quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_service/services/search-service/tests/api_integration
+    notes: |
+      本 CR 的代码修复证据：go vet + go test ./runtime/search/...
+      ./services/search-service/... ./services/assistant-service/internal/
+      application/tool/... 全绿；dart analyze remote_search_repository.dart
+      0 error；wire 小写经 marshal + 容器内热替换 + 经网关三重验证。
+      2026-07-20 二轮补录：(a) 视觉核验完成——修复 app_providers.dart 对
+      user_profile_repository_{contract,remote}.dart 两个 part of 文件的
+      非法 import（并发 user 域拆分半成品）后，widget 截图 harness 12/12
+      通过，产出 6 场景×双色 12 张真实渲染 PNG（归档
+      .qwq_output/env/repo/runs/search-visual-audit/），三页评级
+      P3/P2+/P3 经视觉确认维持，「简陋」观感主因=默认页灵感区纯文字过素
+      （整改进 WP-K）；(b) 经网关全链路验证——以同网络临时 Caddy 容器 +
+      同一 Caddyfile 复验 /search*（result 200 + 小写 rankReasons +
+      rankingVersion；feedback 202；hot-queries 200；旧 /v1/search 404），
+      冷查询超时波动属 R-S06-S-1 本地工件；(c) 交集新发现——「已形成的
+      连接」卡端侧固定动作句（你关注过/你已加入/你互动过）属「状态→动作句」
+      端侧翻译，并入 WP-J 收口。gamma-proxy 与 object-storage 宿主 19130
+      双绑（HEAD 已入库）为环境域拓扑缺陷，网关容器因此起不来，已在报告
+      §1.2 登记。R-S08（交集 attach）/R-S09（搜索 seed）候选风险项待用户
+      确认后登记 outstanding_risks_backlog。

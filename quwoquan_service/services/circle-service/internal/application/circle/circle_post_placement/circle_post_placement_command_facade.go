@@ -119,13 +119,14 @@ func (f *CommandFacade) Remove(ctx context.Context, command TargetCommand) (Comm
 	if actorID != placement.OwnerPersonaID && !moderator {
 		return CommandResult{}, generated.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
 	}
-	if placement.State == placementmodel.CirclePostPlacementStateRemoved {
-		return commandResultFromPlacement(placement, true), nil
-	}
-	return f.commit(ctx, current, actorID, placementmodel.ChangeSet{
+	change := placementmodel.ChangeSet{
 		Kind: placementmodel.ChangeRemove, PlacementID: placement.ID, CircleID: placement.CircleID,
 		ExpectedVersion: placement.Version, OccurredAt: f.now().UTC(),
-	})
+	}
+	if placement.State == placementmodel.CirclePostPlacementStateRemoved {
+		return f.recordNoop(ctx, current, actorID, placement, change)
+	}
+	return f.commit(ctx, current, actorID, change)
 }
 
 func (f *CommandFacade) SetPinned(ctx context.Context, command PresentationCommand) (CommandResult, error) {
@@ -156,14 +157,35 @@ func (f *CommandFacade) setPresentation(ctx context.Context, kind placementmodel
 	if !moderator {
 		return CommandResult{}, generated.AppErrorFromPermissionDenied("presentation changes require circle moderator")
 	}
-	if (kind == placementmodel.ChangePin && placement.Pinned == command.Enabled) ||
-		(kind == placementmodel.ChangeFeature && placement.Featured == command.Enabled) {
-		return commandResultFromPlacement(placement, true), nil
-	}
-	return f.commit(ctx, current, actorID, placementmodel.ChangeSet{
+	change := placementmodel.ChangeSet{
 		Kind: kind, PlacementID: placement.ID, CircleID: placement.CircleID,
 		ExpectedVersion: placement.Version, Enabled: command.Enabled, OccurredAt: f.now().UTC(),
+	}
+	if (kind == placementmodel.ChangePin && placement.Pinned == command.Enabled) ||
+		(kind == placementmodel.ChangeFeature && placement.Featured == command.Enabled) {
+		return f.recordNoop(ctx, current, actorID, placement, change)
+	}
+	return f.commit(ctx, current, actorID, change)
+}
+
+// recordNoop 持久化"目标状态已满足"回执；首个 Idempotency-Key 也能重放原始结果。
+func (f *CommandFacade) recordNoop(ctx context.Context, current operation.Context, actorID string, placement placementmodel.CirclePostPlacement, change placementmodel.ChangeSet) (CommandResult, error) {
+	digest, err := commandDigest(actorID, change)
+	if err != nil {
+		return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
+	}
+	receipt, err := f.store.RecordNoopReceipt(ctx, placementports.NoopReceipt{
+		PlacementID: placement.ID, Version: placement.Version, State: placement.State,
+		ReceiptKey:    scopedReceiptKey(actorID, current.IdempotencyKey),
+		CommandDigest: digest, ReceiptExpiresAt: f.now().UTC().Add(placementReceiptRetention),
 	})
+	if err != nil {
+		return CommandResult{}, mapCommitError(err)
+	}
+	return CommandResult{
+		PlacementID: receipt.PlacementID, Version: receipt.Version,
+		State: string(receipt.State), IdempotentReplay: true,
+	}, nil
 }
 
 func (f *CommandFacade) requirePlacement(ctx context.Context, circleID, placementID string) (placementmodel.CirclePostPlacement, error) {
@@ -239,7 +261,7 @@ func (f *CommandFacade) commit(ctx context.Context, current operation.Context, a
 			return CommandResult{}, mapCommitError(placementmodel.ErrNotFound)
 		}
 		if transitionAlreadyApplied(latest, change) {
-			return commandResultFromPlacement(latest, true), nil
+			return f.recordNoop(ctx, current, actorID, latest, change)
 		}
 		change.ExpectedVersion = latest.Version
 	}

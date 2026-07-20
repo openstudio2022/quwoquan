@@ -1,21 +1,6 @@
 aggregate: RecommendationModelRelease
 
-events:
-  - name: RecommendationModelReleaseStaged
-    producer: recommendation-service
-    consumers: [recommendation-service, platform-ops]
-    channel: event_store
-    payload_entity: RecommendationModelRelease
-    payload_fields: [id, scenario, modelDigest, featureContractVersion, status, createdAt]
-  - name: RecommendationModelReleaseActivated
-    producer: recommendation-service
-    consumers: [content-service, circle-service, search-service, platform-ops]
-    channel: event_store
-    payload_entity: RecommendationModelRelease
-    payload_fields: [id, scenario, modelDigest, featureContractVersion, status, rolloutPercent, activatedAt]
-  - name: RecommendationModelReleaseRolledBack
-    producer: recommendation-service
-    consumers: [content-service, circle-service, search-service, platform-ops]
-    channel: event_store
-    payload_entity: RecommendationModelRelease
-    payload_fields: [id, scenario, status, rolloutPercent]
+# 生命周期事件随生命周期命令一并 V1 deferred（见 aggregate.yaml#deferred_operations）：
+# 模型晋升/回滚由 model_registry_cli 写 rec_model_registry，推理侧按 production 标记
+# 热加载，无事件消费者实现。恢复公开命令时再声明事件与 outbox。
+events: []

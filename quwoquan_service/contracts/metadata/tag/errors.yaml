@@ -1,0 +1,40 @@
+entity: TagNodeView
+domain: TAG
+
+# tag 域共享错误 + 只读查询专属错误。
+# Go 侧经 runtime/errors（ModuleTag）构造，禁止硬编码 code 字符串。
+
+errors:
+  - code: TAG.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: tagInvalidArgument
+    go_const: ErrTagInvalidArgument
+    user_message:
+      zh: "标签请求参数不正确"
+      en: "Invalid tag request"
+
+  - code: TAG.USER.tag_not_found
+    kind: USER
+    reason: tag_not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: tagNotFound
+    go_const: ErrTagNotFound
+    user_message:
+      zh: "标签不存在或已下线"
+      en: "Tag not found or retired"
+
+  - code: TAG.SYSTEM.storage_read_failed
+    kind: SYSTEM
+    reason: storage_read_failed
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: tagStorageReadFailed
+    go_const: ErrTagStorageReadFailed
+    user_message:
+      zh: "标签读取失败，请稍后重试"
+      en: "Unable to read tags, please retry"

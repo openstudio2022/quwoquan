@@ -52,7 +52,7 @@ api_routes:
       trace: true
       attributes: [post_id, reply, outcome]
     slo:
-      latency_p95_ms: 800
+      latency_p95_ms: 500
       availability_percent: 99.9
     description: 发表评论或回复；replyToCommentId 可选，服务端规范化 parentCommentId。
     request_entity: Comment
@@ -109,7 +109,7 @@ api_routes:
       trace: true
       attributes: [post_id, outcome]
     slo:
-      latency_p95_ms: 800
+      latency_p95_ms: 500
       availability_percent: 99.9
     description: 评论作者软删自己的评论；写入 CommentDeleted outbox 事实。
     request_fields: []
@@ -166,7 +166,7 @@ api_routes:
       trace: true
       attributes: [post_id, outcome]
     slo:
-      latency_p95_ms: 800
+      latency_p95_ms: 500
       availability_percent: 99.9
     description: 被引用 Post 作者置顶一级评论；不直接修改 Post 聚合。
     request_fields: []
@@ -223,7 +223,7 @@ api_routes:
       trace: true
       attributes: [post_id, outcome]
     slo:
-      latency_p95_ms: 800
+      latency_p95_ms: 500
       availability_percent: 99.9
     description: 被引用 Post 作者取消置顶一级评论。
     request_fields: []
@@ -279,7 +279,7 @@ api_routes:
       trace: true
       attributes: [outcome]
     slo:
-      latency_p95_ms: 800
+      latency_p95_ms: 500
       availability_percent: 99.9
     description: 绑定已验证的 comment_attachment MediaAsset 引用。
     request_fields: [attachmentMediaIds]
@@ -320,6 +320,7 @@ api_routes:
       idempotency: none
     error_codes:
       - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_sort_invalid
       - CONTENT.SYSTEM.storage_read_failed
     privacy:
       request_classification: PUBLIC
@@ -328,11 +329,11 @@ api_routes:
     telemetry:
       metric: content_comment_page_list
       trace: true
-      attributes: [post_id, outcome]
+      attributes: [post_id, sort, outcome]
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    query_params: [cursor, limit]
+    query_params: [cursor, limit, sort]
     response_entity: CommentPageSlice
     response_body: CommentPageSlice
     response_body_kind: page
@@ -342,7 +343,11 @@ api_routes:
       response_type: ContentCommentPageSlice
       request_encoder: encodeListContentCommentsQuery
       response_decoder: decodeContentCommentPageSlice
-    description: 一级评论 named page reader；仅 BSON projection，不返回 Comment aggregate。
+    description: |
+      一级评论 named page reader；仅 BSON projection，不返回 Comment aggregate。
+      sort=hot（默认，hotScore 投影分驱动）或 latest；置顶段永远在前；仅返回 active。
+      投影组合 authorIpLocation 快照、authorLiked（Post 作者赞过事实）与
+      viewerRelation（viewer→评论作者关注/互关事实，来自 persona_follow_projection）。
     security:
       auth_mode: optional
       principal: owner
@@ -512,6 +517,114 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
+  - method: POST
+    path: /internal/content/comments/{commentId}:hide
+
+    operation: HideComment
+    actor: account
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: hideComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: operator
+      scopes: [ops.case.write]
+      permissions: [content.moderation.decide]
+      ownership_policy: moderation_queue
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_moderation_forbidden
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_hide
+      trace: true
+      attributes: [post_id, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 治理隐藏评论（active → hidden）；写入 CommentModerated 审计事实。举报处置（ResolveReport）与运营后台经此命令执行。
+    request_fields: [reason]
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
+  - method: POST
+    path: /internal/content/comments/{commentId}:restore
+
+    operation: RestoreComment
+    actor: account
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: restoreComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: operator
+      scopes: [ops.case.write]
+      permissions: [content.moderation.decide]
+      ownership_policy: moderation_queue
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_moderation_forbidden
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_restore
+      trace: true
+      attributes: [post_id, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 恢复治理隐藏的评论（hidden → active）；写入 CommentModerated 审计事实。deleted/tombstoned 为终态不可恢复。
+    request_fields: [reason]
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
 consumers:
   - name: app
     capabilities: [create_comment, delete_comment, pin_comment, unpin_comment, list_comments, list_comment_replies, list_authored_comments, list_received_comments]
+  - name: platform-ops
+    capabilities: [hide_comment, restore_comment]

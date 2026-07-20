@@ -3,11 +3,6 @@ service:
   name: user-service
   domain: user
   owner: user-platform
-  commercial_defaults:
-    status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: USER_GREETING_REQUEST_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
@@ -24,6 +19,44 @@ api_routes:
       invariant_target: GreetingRequest
     description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
     writable_fields: [targetSubAccountId, requestMessage, source]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: SendGreetingCommand
+      response_type: GreetingRequestRecord
+      request_encoder: encodeSendGreetingCommand
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: actor_self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.target_blocked_sender
+      - USER.GREETING.duplicate_pending
+      - USER.GREETING.already_contact
+      - USER.GREETING.rate_limited
+      - USER.GREETING.sender_realname_required
+      - USER.GREETING.minor_restricted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner
@@ -44,6 +77,38 @@ api_routes:
       slice: ListGreetingInboxSlice
     description: 收件箱（我收到的待处理请求）
     query_params: [status, cursor, limit]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: ListGreetingRequestsQuery
+      response_type: GreetingRequestSlice
+      request_encoder: encodeListGreetingRequestsQuery
+      response_decoder: decodeGreetingRequestSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner
@@ -64,6 +129,38 @@ api_routes:
       slice: ListGreetingOutboxSlice
     description: 发件箱（我发出的请求）
     query_params: [status, cursor, limit]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: ListGreetingRequestsQuery
+      response_type: GreetingRequestSlice
+      request_encoder: encodeListGreetingRequestsQuery
+      response_decoder: decodeGreetingRequestSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner
@@ -84,6 +181,41 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
+    path_params: [requestId]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: ReplyGreetingCommand
+      response_type: GreetingRequestRecord
+      request_encoder: encodeReplyGreetingCommand
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_target_only
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner
@@ -104,6 +236,41 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 忽略打招呼
+    path_params: [requestId]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: IgnoreGreetingCommand
+      response_type: GreetingRequestRecord
+      request_encoder: encodeIgnoreGreetingCommand
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_target_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner
@@ -124,6 +291,41 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
+    path_params: [requestId]
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      request_type: CancelGreetingCommand
+      response_type: GreetingRequestRecord
+      request_encoder: encodeCancelGreetingCommand
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_requester_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner

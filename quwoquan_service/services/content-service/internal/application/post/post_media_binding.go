@@ -61,7 +61,19 @@ func (s *PostService) prepareMediaAssetsForPublication(
 			return err
 		}
 		if !asset.Ready {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "media asset not ready")
+			switch strings.TrimSpace(asset.ProcessingStatus) {
+			case "rejected":
+				return contentgenerated.AppErrorFromMediaProcessingRejected(
+					fmt.Sprintf("media asset %q was rejected by processing", assetID),
+				)
+			case "deleted":
+				return contentgenerated.AppErrorFromMediaNotFound(
+					fmt.Sprintf("media asset %q was deleted", assetID),
+				)
+			}
+			return contentgenerated.AppErrorFromMediaNotReady(
+				fmt.Sprintf("media asset %q is still processing", assetID),
+			)
 		}
 		bound = append(bound, assetID)
 	}
@@ -94,18 +106,26 @@ func projectBoundMediaAssets(
 	if post == nil {
 		return fmt.Errorf("post is required")
 	}
-	manualCoverIDs := make(map[string]struct{})
-	for _, assetID := range boundAssetIDs {
-		asset := assets[assetID]
-		if strings.EqualFold(asset.MediaType, "video") &&
-			strings.TrimSpace(asset.ManualCoverAssetID) != "" {
-			manualCoverIDs[asset.ManualCoverAssetID] = struct{}{}
-		}
-	}
 	// The draft carries non-delivery presentation metadata from the App. Keep it
 	// before clearing all client-controlled URL fields below; the bind projection
 	// will rebuild each media item with canonical public slice references.
 	metadataByAssetID := boundMediaItemMetadata(post.MediaItems)
+	manualCoverIDs := make(map[string]struct{})
+	for _, assetID := range boundAssetIDs {
+		asset := assets[assetID]
+		if !strings.EqualFold(asset.MediaType, "video") {
+			continue
+		}
+		coverAssetID := strings.TrimSpace(asset.ManualCoverAssetID)
+		if draftCoverAssetID := strings.TrimSpace(
+			asString(metadataByAssetID[assetID]["coverAssetId"]),
+		); draftCoverAssetID != "" {
+			coverAssetID = draftCoverAssetID
+		}
+		if coverAssetID != "" {
+			manualCoverIDs[coverAssetID] = struct{}{}
+		}
+	}
 
 	// Binding supersedes any client-supplied media URL fields, so a successful
 	// bind removes the historical cdnUrl/CAS persistence bypass.
@@ -140,7 +160,11 @@ func projectBoundMediaAssets(
 				firstImageSlice = publicSliceKey
 			}
 		case "video":
-			coverSlice, err := boundVideoCoverSlice(asset, assets)
+			coverSlice, err := boundVideoCoverSlice(
+				asset,
+				assets,
+				metadataByAssetID[assetID],
+			)
 			if err != nil {
 				return err
 			}
@@ -177,6 +201,16 @@ func projectBoundMediaAssets(
 		post.VideoUrl = firstVideoSlice
 		post.ThumbnailUrl = firstVideoCover
 		post.CoverUrl = firstVideoCover
+		for _, assetID := range boundAssetIDs {
+			asset := assets[assetID]
+			if !strings.EqualFold(strings.TrimSpace(asset.MediaType), "video") {
+				continue
+			}
+			post.Width = int64(asset.VideoWidth)
+			post.Height = int64(asset.VideoHeight)
+			post.DurationMs = asset.VerifiedDurationMs
+			break
+		}
 	}
 	if strings.EqualFold(strings.TrimSpace(post.ContentType), "video") &&
 		firstVideoSlice == "" {
@@ -233,8 +267,15 @@ func boundMediaItem(source map[string]any) map[string]any {
 func boundVideoCoverSlice(
 	video MediaAssetBindingSlice,
 	assets map[string]MediaAssetBindingSlice,
+	presentation map[string]any,
 ) (string, error) {
-	if coverAssetID := strings.TrimSpace(video.ManualCoverAssetID); coverAssetID != "" {
+	coverAssetID := strings.TrimSpace(video.ManualCoverAssetID)
+	if draftCoverAssetID := strings.TrimSpace(
+		asString(presentation["coverAssetId"]),
+	); draftCoverAssetID != "" {
+		coverAssetID = draftCoverAssetID
+	}
+	if coverAssetID != "" {
 		cover, found := assets[coverAssetID]
 		if !found || !cover.Ready || !strings.EqualFold(cover.MediaType, "image") {
 			return "", fmt.Errorf(
@@ -252,9 +293,17 @@ func boundVideoCoverSlice(
 		)
 	}
 	if coverSlice := strings.TrimSpace(video.CoverPublicSliceKey); coverSlice != "" {
-		return coverSlice, nil
+		return videoThumbnailPublicSlice(coverSlice), nil
 	}
 	return "", fmt.Errorf("video asset %q has no VOD cover public slice key", video.AssetID)
+}
+
+func videoThumbnailPublicSlice(publicSliceKey string) string {
+	publicSliceKey = strings.TrimSpace(publicSliceKey)
+	if publicSliceKey == "" || strings.Contains(publicSliceKey, "?") {
+		return publicSliceKey
+	}
+	return publicSliceKey + "?variant=thumb"
 }
 
 func requireMediaOwner(resourceOwnerID, actorID string) error {

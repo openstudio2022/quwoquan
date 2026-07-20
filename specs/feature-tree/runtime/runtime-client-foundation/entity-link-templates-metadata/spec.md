@@ -1,4 +1,4 @@
-# L3：实体链接模板元数据（entity-link-templates-metadata）
+# L3 特性：实体链接模板元数据（entity-link-templates-metadata）
 
 ## 背景与动机
 
@@ -33,7 +33,7 @@
 
 ## Out of Scope（本 baseline 文档冻结；实现按 plan 切片）
 
-- **codegen 工具改造与全量调用点替换**（沉浸式、分享 sheet、助理 Referer 等）：见 `树内计划文档`，在 **`/dev`** 闭环。  
+- **codegen 工具改造与全量调用点替换**（沉浸式、分享 sheet、助理 Referer 等）：在对应 acceptance 与 CR 中登记证据，并在 **`/dev`** 闭环。
 - **服务端短链、跳转、OG 动态 HTML**：可选后续 story；本 L3 不强制 API 返回 canonical。  
 - **iOS AASA / Android assetlinks 文件内容**：运维交付物；metadata 仅提供 **path pattern** 输入。
 

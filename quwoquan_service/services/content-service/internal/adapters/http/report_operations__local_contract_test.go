@@ -131,7 +131,7 @@ func TestReportOperationsRejectAnonymousForgedAndUnauthorizedPrincipals(t *testi
 }
 
 func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) {
-	handler, _ := newReportOperationsLocalContractHandler(t)
+	handler, store := newReportOperationsLocalContractHandler(t)
 	reporter := rtauth.TokenSubject{
 		AccountID: "reporter-account",
 		PersonaID: "reporter-persona",
@@ -321,6 +321,15 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	}
 	if string(resolved.Status) != "resolved" || resolved.ReviewerID != "review-operator" {
 		t.Fatalf("resolved report=%+v", resolved)
+	}
+	resolvedEvents := 0
+	for _, event := range store.OutboxEvents() {
+		if event.EventType == "content.report.resolved" {
+			resolvedEvents++
+		}
+	}
+	if resolvedEvents != 1 {
+		t.Fatalf("resolved outbox events=%d want=1", resolvedEvents)
 	}
 }
 

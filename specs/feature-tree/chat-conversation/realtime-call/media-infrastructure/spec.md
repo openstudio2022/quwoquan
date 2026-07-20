@@ -1,25 +1,50 @@
-# L3 规格：media-infrastructure — 媒体基础设施
+# L3 Story：media-infrastructure — RTC 媒体基础设施
 
-> **层级**：L3_subfeature（隶属 L2 `realtime-call`）
-> **状态**：specified
-> **父节点**：`chat-conversation/realtime-call`
+> **层级**：L3_story（隶属 L2 `realtime-call`）
+> **状态**：specified；商用运行证据 pending
 
-## 定位
+## 最小价值
 
-SFU/TURN/录制基础设施的部署与验证：LiveKit SFU 自部署、coturn TURN 服务、Egress 录制管道、灰度发布。
+rtc-service 可通过受控 LiveKit/TURN 能力创建房间并签发短期凭据，App 能在网络变化下建立、
+恢复和结束媒体连接，运营能以真实 QoE 指标决定灰度与回滚。
 
 ## 职责边界
 
-- 覆盖 Phase 0 + Phase 4 基建（I1~I4、F14 录制、F15 屏幕共享）
-- LiveKit SFU 自部署 + 32 人满房基准测试
-- coturn TURN 服务 + NAT 穿透验证
-- LiveKit Egress 录制 → OSS 存储
-- 部署拓扑：rtc-service / livekit-sfu / coturn 独立部署
-- 灰度策略：prod 5%→20%→50%→100% + 自动回滚门禁
+- LiveKit Room 与 CallSession 一一映射。
+- rtc-service 通过 infrastructure port 创建/删除 Room、签发绑定 room/participant/grants 的 token。
+- `livekitUrl` 由服务配置下发，App 不硬编码。
+- coturn 负责 NAT 穿透；realtime-gateway 负责业务事件投递，两者不混用。
+- 媒体建连后必须调用 `ReportMediaConnected`，使 Participant/CallSession 状态可审计。
+- 屏幕共享使用 LiveKit screen track + CallSession start/stop command。
+- 32 人上限需同时通过聚合边界与真实 SFU 容量验证。
 
-## 与父/子节点关系
+## 可观测
 
-- 父节点 `realtime-call` 定义容量规划和灰度门禁阈值
-- 子节点 `sfu-deployment-contract`（L4 Story）承载 SFU 部署的可验收交付
+现有 rtc-service HTTP RED 不能替代媒体质量。当前已落地：
 
-详细规格见父节点 `realtime-call/spec.md` §4.5、§6.5。
+- App `RtcMediaQoeTracker` 在一次通话内只结算一个低基数终态；
+- `rtc_qoe` mergeable hourly rollup 与 SLS 三项黄金指标告警；
+- LiveKit 6789 scrape，以及官方 `livekit_packet_loss_percent_bucket` /
+  `livekit_quality_score_bucket` 媒体面告警；
+- 本地合同锁定取消/未接分母、重连恢复、`connection_lost` wire 值和禁止
+  callId/userId 标签。
+
+真实 SLS series、可执行查询面板、Gamma/prod 弱网 readback 与触发/恢复/回滚演练尚未
+完成；在这些证据可查询前不能把静态配置当作发布准出。
+
+一级指标固定为：
+
+1. 有效媒体接通率；
+2. 接听/加入到媒体可用 P95；
+3. 非预期媒体中断率。
+
+## Out of Scope
+
+- 通话录制、录制文件与相关媒体管道。
+- 本期 E2EE 承诺。
+- P2P 临时 fallback 或 RTC 私有信令。
+
+## 验收
+
+需覆盖 Room/token、TURN、timeout/connected、screen share、弱网/重连、QoE emitter/rollup、
+Gamma 真实媒体与 prod gray readback。受控 SLS Secret 缺失时保持 blocked。

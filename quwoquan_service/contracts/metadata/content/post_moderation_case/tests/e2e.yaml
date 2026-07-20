@@ -1,0 +1,27 @@
+entity: PostModerationCase
+layer: e2e
+
+description: |
+  端云集成场景：举报 → report outbox → moderation-projection → case 开启 →
+  operator 审核裁决 → 发布资格收敛。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  real_engines:
+    mongodb: testcontainer
+    postgres: embedded-postgres
+
+scenarios:
+  - name: report_to_moderation_decision_chain
+    test_type: api_contract
+    actors:
+      service: content-service internal moderation packet
+      storage: MongoDB post_moderation_cases + PostgreSQL reports
+    steps:
+      - CreateReport 触发 outbox 事实
+      - moderation-projection consumer 打开 case
+      - operator ReviewPostModerationCase → DecidePostModeration
+    assertions:
+      - operator principal 之外的 actor 全部 forbidden（BOLA）
+      - 裁决幂等；rejected 内容不可发布

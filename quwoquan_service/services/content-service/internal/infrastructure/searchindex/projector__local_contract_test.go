@@ -3,6 +3,7 @@ package searchindex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -99,16 +100,20 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 type fakeReader struct {
 	byID    map[string]postmodel.Post
 	all     []postmodel.Post
+	loadErr error
 	listErr error
 }
 
-func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, bool) {
+func (r fakeReader) Load(_ context.Context, id string) (*postmodel.Post, bool, error) {
+	if r.loadErr != nil {
+		return nil, false, r.loadErr
+	}
 	p, ok := r.byID[id]
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 	cp := p
-	return &cp, true
+	return &cp, true, nil
 }
 
 func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { return r.all, r.listErr }
@@ -116,7 +121,7 @@ func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { retur
 func publishedPost() postmodel.Post {
 	return postmodel.Post{
 		ID: "post_1", Title: "洱海骑行攻略", Summary: "环湖一日", Body: "正文",
-		ContentType: "video", Status: "published", Visibility: "public",
+		ContentType: "video", Status: "published", Visibility: "public", ModerationStatus: "approved",
 		AuthorId: "user_9", AuthorDisplayNameSnapshot: "alice",
 		TagRefs: []string{"骑行", "洱海"}, EntityRefs: []string{"洱海"},
 		LikeCount: 3, CommentCount: 1,
@@ -218,6 +223,25 @@ func TestProjectorDeletesWhenNoLongerEligible(t *testing.T) {
 	}
 }
 
+func TestProjectorDeletesModerationRejectedPost(t *testing.T) {
+	post := publishedPost()
+	post.ModerationStatus = "rejected"
+	f := newFakeES()
+	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostSettingsUpdated", AggregateID: post.ID,
+	}); err != nil {
+		t.Fatalf("Project err=%v", err)
+	}
+	if len(f.upserts) != 0 {
+		t.Fatalf("moderation rejected post must not be upserted: %#v", f.upserts)
+	}
+	if len(f.deletes) != 1 || f.deletes[0] != "content.post:post_1" {
+		t.Fatalf("expected rejected post deletion, got %#v", f.deletes)
+	}
+}
+
 func TestProjectorDeletesWhenPostMissing(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{}) // store returns not-found
@@ -232,12 +256,26 @@ func TestProjectorDeletesWhenPostMissing(t *testing.T) {
 	}
 }
 
+func TestProjectorReadFailureKeepsOutboxCheckpointReplayable(t *testing.T) {
+	f := newFakeES()
+	proj := newProjectorWithFakeES(t, f, fakeReader{loadErr: errors.New("malformed Mongo Post")})
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostSettingsUpdated", AggregateID: "post-corrupt",
+	}); err == nil {
+		t.Fatal("Post read failure must fail search projection")
+	}
+	if len(f.upserts) != 0 || len(f.deletes) != 0 {
+		t.Fatalf("read failure must not mutate search index: upserts=%#v deletes=%#v", f.upserts, f.deletes)
+	}
+}
+
 func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	post := publishedPost()
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	for _, et := range []string{"ContentReactionActivated", "BehaviorBatchReported", "SomethingElse"} {
+	for _, et := range []string{"ContentReactionSet", "BehaviorBatchReported", "SomethingElse"} {
 		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
 			t.Fatalf("Project(%s) err=%v", et, err)
 		}

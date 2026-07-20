@@ -58,10 +58,10 @@
 - **Branch protection**：主分支开启保护，禁止直接 push，必须走 PR 且 required checks 全绿
 - **本地阻断（可选但强烈建议）**：安装 pre-commit hook，在本地提交前自动执行 `make gate`
 
-本仓库已提供可选脚本：`bash scripts/install-hooks.sh`（安装后当 `quwoquan_service/` 有 staged 变更会自动 gate）。
+本仓库已提供可选脚本：`bash quwoquan_ops/gate/scaffold/install-hooks.sh`（安装后按变更范围自动执行 repo gate）。
 并提供特性与元数据一致性机检：
-- `scripts/verify_feature_traceability.sh`
-- `scripts/verify_contract_metadata.sh`
+- `quwoquan_ops/gate/scaffold/verify_feature_traceability.sh`
+- `quwoquan_service/scripts/contract/verify_contract_metadata.sh`
 
 发布到生产前 SHOULD 额外通过：
 - 变更影响评估（SLO/告警覆盖检查）

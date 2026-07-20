@@ -194,13 +194,13 @@ class ContentUIConfig {
   const ContentUIConfig._();
 
   static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[
-    HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", layoutTemplate: "singleColumnRelations", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "none", contentCardPolicy: "richRelation", feedQuery: <String, String>{"category": "following", "identity": "moment"}, moodCopyKey: "home_mood_following", order: 0),
-    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "micro", "identity": "moment"}, moodCopyKey: "home_mood_recommend", order: 1),
-    HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
-    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
-    HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
-    HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
-    HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"category": "car"}, moodCopyKey: "home_mood_car", order: 6),
+    HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", layoutTemplate: "singleColumnRelations", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "none", contentCardPolicy: "richRelation", feedQuery: <String, String>{"channel": "following"}, moodCopyKey: "home_mood_following", order: 0),
+    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "recommend"}, moodCopyKey: "home_mood_recommend", order: 1),
+    HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
+    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
+    HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
+    HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
+    HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "car"}, moodCopyKey: "home_mood_car", order: 6),
   ];
 
   static const List<DiscoveryTabConfig> discoveryTabs = <DiscoveryTabConfig>[
@@ -299,7 +299,9 @@ class ContentUIConfig {
     'enable_identity_share_template': false,
     'enable_photo_waterfall': true,
     'enable_share_to_circle': true,
+    'enable_shared_video_timeline': true,
     'enable_unified_create_editor': false,
+    'enable_video_timeline_preview': false,
     'show_view_count': false,
   };
 

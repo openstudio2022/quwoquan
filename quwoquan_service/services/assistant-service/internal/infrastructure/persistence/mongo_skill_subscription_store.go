@@ -26,6 +26,13 @@ func (s *MongoSkillSubscriptionStore) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_status")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_status_updated")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "trigger.type", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_trigger")},
+		{
+			Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "clientRequestId", Value: 1}},
+			Options: options.Index().
+				SetName("uq_skill_subscriptions_client_request").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"clientRequestId": bson.M{"$type": "string"}}),
+		},
 	}
 	if _, err := s.coll.Indexes().CreateMany(ctx, indexes); err != nil {
 		return fmt.Errorf("create skill subscription indexes: %w", err)
@@ -33,8 +40,20 @@ func (s *MongoSkillSubscriptionStore) EnsureIndexes(ctx context.Context) error {
 	return nil
 }
 
+// CreateSkillSubscription 为一次创建：clientRequestId 唯一约束承载幂等，
+// 重放返回首个已创建订阅。
 func (s *MongoSkillSubscriptionStore) CreateSkillSubscription(ctx context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error) {
 	if _, err := s.coll.InsertOne(ctx, subscription); err != nil {
+		if mongo.IsDuplicateKeyError(err) && subscription.ClientRequestID != "" {
+			var existing assistant.SkillSubscription
+			findErr := s.coll.FindOne(ctx, bson.M{
+				"owner.ownerId":   subscription.Owner.OwnerID,
+				"clientRequestId": subscription.ClientRequestID,
+			}).Decode(&existing)
+			if findErr == nil {
+				return existing, nil
+			}
+		}
 		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "写入订阅失败", err.Error())
 	}
 	return subscription, nil
@@ -106,15 +125,22 @@ func (s *MongoSkillSubscriptionStore) ListSkillSubscriptions(ctx context.Context
 	return items, nil
 }
 
+// UpdateSkillSubscriptionStatus 是收敛的 set 语义：目标状态已满足时 no-op
+// 返回存量（不推进 updatedAt、不制造伪变更）。
 func (s *MongoSkillSubscriptionStore) UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID, status string, updatedAt time.Time) (assistant.SkillSubscription, error) {
 	var item assistant.SkillSubscription
 	err := s.coll.FindOneAndUpdate(
 		ctx,
-		bson.M{"_id": subscriptionID, "owner.ownerId": userID},
+		bson.M{"_id": subscriptionID, "owner.ownerId": userID, "status": bson.M{"$ne": status}},
 		bson.M{"$set": bson.M{"status": status, "updatedAt": updatedAt}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&item)
-	if err != nil {
+	if err == nil {
+		return item, nil
+	}
+	// 未匹配：订阅不存在，或目标状态已满足（no-op 读回存量）。
+	findErr := s.coll.FindOne(ctx, bson.M{"_id": subscriptionID, "owner.ownerId": userID}).Decode(&item)
+	if findErr != nil {
 		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "订阅不存在", "skill subscription not found")
 	}
 	return item, nil

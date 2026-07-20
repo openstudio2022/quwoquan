@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-import hashlib
 from pathlib import Path
 
 import cv2
@@ -12,6 +11,12 @@ import numpy as np
 from core.asset_identity import compute_post_asset_id
 from core.io import read_json, write_json
 from core.schema import validate_result
+from content.post.video.package_common import (
+    cas_object_key as _cas_object_key,
+    sha256_file as _sha256,
+    subtitles as _subtitles,
+)
+from content.post.video.source_video import SourcedVideoAsset
 from governance.coverage.cold_start_supply import (
     VideoDeliveryPolicy,
     load_cold_start_supply_policy,
@@ -51,14 +56,7 @@ class VideoRenderRequest:
     agent_run_id: str
     agent_model: str
     created_at: str
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return f"sha256:{digest.hexdigest()}"
+    source_video: SourcedVideoAsset | None = None
 
 
 def _validate_request(
@@ -124,30 +122,52 @@ def _portrait_frame(path: Path, policy: VideoDeliveryPolicy) -> np.ndarray:
     return canvas
 
 
-def _vtt_timestamp(total_seconds: int) -> str:
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
-
-
-def _subtitles(lines: tuple[str, ...], segment_seconds: int) -> str:
-    rows = ["WEBVTT", ""]
-    for index, line in enumerate(lines):
-        start = index * segment_seconds
-        end = start + segment_seconds
-        rows.extend(
-            (
-                str(index + 1),
-                f"{_vtt_timestamp(start)} --> {_vtt_timestamp(end)}",
-                line.strip(),
-                "",
-            )
-        )
-    return "\n".join(rows)
-
-
 def render_video_work_package(request: VideoRenderRequest) -> Path:
     policy = load_cold_start_supply_policy().video_delivery
+    if request.source_video is not None:
+        if request.source_frames:
+            raise ValueError(
+                "sourced video and image-sequence frames are mutually exclusive"
+            )
+        if not request.title.strip() or not request.caption.strip():
+            raise ValueError("video title and caption are required")
+        if not request.agent_run_id.strip() or not request.agent_model.strip():
+            raise ValueError("video script must carry Agent run and model evidence")
+        if len(request.script_lines) != policy.minimum_segment_count:
+            raise ValueError(
+                "sourced video script line count must equal delivery policy"
+            )
+        from content.post.video.sourced_package import (
+            SourcedVideoPackageRequest,
+            render_sourced_video_package,
+        )
+
+        package = render_sourced_video_package(
+            SourcedVideoPackageRequest(
+                output_dir=request.output_dir,
+                execution_id=request.execution_id,
+                execution_sequence=request.execution_sequence,
+                topic_id=request.topic_id,
+                entity_ref=request.entity_ref,
+                tag_refs=request.tag_refs,
+                title=request.title,
+                caption=request.caption,
+                script_lines=request.script_lines,
+                source=request.source_video,
+                author_id=request.author_id,
+                creator_profile_id=request.creator_profile_id,
+                agent_run_id=request.agent_run_id,
+                agent_model=request.agent_model,
+                created_at=request.created_at,
+            ),
+            policy=policy,
+        )
+        issues = validate_video_work_package(package)
+        if issues:
+            raise ValueError(
+                "sourced video package validation failed: " + "; ".join(issues)
+            )
+        return package
     segment_count = _validate_request(request, policy)
     assets_dir = request.output_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +201,10 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
     if not cv2.imwrite(str(poster_path), rendered_frames[0]):
         raise RuntimeError("video poster encoding failed")
     subtitles_path.write_text(
-        _subtitles(request.script_lines, policy.segment_duration_seconds),
+        _subtitles(
+            request.script_lines,
+            segment_count * policy.segment_duration_seconds,
+        ),
         encoding="utf-8",
     )
     provenance = {
@@ -248,7 +271,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "assetId": asset_id,
                 "fileName": "assets/video.mp4",
                 "kind": "video",
-                "objectKey": f"media/video/{video_sha.removeprefix('sha256:')}.mp4",
+                "objectKey": _cas_object_key(video_sha, "mp4"),
                 "sha256": video_sha,
                 "mimeType": "video/mp4",
                 "durationMs": duration_ms,
@@ -272,7 +295,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "fileName": "assets/poster.webp",
                 "kind": "image",
                 "role": "cover",
-                "objectKey": f"media/image/{poster_sha.removeprefix('sha256:')}.webp",
+                "objectKey": _cas_object_key(poster_sha, "webp"),
                 "sha256": poster_sha,
                 "mimeType": "image/webp",
                 "width": policy.width,
@@ -374,6 +397,36 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
         sources = provenance.get("sources") if isinstance(provenance, dict) else None
         if not isinstance(sources, list) or not sources:
             issues.append("video provenance sources are missing")
+        elif provenance.get("renderStrategy") == "sourced_video_transcode":
+            attribution = manifest.get("sourceAttribution")
+            required = (
+                "originalCreatorName",
+                "platform",
+                "sourcePostUrl",
+                "originalAssetUrl",
+                "attributionText",
+                "rightsBasis",
+                "commercialAuthorizationStatus",
+                "publicationAdmission",
+                "watermarkStatus",
+                "audioRightsStatus",
+                "collectedAt",
+                "takedownPolicy",
+            )
+            if len(sources) != 1 or not isinstance(sources[0], dict):
+                issues.append(
+                    "sourced video provenance must contain exactly one source"
+                )
+            elif any(not sources[0].get(field) for field in required):
+                issues.append(
+                    "sourced video provenance attribution is incomplete"
+                )
+            if not isinstance(attribution, dict) or any(
+                not attribution.get(field) for field in required
+            ):
+                issues.append("sourced video manifest attribution is incomplete")
+            elif attribution.get("watermarkStatus") != "absent":
+                issues.append("sourced video manifest watermark is not absent")
         elif any(
             not isinstance(source, dict)
             or not source.get("rightsRef")

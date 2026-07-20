@@ -111,6 +111,10 @@ domains:
         status: compliant
         note: 商用消息体系入口；消息页消费 MessageHomeRowDto/ListMessageHome 与 AppMessage/notification inbox，联系页消费 ContactHomeRowDto/ListContactHome/交集摘要 read model；App 不在 UI/Provider 拼来源、交集、成员数或最近互动；会话已读后统一失效全部消息筛选引用，Mock 仅为 contract fixture
         target_dto: MessageHomeRowDto
+      - path: quwoquan_app/lib/ui/chat/pages/greeting_inbox_page.dart
+        status: compliant
+        note: GreetingRequest 独立收发箱；ListGreetingInbox/ListGreetingOutbox 展示完整状态，Reply/Ignore/Cancel 动作均走结构化错误与恢复，reply 成功进入正式会话
+        target_dto: GreetingRequestDto + GreetingReplyResultDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
         status: compliant
         note: Provider 状态 List<ChatMessageDto>；Repository.listMessages 强类型；气泡经 toDisplayItem；语音发送走 audio media 契约
@@ -119,10 +123,14 @@ domains:
         status: compliant
         note: 群主页 GroupHomeDto/GetGroupHome 承载来源、公告、成员数与能力；成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto；群名 updateConversationTitle
         target_dto: GroupHomeDto
+      - path: quwoquan_app/lib/ui/chat/pages/chat_announcement_page.dart
+        status: compliant
+        note: GroupHomeDto 权威回读公告；ConversationGovernanceCommandFacet.UpdateAnnouncement 发布或清空，owner/admin 可编辑、成员只读
+        target_dto: GroupHomeDto
       - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
         status: compliant
-        note: 收件箱 circleId + ChatConversationCreatedDto；群/圈选择 ChatInboxDto/CircleDto；成员 ChatConversationMemberDto + 页面 ViewModel；圈成员 wire 仅在 Repository 边界 parse
-        target_dto: ChatInboxDto
+        note: ListSelectableGroupConversations 按 source=group|circle 在分页前分流，SelectableGroupConversationRowDto.circleId 表达圈子绑定；ChatContactRowDto 承载互关成员，ChatConversationCreatedDto 承载原子建群结果；页面只维护向导 ViewModel
+        target_dto: SelectableGroupConversationRowDto
       - path: quwoquan_app/lib/ui/chat/pages/transfer_ownership_page.dart
         status: compliant
         note: filterMemberDtosByQuery + MemberListNavigateTile(ChatConversationMemberDto)
@@ -161,9 +169,9 @@ domains:
         target_dto: PostBaseDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
-      - path: quwoquan_app/lib/components/content/media_post_card.dart
+      - path: quwoquan_app/lib/components/content/record_post_card.dart
         status: compliant
-        note: PostReadPresentation + 父页传入显式 PostReadSurfaceId（如 feedCard/immersive）；见 post_projection_spec
+        note: PostReadPresentation + 父页传入显式 PostReadSurfaceId（如 feedCard/immersive）；原 media/image/video_post_card 已合并为 record_post_card；见 post_projection_spec
         target_dto: PostBaseDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -233,6 +241,10 @@ domains:
         status: compliant
         note: CircleEditSubmitPayload.toWire；create/update 边界 Map
         target_dto: CircleDto
+      - path: quwoquan_app/lib/ui/circle/pages/circle_membership_approval_page.dart
+        status: compliant
+        note: owner/admin 加入审批队列消费 CircleMembershipQueryFacet.ListPendingCircleMemberships，审批动作走 Approve/Reject typed command；加载、空态、分页和结构化失败均不使用 UI 假数据
+        target_dto: CircleMembershipSlice + CircleMembershipPageSlice
       - path: quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
         status: compliant
         note: CircleHubFeedPostEntry tryReadPresentation + dto/raw 写回同步；viewer 媒体 raws 在 ui/circle/services/home_circles_hub_media_viewer_wiring.dart；页内通过门禁 C
@@ -302,12 +314,12 @@ domains:
         target_dto: N/A
       - path: quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
         status: compliant
-        note: ProfileEditSnapshotData/ProfileQrCardData 读取本人私有编辑快照与二维码卡片，App 使用 pretty_qr_code 渲染服务 HTTPS payload；ProfileEditUpdatePayload 写昵称、性别、生日、regionTagRef、签名、职业/兴趣 tagRefs；地区选择经 TagRepository.listChildren 读取 tag-service 行政区 direct children；手机号绑定走 AuthRepository.bindPhoneWithOtp/bindCarrierPhone，Map 仅 Repository 边界
-        target_dto: ProfileEditSnapshotWireDto
+        note: ProfileEditSnapshotData/ProfileQrCardData 读取本人私有编辑快照与二维码卡片，App 使用 pretty_qr_code 渲染服务 HTTPS payload；ProfileCommandWriter.updateUserProfile(UpdateUserProfileCommand) 写昵称、性别、生日、regionTagRef、签名、职业/兴趣 tagRefs；地区选择经 TagCatalogQuery.listChildren 读取 tag-service 行政区 direct children；手机号绑定走 AuthRepository.bindPhoneWithOtp/bindCarrierPhone
+        target_dto: ProfileEditSnapshotWireDto + UpdateUserProfileCommand
       - path: quwoquan_app/lib/ui/user/pages/career_interest_page.dart
         status: compliant
-        note: 资料编辑职业/兴趣独立页；读取 ProfileEditSnapshotData，候选经 TagRepository.listChildren/resolveTag，保存写 ProfileEditUpdatePayload(occupationTagRef, interestTagRefs)
-        target_dto: ProfileEditSnapshotWireDto + ProfileEditUpdatePayload
+        note: 资料编辑职业/兴趣独立页；读取 ProfileEditSnapshotData，候选经 TagCatalogQuery.listChildren/resolveTag，保存经 ProfileCommandWriter 写 UpdateUserProfileCommand(occupationTagRef, interestTagRefs)
+        target_dto: ProfileEditSnapshotWireDto + UpdateUserProfileCommand
       - path: quwoquan_app/lib/ui/user/pages/add_contact_page.dart
         status: compliant
         note: 添加联系人主页经 UserProfileRepository.getProfileQrCard 获取 ProfileQrCardData，直接嵌入真实二维码卡片；扫码、手机联系人和搜索入口继续走 metadata route/codegen path
@@ -334,15 +346,20 @@ domains:
         target_dto: ContactDiscoveryMatchWireDto
       - path: quwoquan_app/lib/ui/user/pages/persona_management_page.dart
         status: compliant
-        note: UserRepository.getPersonaManagementSummary；PersonaDtoSurface = PersonaManagementItemViewData；创建/更新分身走 UserProfileRepository + PersonaCreateRequestDto/PersonaUpdateRequestDto
-        target_dto: PersonaDto
+        note: PersonaQuery.getPersonaManagementSummary 提供读投影；创建/更新/激活/退役/删除/同步走 PersonaManagementCommandWriter generated typed Facet
+        target_dto: PersonaManagementItemViewData + PersonaManagementCommandWriter
+      - path: quwoquan_app/lib/ui/user/pages/persona_management_form_page.dart
+        status: compliant
+        note: 分身创建/编辑内嵌页消费 PersonaManagementNotifier typed command；userHandle 只读且服务端分配，错误经 RuntimeFailure 映射
+        target_dto: PersonaManagementItemViewData + PersonaIsolationLevel
+      - path: quwoquan_app/lib/ui/user/pages/blocked_users_page.dart
+        status: compliant
+        note: PersonaRelationship 私有拉黑管理页；对象级 BlockedListQuery 返回 BlockedUserSlice（persona 展示快照 + blockedAt），解除动作走 BlockCommandWriter/UnblockUser；不维护本地 blocked Set
+        target_dto: BlockedUserListItem + BlockCommandResult
       - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
         status: compliant
         note: 2026-06-25 stats 详情页收口为统一 multiOptionList segmented toolbar + 三 tab 云侧分页搜索；圈子列表消费 CircleDto，粉丝/关注列表消费 ProfileSocialRelationRowViewData（username/userHandle/profileVisibility/relationState/followedAt/relationshipCapability），动作矩阵只读 viewer->row capability，query/cursor/limit 在 Repository 边界透传
         target_dto: UserProfileDto
-      - path: quwoquan_app/lib/ui/user/pages/profile_comments_page.dart
-        status: compliant
-        note: CommentDto 列表（ContentRepository）
         target_dto: UserProfileDto
 
   - id: entity
@@ -391,7 +408,7 @@ domains:
         target_dto: HomepageClaimRequestDraft
       - path: quwoquan_app/lib/ui/entity/pages/homepage_maintenance_page.dart
         status: compliant
-        note: HomepageBasicDraft
+        note: 已认领主页维护页；消费 HomepageBasicDraft / UpdateClaimedHomepageBasics typed command，路由与 surface 来自 metadata
         target_dto: HomepageBasicDraft
       - path: quwoquan_app/lib/ui/entity/pages/homepage_status_report_page.dart
         status: compliant
@@ -461,7 +478,7 @@ domains:
 
   - id: settings
     metadata_hint: N/A（多数本地偏好）；appearance 等见 user metadata
-    repository: AppearanceSettingsRepository 等
+    repository: UserSettingsQueryReader / UserSettingsCommandWriter / CredentialBindingQuery / AppCredentialBindingCommandWriter
     codegen_examples:
       - lib/cloud/runtime/generated/user/user_setting_dto.g.dart
     mock_remote_shared_types: true
@@ -476,8 +493,32 @@ domains:
         target_dto: N/A
       - path: quwoquan_app/lib/ui/settings/pages/settings_dark_mode_page.dart
         status: compliant
-        note: 深色模式详情页；复用 AppearanceSettingsController 与 AppearanceSettingsWireDto，不新增云端权限/设置 DTO
-        target_dto: AppearanceSettingsWireDto
+        note: 深色模式详情页；复用 AppearanceSettingsController 与 AppearanceSettingsView typed slice
+        target_dto: AppearanceSettingsView
+      - path: quwoquan_app/lib/ui/settings/pages/settings_notifications_page.dart
+        status: compliant
+        note: 通知设置对象页；generated client + UserSettings typed Facet，加载/提交/回滚单轨
+        target_dto: NotificationSettingsView
+      - path: quwoquan_app/lib/ui/settings/pages/settings_privacy_page.dart
+        status: compliant
+        note: 隐私设置对象页；generated client + UserSettings typed Facet，结构化错误与可重试提交
+        target_dto: PrivacySettingsView
+      - path: quwoquan_app/lib/ui/settings/pages/settings_calls_page.dart
+        status: compliant
+        note: 通话设置对象页；generated client + UserSettings typed Facet，铃声与响铃偏好同一投影
+        target_dto: CallSettingsView
+      - path: quwoquan_app/lib/ui/settings/pages/settings_account_security_page.dart
+        status: compliant
+        note: 账号安全对象页；ListCredentialsSlice 脱敏读取，CredentialBinding typed writer 解绑
+        target_dto: ListCredentialsSlice
+      - path: quwoquan_app/lib/ui/settings/pages/blocked_keywords_page.dart
+        status: compliant
+        note: 屏蔽关键词对象页；UserSettings typed Facet 读取/更新 PrivacySettingsView.blockedKeywords
+        target_dto: PrivacySettingsView
+      - path: quwoquan_app/lib/ui/settings/pages/my_reports_page.dart
+        status: compliant
+        note: 当前 Persona 私有举报进度；ContentReportQuery 分页读取 ContentMyReportPage
+        target_dto: ContentMyReportPage
       - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
         status: exempt
         note: 关于页；展示 PackageInfo 版本，无产品云契约
@@ -596,7 +637,7 @@ domains:
         note: 复用壳；无云契约
       - path: quwoquan_app/lib/components/media/image/editor/image_editor_page.dart
         status: exempt
-        note: 本地编辑为主；2026-06-25 缩略条左对齐起始，切页 reveal-not-center，拖拽反馈继续复用共享重排组件
+        note: 本地编辑（曲线/白平衡/马赛克/文字/撤销栈全真实现，占位工具已清零）；无云行模型；滤镜目录云端化与 EditRecipe 上云见 image-editing story M2 规划，届时转 tracked
       - path: quwoquan_app/lib/components/media/camera/camera_capture_page.dart
         status: exempt
         note: 本地相机；无云行模型

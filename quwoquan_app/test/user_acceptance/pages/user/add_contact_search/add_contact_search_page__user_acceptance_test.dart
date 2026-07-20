@@ -1,51 +1,45 @@
-import 'dart:io';
-
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-File _repoFile(String path) {
-  final direct = File(path);
-  if (direct.existsSync()) {
-    return direct;
-  }
-  return File('../$path');
-}
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/user/pages/contact_search_result_page.dart';
+import '../../../../support/fakes/contact_profile_queries.dart';
 
 void main() {
-  test('addContactSearch page coverage evidence is declared', () {
-    const surfaceId = 'addContactSearch';
-    const owner = 'user';
-    const routeId = 'addContactSearch';
-    const sourceEvidence = <String>[
-    'quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart',
-    'quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart',
-  ];
-    const apiEvidence = <String>[
-    'quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go',
-    'quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go',
-  ];
-    const requiredCaseIds = <String>[
-    'user_acceptance.page.addContactSearch.load_success',
-    'user_acceptance.page.addContactSearch.empty_permission_error',
-    'user_acceptance.page.addContactSearch.primary_cta',
-    'user_acceptance.page.addContactSearch.trace_context',
-    'user_acceptance.page.addContactSearch.request_wait_recovery',
-  ];
+  testWidgets('联系人搜索真实渲染云侧能力位与添加主动作', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileQueryProvider.overrideWith(
+            (ref, surface) => ContactProfileQueryFake(
+              searchItems: <SocialRelationSearchItemView>[
+                SocialRelationSearchItemView.fromMap(<String, dynamic>{
+                  'subAccountId': 'persona-alice',
+                  'username': 'alice',
+                  'displayName': 'Alice',
+                  'headline': '摄影作者',
+                  'relationshipCapability': <String, dynamic>{
+                    'relationState': 'not_following',
+                    'canFollow': true,
+                    'canUnfollow': false,
+                    'canOpenConversation': false,
+                  },
+                }),
+              ],
+            ),
+          ),
+        ],
+        child: const CupertinoApp(
+          home: ContactSearchResultPage(initialQuery: 'alice'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    expect(surfaceId, isNotEmpty);
-    expect(owner, isNotEmpty);
-    expect(routeId, isNotEmpty);
-    expect(sourceEvidence, isNotEmpty);
-    expect(apiEvidence, isNotEmpty);
-    expect(requiredCaseIds, containsAll(<String>[
-      'user_acceptance.page.$surfaceId.load_success',
-      'user_acceptance.page.$surfaceId.empty_permission_error',
-      'user_acceptance.page.$surfaceId.primary_cta',
-      'user_acceptance.page.$surfaceId.trace_context',
-      'user_acceptance.page.$surfaceId.request_wait_recovery',
-    ]));
-
-    for (final path in <String>[...sourceEvidence, ...apiEvidence]) {
-      expect(_repoFile(path).existsSync(), isTrue, reason: path);
-    }
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text(UITextConstants.addContact), findsOneWidget);
+    expect(find.text(UITextConstants.addContactSearchNoResult), findsNothing);
   });
 }

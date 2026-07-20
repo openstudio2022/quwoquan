@@ -372,7 +372,7 @@ status_one() {
 
 case "$ACTION" in
   up)
-    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env prod --kind legal-static >/dev/null
+    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env prod --kind legal-static
     if [[ ! -f "$PROD_SIM_LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
       echo "[prod-sim] FAIL: legal-static package missing user-agreement at $PROD_SIM_LEGAL_STATIC_ROOT" >&2
       exit 2

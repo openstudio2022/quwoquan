@@ -7,45 +7,68 @@ node:
   parent_domain_service: shared-homepage-network
   parent_business_capability: homepage-discovery-and-attach-journey
 scope:
-  summary: homepage attach in publish flow 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 发布器主主页挂载与主页内发布上下文自动带入的单轨语义。
+  in_scope:
+  - 发布器经 homepagePicker 选择主主页并写入 post primaryHomepageId。
+  - 从主页详情进入创作时经 HomepageCanonicalReference extra 自动带入当前主页。
+  - 口碑必绑主页、笔记/作品/提问可选绑的规则。
+  out_of_scope:
+  - 发布器完整编辑体验。
+  - 多主页挂载。
 gwt_acceptance:
   GWT1:
-    title: homepage attach in publish flow GWT
+    title: 全局发布与主页内发布共用同一挂载语义
     given:
-    - 前置条件明确。
+    - 用户从创作入口或主页详情「发布」进入同一发布器。
     when:
-    - 用户或系统动作发生。
+    - 用户选择/确认主主页并发布内容。
     then:
-    - 可观察结果符合预期。
+    - 发布 payload 携带唯一 primaryHomepage 引用；主页内进入时默认带入且可更换。
+    - 发布失败不出现「内容已发布但主页未挂上」的静默不一致。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - 两个入口产生的挂载字段与回流聚合语义一致。
+    edge_cases:
+    - 所选主页在发布前被下线时给出结构化错误并允许改选。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
     performance_points: []
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_picker/homepage_picker_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_attach_in_publish_flow.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_attach_in_publish_flow.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_attach_in_publish_flow.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - "2026-07-20 M9 商用化审查：创作页已消费 HomepageCanonicalReference extra（app_router create 路由），planned 证据文件均在磁盘存在；待编译恢复后跑绿回填 recorded。"
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

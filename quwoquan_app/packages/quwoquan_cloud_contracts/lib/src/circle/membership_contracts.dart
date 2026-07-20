@@ -2,7 +2,7 @@ import '../operation_request_payload.dart';
 
 enum CircleMembershipRole { owner, admin, member }
 
-enum CircleMembershipState { pending, active, left, removed }
+enum CircleMembershipState { pending, active, rejected, left, removed }
 
 final class JoinCircleMembershipCommand {
   JoinCircleMembershipCommand({required String circleId})
@@ -53,6 +53,33 @@ final class CircleMembershipListQuery {
   final int limit;
 }
 
+/// 圈子级审批命令（Approve/Reject 共用输入；operation 由 encoder 区分）。
+final class DecideCircleMembershipCommand {
+  DecideCircleMembershipCommand({
+    required String circleId,
+    required String personaId,
+  }) : circleId = _required(circleId, 'circleId'),
+       personaId = _required(personaId, 'personaId');
+
+  final String circleId;
+  final String personaId;
+}
+
+/// owner/admin 待审批队列查询（state=pending）。
+final class PendingCircleMembershipListQuery {
+  PendingCircleMembershipListQuery({
+    required String circleId,
+    this.cursor,
+    this.limit = 20,
+  }) : circleId = _required(circleId, 'circleId') {
+    _limit(limit);
+  }
+
+  final String circleId;
+  final String? cursor;
+  final int limit;
+}
+
 final class MyCircleMembershipQuery {
   MyCircleMembershipQuery({required String circleId})
     : circleId = _required(circleId, 'circleId');
@@ -63,6 +90,7 @@ final class MyCircleMembershipQuery {
 final class PersonaCircleListQuery {
   PersonaCircleListQuery({
     required String personaId,
+    this.query,
     this.cursor,
     this.limit = 20,
   }) : personaId = _required(personaId, 'personaId') {
@@ -70,6 +98,7 @@ final class PersonaCircleListQuery {
   }
 
   final String personaId;
+  final String? query;
   final String? cursor;
   final int limit;
 }
@@ -112,7 +141,9 @@ final class CircleMembershipSlice {
   final String personaId;
   final CircleMembershipRole role;
   final CircleMembershipState state;
-  final DateTime joinedAt;
+
+  /// pending/rejected 申请尚未达成加入，joinedAt 为 null。
+  final DateTime? joinedAt;
   final DateTime? leftAt;
   final DateTime? lastActiveAt;
   final int contribution;
@@ -203,6 +234,15 @@ abstract interface class CircleMembershipCommandWriter {
   );
 }
 
+abstract interface class CircleMembershipModerationWriter {
+  Future<CircleMembershipCommandResult> approve(
+    DecideCircleMembershipCommand command,
+  );
+  Future<CircleMembershipCommandResult> reject(
+    DecideCircleMembershipCommand command,
+  );
+}
+
 abstract interface class CircleMembershipQuery {
   Future<CircleMembershipSlice> getMyMembership(MyCircleMembershipQuery query);
   Future<CircleMembershipPageSlice> listMemberships(
@@ -210,6 +250,12 @@ abstract interface class CircleMembershipQuery {
   );
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
+  );
+}
+
+abstract interface class PendingCircleMembershipQuery {
+  Future<CircleMembershipPageSlice> listPendingMemberships(
+    PendingCircleMembershipListQuery query,
   );
 }
 
@@ -248,11 +294,39 @@ CloudOperationRequestPayload encodeCircleMembershipListQuery(
   queryParameters: _pageQuery(query.cursor, query.limit),
 );
 
+CloudOperationRequestPayload encodeApproveCircleMembershipCommand(
+  DecideCircleMembershipCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{
+    'circleId': command.circleId,
+    'personaId': command.personaId,
+  },
+);
+
+CloudOperationRequestPayload encodeRejectCircleMembershipCommand(
+  DecideCircleMembershipCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{
+    'circleId': command.circleId,
+    'personaId': command.personaId,
+  },
+);
+
+CloudOperationRequestPayload encodePendingCircleMembershipListQuery(
+  PendingCircleMembershipListQuery query,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'circleId': query.circleId},
+  queryParameters: _pageQuery(query.cursor, query.limit),
+);
+
 CloudOperationRequestPayload encodePersonaCircleListQuery(
   PersonaCircleListQuery query,
 ) => CloudOperationRequestPayload(
   pathParameters: <String, String>{'personaId': query.personaId},
-  queryParameters: _pageQuery(query.cursor, query.limit),
+  queryParameters: <String, String>{
+    ..._pageQuery(query.cursor, query.limit),
+    if (_optionalString(query.query) case final value?) 'query': value,
+  },
 );
 
 CircleMembershipCommandResult decodeCircleMembershipCommandResult(
@@ -325,7 +399,7 @@ CircleMembershipSlice _decodeCircleMembershipSlice(Object? value) {
     personaId: _string(map, 'personaId'),
     role: _membershipRole(map['role']),
     state: _membershipState(map['state']),
-    joinedAt: _date(map, 'joinedAt'),
+    joinedAt: _optionalDate(map['joinedAt']),
     leftAt: _optionalDate(map['leftAt']),
     lastActiveAt: _optionalDate(map['lastActiveAt']),
     contribution: _nonNegativeInt(map, 'contribution'),
@@ -492,6 +566,7 @@ CircleMembershipRole _membershipRole(Object? value) => switch (value) {
 CircleMembershipState _membershipState(Object? value) => switch (value) {
   'pending' => CircleMembershipState.pending,
   'active' => CircleMembershipState.active,
+  'rejected' => CircleMembershipState.rejected,
   'left' => CircleMembershipState.left,
   'removed' => CircleMembershipState.removed,
   _ => throw const FormatException('invalid CircleMembershipState'),

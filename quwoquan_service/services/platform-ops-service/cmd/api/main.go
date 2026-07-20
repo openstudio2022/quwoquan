@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -28,8 +27,6 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	confighttp "quwoquan_service/services/platform-ops-service/internal/adapters/http/config_layer"
 	configapp "quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer"
-	configmodel "quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/model"
-	configpersistence "quwoquan_service/services/platform-ops-service/internal/infrastructure/platform_ops/config_layer/persistence"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +37,16 @@ type platformService struct {
 	configLayer  *configapp.Facade
 	configLayers http.Handler
 	health       func(context.Context) error
+}
+
+func platformOperatorOIDCRequired(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "alpha", "integration", "beta-integration", "beta_integration",
+		"gamma-integration", "gamma_integration":
+		return false
+	default:
+		return true
+	}
 }
 
 func main() {
@@ -62,6 +69,13 @@ func main() {
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		log.Fatalf("platform-ops-service access token verifier invalid: %v", err)
+	}
+	operatorOIDCVerifier, err := rtauth.NewOIDCVerifierFromEnv("OPS_OIDC")
+	if err != nil {
+		log.Fatalf("platform-ops-service operator OIDC verifier invalid: %v", err)
+	}
+	if operatorOIDCVerifier == nil && platformOperatorOIDCRequired(appEnv) {
+		log.Fatal("platform-ops-service operator OIDC issuer/audience/JWKS configuration is required")
 	}
 	addr := strings.TrimSpace(os.Getenv("PLATFORM_OPS_SERVICE_ADDR"))
 	if addr == "" {
@@ -94,26 +108,25 @@ func main() {
 	if err := store.EnsureSchema(ctx); err != nil {
 		log.Fatalf("platform-ops-service control plane schema initialization failed: %v", err)
 	}
-	configLayerStore, err := configpersistence.NewPostgresStore(postgresPool)
-	if err != nil {
-		log.Fatalf("platform-ops-service config layer store invalid: %v", err)
-	}
-	if err := configLayerStore.EnsureSchema(ctx); err != nil {
-		log.Fatalf("platform-ops-service config layer schema initialization failed: %v", err)
-	}
-	configKeyCatalog, err := configpersistence.NewGeneratedConfigKeyCatalog(
+	configKeyCatalog, err := configapp.NewConfigKeyCatalog(
 		generatedcontrolplane.MustLoadPlatformConfigSchema(),
 	)
 	if err != nil {
 		log.Fatalf("platform-ops-service generated config key catalog invalid: %v", err)
 	}
-	configLayerFacade, err := configapp.NewFacade(configLayerStore, configLayerStore, configKeyCatalog)
+	// IaC 收口：配置唯一真相源是版本化发布包（config-root 树或仓库配置树），
+	// 平台只提供只读快照与漂移核对，不存在任何在线写路径。
+	configSnapshotSource, err := configapp.NewSnapshotSource(configRoot, repoRoot)
 	if err != nil {
-		log.Fatalf("platform-ops-service config layer facade invalid: %v", err)
+		log.Fatalf("platform-ops-service config snapshot source invalid: %v", err)
+	}
+	configLayerFacade, err := configapp.NewFacade(configSnapshotSource, configKeyCatalog)
+	if err != nil {
+		log.Fatalf("platform-ops-service config snapshot facade invalid: %v", err)
 	}
 	configLayerHandler, err := confighttp.NewHandler(configLayerFacade)
 	if err != nil {
-		log.Fatalf("platform-ops-service config layer HTTP adapter invalid: %v", err)
+		log.Fatalf("platform-ops-service config snapshot HTTP adapter invalid: %v", err)
 	}
 	service := &platformService{
 		repoRoot: repoRoot, store: store, configLayer: configLayerFacade, configLayers: configLayerHandler,
@@ -123,20 +136,45 @@ func main() {
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/healthz", mux)
 	outerMux.Handle("/metrics", mux)
+	// Alertmanager webhook 使用专用机器 token，并由 handler 前的独立认证边界
+	// fail-closed；其余控制面 operation 全部由 metadata codegen 描述符执行
+	// OIDC principal + scope 授权，不保留迁移期 fallback。
+	outerMux.Handle(
+		"/control-plane/platform/alerts/ingest",
+		requireControlPlanePrincipal(mux),
+	)
 	outerMux.Handle(
 		"/",
 		rtauth.RequireGeneratedOperationAuthorization(
-			operationsecurity.ForDomain("ops"),
+			append(
+				operationsecurity.ForDomain("ops"),
+				generatedcontrolplane.PlatformOperationSecurityDescriptors...,
+			),
 		)(mux),
 	)
 
 	instanceID, _ := os.Hostname()
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout（本地/测试），推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("platform-ops-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("platform-ops-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("platform-ops-service exception logger init failed: %v", err)
 	}
@@ -159,7 +197,8 @@ func main() {
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier: accessVerifier,
+			AccessTokenVerifier:  accessVerifier,
+			OperatorOIDCVerifier: operatorOIDCVerifier,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -251,34 +290,13 @@ func (s *platformService) handleListPlaneBindings(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleUpdatePlaneBinding(w http.ResponseWriter, r *http.Request) {
-	bindingID := segmentBetween(r.URL.Path, "/control-plane/platform/topology/planes/", ":update")
-	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	body["id"] = bindingID
-	body["updatedAt"] = nowRFC3339()
-	if err := s.store.PutDocument("plane_binding_overrides", bindingID, body); err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
-		ObjectType: "plane_binding",
-		ObjectID:   bindingID,
-		Mode:       "dual",
-		Actor:      actorFromRequest(r),
-		Decision:   "update",
-	})
-	_ = s.appendAudit("plane_binding", bindingID, "plane_binding_updated", body, nil, r)
-	writeJSON(w, http.StatusOK, body)
-}
-
 func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter, r *http.Request) {
 	var doc struct {
 		Environments map[string]map[string]struct {
 			Domains []string `yaml:"domains"`
 		} `yaml:"environments"`
 	}
-	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "deploy", "shared", "process_domain_mapping.yaml"), &doc); err != nil {
+	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "quwoquan_ops", "environments", "process_domain_mapping.yaml"), &doc); err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
@@ -299,170 +317,6 @@ func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter,
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleListNamespace(w http.ResponseWriter, r *http.Request, namespace string) {
-	items, err := s.store.ListDocuments(namespace)
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func (s *platformService) handleUpdateNamespaceDocument(w http.ResponseWriter, r *http.Request, namespace, auditAction string) {
-	id := pathActionID(r.URL.Path)
-	current, _, _ := s.store.GetDocument(namespace, id)
-	before := cloneMap(current)
-	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body == nil {
-		body = map[string]any{}
-	}
-	body["id"] = id
-	body["updatedAt"] = nowRFC3339()
-	if current != nil {
-		for key, value := range current {
-			if _, ok := body[key]; !ok {
-				body[key] = value
-			}
-		}
-	}
-	if err := s.store.PutDocument(namespace, id, body); err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	mode := "single"
-	if namespace == "gate_rules" {
-		mode = "dual"
-	}
-	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
-		ObjectType: namespace,
-		ObjectID:   id,
-		Mode:       mode,
-		Actor:      actorFromRequest(r),
-		Decision:   "update",
-	})
-	_ = s.appendAudit(namespace, id, auditAction, before, body, r)
-	writeJSON(w, http.StatusOK, body)
-}
-
-func (s *platformService) syncConfigPackageDesiredHashes(ctx context.Context) error {
-	if s.configLayer == nil {
-		return fmt.Errorf("config layer facade is required")
-	}
-	configPackages, err := s.store.ListDocuments("config_packages")
-	if err != nil {
-		return err
-	}
-	packageDesiredHashes := map[string]string{}
-	for _, pkg := range configPackages {
-		pkgID := stringifyDocumentValue(pkg["id"])
-		if pkgID == "" {
-			continue
-		}
-		scope := controlplane.ConfigResolutionScope{
-			Environment: stringifyDocumentValue(pkg["environment"]),
-			Cluster:     stringifyDocumentValue(pkg["cluster"]),
-			Service:     stringifyDocumentValue(pkg["service"]),
-		}
-		resolved, err := s.configLayer.Resolve(ctx, configmodel.Scope{
-			Environment: scope.Environment,
-			Cluster:     scope.Cluster,
-			Service:     scope.Service,
-		})
-		if err != nil {
-			return err
-		}
-		desiredHash := resolved.EffectiveHash
-		pkg["desiredHash"] = desiredHash
-		if err := s.store.PutDocument("config_packages", pkgID, pkg); err != nil {
-			return err
-		}
-		packageDesiredHashes[configPackageScopeKey(scope)] = desiredHash
-	}
-	configInstanceReports, err := s.store.ListDocuments("config_instance_reports")
-	if err != nil {
-		return err
-	}
-	for _, report := range configInstanceReports {
-		reportID := stringifyDocumentValue(report["id"])
-		if reportID == "" {
-			continue
-		}
-		scope := controlplane.ConfigResolutionScope{
-			Environment: stringifyDocumentValue(report["environment"]),
-			Cluster:     stringifyDocumentValue(report["cluster"]),
-			Service:     stringifyDocumentValue(report["service"]),
-		}
-		if desiredHash := packageDesiredHashes[configPackageScopeKey(scope)]; desiredHash != "" {
-			report["desiredHash"] = desiredHash
-			if stringifyDocumentValue(report["effectiveHash"]) == "" {
-				report["effectiveHash"] = desiredHash
-			}
-			report["inSync"] = stringifyDocumentValue(report["desiredHash"]) == stringifyDocumentValue(report["effectiveHash"])
-			if err := s.store.PutDocument("config_instance_reports", reportID, report); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *platformService) lookupConfigPackageDesiredHash(scope controlplane.ConfigResolutionScope, fallback string) (string, error) {
-	configPackages, err := s.store.ListDocuments("config_packages")
-	if err != nil {
-		return "", err
-	}
-	for _, pkg := range configPackages {
-		if configPackageMatchesScope(pkg, scope) {
-			if desiredHash := stringifyDocumentValue(pkg["desiredHash"]); desiredHash != "" {
-				return desiredHash, nil
-			}
-			break
-		}
-	}
-	return fallback, nil
-}
-
-func configPackageMatchesScope(pkg controlplane.Document, scope controlplane.ConfigResolutionScope) bool {
-	return stringifyDocumentValue(pkg["environment"]) == scope.Environment &&
-		stringifyDocumentValue(pkg["cluster"]) == scope.Cluster &&
-		stringifyDocumentValue(pkg["service"]) == scope.Service
-}
-
-func configPackageScopeKey(scope controlplane.ConfigResolutionScope) string {
-	return scope.Environment + "|" + scope.Cluster + "|" + scope.Service
-}
-
-func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request) {
-	runbookID := segmentBetween(r.URL.Path, "/control-plane/platform/runbooks/", ":runDrill")
-	current, ok, err := s.store.GetDocument("runbooks", runbookID)
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	if !ok {
-		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "runbook not found")
-		return
-	}
-	before := cloneMap(current)
-	current["status"] = "success"
-	current["lastRunAt"] = nowRFC3339()
-	current["lastActor"] = actorFromRequest(r)
-	if err := s.store.PutDocument("runbooks", runbookID, current); err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
-		ObjectType: "runbook",
-		ObjectID:   runbookID,
-		Mode:       "single",
-		Actor:      actorFromRequest(r),
-		Decision:   "run_drill",
-	})
-	_ = s.appendAudit("runbook", runbookID, "runbook_drill_executed", before, current, r)
-	writeJSON(w, http.StatusOK, current)
-}
-
 func (s *platformService) appendAudit(objectType, objectID, action string, before, after map[string]any, r *http.Request) error {
 	return s.store.AppendAudit(controlplane.AuditEvent{
 		AuditID:     action,
@@ -480,27 +334,12 @@ func (s *platformService) appendAudit(objectType, objectID, action string, befor
 }
 
 func (s *platformService) handleProjectionSummary(w http.ResponseWriter, r *http.Request) {
-	approvals, err := s.store.ListAllApprovals()
+	summary, err := s.buildProjectionSummary()
 	if err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	audits, err := s.store.ListAudits()
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	runbooks, err := s.store.ListDocuments("runbooks")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"approvalCount":   len(approvals),
-		"auditCount":      len(audits),
-		"runbookCount":    len(runbooks),
-		"releaseServices": []string{"platform-ops-service", "product-ops-service"},
-	})
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (s *platformService) readYAMLInto(path string, target any) error {
@@ -531,8 +370,22 @@ func (s *platformService) readOnboardingDomains() ([]map[string]any, error) {
 	return items, nil
 }
 
+// readReleaseState 读取 stackctl 受锁 CAS ledger；生产环境必须挂载
+// QWQ_PROD_RELEASE_STATE_DIR，避免把可删除的构建输出当作发布真相源。
 func readReleaseState(repoRoot, service string) string {
-	stateFile := filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "release-state", service+".state")
+	stateRoot := strings.TrimSpace(os.Getenv("QWQ_PROD_RELEASE_STATE_DIR"))
+	if stateRoot != "" {
+		data, err := os.ReadFile(filepath.Join(stateRoot, service+".state"))
+		if err != nil {
+			return ""
+		}
+		return string(data)
+	}
+	outputRoot := strings.TrimSpace(os.Getenv("QWQ_OUTPUT_ROOT"))
+	if outputRoot == "" {
+		outputRoot = filepath.Join(repoRoot, ".qwq_output")
+	}
+	stateFile := filepath.Join(outputRoot, "env", "prod", "local", "prod-hosted", "process", "release-state", service+".state")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -595,17 +448,23 @@ func stringifyDocumentValue(value any) string {
 }
 
 func actorFromRequest(r *http.Request) string {
-	if actor := strings.TrimSpace(r.Header.Get("X-Actor")); actor != "" {
-		return actor
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		if actor := strings.TrimSpace(principal.Actor.AccountID); actor != "" {
+			return actor
+		}
+		if actor := strings.TrimSpace(principal.Actor.DeviceActorID); actor != "" {
+			return actor
+		}
 	}
-	return "platform.ops"
+	return "unverified"
 }
 
 func environmentFromRequest(r *http.Request) string {
-	if env := strings.TrimSpace(r.Header.Get("X-Environment")); env != "" {
+	_ = r
+	if env := strings.TrimSpace(os.Getenv("APP_ENV")); env != "" {
 		return env
 	}
-	return "beta"
+	return "unknown"
 }
 
 func requestIDFromRequest(r *http.Request) string {
@@ -620,12 +479,6 @@ func traceIDFromRequest(r *http.Request) string {
 		return traceID
 	}
 	return "trace-" + strings.ReplaceAll(nowRFC3339(), ":", "")
-}
-
-func pathActionID(path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	last := parts[len(parts)-1]
-	return strings.TrimSuffix(last, ":update")
 }
 
 func segmentBetween(path, prefix, suffix string) string {

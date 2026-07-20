@@ -103,14 +103,9 @@ class ProfileInteractionActivityViewData {
   final DateTime? seenAt;
   final DateTime? readAt;
 
-  factory ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-    ProfileInteractionActivityWireDto w,
+  factory ProfileInteractionActivityViewData.fromContentActivity(
+    ContentProfileInteractionActivity w,
   ) {
-    var activityId = w.activityId;
-    if (activityId.isEmpty) {
-      final prefix = w.activityType.isEmpty ? 'activity' : w.activityType;
-      activityId = '$prefix:${w.actorSubAccountId}';
-    }
     final actorDisplayName = w.actorDisplayName.isNotEmpty
         ? w.actorDisplayName
         : w.actorSubAccountId;
@@ -150,7 +145,7 @@ class ProfileInteractionActivityViewData {
     );
     final previewImageUrl = resolveContentMediaUrl(w.previewImageUrl);
     return ProfileInteractionActivityViewData(
-      activityId: activityId,
+      activityId: w.activityId,
       activityType: w.activityType,
       direction: w.direction,
       commentKind: w.commentKind,
@@ -195,15 +190,6 @@ class ProfileInteractionActivityViewData {
       readAt: w.readAt,
     );
   }
-
-  @Deprecated(
-    'Use fromProfileInteractionActivityWire(ProfileInteractionActivityWireDto)',
-  )
-  factory ProfileInteractionActivityViewData.fromMap(Map<String, dynamic> map) {
-    return ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-      ProfileInteractionActivityWireDto.fromMap(map),
-    );
-  }
 }
 
 @immutable
@@ -243,8 +229,6 @@ class ActivePersonaContextViewData {
     return <String, Object?>{
       'subAccountId': subAccountId,
       if (contextVersion.isNotEmpty) 'contextVersion': contextVersion,
-      if (personaContextVersion.isNotEmpty)
-        'personaContextVersion': personaContextVersion,
       'personaSnapshotVersion': personaSnapshotVersion,
       if (sourceSurfaceId.trim().isNotEmpty)
         'sourceSurfaceId': sourceSurfaceId.trim(),
@@ -272,15 +256,34 @@ class ActivePersonaContextViewData {
         avatarVersion: w.avatarVersion,
       ),
       avatarVersion: w.avatarVersion,
-      personaContextVersion: w.personaContextVersion,
+      personaContextVersion: '${w.contextVersion}',
       isPrimary: w.isPrimary,
     );
   }
 
-  @Deprecated('Use fromActivePersonaContextWire(ActivePersonaContextWireDto)')
-  factory ActivePersonaContextViewData.fromMap(Map<String, dynamic> map) {
-    return ActivePersonaContextViewData.fromActivePersonaContextWire(
-      ActivePersonaContextWireDto.fromMap(map),
+  factory ActivePersonaContextViewData.fromActivePersonaContextProjection(
+    ActivePersonaContextProjection projection,
+  ) {
+    final subAccountId = projection.subAccountId;
+    final ownerUserId = projection.ownerUserId.isEmpty
+        ? subAccountId
+        : projection.ownerUserId;
+    return ActivePersonaContextViewData(
+      subAccountId: subAccountId,
+      ownerUserId: ownerUserId,
+      subjectType: projection.subjectType.isEmpty
+          ? 'persona'
+          : projection.subjectType,
+      displayName: projection.displayName.isEmpty
+          ? subAccountId
+          : projection.displayName,
+      avatarUrl: resolveAvatarImageUrl(
+        projection.avatarUrl,
+        avatarVersion: projection.avatarVersion,
+      ),
+      avatarVersion: projection.avatarVersion,
+      personaContextVersion: '${projection.contextVersion}',
+      isPrimary: projection.isPrimary,
     );
   }
 
@@ -322,7 +325,6 @@ class PersonaManagementItemViewData {
     required this.isActive,
     required this.status,
     required this.retiredAt,
-    required this.hasAttributedHistory,
     required this.hasPublishedContent,
     required this.inheritsProfileFromOwner,
     required this.overriddenProfileFields,
@@ -345,7 +347,6 @@ class PersonaManagementItemViewData {
   final bool isActive;
   final String status;
   final DateTime? retiredAt;
-  final bool hasAttributedHistory;
   final bool hasPublishedContent;
   final bool inheritsProfileFromOwner;
   final List<String> overriddenProfileFields;
@@ -386,7 +387,6 @@ class PersonaManagementItemViewData {
       isActive: w.isActive,
       status: w.status,
       retiredAt: w.retiredAt,
-      hasAttributedHistory: w.hasAttributedHistory,
       hasPublishedContent: w.hasPublishedContent,
       inheritsProfileFromOwner: w.inheritsProfileFromOwner,
       overriddenProfileFields: w.overriddenProfileFields,
@@ -397,10 +397,36 @@ class PersonaManagementItemViewData {
     );
   }
 
-  @Deprecated('Use fromPersonaManagementItemWire(PersonaManagementItemWireDto)')
-  factory PersonaManagementItemViewData.fromMap(Map<String, dynamic> map) {
-    return PersonaManagementItemViewData.fromPersonaManagementItemWire(
-      PersonaManagementItemWireDto.fromMap(map),
+  factory PersonaManagementItemViewData.fromPersonaManagementItemProjection(
+    PersonaManagementItemProjection projection,
+  ) {
+    final displayName = projection.displayName.isEmpty
+        ? projection.subAccountId
+        : projection.displayName;
+    return PersonaManagementItemViewData(
+      subAccountId: projection.subAccountId,
+      displayName: displayName,
+      userHandle: projection.userHandle,
+      phone: projection.phone ?? '',
+      email: projection.email ?? '',
+      avatarUrl: resolveAvatarImageUrl(
+        projection.avatarUrl ?? '',
+        avatarVersion: projection.avatarVersion,
+      ),
+      avatarVersion: projection.avatarVersion,
+      isolationLevel: projection.isolationLevel,
+      profileVisibility: projection.profileVisibility,
+      isPrimary: projection.isPrimary,
+      isActive: projection.isActive,
+      status: projection.status,
+      retiredAt: projection.retiredAt,
+      hasPublishedContent: projection.hasPublishedContent,
+      inheritsProfileFromOwner: projection.inheritsProfileFromOwner,
+      overriddenProfileFields: projection.overriddenProfileFields,
+      lastProfileSyncAt: projection.lastProfileSyncAt,
+      lastProfileSyncSource: projection.lastProfileSyncSource ?? '',
+      lastActivatedAt: projection.lastActivatedAt,
+      subjectType: projection.subjectType,
     );
   }
 }
@@ -452,12 +478,13 @@ class PersonaManagementQuotaViewData {
     );
   }
 
-  @Deprecated(
-    'Use fromPersonaManagementQuotaWire(PersonaManagementQuotaWireDto)',
-  )
-  factory PersonaManagementQuotaViewData.fromMap(Map<String, dynamic> map) {
-    return PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
-      PersonaManagementQuotaWireDto.fromMap(map),
+  factory PersonaManagementQuotaViewData.fromPersonaManagementQuotaProjection(
+    PersonaManagementQuotaProjection projection,
+  ) {
+    final max = projection.quotaLimit <= 0 ? 5 : projection.quotaLimit;
+    return PersonaManagementQuotaViewData(
+      maxSubAccounts: max,
+      usedSubAccounts: projection.totalCount,
     );
   }
 }
@@ -466,37 +493,39 @@ class PersonaManagementQuotaViewData {
 class PersonaLifecycleGuardViewData {
   const PersonaLifecycleGuardViewData({
     required this.subAccountId,
-    required this.canDelete,
-    required this.canRetire,
-    required this.requiredAction,
-    required this.reasonCode,
-    required this.message,
+    required this.requestedAction,
+    required this.allowed,
+    required this.reason,
+    required this.requiresSuccessor,
   });
 
   final String subAccountId;
-  final bool canDelete;
-  final bool canRetire;
-  final String requiredAction;
-  final String reasonCode;
-  final String message;
+  final String requestedAction;
+  final bool allowed;
+  final String reason;
+  final bool requiresSuccessor;
 
   factory PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
     PersonaLifecycleGuardWireDto w,
   ) {
     return PersonaLifecycleGuardViewData(
       subAccountId: w.subAccountId,
-      canDelete: w.canDelete,
-      canRetire: w.canRetire,
-      requiredAction: w.requiredAction,
-      reasonCode: w.reasonCode,
-      message: w.message,
+      requestedAction: w.requestedAction,
+      allowed: w.allowed,
+      reason: w.reason,
+      requiresSuccessor: w.requiresSuccessor,
     );
   }
 
-  @Deprecated('Use fromPersonaLifecycleGuardWire(PersonaLifecycleGuardWireDto)')
-  factory PersonaLifecycleGuardViewData.fromMap(Map<String, dynamic> map) {
-    return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
-      PersonaLifecycleGuardWireDto.fromMap(map),
+  factory PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardProjection(
+    PersonaLifecycleGuardProjection projection,
+  ) {
+    return PersonaLifecycleGuardViewData(
+      subAccountId: projection.subAccountId,
+      requestedAction: projection.requestedAction,
+      allowed: projection.allowed,
+      reason: projection.reason,
+      requiresSuccessor: projection.requiresSuccessor,
     );
   }
 }
@@ -540,69 +569,24 @@ class PersonaManagementSummaryViewData {
     );
   }
 
-  @Deprecated(
-    'Use fromPersonaManagementSummaryWire(PersonaManagementSummaryWireDto)',
-  )
-  factory PersonaManagementSummaryViewData.fromMap(Map<String, dynamic> map) {
-    return PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
-      PersonaManagementSummaryWireDto.fromMap(map),
+  factory PersonaManagementSummaryViewData.fromProjection(
+    PersonaManagementSummaryProjection projection,
+  ) {
+    final items = projection.items
+        .map(PersonaManagementItemViewData.fromPersonaManagementItemProjection)
+        .toList(growable: false);
+    return PersonaManagementSummaryViewData(
+      items: items,
+      quota:
+          PersonaManagementQuotaViewData.fromPersonaManagementQuotaProjection(
+            projection.quota,
+          ),
+      activeContext:
+          ActivePersonaContextViewData.fromActivePersonaContextProjection(
+            projection.activeContext,
+          ),
     );
   }
-}
-
-// ─── 主页 Tab 行模型（与 mock 数据字段对齐；待 service.yaml codegen 收敛）────────
-
-/// 作品集条目。
-@immutable
-class UserWorkItem {
-  const UserWorkItem({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.coverUrl,
-    required this.likeCount,
-    required this.date,
-    required this.desc,
-  });
-
-  final String id;
-  final String type;
-  final String title;
-  final String coverUrl;
-  final int likeCount;
-  final String date;
-  final String desc;
-}
-
-/// 生活记录条目。字段与后端契约 `user/user_life_item`（UserLifeItemDto）一一对齐。
-/// category 为 LifeItemCategory 枚举值（footprint/soul/taste/private），子页过滤直接比对。
-@immutable
-class UserLifeItem {
-  const UserLifeItem({
-    required this.id,
-    required this.category,
-    required this.title,
-    this.subtitle = '',
-    this.imageUrl = '',
-    this.refId = '',
-  });
-
-  final String id;
-
-  /// LifeItemCategory 枚举值：footprint=足迹 / soul=书影音 / taste=味蕾 / private=爱物。
-  final String category;
-
-  /// 记录主文案。
-  final String title;
-
-  /// 记录副标题/描述。
-  final String subtitle;
-
-  /// 封面图（绝对 URL 或对象键）。
-  final String imageUrl;
-
-  /// 关联内容引用（作品/圈子等）。
-  final String refId;
 }
 
 // ─── 主页首屏聚合（homepage-bundle，锁定决策 #1：一次聚合 + 交集/打动并发补充）──

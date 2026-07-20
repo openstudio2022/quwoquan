@@ -51,6 +51,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.post_login_landing_landing_bootstrap_context.gwt1_local_contract
@@ -58,6 +59,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.post_login_landing_landing_bootstrap_context.contract
@@ -67,5 +69,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

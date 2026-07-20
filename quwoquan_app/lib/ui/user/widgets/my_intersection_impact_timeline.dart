@@ -50,7 +50,7 @@ class ImpactTimeline extends ConsumerWidget {
           semantic: resolveIntersectionDetailErrorSemantic(
             context,
             error: error,
-            title: '${UITextConstants.profileImpactTitleMine}暂不可用',
+            title: UITextConstants.profileImpactUnavailableTitle,
           ),
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
@@ -162,7 +162,7 @@ class ImpactTimeline extends ConsumerWidget {
     String subAccountId,
   ) {
     return ({String cursor = ''}) => ref
-        .read(userProfileRepositoryProvider)
+        .read(authorImpactQueryProvider)
         .listAuthorImpactEvidence(
           subAccountId: subAccountId,
           impactId: item.impactId,

@@ -47,6 +47,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt1_local_contract
@@ -54,6 +55,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -89,12 +91,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -128,12 +132,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -169,12 +175,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt4_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -210,12 +218,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt5_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -253,12 +263,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt6_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt6_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
@@ -272,5 +284,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
-  full_gate:
+  profile_gates:
   - make gate

@@ -1,0 +1,23 @@
+aggregate: SkillSubscription
+layer: e2e
+
+description: |
+  端云集成场景。技能中心订阅 → cron 租约投递 → 用户收件。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: skill_center_subscribe_and_proactive_delivery
+    description: 技能中心开启订阅 → tick 租约触发 → 主动消息投递
+    test_type: ui_journey
+    patrol_flow: test/user_acceptance/pages/assistant/assistant_skill_center_page__user_acceptance_test.dart
+    actors:
+      app: lib/ui/assistant/pages/assistant_skill_center_page.dart
+      service: assistant-service /assistant/skill-subscriptions + /internal/assistant/skill-subscriptions:tick
+      storage: MongoDB skill_subscriptions + receipts + outbox
+    assertions:
+      - 订阅创建/暂停/恢复在真实存储闭环
+      - 同一 tick 窗口双实例并发只投递一次

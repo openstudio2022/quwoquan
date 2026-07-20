@@ -107,11 +107,16 @@ def main() -> int:
     new_violations = sorted(
         r for r in importers if not _is_boundary(r) and r not in allowed
     )
+    stale_entries = sorted(
+        r for r in allowed if r not in importers or _is_boundary(r)
+    )
 
-    if new_violations:
-        print("verify_lib_dart_io_budget: BLOCK: new dart:io imports", file=sys.stderr)
+    if new_violations or stale_entries:
+        print("verify_lib_dart_io_budget: BLOCK: baseline drift", file=sys.stderr)
         for v in new_violations:
-            print(f"  {v}", file=sys.stderr)
+            print(f"  new importer: {v}", file=sys.stderr)
+        for v in stale_entries:
+            print(f"  stale allowlist entry: {v}", file=sys.stderr)
         print(
             "  Route file/path access through FileStorageGateway "
             "(lib/core/platform/) instead of importing dart:io.",

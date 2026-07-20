@@ -108,12 +108,12 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 - `verify-test-directory-layout`
 - 必要的本地 `api_integration`
 
-收口期 `make gate-full` 应覆盖：
+按 profile 收口：
 
-- `local_contract`
-- `api_integration`
-- `gamma_local` `user_acceptance`
-- `prod` + `rollout_stage=gray_initial` 条件具备时的低风险发布验收
+- `make gate` 只覆盖无环境依赖的 `local_contract`、规格、契约和静态非功能质量。
+- `make gate-smoke` 覆盖 Alpha 的 mock/contract 投影。
+- `make gate-integration ENV=beta|gamma` 覆盖真实内容数据平面的 `api_integration`、媒体、幂等与回滚/replay；不得要求 SLS 或 product-ops。
+- `make gate-release ENV=gamma|prod` 覆盖 Gamma 真机 UAT、trace/SLO/SLS，以及 Prod 的 `rollout_stage=gray_initial` 条件具备时的低风险发布验收。
 
 发布前必须补齐：
 

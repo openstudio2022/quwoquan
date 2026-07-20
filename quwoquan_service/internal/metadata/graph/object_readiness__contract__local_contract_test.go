@@ -33,10 +33,9 @@ func TestProfileUpdateProposalReadinessIsDerivedAndFailsClosed(t *testing.T) {
 		t.Fatalf("readiness=%+v, want implemented object packet", *got)
 	}
 	if got.CommercialReady || got.Stage != "implemented" {
-		t.Fatalf("readiness=%+v, must remain fail-closed before UAT and four environments", *got)
+		t.Fatalf("readiness=%+v, must remain fail-closed before four environments", *got)
 	}
 	for _, missing := range []string{
-		"commercial.user_acceptance",
 		"commercial.environment.alpha",
 		"commercial.environment.beta",
 		"commercial.environment.gamma",
@@ -47,10 +46,17 @@ func TestProfileUpdateProposalReadinessIsDerivedAndFailsClosed(t *testing.T) {
 		}
 	}
 
-	if len(contractGraph.ReadinessEvidence) != 1 {
-		t.Fatalf("readiness evidence packets=%d, want 1", len(contractGraph.ReadinessEvidence))
+	evidenceIndex := -1
+	for index := range contractGraph.ReadinessEvidence {
+		if contractGraph.ReadinessEvidence[index].ObjectID == "user.profile_update_proposal" {
+			evidenceIndex = index
+			break
+		}
 	}
-	for _, artifact := range contractGraph.ReadinessEvidence[0].LocalContract {
+	if evidenceIndex < 0 {
+		t.Fatal("ProfileUpdateProposal readiness evidence is missing")
+	}
+	for _, artifact := range contractGraph.ReadinessEvidence[evidenceIndex].LocalContract {
 		if len(artifact.SHA256) != 64 {
 			t.Fatalf("artifact %s digest=%q, want derived SHA256", artifact.Path, artifact.SHA256)
 		}

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -12,10 +14,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 
+	"quwoquan_service/internal/platform/pgoutbox"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
@@ -30,49 +34,10 @@ import (
 	"quwoquan_service/services/product-ops-service/internal/application"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/application/product_ops/experiment"
 	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
+	opsobservability "quwoquan_service/services/product-ops-service/internal/infrastructure/observability"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/product_ops/experiment/persistence"
 )
-
-type moderationCase struct {
-	ID            string   `json:"id"`
-	TargetType    string   `json:"targetType"`
-	TargetID      string   `json:"targetId"`
-	Reason        string   `json:"reason"`
-	Status        string   `json:"status"`
-	AssignedQueue string   `json:"assignedQueue"`
-	EvidenceRefs  []string `json:"evidenceRefs"`
-	Resolution    string   `json:"resolution,omitempty"`
-	UpdatedAt     string   `json:"updatedAt"`
-}
-
-type recoveryCase struct {
-	ID           string   `json:"id"`
-	UserID       string   `json:"userId"`
-	Status       string   `json:"status"`
-	EvidenceRefs []string `json:"evidenceRefs"`
-	Decision     string   `json:"decision,omitempty"`
-	UpdatedAt    string   `json:"updatedAt"`
-}
-
-type appealCase struct {
-	ID           string   `json:"id"`
-	TargetType   string   `json:"targetType"`
-	TargetID     string   `json:"targetId"`
-	Status       string   `json:"status"`
-	EvidenceRefs []string `json:"evidenceRefs"`
-	Decision     string   `json:"decision,omitempty"`
-	UpdatedAt    string   `json:"updatedAt"`
-}
-
-type recommendationPolicy struct {
-	ID                string         `json:"id"`
-	Name              string         `json:"name"`
-	Status            string         `json:"status"`
-	PolicyVersion     string         `json:"policyVersion"`
-	GuardrailSnapshot map[string]any `json:"guardrailSnapshot"`
-	UpdatedAt         string         `json:"updatedAt"`
-}
 
 type metricSnapshot struct {
 	ID          string  `json:"id"`
@@ -91,21 +56,15 @@ type metricSnapshot struct {
 	Description string  `json:"description"`
 }
 
-type visitRecord struct {
-	TargetType string `json:"targetType"`
-	TargetKey  string `json:"targetKey"`
-	UserID     string `json:"userId"`
-	VisitCount int    `json:"visitCount"`
-	LastSeenAt string `json:"lastSeenAt,omitempty"`
-	SessionID  string `json:"sessionId,omitempty"`
-	Source     string `json:"source,omitempty"`
-}
-
 type productService struct {
-	store          controlplane.StateStore
-	telemetry      *application.TelemetryService
-	experimentHTTP *experimenthttp.Handler
-	publisher      runtimemessaging.EventPublisher
+	store           controlplane.StateStore
+	telemetry       *application.TelemetryService
+	runtimeLogs     *application.RuntimeLogService
+	runtimeLogStore application.RuntimeLogStore
+	growth          *application.GrowthService
+	prometheus      application.PrometheusQuery
+	experimentHTTP  *experimenthttp.Handler
+	publisher       runtimemessaging.EventPublisher
 }
 
 func main() {
@@ -121,7 +80,7 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("product-ops-service config compatibility failed: %v", err)
 	}
-	if err := validateRequiredRuntimeConfig(cfg); err != nil {
+	if err := validateRequiredRuntimeConfig(cfg, appEnv); err != nil {
 		log.Fatalf("product-ops-service required runtime config invalid: %v", err)
 	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
@@ -141,6 +100,22 @@ func main() {
 	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
 	if err != nil {
 		log.Fatalf("product-ops-service device ticket verifier invalid: %v", err)
+	}
+	operatorOIDCVerifier, err := rtauth.NewOIDCVerifierFromEnv("OPS_OIDC")
+	if err != nil {
+		log.Fatalf("product-ops-service operator OIDC verifier invalid: %v", err)
+	}
+	if operatorOIDCVerifier == nil && operatorOIDCRequired(appEnv) {
+		log.Fatal("product-ops-service operator OIDC issuer/audience/JWKS configuration is required")
+	}
+	var prometheusReader application.PrometheusQuery
+	if prometheusURL := strings.TrimSpace(os.Getenv("PROMETHEUS_URL")); prometheusURL != "" {
+		prometheusReader, err = opsobservability.NewPrometheusReader(prometheusURL, nil)
+		if err != nil {
+			log.Fatalf("product-ops-service prometheus reader invalid: %v", err)
+		}
+	} else if appEnv == "prod" || appEnv == "release" {
+		log.Fatal("product-ops-service PROMETHEUS_URL is required for production L3/L4 readback")
 	}
 	addr := getenvOrDefault("PRODUCT_OPS_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if strings.TrimSpace(addr) == "" {
@@ -202,11 +177,20 @@ func main() {
 		return router.PingAll(ctx)
 	})
 	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
-	outboxDispatcher, err := experimentpersistence.NewOutboxDispatcher(postgresPool, publisher)
+	outboxDispatcher, err := pgoutbox.NewDispatcher(postgresPool, publisher, "product_ops_outbox")
 	if err != nil {
 		log.Fatalf("product-ops-service outbox dispatcher invalid: %v", err)
 	}
 	go outboxDispatcher.Run(ctx)
+	controlPlaneOutboxDispatcher, err := pgoutbox.NewDispatcher(
+		postgresPool,
+		publisher,
+		"product_control_plane_outbox",
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service control-plane outbox dispatcher invalid: %v", err)
+	}
+	go controlPlaneOutboxDispatcher.Run(ctx)
 	mongoClient, err := rtmongo.Connect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI})
 	if err != nil {
 		log.Fatalf("product-ops-service mongodb unavailable: %v", err)
@@ -217,68 +201,125 @@ func main() {
 		_ = mongoClient.Disconnect(shutdownCtx)
 	}()
 	dbName := strings.TrimSpace(cfg.MongoDB.Database)
-	visitStore := telemetrypersistence.NewMongoVisitStore(mongoClient.Database(dbName))
-	if err := visitStore.EnsureIndexes(ctx); err != nil {
+	mongoVisitStore := telemetrypersistence.NewMongoVisitStore(mongoClient.Database(dbName))
+	if err := mongoVisitStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("product-ops-service visit index initialization failed: %v", err)
 	}
+	var visitStore application.VisitTelemetryStore = mongoVisitStore
 	healthChecker.Register("mongodb", func(ctx context.Context) error {
 		return mongoClient.Ping(ctx, nil)
 	})
 	healthChecker.Register("postgres", func(ctx context.Context) error {
 		return postgresPool.Ping(ctx)
 	})
-	slsConfig := telemetrypersistence.SLSConfig{
-		Region:                    strings.TrimSpace(cfg.SLS.Region),
-		Endpoint:                  strings.TrimSpace(cfg.SLS.Endpoint),
-		Project:                   strings.TrimSpace(cfg.SLS.Project),
-		RawLogstore:               strings.TrimSpace(cfg.SLS.RawLogstore),
-		StartupDiagnosticLogstore: strings.TrimSpace(cfg.SLS.StartupDiagnosticLogstore),
-		AggregateLogstore:         strings.TrimSpace(cfg.SLS.AggregateLogstore),
-		Timeout:                   time.Duration(cfg.SLS.TimeoutMS) * time.Millisecond,
-	}
-	accessKeyID := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"))
-	accessKeySecret := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"))
-	securityToken := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_SECURITY_TOKEN"))
-	if accessKeyID == "" || accessKeySecret == "" {
-		log.Fatal("product-ops-service SLS credentials are required through deployment Secret")
-	}
-	slsClient := telemetrypersistence.NewOfficialSLSClient(
-		slsConfig,
-		accessKeyID,
-		accessKeySecret,
-		securityToken,
-	)
-	defer slsClient.Close()
-	eventStore, err := telemetrypersistence.NewSLSEventLogStore(slsClient, slsConfig)
-	if err != nil {
-		log.Fatalf("product-ops-service SLS telemetry store invalid: %v", err)
-	}
-	healthChecker.Register("sls", func(context.Context) error {
-		for _, logstore := range []string{
-			slsConfig.RawLogstore,
-			slsConfig.StartupDiagnosticLogstore,
-			slsConfig.AggregateLogstore,
-		} {
-			if _, err := slsClient.GetLogStore(slsConfig.Project, logstore); err != nil {
-				return err
-			}
+	var eventStore application.EventLogStore
+	var rtcMediaQoeReader application.RtcMediaQoeSummaryReader
+	var runtimeLogStore application.RuntimeLogStore
+	var batchLedger application.EventBatchLedger
+	// 协议与契约证据由 local_contract 测试直接组装 in-memory store；生产二进制
+	// 不承载任何 Memory composition，缺后端能力时按下方分支 fail-fast。
+	if schema := postgresTelemetrySchema(appEnv); schema != "" {
+		// beta/gamma integration 使用独立 schema 的 Postgres local。该选择在
+		// composition root 固定，release/prod artifact 不会加载此分支。
+		localStore, err := telemetrypersistence.NewPostgresTelemetryStore(postgresPool, schema)
+		if err != nil {
+			log.Fatalf("product-ops-service postgres telemetry composition invalid: %v", err)
 		}
-		return nil
-	})
-	batchLedger := telemetrypersistence.NewRedisEventBatchLedger(router.Scene("general"))
-	log.Printf(
-		"product-ops-service telemetry storage=sls project=%s raw=%s aggregate=%s visit_storage=mongodb db=%s",
-		slsConfig.Project,
-		slsConfig.RawLogstore,
-		slsConfig.AggregateLogstore,
-		dbName,
-	)
-	service := newProductService(
+		if err := localStore.EnsureSchema(ctx); err != nil {
+			log.Fatalf("product-ops-service postgres telemetry schema initialization failed: %v", err)
+		}
+		eventStore = localStore
+		rtcMediaQoeReader = localStore
+		runtimeLogStore = localStore
+		visitStore = localStore
+		batchLedger = localStore
+		healthChecker.Register("telemetry-postgres-local", func(ctx context.Context) error {
+			return postgresPool.Ping(ctx)
+		})
+		log.Printf(
+			"product-ops-service telemetry storage=postgres_local schema=%s evidence=api_integration",
+			schema,
+		)
+	} else {
+		slsConfig := telemetrypersistence.SLSConfig{
+			Region:                    strings.TrimSpace(cfg.SLS.Region),
+			Endpoint:                  strings.TrimSpace(cfg.SLS.Endpoint),
+			Project:                   strings.TrimSpace(cfg.SLS.Project),
+			RawLogstore:               strings.TrimSpace(cfg.SLS.RawLogstore),
+			StartupDiagnosticLogstore: strings.TrimSpace(cfg.SLS.StartupDiagnosticLogstore),
+			RuntimeLogstore:           strings.TrimSpace(cfg.SLS.RuntimeLogstore),
+			AggregateLogstore:         strings.TrimSpace(cfg.SLS.AggregateLogstore),
+			Timeout:                   time.Duration(cfg.SLS.TimeoutMS) * time.Millisecond,
+		}
+		accessKeyID := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"))
+		accessKeySecret := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"))
+		securityToken := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_SECURITY_TOKEN"))
+		if accessKeyID == "" || accessKeySecret == "" {
+			log.Fatal("product-ops-service SLS credentials are required through deployment Secret")
+		}
+		slsClient := telemetrypersistence.NewOfficialSLSClient(
+			slsConfig,
+			accessKeyID,
+			accessKeySecret,
+			securityToken,
+		)
+		defer slsClient.Close()
+		slsStore, err := telemetrypersistence.NewSLSEventLogStore(slsClient, slsConfig)
+		if err != nil {
+			log.Fatalf("product-ops-service SLS telemetry store invalid: %v", err)
+		}
+		eventStore = slsStore
+		rtcMediaQoeReader = slsStore
+		runtimeLogStore = slsStore
+		healthChecker.Register("sls", func(context.Context) error {
+			for _, logstore := range []string{
+				slsConfig.RawLogstore,
+				slsConfig.StartupDiagnosticLogstore,
+				slsConfig.RuntimeLogstore,
+				slsConfig.AggregateLogstore,
+			} {
+				if _, err := slsClient.GetLogStore(slsConfig.Project, logstore); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		batchLedger = telemetrypersistence.NewRedisEventBatchLedger(router.Scene("general"))
+		log.Printf(
+			"product-ops-service telemetry storage=sls project=%s raw=%s runtime=%s aggregate=%s visit_storage=mongodb db=%s",
+			slsConfig.Project,
+			slsConfig.RawLogstore,
+			slsConfig.RuntimeLogstore,
+			slsConfig.AggregateLogstore,
+			dbName,
+		)
+	}
+	service := newProductServiceWithRuntimeLogs(
 		store,
-		application.NewTelemetryServiceWithStores(visitStore, instrumentEventLogStore(eventStore), batchLedger),
+		application.NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
+			visitStore,
+			instrumentEventLogStore(eventStore),
+			batchLedger,
+			instrumentRtcMediaQoeSummaryReader(rtcMediaQoeReader),
+		),
+		application.NewRuntimeLogService(runtimeLogStore, batchLedger),
 		experimentFacade,
 		publisher,
 	)
+	service.prometheus = prometheusReader
+	service.runtimeLogStore = runtimeLogStore
+	// 运营增长聚合（user_activity_daily）：事件仓库出 distinct session，
+	// Mongo 持久化天级活跃与 actor 首见事实；后台循环幂等聚合今天+昨天。
+	if sessionLister, ok := eventStore.(application.ActiveSessionLister); ok {
+		growthStore := telemetrypersistence.NewMongoGrowthStore(mongoClient.Database(dbName))
+		if err := growthStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("product-ops-service growth index initialization failed: %v", err)
+		}
+		service.growth = application.NewGrowthService(growthStore, sessionLister)
+		go service.growth.RunGrowthAggregationLoop(ctx, 30*time.Minute)
+	} else {
+		log.Fatal("product-ops-service event store must support distinct session listing (growth aggregation)")
+	}
 	mux := newServerMux(service, healthChecker)
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
@@ -288,20 +329,50 @@ func main() {
 	outerMux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
+	// 云侧服务日志上云的内部通道：以 X-Runtime-Log-Ingest-Token 机器凭据
+	// fail-closed（handler 内校验），不走用户 JWT；app sourceType 被拒绝。
+	outerMux.HandleFunc("/ops/internal/runtime-logs:ingest", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
 	outerMux.Handle(
 		"/",
 		rtauth.RequireGeneratedOperationAuthorization(
-			operationsecurity.ForDomain("ops"),
+			append(
+				operationsecurity.ForDomain("ops"),
+				generatedcontrolplane.ProductOperationSecurityDescriptors...,
+			),
 		)(mux),
 	)
 
 	instanceID, _ := os.Hostname()
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, pErr := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	runtimeLogExporter := exportServiceRuntimeLogs(runtimeLogStore)
+	standardLogWriter := robs.NewRuntimeLogExportWriter(
+		os.Stdout,
+		512,
+		runtimeLogExporter,
+	)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(
+		os.Stderr,
+		512,
+		runtimeLogExporter,
+	)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, pErr := robs.NewProcessTraceLogger(
+		standardLogWriter,
+		errorLogWriter,
+		"info",
+		nil,
+	)
 	if pErr != nil {
 		log.Fatalf("product-ops-service process logger init failed: %v", pErr)
 	}
-	exceptionLogger, eErr := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, eErr := robs.NewExceptionLogger(
+		standardLogWriter,
+		errorLogWriter,
+		nil,
+	)
 	if eErr != nil {
 		log.Fatalf("product-ops-service exception logger init failed: %v", eErr)
 	}
@@ -321,6 +392,7 @@ func main() {
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:  accessVerifier,
 			DeviceTicketVerifier: deviceTicketVerifier,
+			OperatorOIDCVerifier: operatorOIDCVerifier,
 		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -332,9 +404,47 @@ func main() {
 	}
 }
 
+func exportServiceRuntimeLogs(
+	store application.RuntimeLogStore,
+) robs.RuntimeLogFieldBatchExporter {
+	return func(fieldsBatch []map[string]string) {
+		encoded, err := json.Marshal(fieldsBatch)
+		if err != nil {
+			return
+		}
+		digest := sha256.Sum256(encoded)
+		batchKey := hex.EncodeToString(digest[:])
+		now := time.Now().UTC()
+		records := make([]application.RuntimeLogRecord, 0, len(fieldsBatch))
+		for index, fields := range fieldsBatch {
+			records = append(records, application.RuntimeLogRecord{
+				Fields:     fields,
+				BatchKey:   batchKey,
+				BatchIndex: index,
+				IngestedAt: now,
+			})
+		}
+		_ = store.PutRuntimeLogBatch(
+			context.Background(),
+			batchKey,
+			records,
+		)
+	}
+}
+
 func newProductService(
 	store controlplane.StateStore,
 	telemetry *application.TelemetryService,
+	experiments *experimentapp.Facade,
+	publishers ...runtimemessaging.EventPublisher,
+) *productService {
+	return newProductServiceWithRuntimeLogs(store, telemetry, nil, experiments, publishers...)
+}
+
+func newProductServiceWithRuntimeLogs(
+	store controlplane.StateStore,
+	telemetry *application.TelemetryService,
+	runtimeLogs *application.RuntimeLogService,
 	experiments *experimentapp.Facade,
 	publishers ...runtimemessaging.EventPublisher,
 ) *productService {
@@ -350,7 +460,7 @@ func newProductService(
 		panic(err)
 	}
 	return &productService{
-		store: store, telemetry: telemetry,
+		store: store, telemetry: telemetry, runtimeLogs: runtimeLogs,
 		experimentHTTP: experimentHandler, publisher: publisher,
 	}
 }
@@ -399,11 +509,16 @@ func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
 		})
 	}
 	if len(out) == 0 {
-		out = []map[string]any{
-			{"level": "L1", "label": "产品旅程", "metric": "five_tab_journey_completion_rate"},
-			{"level": "L2", "label": "业务质量", "metric": "circle_scenario_ctr"},
-			{"level": "L3", "label": "系统 RED", "metric": "api_red_duration_p95_ms"},
-			{"level": "L4", "label": "基础设施", "metric": "gateway_up"},
+		for _, snapshot := range canonicalL1L4MetricSnapshots(l1l4MetricsScope{Environment: "prod"}) {
+			if seen[snapshot.Level] {
+				continue
+			}
+			out = append(out, map[string]any{
+				"level":  snapshot.Level,
+				"label":  snapshot.Label,
+				"metric": snapshot.Metric,
+			})
+			seen[snapshot.Level] = true
 		}
 	}
 	return out, nil
@@ -414,24 +529,6 @@ func safeString(value any) string {
 		return text
 	}
 	return ""
-}
-
-func (s *productService) getRecommendationPolicy(id string) (recommendationPolicy, bool, error) {
-	item, ok, err := s.store.GetDocument("recommendation_policies", id)
-	if err != nil || !ok {
-		return recommendationPolicy{}, ok, err
-	}
-	out, err := decodeDocument[recommendationPolicy](item)
-	return out, true, err
-}
-
-func (s *productService) getVisitRecord(id string) (visitRecord, bool, error) {
-	item, ok, err := s.store.GetDocument("visit_records", id)
-	if err != nil || !ok {
-		return visitRecord{}, ok, err
-	}
-	out, err := decodeDocument[visitRecord](item)
-	return out, true, err
 }
 
 func (s *productService) putIfMissing(namespace, id string, value any) error {
@@ -480,9 +577,17 @@ func documentFromStruct(value any) controlplane.Document {
 	return out
 }
 
-func approvalExists(items []controlplane.ApprovalDecision, actor string) bool {
+func approvalExistsForIntent(
+	items []controlplane.ApprovalDecision,
+	actor string,
+	payloadDigest string,
+	decision string,
+) bool {
 	for _, item := range items {
-		if item.Actor == actor {
+		if item.Actor == actor &&
+			item.Mode == "dual" &&
+			item.PayloadDigest == payloadDigest &&
+			item.Decision == decision {
 			return true
 		}
 	}
@@ -503,18 +608,85 @@ func distinctApprovalActors(items []controlplane.ApprovalDecision) []string {
 	return out
 }
 
-func actorFromRequest(r *http.Request) string {
-	if actor := strings.TrimSpace(r.Header.Get("X-Actor")); actor != "" {
-		return actor
+func dualApprovalPayloadDigest(before controlplane.Document, intent string) string {
+	payload, _ := json.Marshal(struct {
+		Before controlplane.Document `json:"before"`
+		Intent string                `json:"intent"`
+	}{Before: before, Intent: strings.TrimSpace(intent)})
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
+}
+
+func dualApprovalSatisfied(
+	items []controlplane.ApprovalDecision,
+	payloadDigest string,
+	decision string,
+) bool {
+	actors := make(map[string]struct{}, 2)
+	for _, item := range items {
+		if item.Mode != "dual" ||
+			item.PayloadDigest != payloadDigest ||
+			item.Decision != decision {
+			continue
+		}
+		actor := strings.TrimSpace(item.Actor)
+		if actor != "" {
+			actors[actor] = struct{}{}
+		}
 	}
-	return "portal.ops"
+	return len(actors) >= 2
+}
+
+func distinctMatchingApprovalActors(
+	items []controlplane.ApprovalDecision,
+	payloadDigest string,
+	decision string,
+) []string {
+	seen := make(map[string]struct{}, 2)
+	for _, item := range items {
+		if item.Mode != "dual" ||
+			item.PayloadDigest != payloadDigest ||
+			item.Decision != decision {
+			continue
+		}
+		if actor := strings.TrimSpace(item.Actor); actor != "" {
+			seen[actor] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for actor := range seen {
+		out = append(out, actor)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func countMatchingApprovals(
+	items []controlplane.ApprovalDecision,
+	payloadDigest string,
+	decision string,
+) int {
+	return len(distinctMatchingApprovalActors(items, payloadDigest, decision))
+}
+
+func actorFromRequest(r *http.Request) string {
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		if actor := strings.TrimSpace(principal.Actor.AccountID); actor != "" {
+			return actor
+		}
+		if actor := strings.TrimSpace(principal.Actor.DeviceActorID); actor != "" {
+			return actor
+		}
+	}
+	return "unverified"
 }
 
 func environmentFromRequest(r *http.Request) string {
-	if env := strings.TrimSpace(r.Header.Get("X-Environment")); env != "" {
+	_ = r
+	if env := strings.TrimSpace(os.Getenv("APP_ENV")); env != "" {
 		return env
 	}
-	return "beta"
+	return "unknown"
 }
 
 func requestIDFromRequest(r *http.Request) string {
@@ -567,11 +739,21 @@ func writeRuntimeError(
 ) {
 	reason := "internal_error"
 	kind := rterr.KindSystem
-	if status == http.StatusUnauthorized {
+	switch status {
+	case http.StatusBadRequest, http.StatusMethodNotAllowed:
+		reason = "invalid_argument"
+		kind = rterr.KindUser
+	case http.StatusUnauthorized:
 		reason = "unauthorized"
 		kind = rterr.KindUser
-	} else if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
-		reason = "invalid_argument"
+	case http.StatusForbidden:
+		reason = "forbidden"
+		kind = rterr.KindUser
+	case http.StatusNotFound:
+		reason = "route_not_found"
+		kind = rterr.KindUser
+	case http.StatusConflict:
+		reason = "conflict"
 		kind = rterr.KindUser
 	}
 	appError := rterr.NewAppError(

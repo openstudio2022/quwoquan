@@ -13,20 +13,19 @@
 - **架构目标**：与契约/入库/可观测一致的结构须 **`contracts/metadata` → `make codegen-app` → 生成 DTO**；页面/shell 持 **具体类型**，仅在 `.toMap()` / `fromMap` 边界与 `Map<String, dynamic>` 交接。
 - **禁止**用 `Map<String, Object?>` 或松散 Map 在页面层「替代」codegen；亦**禁止**为躲 C 扫描而只做字面量替换却不补 metadata。
 
-## 2. 客户端 browse / page_access 日志（metadata + codegen）
+## 2. 客户端 browse / page_access 日志
 
-**真相源**：[`quwoquan_service/contracts/metadata/ops/event_record/projections/`](../../../quwoquan_service/contracts/metadata/ops/event_record/projections/) 下 `app_log_*.yaml`（`client_projection`）。
+云端产品遥测真相源为
+[`ops/event_record/event_catalog.yaml`](../../quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml)，
+端侧生成产物为
+`quwoquan_app/lib/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart`。
 
-**端侧产物**（禁止手改）：`quwoquan_app/lib/cloud/runtime/generated/ops/app_log_*.g.dart`，例如：
+`page_access_log_util.dart` 同时写两条边界：
 
-- `AppLogBottomNavTapMeta` — bottom_nav_tap 的 `actionMeta`
-- `AppLogPageBrowsePayload` / `AppLogPageBrowseSummaryPayload` — `event=browse`
-- `AppLogPageOpenPayload` / `AppLogPageOpenSummaryPayload` — `event=open`
-- `AppLogPageReturnPayload` / `AppLogPageReturnSummaryPayload` — `event=return`
+- 本地 `AppLogService`：只用于脱敏诊断与回放，payload Map 不自动上传。
+- 云端 `AppTelemetryRecorder`：只接收 codegen 的 `AppTelemetryPayload.pageOpen/pageReturn`。
 
-调用方（如 `MainAppShell`、`page_access_log_util`）构造 **DTO 实例** 后 `.toMap()` 传入 `AppLogService.writeEvent`（`toMap()` 仅在生成体内含 `Map<String, dynamic>`，业务/shell 源文件不手写该 map 字面量）。
-
-与 [ops/event_record/fields.yaml](../../../quwoquan_service/contracts/metadata/ops/event_record/fields.yaml) 运营入库字段独立：本地诊断记录用于排障/回放；运营入库走 `OpsEventRecordInput` / `AnalyticsService`。
+本地诊断 Map 不是 wire DTO，也不得反向成为运营事件契约。
 
 ## 3. 创作页埋点（create_*）
 
@@ -34,8 +33,8 @@
 
 ## 4. AppLog 中枢
 
-- `AppLogService.writeEvent` / `writeRunFile` 入参仍为 **`Map<String, dynamic>`**（与 `AppLogRedactor` / 落盘 JSON 一致）。
-- **禁止**用 `Map<String, Object?>` 作为「类型化」替代；结构化内容须来自 **metadata 生成的 DTO** 再 `.toMap()`。
+- `AppLogService.writeEvent` / `writeRunFile` 的 Map 只存在于本地诊断边界，与 `AppLogRedactor` / 落盘 JSON 一致。
+- 云端结构化内容必须来自 metadata 生成的 typed payload，禁止把本地诊断 Map 当作上传契约。
 - **64 路径内**禁止字面量 `Map<String, dynamic>` 与 `dynamic`（门禁扫描）。
 
 ## 5. 参考命令

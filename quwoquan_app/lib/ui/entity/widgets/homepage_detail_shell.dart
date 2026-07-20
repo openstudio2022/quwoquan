@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -34,7 +33,10 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
+import 'package:quwoquan_app/ui/entity/widgets/homepage_review_section.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
@@ -52,7 +54,10 @@ class HomepageDetailShell extends StatefulWidget {
     required this.objectPageBundle,
     required this.introductionSummary,
     required this.viewerOwnerUserId,
+    required this.wishlistState,
+    required this.initialTabTarget,
     required this.onBack,
+    required this.onShare,
     required this.onClaim,
     required this.onMaintain,
     required this.onReport,
@@ -60,7 +65,11 @@ class HomepageDetailShell extends StatefulWidget {
     required this.onMessageOwner,
     required this.onCreateContent,
     required this.onOpenIntroduction,
+    required this.onOpenRecord,
     required this.onAttach,
+    this.onReviewsChanged,
+    this.requireReviewAuth,
+    this.reviewContinuationResumeToken = 0,
   });
 
   final bool selectionMode;
@@ -72,7 +81,12 @@ class HomepageDetailShell extends StatefulWidget {
   final ObjectPageBundle? objectPageBundle;
   final String? introductionSummary;
   final String? viewerOwnerUserId;
+
+  /// null 表示该主页类型不适用「想去」，继续展示关注语义。
+  final bool? wishlistState;
+  final HomepageDetailTabTarget? initialTabTarget;
   final VoidCallback onBack;
+  final VoidCallback onShare;
   final VoidCallback onClaim;
   final VoidCallback onMaintain;
   final VoidCallback onReport;
@@ -80,7 +94,17 @@ class HomepageDetailShell extends StatefulWidget {
   final VoidCallback onMessageOwner;
   final ValueChanged<HomepageCanonicalReference> onCreateContent;
   final VoidCallback onOpenIntroduction;
+  final ValueChanged<HomepageContentPreview> onOpenRecord;
   final ValueChanged<HomepageCanonicalReference> onAttach;
+
+  /// 评价写/改/删成功后回调（宿主刷新评分摘要）。
+  final VoidCallback? onReviewsChanged;
+
+  /// 评价写操作前的登录闸口。
+  final Future<bool> Function()? requireReviewAuth;
+
+  /// 登录成功后续接评价编辑器的一次性变化令牌。
+  final int reviewContinuationResumeToken;
 
   @override
   State<HomepageDetailShell> createState() => _HomepageDetailShellState();
@@ -102,7 +126,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       )
       .toList(growable: false);
 
-  String _activeTabId = HomepageUIConfig.defaultTabId;
+  late String _activeTabId;
 
   static final String _defaultContentSubTabId = HomepageUIConfig.subTabs
       .firstWhere(
@@ -112,6 +136,25 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       .id;
 
   String _activeContentSubTabId = _defaultContentSubTabId;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTabId = homepageTabIdForTarget(widget.initialTabTarget);
+  }
+
+  @override
+  void didUpdateWidget(covariant HomepageDetailShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTabTarget != widget.initialTabTarget) {
+      _activeTabId = homepageTabIdForTarget(widget.initialTabTarget);
+    }
+    if (oldWidget.reviewContinuationResumeToken !=
+        widget.reviewContinuationResumeToken) {
+      _activeTabId = homepageTabIdForTarget(HomepageDetailTabTarget.record);
+      _activeContentSubTabId = 'opinion';
+    }
+  }
 
   /// 二级过滤可见集：无 homepageTypes 约束的全展示；有约束的仅匹配类型展示。
   /// 真相源 = codegen [HomepageUIConfig.subTabs]。
@@ -217,12 +260,30 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         (detail.ownerUserId ?? '').trim() == viewerOwnerUserId;
   }
 
+  bool get _canMessageOwner {
+    final detail = widget.detail;
+    if (detail == null ||
+        (detail.claimStatus ?? '').trim() != 'claimed' ||
+        _isOwnerLike) {
+      return false;
+    }
+    return (detail.ownerSubAccountId ?? detail.ownerUserId ?? '')
+        .trim()
+        .isNotEmpty;
+  }
+
   bool get _canReport =>
       widget.detail != null &&
       (widget.detail!.status ?? '').trim() != 'offline';
 
+  /// 站外分享仅对已发布主页开放；候选/下线主页对外链接无消费价值。
+  bool get _canShare =>
+      widget.detail != null &&
+      (widget.detail!.status ?? '').trim() == 'published';
+
   bool get _hasMoreActions =>
-      !widget.selectionMode && (_isOwnerLike || _canClaim || _canReport);
+      !widget.selectionMode &&
+      (_canShare || _isOwnerLike || _canClaim || _canReport);
 
   Future<void> _showMoreActions(BuildContext context) async {
     if (!_hasMoreActions) {
@@ -230,6 +291,15 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     }
     final sections = <AppActionSheetSection<_HomepageMoreAction>>[];
     final primaryItems = <AppActionSheetItem<_HomepageMoreAction>>[];
+    if (_canShare) {
+      primaryItems.add(
+        const AppActionSheetItem<_HomepageMoreAction>(
+          value: _HomepageMoreAction.share,
+          label: UITextConstants.homepageShareAction,
+          icon: CupertinoIcons.arrowshape_turn_up_right,
+        ),
+      );
+    }
     if (_isOwnerLike) {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
@@ -275,6 +345,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       return;
     }
     switch (action) {
+      case _HomepageMoreAction.share:
+        widget.onShare();
       case _HomepageMoreAction.claim:
         widget.onClaim();
       case _HomepageMoreAction.maintain:
@@ -285,7 +357,15 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
   }
 
   Widget _buildContentTab(BuildContext context) {
-    if (_contentPreview.isEmpty) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final subTabs = _visibleContentSubTabs;
+    final activeId = subTabs.any((tab) => tab.id == _activeContentSubTabId)
+        ? _activeContentSubTabId
+        : _defaultContentSubTabId;
+    // 口碑子 tab 消费 HomepageReview 对象真实数据（读写全链），
+    // 不再从 contentPreview 记录流过滤伪造的 review 类型。
+    final isOpinionTab = activeId == 'opinion';
+    if (_contentPreview.isEmpty && !isOpinionTab) {
       return _buildMessageCard(
         context,
         title: UITextConstants.homepageContentSectionTitle,
@@ -296,11 +376,6 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         ),
       );
     }
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final subTabs = _visibleContentSubTabs;
-    final activeId = subTabs.any((tab) => tab.id == _activeContentSubTabId)
-        ? _activeContentSubTabId
-        : _defaultContentSubTabId;
     final filtered = _filteredContentPreviewFor(activeId);
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
@@ -330,7 +405,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             ),
             SizedBox(height: AppSpacing.containerSm),
           ],
-          if (filtered.isEmpty)
+          if (isOpinionTab)
+            _buildReviewSection(context)
+          else if (filtered.isEmpty)
             ProfileIosSectionCard(
               child: _HomepageEmptyState(
                 icon: CupertinoIcons.square_stack_3d_up,
@@ -356,6 +433,27 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildReviewSection(BuildContext context) {
+    final homepageId = (widget.detail?.id ?? _reference?.id ?? '').trim();
+    if (homepageId.isEmpty) {
+      return ProfileIosSectionCard(
+        child: _HomepageEmptyState(
+          icon: CupertinoIcons.star,
+          title: UITextConstants.homepageReviewEmptyTitle,
+          description: UITextConstants.homepageReviewEmptyDescription,
+        ),
+      );
+    }
+    return HomepageReviewSection(
+      key: ValueKey<String>('homepage-review-section-$homepageId'),
+      homepageId: homepageId,
+      tagOptions: widget.detail?.categoryTags ?? const <String>[],
+      onReviewsChanged: widget.onReviewsChanged,
+      requireAuth: widget.requireReviewAuth,
+      resumeComposerToken: widget.reviewContinuationResumeToken,
     );
   }
 
@@ -440,7 +538,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
           ),
         ],
       ),
-      onTap: () {},
+      onTap: item.postId.trim().isEmpty
+          ? null
+          : () => widget.onOpenRecord(item),
     );
   }
 
@@ -514,6 +614,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
                             sourceTheme: uiErrorAppearanceRouteValueFor(
                               context,
                             ),
+                          ),
+                          extra: const CircleDetailPageRouteExtra(
+                            referralSource: ReferralSource.entityPage,
                           ),
                         ),
                   child: ProfileIosSectionCard(

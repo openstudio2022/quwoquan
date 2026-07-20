@@ -50,8 +50,10 @@ func NewModerationService(
 	data DataPorts,
 	options ...ModerationServiceOption,
 ) *ModerationService {
-	if data.Aggregate == nil || data.Eligibility == nil {
-		panic("ModerationService requires aggregate and eligibility data ports")
+	if data.Aggregate == nil ||
+		data.Eligibility == nil ||
+		data.CurrentCase == nil {
+		panic("ModerationService requires aggregate, eligibility and current-case data ports")
 	}
 	service := &ModerationService{
 		data:  data,
@@ -80,6 +82,24 @@ func (s *ModerationService) OpenPostModerationCase(
 	); err != nil || found {
 		return replayed, err
 	}
+	// Open 是一次创建：同一 post revision（postId+postVersion+contentDigest 唯一约束）
+	// 只允许一个 Case。并发或跨来源（多条举报）的重复 open 幂等返回既有 Case，
+	// 与 Post 一次发布的 intent 语义同构。
+	if existing, found, err := s.data.Aggregate.LoadByPostRevision(
+		ctx,
+		strings.TrimSpace(command.PostID),
+		command.PostVersion,
+		command.ContentDigest,
+	); err != nil {
+		return PostModerationCaseCommandResult{}, unavailable(err)
+	} else if found {
+		return PostModerationCaseCommandResult{
+			CaseID:   existing.ID(),
+			Version:  existing.Version(),
+			Status:   existing.Status(),
+			Replayed: true,
+		}, nil
+	}
 	now := s.now().UTC()
 	caseID, err := s.newID("pmc")
 	if err != nil {
@@ -104,7 +124,7 @@ func (s *ModerationService) OpenPostModerationCase(
 	if err != nil {
 		return PostModerationCaseCommandResult{}, unavailable(err)
 	}
-	return s.commit(
+	result, commitErr := s.commit(
 		ctx,
 		caseItem,
 		0,
@@ -116,6 +136,24 @@ func (s *ModerationService) OpenPostModerationCase(
 		payload,
 		now,
 	)
+	if commitErr == nil {
+		return result, nil
+	}
+	// 同一 revision 的并发 Open 由存储唯一约束裁决。失败方回读目标态，
+	// 不把内部 duplicate/version 竞争泄露给 report outbox consumer。
+	existing, found, loadErr := s.data.Aggregate.LoadByPostRevision(
+		ctx,
+		strings.TrimSpace(command.PostID),
+		command.PostVersion,
+		command.ContentDigest,
+	)
+	if loadErr != nil {
+		return PostModerationCaseCommandResult{}, unavailable(loadErr)
+	}
+	if found {
+		return moderationResult(existing, true), nil
+	}
+	return PostModerationCaseCommandResult{}, commitErr
 }
 
 func (s *ModerationService) ReviewPostModerationCase(
@@ -134,36 +172,55 @@ func (s *ModerationService) ReviewPostModerationCase(
 	); err != nil || found {
 		return replayed, err
 	}
-	caseItem, found, err := s.load(ctx, command.CaseID)
-	if err != nil {
-		return PostModerationCaseCommandResult{}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		caseItem, found, loadErr := s.load(ctx, command.CaseID)
+		if loadErr != nil {
+			return PostModerationCaseCommandResult{}, loadErr
+		}
+		if !found {
+			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+		}
+		if caseItem.Status() == moderationmodel.StatusReviewed {
+			if strings.TrimSpace(caseItem.ReviewerID()) == strings.TrimSpace(command.ReviewerID) {
+				return moderationResult(caseItem, true), nil
+			}
+			return PostModerationCaseCommandResult{}, mapModerationDomainError(
+				moderationmodel.ErrReviewerForbidden,
+			)
+		}
+		expectedVersion := caseItem.Version()
+		now := s.now().UTC()
+		if reviewErr := caseItem.Review(command.ReviewerID, now); reviewErr != nil {
+			return PostModerationCaseCommandResult{}, mapModerationDomainError(reviewErr)
+		}
+		payload, marshalErr := json.Marshal(postModerationReviewedPayload{
+			CaseID:     caseItem.ID(),
+			ReviewerID: caseItem.ReviewerID(),
+		})
+		if marshalErr != nil {
+			return PostModerationCaseCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			caseItem,
+			expectedVersion,
+			"ReviewPostModerationCase",
+			commandDigest,
+			moderationports.AuditActionReviewed,
+			"",
+			"content.post_moderation_case.reviewed",
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isModerationVersionConflict(commitErr) {
+			return PostModerationCaseCommandResult{}, commitErr
+		}
 	}
-	if !found {
-		return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
-	}
-	expectedVersion := caseItem.Version()
-	now := s.now().UTC()
-	if err := caseItem.Review(command.ReviewerID, now); err != nil {
-		return PostModerationCaseCommandResult{}, mapModerationDomainError(err)
-	}
-	payload, err := json.Marshal(postModerationReviewedPayload{
-		CaseID:     caseItem.ID(),
-		ReviewerID: caseItem.ReviewerID(),
-	})
-	if err != nil {
-		return PostModerationCaseCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		caseItem,
-		expectedVersion,
-		"ReviewPostModerationCase",
-		commandDigest,
-		moderationports.AuditActionReviewed,
-		"",
-		"content.post_moderation_case.reviewed",
-		payload,
-		now,
+	return PostModerationCaseCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+		"post moderation case changed repeatedly while starting review",
 	)
 }
 
@@ -183,49 +240,78 @@ func (s *ModerationService) DecidePostModerationCase(
 	); err != nil || found {
 		return replayed, err
 	}
-	caseItem, found, err := s.load(ctx, command.CaseID)
-	if err != nil {
-		return PostModerationCaseCommandResult{}, err
+	targetStatus := moderationmodel.Status("")
+	switch command.Decision {
+	case moderationmodel.DecisionApprove:
+		targetStatus = moderationmodel.StatusApproved
+	case moderationmodel.DecisionReject:
+		targetStatus = moderationmodel.StatusRejected
 	}
-	if !found {
-		return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+	for attempt := 0; attempt < 3; attempt++ {
+		caseItem, found, loadErr := s.load(ctx, command.CaseID)
+		if loadErr != nil {
+			return PostModerationCaseCommandResult{}, loadErr
+		}
+		if !found {
+			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+		}
+		if targetStatus != "" && caseItem.Status() == targetStatus {
+			if strings.TrimSpace(caseItem.ReviewerID()) == strings.TrimSpace(command.ReviewerID) {
+				return moderationResult(caseItem, true), nil
+			}
+			return PostModerationCaseCommandResult{}, mapModerationDomainError(
+				moderationmodel.ErrReviewerForbidden,
+			)
+		}
+		expectedVersion := caseItem.Version()
+		now := s.now().UTC()
+		if decideErr := caseItem.Decide(
+			command.ReviewerID,
+			command.Decision,
+			command.DecisionReason,
+			now,
+		); decideErr != nil {
+			return PostModerationCaseCommandResult{}, mapModerationDomainError(decideErr)
+		}
+		action := moderationports.AuditActionRejected
+		if caseItem.Status() == moderationmodel.StatusApproved {
+			action = moderationports.AuditActionApproved
+		}
+		snapshot := caseItem.Snapshot()
+		payload, marshalErr := json.Marshal(postModerationDecidedPayload{
+			ID:            snapshot.ID,
+			Version:       snapshot.Version,
+			PostID:        snapshot.PostID,
+			PostVersion:   snapshot.PostVersion,
+			ContentDigest: snapshot.ContentDigest,
+			ReviewerID:    snapshot.ReviewerID,
+			Status:        snapshot.Status,
+			DecidedAt:     snapshot.DecidedAt,
+		})
+		if marshalErr != nil {
+			return PostModerationCaseCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			caseItem,
+			expectedVersion,
+			"DecidePostModerationCase",
+			commandDigest,
+			action,
+			command.DecisionReason,
+			"content.post_moderation_case.decided",
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isModerationVersionConflict(commitErr) {
+			return PostModerationCaseCommandResult{}, commitErr
+		}
 	}
-	expectedVersion := caseItem.Version()
-	now := s.now().UTC()
-	if err := caseItem.Decide(
-		command.ReviewerID,
-		command.Decision,
-		command.DecisionReason,
-		now,
-	); err != nil {
-		return PostModerationCaseCommandResult{}, mapModerationDomainError(err)
-	}
-	action := moderationports.AuditActionRejected
-	if caseItem.Status() == moderationmodel.StatusApproved {
-		action = moderationports.AuditActionApproved
-	}
-	payload, err := json.Marshal(postModerationDecidedPayload{
-		CaseID:        caseItem.ID(),
-		PostID:        caseItem.PostID(),
-		PostVersion:   caseItem.PostVersion(),
-		ContentDigest: caseItem.ContentDigest(),
-		ReviewerID:    caseItem.ReviewerID(),
-		Status:        caseItem.Status(),
-	})
-	if err != nil {
-		return PostModerationCaseCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		caseItem,
-		expectedVersion,
-		"DecidePostModerationCase",
-		commandDigest,
-		action,
-		command.DecisionReason,
-		"content.post_moderation_case.decided",
-		payload,
-		now,
+	return PostModerationCaseCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+		"post moderation case changed repeatedly while deciding",
 	)
 }
 
@@ -245,37 +331,51 @@ func (s *ModerationService) SupersedePostModerationCase(
 	); err != nil || found {
 		return replayed, err
 	}
-	caseItem, found, err := s.load(ctx, command.CaseID)
-	if err != nil {
-		return PostModerationCaseCommandResult{}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		caseItem, found, loadErr := s.load(ctx, command.CaseID)
+		if loadErr != nil {
+			return PostModerationCaseCommandResult{}, loadErr
+		}
+		if !found {
+			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+		}
+		if caseItem.Status() == moderationmodel.StatusSuperseded {
+			return moderationResult(caseItem, true), nil
+		}
+		expectedVersion := caseItem.Version()
+		now := s.now().UTC()
+		if supersedeErr := caseItem.Supersede(now); supersedeErr != nil {
+			return PostModerationCaseCommandResult{}, mapModerationDomainError(supersedeErr)
+		}
+		payload, marshalErr := json.Marshal(postModerationSupersededPayload{
+			CaseID:      caseItem.ID(),
+			PostID:      caseItem.PostID(),
+			PostVersion: caseItem.PostVersion(),
+		})
+		if marshalErr != nil {
+			return PostModerationCaseCommandResult{}, unavailable(marshalErr)
+		}
+		result, commitErr := s.commit(
+			ctx,
+			caseItem,
+			expectedVersion,
+			"SupersedePostModerationCase",
+			commandDigest,
+			moderationports.AuditActionSuperseded,
+			"",
+			"content.post_moderation_case.superseded",
+			payload,
+			now,
+		)
+		if commitErr == nil {
+			return result, nil
+		}
+		if !isModerationVersionConflict(commitErr) {
+			return PostModerationCaseCommandResult{}, commitErr
+		}
 	}
-	if !found {
-		return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
-	}
-	expectedVersion := caseItem.Version()
-	now := s.now().UTC()
-	if err := caseItem.Supersede(now); err != nil {
-		return PostModerationCaseCommandResult{}, mapModerationDomainError(err)
-	}
-	payload, err := json.Marshal(postModerationSupersededPayload{
-		CaseID:      caseItem.ID(),
-		PostID:      caseItem.PostID(),
-		PostVersion: caseItem.PostVersion(),
-	})
-	if err != nil {
-		return PostModerationCaseCommandResult{}, unavailable(err)
-	}
-	return s.commit(
-		ctx,
-		caseItem,
-		expectedVersion,
-		"SupersedePostModerationCase",
-		commandDigest,
-		moderationports.AuditActionSuperseded,
-		"",
-		"content.post_moderation_case.superseded",
-		payload,
-		now,
+	return PostModerationCaseCommandResult{}, contentgenerated.AppErrorFromVersionConflict(
+		"post moderation case changed repeatedly while superseding",
 	)
 }
 
@@ -303,6 +403,27 @@ func (s *ModerationService) GetPostPublicationEligibility(
 		DecisionAt:    cloneTime(eligibility.DecisionAt),
 		FailureReason: eligibility.FailureReason,
 	}, nil
+}
+
+func (s *ModerationService) GetCurrentPostModerationCase(
+	ctx context.Context,
+	query GetCurrentPostModerationCaseQuery,
+) (PostModerationCaseOpsSlice, error) {
+	postID := strings.TrimSpace(query.PostID)
+	if postID == "" {
+		return PostModerationCaseOpsSlice{},
+			contentgenerated.AppErrorFromInvalidArgument(
+				"GetCurrentPostModerationCase requires postId",
+			)
+	}
+	slice, found, err := s.data.CurrentCase.FindCurrentByPostID(ctx, postID)
+	if err != nil {
+		return PostModerationCaseOpsSlice{}, unavailable(err)
+	}
+	if !found {
+		return PostModerationCaseOpsSlice{}, moderationCaseNotFound(postID)
+	}
+	return slice, nil
 }
 
 func (s *ModerationService) replay(
@@ -431,6 +552,12 @@ func moderationCommandDigest(commandName string, encoded []byte) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+func isModerationVersionConflict(err error) bool {
+	var appError *rterr.AppError
+	return errors.As(err, &appError) &&
+		appError.Code.String() == contentgenerated.ErrVersionConflict.Error()
+}
+
 func mapModerationDomainError(err error) error {
 	switch {
 	case errors.Is(err, moderationmodel.ErrReviewerForbidden):
@@ -448,7 +575,7 @@ func mapModerationDomainError(err error) error {
 }
 
 func moderationCaseNotFound(caseID string) error {
-	return contentgenerated.AppErrorFromMediaNotFound(
+	return contentgenerated.AppErrorFromModerationCaseNotFound(
 		fmt.Sprintf("post moderation case %s not found", strings.TrimSpace(caseID)),
 	)
 }
@@ -494,12 +621,14 @@ type postModerationReviewedPayload struct {
 }
 
 type postModerationDecidedPayload struct {
-	CaseID        string                 `json:"caseId"`
+	ID            string                 `json:"id"`
+	Version       int64                  `json:"version"`
 	PostID        string                 `json:"postId"`
 	PostVersion   int64                  `json:"postVersion"`
 	ContentDigest string                 `json:"contentDigest"`
 	ReviewerID    string                 `json:"reviewerId"`
 	Status        moderationmodel.Status `json:"status"`
+	DecidedAt     *time.Time             `json:"decidedAt"`
 }
 
 type postModerationSupersededPayload struct {

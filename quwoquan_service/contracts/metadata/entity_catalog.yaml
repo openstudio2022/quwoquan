@@ -27,7 +27,7 @@ entities:
 
   - name: LocationPoi
     domain: integration
-    canonical: contracts/metadata/integration/location/aggregate.yaml
+    canonical: contracts/metadata/integration/location/entity.yaml
     storage: mongodb
     description: External location provider normalized poi
 
@@ -39,12 +39,18 @@ entities:
 
   - name: HomepageClaimRequest
     domain: entity
-    canonical: contracts/metadata/entity/homepage/aggregate.yaml
+    canonical: contracts/metadata/entity/homepage_claim_request/entity.yaml
     storage: mongodb
     description: Shared homepage ownership claim request
 
+  - name: HomepageReview
+    domain: entity
+    canonical: contracts/metadata/entity/homepage_review/entity.yaml
+    storage: mongodb
+    description: Shared homepage user review with rating
+
   - name: HomepageStatusReport
     domain: entity
-    canonical: contracts/metadata/entity/homepage/aggregate.yaml
+    canonical: contracts/metadata/entity/homepage_status_report/entity.yaml
     storage: mongodb
     description: Shared homepage offline or correction report

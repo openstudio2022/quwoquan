@@ -19,6 +19,7 @@ type ReportCommandFacade interface {
 
 type ReportQueryFacade interface {
 	GetReport(context.Context, GetReportQuery) (ReportDetailSlice, error)
+	ListMyReports(context.Context, ListMyReportsQuery) (MyReportPageSlice, error)
 	ListReports(context.Context, ListReportsQuery) (ReportQueueSlice, error)
 }
 

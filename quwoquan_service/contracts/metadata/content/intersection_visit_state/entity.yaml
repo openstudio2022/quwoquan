@@ -1,0 +1,27 @@
+domain: content
+entity: IntersectionVisitState
+object_kind: aggregate_root
+description: 「我的交集」收件箱的 per-dimension 已读水位；一 user 一文档，维度水位只经
+  $max 单调推进（晚到的旧时间戳不会回退已推进的位），重放天然收敛，因此不维护命令回执。
+  Redis（ix:watermark hash）只是加速读缓存，本对象是耐久真相源。
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 300
+capabilities: [commandable, queryable]
+business_rules:
+  - userId 唯一（一 user 一文档）
+  - 维度集合固定为 identity/location/content/interest/relationship
+  - 各维度水位只能单调推进；命令未指定维度时推进全部维度
+  - 重放（任意次 MarkIntersectionsVisited）语义等价且无副作用放大
+lifecycle:
+  states: [active]
+  optimistic_concurrency: none
+  idempotency: naturally_convergent_monotonic_watermark
+taggable: false
+vector_enabled: false
+ddd_layer_mapping:
+  domain_model: internal/application/intersection
+  repository: internal/application/ports
+  application: internal/application/intersection
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

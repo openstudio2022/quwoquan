@@ -10,6 +10,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -21,6 +22,9 @@ import io.flutter.plugin.platform.PlatformView;
  */
 public final class PlatformVideoView implements PlatformView {
   @NonNull private final SurfaceView surfaceView;
+  @NonNull private final ExoPlayer exoPlayer;
+  @Nullable private SurfaceHolder.Callback surfaceCallback;
+  private boolean disposed = false;
 
   /**
    * Constructs a new PlatformVideoView.
@@ -30,6 +34,7 @@ public final class PlatformVideoView implements PlatformView {
    */
   @OptIn(markerClass = UnstableApi.class)
   public PlatformVideoView(@NonNull Context context, @NonNull ExoPlayer exoPlayer) {
+    this.exoPlayer = exoPlayer;
     surfaceView = new SurfaceView(context);
 
     if (Build.VERSION.SDK_INT == Build.VERSION_CODES.P) {
@@ -51,28 +56,32 @@ public final class PlatformVideoView implements PlatformView {
   }
 
   private void setupSurfaceWithCallback(@NonNull ExoPlayer exoPlayer) {
-    surfaceView
-        .getHolder()
-        .addCallback(
-            new SurfaceHolder.Callback() {
-              @Override
-              public void surfaceCreated(@NonNull SurfaceHolder holder) {
-                exoPlayer.setVideoSurface(holder.getSurface());
-                // Force first frame rendering:
-                exoPlayer.seekTo(1);
-              }
+    surfaceCallback =
+        new SurfaceHolder.Callback() {
+          @Override
+          public void surfaceCreated(@NonNull SurfaceHolder holder) {
+            if (disposed) {
+              return;
+            }
+            exoPlayer.setVideoSurface(holder.getSurface());
+            // Force first frame rendering:
+            exoPlayer.seekTo(1);
+          }
 
-              @Override
-              public void surfaceChanged(
-                  @NonNull SurfaceHolder holder, int format, int width, int height) {
-                // No implementation needed.
-              }
+          @Override
+          public void surfaceChanged(
+              @NonNull SurfaceHolder holder, int format, int width, int height) {
+            // No implementation needed.
+          }
 
-              @Override
-              public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-                exoPlayer.setVideoSurface(null);
-              }
-            });
+          @Override
+          public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+            if (!disposed) {
+              exoPlayer.setVideoSurface(null);
+            }
+          }
+        };
+    surfaceView.getHolder().addCallback(surfaceCallback);
   }
 
   /**
@@ -86,9 +95,24 @@ public final class PlatformVideoView implements PlatformView {
     return surfaceView;
   }
 
-  /** Disposes of the resources used by this PlatformView. */
+  /**
+   * Detaches the player before the framework-owned surface is destroyed.
+   *
+   * <p>Order matters on early/low-end devices: clearing the player surface first avoids
+   * "client returned a buffer it does not own" races during dispose/seek teardown. The
+   * SurfaceView owns its Surface, so this class must never release it directly.
+   */
   @Override
   public void dispose() {
-    surfaceView.getHolder().getSurface().release();
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    if (surfaceCallback != null) {
+      surfaceView.getHolder().removeCallback(surfaceCallback);
+      surfaceCallback = null;
+    }
+    exoPlayer.clearVideoSurfaceView(surfaceView);
+    exoPlayer.setVideoSurface(null);
   }
 }

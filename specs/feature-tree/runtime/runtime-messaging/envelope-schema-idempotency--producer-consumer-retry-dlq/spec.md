@@ -1,4 +1,4 @@
-# L4 特性：producer-consumer-retry-dlq
+# L3 特性：producer-consumer-retry-dlq
 
 ## 功能说明
 - 完成对象级任务落地（模型/接口/策略/存储）。

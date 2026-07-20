@@ -2,19 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-Widget _buildApp(Widget child, {CircleRepository? repository}) {
+import 'typed_circle_query_test_double.dart';
+
+Widget _buildApp(
+  Widget child, {
+  CircleRepository? repository,
+  CircleFeedQueryReader? feedQuery,
+}) {
   return ProviderScope(
     overrides: [
       circleRepositoryProvider.overrideWithValue(
         repository ?? MockCircleRepository(),
+      ),
+      circleDetailFeedQueryProvider.overrideWithValue(
+        feedQuery ??
+            CircleFeedQueryTestDouble(
+              (query) => CircleFeedPageSlice(
+                items: const <CircleFeedPostProjection>[],
+              ),
+            ),
       ),
     ],
     child: MaterialApp.router(
@@ -77,6 +90,7 @@ void main() {
           ),
         ),
         repository: repository,
+        feedQuery: CircleFeedQueryTestDouble(_articleFeedFixture),
       ),
     );
     await tester.pumpAndSettle();
@@ -104,6 +118,55 @@ void main() {
   });
 }
 
+CircleFeedPageSlice _articleFeedFixture(CircleFeedQuery query) {
+  return CircleFeedPageSlice(
+    items: <CircleFeedPostProjection>[
+      CircleFeedPostProjection(
+        circleId: query.circleId,
+        placementId: 'fixture-placement-article-cover',
+        post: ContentPostProjection(
+          postId: 'fixture_article_with_cover',
+          contentType: 'article',
+          contentIdentity: 'work',
+          authorId: 'fixture_user_photo',
+          authorDisplayName: '契约摄影师',
+          authorAvatarUrl: 'media/avatar/fixture_user_photo.png',
+          title: '山路晨雾手账',
+          summary: '把徒步笔记做成可翻页的旅途册。',
+          body: '把徒步笔记做成可翻页的旅途册。',
+          coverUrl: 'media/image/fixture_article_with_cover.jpg',
+          articleTemplate: 'journal',
+          articleFontPreset: 'handwritten',
+          likeCount: 164,
+          commentCount: 12,
+          shareCount: 11,
+          createdAt: DateTime.utc(2026, 5, 13),
+        ),
+      ),
+      CircleFeedPostProjection(
+        circleId: query.circleId,
+        placementId: 'fixture-placement-article-text',
+        post: ContentPostProjection(
+          postId: 'fixture_article_text_only',
+          contentType: 'article',
+          contentIdentity: 'work',
+          authorId: 'fixture_user_owner',
+          authorDisplayName: '纸上居',
+          authorAvatarUrl: 'media/avatar/fixture_user_owner.png',
+          summary: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+          body: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+          articleTemplate: 'gentle',
+          articleFontPreset: 'clean',
+          likeCount: 88,
+          commentCount: 6,
+          shareCount: 4,
+          createdAt: DateTime.utc(2026, 5, 13, 1),
+        ),
+      ),
+    ],
+  );
+}
+
 class _ArticleFixtureCircleRepository extends MockCircleRepository {
   @override
   Future<CircleDetailPayload> getCircle(String circleId) async {
@@ -111,70 +174,12 @@ class _ArticleFixtureCircleRepository extends MockCircleRepository {
       'id': circleId,
       'name': '契约摄影社',
       'ownerId': 'fixture_user_owner',
-      'categoryId': 'photography',
+      'category': 'photography',
       'visibility': 'public',
       'joinPolicy': 'approval',
       'createdAt': '2026-05-06T00:00:00Z',
       'updatedAt': '2026-05-06T00:00:00Z',
       'sectionConfig': const <Map<String, dynamic>>[],
     });
-  }
-
-  @override
-  Future<List<PostBaseDto>> getCircleFeed(
-    String circleId, {
-    String? identity,
-    String? type,
-    String? cursor,
-    int limit = 20,
-    String sort = 'latest',
-  }) async {
-    final rows = <Map<String, dynamic>>[
-      {
-        'postId': 'fixture_article_with_cover',
-        'id': 'fixture_article_with_cover',
-        'contentType': 'article',
-        'type': 'article',
-        'contentIdentity': 'work',
-        'identity': 'work',
-        'authorId': 'fixture_user_photo',
-        'authorDisplayName': '契约摄影师',
-        'authorAvatarUrl': 'media/avatar/fixture_user_photo.png',
-        'title': '山路晨雾手账',
-        'summary': '把徒步笔记做成可翻页的旅途册。',
-        'body': '把徒步笔记做成可翻页的旅途册。',
-        'coverUrl': 'media/image/fixture_article_with_cover.jpg',
-        'articleTemplate': 'journal',
-        'articleFontPreset': 'handwritten',
-        'likeCount': 164,
-        'commentCount': 12,
-        'shareCount': 11,
-        'circleId': circleId,
-        'createdAt': '2026-05-13T00:00:00Z',
-      },
-      {
-        'postId': 'fixture_article_text_only',
-        'id': 'fixture_article_text_only',
-        'contentType': 'article',
-        'type': 'article',
-        'contentIdentity': 'work',
-        'identity': 'work',
-        'authorId': 'fixture_user_owner',
-        'authorDisplayName': '纸上居',
-        'authorAvatarUrl': 'media/avatar/fixture_user_owner.png',
-        'title': '',
-        'summary': '没有标题也没封面，只保留真正想被圈友读到的正文。',
-        'body': '没有标题也没封面，只保留真正想被圈友读到的正文。',
-        'coverUrl': '',
-        'articleTemplate': 'gentle',
-        'articleFontPreset': 'clean',
-        'likeCount': 88,
-        'commentCount': 6,
-        'shareCount': 4,
-        'circleId': circleId,
-        'createdAt': '2026-05-13T01:00:00Z',
-      },
-    ];
-    return rows.map(ArticlePostDto.fromMap).toList(growable: false);
   }
 }

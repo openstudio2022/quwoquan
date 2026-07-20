@@ -190,7 +190,8 @@ make codegen-rec-model-python # Python: features + training_samples（Pydantic�
 
 ### 当前 entity.yaml 处置
 
-- `CreatorRuntimeProfile`、`UserLifeItem`、`UserWork`：imported/materialized projection。
+- `CreatorRuntimeProfile`：imported/materialized projection（`UserLifeItem`/`UserWork`
+  投影已于 2026-07-20 M12 收口随 B3 删表决策一并从对象图删除，无 UI 消费方）。
 - `ModelScoreRequest`：仅是 `RecommendationModelRelease` scoring Reader 的 inference wire DTO，不登记为业务对象、聚合或生命周期 owner。
 - `Report`：governance aggregate。
 - `DeletedPostTombstone`：内容删除后的 retention/audit 事实，由 Post 删除事件创建；
@@ -264,6 +265,11 @@ operation 的 `reliability.idempotency` 只描述请求重放；调用方版本�
 快照覆盖；一次创建/发布、关系 set/unset、事实 append、projection、external query 与
 runtime session 禁止使用。服务端 Store 的 `ExpectedVersion` 始终是内部 CAS 参数，不是
 公开 API 默认字段。
+
+`If-Match` 携带带引号的非负十进制聚合版本：正整数表示快照覆盖所基于的版本；`"0"`
+表示「期望目标尚不存在」（lazy create，如 `UpdateServiceConfig` 首次为某 scope 建
+ConfigLayer）。runtime guard 统一放行 ≥0，是否接受 0 由各对象 handler 按语义收紧
+（如 `UpdateExperimentRollout` 只接受 >0）。
 
 ### Object Data Ports
 

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 Widget _wrap({
@@ -14,7 +15,7 @@ Widget _wrap({
 }) {
   return ProviderScope(
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repository),
+      chatRepositoryCompositionProvider.overrideWithValue(repository),
       currentUserIdProvider.overrideWithValue(currentUserId),
     ],
     child: CupertinoApp(

@@ -10,7 +10,10 @@ import (
 )
 
 type postReactionTargetReader interface {
-	PostExists(ctx context.Context, postID string) (bool, error)
+	FindPostOwnership(
+		ctx context.Context,
+		postID string,
+	) (commentmodel.PostOwnership, bool, error)
 }
 
 type commentReactionTargetReader interface {
@@ -21,7 +24,7 @@ type commentReactionTargetReader interface {
 }
 
 // ReactionTargetReader 是 ContentReaction 到 Post/Comment 的窄防腐读端口。
-// 它只回答目标是否可互动，不返回或拼装任何目标聚合。
+// 它只回答目标是否可互动以及作者是谁（通知接收者），不返回或拼装任何目标聚合。
 type ReactionTargetReader struct {
 	posts    postReactionTargetReader
 	comments commentReactionTargetReader
@@ -37,21 +40,35 @@ func NewReactionTargetReader(
 	return &ReactionTargetReader{posts: posts, comments: comments}
 }
 
-func (r *ReactionTargetReader) ReactionTargetExists(
+func (r *ReactionTargetReader) FindReactionTarget(
 	ctx context.Context,
 	target reactiondomain.Target,
-) (bool, error) {
+) (reactionapp.ReactionTargetSlice, error) {
 	if err := target.Validate(); err != nil {
-		return false, err
+		return reactionapp.ReactionTargetSlice{}, err
 	}
 	switch target.Kind {
 	case reactiondomain.TargetKindPost:
-		return r.posts.PostExists(ctx, target.ID)
+		ownership, found, err := r.posts.FindPostOwnership(ctx, target.ID)
+		if err != nil {
+			return reactionapp.ReactionTargetSlice{}, err
+		}
+		return reactionapp.ReactionTargetSlice{
+			Exists:   found && ownership.Active,
+			AuthorID: ownership.AuthorID,
+		}, nil
 	case reactiondomain.TargetKindComment:
 		comment, found, err := r.comments.FindReplyTarget(ctx, target.ID)
-		return found && comment.Status == commentmodel.StatusActive, err
+		if err != nil {
+			return reactionapp.ReactionTargetSlice{}, err
+		}
+		return reactionapp.ReactionTargetSlice{
+			Exists:   found && comment.Status == commentmodel.StatusActive,
+			AuthorID: comment.AuthorID,
+		}, nil
 	default:
-		return false, fmt.Errorf("unsupported ContentReaction target kind %q", target.Kind)
+		return reactionapp.ReactionTargetSlice{},
+			fmt.Errorf("unsupported ContentReaction target kind %q", target.Kind)
 	}
 }
 

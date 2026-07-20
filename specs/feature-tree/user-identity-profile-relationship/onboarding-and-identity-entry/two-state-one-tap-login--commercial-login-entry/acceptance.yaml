@@ -41,22 +41,23 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     - quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
-    - quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
     performance_points:
     - 历史账号二次登录过程中页面必须保持可恢复加载态，不出现本地假登录闪回。
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_local_contract
@@ -64,11 +65,13 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_api_integration
@@ -114,17 +117,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt2_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_local_contract
@@ -176,17 +182,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt3_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt3_api_integration
         envs: *id002
       - layer: user_acceptance
+        execution_profile: release
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
@@ -233,17 +242,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt4_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_local_contract
@@ -286,12 +298,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt5_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt5_local_contract
@@ -334,18 +348,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt6_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt6_local_contract
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
         envs:
         - gamma_local
       - layer: api_integration
+        execution_profile: integration
         suite: otp_auth_contract
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.otp_auth_contract
@@ -390,17 +407,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt7_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt7_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt7_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_local_contract
@@ -423,34 +443,37 @@ gwt_acceptance:
     - 创建与恢复账号的服务端副作用可由真实存储 contract 测试证明。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    - quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
     - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     performance_points:
     - OTP 登录提交时必须保持 loading、防重复提交和结构化失败恢复。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt8_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt8_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt8_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_local_contract
@@ -472,21 +495,23 @@ contract_acceptance:
     - SendOtp / LoginWithPhone / LoginOneTap / ResolveOneTapLoginHint 在 metadata 同源声明 commercial、authorization、安全、隐私、可靠性、遥测、错误码与 SLO，App ContractGraph lock 通过正式 handoff 接受。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: contract1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract1_api_integration
@@ -511,26 +536,29 @@ contract_acceptance:
       provider 原始 URL。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: contract2_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_local_contract
@@ -557,6 +585,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
@@ -564,11 +593,13 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.uat1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: uat1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.uat1_api_integration
@@ -586,5 +617,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-auth-policy
   - make verify-app-login-entry-loop-contract
-  full_gate:
+  profile_gates:
   - make gate

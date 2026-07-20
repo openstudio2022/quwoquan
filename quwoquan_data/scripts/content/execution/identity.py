@@ -14,7 +14,7 @@ _EXECUTION_ID_RE = re.compile(
     r"(?P<content_type>homepage|article|image|video)-"
     r"(?P<intent>[a-z][a-z0-9-]*)--"
     r"(?P<scope>[a-z0-9][a-z0-9-]*)--"
-    r"(?P<milestone>canary|m1|m2|m3)-"
+    r"(?P<milestone>canary|m1|m2|m3|h10k)-"
     r"(?P<sequence>[0-9]{3,})$"
 )
 
@@ -38,7 +38,7 @@ def validate_execution_id(value: str) -> str:
     if match is None:
         raise ValueError(
             "executionId must be YYYYMMDD--<vertical>-<contentType>-<intent>--"
-            "<scope>--<canary|m1|m2|m3>-<sequence>"
+            "<scope>--<canary|m1|m2|m3|h10k>-<sequence>"
         )
     try:
         date.fromisoformat(

@@ -188,6 +188,77 @@ func (s *PGReportStore) FindReceipt(
 	}, true, nil
 }
 
+// RecordNoopReceipt 持久化目标状态已满足的命名迁移回执：INSERT ON CONFLICT
+// DO NOTHING 与既有 receipt 语义共存，并发首插以先者为准并回放先者结果。
+func (s *PGReportStore) RecordNoopReceipt(
+	ctx context.Context,
+	noop reportports.NoopReceipt,
+) (reportports.CommitResult, error) {
+	if noop.Aggregate == nil ||
+		strings.TrimSpace(noop.IdempotencyKey) == "" ||
+		strings.TrimSpace(noop.CommandName) == "" ||
+		strings.TrimSpace(noop.CommandDigest) == "" {
+		return reportports.CommitResult{},
+			contentgenerated.AppErrorFromVersionConflict(
+				"report no-op receipt is incomplete",
+			)
+	}
+	if replayed, found, err := s.FindReceipt(
+		ctx,
+		noop.IdempotencyKey,
+		noop.CommandName,
+		noop.CommandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	record := recordFromSnapshot(noop.Aggregate.Snapshot())
+	resultJSON, err := json.Marshal(record)
+	if err != nil {
+		return reportports.CommitResult{}, err
+	}
+	expiresAt := noop.ReceiptExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	result, err := s.db.ExecContext(ctx, `
+INSERT INTO report_command_receipts (
+  idempotency_key, aggregate_id, aggregate_version, command_name, command_digest,
+  result_json, created_at, expires_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+ON CONFLICT (idempotency_key) DO NOTHING`,
+		strings.TrimSpace(noop.IdempotencyKey),
+		record.ID,
+		record.Version,
+		strings.TrimSpace(noop.CommandName),
+		strings.TrimSpace(noop.CommandDigest),
+		resultJSON,
+		time.Now().UTC(),
+		expiresAt,
+	)
+	if err != nil {
+		return reportports.CommitResult{}, err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil && rows == 1 {
+		return reportports.CommitResult{Aggregate: noop.Aggregate}, nil
+	}
+	replayed, found, err := s.FindReceipt(
+		ctx,
+		noop.IdempotencyKey,
+		noop.CommandName,
+		noop.CommandDigest,
+	)
+	if err != nil {
+		return reportports.CommitResult{}, err
+	}
+	if !found {
+		return reportports.CommitResult{},
+			contentgenerated.AppErrorFromStorageWriteFailed(
+				"report no-op receipt lost a concurrent insert",
+			)
+	}
+	return replayed, nil
+}
+
 func (s *PGReportStore) Commit(
 	ctx context.Context,
 	commit reportports.Commit,
@@ -313,6 +384,61 @@ LIMIT $1`, limit)
 		return reportapp.ReportQueueSlice{}, err
 	}
 	return reportapp.ReportQueueSlice{Items: items, Total: len(items)}, nil
+}
+
+func (s *PGReportStore) ListByReporter(
+	ctx context.Context,
+	reporterID string,
+	cursor *reportapp.MyReportCursor,
+	limit int,
+) ([]reportapp.MyReportItemSlice, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if cursor == nil {
+		rows, err = s.db.QueryContext(ctx, `
+SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+       reviewer_id, resolution, created_at, updated_at, resolved_at
+FROM reports
+WHERE reporter_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT $2`, strings.TrimSpace(reporterID), limit)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+       reviewer_id, resolution, created_at, updated_at, resolved_at
+FROM reports
+WHERE reporter_id = $1
+  AND (created_at < $2 OR (created_at = $2 AND id < $3))
+ORDER BY created_at DESC, id DESC
+LIMIT $4`,
+			strings.TrimSpace(reporterID),
+			cursor.CreatedAt.UTC(),
+			strings.TrimSpace(cursor.ID),
+			limit,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]reportapp.MyReportItemSlice, 0, limit)
+	for rows.Next() {
+		record, scanErr := scanReportRecord(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, record.myReportItemSlice())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const reportSelectByID = `
@@ -612,6 +738,20 @@ func (r reportRecord) queueItemSlice() reportapp.ReportQueueItemSlice {
 		Status:     reportmodel.Status(r.Status),
 		CreatedAt:  r.CreatedAt,
 		UpdatedAt:  r.UpdatedAt,
+	}
+}
+
+func (r reportRecord) myReportItemSlice() reportapp.MyReportItemSlice {
+	return reportapp.MyReportItemSlice{
+		ID:          r.ID,
+		TargetType:  reportmodel.TargetType(r.TargetType),
+		TargetID:    r.TargetID,
+		Reason:      reportmodel.Reason(r.Reason),
+		Description: r.Description,
+		Status:      reportmodel.Status(r.Status),
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+		ResolvedAt:  r.ResolvedAt,
 	}
 }
 

@@ -31,12 +31,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_config.environment_topology_and_packaging.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_config.environment_topology_and_packaging.gwt1_local_contract
@@ -48,6 +50,6 @@ execution:
   - python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   - python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   - python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
-  full_gate:
+  profile_gates:
   - make verify-env-packaging
   - make gate

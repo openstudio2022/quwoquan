@@ -1,4 +1,4 @@
-# L3：App Cloud 业务对象商用闭环
+# L3 特性：App Cloud 业务对象商用闭环
 
 ## 最小价值点
 
@@ -10,6 +10,7 @@ App 通过同一份不可变 ContractGraph，只调用具名业务对象 Facet �
 - 业务能力：`system-architecture-and-engineering-guide`
 - Story：`app-cloud-business-object-commercial-closure`
 - AppRoot UAT：`UAT_BUSINESS_OBJECT_COMMERCIALIZATION`
+- 分批执行规划：[object-batch-rollout-plan.md](./object-batch-rollout-plan.md)（91 对象 12 批，B0–B11，每批含范围/清除项/断点/决策项与一键复制会话指令）
 - 关联 Scenario：
   - `identity-entry-persona-continuation`
   - `content-feed-open-detail`

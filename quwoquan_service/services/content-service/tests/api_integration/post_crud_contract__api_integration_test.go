@@ -199,17 +199,46 @@ func TestDeletePostContract(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	tombstones := requireMongoDB(t).Collection("deleted_post_tombstones")
+	count, err := tombstones.CountDocuments(
+		t.Context(),
+		bson.M{"_id": postID, "postId": postID},
+	)
+	if err != nil || count != 1 {
+		t.Fatalf("delete tombstone count=%d err=%v", count, err)
+	}
+
+	replayReq := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
+	replayReq.Header.Set("X-Client-User-Id", "delete_author")
+	ensureIdempotencyHeader(replayReq, "delete-post-replay")
+	replayRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(replayRec, replayReq)
+	if replayRec.Code != http.StatusOK {
+		t.Fatalf(
+			"repeated delete expected 200, got %d: %s",
+			replayRec.Code,
+			replayRec.Body.String(),
+		)
+	}
+	count, err = tombstones.CountDocuments(t.Context(), bson.M{"_id": postID})
+	if err != nil || count != 1 {
+		t.Fatalf("repeated delete duplicated tombstone: count=%d err=%v", count, err)
+	}
 
 	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	getReq.Header.Set("X-Client-User-Id", "delete_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	// 墓碑保留期语义：删除后读取按 content_deleted 返回 410（非 404）。
+	if getRec.Code != http.StatusGone {
+		t.Fatalf("expected 410 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	if !strings.Contains(getRec.Body.String(), "CONTENT.USER.content_deleted") {
+		t.Fatalf("deleted post read must map content_deleted, got %s", getRec.Body.String())
 	}
 }
 
-func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
+func TestGetDeletedPostAfterServiceRestartStillReturnsTombstone(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := submitPublishedPostWithAuthor(t, "delete_restart_author", `{
@@ -259,8 +288,13 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
 	getReq.Header.Set("X-Client-User-Id", "delete_restart_author")
 	getRec := httptest.NewRecorder()
 	restartedHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 after restart for deleted post, got %d: %s", getRec.Code, getRec.Body.String())
+	// 软删文档在保留期内持续存在：服务重启后读取仍按墓碑语义返回 410 content_deleted，
+	// 不回退 404（TTL 到期文档消失后才回落 404）。
+	if getRec.Code != http.StatusGone {
+		t.Fatalf("expected 410 after restart for deleted post, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	if !strings.Contains(getRec.Body.String(), "CONTENT.USER.content_deleted") {
+		t.Fatalf("deleted post read after restart must map content_deleted, got %s", getRec.Body.String())
 	}
 }
 

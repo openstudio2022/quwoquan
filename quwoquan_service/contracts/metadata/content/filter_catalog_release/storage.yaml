@@ -1,0 +1,28 @@
+aggregate: FilterCatalogRelease
+backend: mongodb
+
+collections:
+  filter_catalog_releases:
+    entity: FilterCatalogRelease
+    description: 不可变滤镜目录发布与激活状态；categories/presets 为有界内嵌成员。
+    indexes:
+      - { name: idx_filter_catalog_release_id, keys: { releaseId: 1 }, unique: true }
+      - { name: idx_filter_catalog_digest, keys: { canonicalDigest: 1 }, unique: true }
+      - { name: idx_filter_catalog_single_active, keys: { status: 1 }, unique: true, partial_filter: { status: active } }
+      - { name: idx_filter_catalog_status_imported, keys: { status: 1, importedAt: -1 } }
+      - { name: idx_filter_catalog_version, keys: { releaseId: 1, version: 1 }, unique: true }
+
+  filter_catalog_command_receipts:
+    entity: FilterCatalogRelease
+    description: Stage/Activate/Rollback 的幂等结果，与聚合状态在同一 Mongo transaction 提交。
+    indexes:
+      - { name: idx_filter_catalog_receipts_key, keys: { _id: 1 }, unique: true }
+      - { name: idx_filter_catalog_receipts_aggregate, keys: { aggregateId: 1, aggregateVersion: -1 } }
+      - { name: idx_filter_catalog_receipts_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+
+redis_cache:
+  - key: "content:filter-catalog:active"
+    ttl_seconds: 21600
+    entity: FilterCatalogRelease
+    invalidate_on: [FilterCatalogReleaseActivated, FilterCatalogReleaseRolledBack]
+

@@ -1,0 +1,21 @@
+aggregate: AssistantScorecardFact
+layer: e2e
+
+description: |
+  端云集成场景。run 完成 → 服务端自评 scorecard → 学习画像聚合。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: run_completion_scorecard_aggregation
+    description: run 终态触发 scorecard 落盘并进入画像聚合
+    test_type: api_contract
+    actors:
+      service: assistant-service run 完成钩子 → assistant_scorecard_facts
+      storage: MongoDB assistant_scorecard_facts + rm_assistant_learning_profile
+    assertions:
+      - 每个 completed run 恰有一条 scorecard（scoreId dedupe）
+      - 画像聚合分数随 scorecard 收敛

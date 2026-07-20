@@ -12,7 +12,7 @@ paths:
             x-actor: account
             x-application:
                 kind: query
-                facet: ConfigLayerQueryFacade
+                facet: ConfigSnapshotQueryFacade
                 method: listConfigKeys
                 reader: ConfigKeyCatalogReader
                 slice: ConfigKeyCatalogSlice
@@ -31,75 +31,25 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /control-plane/platform/configs/{configKey}:update:
-        post:
-            operationId: UpdateServiceConfig
-            x-contract-operation-id: ops.config_layer.UpdateServiceConfig
-            x-object-id: ops.config_layer
-            x-actor: account
-            x-application:
-                kind: command
-                facet: ConfigLayerCommandFacade
-                method: setValue
-                aggregateOwner: ConfigLayer
-            parameters:
-                - name: configKey
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-                - name: Idempotency-Key
-                  in: header
-                  required: true
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-                - name: If-Match
-                  in: header
-                  required: true
-                  description: Quoted positive aggregate version for a snapshot overwrite.
-                  schema:
-                    type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/SetConfigLayerValueRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SetConfigLayerValueResult'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /control-plane/platform/configs/layers:
+    /control-plane/platform/configs/domains:
         get:
-            operationId: ListConfigLayers
-            x-contract-operation-id: ops.config_layer.ListConfigLayers
+            operationId: ListConfigDomains
+            x-contract-operation-id: ops.config_layer.ListConfigDomains
             x-object-id: ops.config_layer
             x-actor: account
             x-application:
                 kind: query
-                facet: ConfigLayerQueryFacade
-                method: listLayers
-                reader: ConfigLayerReader
-                slice: ConfigLayerSlice
+                facet: ConfigSnapshotQueryFacade
+                method: listDomains
+                reader: ConfigSnapshotReader
+                slice: ConfigDomainSlice
             responses:
                 "200":
                     description: OK
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ConfigLayerSlice'
+                                $ref: '#/components/schemas/ConfigDomainSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -116,9 +66,9 @@ paths:
             x-actor: account
             x-application:
                 kind: query
-                facet: ConfigLayerQueryFacade
+                facet: ConfigSnapshotQueryFacade
                 method: resolveEffectiveConfig
-                reader: EffectiveConfigReader
+                reader: ConfigSnapshotReader
                 slice: EffectiveConfigSlice
             responses:
                 "200":
@@ -127,6 +77,33 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/EffectiveConfigSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/configs/snapshot:
+        get:
+            operationId: GetConfigSnapshot
+            x-contract-operation-id: ops.config_layer.GetConfigSnapshot
+            x-object-id: ops.config_layer
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotQueryFacade
+                method: getSnapshot
+                reader: ConfigSnapshotReader
+                slice: ConfigSnapshotView
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConfigSnapshotView'
                 default:
                     description: Runtime failure
                     content:
@@ -274,6 +251,33 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /ops/events/rtc-media-qoe/summary:
+        get:
+            operationId: GetRtcMediaQoeSummary
+            x-contract-operation-id: ops.event_record.GetRtcMediaQoeSummary
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: RtcMediaQoeQueryFacade
+                method: get24HourSummary
+                reader: RtcMediaQoeSummaryReader
+                slice: RtcMediaQoeSummarySlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RtcMediaQoeSummarySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /ops/events/summary:
         get:
             operationId: GetEventSummary
@@ -410,6 +414,95 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /ops/runtime-logs:
+        post:
+            operationId: ReportRuntimeLogBatch
+            x-contract-operation-id: ops.event_record.ReportRuntimeLogBatch
+            x-object-id: ops.event_record
+            x-actor: persona_or_device
+            x-application:
+                kind: command
+                facet: RuntimeLogCommandFacet
+                method: appendAppRuntimeBatch
+                appendSink: EventRecord
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReportRuntimeLogBatchRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /ops/runtime-logs/drilldown:
+        get:
+            operationId: GetRuntimeLogDrilldown
+            x-contract-operation-id: ops.event_record.GetRuntimeLogDrilldown
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: RuntimeLogQueryFacet
+                method: getDrilldown
+                reader: RuntimeLogDrilldownReader
+                slice: RuntimeLogDrilldownSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetRuntimeLogDrilldownResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /ops/runtime-logs/summary:
+        get:
+            operationId: GetRuntimeLogSummary
+            x-contract-operation-id: ops.event_record.GetRuntimeLogSummary
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: RuntimeLogQueryFacet
+                method: getSummary
+                reader: RuntimeLogSummaryReader
+                slice: RuntimeLogSummarySlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetRuntimeLogSummaryResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /ops/startup-events:
         post:
             operationId: ReportStartupEventBatch
@@ -455,8 +548,8 @@ paths:
             x-application:
                 kind: command
                 facet: VisitRecordCommandFacade
-                method: append
-                appendSink: VisitRecord
+                method: recordVisit
+                aggregateOwner: VisitRecord
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -513,15 +606,20 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        ConfigDomainSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConfigDomainSlice
+            x-contract-placeholder: true
         ConfigKeyCatalogSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ConfigKeyCatalogSlice
             x-contract-placeholder: true
-        ConfigLayerSlice:
+        ConfigSnapshotView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ConfigLayerSlice
+            x-contract-entity: ConfigSnapshotView
             x-contract-placeholder: true
         EffectiveConfigSlice:
             type: object
@@ -553,6 +651,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetEventSummaryResponse
             x-contract-placeholder: true
+        GetRuntimeLogDrilldownResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetRuntimeLogDrilldownResponse
+            x-contract-placeholder: true
+        GetRuntimeLogSummaryResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetRuntimeLogSummaryResponse
+            x-contract-placeholder: true
         GetVisitStatsResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -568,20 +676,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportEventBatchRequest
             x-contract-placeholder: true
+        ReportRuntimeLogBatchRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportRuntimeLogBatchRequest
+            x-contract-placeholder: true
         ReportStartupEventBatchRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportStartupEventBatchRequest
             x-contract-placeholder: true
-        SetConfigLayerValueRequest:
+        RtcMediaQoeSummarySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SetConfigLayerValueRequest
-            x-contract-placeholder: true
-        SetConfigLayerValueResult:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SetConfigLayerValueResult
+            x-contract-entity: RtcMediaQoeSummarySlice
             x-contract-placeholder: true
         UpdateExperimentRolloutRequest:
             type: object

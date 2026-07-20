@@ -1,0 +1,19 @@
+entity: ProfileInteractionReadFact
+layer: e2e
+
+execution:
+  environment: gamma_local
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: profile_interaction_seen_read_journey
+    test_type: ui_journey
+    steps:
+      - received activity 可见满一秒后 App 追加 seen fact
+      - 打开目标后 App 追加 read fact
+      - outbox consumer 单调更新 ActivityView
+    assertions:
+      - 快速滚过不追加 seen
+      - 重复曝光/打开不产生第二条同状态事实
+      - 网络失败回滚乐观态并提供可恢复错误

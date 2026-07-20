@@ -1,4 +1,4 @@
-# cold-start-performance
+# L3 特性：cold-start-performance
 
 ## 归属
 
@@ -74,7 +74,11 @@
 
 ## 视觉与原生边界
 
-- Android/iOS 原生层只显示自适应渐变背景与同源透明品牌簇，不实现 controller、提示、重放或动画进度。
+- Android/iOS 原生层只显示自适应渐变背景、同源透明品牌簇与贴底品牌名条，不实现 controller、提示、重放或动画进度；Android 渐变与启动色资源必须由原生资产生成器从 Dart 品牌 token 生成，不允许手调第二套色值。
+- 欢迎页信息结构固定为：深蓝渐变背景 + 八瓣花 + slogan「遇见同趣，绽放热爱」+ 底部品牌名「趣我圈」+ 系统状态栏；不出现中央大标题、小趣低语、按钮、进度或装饰光斑。品牌深蓝与浅色状态栏内容在深浅色系统模式下统一，不随主题切换。
+- 图一高保作为视觉验收参考但不进入运行时资产：背景使用上亮下深的纯净品牌蓝渐变；花瓣保持高饱和全开终态；slogan 使用单色近白、32sp/600（紧凑屏 28sp）；底部品牌名使用同字体家族 18sp/500。禁止截图文字、未知授权字体、噪点纹理和可识别光斑。
+- 品牌中文字体固定为仓内 `Noto Sans SC` 可变字体；OFL-1.1、上游 commit 与 SHA-256 由 bundled font manifest 审计，该字体是正式选择而非开发态 fallback。
+- 花朵可见直径约占屏宽 40%（clamp 132~168dp）；品牌簇整体锚定 `Alignment(0, -0.12)`；底部品牌名视觉中心约在屏幕高度 90% 且不进入底部安全区。品牌簇只暴露单一无障碍语义「趣我圈，遇见同趣，绽放热爱」。
 - Android 12+ 必须使用同源的静态花瓣 icon，避免系统 SplashScreen API 忽略普通 `windowBackground` 品牌簇后退化成纯蓝屏；该 icon 不得包含动画、提示、状态或进度镜像。Launcher 直接进入 `MainActivity`，不得恢复 `StartupActivity`、`NativeWelcomeView` 或 overlay。
 - Flutter `WelcomeScreen` 是唯一动效页面；`/welcome` 使用 `WelcomeFlowMode.entry`，固定一轮、零重放、不依赖 startup readiness。
 - 每片花瓣使用 `bloomAmount ∈ [0,1]`：`0` 是历史花苞态，`1` 是全开终态；全开不应用动态变换，和原生静态终态、应用图标保持 identity。
@@ -83,7 +87,8 @@
 - 聚拢使用 `easeInOutCubic` 并按 `7→0` 逆序；绽放使用远端基线的 `easeOutCubic` 并按 `0→7` 顺时针逐瓣执行。
 - 禁止 `Matrix4.rotateX/Y`、透视 `setEntry`、`scaleY`、宽高分别插值、spring 或 overshoot；平面品牌标识不使用缺乏深度线索的伪 3D 折叠。
 - 单一 `AnimationController` 通过纯函数时间轴计算八片花瓣，不恢复八控制器和 Timer 队列。
-- 花蕊、标题、slogan 和品牌簇位置固定；重放提示限一行、24px 高，不使用卡片或阶段列表。
+- 欢迎页、登录页品牌标和应用图标消费同一个 `WelcomeAppearance`；禁止用透明度、渐变分支或独立 painter 形成第二套八瓣花终态。
+- 花蕊、slogan、底部品牌名和品牌簇位置固定；重放提示限一行、24px 高，轻微淡入固定挂在品牌名上方，不推动其他元素重排，不使用卡片或阶段列表。
 
 ## Shell 与失败边界
 
@@ -122,7 +127,7 @@
 | `welcomeExitMs` | `processStart → welcomeExit`；硬门 ≤6s，超限率 0 |
 | `overlayRemovedMs` | `processStart → Flutter 欢迎层实际移除`；硬门 ≤6s，超限率 0 |
 
-`startup_welcome_sequence` 是本地启动探针事实，必须记录：`phase`、`motionSpecVersion=petal_bloom_v2`、`cycleIndex`、`replayCount`、`deadlineOrigin`、`elapsedSinceProcessStartMs`、`remainingBudgetMs`、`readyAtCycleStart`、`readyAtCycleEnd`、`hintVisible`、`motionReduced`、`animationCompressed`、`exitReason`、`buildFrameP95Ms`、`rasterFrameP95Ms`、`shellFirstPaintMs`、`overlayRemovedMs`。它只进入设备/Web 发布 UAT 证据，不再投影为不存在生产者的 `ops_events_total` 或 `ops_event_metrics_*`。
+`startup_welcome_sequence` 是本地启动探针事实，必须记录：`phase`、`motionSpec=petal_bloom`、`cycleIndex`、`replayCount`、`deadlineOrigin`、`elapsedSinceProcessStartMs`、`remainingBudgetMs`、`readyAtCycleStart`、`readyAtCycleEnd`、`hintVisible`、`motionReduced`、`animationCompressed`、`exitReason`、`buildFrameP95Ms`、`rasterFrameP95Ms`、`shellFirstPaintMs`、`overlayRemovedMs`。它只进入设备/Web 发布 UAT 证据，不再投影为不存在生产者的 `ops_events_total` 或 `ops_event_metrics_*`。
 
 启动投影必须产生 `ops_startup_phase_total` 和阶段耗时 histogram；标签只能包含低基数
 `phase`、`outcome`、`platform`、`runtime_env` 与 `recovery_surface`。Mongo→ES 与指标

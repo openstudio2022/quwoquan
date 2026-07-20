@@ -18,7 +18,7 @@ from core.content_source_registry import (  # noqa: E402
     verify_content_source_registry,
 )
 from core.baike_source_contract import (  # noqa: E402
-    BAIDU_BAIKE_API_POLICY,
+    BAIDU_BAIKE_CANONICAL_RESOLUTION,
     TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
     source_contract_issues,
 )
@@ -75,7 +75,7 @@ def test_homepage_role_three_encyclopedia_closed_set_resolution():
     assert homepage_source_can_seed_base_draft({
         "sourceKind": "baidu_baike",
         "url": "https://baike.baidu.com/item/西湖",
-        "extractor": "baidu_baike_openapi",
+        "extractor": "baidu_baike_html",
         "policyRevision": "encyclopedia-primary",
     })
 
@@ -83,13 +83,13 @@ def test_homepage_role_three_encyclopedia_closed_set_resolution():
 def test_baike_sources_expose_canonical_resolution_policies():
     assert source_contract_issues({
         "wikipedia_api",
-        "baidu_baike_openapi",
+        "baidu_baike_html",
         "toutiao_baike_html",
     }) == []
     assert TOUTIAO_BAIKE_CANONICAL_RESOLUTION.base_url == "https://www.baike.com/wiki/"
     assert TOUTIAO_BAIKE_CANONICAL_RESOLUTION.candidate_limit > 0
-    assert BAIDU_BAIKE_API_POLICY.base_url.endswith("/BaikeLemmaCardApi")
-    assert BAIDU_BAIKE_API_POLICY.candidate_limit > 0
+    assert BAIDU_BAIKE_CANONICAL_RESOLUTION.base_url == "https://baike.baidu.com/search/word?word="
+    assert BAIDU_BAIKE_CANONICAL_RESOLUTION.candidate_limit > 0
 
 
 def test_lane_prompt_is_rendered_from_registry_policy():

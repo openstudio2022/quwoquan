@@ -92,7 +92,7 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 	if err != nil {
 		return err
 	}
-	if _, err := s.BuildFakeTurnStream(ctx, evt.SenderID, turn.TurnID); err != nil {
+	if _, err := s.ExecuteTurn(ctx, evt.SenderID, turn.TurnID); err != nil {
 		return err
 	}
 	stored, err := s.GetTurn(ctx, evt.SenderID, turn.TurnID)

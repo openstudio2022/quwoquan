@@ -14,7 +14,7 @@ scope:
   - Journey/Page 顶层 case 模型及反向绑定要求
   - App / Service / Data / Ops canonical 三层目录与 tests.recorded 证据口径
   - verify-test-specs / verify-test-directory-layout / verify-test-no-fake / verify-test-coverage-map
-    与 make gate / make gate-full 收口
+    与 make gate / make gate-release ENV=gamma 收口
   - user_acceptance.page.* 页面矩阵与 metadata ui_surfaces / app_routes 同源
   out_of_scope:
   - 单个业务 Story 的具体产品行为细节
@@ -38,8 +38,6 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
-      - file: quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
       - command: python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
       - command: python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
       - command: python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
@@ -53,6 +51,7 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: runtime_test_pyramid_page_matrix
         cases:
         - user_acceptance.runtime.runtime_test_pyramid.sit1.page_matrix
@@ -63,6 +62,7 @@ sit_acceptance:
         rollout_stages:
         - gray_initial
       - layer: local_contract
+        execution_profile: baseline
         suite: runtime_test_pyramid_local_contract_chain
         cases:
         - local_contract.runtime.runtime_test_pyramid.sit1.local_contract_chain
@@ -70,6 +70,7 @@ sit_acceptance:
         - alpha
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: runtime_test_pyramid_api_contract_chain
         cases:
         - api_integration.runtime.runtime_test_pyramid.sit1.api_contract_chain
@@ -78,11 +79,13 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: runtime_test_pyramid_page_contract_guard
         cases:
         - local_contract.runtime.runtime_test_pyramid.sit1.page_contract_guard
         envs: *id001
       - layer: api_integration
+        execution_profile: release
         suite: runtime_test_pyramid_release_readiness_guard
         cases:
         - api_integration.runtime.runtime_test_pyramid.sit1.release_readiness_guard
@@ -107,5 +110,8 @@ execution:
   - python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
   - python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
   - python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
-  full_gate:
-  - make gate-full
+  profile_gates:
+  - make gate
+  - make gate-smoke
+  - make gate-integration ENV=beta
+  - make gate-release ENV=gamma

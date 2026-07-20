@@ -1,4 +1,4 @@
-# L3 组件：rec-model-training（训练集部署工程服务）
+# L2 特性：rec-model-training（训练集部署工程服务）
 
 ## 功能说明
 

@@ -80,11 +80,43 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		t.Fatalf("CircleGroup BOLA must fail closed: status=%d body=%s", denied.Code, denied.Body.String())
 	}
 
+	// 归档要求 group owner 角色；owner membership 由 relay 投影，测试直接预置读模型。
+	if _, err := mongoDB.Collection("circle_group_memberships").InsertOne(context.Background(), bson.M{
+		"_id": "cgm-owner", "version": 1, "circleId": "circle-group", "groupId": groupID,
+		"personaId": "persona-member", "role": "owner", "state": "joined",
+		"createdAt": time.Now().UTC(), "updatedAt": time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 归档是命名迁移；已归档后的新 key 落 no-op receipt、不递增版本，同 key 重放。
+	archived := executeGroupCommand(t, http.MethodDelete, "/circles/circle-group/groups/"+groupID, nil, "group-archive-1", "", "persona-member", "ArchiveCircleGroup")
+	if archived.Code != http.StatusOK {
+		t.Fatalf("archive CircleGroup failed: status=%d body=%s", archived.Code, archived.Body.String())
+	}
+	archivedBody := decodeBody(t, archived)
+	if archivedBody["status"] != "archived" {
+		t.Fatalf("CircleGroup archive receipt drift: %#v", archivedBody)
+	}
+	archivedVersion := archivedBody["version"]
+	noop := executeGroupCommand(t, http.MethodDelete, "/circles/circle-group/groups/"+groupID, nil, "group-archive-noop", "", "persona-member", "ArchiveCircleGroup")
+	if noop.Code != http.StatusOK {
+		t.Fatalf("CircleGroup archive no-op failed: status=%d body=%s", noop.Code, noop.Body.String())
+	}
+	noopBody := decodeBody(t, noop)
+	if noopBody["version"] != archivedVersion || noopBody["idempotentReplay"] != true {
+		t.Fatalf("CircleGroup archive no-op must keep version and replay: %#v", noopBody)
+	}
+	noopReplay := executeGroupCommand(t, http.MethodDelete, "/circles/circle-group/groups/"+groupID, nil, "group-archive-noop", "", "persona-member", "ArchiveCircleGroup")
+	if noopReplay.Code != http.StatusOK || decodeBody(t, noopReplay)["idempotentReplay"] != true {
+		t.Fatalf("CircleGroup archive no-op replay drift: status=%d body=%s", noopReplay.Code, noopReplay.Body.String())
+	}
+
 	store := grouppersistence.NewMongoAggregateStore(mongoDB)
 	streamRelay := groupapp.NewOutboxRelay(
 		store, store, messaging.NewCircleGroupStreamPublisher(redisRouter.Scene("general")), "circle-group-stream-test",
 	)
-	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 1 {
+	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 2 {
 		t.Fatalf("CircleGroup stream drain count=%d err=%v", count, err)
 	}
 	const consumerGroup = "circle-group-api-test"
@@ -92,7 +124,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 		t.Fatal(err)
 	}
 	messages, err := redisRouter.Scene("general").XReadGroup(context.Background(), consumerGroup, "reader", map[string]string{messaging.CircleGroupStream: ">"}, 10, 0)
-	if err != nil || len(messages) != 1 || messages[0].Values["aggregateType"] != "CircleGroup" {
+	if err != nil || len(messages) != 2 || messages[0].Values["aggregateType"] != "CircleGroup" {
 		t.Fatalf("CircleGroup stream envelope drift: messages=%#v err=%v", messages, err)
 	}
 }

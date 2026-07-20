@@ -7,14 +7,17 @@ collections:
     indexes:
       - { name: idx_runs_user_created, keys: { userId: 1, createdAt: -1 } }
       - { name: idx_runs_conversation, keys: { conversationId: 1, createdAt: -1 } }
+      - { name: idx_runs_context_window, keys: { conversationId: 1, userId: 1, status: 1, createdAt: -1 } }
+      - { name: uq_runs_client_request, keys: { userId: 1, conversationId: 1, clientRequestId: 1 }, unique: true, sparse: true }
       - { name: idx_runs_skill, keys: { skillId: 1, createdAt: -1 }, sparse: true }
       - { name: idx_runs_status, keys: { status: 1, createdAt: -1 } }
-      - { name: idx_runs_page, keys: { pageType: 1, pageObjectId: 1 }, sparse: true }
-    vector_indexes:
-      - name: vector_runs_context
-        field: contextEmbedding
-        dimensions: 1536
-        similarity: cosine
+
+  assistant_run_events:
+    entity: AssistantRun
+    description: AssistantRun 拥有的 SSE 有序事件日志；支持 Last-Event-ID 断线续传，保留 7 天。
+    indexes:
+      - { name: uq_run_events_run_seq, keys: { runId: 1, seq: 1 }, unique: true }
+      - { name: idx_run_events_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
 
   rm_assistant_learning_profile:
     entity: AssistantLearningProfile
@@ -48,3 +51,13 @@ redis_cache:
     ttl_seconds: 300
     type: string
     description: Suggested Actions 缓存
+
+  - key: "assistant:run:execution:{runId}"
+    ttl_seconds: 190
+    type: string
+    description: AssistantRun 跨实例执行 single-flight lease
+
+  - key: "assistant:run:cancel:{runId}"
+    ttl_seconds: 600
+    type: string
+    description: AssistantRun 跨实例取消信号

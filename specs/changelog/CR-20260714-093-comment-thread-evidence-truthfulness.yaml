@@ -1,13 +1,52 @@
 id: CR-20260714-093-comment-thread-evidence-truthfulness
 title: 评论线程验收证据去伪与服务缺口显式化
 slug: comment-thread-evidence-truthfulness
-revision: 2
+revision: 3
 status: in_progress
 
 affected_nodes:
   - specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread
 
 entries:
+  - timestamp: "2026-07-20T23:40:00+08:00"
+    summary: |
+      在 V3 独立聚合主线上冻结 Comment V4 商用契约：一级评论改为服务端
+      hot/latest 两档排序并新增可重算 hotScore；生命周期扩展为
+      active/hidden/deleted/tombstoned；补齐事务内 author 滑动窗口频控、
+      ReportResolved→HideComment、PostDeleted→批量 tombstone、创建时 IP 属地快照、
+      authorLiked/viewerRelation 批量展示投影和评论/回复/@/置顶通知。
+      App 统一补热门/最新切换、IP/作者赞过/关系 badge、长按复制/举报/删除、
+      删除二次确认和游客举报登录 continuation；不恢复 profile_comments 独立页。
+    reason: |
+      V3 已解决持久化与端云主链，但缺少社区评论商用所需的稳定热评、监管属地、
+      举报治理、频控、宿主删除级联和完整通知/动作体验。继续把这些缺口留作页面
+      特判或占位会制造第二真相源，且无法通过四环境准出。
+    change_type: [contract, architecture, reliability, security, ux, testing, breaking]
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
+        sections: [V4 change record, lifecycle, sort, governance, display projection, exit criteria]
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/design.md
+        sections: [Comment state machine, hotScore, moderation, notification, IP location]
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+        sections: [GWT1-GWT20]
+      - path: specs/feature-tree/journey_scenario_registry.yaml
+        sections: [content-comment-interaction]
+      - path: docs/functional_module_commercial_maturity_matrix.md
+        sections: [M16]
+      - path: quwoquan_service/contracts/metadata/content/comment
+        sections: [fields, service, events, storage, errors]
+      - path: quwoquan_service/contracts/metadata/content/report/events.yaml
+        sections: [ReportResolved consumers]
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - hot/latest、四态生命周期和 display projection 均为单轨替换，不提供旧三档、旧 DTO 或页面 fallback。
+      - local_contract 主链已补；真实 Mongo/API、Gamma 设备、四环境同 commit、AOT/SBOM、指标 readback 与 prod canary 未完成前，Story 保持 GATE_BLOCK。
+
   - timestamp: "2026-07-14T18:00:00+08:00"
     summary: |
       将 Comment Story 升级为 Comment / ContentReaction 独立商用对象闭环：删除旧 DTO、

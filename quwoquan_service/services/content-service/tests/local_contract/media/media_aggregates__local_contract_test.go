@@ -165,6 +165,83 @@ func TestMediaCompleteIsIdempotentAndOutboxVersionsAreAtomic(t *testing.T) {
 	}
 }
 
+func TestMediaAssetAccessPolicyNoopPersistsReceipt(t *testing.T) {
+	now := time.Date(2030, time.February, 3, 5, 6, 7, 0, time.UTC)
+	service, store, _ := newMediaService(now)
+	created, err := service.InitMediaUpload(
+		mediaContext("init-policy-noop"),
+		mediaapp.InitMediaUploadCommand{
+			OwnerID:        "persona-policy-owner",
+			MediaType:      "image",
+			ContentType:    "image/jpeg",
+			FileSize:       256,
+			ExpectedSHA256: digestAtomic,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init upload: %v", err)
+	}
+	completed, err := service.CompleteMediaUpload(
+		mediaContext("complete-policy-noop"),
+		mediaapp.CompleteMediaUploadCommand{
+			SessionID:    created.SessionID,
+			OwnerID:      "persona-policy-owner",
+			AccessPolicy: mediamodel.AccessPolicyOwnerOnly,
+		},
+	)
+	if err != nil {
+		t.Fatalf("complete upload: %v", err)
+	}
+	outboxBeforeNoop := len(store.OutboxEvents())
+	noopCommand := mediaapp.UpdateMediaAssetAccessPolicyCommand{
+		AssetID:      completed.AssetID,
+		OwnerID:      "persona-policy-owner",
+		AccessPolicy: mediamodel.AccessPolicyOwnerOnly,
+	}
+	noop, err := service.UpdateMediaAssetAccessPolicy(
+		mediaContext("asset-policy-noop"),
+		noopCommand,
+	)
+	if err != nil {
+		t.Fatalf("record access-policy no-op: %v", err)
+	}
+	if noop.Replayed || noop.Version != 1 ||
+		noop.AccessPolicy != mediamodel.AccessPolicyOwnerOnly {
+		t.Fatalf("unexpected first no-op result: %+v", noop)
+	}
+	if got := len(store.OutboxEvents()); got != outboxBeforeNoop {
+		t.Fatalf("no-op appended outbox fact: before=%d after=%d", outboxBeforeNoop, got)
+	}
+
+	changed, err := service.UpdateMediaAssetAccessPolicy(
+		mediaContext("asset-policy-public"),
+		mediaapp.UpdateMediaAssetAccessPolicyCommand{
+			AssetID:      completed.AssetID,
+			OwnerID:      "persona-policy-owner",
+			AccessPolicy: mediamodel.AccessPolicyPublic,
+		},
+	)
+	if err != nil {
+		t.Fatalf("change access policy: %v", err)
+	}
+	if changed.Version != 2 || changed.AccessPolicy != mediamodel.AccessPolicyPublic {
+		t.Fatalf("unexpected changed access policy: %+v", changed)
+	}
+
+	replayed, err := service.UpdateMediaAssetAccessPolicy(
+		mediaContext("asset-policy-noop"),
+		noopCommand,
+	)
+	if err != nil {
+		t.Fatalf("replay access-policy no-op: %v", err)
+	}
+	if !replayed.Replayed ||
+		replayed.Version != noop.Version ||
+		replayed.AccessPolicy != noop.AccessPolicy {
+		t.Fatalf("no-op receipt did not replay original result: first=%+v replay=%+v", noop, replayed)
+	}
+}
+
 func TestReadyVideoRequiresAndPersistsTrustedProcessingDescriptor(t *testing.T) {
 	now := time.Date(2030, time.February, 4, 4, 5, 6, 0, time.UTC)
 	service, _, _ := newMediaService(now)
@@ -200,20 +277,29 @@ func TestReadyVideoRequiresAndPersistsTrustedProcessingDescriptor(t *testing.T) 
 		t.Fatal("ready video without a VOD descriptor must be rejected")
 	}
 
+	videoPrefix := fmt.Sprintf(
+		"media/video/s/asset/%s/v2",
+		completed.AssetID,
+	)
 	command := mediaapp.RecordMediaProcessingResultCommand{
 		AssetID:    completed.AssetID,
 		Processing: mediamodel.ProcessingStatusReady,
-		Descriptor: mediamodel.VideoProcessingDescriptor{
-			ProcessorProfile:             "vod_h264_main",
-			VerifiedDurationMs:           12500,
-			VideoWidth:                   1080,
-			VideoHeight:                  1920,
-			VideoCodec:                   "h264",
-			VideoContainer:               "mp4",
-			VideoPublicSliceKey:          "media/video/mas-2/v2/main.mp4",
-			CoverPublicSliceKey:          "media/video/mas-2/v2/cover.jpg",
-			PreviewTrackVersion:          1,
-			PreviewTrackManifestSliceKey: "media/video/mas-2/v2/storyboard.json",
+		Descriptor: mediamodel.MediaProcessingDescriptor{
+			Video: mediamodel.VideoProcessingDescriptor{
+				ProcessorProfile:             "media_canary_progressive_mp4",
+				VerifiedDurationMs:           125000,
+				VideoWidth:                   1080,
+				VideoHeight:                  1920,
+				VideoCodec:                   "h264",
+				VideoContainer:               "mp4",
+				VideoAudioCodec:              "aac",
+				VideoKeyframeIntervalMs:      2000,
+				VideoFastStart:               true,
+				VideoPublicSliceKey:          videoPrefix + "/source.mp4",
+				CoverPublicSliceKey:          videoPrefix + "/cover.jpg",
+				PreviewTrackVersion:          1,
+				PreviewTrackManifestSliceKey: videoPrefix + "/preview/manifest.json",
+			},
 		},
 	}
 	ctx := mediaContext("ready-video-with-descriptor")
@@ -222,14 +308,91 @@ func TestReadyVideoRequiresAndPersistsTrustedProcessingDescriptor(t *testing.T) 
 		t.Fatalf("record trusted processing result: %v", err)
 	}
 	if result.ProcessingStatus != mediamodel.ProcessingStatusReady ||
-		result.VerifiedDurationMs != 12500 ||
+		result.VerifiedDurationMs != 125000 ||
 		result.VideoWidth != 1080 ||
+		result.VideoAudioCodec != "aac" ||
+		!result.VideoFastStart ||
 		result.PreviewTrackVersion != 1 {
 		t.Fatalf("trusted descriptor was not returned: %+v", result)
 	}
 	replayed, err := service.RecordMediaProcessingResult(ctx, command)
-	if err != nil || !replayed.Replayed || replayed.VerifiedDurationMs != 12500 {
+	if err != nil || !replayed.Replayed || replayed.VerifiedDurationMs != 125000 {
 		t.Fatalf("processing result replay must be exact: result=%+v err=%v", replayed, err)
+	}
+}
+
+func TestReadyVideoRejectsOverOneHourAndUnsafeSeekDescriptors(t *testing.T) {
+	now := time.Date(2030, time.February, 5, 4, 5, 6, 0, time.UTC)
+	base := mediamodel.MediaAssetSnapshot{
+		ID:               "asset-video-boundary",
+		Version:          1,
+		OwnerID:          "persona-owner",
+		SourceSessionID:  "session-video-boundary",
+		ObjectKey:        "uploads/video-boundary",
+		SHA256:           digestAtomic,
+		MediaType:        "video",
+		ContentType:      "video/mp4",
+		FileSize:         2048,
+		AccessPolicy:     mediamodel.AccessPolicyOwnerOnly,
+		ProcessingStatus: mediamodel.ProcessingStatusProcessing,
+		CoverStrategy:    "first_frame",
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	descriptor := mediamodel.VideoProcessingDescriptor{
+		ProcessorProfile:        "media_canary_progressive_mp4",
+		VerifiedDurationMs:      mediamodel.MaxVideoDurationMs + 5000,
+		VideoWidth:              1080,
+		VideoHeight:             1920,
+		VideoCodec:              "h264",
+		VideoContainer:          "mp4",
+		VideoAudioCodec:         "aac",
+		VideoKeyframeIntervalMs: 2000,
+		VideoFastStart:          true,
+		VideoPublicSliceKey:     "media/video/s/asset/asset-video-boundary/v1/source.mp4",
+		CoverPublicSliceKey:     "media/video/s/asset/asset-video-boundary/v1/cover.webp",
+	}
+	asset, err := mediamodel.RestoreMediaAsset(base)
+	if err != nil {
+		t.Fatalf("restore processing asset: %v", err)
+	}
+	if err := asset.RecordProcessingResult(
+		mediamodel.ProcessingStatusReady,
+		"",
+		mediamodel.MediaProcessingDescriptor{Video: descriptor},
+		now.Add(time.Second),
+	); err == nil {
+		t.Fatal("3605-second descriptor must be rejected by the one-hour product boundary")
+	}
+
+	descriptor.VerifiedDurationMs = 125000
+	descriptor.VideoKeyframeIntervalMs = mediamodel.MaxVideoKeyframeIntervalMs + 1
+	asset, err = mediamodel.RestoreMediaAsset(base)
+	if err != nil {
+		t.Fatalf("restore processing asset for keyframe check: %v", err)
+	}
+	if err := asset.RecordProcessingResult(
+		mediamodel.ProcessingStatusReady,
+		"",
+		mediamodel.MediaProcessingDescriptor{Video: descriptor},
+		now.Add(time.Second),
+	); err == nil {
+		t.Fatal("descriptor with a keyframe interval over two seconds must be rejected")
+	}
+
+	descriptor.VideoKeyframeIntervalMs = 2000
+	descriptor.VideoFastStart = false
+	asset, err = mediamodel.RestoreMediaAsset(base)
+	if err != nil {
+		t.Fatalf("restore processing asset for fast-start check: %v", err)
+	}
+	if err := asset.RecordProcessingResult(
+		mediamodel.ProcessingStatusReady,
+		"",
+		mediamodel.MediaProcessingDescriptor{Video: descriptor},
+		now.Add(time.Second),
+	); err == nil {
+		t.Fatal("non-fast-start MP4 must not become ready")
 	}
 }
 
@@ -255,6 +418,16 @@ func TestOriginalMediaAccessAppendsOneFactAndKeepsAbsoluteExpiryOnReplay(t *test
 	)
 	if err != nil {
 		t.Fatalf("complete upload: %v", err)
+	}
+	if _, err := service.RecordMediaProcessingResult(
+		mediaContext("ready-original-access-image"),
+		mediaapp.RecordMediaProcessingResultCommand{
+			AssetID:    completed.AssetID,
+			Processing: mediamodel.ProcessingStatusReady,
+			Descriptor: imageProcessingDescriptor(completed.AssetID, 2),
+		},
+	); err != nil {
+		t.Fatalf("ready image before original access: %v", err)
 	}
 	command := mediaapp.RequestOriginalMediaAccessCommand{
 		AssetID: completed.AssetID, ViewerID: "persona-owner", Purpose: "save",

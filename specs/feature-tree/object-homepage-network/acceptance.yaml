@@ -45,12 +45,14 @@ domain_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: da1_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da1.da1_local_contract
         envs: &id001
         - local
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da1.user_journey
@@ -58,11 +60,13 @@ domain_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: da1_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da1.da1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: da1_api_integration
         cases:
         - api_integration.object_homepage_network.domain_service.da1.da1_api_integration
@@ -98,11 +102,13 @@ domain_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.domain_service.da2.contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: da2_api_integration
         cases:
         - api_integration.object_homepage_network.domain_service.da2.da2_api_integration
@@ -111,6 +117,7 @@ domain_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: da2_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da2.da2_local_contract
@@ -141,17 +148,20 @@ domain_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: da3_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da3.da3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.domain_service.da3.cross_service_integration
         envs: *id002
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da3.user_journey
@@ -177,17 +187,20 @@ domain_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: da4_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da4.da4_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.domain_service.da4.cross_service_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.domain_service.da4.contract
@@ -213,17 +226,20 @@ domain_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: da5_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da5.da5_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.domain_service.da5.cross_service_integration
         envs: *id002
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da5.user_journey
@@ -238,5 +254,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
-  full_gate:
-  - make gate-full
+  profile_gates:
+  - make gate-release ENV=gamma

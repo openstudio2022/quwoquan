@@ -11,21 +11,20 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 | 环境 | 运行形态 | 必须验证（内容图片） | 准出要求 |
 | --- | --- | --- | --- |
-| `alpha` | 本地/CI；fixture/mock 或最小 remote | `MediaAsset` 字段契约、`RequestOriginalImageAccess`、`AppImage`/URL 策略静态门禁 | **不作为**商用全矩阵最终证明 |
-| `beta` | 本地 beta stack + Android/iOS **真实 runner** | 选图 → `InitMediaUpload` → PUT → `CompleteMediaUpload` → **GetMediaAsset**（含 `lqip`/`contentProfile`/`derivativePolicyVersion`/派生语义）→ 发帖 → feed/详情/沉浸 viewer **AppImage 路径** → （授权场景）`original:access` → 打开或合理错误态 | 至少一端 passed；发布前应覆盖 Android **与** iOS |
-| `local-gamma` | 本地 Docker gamma mirror + seed | `APP_DATA_SOURCE=remote`、网关/media、content 上传与帖子 wire 投影一致；**结构化 JSON 报告 passed（非 dry-run）** | 与 [`local-gamma-mirror`](../deliver-deploy-prod-pipeline/local-gamma-mirror/) Runbook 对齐 |
-| `cloud-gamma-pre` | CI：`cloud-gamma-pre`（ECS pre + **self-hosted** 设备矩阵或等价农场） | 真实 `GAMMA_BASE_URL`、真实媒体加载与原图授权链路；阻断 prod 前置 | pre 失败不得进入 prod |
-| `cloud-gamma-prod-smoke` | ECS prod 就地升级后 smoke | 发布链路 + feed/详情/沉浸 + 原图授权降级与限流/拒绝可观测 | smoke failed 必须阻断发布完成结论 |
+| `alpha` | `alpha-local` | `MediaAsset` 字段契约、`RequestOriginalImageAccess`、`AppImage`/URL 策略静态门禁 | 工程与功能准出，不作为商用矩阵最终证明 |
+| `beta` | `beta-local` + Android/iOS **真实 runner** | 选图 → `InitMediaUpload` → PUT → `CompleteMediaUpload` → **GetMediaAsset** → 发帖 → feed/详情/沉浸 viewer → 原图授权 | Android 与 iOS 非 dry-run passed |
+| `gamma` | `gamma-local` | `APP_DATA_SOURCE=remote`、真实本地 gateway/media authority、content 上传与帖子 wire 投影一致 | 结构化非 dry-run 报告 passed |
+| `prod` | `prod-hosted` 的 `gray-initial → carry-on → full` | 已发布 release 的上传、分发、原图授权、拒绝/限流可观测与回滚演练 | 同 release/config hash 逐阶段通过；任一阶段失败停止 rollout |
 
 ## 核心场景（最小闭环）
 
-下列步骤须在 **beta / local-gamma / cloud-gamma-pre / cloud-gamma-prod-smoke** 中至少各跑通一次（可按环境裁剪观测深度，不得裁剪「真实远端 + 真实 UI」）：
+下列步骤须在 **beta-local / gamma-local / prod-hosted gray-initial** 中至少各跑通一次；alpha 覆盖同构的本地契约与静态门禁：
 
 1. **上传事务**：`InitMediaUpload` → 客户端 PUT → `CompleteMediaUpload` → **GetMediaAsset** 直至图片交付元数据齐备（含 `dominantColor`/`lqip`/`contentProfile`/`derivativePolicyVersion` 及派生语义；若管线异步则 poll 直至就绪或明确失败态）。
 2. **发帖**：创建/发布帖子携带稳定 `mediaId`（及展示 URL 语义），避免仅靠客户端裸拼接 CDN。
 3. **分发与自适应**：Feed / 圈子 / 搜索等入口经 **`AppImage` / `ImageUrlResolver` 路径**加载；带 `cw`/`ch`/`dpr`/网络档位的 URL 决策在弱网下可观测（日志或截屏摘要）。
 4. **原图授权**：对允许原图的资产调用 `POST .../original:access`，验收授权 URL、拒绝（403）、限流（429）之一与产品预期一致；过期/篡改签名须可解释。
-5. **多端**：同一帖子在第二设备或第二账号可见一致引用（至少在 gamma-pre smoke 中覆盖）。
+5. **多端**：同一帖子在第二设备或第二账号可见一致引用（至少在 gamma-local 或 prod `gray-initial` smoke 中覆盖）。
 
 ## 证据与报告口径
 
@@ -36,24 +35,18 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 ## 仓库内可自动化闭环（不冒充商用矩阵）
 
-在无 ECS 凭据、无 self-hosted Android/iOS 的会话中仍须持续执行，用于阻断回归与保持工程诚实：
+在无 prod-hosted 凭据、无 self-hosted Android/iOS 的会话中仍须持续执行，用于阻断回归与保持工程诚实：
 
 - `make gate-runtime-media`（含图片策略静态门禁等，见 [`automation-gates.md`](./automation-gates.md)）。
 - `go test`（`content-service` 媒体/原图访问契约）、Flutter `flutter test`（如 `post_summary_view_test`、`AppImage` 相关契约）。
 - **Dry-run** 形态的矩阵脚本演练：仅验证脚本与 artifact 路径，**明确标注**不得计入商用矩阵。
 
-**前置自检（不替代四条 JSON）**：
-
-```bash
-python3 scripts/check_image_commercial_matrix_prereqs.py --strict
-```
-
 ## 依赖外部资源的闭环（商用矩阵必要条件）
 
 | 依赖 | 用途 |
 | --- | --- |
-| 可达的 **beta / gamma** 网关与媒体域名 | 非 localhost 占位 |
-| **ECS / 云前置** 凭证与流水线（`cloud-gamma-pre`、`prod-smoke`） | pre 阻断与发布后 smoke |
+| 可达的 **beta-local / gamma-local** 网关与媒体域名 | 本地真实 Remote 链路 |
+| `prod-hosted` 分平面凭证与 rollout 编排 | `gray-initial` 阻断与发布后 smoke |
 | **Self-hosted Android / iOS** runner（或等价设备农场） | 非 dry-run 设备矩阵 |
 | 对象存储与 CDN（及图片处理外链路若启用） | Complete 之后真实就绪语义 |
 
@@ -66,11 +59,11 @@ python3 scripts/check_image_commercial_matrix_prereqs.py --strict
 | 序号 | 阶段 | 产出 | 责任边界 |
 | --- | --- | --- | --- |
 | Q0 | 工程与文档 | 本文件 + `acceptance.yaml` J4 + 门禁引用齐全 | 研发 |
-| Q1 | **local-gamma** 非 dry-run | 双端（或矩阵）JSON：上传—发帖—feed/沉浸—原图 | 研发 + 运维（镜像） |
-| Q2 | **beta** 非 dry-run | 同上，对接 beta 网关与 seed | 研发 |
-| Q3 | **cloud-gamma-pre** | CI artifact：probe + device JSON，`status=passed` | 平台 + 运维 |
-| Q4 | **cloud-gamma-prod-smoke** | 升级后 smoke JSON；失败条款进发布 Runbook | 运维 + 研发值班 |
-| Q5 | 归档 | 四条证据路径写入本段「当前执行证据」与 CR / `树内任务文档` | 发布负责人 |
+| Q1 | **alpha-local** | 本地契约、静态策略和 CA preflight | 研发 |
+| Q2 | **beta-local** 非 dry-run | 双端 JSON：上传—发帖—feed/沉浸—原图 | 研发 |
+| Q3 | **gamma-local** 非 dry-run | Remote 网关、媒体与设备矩阵 JSON | 研发 + 运维 |
+| Q4 | **prod-hosted** | `gray-initial → carry-on → full` smoke 与回滚证据 | 运维 + 研发值班 |
+| Q5 | 归档 | 四条证据路径写入本段「当前执行证据」、acceptance 与 CR | 发布负责人 |
 
 **待补齐自动化（当前仓库gap，不计入矩阵 passed 直至落地）**：
 
@@ -79,10 +72,9 @@ python3 scripts/check_image_commercial_matrix_prereqs.py --strict
 
 ## 当前执行证据与环境前提（2026-05-03 修订）
 
-**环境定义（与仓库对齐）**：
+**环境定义（与仓库对齐）**：环境 target 与 public base 全部来自
+[`environment_topology_manifest.yaml`](../../../../quwoquan_ops/environments/environment_topology_manifest.yaml)；
+beta/gamma 只使用本地 target，远端验证归 `prod-hosted` rollout。设备侧使用开发者本机或
+self-hosted Runner 上的 Flutter/Patrol，不得手写 `GAMMA_BASE_URL` 或单一媒体基址。
 
-- **云端**：阿里云 ECS onebox 由 `quwoquan_ops/cli/gamma/deploy_gamma_ecs.sh` 与 [`.github/workflows/deploy-gamma-ecs.yml`](../../../../.github/workflows/deploy-gamma-ecs.yml) 驱动；默认公网宿主参见 `quwoquan_ops/cli/gamma/deploy_gamma_ecs.sh` 中的 `GAMMA_ECS_HOST`。
-- **self-hosted 端侧**：可为 **开发者本机**（`flutter devices` 含 Android/iOS）或注册为 `self-hosted` 的 GitHub Runner，与手册 [`commercial-e2e-matrix-runbook.md`](../runtime-messaging/reliable-async-task-channel/commercial-e2e-matrix-runbook.md) 一致。
-- **关键**：`GAMMA_BASE_URL` 必须指向 **gamma-proxy（Caddy）** 端口（compose 中 `LOCAL_GAMMA_HTTP_PORT`，ECS 常见 `18000`），并先用 `quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py` 验证 `/chat`、`/content` 已反代；误用 content 直出端口会得到 `route_not_found` 或 Caddy 占位明文，**不能**作为矩阵 passed 依据。
-
-**诚实结论**：本节不宣称「全矩阵已完成」——须按 Q1–Q4 归档四条环境 **非 dry-run** JSON+UI 证据后方得解除 `GATE_BLOCK`。此前结论若写「仅因无 ECS 即无法矩阵」为**表述过时**，应以 **URL/路由是否正确 + 证据是否齐备** 为准。
+**诚实结论**：本节不宣称「全矩阵已完成」——须按 Q1–Q4 归档四个 target 的可追溯证据后方得解除 `GATE_BLOCK`。

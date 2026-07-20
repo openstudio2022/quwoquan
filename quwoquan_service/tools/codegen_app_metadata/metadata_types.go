@@ -359,6 +359,7 @@ type uiConfigFile struct {
 	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
 	HomepageTabs                   []homepageTabDef                   `yaml:"homepage_tabs"`
 	HomepageSubTabs                []homepageSubTabDef                `yaml:"homepage_sub_tabs"`
+	HomepageWishlistTypes          []string                           `yaml:"homepage_wishlist_types"`
 	CircleTabs                     []circleTabDef                     `yaml:"circle_tabs"`
 	CircleSections                 []circleSectionDef                 `yaml:"circle_sections"`
 	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
@@ -459,8 +460,65 @@ type telemetryEventCatalogFile struct {
 	LogTypes        []string                         `yaml:"log_types"`
 	NetworkClasses  []string                         `yaml:"network_classes"`
 	CommonFields    []string                         `yaml:"common_fields"`
+	ContextExtensions []string                       `yaml:"context_extensions"`
 	ExtensionFields map[string]telemetryExtensionDef `yaml:"extension_fields"`
 	Events          []telemetryEventDef              `yaml:"events"`
+}
+
+type contentPublicationPolicyFile struct {
+	Schema               string                            `yaml:"schema"`
+	TextLimits           contentPublicationTextLimitsDef   `yaml:"text_limits"`
+	FormatRecommendation contentPublicationFormatPolicyDef `yaml:"format_recommendation"`
+	RateLimit            contentPublicationRateLimitDef    `yaml:"rate_limit"`
+	Safety               contentPublicationSafetyPolicyDef `yaml:"safety"`
+}
+
+type contentPublicationTextLimitsDef struct {
+	TitleMaxRunes            int `yaml:"title_max_runes"`
+	MicroBodyMaxRunes        int `yaml:"micro_body_max_runes"`
+	ArticleMarkdownMaxRunes  int `yaml:"article_markdown_max_runes"`
+	SummaryMaxRunes          int `yaml:"summary_max_runes"`
+	SemanticMentionsMaxItems int `yaml:"semantic_mentions_max_items"`
+}
+
+type contentPublicationFormatPolicyDef struct {
+	ArticleBodyMinRunes      int  `yaml:"article_body_min_runes"`
+	ArticleParagraphMinCount int  `yaml:"article_paragraph_min_count"`
+	ArticleWhenTitlePresent  bool `yaml:"article_when_title_present"`
+	ArticleWhenMediaPresent  bool `yaml:"article_when_media_present"`
+	UserConfirmationRequired bool `yaml:"user_confirmation_required"`
+}
+
+type contentPublicationRateLimitDef struct {
+	PersonaWindowSeconds   int    `yaml:"persona_window_seconds"`
+	PersonaMaxPublications int    `yaml:"persona_max_publications"`
+	DependencyFailure      string `yaml:"dependency_failure"`
+}
+
+type contentPublicationSafetyPolicyDef struct {
+	Required             bool     `yaml:"required"`
+	DependencyFailure    string   `yaml:"dependency_failure"`
+	Decisions            []string `yaml:"decisions"`
+	UnavailableAction    string   `yaml:"unavailable_action"`
+	RejectErrorCode      string   `yaml:"reject_error_code"`
+	UnavailableErrorCode string   `yaml:"unavailable_error_code"`
+}
+
+type contentMediaUploadPolicyFile struct {
+	Schema            string                               `yaml:"schema"`
+	StreamingRequired bool                                 `yaml:"streaming_required"`
+	MediaTypes        map[string]contentMediaUploadTypeDef `yaml:"media_types"`
+	Errors            contentMediaUploadErrorDef           `yaml:"errors"`
+}
+
+type contentMediaUploadTypeDef struct {
+	MaxFileSizeBytes    int      `yaml:"max_file_size_bytes"`
+	AllowedContentTypes []string `yaml:"allowed_content_types"`
+}
+
+type contentMediaUploadErrorDef struct {
+	FileTooLarge    string `yaml:"file_too_large"`
+	UnsupportedType string `yaml:"unsupported_type"`
 }
 
 type searchNamedValueDef struct {

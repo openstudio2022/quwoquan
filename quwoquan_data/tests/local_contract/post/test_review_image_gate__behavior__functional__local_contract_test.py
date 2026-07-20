@@ -23,6 +23,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
+from core import image_safety as I  # noqa: E402
 from content.post.article.route_review_checks import (  # noqa: E402
     _check_image_gate,
     _check_image_fidelity,
@@ -33,11 +34,6 @@ from content.post.article.route_review_checks import (  # noqa: E402
 )
 from content.post.article.route_core import _image_caption_from_article  # noqa: E402
 
-FIXTURE_MEDIA = (
-    DATA_ROOT.parent
-    / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
-)
-FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
 _TMP = Path(tempfile.mkdtemp(prefix="review_img_"))
 
 
@@ -54,10 +50,6 @@ def _watermark(path: Path) -> Path:
     cv2.putText(img, "tripadvisor", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 3)
     cv2.imwrite(str(path), img)
     return path
-
-
-def _face_fixture() -> Path | None:
-    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_clean_assets_pass():
@@ -104,12 +96,20 @@ def test_unsafe_blocks_revision():
     assert fallback == "agent_compose"
 
 
-def test_face_requires_human_review():
+def test_face_signal_requires_human_review():
     """新 HITL 契约：含人脸图片不再硬阻断 review，而是标记 humanReview 并记入账本，
     由发布门 + annotate 在发布前裁决（存疑必须人确认）。"""
-    face = _face_fixture()
-    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
-    gate = _check_image_gate({"assets": [{"assetId": "f", "sourcePath": str(face)}]})
+    face_signal_input = _clean(_TMP / "face-signal-input.jpg")
+    original_detector = I._detect_faces
+    I._ASSESS_CACHE.clear()
+    try:
+        I._detect_faces = lambda _: 1
+        gate = _check_image_gate(
+            {"assets": [{"assetId": "f", "sourcePath": str(face_signal_input)}]}
+        )
+    finally:
+        I._detect_faces = original_detector
+        I._ASSESS_CACHE.clear()
     # 不因人脸阻断 review（无 unsafe/重复时 passed=True）
     assert gate["passed"] is True, gate["issues"]
     assert gate["humanReview"] is True

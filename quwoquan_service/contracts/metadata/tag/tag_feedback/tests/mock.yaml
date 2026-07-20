@@ -1,0 +1,16 @@
+entity: TagFeedback
+layer: app_side
+
+description: 端侧独立测试场景（typed command 编码与上报行为）。
+
+feedback_scenarios:
+  - name: feedback_command_wire_shape
+    description: TagFeedback typed command 只含 metadata request_fields
+    assertions:
+      - body keys ⊆ [tagRef, action, context]
+      - action ∈ [click, ignore, correct]
+
+  - name: feedback_writer_structured_failure
+    description: 上报失败经 CloudErrorMapper 结构化，不吞异常不合成成功
+    assertions:
+      - CloudException.runtimeFailure.code 以 TAG. 开头

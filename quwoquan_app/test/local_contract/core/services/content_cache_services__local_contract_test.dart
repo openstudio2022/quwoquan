@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 CachedContentRepository _cachedContentRepository({
   required _CountingContentRepository delegate,
@@ -20,6 +21,7 @@ CachedContentRepository _cachedContentRepository({
   required ContentQuerySnapshotStore querySnapshotStore,
   UserProfileCacheService? userProfileCache,
   Future<void> Function(String avatarUrl)? avatarPreloader,
+  Future<List<String>> Function()? blockedKeywordsLoader,
 }) {
   return CachedContentRepository(
     readDelegate: delegate,
@@ -28,6 +30,7 @@ CachedContentRepository _cachedContentRepository({
     querySnapshotStore: querySnapshotStore,
     userProfileCache: userProfileCache,
     avatarPreloader: avatarPreloader,
+    blockedKeywordsLoader: blockedKeywordsLoader,
   );
 }
 
@@ -71,6 +74,23 @@ void main() {
       expect(fallback.items.single.id, 'post_1');
       expect(fallback.isCacheFallback, isTrue);
       expect(fallback.cacheFallbackError, isA<StateError>());
+    });
+
+    test('feed 缓存回退仍过滤账号屏蔽关键词', () async {
+      final delegate = _CountingContentRepository();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(),
+        blockedKeywordsLoader: () async => <String>['缓存内容'],
+      );
+
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      delegate.failFeedRequests = true;
+      final fallback = await repo.listDiscoveryFeedPage(category: 'moment');
+
+      expect(fallback.items, isEmpty);
+      expect(fallback.isCacheFallback, isTrue);
     });
 
     test('个人作品优先请求远端，失败时才回退快照', () async {
@@ -376,6 +396,7 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,

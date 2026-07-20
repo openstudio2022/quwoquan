@@ -7,45 +7,177 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: group-creation-member-management
 scope:
-  summary: group create flow 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 从全局添加入口经互关联系人、私建群或圈子绑定群三类来源选人，原子创建私建群并进入新会话、回流 Inbox。
+  in_scope:
+  - 三来源服务端权威读取、搜索、互关过滤、跨来源 userId 去重与已选反馈
+  - CreateConversation 初始成员的互关/拉黑/去重/1000 人上限校验
+  - 建群成功后聊天详情可进入且 Inbox 可权威回读
+  out_of_scope:
+  - 圈子或圈子群创建
+  - 企业联系人、群二维码和邀请链接
 gwt_acceptance:
   GWT1:
-    title: group create flow GWT
+    title: 三类来源选择与同一向导状态
     given:
-    - 前置条件明确。
+    - 当前用户存在互关联系人，并加入至少一个私建群和一个带 circleId 的圈子绑定群。
     when:
-    - 用户或系统动作发生。
+    - 用户分别打开“从群聊中选择”和“从圈子中选择”，选择来源内互关成员并返回发起页。
     then:
-    - 可观察结果符合预期。
+    - 服务端在分页前按 source=group|circle 过滤，私建群结果 circleId 为空，圈子结果 circleId 非空。
+    - 两类来源复用同一 ListSelectableGroupContactMembers 互关成员链，不加载非互关、屏蔽、非 user 成员。
+    - 所有来源选择结果进入同一 wizard，并按稳定 userId 去重、支持删除。
+    - 打开与完成来源选择分别记录 source_group|circle_open 与 source_group|circle_selection_applied。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - Remote、Alpha Mock、Provider 与页面 local_contract 对 source、circleId、计数和成员交集行为一致。
+    edge_cases:
+    - 未知 source 被服务端与 Alpha Mock fail-closed 拒绝。
+    - friendMemberCount 为 0 的来源不返回。
+    - 来源标题超长不发生横向溢出。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml#ListSelectableGroupConversations
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml#ListSelectableGroupContactMembers
+    - quwoquan_service/contracts/metadata/messages/conversation/projections/selectable_group_conversation_row.yaml
+    performance_points:
+    - 来源 Reader P95 小于 500ms，端侧不逐群发起 N+1 成员请求计算计数。
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/chat/alpha_group_selection__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/providers/start_group_from_group_provider__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
-        - local_contract.chat_conversation.group_creation_member_management.group_create_flow.contract
+        - local_contract.chat.group_create.source_split_and_mock_parity
+        - local_contract.chat.group_create.member_intersection
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
-        - local_contract.chat_conversation.group_creation_member_management.group_create_flow.gwt1_local_contract
+        - local_contract.chat.group_create.group_and_circle_picker
+        - local_contract.chat.group_create.cross_source_wizard
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - 2026-07-20 本地三套 local_contract 已通过；状态保持 pending，直到 beta/gamma Remote 与真机 UAT 留证。
+  GWT2:
+    title: 服务端原子建群与成员策略
+    given:
+    - 用户已选择一个或多个互关账号，且请求携带稳定 initialMemberIds 与 maxGroupSize=1000。
+    when:
+    - App 调用 CreateConversation 创建私建群。
+    then:
+    - 服务端重新执行互关、拉黑、重复成员与人数上限校验，不信任端侧过滤。
+    - 成功事务原子写入 Conversation、owner/member membership 与 outbox；失败不得留下半成品群。
+    - assistant 成员不消耗 user 容量，用户容量单轨遵循 1000 上限。
+    done_when:
+    - api_integration 覆盖成功、非互关、屏蔽、重复请求、边界容量与 outbox。
+    edge_cases:
+    - 非互关与被屏蔽账号返回 metadata 生成的群专用结构化错误。
+    - 恰好达到上限允许，超过上限拒绝。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml#CreateConversation
+    - quwoquan_service/contracts/metadata/messages/conversation/errors.yaml
+    performance_points:
+    - CreateConversation P95 小于 500ms；成员校验使用批量关系门，不允许逐成员跨服务串行 N+1。
+    tests:
+      planned:
+      - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/selectable_group_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/group_governance_authorization__security__api_integration_test.go
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: chat_group_create_contract
+        cases:
+        - api_integration.chat.group_create.relationship_and_capacity
+        - api_integration.chat.group_create.source_split
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: alpha_group_create_parity
+        cases:
+        - local_contract.chat.group_create.alpha_policy_parity
+        envs:
+        - local
+    notes:
+    - selectable_group_contract 的 source=group|circle API 用例已本地通过；环境证据尚未登记。
+  GWT3:
+    title: 建群成功进入详情并回流消息列表
+    given:
+    - 用户从任一来源选中合法成员并停留在发起群聊页。
+    when:
+    - 用户点击发起群聊且服务端返回 canonical conversationId。
+    then:
+    - App 只使用返回的 conversationId 进入聊天详情，不合成本地临时 ID。
+    - 新群可从服务端 Inbox 回读，发起页与消息列表 Provider 同步刷新。
+    - 提交失败保留选择并展示 RuntimeFailure 结构化恢复动作。
+    - create_success|create_failed 的 result 记录匿名来源组合，并可与服务端 HTTP 黄金信号交叉验证。
+    done_when:
+    - user_acceptance 覆盖“圈子来源 -> 选成员 -> 建群 -> 进入详情 -> Inbox 回读”，beta/gamma/prod smoke 均留证。
+    edge_cases:
+    - 重复点击由提交锁与服务端幂等共同阻断重复群。
+    - 网络失败不得先导航或伪造成功。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#startGroupChat
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml#ListInbox
+    - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_l2_chat_objects
+    - quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json
+    - quwoquan_ops/environments/gamma_validation_suites.json#chat_group_lifecycle_api_probe
+    performance_points:
+    - 提交期间只有一个进度态；成功路由切换后 Inbox 刷新不阻塞详情首帧。
+    tests:
+      planned:
+      - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_create_journey__user_acceptance_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+      - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: chat_group_create_journey
+        cases:
+        - user_acceptance.chat.group_create.circle_source_to_inbox
+        envs:
+        - alpha
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: chat_group_create_widget
+        cases:
+        - local_contract.chat.group_create.success_refreshes_inbox
+        - local_contract.chat.group_create.structured_failure
+        envs:
+        - local
+      - layer: api_integration
+        execution_profile: environment
+        suite: chat_group_lifecycle_api_probe
+        cases:
+        - api_integration.chat.group_create.source_split
+        - api_integration.chat.group_create.create_message_inbox_cleanup
+        envs:
+        - beta
+        - gamma
+        - prod
+    notes:
+    - Alpha UAT 已本地通过；beta/gamma 使用 mutating probe，prod 使用只读独立验收账号，三者均留证前不得标记 completed。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

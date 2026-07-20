@@ -2,8 +2,8 @@
   "schema": "gamma-curated-media-bundle",
   "environment": "gamma",
   "selectionProfile": "gamma-curated-core",
-  "imageObjectCount": 128,
-  "totalObjectCount": 131,
+  "imageObjectCount": 130,
+  "totalObjectCount": 136,
   "mediaObjects": [
     {
       "objectKey": "media/attachment/s/archived-attachment/post/fixture_chat_file_001/spec.txt",
@@ -895,13 +895,6 @@
       "sizeBytes": 417403
     },
     {
-      "objectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/post/fixture_video_001/cover.png",
-      "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1",
-      "mimeType": "image/png",
-      "sizeBytes": 1440813
-    },
-    {
       "objectKey": "media/image/s/archived-image/post/fixture_video_001/image-2.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/post/fixture_video_001/image-2.png",
       "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef",
@@ -914,6 +907,48 @@
       "sourceHash": "sha256:0cd83d944a6ca7822b4a8306cecc60a36e859b041f6702c6a1ad9ead78924451",
       "mimeType": "video/mp4",
       "sizeBytes": 1128375
+    },
+    {
+      "objectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
+      "sourceHash": "sha256:de873a0665a703570cc441209b2291067738d000e92ef62cfa6d7ca131e1ac71",
+      "mimeType": "image/webp",
+      "sizeBytes": 3996
+    },
+    {
+      "objectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/source.mp4",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-hour-boundary-3595s/v1/source.mp4",
+      "sourceHash": "sha256:293cf11f6b170ccf87f04ad078d1db62cc91ab8dc9e2b3042f96710b2c75df5f",
+      "mimeType": "video/mp4",
+      "sizeBytes": 92934732
+    },
+    {
+      "objectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-seek-125s/v1/cover.webp",
+      "sourceHash": "sha256:c54f284bf8cdbc0a5562650dd3c894f61a1f102e9e6abcd463aad18767c3f31e",
+      "mimeType": "image/webp",
+      "sizeBytes": 3906
+    },
+    {
+      "objectKey": "media/video/s/media-canary-seek-125s/v1/preview/manifest.json",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-seek-125s/v1/preview/manifest.json",
+      "sourceHash": "sha256:0cb67b3186086d8d498b3e2bc9174a91bcdb8f8766490afb2daecdb6096a5eb2",
+      "mimeType": "application/json",
+      "sizeBytes": 4098
+    },
+    {
+      "objectKey": "media/video/s/media-canary-seek-125s/v1/preview/sprite.webp",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-seek-125s/v1/preview/sprite.webp",
+      "sourceHash": "sha256:03f692ad5e27a93c6aff74799b6ee8767166167085e1bc4629b89e8c7ea01f28",
+      "mimeType": "image/webp",
+      "sizeBytes": 107960
+    },
+    {
+      "objectKey": "media/video/s/media-canary-seek-125s/v1/source.mp4",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/s/media-canary-seek-125s/v1/source.mp4",
+      "sourceHash": "sha256:889ce288e07259e832b1e6a1895d52324c152de669d8bf798750998b3bcad082",
+      "mimeType": "video/mp4",
+      "sizeBytes": 8235149
     },
     {
       "objectKey": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",

@@ -1,27 +1,32 @@
 domain: recommendation
 aggregate_root: RecommendationModelRelease
 object_kind: aggregate_root
-description: 推荐模型发布、激活、灰度和回滚的唯一生命周期根。
-storage_backend: postgres
+description: 场景模型发布的可审计读模型与评分 Reader 根。V1 生命周期命令 deferred：登记/晋升/回滚由
+  rec-model-service 的 model_registry_cli（含 promotion gate）与 CI 训练管线写入
+  rec_model_registry；在线只暴露按已激活发布评分的 named Reader。
+storage_backend: mongodb
 cache_layer: redis
 cache_ttl_seconds: 300
-capabilities: [commandable, queryable]
+capabilities: [queryable]
 taggable: false
 vector_enabled: false
 members: []
 business_rules:
   - release_id_and_model_digest_are_immutable
-  - only_staged_release_can_be_activated
-  - only_active_release_can_change_rollout_percent
   - one_scenario_has_at_most_one_active_release
-  - rollback_target_must_be_a_previously_activated_release
+  - promotion_and_rollback_pass_registry_promotion_gate
 lifecycle:
   initial: staged
   terminal: [retired]
-  transitions:
-    - { from: staged, command: ActivateRecommendationModelRelease, to: active }
-    - { from: active, command: RollbackRecommendationModelRelease, to: retired }
-    - { from: staged, command: RollbackRecommendationModelRelease, to: retired }
+  transitions: []
+deferred_operations:
+  reason: 零 API 调用方；模型晋升/回滚/灰度由 model_registry_cli + CI promotion gate + AB policy
+    闭环承载。恢复前置条件：出现真实 operator 消费面（Portal 或跨服务命令），并补
+    PostgreSQL Store/outbox/facade/transport packet 与三层测试。
+  operations:
+    - StageRecommendationModelRelease
+    - ActivateRecommendationModelRelease
+    - RollbackRecommendationModelRelease
 ddd_layer_mapping:
   domain_model: internal/domain/recommendation/model_release
   repository: internal/domain/recommendation/ports

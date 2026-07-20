@@ -7,39 +7,40 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: persona-follow-graph
 scope:
-  summary: 分身删除/退役守卫、生命周期限制与错误语义的一致性验收范围。
+  summary: 分身退役守卫、生命周期限制与错误语义的一致性验收范围。
   in_scope:
-  - lifecycle guard 对 primary / active / last persona / 有历史 persona 的决策
-  - 有归因历史的 persona 只能 retire 不能 delete-empty
+  - lifecycle guard 对 primary / active / last / retired persona 的决策
+  - 所有非阻断 persona 统一 retire，不以跨域归因历史决定生命周期命令
   - retire 后状态、retiredAt 与 isActive 落库一致
   - retired persona 不可再 activate 或 update
   out_of_scope:
   - 分身管理列表的一般编辑与同步建议（归属 `persona-management`）
-  - 群聊、内容、通知等历史归因的大规模压测
+  - 合规物理清除与数据主体删除流程
 gwt_acceptance:
   GWT1:
     title: 分身生命周期守卫与退役语义稳定
     given:
     - 用户至少拥有主分身与一个辅助分身。
-    - 辅助分身可能存在内容、消息、通知或邀请等归因历史。
+    - 辅助分身可能在任意下游域被并发引用。
     when:
-    - 客户端请求 lifecycle guard、delete-empty、retire、activate 或 update。
+    - 客户端请求 lifecycle guard、retire、activate 或 update。
     then:
-    - primary persona 被 delete/retire 守卫阻断。
-    - 有历史 persona 返回 `retire_instead_of_delete`，delete-empty 返回 conflict。
+    - primary persona 被 retire 守卫阻断。
+    - 非 primary、非 active、非 last、非 retired persona 可直接 retire，命令不查询跨域归因历史。
+    - metadata、服务端、App 合同与页面均不存在 delete-empty 或物理删除入口。
     - retire 成功后 persona 进入 retired 态并禁止再次 activate/update。
     done_when:
-    - user-service lifecycle guard / retire / delete-empty 契约测试通过。
-    - App local_contract 至少验证 retired persona 的管理页呈现与删除按钮抑制。
+    - user-service lifecycle guard / retire 契约测试通过。
+    - App local_contract 至少验证退役确认、阻断提示与 retired persona 动作抑制。
     edge_cases:
-    - pg-backed 历史与 mongo fallback 历史都能命中同一守卫语义。
     - primary guard 优先级高于 active successor guard。
     - retired persona 再次变更返回结构化错误，不允许静默成功。
+    - 下游在退役提交前后创建的历史记录都继续引用同一 personaId，不发生改绑或身份丢失。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
     performance_points:
-    - lifecycle guard 读取不依赖端侧二次拼装；服务端一次返回 delete/retire 所需决策。
+    - lifecycle guard 读取只依赖 user 域 Persona 状态，不执行跨域 fan-out。
     tests:
       planned: []
       recorded:
@@ -49,36 +50,33 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: persona_lifecycle
         cases:
-        - api_integration.user.persona_lifecycle.guard_history_retire_instead_of_delete
         - api_integration.user.persona_lifecycle.primary_guard
+        - api_integration.user.persona_lifecycle.active_requires_successor
+        - api_integration.user.persona_lifecycle.last_persona_guard
+        - api_integration.user.persona_lifecycle.retire_independent_of_attribution_history
         - api_integration.user.persona_lifecycle.retire_persists_retired_status
-        - api_integration.user.persona_lifecycle.delete_empty_conflict_when_history_exists
         - api_integration.user.persona_lifecycle.retired_persona_cannot_activate_or_update
         envs:
         - gamma
       - layer: local_contract
+        execution_profile: baseline
         suite: persona_management_page
         cases:
-        - local_contract.user.persona_lifecycle.retired_persona_hides_delete_action
+        - local_contract.user.persona_lifecycle.retired_persona_hides_retire_action
+        - local_contract.user.persona_lifecycle.guard_blocks_primary_and_active
         envs:
         - local
-      supporting:
-      - layer: api_integration
-        suite: persona_lifecycle_metrics
-        cases:
-        - api_integration.user.persona_lifecycle.mongo_history_fallback_metric
-        envs:
-        - gamma
     notes:
-    - 本 story 关注 delete/retire contract；不把一般分身编辑能力混入生命周期守卫范围。
+    - 本 story 只关注 retire contract；不把一般分身编辑能力或合规物理清除混入生命周期守卫范围。
     - '[migrated_from_recorded_command] go test ./services/user-service/tests -run
-      Test(GetPersonaLifecycleGuard_HistoryCoverageBySource|GetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|GetPersonaLifecycleGuard_HistoryRequiresRetire|RetirePersona_PersistsRetiredStatus|DeleteEmptyPersona_HistoryRequiresRetireConflict|RetiredPersona_CannotBeActivatedOrUpdated)
+      Test(GetPersonaLifecycleGuard_PrimaryBlocked|GetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|GetPersonaLifecycleGuard_AllowsInactiveAuxiliary|RetirePersona_PersistsRetiredStatus|RetiredPersona_CannotBeActivatedOrUpdated)
       -count=1'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

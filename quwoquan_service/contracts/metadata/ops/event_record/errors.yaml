@@ -11,6 +11,14 @@ errors:
     dart_const: eventBatchInvalid
     go_const: ErrEventBatchInvalid
     user_message: { zh: "事件批次不符合目录契约", en: "The event batch does not match the telemetry catalog." }
+  - code: OPS.USER.runtime_log_batch_invalid
+    kind: USER
+    reason: runtime_log_batch_invalid
+    http_status: 422
+    recovery_action: absorb
+    dart_const: runtimeLogBatchInvalid
+    go_const: ErrRuntimeLogBatchInvalid
+    user_message: { zh: "诊断日志批次不符合统一日志目录", en: "The runtime diagnostic batch does not match the log catalog." }
   - code: OPS.USER.idempotency_key_invalid
     kind: USER
     reason: idempotency_key_invalid
@@ -44,6 +52,15 @@ errors:
     dart_const: logstoreUnavailable
     go_const: ErrLogstoreUnavailable
     user_message: { zh: "日志服务暂时不可用", en: "Telemetry storage is temporarily unavailable." }
+  - code: OPS.SYSTEM.runtime_logstore_unavailable
+    kind: SYSTEM
+    reason: runtime_logstore_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: runtimeLogstoreUnavailable
+    go_const: ErrRuntimeLogstoreUnavailable
+    user_message: { zh: "诊断日志服务暂时不可用", en: "Runtime diagnostics storage is temporarily unavailable." }
   - code: OPS.SYSTEM.startup_configuration_invalid
     kind: SYSTEM
     reason: startup_configuration_invalid
@@ -71,6 +88,14 @@ errors:
     dart_const: startupRouterUnavailable
     go_const: ErrStartupRouterUnavailable
     user_message: { zh: "页面暂时无法打开，请重试", en: "The page is temporarily unavailable. Please retry." }
+  - code: OPS.SYSTEM.unclassified_page_failure
+    kind: SYSTEM
+    reason: unclassified_page_failure
+    http_status: 500
+    recovery_action: absorb
+    dart_const: unclassifiedPageFailure
+    go_const: ErrUnclassifiedPageFailure
+    user_message: { zh: "页面遇到未分类异常", en: "The page encountered an unclassified failure." }
   - code: OPS.SYSTEM.startup_native_first_frame_timeout
     kind: SYSTEM
     reason: startup_native_first_frame_timeout

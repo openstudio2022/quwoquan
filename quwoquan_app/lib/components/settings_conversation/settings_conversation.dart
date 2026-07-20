@@ -5,6 +5,4 @@ library;
 
 export 'sheet/conversation_sheet.dart';
 export 'more_actions_popup/more_action_popup.dart';
-export 'more_actions_popup/more_action_types.dart';
-export 'more_actions_popup/configs/image_viewer_config.dart';
 export 'more_actions_popup/configs/media_post_config.dart';

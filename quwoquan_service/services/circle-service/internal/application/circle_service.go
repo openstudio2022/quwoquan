@@ -2,147 +2,47 @@ package application
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
-	rterr "quwoquan_service/runtime/errors"
 	rtimpact "quwoquan_service/runtime/impact"
-	messaging "quwoquan_service/runtime/messaging"
 	rtobs "quwoquan_service/runtime/observability"
+	"quwoquan_service/runtime/operation"
 	rtsearch "quwoquan_service/runtime/search"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
+	generated "quwoquan_service/services/circle-service/internal/generated"
 )
 
-// EventPublisher is the runtime-compatible event publisher interface.
-type EventPublisher = messaging.EventPublisher
-
-type noopPublisher struct{}
-
-func (noopPublisher) Publish(_ context.Context, _ messaging.DomainEvent) error { return nil }
-
-// CircleService encapsulates the Circle aggregate CRUD/read surface.
+// CircleService 承载 Circle 聚合本体的具名查询 Reader/Slice。
+// 写路径由 CircleCommandFacade + AggregateStore 承载，本服务不再持有写端口。
 type CircleService struct {
-	records   CircleRecordStore
-	sections  CircleSectionStore
-	feedStore CircleFeedStore
-	ids       EntityIDGenerator
-	events    EventPublisher
+	records       CircleRecordStore
+	feedStore     CircleFeedStore
+	discoveryFeed CircleDiscoveryFeedReader
 }
 
 type CircleServiceOption func(*CircleService)
 
-func WithEventPublisher(ep EventPublisher) CircleServiceOption {
-	return func(s *CircleService) { s.events = ep }
-}
-
 func WithFeedStore(fs CircleFeedStore) CircleServiceOption {
 	return func(s *CircleService) { s.feedStore = fs }
+}
+
+func WithDiscoveryFeedReader(reader CircleDiscoveryFeedReader) CircleServiceOption {
+	return func(s *CircleService) { s.discoveryFeed = reader }
 }
 
 func NewCircleService(
 	storage CircleStoragePorts,
 	opts ...CircleServiceOption,
 ) *CircleService {
-	s := &CircleService{
-		records: storage.Records, sections: storage.Sections,
-		ids: storage.IDs, events: noopPublisher{},
-	}
+	s := &CircleService{records: storage.Records}
 	for _, o := range opts {
 		o(s)
 	}
 	return s
-}
-
-func (s *CircleService) publishEvent(ctx context.Context, eventType string, aggregateID string, payload map[string]any) {
-	s.events.Publish(ctx, messaging.DomainEvent{
-		Type:          eventType,
-		AggregateType: "Circle",
-		AggregateID:   aggregateID,
-		Payload:       payload,
-		OccurredAt:    time.Now().Format(time.RFC3339),
-	})
-}
-
-// --- Circle CRUD ---
-
-type CreateCircleRequest struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	CoverUrl    string   `json:"coverUrl"`
-	Category    string   `json:"category"`
-	Tags        []string `json:"tags"`
-	Visibility  string   `json:"visibility"`
-	JoinPolicy  string   `json:"joinPolicy"`
-	OwnerID     string
-}
-
-func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleRequest) (circle *model.Circle, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.CreateCircle",
-		attribute.String("circle.owner_id", req.OwnerID),
-		attribute.String("circle.visibility", req.Visibility))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if req.Name == "" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleCircle, "圈子名称不能为空", "missing name")
-	}
-
-	now := time.Now()
-	id, err := generateEntityID(s.ids)
-	if err != nil {
-		return nil, err
-	}
-
-	visibility := model.CircleVisibilityPublic
-	if req.Visibility == "private" {
-		visibility = model.CircleVisibilityPrivate
-	}
-	joinPolicy := model.CircleJoinPolicyOpen
-	if req.JoinPolicy == "approval" {
-		joinPolicy = model.CircleJoinPolicyApproval
-	} else if req.JoinPolicy == "invite_only" {
-		joinPolicy = model.CircleJoinPolicyInviteOnly
-	}
-
-	defaultQuota := int64(1024 * 1024 * 1024) // 1 GB
-	circle = &model.Circle{
-		ID:                id,
-		Name:              req.Name,
-		Description:       req.Description,
-		CoverUrl:          req.CoverUrl,
-		OwnerID:           req.OwnerID,
-		Category:          req.Category,
-		Tags:              req.Tags,
-		MemberCount:       0,
-		Status:            model.CircleStatusActive,
-		Visibility:        visibility,
-		JoinPolicy:        joinPolicy,
-		AutoSyncChat:      true,
-		StorageQuotaBytes: defaultQuota,
-		SectionConfig: []model.CircleSectionConfig{
-			{SectionType: model.CircleSectionTypeWorks, Visible: true, Order: 0},
-			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 1},
-			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 2},
-			{SectionType: model.CircleSectionTypeInteraction, Visible: true, Order: 3},
-		},
-		DomainID:  req.Category,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := s.records.Create(ctx, circle); err != nil {
-		return nil, fmt.Errorf("create circle: %w", err)
-	}
-
-	s.publishEvent(ctx, "CircleCreated", id, map[string]any{
-		"id": id, "name": req.Name, "ownerId": req.OwnerID,
-		"category": req.Category, "tags": req.Tags,
-	})
-
-	return circle, nil
 }
 
 func (s *CircleService) GetCircle(ctx context.Context, circleID string) (*model.Circle, error) {
@@ -153,10 +53,7 @@ func (s *CircleService) GetCircle(ctx context.Context, circleID string) (*model.
 
 	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
-		err = rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
+		err = generated.AppErrorFromCircleNotFound("circle not found")
 		return nil, err
 	}
 	return c, nil
@@ -330,93 +227,57 @@ func (s *CircleService) SearchCircles(
 	}
 }
 
-func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data map[string]any) (c *model.Circle, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateCircle",
-		attribute.String("circle.id", circleID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	c, ok := s.records.FindByID(ctx, circleID)
-	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
-	}
-
-	if v, ok := data["name"].(string); ok && v != "" {
-		c.Name = v
-	}
-	if v, ok := data["description"].(string); ok {
-		c.Description = v
-	}
-	if v, ok := data["coverUrl"].(string); ok {
-		c.CoverUrl = v
-	}
-	if v, ok := data["category"].(string); ok {
-		c.Category = v
-	}
-
-	if !s.records.Update(ctx, circleID, c) {
-		return nil, fmt.Errorf("update circle failed")
-	}
-
-	s.publishEvent(ctx, "CircleUpdated", circleID, map[string]any{
-		"id": circleID, "name": c.Name, "description": c.Description,
-	})
-
-	return c, nil
-}
-
-func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ArchiveCircle",
-		attribute.String("circle.id", circleID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if !s.records.Archive(ctx, circleID) {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
-	}
-	s.publishEvent(ctx, "CircleArchived", circleID, map[string]any{"id": circleID, "status": "archived"})
-	return nil
-}
-
 // --- Stats ---
 
-func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (_ map[string]any, err error) {
+// CircleStatsWire 是 GetCircleStats 的稳定回读投影，键集合与
+// contracts/metadata/social/circle/projections/circle_stats_wire.yaml 对齐。
+type CircleStatsWire struct {
+	TotalMembers      int64 `json:"totalMembers"`
+	WeeklyActive      int64 `json:"weeklyActive"`
+	TotalPosts        int64 `json:"totalPosts"`
+	TotalDiscussions  int64 `json:"totalDiscussions"`
+	StorageUsedBytes  int64 `json:"storageUsedBytes"`
+	StorageQuotaBytes int64 `json:"storageQuotaBytes"`
+}
+
+func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (CircleStatsWire, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleStats",
 		attribute.String("circle.id", circleID))
+	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
+		err = generated.AppErrorFromCircleNotFound("circle not found")
+		return CircleStatsWire{}, err
 	}
-	return map[string]any{
-		"totalMembers":      c.MemberCount,
-		"weeklyActive":      c.WeeklyActiveCount,
-		"totalPosts":        c.PostCount,
-		"totalDiscussions":  0,
-		"storageUsedBytes":  c.StorageUsedBytes,
-		"storageQuotaBytes": c.StorageQuotaBytes,
+	return CircleStatsWire{
+		TotalMembers:      c.MemberCount,
+		WeeklyActive:      c.WeeklyActiveCount,
+		TotalPosts:        c.PostCount,
+		TotalDiscussions:  0,
+		StorageUsedBytes:  c.StorageUsedBytes,
+		StorageQuotaBytes: c.StorageQuotaBytes,
 	}, nil
 }
 
-func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_ map[string]any, err error) {
+// CircleImpactSummaryWire 是 GetCircleImpact 的稳定回读投影。
+type CircleImpactSummaryWire struct {
+	CircleID string               `json:"circleId"`
+	Total    int64                `json:"total"`
+	Items    []rtimpact.Statement `json:"items"`
+}
+
+func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (CircleImpactSummaryWire, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleImpact",
 		attribute.String("circle.id", circleID))
+	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
+		err = generated.AppErrorFromCircleNotFound("circle not found")
+		return CircleImpactSummaryWire{}, err
 	}
 	items := make([]rtimpact.Statement, 0, 1)
 	if item, complete := buildCircleMemberImpact(c); complete {
@@ -426,11 +287,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 	for _, item := range items {
 		total += item.Count
 	}
-	return map[string]any{
-		"circleId": circleID,
-		"total":    total,
-		"items":    items,
-	}, nil
+	return CircleImpactSummaryWire{CircleID: circleID, Total: total, Items: items}, nil
 }
 
 // buildCircleMemberImpact only publishes the member fact because the owner is
@@ -472,117 +329,92 @@ func buildCircleMemberImpact(c *model.Circle) (rtimpact.Statement, bool) {
 
 // --- Feed ---
 
-func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limit int, cursor string, sort string) ([]map[string]any, string) {
+func (s *CircleService) GetCircleFeed(
+	ctx context.Context,
+	circleID string,
+	limit int,
+	cursor string,
+	sort string,
+	identity string,
+	contentType string,
+) (CircleFeedSlice, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleFeed",
 		attribute.String("circle.id", circleID),
 		attribute.String("feed.sort", sort))
-	defer func() { rtobs.EndSpan(span, nil) }()
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
 
 	if s.feedStore == nil {
-		return []map[string]any{}, ""
+		err = generated.AppErrorFromInternalError("circle feed reader is not configured")
+		return CircleFeedSlice{}, err
 	}
-	items, nextCursor := s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
-		Sort:   sort,
-		Cursor: cursor,
-		Limit:  limit,
+	items, nextCursor, readErr := s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
+		Identity: identity,
+		Type:     contentType,
+		Sort:     sort,
+		Cursor:   cursor,
+		Limit:    limit,
 	})
-	projected := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		projected = append(projected, projectCircleFeedItem(item))
-	}
-	return projected, nextCursor
-}
-
-func projectCircleFeedItem(item map[string]any) map[string]any {
-	if item == nil {
-		return nil
-	}
-	out := make(map[string]any, len(item))
-	for key, value := range item {
-		if key == "_id" {
-			continue
+	if readErr != nil {
+		if errors.Is(readErr, ErrInvalidCircleFeedCursor) {
+			err = generated.AppErrorFromInvalidArgument(readErr.Error())
+			return CircleFeedSlice{}, err
 		}
-		out[key] = value
+		err = generated.AppErrorFromInternalError(readErr.Error())
+		return CircleFeedSlice{}, err
 	}
-	if _, ok := out["postId"]; !ok {
-		if id, ok := item["_id"]; ok {
-			out["postId"] = id
-		}
+	if items == nil {
+		items = []CircleFeedPost{}
 	}
-	return out
+	return CircleFeedSlice{Items: items, Cursor: nextCursor}, nil
 }
 
-// --- Feed management ---
-
-func (s *CircleService) PinPost(ctx context.Context, circleID, postID string, pinned bool) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.PinPost",
-		attribute.String("circle.id", circleID),
-		attribute.String("post.id", postID))
+func (s *CircleService) ListCircleDiscoveryFeed(
+	ctx context.Context,
+	query CircleDiscoveryFeedQuery,
+) (CircleDiscoveryFeedSlice, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListCircleDiscoveryFeed",
+		attribute.String("feed.category", query.Category),
+		attribute.String("feed.scope", string(query.Scope)),
+		attribute.String("feed.sort", query.Sort))
+	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	if s.feedStore == nil {
-		return rterr.NewUnavailable(rterr.ModuleCircle, "圈子动态暂不可用", "circle feed store unavailable")
+	if s.discoveryFeed == nil {
+		err = generated.AppErrorFromInternalError("circle discovery feed reader is not configured")
+		return CircleDiscoveryFeedSlice{}, err
 	}
-	ok, updateErr := s.feedStore.UpdateCirclePostPinned(ctx, circleID, postID, pinned)
-	if updateErr != nil {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindSystem, "feed_update_failed"),
-			"圈子动态更新失败", updateErr.Error(),
-		)
+	if query.Scope == "" {
+		query.Scope = CircleDiscoveryFeedScopeRecommended
 	}
-	if !ok {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"帖子不存在", "circle post not found",
-		)
+	if query.Scope != CircleDiscoveryFeedScopeRecommended &&
+		query.Scope != CircleDiscoveryFeedScopeMine {
+		err = generated.AppErrorFromInvalidArgument("scope must be recommended or mine")
+		return CircleDiscoveryFeedSlice{}, err
 	}
-	s.publishEvent(ctx, "CirclePostPinned", postID, map[string]any{
-		"circleId": circleID, "postId": postID, "pinned": pinned,
-	})
-	return nil
-}
-
-func (s *CircleService) FeaturePost(ctx context.Context, circleID, postID string, featured bool) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.FeaturePost",
-		attribute.String("circle.id", circleID),
-		attribute.String("post.id", postID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.feedStore == nil {
-		return rterr.NewUnavailable(rterr.ModuleCircle, "圈子动态暂不可用", "circle feed store unavailable")
+	if query.Limit <= 0 || query.Limit > 200 {
+		err = generated.AppErrorFromInvalidArgument("limit must be in 1..200")
+		return CircleDiscoveryFeedSlice{}, err
 	}
-	ok, updateErr := s.feedStore.UpdateCirclePostFeatured(ctx, circleID, postID, featured)
-	if updateErr != nil {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindSystem, "feed_update_failed"),
-			"圈子动态更新失败", updateErr.Error(),
-		)
+	if current, ok := operation.FromContext(ctx); ok {
+		query.PersonaID = strings.TrimSpace(current.Actor.PersonaID)
 	}
-	if !ok {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"帖子不存在", "circle post not found",
-		)
+	if query.Scope == CircleDiscoveryFeedScopeMine && query.PersonaID == "" {
+		return CircleDiscoveryFeedSlice{
+			Circles: []model.Circle{},
+			Items:   []CircleFeedPost{},
+		}, nil
 	}
-	s.publishEvent(ctx, "CirclePostFeatured", postID, map[string]any{
-		"circleId": circleID, "postId": postID, "featured": featured,
-	})
-	return nil
-}
-
-// --- Sections ---
-
-func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sections []model.CircleSectionConfig) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateSections",
-		attribute.String("circle.id", circleID),
-		attribute.Int("sections.count", len(sections)))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if err = s.sections.UpdateSections(ctx, circleID, sections); err != nil {
-		return err
+	result, readErr := s.discoveryFeed.ListCircleDiscoveryFeed(ctx, query)
+	if readErr != nil {
+		err = generated.AppErrorFromInternalError(readErr.Error())
+		return CircleDiscoveryFeedSlice{}, err
 	}
-	s.publishEvent(ctx, "CircleSectionsUpdated", circleID, map[string]any{
-		"circleId": circleID, "sectionConfig": sections,
-	})
-	return nil
+	if result.Circles == nil {
+		result.Circles = []model.Circle{}
+	}
+	if result.Items == nil {
+		result.Items = []CircleFeedPost{}
+	}
+	return result, nil
 }

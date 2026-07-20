@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
     show ContentCommentListItem;
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
@@ -15,13 +16,14 @@ import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dar
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 enum CommentDetailSurfaceMode {
-  cardModal('card_modal'),
-  immersiveSplit('immersive_split'),
-  profileInteraction('profile_interaction');
+  cardModal('card_modal', AppUiSurfaces.homeFeed),
+  immersiveSplit('immersive_split', AppUiSurfaces.workBrowser),
+  profileInteraction('profile_interaction', AppUiSurfaces.profileHome);
 
-  const CommentDetailSurfaceMode(this.analyticsName);
+  const CommentDetailSurfaceMode(this.analyticsName, this.sourceSurface);
 
   final String analyticsName;
+  final AppUiSurface sourceSurface;
 }
 
 class CommentDetailSurface extends ConsumerStatefulWidget {
@@ -125,6 +127,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
       config: widget.config,
       replyTo: replyTo,
       surfaceMode: widget.mode.analyticsName,
+      sourceSurface: widget.mode.sourceSurface,
     );
     if (!mounted || !submitted) return;
     final comments = ref.read(commentProviderFamily(widget.postId)).comments;

@@ -1,4 +1,4 @@
-# 业务对象三环境共用测试数据清单
+# 业务对象四环境数据清单
 
 本文档是 alpha/beta/gamma 共用测试数据的页面到业务对象依赖清单。后续新增页面、Repository 或人工 beta 场景时，必须先更新对应 contract fixture 与 seed manifest，再实现业务代码或测试。
 
@@ -8,14 +8,14 @@
 |---|---|---|---|
 | alpha | contract-seeded MockRepository | 单服务自身 reset+seed 测试存储 | 端侧离线 mock 与云侧单服务接口验证 |
 | beta | RemoteRepository | 本地服务按 `app_beta_seed_manifest.json` reset+seed | 本地端云联调与人工测试 |
-| gamma | RemoteRepository | 云侧集成环境按 `app_gamma_seed_manifest.json` reset+seed | 云侧集成验证 |
+| gamma | RemoteRepository | gamma-local mirror 按 `app_gamma_seed_manifest.json` reset+seed | 本地端云集成验证 |
 | prod | 真实用户数据 | 真实用户数据 | 正式发布（含云侧灰度策略与配置版本；同一生产 App 包，非独立环境包） |
 
 ### 多实例 / 单套补充约束
 
 - 端侧 `alpha` / `beta` / `gamma` 可在**不同模拟器**并行运行多个实例，但每个实例都必须显式绑定 `device-id`。
 - `beta` 云侧数据源只允许一套本地服务栈；重新启动 beta 时必须先停止旧实例并回收 `18080/18087/18088` 等固定端口。
-- `gamma` 云侧数据源只允许一套 ECS gamma 或一套 local-gamma mirror；并行只体现在多个端侧实例同时访问同一套 gamma。
+- `gamma` 云侧数据源只允许一套 gamma-local mirror；并行只体现在多个端侧实例同时访问同一套 gamma。
 - 不得为端侧多实例再复制一套 beta/gamma seed 数据；仍以既有 `app_beta_seed_manifest.json` / `app_gamma_seed_manifest.json` 为唯一真相源。
 
 ## 页面依赖矩阵

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -16,7 +17,9 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(
             home: _AssistantTestPage(repo: mock, writer: mock.writer),
           ),
@@ -36,7 +39,9 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(
             home: _AssistantTestPage(repo: mock, writer: mock.writer),
           ),
@@ -62,7 +67,9 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -84,7 +91,9 @@ void main() {
       final mock = _ErrorAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -100,7 +109,9 @@ void main() {
       final mock = _ErrorRemoveAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -123,7 +134,9 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -144,7 +157,9 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatRepositoryProvider.overrideWithValue(mock)],
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(mock),
+          ],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );

@@ -1,0 +1,36 @@
+entity: Notification
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  data_source: fields.yaml constraints 派生 mock fixture。
+  分层：
+    dto_scenarios    → quwoquan_app/test/local_contract/cloud/notification/**
+    widget_scenarios → quwoquan_app/test/local_contract/ui/chat/**（消息页通知维度）
+
+dto_scenarios:
+  - name: app_message_wire_decode
+    description: AppMessage wire 解码只认 canonical 键（messageId/messageType/target），未知类型 fail closed
+    assertions:
+      - messageId 非空
+      - messageType 属于 NotificationType 五大类
+      - target 缺失时通知行不可跳转但可渲染
+
+  - name: notification_error_codes_typed
+    description: NOTIFICATION.* 错误码经 codegen 枚举消费，不硬编码字符串
+    assertions:
+      - unread-count 读取失败映射结构化 RuntimeFailure
+      - 401/404/409 各有对应枚举
+
+widget_scenarios:
+  - name: notification_dimension_renders_inbox
+    description: 消息页通知维度只渲染 ListAppMessages 数据；空 inbox 展示独立空态
+    assertions:
+      - 通知行 title/summary/时间/已读态与 fixture 一致
+      - 无通知时不回退拼接
+
+  - name: notification_row_tap_reads_and_navigates
+    description: 点击通知行按 target 路由跳转并调用 ReadAppMessage
+    assertions:
+      - 跳转 route 来自 target.routeId/routePath
+      - 已读后未读徽标同步刷新

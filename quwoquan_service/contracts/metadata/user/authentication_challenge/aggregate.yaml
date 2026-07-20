@@ -9,11 +9,12 @@ business_rules:
   - purpose、channel、destinationHash 与 secretRef 创建后不可变
   - secret 明文不得进入 aggregate、日志、事件或 API 响应
   - verify attempt 有界，超过上限或 expiresAt 后立即失效
-  - completed、expired 与 locked 为终态，重复成功验证返回同一 receipt
+  - completed、expired 与 locked 为终态；成功消费在 challenge 行内记录结果指纹，同一凭据重复验证返回同一结果
+  - 发送冷却与配额由服务端强制，challenge 创建按 idempotency key 去重
 lifecycle:
   states: [pending, completed, expired, locked, cancelled]
   optimistic_concurrency: version
-  idempotency: command_receipt
+  idempotency: inline_row_receipt
 ddd_layer_mapping:
   domain_model: internal/domain/account/authentication_challenge/model
   ports: internal/domain/account/authentication_challenge/ports

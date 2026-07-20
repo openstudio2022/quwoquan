@@ -86,7 +86,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
     minimum_frames = (
         load_cold_start_supply_policy().video_delivery.minimum_segment_count
     )
-    if len(pack.source_frames) < minimum_frames:
+    if pack.source_video is None and len(pack.source_frames) < minimum_frames:
         frame_issues.append(
             _issue(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
@@ -112,7 +112,11 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
                 "entity_name": pack.primary_entity,
                 "segment_count": minimum_frames,
                 "source_frames_json": json.dumps(
-                    pack_payload["sourceFrames"],
+                    (
+                        pack_payload["sourceVideo"]
+                        if pack.source_video is not None
+                        else pack_payload["sourceFrames"]
+                    ),
                     ensure_ascii=False,
                     indent=2,
                 ),
@@ -142,6 +146,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
     quality_payload = {
         "recommendation": "compose",
         "carrier": "video",
+        "sourceMode": pack_payload["sourceMode"],
         "sourceFrameCount": len(pack.source_frames),
         "sourcePaths": list(pack.source_paths),
         "sourceUrls": list(pack.source_urls),
@@ -162,6 +167,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         issues=tuple(frame_issues),
         evidence_summary={
             "carrier": "video",
+            "sourceMode": pack_payload["sourceMode"],
             "sourceFrameCount": len(pack.source_frames),
         },
         next_step="compose_brief" if not frame_issues else None,
@@ -182,6 +188,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         issues=tuple(frame_issues),
         evidence_summary={
             "carrier": "video",
+            "sourceMode": pack_payload["sourceMode"],
             "sourceFrameCount": len(pack.source_frames),
         },
         next_step="agent_compose" if not frame_issues else None,
@@ -343,6 +350,16 @@ def _compose_payload(
         "sourceUrls": list(pack.source_urls),
         "sourcePaths": list(pack.source_paths),
         "sourceFrames": [frame.to_dict() for frame in pack.source_frames],
+        "sourceMode": (
+            "sourced_video"
+            if pack.source_video is not None
+            else "rights_cleared_image_sequence"
+        ),
+        **(
+            {"sourceVideo": pack.source_video.to_dict()}
+            if pack.source_video is not None
+            else {}
+        ),
         "storySpine": pack.to_dict()["storySpine"],
         "publishLayout": "video",
         "publishAngle": "体验",

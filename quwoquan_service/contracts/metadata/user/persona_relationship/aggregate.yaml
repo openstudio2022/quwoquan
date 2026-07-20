@@ -16,6 +16,7 @@ business_rules:
   - 任一方向 block 必须在同一事务清除双方 following
   - unblock 只清除 blocked，不恢复历史 following
   - 所有写入在 canonical pair 行锁内串行提交，并以 version 单调递增和 idempotency receipt 保证可重放
+  - follower/following 是 outbox 驱动的派生读模型；命令事务禁止同步全表 COUNT，投影按 eventId 幂等并按 aggregate version 顺序消费
 lifecycle:
   states: [active, tombstoned]
   write_serialization: canonical_pair_row_lock

@@ -8,7 +8,6 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
@@ -43,51 +42,6 @@ func (r *fakeAuthorPostReader) ListAuthorPosts(
 	r.request = request
 	return r.page, r.err
 }
-
-type fakePostSearchReader struct {
-	result                   postports.PostSearchResultSlice
-	err                      error
-	calls                    int
-	request                  postports.PostSearchReadRequest
-	aggregateCollectionCalls int
-}
-
-func (r *fakePostSearchReader) SearchPosts(
-	_ context.Context,
-	request postports.PostSearchReadRequest,
-) (postports.PostSearchResultSlice, error) {
-	r.calls++
-	r.request = request
-	return r.result, r.err
-}
-
-// 这个 fake 同时实现 aggregate CollectionReader；SearchPosts 若错误地向下转型并扫描
-// 聚合集合，测试会立即失败。它仅用于证明 Query Facade 不存在这种降级路径。
-func (r *fakePostSearchReader) ListAll(_ context.Context) ([]postmodel.Post, error) {
-	r.aggregateCollectionCalls++
-	return nil, errors.New("aggregate collection reader must not serve SearchPosts")
-}
-
-func (r *fakePostSearchReader) ListPublished(
-	_ context.Context,
-	_ int,
-	_ string,
-) []postmodel.Post {
-	r.aggregateCollectionCalls++
-	return nil
-}
-
-func (r *fakePostSearchReader) ListByAuthor(
-	_ context.Context,
-	_ string,
-	_ int,
-	_ string,
-) []postmodel.Post {
-	r.aggregateCollectionCalls++
-	return nil
-}
-
-var _ postports.CollectionReader = (*fakePostSearchReader)(nil)
 
 func queryViewer(personaID string) postports.ViewerContext {
 	return postports.NewViewerContext(postports.NewPersonaID(personaID))
@@ -130,6 +84,41 @@ func TestPostDetailAllowsOnlyPublicOrOwnerVisibility(t *testing.T) {
 		),
 	)
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromPostNotFound(""))
+
+	reader.detail = postports.PostDetailSlice{
+		PostID:           postports.NewPostID("post-moderation-rejected"),
+		AuthorPersonaID:  postports.NewPersonaID("persona-author"),
+		Status:           postports.PostStatus("published"),
+		Visibility:       postports.PostVisibility("public"),
+		ModerationStatus: "rejected",
+	}
+	_, err = facade.GetPost(
+		ctx,
+		postports.NewPostDetailQuery(
+			postports.NewPostID("post-moderation-rejected"),
+			queryViewer("persona-outsider"),
+		),
+	)
+	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromPostNotFound(""))
+	if _, err = facade.GetPost(
+		ctx,
+		postports.NewPostDetailQuery(
+			postports.NewPostID("post-moderation-rejected"),
+			queryViewer("persona-author"),
+		),
+	); err != nil {
+		t.Fatalf("owner persona must retain access to rejected Post: %v", err)
+	}
+	reader.detail.ModerationStatus = "approved"
+	if _, err = facade.GetPost(
+		ctx,
+		postports.NewPostDetailQuery(
+			postports.NewPostID("post-moderation-rejected"),
+			queryViewer("persona-outsider"),
+		),
+	); err != nil {
+		t.Fatalf("approved public Post must be visible again: %v", err)
+	}
 
 	reader.detail = postports.PostDetailSlice{
 		PostID:          postports.NewPostID("post-draft"),
@@ -309,119 +298,155 @@ func TestPostQueryFacadeRejectsCursorOutsideQueryScope(t *testing.T) {
 	if authorReader.calls != 0 {
 		t.Fatalf("cross-scope author cursor must not reach reader, calls=%d", authorReader.calls)
 	}
-
-	searchReader := &fakePostSearchReader{}
-	searchFacade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{Search: searchReader})
-	viewer := queryViewer("persona-searcher")
-	wrongSearchScope := postports.NewPostSearchReadRequest(
-		viewer.PersonaID(),
-		"另一查询",
-		"",
-		"",
-		"",
-		"",
-		postports.PostSearchCursor{},
-		10,
-	)
-	_, err = searchFacade.SearchPosts(
-		context.Background(),
-		postports.NewPostSearchQuery(
-			viewer,
-			"当前查询",
-			"",
-			"",
-			"",
-			"",
-			postports.NewPostSearchCursor(
-				wrongSearchScope.CursorScope(),
-				"other-search-after",
-			).Encode(),
-			10,
-		),
-	)
-	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromInvalidArgument(""))
-	if searchReader.calls != 0 {
-		t.Fatalf("cross-scope search cursor must not reach reader, calls=%d", searchReader.calls)
-	}
 }
 
-func TestPostQueryFacadeSearchUsesDedicatedReaderAndFailsClosed(t *testing.T) {
+type fakeViewerBlockReader struct {
+	blockedPairs map[string]bool
+	err          error
+	calls        int
+}
+
+func (r *fakeViewerBlockReader) IsBlockedBetween(
+	_ context.Context,
+	viewer postports.PersonaID,
+	author postports.PersonaID,
+) (bool, error) {
+	r.calls++
+	if r.err != nil {
+		return false, r.err
+	}
+	return r.blockedPairs[string(viewer)+"|"+string(author)], nil
+}
+
+func TestGetPostEnforcesBlockServerSide(t *testing.T) {
 	ctx := context.Background()
-	searchReader := &fakePostSearchReader{
-		result: postports.PostSearchResultSlice{
-			Items: []postports.PostSearchItemSlice{{
-				PostID:      postports.NewPostID("post-search"),
-				ContentType: postports.ContentType("article"),
-				Title:       "搜索结果",
+	detailReader := &fakePostDetailReader{
+		found: true,
+		detail: postports.PostDetailSlice{
+			PostID:           postports.NewPostID("post-blocked-detail"),
+			AuthorPersonaID:  postports.NewPersonaID("persona-author"),
+			Status:           postports.PostStatus("published"),
+			Visibility:       postports.PostVisibility("public"),
+			ModerationStatus: "approved",
+		},
+	}
+	blocks := &fakeViewerBlockReader{blockedPairs: map[string]bool{
+		"persona-blocked-viewer|persona-author": true,
+	}}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail:       detailReader,
+		ViewerBlocks: blocks,
+	})
+
+	_, err := facade.GetPost(ctx, postports.NewPostDetailQuery(
+		postports.NewPostID("post-blocked-detail"),
+		queryViewer("persona-blocked-viewer"),
+	))
+	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromPostNotFound(""))
+	if detailReader.calls != 1 {
+		t.Fatalf("detail reader calls=%d want=1", detailReader.calls)
+	}
+
+	blocks.calls = 0
+	if _, err = facade.GetPost(ctx, postports.NewPostDetailQuery(
+		postports.NewPostID("post-blocked-detail"),
+		queryViewer("persona-author"),
+	)); err != nil {
+		t.Fatalf("owner must retain detail access: %v", err)
+	}
+	if blocks.calls != 0 {
+		t.Fatalf("owner detail read must bypass block guard, calls=%d", blocks.calls)
+	}
+
+	blocks.err = errors.New("projection unavailable")
+	_, err = facade.GetPost(ctx, postports.NewPostDetailQuery(
+		postports.NewPostID("post-blocked-detail"),
+		queryViewer("persona-other"),
+	))
+	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromStorageReadFailed(""))
+}
+
+// GWT: Given author 拉黑了 viewer（或反向），When viewer 拉取作者主页作品列表，
+// Then 服务端返回空页且不触达 author reader，也不向被拉黑方泄露 block 存在性。
+func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
+	ctx := context.Background()
+	authorReader := &fakeAuthorPostReader{
+		page: postports.AuthorPostPageSlice{
+			Items: []postports.AuthorPostItemSlice{{
+				PostID:          postports.NewPostID("post-1"),
+				AuthorPersonaID: postports.NewPersonaID("persona-author"),
+				Status:          postports.PostStatus("published"),
+				Visibility:      postports.PostVisibility("public"),
 			}},
 		},
 	}
-	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{Search: searchReader})
-	viewer := queryViewer("persona-searcher")
+	blocks := &fakeViewerBlockReader{blockedPairs: map[string]bool{
+		"persona-blocked-viewer|persona-author": true,
+	}}
+	facade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Author:       authorReader,
+		ViewerBlocks: blocks,
+	})
 
-	unpaged := postports.NewPostSearchReadRequest(
-		viewer.PersonaID(),
-		"川西",
-		"",
-		"",
-		"",
-		"",
-		postports.PostSearchCursor{},
-		10,
-	)
-	cursor := postports.NewPostSearchCursor(
-		unpaged.CursorScope(),
-		"search-after-fixture",
-	).Encode()
-	results, err := facade.SearchPosts(
-		ctx,
-		postports.NewPostSearchQuery(
-			viewer,
-			"川西",
-			"",
-			"",
-			"",
-			"",
-			cursor,
-			10,
-		),
-	)
+	page, err := facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
+		postports.NewPersonaID("persona-author"),
+		queryViewer("persona-blocked-viewer"),
+		"", "", "", "", 10,
+	))
 	if err != nil {
-		t.Fatalf("dedicated search reader failed: %v", err)
+		t.Fatalf("blocked viewer must receive empty page, not error: %v", err)
 	}
-	if len(results.Items) != 1 || searchReader.calls != 1 {
-		t.Fatalf("search must call only dedicated reader: items=%+v calls=%d", results.Items, searchReader.calls)
+	if len(page.Items) != 0 || page.HasMore || page.NextCursor != "" {
+		t.Fatalf("blocked viewer must not see author posts: %+v", page)
 	}
-	if searchReader.aggregateCollectionCalls != 0 {
-		t.Fatalf(
-			"SearchPosts must not invoke aggregate CollectionReader, calls=%d",
-			searchReader.aggregateCollectionCalls,
-		)
-	}
-	if got := searchReader.request.Cursor().Token(); got != "search-after-fixture" {
-		t.Fatalf("search reader cursor token = %q, want search-after-fixture", got)
+	if authorReader.calls != 0 {
+		t.Fatalf("blocked viewer must not reach author reader, calls=%d", authorReader.calls)
 	}
 
-	searchReader.err = errors.New("search index unavailable")
-	_, err = facade.SearchPosts(
-		ctx,
-		postports.NewPostSearchQuery(viewer, "川西", "", "", "", "", "", 10),
-	)
+	// 非拉黑 viewer 正常读取。
+	page, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
+		postports.NewPersonaID("persona-author"),
+		queryViewer("persona-friend"),
+		"", "", "", "", 10,
+	))
+	if err != nil {
+		t.Fatalf("unblocked viewer read failed: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("unblocked viewer must see author posts: %+v", page)
+	}
+
+	// owner 自读不经过 block guard。
+	blocks.calls = 0
+	if _, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
+		postports.NewPersonaID("persona-author"),
+		queryViewer("persona-author"),
+		"", "", "", "", 10,
+	)); err != nil {
+		t.Fatalf("owner read failed: %v", err)
+	}
+	if blocks.calls != 0 {
+		t.Fatalf("owner read must bypass block guard, calls=%d", blocks.calls)
+	}
+
+	// 匿名 viewer（游客）不经过 block guard，仍可读公开作品。
+	if _, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
+		postports.NewPersonaID("persona-author"),
+		queryViewer(""),
+		"", "", "", "", 10,
+	)); err != nil {
+		t.Fatalf("guest read failed: %v", err)
+	}
+	if blocks.calls != 0 {
+		t.Fatalf("guest read must bypass block guard, calls=%d", blocks.calls)
+	}
+
+	// block 判定失败必须 fail-closed 为结构化读错误，不能放行。
+	blocks.err = errors.New("projection unavailable")
+	_, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
+		postports.NewPersonaID("persona-author"),
+		queryViewer("persona-blocked-viewer"),
+		"", "", "", "", 10,
+	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromStorageReadFailed(""))
-
-	missingReaderFacade := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{})
-	_, err = missingReaderFacade.SearchPosts(
-		ctx,
-		postports.NewPostSearchQuery(viewer, "川西", "", "", "", "", "", 10),
-	)
-	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromRequiredDependencyUnavailable(""))
-
-	_, err = facade.SearchPosts(
-		ctx,
-		postports.NewPostSearchQuery(queryViewer(""), "川西", "", "", "", "", "", 10),
-	)
-	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromUnauthorized(""))
-	if searchReader.calls != 2 {
-		t.Fatalf("unauthenticated search must not call search reader, calls=%d", searchReader.calls)
-	}
 }

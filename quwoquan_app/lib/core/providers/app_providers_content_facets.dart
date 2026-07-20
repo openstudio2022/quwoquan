@@ -17,62 +17,51 @@ final class _ContentFacets {
 }
 
 final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  final source = cloudRepositoryImplForMode<_ContentFacets>(
-    mode,
-    remote: () {
-      final adapter = RemoteContentRepository(
-        httpClient: ref.watch(cloudHttpClientProvider),
-      );
-      return _ContentFacets(
-        read: adapter,
-        write: adapter,
-        engagement: adapter,
-        config: adapter,
-      );
-    },
-    mock: () {
-      final adapter = MockContentRepository();
-      return _ContentFacets(
-        read: adapter,
-        write: adapter,
-        engagement: adapter,
-        config: adapter,
-      );
-    },
+  Future<List<String>> loadBlockedKeywords() async {
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      return const <String>[];
+    }
+    return ref.read(blockedKeywordSnapshotCacheProvider).load(() async {
+      final settings = await ref
+          .read(userSettingsQueryReaderProvider)
+          .getPrivacySettings();
+      return settings.blockedKeywords;
+    });
+  }
+
+  final adapter = RemoteContentRepository(
+    httpClient: ref.watch(cloudHttpClientProvider),
+    blockedKeywordsLoader: loadBlockedKeywords,
   );
   final cached = CachedContentRepository(
-    readDelegate: source.read,
-    writeDelegate: source.write,
+    readDelegate: adapter,
+    writeDelegate: adapter,
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
+    blockedKeywordsLoader: loadBlockedKeywords,
     userProfileCache: ref.watch(userProfileCacheProvider),
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
   return _ContentFacets(
     read: cached,
     write: cached,
-    engagement: source.engagement,
-    config: source.config,
+    engagement: adapter,
+    config: adapter,
   );
 });
 
 final profileMediaUploadGatewayProvider = Provider<ProfileMediaUploadGateway>((
   ref,
 ) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ProfileMediaUploadGateway is Remote-only in production composition; alpha must override it explicitly',
-    );
-  }
   final gateway = ContentProfileMediaUploadGateway(
     ref.watch(profileEditContentMediaFacetProvider),
+    httpClient: ref.watch(cloudHttpClientProvider),
   );
   ref.onDispose(gateway.dispose);
   return gateway;
 });
 
-final contentReadRepositoryProvider = Provider<ContentReadRepository>(
+final contentDiscoveryFeedQueryProvider = Provider<ContentDiscoveryFeedQuery>(
   (ref) => ref.watch(_contentFacetsProvider).read,
 );
 final contentWriteRepositoryProvider = Provider<ContentWriteRepository>(
@@ -84,11 +73,6 @@ final contentEngagementRepositoryProvider =
     );
 
 ContentPostReactionFacet _productionPostReactionFacet(Ref ref) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentPostReactionFacet is Remote-only in production composition; alpha must override the typed Facet from quwoquan_cloud_mock',
-    );
-  }
   return RemoteContentPostReactionFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
@@ -113,11 +97,6 @@ final contentPostReactionFacetProvider = Provider<ContentPostReactionFacet>(
 
 final createContentPostPublicationWriterProvider =
     Provider<ContentPostPublicationWriter>((ref) {
-      if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-        throw StateError(
-          'ContentPostPublicationWriter is Remote-only in production composition; alpha must override the typed writer from quwoquan_cloud_mock',
-        );
-      }
       return RemoteContentPostPublicationWriter(
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, idempotencyKey) =>
@@ -160,11 +139,6 @@ RemoteContentCommentFacet _remoteContentCommentFacet(
 }
 
 ContentCommentFacet _productionCommentFacet(Ref ref, AppUiSurface surface) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentCommentFacet is Remote-only in production composition; alpha must override the typed Facet from quwoquan_cloud_mock',
-    );
-  }
   return _remoteContentCommentFacet(ref, surface);
 }
 
@@ -173,11 +147,77 @@ final workBrowserContentCommentFacetProvider = Provider<ContentCommentFacet>(
 );
 final profileCommentsContentCommentFacetProvider =
     Provider<ContentCommentFacet>(
-      (ref) => _productionCommentFacet(ref, AppUiSurfaces.profileComments),
+      (ref) => _productionCommentFacet(ref, AppUiSurfaces.profileHome),
     );
 final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
   (ref) => ref.watch(_contentFacetsProvider).config,
 );
+
+final _imageEditorFilterCatalogQueryProvider =
+    Provider<ContentFilterCatalogQuery>((ref) {
+      return RemoteFilterCatalogQuery(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId) => _contentQueryInvocationContext(
+          ref,
+          surface: AppUiSurfaces.imageEditor,
+          clientPageId: clientPageId,
+        ),
+      );
+    });
+
+final filterCatalogCoordinatorProvider = Provider<FilterCatalogCoordinator>((
+  ref,
+) {
+  return FilterCatalogCoordinator(
+    remote: ref.watch(_imageEditorFilterCatalogQueryProvider),
+    verifiedStore: const SharedPreferencesVerifiedFilterCatalogStore(),
+    bootstrapReader: const AssetFilterCatalogBootstrapReader(),
+    integrityVerifier: const CanonicalFilterCatalogIntegrityVerifier(),
+    observer: _AppTelemetryFilterCatalogResolutionObserver(
+      ref.watch(appTelemetryReporterProvider),
+    ),
+  );
+});
+
+final imageEditorFilterRepositoryProvider =
+    Provider<ImageEditorFilterRepository>((ref) {
+      final coordinator = ref.watch(filterCatalogCoordinatorProvider);
+      return ImageEditorFilterRepository(
+        catalogLoader: () async => imageEditorFilterConfigFromSnapshot(
+          (await coordinator.load()).snapshot,
+        ),
+      );
+    });
+
+final class _AppTelemetryFilterCatalogResolutionObserver
+    implements FilterCatalogResolutionObserver {
+  const _AppTelemetryFilterCatalogResolutionObserver(this._telemetry);
+
+  final AppTelemetryRecorder _telemetry;
+
+  @override
+  void sourceSelected(FilterCatalogSource source, String releaseId) {
+    _record('resolved_${source.name}');
+  }
+
+  @override
+  void candidateRejected(FilterCatalogSource source, Object error) {
+    _record('rejected_${source.name}');
+  }
+
+  void _record(String result) {
+    unawaited(
+      _telemetry.record(
+        AppTelemetryPayload.operationResult(
+          operationId: AppCloudOperationIds
+              .contentFilterCatalogReleaseGetActiveFilterCatalog,
+          result: result,
+        ),
+        pageName: PageNames.createEditImage,
+      ),
+    );
+  }
+}
 
 RemoteContentMediaFacet _remoteContentMediaFacet(
   Ref ref,
@@ -202,11 +242,6 @@ RemoteContentMediaFacet _remoteContentMediaFacet(
 );
 
 ContentMediaFacet _productionContentMediaFacet(Ref ref, AppUiSurface surface) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentMediaFacet is Remote-only in production composition; alpha must override it from quwoquan_cloud_mock',
-    );
-  }
   return _remoteContentMediaFacet(ref, surface);
 }
 
@@ -229,26 +264,8 @@ final circleDetailContentMediaFacetProvider = Provider<ContentMediaFacet>(
   (ref) => _productionContentMediaFacet(ref, AppUiSurfaces.circleDetail),
 );
 
-final contentMediaObjectUploadProvider = Provider<ContentMediaObjectUpload>((
-  ref,
-) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentMediaObjectUpload is Remote-only in production composition; alpha must override the data-plane fixture',
-    );
-  }
-  final uploader = RemoteContentMediaObjectUploader();
-  ref.onDispose(uploader.dispose);
-  return uploader.upload;
-});
-
 final contentMediaStreamObjectUploadProvider =
     Provider<ContentMediaStreamObjectUpload>((ref) {
-      if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-        throw StateError(
-          'ContentMediaStreamObjectUpload is Remote-only in production composition; alpha must override the data-plane fixture',
-        );
-      }
       final uploader = RemoteContentMediaObjectUploader();
       ref.onDispose(uploader.dispose);
       return uploader.uploadStream;
@@ -257,23 +274,29 @@ final contentMediaStreamObjectUploadProvider =
 final contentMediaSourceReaderProvider = Provider<ContentMediaSourceReader>((
   ref,
 ) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentMediaSourceReader is Remote-only in production composition; alpha must override it explicitly',
-    );
-  }
   return const LocalContentMediaSourceReader();
 });
+
+/// 已接受发布的进程内一致性信号。写侧只广播事实，发现流等读模型按需刷新；
+/// 不允许发布页面反向 import 其他 UI 领域的 Provider。
+final contentPublicationEpochProvider =
+    NotifierProvider<ContentPublicationEpochNotifier, int>(
+      ContentPublicationEpochNotifier.new,
+    );
+
+final class ContentPublicationEpochNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void notifyCommitted() {
+    state += 1;
+  }
+}
 
 ContentOutboundShareAppendWriter _productionOutboundShareWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'ContentOutboundShareAppendWriter is Remote-only in production composition; alpha must override it explicitly',
-    );
-  }
   return RemoteContentOutboundShareAppendWriter(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, command) {
@@ -306,11 +329,6 @@ CirclePostPlacementCommandWriter _productionCirclePostPlacementWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'CirclePostPlacementCommandWriter is Remote-only in production composition; alpha must override it explicitly',
-    );
-  }
   return RemoteCirclePostPlacementCommandWriter(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, idempotencyKey) {

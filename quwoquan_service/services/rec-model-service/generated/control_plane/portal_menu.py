@@ -46,29 +46,15 @@ _PORTAL_MENU_JSON = r'''{
     {
       "domain": "platform-ops",
       "icon": "settings-2",
-      "label": "配置中心",
+      "label": "配置快照（IaC 只读）",
       "menu_id": "platform-config-center",
       "object_types": [
-        "service_config",
-        "config_layer_value"
+        "service_config"
       ],
       "order": 211,
       "parent_menu_id": "platform-config",
       "permission_scope": "ops.platform.config.read",
-      "route_path": "/platform/config/layers"
-    },
-    {
-      "domain": "platform-ops",
-      "icon": "package",
-      "label": "配置包",
-      "menu_id": "platform-config-packages",
-      "object_types": [
-        "config_package"
-      ],
-      "order": 212,
-      "parent_menu_id": "platform-config",
-      "permission_scope": "ops.platform.config.read",
-      "route_path": "/platform/config/packages"
+      "route_path": "/platform/config/snapshot"
     },
     {
       "domain": "platform-ops",
@@ -113,20 +99,6 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "platform-ops",
-      "icon": "shield-check",
-      "label": "治理策略",
-      "menu_id": "platform-governance",
-      "object_types": [
-        "governance_policy_template",
-        "governance_policy_binding"
-      ],
-      "order": 24,
-      "parent_menu_id": "platform-ops",
-      "permission_scope": "ops.platform.governance.read",
-      "route_path": "/platform/governance"
-    },
-    {
-      "domain": "platform-ops",
       "icon": "rocket",
       "label": "灰度与回滚",
       "menu_id": "platform-rollout",
@@ -140,43 +112,11 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "platform-ops",
-      "icon": "network",
-      "label": "环境与依赖",
-      "menu_id": "platform-dependency",
-      "object_types": [
-        "environment_topology",
-        "dependency_profile",
-        "capacity_profile"
-      ],
-      "order": 25,
-      "parent_menu_id": "platform-ops",
-      "permission_scope": "ops.platform.dependency.read",
-      "route_path": "/platform/dependency"
-    },
-    {
-      "domain": "platform-ops",
-      "icon": "network",
-      "label": "集群与实例",
-      "menu_id": "platform-topology-cluster",
-      "object_types": [
-        "runtime_cluster",
-        "runtime_service",
-        "runtime_instance"
-      ],
-      "order": 251,
-      "parent_menu_id": "platform-dependency",
-      "permission_scope": "ops.platform.dependency.read",
-      "route_path": "/platform/dependency/clusters"
-    },
-    {
-      "domain": "platform-ops",
       "icon": "chart-area",
       "label": "可观测与 SLO",
       "menu_id": "platform-observability",
       "object_types": [
-        "slo_policy",
-        "alert_template",
-        "dashboard_card"
+        "active_alert"
       ],
       "order": 26,
       "parent_menu_id": "platform-ops",
@@ -184,40 +124,14 @@ _PORTAL_MENU_JSON = r'''{
       "route_path": "/platform/observability"
     },
     {
-      "domain": "platform-ops",
-      "icon": "book-open-text",
-      "label": "Runbook 与演练",
-      "menu_id": "platform-runbook",
-      "object_types": [
-        "runbook"
-      ],
-      "order": 27,
-      "parent_menu_id": "platform-ops",
-      "permission_scope": "ops.platform.runbook.read",
-      "route_path": "/platform/runbook"
-    },
-    {
-      "domain": "platform-ops",
-      "icon": "badge-check",
-      "label": "CI/CD 门禁",
-      "menu_id": "platform-gates",
-      "object_types": [
-        "gate_rule"
-      ],
-      "order": 28,
-      "parent_menu_id": "platform-ops",
-      "permission_scope": "ops.platform.gate.read",
-      "route_path": "/platform/gates"
-    },
-    {
       "domain": "product-ops",
       "icon": "sparkles",
       "label": "Product Ops",
       "menu_id": "product-ops",
       "object_types": [
-        "moderation_case",
-        "experiment",
-        "recommendation_policy"
+        "report_queue",
+        "premium_pool_entry",
+        "l1l4_metric_snapshot"
       ],
       "order": 30,
       "permission_scope": "ops.product.read",
@@ -242,10 +156,7 @@ _PORTAL_MENU_JSON = r'''{
       "label": "治理处置",
       "menu_id": "governance",
       "object_types": [
-        "moderation_case",
-        "report_queue",
-        "appeal_case",
-        "recovery_case"
+        "report_queue"
       ],
       "order": 32,
       "parent_menu_id": "product-ops",
@@ -254,14 +165,28 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "product-ops",
+      "icon": "building",
+      "label": "实体主页治理",
+      "menu_id": "entity-homepage-governance",
+      "object_types": [
+        "homepage_candidate_queue",
+        "homepage_claim_request_queue",
+        "homepage_status_report_queue"
+      ],
+      "order": 33,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.entity_homepage.read",
+      "route_path": "/product/entity-homepage-governance"
+    },
+    {
+      "domain": "product-ops",
       "icon": "chart-spline",
       "label": "推荐运营",
       "menu_id": "recommendation",
       "object_types": [
-        "recommendation_policy",
-        "recommendation_override"
+        "premium_pool_entry"
       ],
-      "order": 33,
+      "order": 34,
       "parent_menu_id": "product-ops",
       "permission_scope": "ops.reco.read",
       "route_path": "/product/recommendation"
@@ -296,115 +221,16 @@ _PORTAL_MENU_JSON = r'''{
     {
       "domain": "product-ops",
       "icon": "chart-area",
-      "label": "集群下钻",
-      "menu_id": "product-l1-l4-drilldown",
-      "object_types": [
-        "l1l4_metric_snapshot",
-        "runtime_cluster"
-      ],
-      "order": 342,
-      "parent_menu_id": "product-l1-l4",
-      "permission_scope": "ops.product.dashboard.read",
-      "route_path": "/product/l1-l4/cluster"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "chart-area",
       "label": "服务下钻",
       "menu_id": "product-l1-l4-service",
       "object_types": [
         "l1l4_metric_snapshot",
-        "runtime_cluster",
         "runtime_service"
       ],
-      "order": 343,
+      "order": 342,
       "parent_menu_id": "product-l1-l4",
       "permission_scope": "ops.product.dashboard.read",
       "route_path": "/product/l1-l4/service"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "chart-area",
-      "label": "实例下钻",
-      "menu_id": "product-l1-l4-instance",
-      "object_types": [
-        "l1l4_metric_snapshot",
-        "runtime_cluster",
-        "runtime_service",
-        "runtime_instance"
-      ],
-      "order": 344,
-      "parent_menu_id": "product-l1-l4",
-      "permission_scope": "ops.product.dashboard.read",
-      "route_path": "/product/l1-l4/instance"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "building-2",
-      "label": "实体主页运营",
-      "menu_id": "entity-homepages",
-      "object_types": [
-        "entity_homepage",
-        "homepage_quality_case"
-      ],
-      "order": 35,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.product.homepage.read",
-      "route_path": "/product/entity-homepages"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "users-round",
-      "label": "圈子运营",
-      "menu_id": "circles-ops",
-      "object_types": [
-        "circle",
-        "circle_scenario"
-      ],
-      "order": 36,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.product.circle.read",
-      "route_path": "/product/circles-ops"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "sparkles",
-      "label": "小趣评论审核",
-      "menu_id": "xiaoqu-comments",
-      "object_types": [
-        "assistant_comment",
-        "correction_case"
-      ],
-      "order": 37,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.product.xiaoqu.read",
-      "route_path": "/product/xiaoqu-comments"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "flask-conical",
-      "label": "实验与灰度",
-      "menu_id": "experiments",
-      "object_types": [
-        "experiment"
-      ],
-      "order": 39,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.experiment.read",
-      "route_path": "/product/experiments"
-    },
-    {
-      "domain": "product-ops",
-      "icon": "users-round",
-      "label": "标签与分群",
-      "menu_id": "segments",
-      "object_types": [
-        "segment"
-      ],
-      "order": 40,
-      "parent_menu_id": "product-ops",
-      "permission_scope": "ops.segment.read",
-      "route_path": "/product/segments"
     },
     {
       "domain": "overview",
@@ -417,18 +243,6 @@ _PORTAL_MENU_JSON = r'''{
       "order": 40,
       "permission_scope": "ops.audit.read",
       "route_path": "/audit"
-    },
-    {
-      "domain": "overview",
-      "icon": "panel-left-close",
-      "label": "系统设置",
-      "menu_id": "settings",
-      "object_types": [
-        "portal_settings"
-      ],
-      "order": 50,
-      "permission_scope": "ops.settings.read",
-      "route_path": "/settings"
     }
   ]
 }'''

@@ -59,6 +59,25 @@ func (s *MongoVisitStore) RecordVisit(ctx context.Context, input application.Vis
 	return record, nil
 }
 
+func (s *MongoVisitStore) GetVisit(
+	ctx context.Context,
+	userID, targetType, targetKey string,
+) (application.VisitRecord, bool, error) {
+	var record application.VisitRecord
+	err := s.collection.FindOne(ctx, bson.D{
+		{Key: "userId", Value: strings.TrimSpace(userID)},
+		{Key: "targetType", Value: strings.TrimSpace(targetType)},
+		{Key: "targetKey", Value: strings.TrimSpace(targetKey)},
+	}).Decode(&record)
+	if err == mongo.ErrNoDocuments {
+		return application.VisitRecord{}, false, nil
+	}
+	if err != nil {
+		return application.VisitRecord{}, false, fmt.Errorf("get visit: %w", err)
+	}
+	return record, true, nil
+}
+
 func (s *MongoVisitStore) GetVisitStats(ctx context.Context, query application.VisitStatsQuery) (application.VisitStats, error) {
 	filter := bson.D{}
 	if value := strings.TrimSpace(query.TargetType); value != "" {

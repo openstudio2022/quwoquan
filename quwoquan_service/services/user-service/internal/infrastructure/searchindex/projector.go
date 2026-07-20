@@ -15,6 +15,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -75,9 +76,8 @@ func NewProjector(indexer *es.Indexer, reader ProfileReader, opts ...Option) *Pr
 // PublishUserEvent reconciles a profile lifecycle event into the index. Profile /
 // avatar / registration events reconcile the profile against its current
 // eligibility (upsert when discoverable, delete otherwise). Relationship / block /
-// counter events do not change the searchable surface and are ignored. It always
-// returns nil so a failing index write cannot break the publish fan-out or the
-// primary profile write path.
+// counter events do not change the searchable surface and are ignored. 普通资料
+// 更新保持 best-effort；UserAccountClosed 删除失败必须返回，使 durable outbox 重试。
 func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ string, _ map[string]any) error {
 	if p == nil || p.indexer == nil {
 		return nil
@@ -87,8 +87,22 @@ func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ s
 		return nil
 	}
 	switch eventType {
+	case event.UserAccountClosed:
+		// UserAccountClosed reconciles to a delete: a closed account is no
+		// longer search eligible, so the read-back drops it from the index.
+		return p.reconcile(ctx, userID, eventType)
 	case event.UserProfileUpdated, event.UserAvatarUpdated, event.UserRegistered:
-		p.reconcile(ctx, userID, eventType)
+		if err := p.reconcile(ctx, userID, eventType); err != nil {
+			p.logger.Warn(
+				"search index reconcile failed",
+				"event",
+				eventType,
+				"userId",
+				userID,
+				"err",
+				err,
+			)
+		}
 	default:
 		// Non-profile / counter-only events: nothing searchable changed.
 	}
@@ -99,30 +113,30 @@ func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ s
 // it (e.g. suspended, deleted, or vanished). Keeping the index aligned with the
 // same eligibility the discoverable set uses avoids a second discoverability truth
 // source.
-func (p *Projector) reconcile(ctx context.Context, userID, eventType string) {
+func (p *Projector) reconcile(
+	ctx context.Context,
+	userID, eventType string,
+) error {
 	profile, err := p.reader.FindByID(ctx, userID)
 	if err != nil {
-		p.logger.Warn("search index read-back failed",
-			"event", eventType, "userId", userID, "err", err)
-		return
+		return fmt.Errorf("search index read-back: %w", err)
 	}
 	if profile == nil || !application.UserProfileSearchEligible(*profile) {
-		p.delete(ctx, userID, eventType)
-		return
+		return p.delete(ctx, userID)
 	}
 	doc := application.ProjectUserProfileToSearchDocument(*profile)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
-		p.logger.Warn("search index upsert failed",
-			"event", eventType, "userId", userID, "err", err)
+		return fmt.Errorf("search index upsert: %w", err)
 	}
+	return nil
 }
 
 // delete removes the profile's doc from the index. Replayed deletes are
 // idempotent.
-func (p *Projector) delete(ctx context.Context, userID, eventType string) {
+func (p *Projector) delete(ctx context.Context, userID string) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: userID}
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
-		p.logger.Warn("search index delete failed",
-			"event", eventType, "userId", userID, "err", err)
+		return fmt.Errorf("search index delete: %w", err)
 	}
+	return nil
 }

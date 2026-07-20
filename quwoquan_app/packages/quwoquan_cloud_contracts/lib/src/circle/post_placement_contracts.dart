@@ -14,6 +14,43 @@ final class PlaceCirclePostCommand {
   final String? groupId;
 }
 
+final class RemoveCirclePostCommand {
+  RemoveCirclePostCommand({
+    required String circleId,
+    required String placementId,
+  }) : circleId = _required(circleId, 'circleId'),
+       placementId = _required(placementId, 'placementId');
+
+  final String circleId;
+  final String placementId;
+}
+
+final class PinCirclePostCommand {
+  PinCirclePostCommand({
+    required String circleId,
+    required String placementId,
+    required this.enabled,
+  }) : circleId = _required(circleId, 'circleId'),
+       placementId = _required(placementId, 'placementId');
+
+  final String circleId;
+  final String placementId;
+  final bool enabled;
+}
+
+final class FeatureCirclePostCommand {
+  FeatureCirclePostCommand({
+    required String circleId,
+    required String placementId,
+    required this.enabled,
+  }) : circleId = _required(circleId, 'circleId'),
+       placementId = _required(placementId, 'placementId');
+
+  final String circleId;
+  final String placementId;
+  final bool enabled;
+}
+
 final class CirclePostPlacementCommandResult {
   const CirclePostPlacementCommandResult({
     required this.placementId,
@@ -32,6 +69,18 @@ abstract interface class CirclePostPlacementCommandWriter {
   Future<CirclePostPlacementCommandResult> placePost(
     PlaceCirclePostCommand command,
   );
+
+  Future<CirclePostPlacementCommandResult> removePost(
+    RemoveCirclePostCommand command,
+  );
+
+  Future<CirclePostPlacementCommandResult> setPinned(
+    PinCirclePostCommand command,
+  );
+
+  Future<CirclePostPlacementCommandResult> setFeatured(
+    FeatureCirclePostCommand command,
+  );
 }
 
 CloudOperationRequestPayload encodePlaceCirclePostCommand(
@@ -42,6 +91,35 @@ CloudOperationRequestPayload encodePlaceCirclePostCommand(
     'postId': command.postId,
     if (command.groupId != null) 'groupId': command.groupId,
   },
+);
+
+CloudOperationRequestPayload encodeRemoveCirclePostCommand(
+  RemoveCirclePostCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{
+    'circleId': command.circleId,
+    'placementId': command.placementId,
+  },
+);
+
+CloudOperationRequestPayload encodePinCirclePostCommand(
+  PinCirclePostCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{
+    'circleId': command.circleId,
+    'placementId': command.placementId,
+  },
+  body: <String, Object?>{'enabled': command.enabled},
+);
+
+CloudOperationRequestPayload encodeFeatureCirclePostCommand(
+  FeatureCirclePostCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{
+    'circleId': command.circleId,
+    'placementId': command.placementId,
+  },
+  body: <String, Object?>{'enabled': command.enabled},
 );
 
 CirclePostPlacementCommandResult decodeCirclePostPlacementCommandResult(

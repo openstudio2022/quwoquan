@@ -16,7 +16,7 @@ licensePolicies:
   - licensed_asset_required
 extractors:
   - wikipedia_api
-  - baidu_baike_openapi
+  - baidu_baike_html
   - toutiao_baike_html
   - static_official_html
   - qunar_html
@@ -82,10 +82,10 @@ sites:
     urlPatterns:
       - https://baike.baidu.com/item/*
     fetchable: true
-    extractor: baidu_baike_openapi
+    extractor: baidu_baike_html
     licensePolicy: factual_citation_only
     qualityTier: A
-    notes: 百科卡片 API 候选源；research 必须先校验标题与地域，空响应不得写入 source plan。
+    notes: 百度百科公开词条 HTML 候选源；research 必须经精确词条重定向校验标题与地域，空响应不得写入 source plan。
   - siteId: toutiao_baike
     platform: 今日头条百科
     category: encyclopedia

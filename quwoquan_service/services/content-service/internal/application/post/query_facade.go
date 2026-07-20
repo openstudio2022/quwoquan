@@ -12,25 +12,31 @@ import (
 
 // PostQueryDependencies 是 canonical Post 查询 Facade 的显式装配输入。
 // 其中没有 AggregateStore 或 CollectionReader：查询面不能回退到聚合扫描。
+// Tombstones 承载删除保留期 410 语义（content.DeletedPostTombstone 具名读端口）。
+// ViewerBlocks 消费 user 域 PersonaBlocked 事实投影，在服务端强制
+// 「拉黑双方互不可见对方作品」；nil 表示装配缺失（fail-open 仅限测试组合）。
 type PostQueryDependencies struct {
-	Detail postports.PostDetailReader
-	Author postports.AuthorPostReader
-	Search postports.PostSearchReader
+	Detail       postports.PostDetailReader
+	Author       postports.AuthorPostReader
+	Tombstones   postports.TombstoneReader
+	ViewerBlocks postports.ViewerBlockReader
 }
 
-// PostQueryFacade 为 GetPost、ListUserPosts、SearchPosts 提供强类型查询入口。
+// PostQueryFacade 为 GetPost、ListUserPosts 提供强类型查询入口。
 // 它只依赖显式 reader ports，供 handler/composition 直接装配。
 type PostQueryFacade struct {
-	detail postports.PostDetailReader
-	author postports.AuthorPostReader
-	search postports.PostSearchReader
+	detail       postports.PostDetailReader
+	author       postports.AuthorPostReader
+	tombstones   postports.TombstoneReader
+	viewerBlocks postports.ViewerBlockReader
 }
 
 func NewPostQueryFacade(dependencies PostQueryDependencies) *PostQueryFacade {
 	return &PostQueryFacade{
-		detail: dependencies.Detail,
-		author: dependencies.Author,
-		search: dependencies.Search,
+		detail:       dependencies.Detail,
+		author:       dependencies.Author,
+		tombstones:   dependencies.Tombstones,
+		viewerBlocks: dependencies.ViewerBlocks,
 	}
 }
 
@@ -49,15 +55,49 @@ func (f *PostQueryFacade) GetPost(
 	if err != nil {
 		return postports.PostDetailSlice{}, postQueryReadFailure("GetPost", err)
 	}
-	if !found {
-		return postports.PostDetailSlice{}, contentgenerated.AppErrorFromPostNotFound(
-			"GetPost target is missing, deleted, or not visible to viewer",
+	if found && strings.EqualFold(strings.TrimSpace(string(detail.Status)), "deleted") {
+		// 软删文档仍在：保留期内按墓碑语义返回 410 content_deleted。
+		return postports.PostDetailSlice{}, contentgenerated.AppErrorFromContentDeleted(
+			"GetPost target was deleted by its author",
 		)
+	}
+	if !found {
+		if f.tombstones != nil {
+			if _, deleted, tombstoneErr := f.tombstones.FindTombstone(
+				ctx,
+				string(query.PostID()),
+			); tombstoneErr == nil && deleted {
+				return postports.PostDetailSlice{}, contentgenerated.AppErrorFromContentDeleted(
+					"GetPost target was deleted by its author",
+				)
+			}
+		}
+		return postports.PostDetailSlice{}, contentgenerated.AppErrorFromPostNotFound(
+			"GetPost target is missing or not visible to viewer",
+		)
+	}
+	if query.Viewer().IsAuthenticated() &&
+		!query.Viewer().IsOwner(detail.AuthorPersonaID) &&
+		f.viewerBlocks != nil {
+		blocked, blockErr := f.viewerBlocks.IsBlockedBetween(
+			ctx,
+			query.Viewer().PersonaID(),
+			detail.AuthorPersonaID,
+		)
+		if blockErr != nil {
+			return postports.PostDetailSlice{}, postQueryReadFailure("GetPost", blockErr)
+		}
+		if blocked {
+			// 详情读同样返回 not_found，避免向任一方泄露内容或拉黑关系存在性。
+			return postports.PostDetailSlice{}, contentgenerated.AppErrorFromPostNotFound(
+				"GetPost target is missing or not visible to viewer",
+			)
+		}
 	}
 	if !canViewerReadPostDetail(detail, query.Viewer()) {
 		// 私有内容对外同样返回 not_found，避免把资源存在性暴露给未授权主体。
 		return postports.PostDetailSlice{}, contentgenerated.AppErrorFromPostNotFound(
-			"GetPost target is missing, deleted, or not visible to viewer",
+			"GetPost target is missing or not visible to viewer",
 		)
 	}
 	return detail, nil
@@ -109,6 +149,25 @@ func (f *PostQueryFacade) ListUserPosts(
 			"ListUserPosts non-owner requested non-public visibility",
 		)
 	}
+	if accessScope == postports.AuthorPostAccessPublic &&
+		f.viewerBlocks != nil && query.Viewer().IsAuthenticated() {
+		blocked, blockErr := f.viewerBlocks.IsBlockedBetween(
+			ctx,
+			query.Viewer().PersonaID(),
+			query.AuthorPersonaID(),
+		)
+		if blockErr != nil {
+			return postports.AuthorPostPageSlice{}, postQueryReadFailure("ListUserPosts", blockErr)
+		}
+		if blocked {
+			// 拉黑双方在作者主页读路径互不可见：返回空页而不是 403，
+			// 避免把 block 关系的存在性泄露给被拉黑方。
+			return postports.AuthorPostPageSlice{
+				Items:   []postports.AuthorPostItemSlice{},
+				HasMore: false,
+			}, nil
+		}
+	}
 
 	unpagedRequest := postports.NewAuthorPostReadRequest(
 		query.AuthorPersonaID(),
@@ -144,79 +203,6 @@ func (f *PostQueryFacade) ListUserPosts(
 	return page, nil
 }
 
-func (f *PostQueryFacade) SearchPosts(
-	ctx context.Context,
-	query postports.PostSearchQuery,
-) (postports.PostSearchResultSlice, error) {
-	if !query.Viewer().IsAuthenticated() {
-		return postports.PostSearchResultSlice{}, contentgenerated.AppErrorFromUnauthorized(
-			"SearchPosts requires authenticated persona",
-		)
-	}
-	if strings.TrimSpace(query.Terms()) == "" {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(
-			"SearchPosts requires non-empty query",
-		)
-	}
-	if f == nil || f.search == nil {
-		// 搜索永不回退到 Mongo/aggregate ListPublished；未装配索引 reader 必须失败关闭。
-		return postports.PostSearchResultSlice{}, postQueryReaderUnavailable(
-			"SearchPosts search reader is not configured",
-		)
-	}
-
-	limit, err := normalizePostQueryLimit(query.Limit())
-	if err != nil {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(err.Error())
-	}
-	identity, err := normalizePostQueryIdentity(query.Identity())
-	if err != nil {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(err.Error())
-	}
-	contentType, err := normalizePostQueryContentType(query.ContentType())
-	if err != nil {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(err.Error())
-	}
-
-	unpagedRequest := postports.NewPostSearchReadRequest(
-		query.Viewer().PersonaID(),
-		query.Terms(),
-		identity,
-		contentType,
-		query.CategoryID(),
-		query.SubCategory(),
-		postports.PostSearchCursor{},
-		limit,
-	)
-	cursor, err := postports.ParsePostSearchCursor(query.Cursor())
-	if err != nil {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(
-			"SearchPosts cursor is invalid",
-		)
-	}
-	if cursor.IsSet() && cursor.Scope() != unpagedRequest.CursorScope() {
-		return postports.PostSearchResultSlice{}, invalidPostQueryArgument(
-			"SearchPosts cursor does not match query",
-		)
-	}
-	request := postports.NewPostSearchReadRequest(
-		query.Viewer().PersonaID(),
-		query.Terms(),
-		identity,
-		contentType,
-		query.CategoryID(),
-		query.SubCategory(),
-		cursor,
-		limit,
-	)
-
-	results, err := f.search.SearchPosts(ctx, request)
-	if err != nil {
-		return postports.PostSearchResultSlice{}, postQueryReadFailure("SearchPosts", err)
-	}
-	return results, nil
-}
-
 func canViewerReadPostDetail(
 	detail postports.PostDetailSlice,
 	viewer postports.ViewerContext,
@@ -226,6 +212,9 @@ func canViewerReadPostDetail(
 	}
 	if viewer.IsOwner(detail.AuthorPersonaID) {
 		return true
+	}
+	if !strings.EqualFold(strings.TrimSpace(detail.ModerationStatus), "approved") {
+		return false
 	}
 	if !strings.EqualFold(strings.TrimSpace(string(detail.Status)), "published") {
 		return false

@@ -35,6 +35,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	switch operation {
 	case "AbortMediaUpload":
 		h.handleAbortMediaUpload(w, r)
+	case "ActivateFilterCatalogRelease":
+		h.handleNotImplemented(w, r, operation)
 	case "BeginReportReview":
 		h.handleBeginReportReview(w, r)
 	case "BindMediaAssetsToComment":
@@ -52,7 +54,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "CreateReport":
 		h.handleCreateReport(w, r)
 	case "DecidePostModeration":
-		h.handleNotImplemented(w, r, operation)
+		h.handleDecidePostModeration(w, r)
 	case "DeleteComment":
 		h.handleDeleteComment(
 			w,
@@ -62,20 +64,28 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		)
 	case "DeletePost":
 		h.handleDeletePost(w, r)
+	case "DismissReport":
+		h.handleDismissReport(w, r)
 	case "GenerateArticleSummary":
+		h.handleGenerateArticleSummary(w, r)
+	case "GetActiveFilterCatalog":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
 		h.handleGetAppConfig(w, r)
 	case "GetAuthorImpact":
 		h.handleGetAuthorImpact(w, r)
 	case "GetContentReactionState":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "GetCounters":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetCounters(w, r, strings.TrimSpace(r.PathValue("postId")))
+	case "GetCurrentPostModerationCase":
+		h.handleGetCurrentPostModerationCase(w, r)
+	case "GetEntityWishlistState":
+		h.handleGetEntityWishlistState(w, r)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
 	case "GetHelperRead":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetHelperRead(w, r)
 	case "GetMediaAsset":
 		h.handleGetMediaAsset(w, r)
 	case "GetMediaAssetDeliveryReference":
@@ -85,7 +95,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetMediaUploadSession":
 		h.handleGetMediaUploadSession(w, r)
 	case "GetMyFootprint":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetMyFootprint(w, r)
 	case "GetMyIntersectionSummary":
 		h.handleGetMyIntersectionSummary(w, r)
 	case "GetObjectIntersections":
@@ -95,13 +105,19 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetPostPublicationEligibility":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetPostPublicationEligibility(w, r)
 	case "GetReport":
 		h.handleGetReport(w, r)
+	case "HideComment":
+		h.handleHideComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 	case "InitMediaUpload":
 		h.handleInitMediaUpload(w, r)
 	case "LikePost":
-		h.handleNotImplemented(w, r, operation)
+		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "ListAuthorImpactEvidence":
 		h.handleListAuthorImpactEvidence(w, r)
 	case "ListCommentReplies":
@@ -119,6 +135,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleListCommentsForPostAuthor(w, r)
 	case "ListMyIntersections":
 		h.handleListMyIntersections(w, r)
+	case "ListMyReports":
+		h.handleListMyReports(w, r)
 	case "ListProfileInteractionActivitiesReceived":
 		h.handleListProfileInteractionActivitiesReceived(w, r)
 	case "ListProfileInteractionActivitiesSent":
@@ -127,8 +145,10 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleListReports(w, r)
 	case "ListUserPosts":
 		h.handleListUserPosts(w, r)
+	case "MarkIntersectionsVisited":
+		h.handleMarkIntersectionsVisited(w, r)
 	case "OpenPostModerationCase":
-		h.handleNotImplemented(w, r, operation)
+		h.handleOpenPostModerationCase(w, r)
 	case "PinComment":
 		h.handleSetCommentPinned(
 			w,
@@ -149,20 +169,28 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleRequestOriginalImageAccess(w, r)
 	case "ResolveReport":
 		h.handleResolveReport(w, r)
+	case "RestoreComment":
+		h.handleRestoreComment(
+			w,
+			r,
+			strings.TrimSpace(r.PathValue("commentId")),
+		)
 	case "ReviewPostModerationCase":
+		h.handleReviewPostModerationCase(w, r)
+	case "RollbackFilterCatalogRelease":
 		h.handleNotImplemented(w, r, operation)
-	case "SearchPosts":
-		h.handleSearchPosts(w, r)
 	case "SelectAutoVideoCover":
 		h.handleSelectAutoVideoCover(w, r)
 	case "SelectManualVideoCover":
 		h.handleSelectManualVideoCover(w, r)
+	case "StageFilterCatalogRelease":
+		h.handleNotImplemented(w, r, operation)
 	case "SubmitPostPublication":
 		h.handleSubmitPostPublication(w, r)
 	case "SupersedePostModerationCase":
-		h.handleNotImplemented(w, r, operation)
+		h.handleSupersedePostModerationCase(w, r)
 	case "UnlikePost":
-		h.handleNotImplemented(w, r, operation)
+		h.handleUnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "UnpinComment":
 		h.handleSetCommentPinned(
 			w,
@@ -188,12 +216,15 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/content/behaviors", operation: "ReportBehaviors"},
 	{method: "POST", pathTemplate: "/content/comments/{commentId}/media:bind", operation: "BindMediaAssetsToComment"},
 	{method: "POST", pathTemplate: "/content/comments/{commentId}/reaction", operation: "ReactToComment"},
+	{method: "GET", pathTemplate: "/content/entity-wishlist-state", operation: "GetEntityWishlistState"},
 	{method: "GET", pathTemplate: "/content/feed", operation: "GetFeed"},
+	{method: "GET", pathTemplate: "/content/filter-catalog", operation: "GetActiveFilterCatalog"},
 	{method: "GET", pathTemplate: "/content/footprint", operation: "GetMyFootprint"},
 	{method: "GET", pathTemplate: "/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "GET", pathTemplate: "/content/intersections", operation: "ListMyIntersections"},
 	{method: "GET", pathTemplate: "/content/intersections/object", operation: "GetObjectIntersections"},
 	{method: "GET", pathTemplate: "/content/intersections/summary", operation: "GetMyIntersectionSummary"},
+	{method: "POST", pathTemplate: "/content/intersections/visit", operation: "MarkIntersectionsVisited"},
 	{method: "GET", pathTemplate: "/content/media/uploads/{sessionId}", operation: "GetMediaUploadSession"},
 	{method: "POST", pathTemplate: "/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
 	{method: "POST", pathTemplate: "/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
@@ -202,7 +233,6 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/content/media/{mediaId}/cover:auto", operation: "SelectAutoVideoCover"},
 	{method: "POST", pathTemplate: "/content/media/{mediaId}/cover:manual", operation: "SelectManualVideoCover"},
 	{method: "POST", pathTemplate: "/content/media/{mediaId}/original:access", operation: "RequestOriginalImageAccess"},
-	{method: "GET", pathTemplate: "/content/posts/search", operation: "SearchPosts"},
 	{method: "DELETE", pathTemplate: "/content/posts/{postId}", operation: "DeletePost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}", operation: "GetPost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}/comments", operation: "ListComments"},
@@ -224,19 +254,27 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/content/reports/{reportId}", operation: "GetReport"},
 	{method: "PATCH", pathTemplate: "/content/reports/{reportId}", operation: "ResolveReport"},
 	{method: "POST", pathTemplate: "/content/reports/{reportId}/review", operation: "BeginReportReview"},
+	{method: "POST", pathTemplate: "/content/reports/{reportId}:dismiss", operation: "DismissReport"},
 	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
 	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
 	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
 	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
-	{method: "PATCH", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state", operation: "UpdateProfileInteractionState"},
+	{method: "POST", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts", operation: "UpdateProfileInteractionState"},
 	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
 	{method: "GET", pathTemplate: "/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
+	{method: "GET", pathTemplate: "/content/users/me/reports", operation: "ListMyReports"},
+	{method: "POST", pathTemplate: "/internal/content/comments/{commentId}:hide", operation: "HideComment"},
+	{method: "POST", pathTemplate: "/internal/content/comments/{commentId}:restore", operation: "RestoreComment"},
+	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases", operation: "StageFilterCatalogRelease"},
+	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases/{releaseId}:activate", operation: "ActivateFilterCatalogRelease"},
+	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases/{releaseId}:rollback", operation: "RollbackFilterCatalogRelease"},
 	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}", operation: "GetOwnedMediaAsset"},
 	{method: "PATCH", pathTemplate: "/internal/content/media/{mediaId}:access-policy", operation: "UpdateMediaAssetAccessPolicy"},
 	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}:delivery-reference", operation: "GetMediaAssetDeliveryReference"},
 	{method: "POST", pathTemplate: "/internal/content/media/{mediaId}:processing-result", operation: "RecordMediaProcessingResult"},
 	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}:reference", operation: "GetMediaAssetReference"},
+	{method: "GET", pathTemplate: "/internal/content/posts/{postId}/moderation-case", operation: "GetCurrentPostModerationCase"},
 	{method: "GET", pathTemplate: "/internal/content/posts/{postId}/publication-eligibility", operation: "GetPostPublicationEligibility"},
 	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:moderate", operation: "DecidePostModeration"},
 	{method: "POST", pathTemplate: "/internal/content/posts/{postId}:open-moderation-case", operation: "OpenPostModerationCase"},
@@ -357,6 +395,7 @@ type GeneratedGetFeedParams struct {
 	Cursor        string
 	SubCategory   string
 	FeedRequestId string
+	ChannelId     string
 	Limit         int
 }
 
@@ -369,6 +408,7 @@ func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetF
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
 	out.SubCategory = strings.TrimSpace(q.Get("subCategory"))
 	out.FeedRequestId = strings.TrimSpace(q.Get("feedRequestId"))
+	out.ChannelId = strings.TrimSpace(q.Get("channelId"))
 	rawLimit := strings.TrimSpace(q.Get("limit"))
 	if rawLimit != "" {
 		if parsed, err := strconv.Atoi(rawLimit); err == nil {
@@ -452,6 +492,9 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
 		"assistantUsePolicy":      {},
+	},
+	"UpdateProfileInteractionState": {
+		"state": {},
 	},
 }
 

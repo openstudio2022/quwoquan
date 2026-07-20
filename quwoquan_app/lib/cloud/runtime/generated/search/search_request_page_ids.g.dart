@@ -7,6 +7,7 @@ class SearchRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'ClearRecentSearches': 'search.clear.recent.searches',
     'DeleteRecentSearch': 'search.delete.recent.search',
+    'ListHotQueries': 'search.list.hot.queries',
     'ListRecentSearches': 'search.list.recent.searches',
     'ReportSearchFeedback': 'search.report.search.feedback',
     'SearchQuery': 'search.search.query',
@@ -15,6 +16,7 @@ class SearchRequestPageIds {
 
   static const String clearRecentSearches = 'search.clear.recent.searches';
   static const String deleteRecentSearch = 'search.delete.recent.search';
+  static const String listHotQueries = 'search.list.hot.queries';
   static const String listRecentSearches = 'search.list.recent.searches';
   static const String reportSearchFeedback = 'search.report.search.feedback';
   static const String searchQuery = 'search.search.query';

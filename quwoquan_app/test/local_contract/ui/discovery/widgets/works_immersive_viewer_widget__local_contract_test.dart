@@ -3,16 +3,19 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/rendering.dart' show RenderObject, RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/source_attribution_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
@@ -23,18 +26,26 @@ import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
+    show ActivePersonaContextViewData;
+import '../../../../support/cloud_services/content/content_mock_data.dart';
+import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -47,7 +58,11 @@ import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart'
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/video/fake_video_player_platform.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/sqflite_ffi_test_support.dart';
 
 Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
   Map<String, Map<String, dynamic>> raw,
@@ -446,6 +461,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -461,6 +477,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
     if (posts.isEmpty) {
       return super.listDiscoveryFeedPage(
         category: category,
+        channelId: channelId,
         identity: identity,
         type: type,
         subCategory: subCategory,
@@ -487,35 +504,75 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
           : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}',
     );
   }
-
-  @override
-  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
-    final isArticle = ContentMockData.discoveryArticleData.any(
-      (item) => item.id == postId,
-    );
-    if (isArticle) {
-      final row = ContentMockData.discoveryArticleData.firstWhere(
-        (item) => item.id == postId,
-      );
-      return DiscoveryPresentationWire.fromRow(<String, dynamic>{
-        ...row.toDiscoveryWireMap(),
-        'id': row.id,
-        'type': 'article',
-        'contentType': 'article',
-        'title': row.title,
-        'body': row.summary ?? row.body,
-        'cards': const <Map<String, dynamic>>[
-          {'title': '第二页标题', 'body': '第二页正文'},
-        ],
-      });
-    }
-    return super.discoveryPresentationWireForPost(postId);
-  }
 }
 
 class _RemoteModeNotifier extends AppDataSourceModeNotifier {
   @override
   AppDataSourceMode build() => AppDataSourceMode.remote;
+}
+
+class _AuthenticatedViewerSession extends AuthSessionController {
+  @override
+  AuthSessionState build() {
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'viewer-test-token',
+      ownerId: 'viewer-test-owner',
+      activeSubAccountId: 'viewer-test-persona',
+    );
+  }
+}
+
+class _FlippableViewerSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+
+  void loginNow() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'viewer-resume-token',
+      ownerId: 'viewer-resume-owner',
+      activeSubAccountId: 'viewer-resume-persona',
+    );
+  }
+}
+
+class _RecordingContentReportWriter implements ContentReportCommandWriter {
+  final List<CreateContentReportCommand> commands =
+      <CreateContentReportCommand>[];
+
+  @override
+  Future<void> createReport(CreateContentReportCommand command) async {
+    commands.add(command);
+  }
+}
+
+class _RecordingContentMediaFacet implements ContentMediaFacet {
+  _RecordingContentMediaFacet(this.originalUrl);
+
+  final Uri originalUrl;
+  final List<String> requestedMediaIds = <String>[];
+
+  @override
+  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+    RequestContentMediaOriginalAccessCommand command,
+  ) async {
+    requestedMediaIds.add(command.mediaId);
+    return ContentMediaOriginalAccessGrant(
+      mediaId: command.mediaId,
+      status: 'granted',
+      originalUrl: originalUrl,
+      format: 'jpeg',
+      sizeBytes: 2048,
+      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+      ttlSeconds: 300,
+      auditId: 'audit-original-viewer',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 PhotoPostDto _photoPost({
@@ -548,7 +605,17 @@ PhotoPostDto _photoPost({
   );
 }
 
-VideoPostDto _videoPost({int? width, int? height}) {
+VideoPostDto _videoPost({
+  int? width,
+  int? height,
+  String body = 'video body',
+  String videoUrl =
+      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+  String coverUrl =
+      'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+  SourceAttributionDto? sourceAttribution,
+  List<IntersectionReason>? intersectionReasons,
+}) {
   return VideoPostDto(
     id: 'video-1',
     type: 'video',
@@ -556,20 +623,23 @@ VideoPostDto _videoPost({int? width, int? height}) {
     assistantUsePolicy: 'inherit',
     authorId: 'author-video',
     displayName: '视频作者',
-    avatarUrl: 'https://example.com/avatar-video.jpg',
+    avatarUrl: '',
     authorRoleLabel: '',
     authorIdentityTags: const <String>[],
     authorVerified: false,
-    body: 'video body',
-    videoUrl: 'https://example.com/video.mp4',
-    thumbnailUrl: 'https://example.com/video.jpg',
-    coverUrl: 'https://example.com/video.jpg',
+    body: body,
+    sourceAttribution: sourceAttribution,
+    videoUrl: videoUrl,
+    thumbnailUrl: coverUrl,
+    coverUrl: coverUrl,
     width: width,
     height: height,
+    durationMs: 125000,
     likeCount: 0,
     commentCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
+    intersectionReasons: intersectionReasons,
   );
 }
 
@@ -732,8 +802,16 @@ Widget _wrap(
   Widget child, {
   List overrides = const [],
   bool useRemoteMode = false,
+  double? textScaleFactor,
+  EdgeInsets? viewPadding,
+  MockContentRepository? contentRepository,
 }) {
   final allOverrides = [
+    ...mockContentFacetOverrides(contentRepository ?? MockContentRepository()),
+    if (!useRemoteMode)
+      contentRuntimeConfigProvider.overrideWithValue(
+        buildAlphaContentRuntimeConfigDefaults(),
+      ),
     ...overrides,
     if (useRemoteMode)
       appDataSourceModeProvider.overrideWith(_RemoteModeNotifier.new),
@@ -744,10 +822,74 @@ Widget _wrap(
       designSize: const Size(375, 812),
       builder: (context, _) => MaterialApp(
         theme: ThemeData.dark(),
+        builder: textScaleFactor == null && viewPadding == null
+            ? null
+            : (context, child) {
+                final mediaQuery = MediaQuery.of(context);
+                return MediaQuery(
+                  data: mediaQuery.copyWith(
+                    textScaler: textScaleFactor == null
+                        ? mediaQuery.textScaler
+                        : TextScaler.linear(textScaleFactor),
+                    padding: viewPadding ?? mediaQuery.padding,
+                    viewPadding: viewPadding ?? mediaQuery.viewPadding,
+                  ),
+                  child: child!,
+                );
+              },
         home: Scaffold(body: child),
       ),
     ),
   );
+}
+
+final class _NoopMediaDownloadCache extends MediaDownloadCache {
+  _NoopMediaDownloadCache() : super();
+
+  @override
+  Future<String?> getCachedFilePath(String url) async => null;
+}
+
+FakeVideoPlayerPlatform _installImmersiveVideoTestPlatform() {
+  final originalPlatform = VideoPlayerPlatform.instance;
+  final fakePlatform = FakeVideoPlayerPlatform();
+  VideoPlayerPlatform.instance = fakePlatform;
+  VideoPlayerWidget.debugResetControllerSlots();
+  FlutterSecureStorage.setMockInitialValues(<String, String>{});
+  _mockPathProviderForImmersiveViewerTest();
+  addTearDown(() {
+    VideoPlayerPlatform.instance = originalPlatform;
+    VideoPlayerWidget.debugResetControllerSlots();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
+  });
+  return fakePlatform;
+}
+
+void _mockPathProviderForImmersiveViewerTest() {
+  const channel = MethodChannel('plugins.flutter.io/path_provider');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(channel, (call) async {
+        final directory = Directory.systemTemp.createTempSync(
+          'quwoquan-works-immersive-test-',
+        );
+        addTearDown(() {
+          if (directory.existsSync()) {
+            directory.deleteSync(recursive: true);
+          }
+        });
+        switch (call.method) {
+          case 'getApplicationDocumentsDirectory':
+          case 'getApplicationSupportDirectory':
+          case 'getTemporaryDirectory':
+            return directory.path;
+          default:
+            return null;
+        }
+      });
 }
 
 Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
@@ -781,7 +923,10 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
     ],
   );
   return ProviderScope(
-    overrides: overrides.cast(),
+    overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
+      ...overrides,
+    ].cast(),
     child: ScreenUtilInit(
       designSize: const Size(375, 812),
       builder: (context, _) =>
@@ -791,8 +936,18 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
 }
 
 void _consumeImageLoadExceptions(WidgetTester tester) {
-  while (tester.takeException() != null) {
-    // swallow network image loading errors in widget tests
+  Object? exception;
+  while ((exception = tester.takeException()) != null) {
+    final message = exception.toString();
+    final isExpectedImageFailure =
+        exception is NetworkImageLoadException ||
+        exception is HttpException ||
+        exception is SocketException ||
+        message.contains('ImageCodecException') ||
+        message.contains('Invalid image data');
+    if (!isExpectedImageFailure) {
+      throw exception!;
+    }
   }
 }
 
@@ -806,12 +961,64 @@ Future<void> _pumpImmersiveViewerFirstFrames(WidgetTester tester) async {
   _consumeImageLoadExceptions(tester);
 }
 
+Future<Finder> _waitForVideoTimelineMeasurementFrame(
+  WidgetTester tester,
+) async {
+  final timeline = find.byKey(
+    const ValueKey<String>('video-playback-timeline-workBrowser'),
+  );
+  for (var attempt = 0; attempt < 40; attempt += 1) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    if (timeline.evaluate().isNotEmpty) {
+      return timeline;
+    }
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
+    if (timeline.evaluate().isNotEmpty) {
+      return timeline;
+    }
+  }
+  expect(timeline, findsOneWidget, reason: '受控视频会话应在有界帧内装配共享时间轴。');
+  return timeline;
+}
+
 Future<void> _pumpSettledFrames(WidgetTester tester) async {
   _consumeImageLoadExceptions(tester);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 450));
   await tester.pump(const Duration(milliseconds: 16));
   _consumeImageLoadExceptions(tester);
+}
+
+List<Rect> _globalTextPaintRects(WidgetTester tester, Finder finder) {
+  final root = tester.renderObject<RenderObject>(finder);
+  final result = <Rect>[];
+  void collect(RenderObject object) {
+    if (object is RenderParagraph && object.attached && object.hasSize) {
+      final textLength = object.text.toPlainText().length;
+      if (textLength > 0) {
+        for (final box in object.getBoxesForSelection(
+          TextSelection(baseOffset: 0, extentOffset: textLength),
+        )) {
+          final localRect = box.toRect();
+          result.add(
+            Rect.fromPoints(
+              object.localToGlobal(localRect.topLeft),
+              object.localToGlobal(localRect.bottomRight),
+            ),
+          );
+        }
+      }
+    }
+    object.visitChildren(collect);
+  }
+
+  collect(root);
+  return result;
 }
 
 Future<void> _tapRichTextSubstring(
@@ -884,8 +1091,11 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
 }
 
 void main() {
+  setUpAll(ensureSqfliteFfiInitialized);
+
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
+    _mockPathProviderForImmersiveViewerTest();
   });
 
   test('沉浸媒体滑动顺滑性静态契约', () {
@@ -896,7 +1106,13 @@ void main() {
           'lib/ui/discovery/widgets/works_immersive_viewer.dart',
         ).readAsStringSync() +
         File(
+          'lib/ui/discovery/widgets/works_immersive_viewer_build.dart',
+        ).readAsStringSync() +
+        File(
           'lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/ui/discovery/widgets/works_immersive_viewer_lifecycle.dart',
         ).readAsStringSync();
     final imageBookSource = File(
       'lib/components/media/image/book/image_book_canvas.dart',
@@ -942,8 +1158,23 @@ void main() {
     );
     expect(
       viewerSource,
-      contains('final keepAlive = isCurrent'),
-      reason: '视频书只保活当前视频页，切页后释放非活跃页。',
+      contains('final keepAlive = widget.isVisible && isCurrent'),
+      reason: '视频书只保活当前可见帖子的当前视频页，切页后释放非活跃页。',
+    );
+    expect(
+      viewerSource,
+      contains('isVisible: index == _currentPage'),
+      reason: '外层 PageView 预建相邻帖子时，非可见视频帖子不得初始化 decoder。',
+    );
+    expect(
+      viewerSource,
+      contains('initialize: widget.isVisible && isCurrent'),
+      reason: '只有当前可见帖子内的当前分集可以创建 VideoPlayerController。',
+    );
+    expect(
+      viewerSource,
+      contains('viewportEpoch != _videoViewportEpoch'),
+      reason: '外层翻页后的迟到播放会话回调不得覆盖当前可见视频。',
     );
     expect(
       videoPlayerSource,
@@ -952,10 +1183,32 @@ void main() {
     );
     expect(
       videoPlayerSource,
-      contains('_playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);'),
-      reason: 'autoPlay 变更必须经 VideoPlaybackSession 的强类型状态机同步，'
+      contains(
+        '_playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);',
+      ),
+      reason:
+          'autoPlay 变更必须经 VideoPlaybackSession 的强类型状态机同步，'
           '不能回退到播放器私有播放控制。',
     );
+  });
+
+  test('沉浸浏览器主文件与职责 companion 均低于千行', () {
+    final files = Directory('lib/ui/discovery/widgets')
+        .listSync()
+        .whereType<File>()
+        .where(
+          (file) =>
+              file.uri.pathSegments.last.startsWith('works_immersive_viewer') &&
+              file.path.endsWith('.dart'),
+        );
+    for (final file in files) {
+      final lineCount = file.readAsStringSync().split('\n').length;
+      expect(
+        lineCount,
+        lessThan(1000),
+        reason: '${file.uri.pathSegments.last} 不得重新膨胀为千行级职责集合。',
+      );
+    }
   });
 
   testWidgets('视频书沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
@@ -982,6 +1235,7 @@ void main() {
               body: WorksImmersiveViewer(
                 showWorksToolbar: true,
                 showTopNavigation: true,
+                source: 'browse',
                 onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
                 onAssistantTap: () {},
                 onSwitchToCircles: () => switchedToHome = true,
@@ -993,6 +1247,18 @@ void main() {
       ),
     );
     await _pumpImmersiveViewerFirstFrames(tester);
+    for (var attempt = 0; attempt < 40; attempt += 1) {
+      final allFeedsReady = const <String>['photo', 'video', 'article'].every(
+        (channelId) =>
+            container.read(discoveryFeedProvider(channelId)).value != null,
+      );
+      if (allFeedsReady) {
+        break;
+      }
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
 
     expect(
       container.read(discoveryFeedProvider('photo')).value?.items.length,
@@ -1007,16 +1273,14 @@ void main() {
       equals(2),
     );
 
-    final verticalPager = find.byWidgetPredicate(
-      (widget) => widget is PageView && widget.scrollDirection == Axis.vertical,
-    );
+    final verticalPager = find.byKey(TestKeys.worksImmersivePager);
     var reachedSentinel = false;
     for (var i = 0; i < 8; i += 1) {
       await tester.fling(verticalPager, const Offset(0, -700), 1200);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 450));
       reachedSentinel = find
-          .byKey(const ValueKey<String>('works-load-more-sentinel'))
+          .byKey(TestKeys.worksLoadMoreSentinel)
           .evaluate()
           .isNotEmpty;
       if (reachedSentinel) {
@@ -1050,10 +1314,7 @@ void main() {
       container.read(discoveryFeedProvider('article')).value?.items.length,
       equals(4),
     );
-    expect(
-      find.byKey(const ValueKey<String>('works-load-more-sentinel')),
-      findsNothing,
-    );
+    expect(find.byKey(TestKeys.worksLoadMoreSentinel), findsNothing);
     expect(switchedToHome, isFalse);
 
     // 滚动翻页会经 trackSkip 懒创建 ContentBehaviorTracker（周期性 flush 定时器，
@@ -1105,10 +1366,6 @@ void main() {
       find.byKey(const ValueKey<String>('works-format-tab-strip')),
       findsNothing,
     );
-
-    // 不再出现「关注 / 视频书」一级 tab。
-    expect(find.text('关注'), findsNothing);
-    expect(find.text('精品'), findsNothing);
 
     container.dispose();
   });
@@ -1503,6 +1760,767 @@ void main() {
       find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
     );
     expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
+  });
+
+  testWidgets('外部来源视频在沉浸播放器展示冻结的原创者归属', (tester) async {
+    const attributionText = '原创：山海旅行者 · 来源：头条';
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      sourceAttribution: SourceAttributionDto(
+        originalCreatorName: '山海旅行者',
+        platform: '头条',
+        sourcePostUrl: 'https://example.com/source-post',
+        originalAssetUrl: 'https://example.com/source.mp4',
+        attributionText: attributionText,
+        rightsBasis: 'risk_accepted_attribution_only',
+        commercialAuthorizationStatus: 'not_verified',
+        publicationAdmission: 'risk_accepted_attribution_only',
+        watermarkStatus: 'absent',
+        audioRightsStatus: 'replaced_with_licensed_track',
+        modelReleaseStatus: 'not_required',
+        propertyReleaseStatus: 'not_required',
+        collectedAt: DateTime(2026, 7, 20),
+        takedownPolicy: 'notice_and_takedown',
+      ),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
+
+    expect(
+      find.byKey(
+        const ValueKey<String>('works-video-source-attribution'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text(attributionText), findsOneWidget);
+  });
+
+  testWidgets('视频底部栈将文本置于时长和时间轴之上且时长只展示首次五秒', (tester) async {
+    _installImmersiveVideoTestPlatform();
+
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      body: '标题正文与交集说明共同组成沉浸视频文本区。',
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'relationship',
+          primaryText: '联系人林清越收藏过',
+          source: 'identity',
+          actionTargetId: 'video-1',
+        ),
+      ],
+      coverUrl: '',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+        viewPadding: const EdgeInsets.only(bottom: 34),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(VideoPlayerWidget), findsOneWidget);
+    expect(
+      VideoPlayerWidget.debugActiveControllerCount,
+      greaterThanOrEqualTo(1),
+    );
+    // 首次出现的测量帧必须先保持透明；实际 RenderBox 无碰撞后下一帧才显示。
+    final timeline = await _waitForVideoTimelineMeasurementFrame(tester);
+
+    final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+    final track = find.byKey(
+      const ValueKey<String>('video-playback-timeline-track'),
+    );
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    final caption = find.byKey(const ValueKey<String>('works-caption-rail'));
+    final engagementRail = find.byKey(
+      const ValueKey<String>('immersive-engagement-rail'),
+    );
+    final intersection = find.byKey(
+      const ValueKey<String>('works-caption-intersection-reason'),
+    );
+
+    expect(timeline, findsOneWidget);
+    expect(track, findsOneWidget);
+    expect(duration, findsOneWidget);
+    expect(caption, findsOneWidget);
+    expect(intersection, findsOneWidget);
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '首个布局帧尚未完成碰撞测量，总时长不得先闪现。',
+    );
+    await tester.pump();
+
+    final timelineRect = tester.getRect(timeline);
+    final trackRect = tester.getRect(track);
+    final durationRect = tester.getRect(duration);
+    final captionRect = tester.getRect(caption);
+    final engagementRailRect = tester.getRect(engagementRail);
+    final intersectionRect = tester.getRect(intersection);
+    expect(timelineRect.bottom, closeTo(toolbarRect.top, 1));
+    expect(trackRect.bottom, closeTo(toolbarRect.top, 1));
+    expect(trackRect.width, closeTo(timelineRect.width, 1));
+    expect(timelineRect.left, closeTo(engagementRailRect.left, 1));
+    expect(timelineRect.right, closeTo(engagementRailRect.right, 1));
+    expect(durationRect.right, closeTo(trackRect.right, 1));
+    expect(durationRect.bottom, lessThan(trackRect.top));
+    expect(captionRect.bottom, lessThan(durationRect.top));
+    expect(intersectionRect.top, greaterThanOrEqualTo(captionRect.top));
+    expect(intersectionRect.bottom, lessThanOrEqualTo(captionRect.bottom));
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      1,
+      reason: '首次进入且无文本碰撞时应显示总时长。',
+    );
+
+    final timelineRectBeforeExpiry = tester.getRect(timeline);
+    final trackRectBeforeExpiry = tester.getRect(track);
+    final captionRectBeforeExpiry = tester.getRect(caption);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('video-playback-timeline-hit-area')),
+    );
+    for (
+      var attempt = 0;
+      attempt < 10 && tester.widget<Opacity>(duration).opacity != 1;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      1,
+      reason: '普通点击不得提前结束或重启仍在进行的 entry-only 窗口。',
+    );
+    await tester.pump(const Duration(milliseconds: 2100));
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '点击/拖动不得重新开启 entry_only 的五秒窗口。',
+    );
+    expect(tester.getRect(timeline), timelineRectBeforeExpiry);
+    expect(tester.getRect(track), trackRectBeforeExpiry);
+    expect(tester.getRect(caption), captionRectBeforeExpiry);
+  });
+
+  testWidgets('视频底部层级在双手机与 iPad 视口保持贴栏和安全轨对齐', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      body: '短标题正文',
+      coverUrl: '',
+    );
+    final viewports = <({Size size, double bottomInset})>[
+      (size: const Size(390, 844), bottomInset: 34),
+      (size: const Size(430, 932), bottomInset: 34),
+      (size: const Size(1024, 1366), bottomInset: 24),
+    ];
+
+    for (final viewport in viewports) {
+      tester.view.physicalSize = viewport.size;
+      await tester.pumpWidget(
+        _wrap(
+          WorksImmersiveViewer(
+            showWorksToolbar: true,
+            showTopNavigation: false,
+            externalPosts: [post],
+            externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+            onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+            onAssistantTap: () {},
+          ),
+          viewPadding: EdgeInsets.only(bottom: viewport.bottomInset),
+          overrides: [
+            mediaDownloadCacheProvider.overrideWithValue(
+              _NoopMediaDownloadCache(),
+            ),
+          ],
+        ),
+      );
+      final timeline = await _waitForVideoTimelineMeasurementFrame(tester);
+      await tester.pump();
+      final track = find.byKey(
+        const ValueKey<String>('video-playback-timeline-track'),
+      );
+      final duration = find.byKey(
+        const ValueKey<String>('works-video-transient-duration'),
+      );
+      final caption = find.byKey(const ValueKey<String>('works-caption-rail'));
+      final toolbar = find.byType(ImmersiveEngagementBar);
+      final engagementRail = find.byKey(
+        const ValueKey<String>('immersive-engagement-rail'),
+      );
+      final timelineRect = tester.getRect(timeline);
+      final trackRect = tester.getRect(track);
+      final toolbarRect = tester.getRect(toolbar);
+      final railRect = tester.getRect(engagementRail);
+
+      expect(
+        timelineRect.bottom,
+        closeTo(toolbarRect.top, 1),
+        reason: '${viewport.size} 时间轴热区未贴互动栏。',
+      );
+      expect(
+        trackRect.bottom,
+        closeTo(toolbarRect.top, 1),
+        reason: '${viewport.size} 轨道本体未贴互动栏。',
+      );
+      expect(timelineRect.left, closeTo(railRect.left, 1));
+      expect(timelineRect.right, closeTo(railRect.right, 1));
+      expect(
+        tester.getRect(caption).bottom,
+        lessThan(tester.getRect(duration).top),
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      for (
+        var attempt = 0;
+        attempt < 20 && VideoPlayerWidget.debugActiveControllerCount > 0;
+        attempt += 1
+      ) {
+        await tester.runAsync(() async {
+          await Future<void>.delayed(Duration.zero);
+        });
+        await tester.pump();
+      }
+      expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+    }
+  });
+
+  testWidgets('文本与总时长真实碰撞时首帧不闪现且仅隐藏视觉时长', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      body:
+          '高文字缩放下仍需完整保留的标题正文，这段内容会连续铺满文本轨道，'
+          '用于证明真正绘制出来的字形与右侧总时长发生碰撞，而不是只比较外层容器。',
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'relationship',
+          primaryText: '联系人林清越收藏过',
+          source: 'identity',
+          actionTargetId: 'video-1',
+        ),
+      ],
+      coverUrl: '',
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          // 碰撞测试只隔离 caption/timeline chrome，避免全局大字缩放把
+          // 独立的互动工具栏可访问性约束混入本断言。
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        textScaleFactor: 5,
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+
+    final timeline = await _waitForVideoTimelineMeasurementFrame(tester);
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    final caption = find.byKey(const ValueKey<String>('works-caption-rail'));
+    final track = find.byKey(
+      const ValueKey<String>('video-playback-timeline-track'),
+    );
+    expect(tester.widget<Opacity>(duration).opacity, 0);
+
+    await tester.pump();
+    final timelineRect = tester.getRect(timeline);
+    final trackRect = tester.getRect(track);
+    final durationRect = tester.getRect(duration);
+    final textPaintRects = _globalTextPaintRects(tester, caption);
+    expect(
+      textPaintRects.any(
+        (rect) => rect.inflate(AppSpacing.intraGroupXs).overlaps(durationRect),
+      ),
+      isTrue,
+      reason: '测试必须制造真实 RenderParagraph 字形碰撞，而不是比较整条 rail 包围盒。',
+    );
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '碰撞时总时长必须立即保持透明。',
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getRect(timeline), timelineRect);
+    expect(tester.getRect(track), trackRect);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label ==
+                UITextConstants.videoPlaybackProgressLabel &&
+            widget.properties.value == '0:00 / 2:05',
+      ),
+      findsOneWidget,
+      reason: '隐藏视觉时长不得删除 current/total 无障碍语义。',
+    );
+  });
+
+  testWidgets('大字短文本未占满右侧时不按整条 rail 误隐藏时长', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      body: '短文',
+      coverUrl: '',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        textScaleFactor: 5,
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    await tester.pump();
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    final caption = find.byKey(const ValueKey<String>('works-caption-rail'));
+    final durationRect = tester.getRect(duration);
+    expect(
+      tester
+          .getRect(caption)
+          .inflate(AppSpacing.intraGroupXs)
+          .overlaps(durationRect),
+      isTrue,
+      reason: '测试需证明整条 rail 包围盒会产生旧实现的误判条件。',
+    );
+    expect(
+      _globalTextPaintRects(tester, caption).any(
+        (rect) => rect.inflate(AppSpacing.intraGroupXs).overlaps(durationRect),
+      ),
+      isFalse,
+    );
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      1,
+      reason: '实际字形未填满右侧时，总时长可共享该纵向区域且不另占一行。',
+    );
+  });
+
+  testWidgets('文字缩放动态变化会先隐藏并重新测量总时长', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final textScale = ValueNotifier<double>(1);
+    addTearDown(textScale.dispose);
+    final post = _videoPost(
+      width: 1920,
+      height: 1080,
+      body:
+          '动态文字缩放后必须重新测量的标题正文，这段内容会铺满文本轨道，'
+          '让放大后的实际字形进入总时长区域。',
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'relationship',
+          primaryText: '联系人林清越收藏过',
+          source: 'identity',
+          actionTargetId: 'video-1',
+        ),
+      ],
+      coverUrl: '',
+    );
+
+    await tester.pumpWidget(
+      ValueListenableBuilder<double>(
+        valueListenable: textScale,
+        builder: (context, scale, _) => _wrap(
+          WorksImmersiveViewer(
+            showWorksToolbar: false,
+            showTopNavigation: false,
+            externalPosts: [post],
+            externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+            onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+            onAssistantTap: () {},
+          ),
+          textScaleFactor: scale,
+          overrides: [
+            mediaDownloadCacheProvider.overrideWithValue(
+              _NoopMediaDownloadCache(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    await tester.pump();
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    final caption = find.byKey(const ValueKey<String>('works-caption-rail'));
+    expect(tester.widget<Opacity>(duration).opacity, 1);
+
+    textScale.value = 6;
+    await tester.pump();
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: 'MediaQuery 几何改变后的首帧必须先透明，不能沿用旧碰撞结论。',
+    );
+    await tester.pump();
+    final durationRect = tester.getRect(duration);
+    expect(
+      _globalTextPaintRects(tester, caption).any(
+        (rect) => rect.inflate(AppSpacing.intraGroupXs).overlaps(durationRect),
+      ),
+      isTrue,
+    );
+    expect(tester.widget<Opacity>(duration).opacity, 0);
+  });
+
+  testWidgets('共享时间轴视觉关闭时仍保留视频进度语义', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+          contentFeatureFlagProvider(
+            'enable_shared_video_timeline',
+          ).overrideWith((ref) => false),
+        ],
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    expect(
+      find.byKey(const ValueKey<String>('video-playback-timeline-track')),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label ==
+                UITextConstants.videoPlaybackProgressLabel &&
+            widget.properties.value == '0:00 / 2:05',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('切集为每个分集重新开启一次五秒窗口', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    final raw = _viewerRawByPostId({
+      post.id: <String, dynamic>{
+        ...post.toMap(),
+        'workId': post.id,
+        'workType': 'video',
+        'workIdentity': 'work',
+        'caption': post.body,
+        'mediaItems': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'kind': 'video',
+            'url': 'media/video/s/video-series-001/post/video-1/episode-1.mp4',
+            'durationMs': 125000,
+          },
+          <String, dynamic>{
+            'kind': 'video',
+            'url': 'media/video/s/video-series-001/post/video-1/episode-2.mp4',
+            'durationMs': 125000,
+          },
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: raw,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    await tester.pump();
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    expect(find.text('视频集 · 1/2'), findsOneWidget);
+    expect(tester.widget<Opacity>(duration).opacity, 1);
+    await tester.pump(const Duration(milliseconds: 5100));
+    expect(tester.widget<Opacity>(duration).opacity, 0);
+
+    final episodeStage = find.byKey(
+      const ValueKey<String>('works-video-stage-video-1-0'),
+    );
+    expect(episodeStage, findsOneWidget);
+    await tester.fling(episodeStage, const Offset(-700, 0), 1200);
+    await tester.pump(const Duration(seconds: 1));
+    for (
+      var attempt = 0;
+      attempt < 40 &&
+          (find.text('视频集 · 2/2').evaluate().isEmpty ||
+              duration.evaluate().isEmpty);
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
+    expect(find.text('视频集 · 2/2'), findsOneWidget);
+    expect(duration, findsOneWidget);
+    await tester.pump();
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      1,
+      reason: '切集后的新 chrome/session 必须重新开启一次窗口。',
+    );
+    await tester.pump(const Duration(milliseconds: 5100));
+    expect(tester.widget<Opacity>(duration).opacity, 0);
+
+    await tester.tap(find.byType(AppMediaCommentIcon));
+    await _pumpSettledFrames(tester);
+    expect(find.byKey(TestKeys.immersiveCommentSplitSheet), findsOneWidget);
+    await tester.tap(find.byIcon(CupertinoIcons.xmark_circle_fill));
+    await _pumpSettledFrames(tester);
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    await tester.pump();
+    expect(find.text('视频集 · 2/2'), findsOneWidget);
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '评论分屏只是临时重建，必须恢复同一媒体身份且不能重启已结束的窗口。',
+    );
+
+    final secondEpisodeStage = find.byKey(
+      const ValueKey<String>('works-video-stage-video-1-1'),
+    );
+    await tester.fling(secondEpisodeStage, const Offset(700, 0), 1200);
+    await tester.pump(const Duration(seconds: 1));
+    for (
+      var attempt = 0;
+      attempt < 40 &&
+          (find.text('视频集 · 1/2').evaluate().isEmpty ||
+              duration.evaluate().isEmpty);
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
+    expect(find.text('视频集 · 1/2'), findsOneWidget);
+    await tester.pump();
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      1,
+      reason: '2→1 是真实切集，即使回到既有媒体身份也必须开启新的 entry-only 窗口。',
+    );
+  });
+
+  testWidgets('分集列表重排按媒体身份保留当前集且不重启时长窗口', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final reordered = ValueNotifier<bool>(false);
+    addTearDown(reordered.dispose);
+    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+
+    Map<String, MediaViewerPostWireRow> rawFor(bool reverse) {
+      final episodes = <Map<String, dynamic>>[
+        <String, dynamic>{
+          'kind': 'video',
+          'url': 'media/video/s/video-series-001/post/video-1/episode-1.mp4',
+          'durationMs': 125000,
+        },
+        <String, dynamic>{
+          'kind': 'video',
+          'url': 'media/video/s/video-series-001/post/video-1/episode-2.mp4',
+          'durationMs': 125000,
+        },
+      ];
+      return _viewerRawByPostId({
+        post.id: <String, dynamic>{
+          ...post.toMap(),
+          'workId': post.id,
+          'workType': 'video',
+          'workIdentity': 'work',
+          'caption': post.body,
+          'mediaItems': reverse ? episodes.reversed.toList() : episodes,
+        },
+      });
+    }
+
+    await tester.pumpWidget(
+      ValueListenableBuilder<bool>(
+        valueListenable: reordered,
+        builder: (context, reverse, _) => _wrap(
+          WorksImmersiveViewer(
+            showWorksToolbar: true,
+            showTopNavigation: false,
+            externalPosts: [post],
+            externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+            rawPostsById: rawFor(reverse),
+            onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+            onAssistantTap: () {},
+          ),
+          overrides: [
+            mediaDownloadCacheProvider.overrideWithValue(
+              _NoopMediaDownloadCache(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    final firstEpisodeStage = find.byKey(
+      const ValueKey<String>('works-video-stage-video-1-0'),
+    );
+    await tester.fling(firstEpisodeStage, const Offset(-700, 0), 1200);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('视频集 · 2/2'), findsOneWidget);
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    await tester.pump(const Duration(milliseconds: 5100));
+    expect(tester.widget<Opacity>(duration).opacity, 0);
+
+    reordered.value = true;
+    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 40 && find.text('视频集 · 1/2').evaluate().isEmpty;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
+    expect(
+      find.text('视频集 · 1/2'),
+      findsOneWidget,
+      reason: '原第 2 集重排到索引 0 后应按 delivery identity 保持为当前媒体。',
+    );
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    await tester.pump();
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '同一媒体仅发生列表重排，不属于切集，不能重启已结束的五秒窗口。',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  test('视频 bottom chrome 单轨装配且不恢复左侧播放按钮', () {
+    final controlsSource = File(
+      'lib/ui/discovery/widgets/works_immersive_viewer_controls.dart',
+    ).readAsStringSync();
+    final chromeSource = File(
+      'lib/ui/discovery/widgets/works_immersive_viewer_video_chrome.dart',
+    ).readAsStringSync();
+    final canvasSource = File(
+      'lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
+    ).readAsStringSync();
+
+    expect(controlsSource, isNot(contains('works-video-play-toggle')));
+    expect(controlsSource, contains('VideoPlaybackTimeline('));
+    expect(
+      chromeSource,
+      contains('ImmersiveEngagementBar.reservedHeight(context)'),
+    );
+    expect(chromeSource, contains('footer: widget.intersection'));
+    expect(chromeSource, contains('_collidesWithCaption'));
+    expect(
+      chromeSource,
+      contains('widget.durationWindowActive && _durationVisible'),
+    );
+    expect(
+      File(
+        'lib/ui/discovery/widgets/works_immersive_viewer_lifecycle.dart',
+      ).readAsStringSync(),
+      contains('_videoDurationWindowTimer = Timer(const Duration(seconds: 5)'),
+    );
+    expect(chromeSource, contains('required this.intersection'));
+    expect(chromeSource, contains('scrubTimeVisible: _scrubTimeVisible'));
+    expect(canvasSource, contains('VideoPlaybackCenterPlayGlyph()'));
   });
 
   testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (tester) async {
@@ -2206,6 +3224,295 @@ void main() {
     );
   });
 
+  testWidgets('canonical viewer 经 typed media facet 加载当前原图', (tester) async {
+    final post = _photoPost();
+    final originalUrl = Uri.parse(
+      'https://cdn.example.com/original/photo-1.jpg',
+    );
+    final mediaFacet = _RecordingContentMediaFacet(originalUrl);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: <PostBaseDto>[post],
+          externalPostViews: <ContentSurfaceView>[
+            ContentSurfaceViewMapper.fromDto(post),
+          ],
+          rawPostsById: _viewerRawByPostId(<String, Map<String, dynamic>>{
+            post.id: <String, dynamic>{
+              'workId': post.id,
+              'workType': 'image',
+              'workIdentity': 'work',
+              'imageUrls': post.imageUrls,
+              'mediaAssetId': 'asset-photo-1',
+              'mediaAssetVersion': 1,
+              'mediaItems': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'kind': 'image',
+                  'url': post.imageUrls.single,
+                  'mediaAssetId': 'asset-photo-1',
+                  'mediaAssetVersion': 1,
+                },
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          authSessionControllerProvider.overrideWith(
+            _AuthenticatedViewerSession.new,
+          ),
+          workBrowserContentMediaFacetProvider.overrideWithValue(mediaFacet),
+        ],
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+
+    await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+    await _pumpSettledFrames(tester);
+    expect(find.text(UITextConstants.viewOriginal), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.viewOriginal));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    _consumeImageLoadExceptions(tester);
+
+    expect(mediaFacet.requestedMediaIds, <String>['asset-photo-1']);
+    expect(
+      tester.widget<ImageBookCanvas>(find.byType(ImageBookCanvas)).imageUrls,
+      <String>[originalUrl.toString()],
+    );
+    expect(find.text(UITextConstants.imageOriginalLoaded), findsOneWidget);
+  });
+
+  testWidgets('沉浸举报登录成功后续接原 post 且关闭登录走安全首页', (tester) async {
+    AuthGate.resetDebounce();
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final post = _photoPost();
+    final reportWriter = _RecordingContentReportWriter();
+    final reporter = MockBehaviorRepository();
+    final behaviorTracker = ContentBehaviorTracker(
+      reporter: reporter,
+      enablePeriodicFlush: false,
+    );
+    final engagementTracker = ContentEngagementTracker(reporter: reporter);
+    addTearDown(behaviorTracker.dispose);
+    addTearDown(engagementTracker.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        ...mockContentFacetOverrides(MockContentRepository()),
+        authSessionControllerProvider.overrideWith(_FlippableViewerSession.new),
+        workBrowserContentReportCommandWriterProvider.overrideWithValue(
+          reportWriter,
+        ),
+        contentBehaviorTrackerProvider.overrideWithValue(behaviorTracker),
+        contentEngagementTrackerProvider.overrideWithValue(engagementTracker),
+        activePersonaContextProvider.overrideWith(
+          (_) async => ActivePersonaContextViewData.fallback(
+            subAccountId: 'viewer-test-persona',
+            ownerUserId: 'viewer-test-owner',
+            displayName: 'Viewer',
+            avatarUrl: '',
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: WorksImmersiveViewer(
+              showWorksToolbar: true,
+              showTopNavigation: false,
+              externalPosts: <PostBaseDto>[post],
+              externalPostViews: <ContentSurfaceView>[
+                ContentSurfaceViewMapper.fromDto(post),
+              ],
+              onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+              onAssistantTap: () {},
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => const Scaffold(
+            key: ValueKey<String>('viewer-report-login'),
+            body: SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) =>
+              MaterialApp.router(theme: ThemeData.dark(), routerConfig: router),
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+
+    await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+    await _pumpSettledFrames(tester);
+    await tester.ensureVisible(find.text(UITextConstants.report));
+    await tester.pump();
+    await tester.tap(find.text(UITextConstants.report));
+    final selectedReason = find.text(UITextConstants.profileReportReasonSpam);
+    for (
+      var attempt = 0;
+      attempt < 20 && selectedReason.evaluate().isEmpty;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(selectedReason, findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(selectedReason);
+    final loginPage = find.byKey(const ValueKey<String>('viewer-report-login'));
+    for (
+      var attempt = 0;
+      attempt < 20 && loginPage.evaluate().isEmpty;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(loginPage, findsOneWidget);
+    expect(reportWriter.commands, isEmpty);
+    final pending = container.read(authContinuationProvider);
+    expect(pending, isA<SubmitContentReportContinuation>());
+    final reportContinuation = pending! as SubmitContentReportContinuation;
+    expect(reportContinuation.postId, post.id);
+    expect(reportContinuation.reason, ContentReportReason.spam);
+    expect(
+      GoRouterState.of(
+        tester.element(
+          find.byKey(const ValueKey<String>('viewer-report-login')),
+        ),
+      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.safeFallback.name,
+    );
+
+    (container.read(authSessionControllerProvider.notifier)
+            as _FlippableViewerSession)
+        .loginNow();
+    router.pop();
+    await _pumpSettledFrames(tester);
+    await tester.pump();
+
+    expect(reportWriter.commands, hasLength(1));
+    expect(reportWriter.commands.single.targetId, post.id);
+    expect(container.read(authContinuationProvider), isNull);
+  });
+
+  testWidgets('external 空内容六秒后提供可退出状态而非永久 spinner', (tester) async {
+    var dismissed = false;
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: const <PostBaseDto>[],
+          externalPostViews: const <ContentSurfaceView>[],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onDismissed: (_) => dismissed = true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+    expect(
+      find.byKey(const ValueKey<String>('works-external-empty-exit')),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('works-external-empty-exit')),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.contentUnavailable), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.back));
+    await tester.pump();
+    expect(dismissed, isTrue);
+  });
+
+  testWidgets('canonical viewer 最后一条内容仅结算一次 dwell 并保留入口归因', (tester) async {
+    final reporter = MockBehaviorRepository();
+    final behaviorTracker = ContentBehaviorTracker(
+      reporter: reporter,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    final engagementTracker = ContentEngagementTracker(reporter: reporter);
+    final post = _photoPost();
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: <PostBaseDto>[post],
+          externalPostViews: <ContentSurfaceView>[
+            ContentSurfaceViewMapper.fromDto(post),
+          ],
+          referralSource: ReferralSource.friendShare,
+          feedRequestId: 'feed-attribution-42',
+          initialFeedPosition: 42,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          contentBehaviorTrackerProvider.overrideWithValue(behaviorTracker),
+          contentEngagementTrackerProvider.overrideWithValue(engagementTracker),
+        ],
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await behaviorTracker.flush();
+    await engagementTracker.dispose();
+
+    final visibleEnters = reporter.recorded
+        .where(
+          (event) =>
+              event.contentId == post.id &&
+              event.action == BehaviorAction.impression &&
+              event.state == 'visible',
+        )
+        .toList(growable: false);
+    final dwells = reporter.recorded
+        .where(
+          (event) =>
+              event.contentId == post.id &&
+              event.action == BehaviorAction.dwell,
+        )
+        .toList(growable: false);
+
+    expect(visibleEnters, hasLength(1));
+    expect(dwells, hasLength(1));
+    expect(dwells.single.referralSource, ReferralSource.friendShare);
+    expect(dwells.single.feedRequestId, 'feed-attribution-42');
+    expect(dwells.single.position, 42);
+  });
+
   testWidgets('沉浸式浏览器更多功能使用贴底非全屏面板', (tester) async {
     final post = _photoPost();
     await tester.pumpWidget(
@@ -2348,6 +3655,101 @@ void main() {
     expect(find.text(article.title), findsNothing);
     expect(find.byType(VideoPlayerWidget), findsNothing);
     expect(find.text('图片 / 视频'), findsOneWidget);
+  });
+
+  testWidgets('过滤移除并恢复当前视频时不复用失效会话', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final video = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    final photo = _photoPost(
+      imageUrls: const <String>[''],
+    ).copyWith(coverUrl: '', avatarUrl: '');
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [video, photo],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(video),
+            ContentSurfaceViewMapper.fromDto(photo),
+          ],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
+    final duration = find.byKey(
+      const ValueKey<String>('works-video-transient-duration'),
+    );
+    await tester.pump();
+    expect(tester.widget<Opacity>(duration).opacity, 1);
+    await tester.pump(const Duration(seconds: 3));
+
+    void openMoreActions() {
+      final button = find.descendant(
+        of: find.byKey(const ValueKey<String>('works-top-more')),
+        matching: find.byType(CupertinoButton),
+      );
+      expect(button, findsOneWidget);
+      tester.widget<CupertinoButton>(button).onPressed?.call();
+    }
+
+    openMoreActions();
+    await _pumpSettledFrames(tester);
+    await tester.tap(find.text('内容过滤'));
+    await _pumpSettledFrames(tester);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('more-action-content-filter-image')),
+    );
+    await _pumpSettledFrames(tester);
+    await tester.tap(find.text('完成'));
+    await _pumpSettledFrames(tester);
+    expect(find.byType(VideoPlayerWidget), findsNothing);
+    for (
+      var attempt = 0;
+      attempt < 20 && VideoPlayerWidget.debugActiveControllerCount > 0;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+    }
+    expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+
+    openMoreActions();
+    await _pumpSettledFrames(tester);
+    await tester.tap(find.text('内容过滤'));
+    await _pumpSettledFrames(tester);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('more-action-content-filter-video')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('more-action-content-filter-image')),
+    );
+    await _pumpSettledFrames(tester);
+    await tester.tap(find.text('完成'));
+    await _pumpSettledFrames(tester);
+    expect(
+      find.byType(VideoPlayerWidget),
+      findsOneWidget,
+      reason: '恢复视频筛选后应先重建唯一当前视频播放器。',
+    );
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
+    expect(
+      tester.widget<Opacity>(duration).opacity,
+      0,
+      reason: '过滤临时移除并恢复同一媒体不属于真实切集，不能重启五秒窗口。',
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('图片滑到边界后从内容区继续横滑不会切换主 tab', (tester) async {
@@ -3104,7 +4506,9 @@ void main() {
       imageUrls: const ['media/image/s/fixture/photo-only.jpg'],
     );
     var dismissed = false;
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [...mockContentFacetOverrides(MockContentRepository())],
+    );
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -3912,11 +5316,9 @@ void main() {
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
-        overrides: [
-          ...mockContentFacetOverrides(repo),
-          analyticsProvider.overrideWithValue(analytics),
-        ],
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
         useRemoteMode: true,
+        contentRepository: repo,
       ),
     );
     await tester.pump();
@@ -3996,10 +5398,8 @@ void main() {
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
-        overrides: [
-          ...mockContentFacetOverrides(repo),
-          analyticsProvider.overrideWithValue(analytics),
-        ],
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
+        contentRepository: repo,
       ),
     );
     await tester.pump();
@@ -4052,10 +5452,8 @@ void main() {
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
-        overrides: [
-          ...mockContentFacetOverrides(repo),
-          analyticsProvider.overrideWithValue(analytics),
-        ],
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
+        contentRepository: repo,
       ),
     );
 

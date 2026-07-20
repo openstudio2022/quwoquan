@@ -15,7 +15,10 @@
 - **扩展执行目录**：[runtime_extension_catalog.md](runtime_extension_catalog.md)
 - **特性树**：`specs/feature-tree/`、`specs/feature-tree/tree_index.yaml`
 - **命令**：`/explore`、`/prd`、`/design`、`/dev`、`/commit`、`/deploy`（根目录统一）；`/archive` 仅作兼容补归档入口
-- **推荐模型服务就绪**：Create 阶段完成后见 [rec-model-service/readiness.md](feature-tree/recommendation-platform/rec-model-service/readiness.md)；Python 模型与接口由 `make codegen-rec-model-python` 生成，与 App/Go 同源。训练工程见 recommendation-platform 下 **rec-model-training**。
+- **推荐模型服务就绪**：以
+  [`recommendation-platform/spec.md`](feature-tree/recommendation-platform/spec.md)、
+  各 L3 `acceptance.yaml` 与 metadata/codegen 验证结果为准；Python 模型与接口由
+  `make codegen-rec-model-python` 生成，与 App/Go 同源。
 
 ## 原则
 

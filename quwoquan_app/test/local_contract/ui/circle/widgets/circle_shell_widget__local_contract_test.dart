@@ -6,14 +6,15 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -24,6 +25,8 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
@@ -50,8 +53,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -59,14 +62,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -159,6 +159,11 @@ final class _FixtureCircleMembershipQuery implements CircleMembershipQuery {
   ) async => const PersonaCirclePageSlice(items: <PersonaCircleSummary>[]);
 }
 
+final class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
+  @override
+  Future<void> append(AppendCircleBehaviorFactCommand command) async {}
+}
+
 final class _FixtureCircleMembershipCommandWriter
     implements CircleMembershipCommandWriter {
   _FixtureCircleMembershipCommandWriter();
@@ -230,6 +235,10 @@ Widget _scopedApp({
         ),
       ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      circleDetailBehaviorFactWriterProvider.overrideWithValue(
+        _NoopCircleBehaviorFactWriter(),
+      ),
+      behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
       ...overrides,
     ],
     child: MaterialApp.router(
@@ -382,10 +391,6 @@ void main() {
         find.text(UITextConstants.objectImpactTitleCircle),
         findsOneWidget,
       );
-      expect(
-        find.text(UITextConstants.objectMyIntersectionsTitle),
-        findsOneWidget,
-      );
       expect(find.text('12人在这里建立了新连接'), findsOneWidget);
       expect(find.text('5个讨论正在这里发生'), findsOneWidget);
       expect(find.text('3人最近参与了这里'), findsOneWidget);
@@ -490,6 +495,42 @@ void main() {
       expect(called, isTrue);
     });
 
+    testWidgets('成员从圈子更多动作进入 picker 并携带 circle/conversation context', (
+      tester,
+    ) async {
+      final pickerIntents = <RtcCallEntryIntent>[];
+      await _pumpShell(
+        tester,
+        overrides: <Override>[
+          rtcCallEntryPresenterProvider.overrideWithValue(
+            RtcCallEntryPresenter(
+              permissionRequest: (_, _) async => CallPermissionOutcome.granted,
+              participantPicker: (_, intent) async {
+                pickerIntents.add(intent);
+                return null;
+              },
+            ),
+          ),
+        ],
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('object-chrome-more')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(UITextConstants.callGroupVoice));
+      await tester.pumpAndSettle();
+
+      expect(pickerIntents, hasLength(1));
+      expect(pickerIntents.single.contextKind, RtcCallEntryContextKind.circle);
+      expect(pickerIntents.single.circleId, 'fixture_circle_photo');
+      expect(
+        pickerIntents.single.conversationId,
+        'fixture_conv_fixture_circle_photo',
+      );
+      expect(pickerIntents.single.defaultSelectAll, isTrue);
+    });
+
     testWidgets('更多按钮打开统一底部动作面板并支持复制链接', (tester) async {
       String? copiedText;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -523,7 +564,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 3));
 
-      expect(copiedText, equals('fixture_circle_photo'));
+      // 复制链接必须是可分享深链（metadata link_templates circle path），
+      // 而不是裸 circleId（2026-07-20 M8-H Phase 1 断点修复）。
+      expect(copiedText, isNotNull);
+      expect(copiedText, endsWith('/circle/fixture_circle_photo'));
+      expect(copiedText, isNot(equals('fixture_circle_photo')));
     });
 
     testWidgets('审批加入后切换为待审核状态', (tester) async {

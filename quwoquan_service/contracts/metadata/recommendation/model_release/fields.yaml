@@ -13,33 +13,6 @@ entities:
       - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: activatedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
 
-  StageRecommendationModelReleaseRequest:
-    description: 登记待激活模型发布的强类型命令输入。
-    fields:
-      - { name: id, type: string, constraints: [NOT_NULL] }
-      - { name: scenario, type: string, constraints: [NOT_NULL] }
-      - { name: modelDigest, type: string, constraints: [NOT_NULL] }
-      - { name: featureContractVersion, type: string, constraints: [NOT_NULL] }
-
-  ActivateRecommendationModelReleaseRequest:
-    description: 激活已登记发布并设定灰度比例的强类型命令输入。
-    fields:
-      - { name: rolloutPercent, type: int, constraints: [NOT_NULL] }
-
-  RollbackRecommendationModelReleaseRequest:
-    description: 将场景回滚到目标已激活发布的强类型命令输入。
-    fields:
-      - { name: targetReleaseId, type: string, constraints: [NOT_NULL] }
-
-  RecommendationModelReleaseCommandResult:
-    description: 发布命令提交回执。
-    fields:
-      - { name: releaseId, type: string, constraints: [NOT_NULL] }
-      - { name: version, type: int64, constraints: [NOT_NULL] }
-      - { name: status, type: string, constraints: [NOT_NULL] }
-      - { name: rolloutPercent, type: int, constraints: [NOT_NULL] }
-      - { name: idempotentReplay, type: bool, constraints: [NOT_NULL] }
-
   ModelScoreRequest:
     description: 已激活 RecommendationModelRelease 的多场景评分 transport DTO，不是业务对象。
     fields:
@@ -52,7 +25,11 @@ entities:
       - { name: context, type: object, constraints: [NULLABLE] }
 
   CandidateInput:
-    description: 评分 Reader 的候选 transport DTO，不登记为业务对象。
+    description: |
+      评分 Reader 的候选 transport DTO，不登记为业务对象。
+      N3-3 特征偏斜收口：publishHour 由服务端从 publishedAt 派生随请求下发
+      （训练-在线同源）；bodyLength/aspectRatio/hasCover 因在线召回投影不携带
+      已从特征 registry 退役（S1 召回投影补齐后再启用），wire 不传。
     fields:
       - { name: contentId, type: string }
       - { name: contentType, type: string }
@@ -60,16 +37,27 @@ entities:
       - { name: tagRefs, type: "[]string" }
       - { name: entityRefs, type: "[]string" }
       - { name: ageHours, type: float64 }
+      - { name: publishHour, type: int }
       - { name: viewCount, type: int64 }
       - { name: likeCount, type: int64 }
       - { name: commentCount, type: int64 }
       - { name: shareCount, type: int64 }
       - { name: recallPath, type: string }
+      - { name: qualityScore, type: float64 }
+      - { name: contentVertical, type: string }
+      - { name: supplySource, type: string }
+      - { name: intersectionFactStrength, type: float64 }
+      - { name: intersectionFreshness, type: float64 }
+      - { name: affinityIntersectionScore, type: float64 }
+      - { name: intersectionSourceRefTop, type: string }
+      - { name: intersectionConfidenceLabel, type: string }
+      - { name: intersectionClass, type: string }
 
   ModelScoreResponse:
-    description: 单次评分 Reader 的 transport 结果。
+    description: 单次评分 Reader 的 transport 结果；模型命中时必须返回具体发布身份供曝光事实审计。
     fields:
       - { name: scores, type: "[]CandidateScore", constraints: [NOT_NULL] }
+      - { name: modelReleaseId, type: string, constraints: [NULLABLE] }
 
   BatchModelScoreRequest:
     description: 同一调用上下文中的强类型批量评分请求。

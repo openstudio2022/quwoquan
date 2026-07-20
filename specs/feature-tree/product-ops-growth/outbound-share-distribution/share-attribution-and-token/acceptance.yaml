@@ -39,12 +39,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt1_local_contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt1_local_contract
@@ -77,11 +79,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt2_api_integration
         cases:
         - api_integration.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_api_integration
@@ -90,6 +94,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_local_contract
@@ -123,17 +128,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt3_api_integration
         cases:
         - api_integration.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_local_contract
@@ -163,12 +171,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt4_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt4_local_contract
@@ -190,6 +200,7 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.contract1_local_contract
@@ -201,5 +212,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

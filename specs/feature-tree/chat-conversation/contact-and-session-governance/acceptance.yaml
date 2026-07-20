@@ -23,7 +23,7 @@ sit_acceptance:
   SIT1:
     title: 关注状态机与关系能力位单一真相源
     story_refs:
-    - relationship-state-contract
+    - conversation-entry-matrix
     done_when:
     - RelationshipState 枚举、RelationshipCapabilityView、主页动作矩阵和会话入口都只消费 self/not_following/following/followed_by/mutual。
     - 规格、契约、端侧 UI、Remote/Mock 和测试中不存在作为关系等级的旧字段。
@@ -32,23 +32,31 @@ sit_acceptance:
     - 关系能力读取 p95 <= 150ms。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_relationship_lifecycle__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/contact_relationship_lifecycle_journey__user_acceptance_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit1.sit1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.chat_conversation.contact_and_session_governance.sit1.sit1_api_integration
@@ -63,7 +71,7 @@ sit_acceptance:
   SIT2:
     title: 拉黑门禁级联与取消拉黑不自动恢复关系
     story_refs:
-    - block-gate-cascade
+    - conversation-entry-matrix
     done_when:
     - 创建 BlockEdge 幂等，并删除双方 FollowEdge、失效双方 pending GreetingRequest、发布 UserBlocked。
     - 任一方向存在拉黑时，关注、打招呼、建会话、SendMessage、1v1 RTC 均由服务端拒绝。
@@ -74,22 +82,30 @@ sit_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_relationship_lifecycle__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_page_widget__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit2.sit2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit2_api_integration
         cases:
         - api_integration.chat_conversation.contact_and_session_governance.sit2.sit2_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit2.sit2_local_contract
@@ -101,8 +117,7 @@ sit_acceptance:
   SIT3:
     title: 打招呼请求箱与回复建正式私信
     story_refs:
-    - greeting-request-inbox
-    - greeting-reply-promotes-conversation
+    - greeting-request-inbox-and-upgrade
     done_when:
     - 非 mutual 且未拉黑用户可发起一条 pending GreetingRequest，请求不进入普通会话列表。
     - 同一 requester-target 只能存在一条 pending 请求，重复创建返回结构化错误。
@@ -113,27 +128,35 @@ sit_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/user-service/tests/api_integration/greeting_request_state_machine__api_integration_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/greeting_request_state_machine__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/greeting_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/greeting_inbox_journey__user_acceptance_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit3.sit3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit3_api_integration
         cases:
         - api_integration.chat_conversation.contact_and_session_governance.sit3.sit3_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit3.sit3_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.contact_and_session_governance.sit3.device_journey
@@ -147,9 +170,7 @@ sit_acceptance:
   SIT4:
     title: 私信与 1v1 RTC 服务端门禁不可绕过
     story_refs:
-    - direct-conversation-gate
-    - send-message-gate
-    - rtc-relationship-gate
+    - conversation-entry-matrix
     done_when:
     - CreateConversation 对 direct 1v1 校验 mutual 或 replied greeting；非授权状态不创建 conversation。
     - SendMessage 校验 conversation 成员、非 blocked、会话未只读；不依赖端侧按钮作为唯一防线。
@@ -162,27 +183,37 @@ sit_acceptance:
       - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
       - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_relationship_lifecycle__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_conversation_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/contact_relationship_lifecycle_journey__user_acceptance_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit4.sit4_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit4_api_integration
         cases:
         - api_integration.chat_conversation.contact_and_session_governance.sit4.sit4_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.sit4.sit4_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.contact_and_session_governance.sit4.device_journey
@@ -209,17 +240,21 @@ contract_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/cloud/contracts/chat/message_contracts__local_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/contracts/chat/message_contracts__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.chat_conversation.contact_and_session_governance.contract1.contract1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: contract1_api_integration
         cases:
         - api_integration.chat_conversation.contact_and_session_governance.contract1.contract1_api_integration
@@ -233,5 +268,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-login-entry-loop-contract
-  full_gate:
+  profile_gates:
   - make gate

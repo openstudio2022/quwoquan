@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/application"
 )
@@ -66,7 +67,7 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 	if err != nil {
 		return application.ExternalInteractionAccepted{}, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/integrations/external-requests", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+serviceclients.IntegrationExternalRequestsPath, bytes.NewReader(body))
 	if err != nil {
 		return application.ExternalInteractionAccepted{}, err
 	}

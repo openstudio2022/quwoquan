@@ -1,0 +1,70 @@
+entity: TagTaxonomyRelease
+domain: TAG
+
+errors:
+  - code: TAG.USER.release_not_found
+    kind: USER
+    reason: release_not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: tagReleaseNotFound
+    go_const: ErrTagReleaseNotFound
+    user_message:
+      zh: "标签发布批次不存在"
+      en: "Tag taxonomy release not found"
+
+  - code: TAG.USER.release_invalid_argument
+    kind: USER
+    reason: release_invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: tagReleaseInvalidArgument
+    go_const: ErrTagReleaseInvalidArgument
+    user_message:
+      zh: "标签发布请求不合法"
+      en: "Invalid tag taxonomy release request"
+
+  - code: TAG.USER.release_invalid_transition
+    kind: USER
+    reason: release_invalid_transition
+    http_status: 409
+    recovery_action: refresh
+    dart_const: tagReleaseInvalidTransition
+    go_const: ErrTagReleaseInvalidTransition
+    user_message:
+      zh: "标签发布状态不允许该操作"
+      en: "Tag taxonomy release state does not allow this operation"
+
+  - code: TAG.USER.release_version_conflict
+    kind: USER
+    reason: release_version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: tagReleaseVersionConflict
+    go_const: ErrTagReleaseVersionConflict
+    user_message:
+      zh: "标签发布已更新，请刷新后重试"
+      en: "Tag taxonomy release changed, refresh and retry"
+
+  - code: TAG.USER.release_idempotency_conflict
+    kind: USER
+    reason: release_idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: tagReleaseIdempotencyConflict
+    go_const: ErrTagReleaseIdempotencyConflict
+    user_message:
+      zh: "重复请求与原发布操作不一致"
+      en: "The repeated request differs from the original release operation"
+
+  - code: TAG.SYSTEM.release_storage_failed
+    kind: SYSTEM
+    reason: release_storage_failed
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: tagReleaseStorageFailed
+    go_const: ErrTagReleaseStorageFailed
+    user_message:
+      zh: "标签发布操作失败，请稍后重试"
+      en: "Tag taxonomy release operation failed, please retry"

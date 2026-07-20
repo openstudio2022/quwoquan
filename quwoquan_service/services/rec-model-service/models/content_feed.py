@@ -34,17 +34,46 @@ CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 ITEM_NUMERIC = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
-    "bodyLength", "tagCount", "qualityScore", "publishHour", "aspectRatio",
+    # N3-3 特征偏斜收口：bodyLength/aspectRatio/hasCover 已退役（在线召回投影
+    # 不携带、serving 恒 0，训练学到的分裂在线全失效；S1 召回投影补齐后再启用）。
+    "tagCount", "qualityScore", "publishHour",
 ]
 RECALL_PATH_MAP = {"tag_recall": 0, "hot_recall": 1, "social_friend": 2, "social_circle": 3, "explore_recall": 4}
 USER_NUMERIC = [
     "engagementRate", "totalLikes", "totalShares", "totalEvents",
 ]
 CONTEXT_NUMERIC = ["requestHour", "requestDayOfWeek"]
+# W7 交集特征（registry v5）：user 侧事实计数 + 候选侧事实强度。affinity 通道为
+# advisory：候选级 affinity 仅在 intersectionConfidenceLabel 存在时计入（与 Go
+# ranking fusion 同语义）。三处消费方（本文件 / train.py / train_multiobjective.py）
+# 必须与 verify_feature_consistency.py 的交集特征清单同步。
+INTERSECTION_USER_NUMERIC = [
+    "sharedFolloweesCount", "sharedCircleCount", "coCommentedCount",
+    "coVisitedEntityCount", "followeeInObjectActive", "followeeViewingActive",
+    "affinityIntersectionScore",
+]
+INTERSECTION_CLASS_MAP = {"fact": 2, "affinity": 1}
+
+
+def _append_intersection_features(
+    features: list[float], item: dict, user: dict
+) -> None:
+    """Append intersection features (user 7 + item 4 = 11 dims)."""
+    for f in INTERSECTION_USER_NUMERIC:
+        features.append(float(user.get(f, 0) or 0))
+    features.append(float(item.get("intersectionFactStrength", 0) or 0))
+    features.append(float(item.get("intersectionFreshness", 0) or 0))
+    candidate_affinity = float(item.get("affinityIntersectionScore", 0) or 0)
+    if not str(item.get("intersectionConfidenceLabel", "") or "").strip():
+        candidate_affinity = 0.0
+    features.append(candidate_affinity)
+    features.append(
+        float(INTERSECTION_CLASS_MAP.get(str(item.get("intersectionClass", "") or ""), 0))
+    )
 
 
 def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[float]:
-    """Must align with train.py _extract_features (34 dims)."""
+    """Must align with train.py _extract_features (45 dims)."""
     features: list[float] = []
     for f in ITEM_NUMERIC:
         features.append(float(row.get(f, 0) or 0))
@@ -53,7 +82,7 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
     for f in CONTEXT_NUMERIC:
         features.append(float(ctx_feat.get(f, 0) or 0))
     features.append(float(CONTENT_TYPE_MAP.get(row.get("contentType", ""), -1)))
-    features.append(1.0 if row.get("hasCover") else 0.0)
+    # hasCover 已退役（N3-3）：在线不可得，双侧同步移除保持特征向量同构。
     features.append(float(RECALL_PATH_MAP.get(row.get("recallPath", ""), -1)))
 
     tag_affinities = user_feat.get("tagAffinities", {})
@@ -94,6 +123,8 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
     content_type = row.get("contentType", "")
     features.append(float(type_ener.get(content_type, 0)))
 
+    _append_intersection_features(features, row, user_feat)
+
     return features
 
 
@@ -125,7 +156,7 @@ def _resolve_cached_artifact_path(artifact_path: str) -> str | None:
     return None
 
 
-def _load_model_from_registry() -> Any:
+def _load_model_from_registry() -> tuple[Any | None, str | None]:
     """Load production LightGBM model from MongoDB registry.
 
     Resolution order:
@@ -134,7 +165,7 @@ def _load_model_from_registry() -> Any:
     3. None → rule fallback
     """
     if lgb is None or MongoClient is None:
-        return None
+        return None, None
     uri = os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true")
     db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_content")
     try:
@@ -145,7 +176,8 @@ def _load_model_from_registry() -> Any:
                 sort=[("createdAt", -1)],
             )
         if not doc:
-            return None
+            return None, None
+        model_release_id = str(doc.get("_id") or "").strip() or None
 
         artifact_uri = doc.get("artifactUri", "")
         if artifact_uri:
@@ -153,32 +185,36 @@ def _load_model_from_registry() -> Any:
                 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
                 import artifact_store
                 local_path = artifact_store.download(artifact_uri)
-                return lgb.Booster(model_file=local_path)
+                return lgb.Booster(model_file=local_path), model_release_id
             except Exception:
                 pass
 
         artifact_path = doc.get("artifactPath", "")
         resolved_path = _resolve_cached_artifact_path(artifact_path)
         if resolved_path:
-            return lgb.Booster(model_file=resolved_path)
+            return lgb.Booster(model_file=resolved_path), model_release_id
     except Exception:
         pass
-    return None
+    return None, None
 
 
 class ContentFeedScorer:
     """Scorer for scenario=content_feed. Loads LightGBM model on init."""
 
     def __init__(self):
-        self._model = _load_model_from_registry()
+        self._model, self._model_release_id = _load_model_from_registry()
         self._model_version = "lgb" if self._model else "rule"
 
     @property
     def model_version(self) -> str:
         return self._model_version
 
+    @property
+    def model_release_id(self) -> str | None:
+        return self._model_release_id
+
     def reload(self):
-        self._model = _load_model_from_registry()
+        self._model, self._model_release_id = _load_model_from_registry()
         self._model_version = "lgb" if self._model else "rule"
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
@@ -224,4 +260,7 @@ class ContentFeedScorer:
                 detail["total"] = sc
                 scores_list.append(CandidateScore(contentId=content_id, score=sc, detail=detail))
 
-        return ModelScoreResponse(scores=scores_list)
+        return ModelScoreResponse(
+            scores=scores_list,
+            modelReleaseId=self._model_release_id,
+        )

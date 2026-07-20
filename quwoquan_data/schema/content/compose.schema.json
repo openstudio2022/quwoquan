@@ -136,6 +136,10 @@
     "imageBindings": { "type": "array", "items": { "type": "object" } },
     "videoBindings": { "type": "array", "items": { "type": "object" } },
     "sourceFrames": { "type": "array", "items": { "type": "object" } },
+    "sourceVideo": { "$ref": "sourced_video_evidence.schema.json" },
+    "sourceMode": {
+      "enum": ["sourced_video", "rights_cleared_image_sequence"]
+    },
     "scriptLines": { "type": "array", "items": { "type": "string" } },
     "agentRunId": { "type": "string" },
     "generator": { "type": "string" },
@@ -193,7 +197,7 @@
         ]
       },
       "then": {
-        "required": ["title", "caption", "sourceFrames", "scriptLines", "storySpine", "generator"],
+        "required": ["title", "caption", "sourceMode", "scriptLines", "storySpine", "generator"],
         "properties": {
           "title": { "type": "string", "minLength": 1, "maxLength": 80 },
           "caption": { "type": "string", "minLength": 1, "maxLength": 300 },
@@ -202,7 +206,19 @@
           "generator": { "const": "agent" },
           "entityRefs": { "type": "array", "minItems": 1 },
           "tagRefs": { "type": "array", "minItems": 2 }
-        }
+        },
+        "oneOf": [
+          {
+            "properties": { "sourceMode": { "const": "sourced_video" } },
+            "required": ["sourceVideo"]
+          },
+          {
+            "properties": {
+              "sourceMode": { "const": "rights_cleared_image_sequence" }
+            },
+            "required": ["sourceFrames"]
+          }
+        ]
       }
     },
     {

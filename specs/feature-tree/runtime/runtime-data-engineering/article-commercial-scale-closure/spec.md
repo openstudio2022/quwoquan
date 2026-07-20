@@ -1,8 +1,11 @@
-# article-commercial-scale-closure
+# L3 特性：article-commercial-scale-closure
 
 ## 概述
 
-面向旅行与摄影垂类的文章商业化收口 Story：把开放式文章来源站点纳入统一 onboarding 合同与共享 commercial pool，清理历史 article/homepage 旁路，建立唯一 commercial execution branch，并以真实 `cursor_sdk` + 最新 `composer` 模型完成 `H100 -> H1000` 端到端验证，再基于真实证据评估 `10k/日` 可行性。
+面向浙江、四川旅行垂类的文章商业化放量 Story：把文章来源站点纳入统一
+onboarding 合同与共享 commercial pool，建立唯一 commercial execution branch，
+依次完成 Canary、H200、H1000 与 H10K 真实发布；日产 100,000 只允许依据 H10K
+权威成本、吞吐和下游消费证据外推。
 
 ## 归属
 
@@ -14,21 +17,20 @@
 
 ### In Scope
 
-- article/homepage 商业主线的唯一执行分支：`download -> build -> content_plan -> produce -> publish -> ship/import -> verify`
+- article 商业主线的唯一执行分支：`download -> build -> content_plan -> produce -> publish -> ship/import -> verify`
 - 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
 - 站点 admission 分层：`commercial_release` / `controlled_trial` / `reference_only` / `blocked`
-- 真实 `cursor_sdk` managed authoring、authoritative `TokenLedger`、`firstPassRate`、`sdk_monitoring`、`managed_batch_audit`
-- H100 article+homepage 真实闭环
-- H1000 在 H100 全绿后的同轮放量验证
-- 基于 H1000 实测的 `10k/日` evaluate-only 评估
-- 当前 article/homepage 商业 blocker：source sufficiency、mixed-layout、homepage closure、release/import/search/reco visibility
+- 文章来源与独立开放许可插图的 typed role、逐资产 rights/provenance 与 mixed-layout
+- 真实 `cursor_sdk` managed authoring、authoritative `TokenLedger`、预算 kill switch
+- Canary（浙江 2、四川 1）、H200、H1000、H10K 的独立 article execution 与 immutable release
+- H10K 必须每省 5,000、共 10,000 条 accepted/canonical/Gamma 可查询文章在 24 小时内完成
+- 基于 H10K 实测的 100,000/日 evaluate-only 评估
 
 ### Out of Scope
 
-- Pinterest image-only 商业线
-- video lane 商业化
+- image 与 video lane 的独立生产逻辑
 - creator pool 新一轮扩池与 persona 设计
-- 10k/日与 100k/日实际生产放量交付
+- 100,000/日实际生产
 - 每个新增站点都单独跑一套独立 H100/H1000；本 Story 只验 shared commercial pool 总体能力
 
 ## 核心原则
@@ -36,10 +38,10 @@
 1. **唯一商业分支**：文章商业化执行只认 `qwq-data task execute` 创建的单
    execution 主线，不再并行维护第二套 source-planning、produce 或 release 语义。
 2. **开放式扩站但共享验收**：新老站点全部走统一 onboarding 合同，进入 shared pool 后共同承担 H100/H1000 配额；不要求每站各自单独关门。
-3. **证据优先于数量**：`H100/H1000` 完成必须同时具备真实 `env_ready_report`、`task_execution_state`、`token_ledger`、`managed_batch_audit`、`sdk_monitoring` 与 release/import/search/reco 证据。
-4. **只用最新 composer 主线**：内容生成执行统一使用 `cursor_sdk` 与默认最新 `composer`，不再用细版本口径制造执行漂移。
+3. **文本与插图双角色闭包**：文章文本事实源和插图资产必须分别记录来源、权利与用途；无逐图权利时不得静默退化 `text_only` 或复用平台 UGC 原图。
+4. **模型与成本可复现**：author/reviewer 使用 execution manifest 冻结的具体模型；每次 turn 的权威 usage、真实 billed cost、重试成本和 passed-unit cost 必须增量落账。
 5. **历史旁路必须清理**：退场的 `source_plan`、prior-plan source reuse、双 planning contract、旧 quota/reuse/provider 扩散不得继续干扰 commercial path。
-6. **10k 只做 evaluate**：没有 H1000 的真实 throughput / `unitPassedCost` / `sourceReadyObjectCapacity` / `firstPassRate`，不得承诺日产万级可行。
+6. **H10K 实跑，H100K 只外推**：H10K 缺少真实 release/import/API/App UAT/rollback/replay 任一证据都保持 NO_GO；100,000/日不实际生产。
 
 ## 真相源
 
@@ -53,13 +55,13 @@
 
 ## 关键裁定
 
-- 当前 image-only 商业验证已收紧在 `geo-content-trinity` 的 Pinterest lane，本 Story 不再复用该验收口径。
-- article 商业化的真正问题不在后半条 `produce -> publish` 主线，而在前半条来源准入、planning contract 与历史旁路清理。
+- article 商业化的主要 blocker 是站点准入、底稿与插图双角色权利闭包、planning contract 与历史旁路清理。
 - shared commercial pool 的成功标准是“通过权利/质量门并能闭环下游可见性”的 released objects，而不是站点名册数量或 trial 漏斗数量。
+- homepage 必须通过显式 `homepageExecutionId` 绑定已冻结、已发布的同档主页批次。
 
 ## 输出目录口径（数据输出规范）
 
-- H100/H1000 每次运行都使用唯一 `.qwq_output/data/tasks/<executionId>/` 工作包；
+- Canary/H200/H1000/H10K 每次运行都使用唯一 `.qwq_output/data/tasks/<executionId>/` 工作包；
   homepage 与 article 使用独立 execution，禁止混用运行身份。
 - readiness/monitoring/audit 只认当前 execution 内的权威证据；approved canonical 只写
   `quwoquan_data/publish/**`，immutable release 只写 `.qwq_output/data/releases/<releaseId>/`。

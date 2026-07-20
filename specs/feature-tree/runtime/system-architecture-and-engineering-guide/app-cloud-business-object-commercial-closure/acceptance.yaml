@@ -72,6 +72,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: ddd_cqrs_contract_graph
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.ddd_cqrs_baseline
@@ -140,6 +141,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: app_cloud_business_object_contract
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.contract_graph
@@ -163,6 +165,9 @@ gwt_acceptance:
         - file: quwoquan_service/services/notification-service/tests/local_contract/notification_delivery_ops_facades__local_contract_test.go
         - file: quwoquan_app/test/local_contract/cloud/user/profile_update_proposal_facets__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/ui/user/profile_update_proposal_review_sheet__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/settings/pages/b1_settings_pages__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
+        - file: quwoquan_service/services/user-service/tests/local_contract/internal/application/account/user_settings/user_settings_facade__reliability__local_contract_test.go
     status: partial
 
   GWT2:
@@ -214,6 +219,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: api_integration
+          execution_profile: integration
           suite: app_cloud_server_security
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.auth_bola
@@ -222,6 +228,7 @@ gwt_acceptance:
           quality_facet: security
       supporting:
         - layer: local_contract
+          execution_profile: baseline
           suite: generated_security_descriptor
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.security_descriptor
@@ -245,6 +252,10 @@ gwt_acceptance:
         - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
         - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
         - file: quwoquan_service/services/user-service/tests/api_integration/active_persona_context_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/account_session_packet__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/persona_command_packet__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/user_settings_packet__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/device_credential_packet__api_integration_test.go
         - file: quwoquan_service/services/user-service/internal/adapters/http/profile_update_proposal_handler__local_contract_test.go
         - file: quwoquan_service/services/user-service/tests/api_integration/profile_update_proposal_store__api_integration_test.go
         - file: quwoquan_app/test/local_contract/cloud/assistant/assistant_consent_fail_closed__security__local_contract_test.dart
@@ -293,6 +304,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: production_dependency_purity
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.production_purity
@@ -309,6 +321,7 @@ gwt_acceptance:
         - file: quwoquan_ops/tests/local_contract/test_cloud_package_boundaries__contract__local_contract_test.py
         - file: quwoquan_ops/tests/local_contract/test_production_wiring_purity__local_contract_test.py
         - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/circle/alpha_file_facets__local_contract_test.dart
+        - file: quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/user/alpha_b1_identity_facets__local_contract_test.dart
     status: partial
 
   GWT4:
@@ -358,6 +371,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: cloud_runtime_execution
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.runtime_semantics
@@ -366,6 +380,7 @@ gwt_acceptance:
           quality_facet: reliability
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: cloud_runtime_remote
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.runtime_remote
@@ -431,11 +446,13 @@ gwt_acceptance:
       - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
       - specs/feature-tree/journey_scenario_registry.yaml
       - quwoquan_ops/environments/gamma_validation_suites.json
+      - specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/object-batch-rollout-plan.md
     performance_points:
       - Journey 首屏、主动作、API P95/P99、queue lag 与 projection freshness 达到各能力 SLO。
     test_evidence:
       primary:
         - layer: user_acceptance
+          execution_profile: release
           suite: business_object_commercial_journeys
           cases:
             - user_acceptance.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.ten_scenarios
@@ -544,6 +561,26 @@ gwt_acceptance:
             - user_acceptance.page.settingsDarkMode.primary_cta
             - user_acceptance.page.settingsDarkMode.trace_context
             - user_acceptance.page.settingsDarkMode.request_wait_recovery
+            - user_acceptance.page.settingsNotifications.load_success
+            - user_acceptance.page.settingsNotifications.empty_permission_error
+            - user_acceptance.page.settingsNotifications.primary_cta
+            - user_acceptance.page.settingsNotifications.trace_context
+            - user_acceptance.page.settingsNotifications.request_wait_recovery
+            - user_acceptance.page.settingsPrivacy.load_success
+            - user_acceptance.page.settingsPrivacy.empty_permission_error
+            - user_acceptance.page.settingsPrivacy.primary_cta
+            - user_acceptance.page.settingsPrivacy.trace_context
+            - user_acceptance.page.settingsPrivacy.request_wait_recovery
+            - user_acceptance.page.settingsCalls.load_success
+            - user_acceptance.page.settingsCalls.empty_permission_error
+            - user_acceptance.page.settingsCalls.primary_cta
+            - user_acceptance.page.settingsCalls.trace_context
+            - user_acceptance.page.settingsCalls.request_wait_recovery
+            - user_acceptance.page.settingsAccountSecurity.load_success
+            - user_acceptance.page.settingsAccountSecurity.empty_permission_error
+            - user_acceptance.page.settingsAccountSecurity.primary_cta
+            - user_acceptance.page.settingsAccountSecurity.trace_context
+            - user_acceptance.page.settingsAccountSecurity.request_wait_recovery
             - user_acceptance.page.settingsAbout.load_success
             - user_acceptance.page.settingsAbout.empty_permission_error
             - user_acceptance.page.settingsAbout.primary_cta
@@ -559,11 +596,6 @@ gwt_acceptance:
             - user_acceptance.page.profilePersonas.primary_cta
             - user_acceptance.page.profilePersonas.trace_context
             - user_acceptance.page.profilePersonas.request_wait_recovery
-            - user_acceptance.page.profileComments.load_success
-            - user_acceptance.page.profileComments.empty_permission_error
-            - user_acceptance.page.profileComments.primary_cta
-            - user_acceptance.page.profileComments.trace_context
-            - user_acceptance.page.profileComments.request_wait_recovery
             - user_acceptance.page.profileStats.load_success
             - user_acceptance.page.profileStats.empty_permission_error
             - user_acceptance.page.profileStats.primary_cta
@@ -609,6 +641,7 @@ gwt_acceptance:
           quality_facet: experience
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: app_cloud_operation_store_event
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.operation_store_event
@@ -623,7 +656,35 @@ gwt_acceptance:
         - file: quwoquan_service/services/notification-service/tests/api_integration/notification_delivery_mongo_integration__reliability__api_integration_test.go
         - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_interaction_journey__user_acceptance_test.dart
         - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+        - file: quwoquan_service/services/realtime-gateway/tests/local_contract/gateway__local_contract_test.go
+        - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
+        - file: quwoquan_service/services/chat-service/tests/api_integration/rtc_call_log_projection__api_integration_test.go
+        - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_facets_remote__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/cloud/rtc/incoming_call_state__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_participants_presentation__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_provider_lifecycle__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_signal_consume__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/core/platform/rtc_native_incoming_call__platform__local_contract_test.dart
+        - file: quwoquan_service/services/notification-service/tests/api_integration/rtc_incoming_call_coordination__reliability__api_integration_test.go
+        - file: quwoquan_service/services/integration-service/tests/api_integration/push_delivery_worker__idempotency__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/device_credential_packet__api_integration_test.go
+        - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_realtime_receive_journey__user_acceptance_test.dart
+        - file: quwoquan_service/services/content-service/tests/api_integration/intersection_visit_http_contract__api_integration_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/learning_event_dedupe__api_integration_test.go
+        - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
+        - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
+        - file: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
+        - file: quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/journeys/user/persona_management_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/journeys/user/user_settings_save_reopen_journey__user_acceptance_test.dart
     status: pending
+    notes:
+      - "2026-07-19 B2 真实性复核：首轮内容/媒体实现不能作为商业准出证据；稳定 ContractGraph 派生为 8 implemented、2 contract-ready、0 commercial-ready。重新打开的阻断包括 Search 双轨、ProfileInteractionActivityView 未真实物化、审核决定未回写 Post、页面 operation 可达性与登录续接、失真测试绑定及四环境运行制品。上述缺口全部闭合并由同一 Graph hash 的 local_contract/api_integration/user_acceptance 与 stackctl 证据证明前，GWT5 保持 pending。"
+      - "2026-07-19 B10 服务端与契约收口（CR-20260719-121）：realtime-gateway 第一方实现（ticket+lease/fencing+per-user 订阅），rtc-service 按 packet 重做（state CAS+receipt+outbox、auth 装配、删信令旁路与录制死链）。剩余 GATE_BLOCK：App rtc Facet 拆分/信令合并/mock 迁移、通话与 chat 实时 UAT、gamma-local realtime-gateway+LiveKit 启用与运行制品、commercial 翻 ready。"
+      - "2026-07-20 B10 端到端收口（CR-20260719-121）：App 已切 5 个 generated typed Facet + production Remote-only，Mock 迁独立 alpha 包，真实来电首帧/GetCall、成员展示组合、RTC outbox→chat system_call_log、结构化错误、语义 token、连接埋点与本地行为契约已闭合；production Remote UAT 未闭合。RTC/Notification/Integration API integration、gateway local_contract 与关键并发 `go test -race` 通过。最新 Gamma 全服务 package `.qwq_output/env/gamma/runs/20260720T161422Z-package-gamma-local` 成功；full cold-start 因本机缺受控 SLS secret fail-closed，release verify `.qwq_output/env/gamma/runs/20260720T161256Z-verify-gamma-local` 同步阻断，故 GWT5/commercial.ready 继续 pending，不以静态证据替代运行制品。"
+      - "2026-07-20 B10 证据真实性纠偏：原 `call_answer_hangup` / `call_reconnect` 两个 `user_acceptance` 文件通过 Provider override 与假 LiveKit 运行，只能证明 local_contract，不能作为 production Remote UAT；本轮已删除该两条伪 UAT 绑定并改录同层 local_contract、真实 Postgres/Redis API integration 与原生平台合同。离线 Push→系统来电 UI→Answer/Reject→LiveKit 的 Gamma 真机 UAT、到达 P95、取消竞态 readback 仍是 GATE_BLOCK，取得真实凭据和设备制品前不得翻 commercial.ready。"
+      - "2026-07-19 B9 推荐运营对象收口（CR-20260719-120 entry 2）：三条真实断链修复（visit wire+幂等台账、intersection visit 迁 content 域水位并接通路由、config outbox 共享租约投递器）；model_release 生命周期 deferred 裁剪、exposure/feedback fact 确定性 dedupe 与归因、If-Match \"0\" 语义统一、7 对象 readiness + B9 告警组。诚实保留：event_record 查询 4 op blocked（R-TELEMETRY-001 SLS/gamma 证据）、experiment app consumer deferred、AB 双轨登记 R-OBJ-004、modelReleaseId 归因缺口 NULLABLE 注记。"
 
 contract_acceptance:
   CONTRACT1:
@@ -646,6 +707,7 @@ contract_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: app_cloud_story_traceability
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.app_cloud_business_object_commercial_closure.traceability
@@ -671,7 +733,7 @@ execution:
     - cd quwoquan_app && flutter test test/local_contract/cloud/user/profile_update_proposal_facets__local_contract_test.dart test/local_contract/ui/user/profile_update_proposal_review_sheet__local_contract_test.dart
   api_integration:
     - cd quwoquan_service && go test ./services/user-service/tests/api_integration -run TestProfileUpdateProposal -count=1
-  full_gate:
+  profile_gates:
     - make gate
-    - python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
-    - make gate-full
+    - python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release
+    - make gate-release ENV=gamma

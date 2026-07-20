@@ -22,8 +22,21 @@ type OutboxEvent struct {
 	Checkpoint string
 }
 
+// PostDeletionTombstone 是 DeletePost 命令的伴随不可变事实
+// （canonical object content.DeletedPostTombstone）。它与聚合提交同事务
+// 持久化到 deleted_post_tombstones，_id 复用 postId 作唯一 dedupe key；
+// 保留期由 expireAt TTL 索引承载。
+type PostDeletionTombstone struct {
+	PostID    string
+	AuthorID  string
+	Reason    string
+	DeletedAt time.Time
+	ExpireAt  time.Time
+}
+
 // Commit 是 PostCommandFacade 交给 PostAggregateStore 的唯一写模型。
 // ExpectedVersion=0 仅用于创建；其余命令必须携带已装载版本。
+// Tombstone 仅在删除命令时非空，与 state/receipt/outbox 同事务追加。
 type Commit struct {
 	Post             *postmodel.Post
 	ExpectedVersion  int64
@@ -32,6 +45,7 @@ type Commit struct {
 	CommandDigest    string
 	ReceiptExpiresAt time.Time
 	Events           []OutboxEvent
+	Tombstone        *PostDeletionTombstone
 }
 
 type CommitResult struct {
@@ -84,4 +98,13 @@ type OutboxPublisher interface {
 type ProjectionCheckpointStore interface {
 	LoadCheckpoint(ctx context.Context, consumer string) (string, error)
 	SaveCheckpoint(ctx context.Context, consumer, checkpoint string) error
+}
+
+// TombstoneReader 是删除保留期语义的具名读端口：保留期内返回墓碑事实
+// （读取方据此回 410 content_deleted），TTL 到期后 found=false 回落 404。
+type TombstoneReader interface {
+	FindTombstone(
+		ctx context.Context,
+		postID string,
+	) (PostDeletionTombstone, bool, error)
 }

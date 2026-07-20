@@ -1,18 +1,74 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 void main() {
+  const inputBarFiles = <String>[
+    'lib/components/input/customizable_chat_input_bar.dart',
+    'lib/components/input/customizable_chat_input_bar_attachments.part.dart',
+    'lib/components/input/customizable_chat_input_bar_composer.part.dart',
+    'lib/components/input/customizable_chat_input_bar_layout.part.dart',
+    'lib/components/input/customizable_chat_input_bar_voice.part.dart',
+  ];
+
+  test('输入栏按职责拆分且保持单一 State 与回调真相源', () {
+    final sources = <String, String>{
+      for (final path in inputBarFiles) path: _readAppFile(path),
+    };
+
+    for (final entry in sources.entries) {
+      final lineCount = const LineSplitter().convert(entry.value).length;
+      expect(
+        lineCount,
+        lessThan(1000),
+        reason: '${entry.key} 有 $lineCount 行，必须继续按职责拆分',
+      );
+    }
+
+    final mainSource = sources[inputBarFiles.first]!;
+    for (final partPath in inputBarFiles.skip(1)) {
+      final partName = partPath.split('/').last;
+      expect(mainSource, contains("part '$partName';"));
+      expect(
+        sources[partPath],
+        contains("part of 'customizable_chat_input_bar.dart';"),
+      );
+    }
+
+    final combined = sources.values.join('\n');
+    expect(
+      RegExp(
+        r'class\s+_CustomizableChatInputBarState\s+extends\s+State<CustomizableChatInputBar>',
+      ).allMatches(combined),
+      hasLength(1),
+    );
+    for (final callbackPattern in <String>[
+      r'Future<void>\s+_addAttachments\s*\(',
+      r'Future<void>\s+_send\s*\(',
+      r'Future<void>\s+_startVoiceRecord\s*\(',
+      r'Widget\s+_buildInputBar\s*\(',
+    ]) {
+      expect(
+        RegExp(callbackPattern).allMatches(combined),
+        hasLength(1),
+        reason: '$callbackPattern 必须只存在于对应职责 part',
+      );
+    }
+  });
+
   group('CustomizableChatInputBar', () {
     testWidgets('输入文本后通过发送按钮提交 payload', (tester) async {
       ChatInputSubmitPayload? submitted;
@@ -70,9 +126,9 @@ void main() {
       await tester.tap(find.byKey(TestKeys.chatInputMoreButton));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(UnifiedEmojiPicker), findsNothing);
-      expect(find.text(UITextConstants.chatMorePhoto), findsOneWidget);
-      expect(find.text(UITextConstants.chatMoreShoot), findsOneWidget);
-      expect(find.text(UITextConstants.chatMoreFile), findsOneWidget);
+      expect(find.text(ChatText.chatMorePhoto), findsOneWidget);
+      expect(find.text(ChatText.chatMoreShoot), findsOneWidget);
+      expect(find.text(ChatText.chatMoreFile), findsOneWidget);
     });
 
     testWidgets('emoji 面板 glyph 使用 emoji-capable fallback 字体栈', (tester) async {
@@ -94,15 +150,18 @@ void main() {
       await tester.tap(find.byKey(TestKeys.chatInputEmojiToggleButton));
       await tester.pump(const Duration(milliseconds: 300));
 
-      final emojiGlyph = tester.widgetList<Text>(
-        find.descendant(
-          of: find.byType(UnifiedEmojiPicker),
-          matching: find.byType(Text),
-        ),
-      ).firstWhere(
-        (widget) =>
-            widget.style?.fontSize == SettingsSemanticConstants.emojiIconFontSize,
-      );
+      final emojiGlyph = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byType(UnifiedEmojiPicker),
+              matching: find.byType(Text),
+            ),
+          )
+          .firstWhere(
+            (widget) =>
+                widget.style?.fontSize ==
+                SettingsSemanticConstants.emojiIconFontSize,
+          );
       expect(
         emojiGlyph.style?.fontFamilyFallback,
         contains(BundledFontFamilies.notoColorEmoji),
@@ -110,7 +169,7 @@ void main() {
     });
 
     testWidgets('群聊输入区可插入 @小趣 上下文 mention', (tester) async {
-      final controller = TextEditingController();
+      final controller = ChatMentionTextEditingController();
       const sendButtonKey = ValueKey<String>('send_button');
       ChatInputSubmitPayload? submitted;
       addTearDown(controller.dispose);
@@ -140,6 +199,73 @@ void main() {
       await tester.pump();
 
       expect(submitted?.mentions, contains('assistant'));
+    });
+
+    testWidgets('输入 @ 后选择成员，正文与稳定 userId 原子提交', (tester) async {
+      final controller = ChatMentionTextEditingController();
+      ChatInputSubmitPayload? submitted;
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                controller: controller,
+                onMentionRequested: (_) async =>
+                    const ChatInputMentionCandidate(
+                      id: 'user_zhang',
+                      displayName: '张三',
+                    ),
+                onSend: (payload) async => submitted = payload,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pumpAndSettle();
+
+      expect(controller.text, '@张三 ');
+      expect(controller.activeMentionIds, <String>['user_zhang']);
+      await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+      await tester.pump();
+      expect(submitted?.text, '@张三');
+      expect(submitted?.mentions, <String>['user_zhang']);
+    });
+
+    testWidgets('删除完整提及 token 后不再发送隐形 mention', (tester) async {
+      final controller = ChatMentionTextEditingController();
+      ChatInputSubmitPayload? submitted;
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                controller: controller,
+                onMentionRequested: (_) async =>
+                    const ChatInputMentionCandidate(
+                      id: 'user_zhang',
+                      displayName: '张三',
+                    ),
+                onSend: (payload) async => submitted = payload,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '普通内容');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+      await tester.pump();
+
+      expect(submitted?.text, '普通内容');
+      expect(submitted?.mentions, isEmpty);
     });
 
     testWidgets('超过五行后出现展开入口', (tester) async {
@@ -205,7 +331,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byIcon(Icons.keyboard_outlined), findsOneWidget);
-      expect(find.text(UITextConstants.chatVoiceHoldToTalk), findsOneWidget);
+      expect(find.text(ChatText.chatVoiceHoldToTalk), findsOneWidget);
     });
 
     testWidgets('语音按住松手只交给录音回调，不产生文本 payload', (tester) async {
@@ -274,10 +400,7 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 2));
 
-      expect(
-        find.textContaining(UITextConstants.chatVoiceRecording),
-        findsOneWidget,
-      );
+      expect(find.textContaining(ChatText.chatVoiceRecording), findsOneWidget);
 
       await gesture.up();
       await tester.pump();
@@ -312,7 +435,7 @@ void main() {
       await tester.pump();
       await gesture.moveBy(Offset(0, -AppSpacing.buttonHeight * 2));
       await tester.pump();
-      expect(find.text(UITextConstants.chatVoiceReleaseCancel), findsWidgets);
+      expect(find.text(ChatText.chatVoiceReleaseCancel), findsWidgets);
 
       await gesture.up();
       await tester.pump();
@@ -457,4 +580,12 @@ void main() {
       expect(multiLineHeight, greaterThan(singleLineHeight));
     });
   });
+}
+
+String _readAppFile(String relativePath) {
+  final direct = File(relativePath);
+  if (direct.existsSync()) {
+    return direct.readAsStringSync();
+  }
+  return File('quwoquan_app/$relativePath').readAsStringSync();
 }

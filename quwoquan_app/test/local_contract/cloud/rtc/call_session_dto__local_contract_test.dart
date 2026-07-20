@@ -37,8 +37,6 @@ void main() {
             'joinedAt': '2026-03-07T10:00:05Z',
           },
         ],
-        'isRecording': true,
-        'recordingUrl': 'https://cdn.example.com/rec/001.mp4',
         'isScreenSharing': true,
         'screenShareUserId': 'user_001',
         'endReason': null,
@@ -60,8 +58,6 @@ void main() {
       expect(dto.maxParticipants, equals(16));
       expect(dto.participantCount, equals(3));
       expect(dto.participants.length, equals(2));
-      expect(dto.isRecording, isTrue);
-      expect(dto.recordingUrl, equals('https://cdn.example.com/rec/001.mp4'));
       expect(dto.isScreenSharing, isTrue);
       expect(dto.screenShareUserId, equals('user_001'));
       expect(dto.endReason, isNull);
@@ -130,7 +126,6 @@ void main() {
             'joinedAt': '2026-01-01T00:00:00.000Z',
           },
         ],
-        'isRecording': false,
         'isScreenSharing': false,
         'startedAt': '2026-01-01T00:00:00.000Z',
         'createdAt': '2026-01-01T00:00:00.000Z',
@@ -144,7 +139,6 @@ void main() {
       expect(map['maxParticipants'], equals(8));
       expect(map['participants'], isA<List>());
       expect((map['participants'] as List).length, equals(1));
-      expect(map['isRecording'], isFalse);
     });
 
     test('participants 正确解析嵌套 CallParticipantDto', () {
@@ -209,24 +203,26 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('CallSessionDto — 单轨契约', () {
     test('拒绝 _id 和 id alias，只认 callId', () {
-      final retiredStorage = CallSessionDto.fromMap(<String, dynamic>{
-        '_id': 'call_compat',
-        'callType': 'audio',
-        'status': 'in_call',
-        'initiatorId': 'u1',
-        'roomId': 'r1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      });
-      final retiredGeneric = CallSessionDto.fromMap(<String, dynamic>{
-        'id': 'call_generic',
-        'callType': 'audio',
-        'status': 'in_call',
-        'initiatorId': 'u1',
-        'roomId': 'r1',
-        'createdAt': '2026-01-01T00:00:00Z',
-        'updatedAt': '2026-01-01T00:00:00Z',
-      });
+      expect(
+        () => CallSessionDto.fromMap(<String, dynamic>{
+          '_id': 'call_compat',
+          'initiatorId': 'u1',
+          'roomId': 'r1',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => CallSessionDto.fromMap(<String, dynamic>{
+          'id': 'call_generic',
+          'initiatorId': 'u1',
+          'roomId': 'r1',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
+        }),
+        throwsFormatException,
+      );
       final canonical = CallSessionDto.fromMap(<String, dynamic>{
         'callId': 'call_canonical',
         'callType': 'audio',
@@ -236,8 +232,6 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       });
-      expect(retiredStorage.callId, isEmpty);
-      expect(retiredGeneric.callId, isEmpty);
       expect(canonical.callId, equals('call_canonical'));
     });
 
@@ -298,14 +292,12 @@ void main() {
         'status': 'in_call',
         'initiatorId': 'u1',
         'roomId': 'r1',
-        'isRecording': false,
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
       final dto = CallSessionDto.fromMap(raw);
-      final updated = dto.copyWith(status: 'ended', isRecording: true);
+      final updated = dto.copyWith(status: 'ended');
       expect(updated.status, equals('ended'));
-      expect(updated.isRecording, isTrue);
       expect(updated.callId, equals('call_copy'));
       expect(updated.callType, equals('audio'));
     });
@@ -315,19 +307,11 @@ void main() {
   // CallSessionDto — 异常/边界契约
   // ──────────────────────────────────────────────────────────────────
   group('CallSessionDto — 异常/边界契约', () {
-    test('空 map 不崩溃', () {
-      expect(() => CallSessionDto.fromMap(const {}), returnsNormally);
-      final dto = CallSessionDto.fromMap(const {});
-      expect(dto.callId, isEmpty);
-      expect(dto.callType, equals('audio'));
-      expect(dto.status, equals('initiated'));
-      expect(dto.initiatorId, isEmpty);
-      expect(dto.roomId, isEmpty);
-      expect(dto.maxParticipants, equals(32));
-      expect(dto.participantCount, equals(0));
-      expect(dto.participants, isEmpty);
-      expect(dto.isRecording, isFalse);
-      expect(dto.isScreenSharing, isFalse);
+    test('空 map 缺少必填字段时 fail-closed', () {
+      expect(
+        () => CallSessionDto.fromMap(const <String, dynamic>{}),
+        throwsFormatException,
+      );
     });
 
     test('null 值字段安全', () {
@@ -342,8 +326,6 @@ void main() {
         'maxParticipants': null,
         'participantCount': null,
         'participants': null,
-        'isRecording': null,
-        'recordingUrl': null,
         'isScreenSharing': null,
         'screenShareUserId': null,
         'endReason': null,
@@ -353,15 +335,7 @@ void main() {
         'createdAt': null,
         'updatedAt': null,
       };
-      expect(() => CallSessionDto.fromMap(raw), returnsNormally);
-      final dto = CallSessionDto.fromMap(raw);
-      expect(dto.callId, isEmpty);
-      expect(dto.callType, equals('audio'));
-      expect(dto.maxParticipants, equals(32));
-      expect(dto.participants, isEmpty);
-      expect(dto.conversationId, isNull);
-      expect(dto.circleId, isNull);
-      expect(dto.recordingUrl, isNull);
+      expect(() => CallSessionDto.fromMap(raw), throwsFormatException);
     });
 
     test('participants 非 List 类型不崩溃', () {
@@ -414,7 +388,6 @@ void main() {
       expect(dto.callId, equals('call_minimal'));
       expect(dto.conversationId, isNull);
       expect(dto.circleId, isNull);
-      expect(dto.recordingUrl, isNull);
       expect(dto.screenShareUserId, isNull);
       expect(dto.endReason, isNull);
       expect(dto.durationMs, isNull);
@@ -502,12 +475,11 @@ void main() {
   // CallParticipantDto — 异常/边界契约
   // ──────────────────────────────────────────────────────────────────
   group('CallParticipantDto — 异常/边界契约', () {
-    test('空 map 不崩溃', () {
-      expect(() => CallParticipantDto.fromMap(const {}), returnsNormally);
-      final dto = CallParticipantDto.fromMap(const {});
-      expect(dto.userId, isEmpty);
-      expect(dto.role, equals('invitee'));
-      expect(dto.status, equals('invited'));
+    test('空 map 缺少 userId 时 fail-closed', () {
+      expect(
+        () => CallParticipantDto.fromMap(const <String, dynamic>{}),
+        throwsFormatException,
+      );
     });
 
     test('null 值字段安全', () {
@@ -520,11 +492,7 @@ void main() {
         'joinedAt': null,
         'leftAt': null,
       };
-      expect(() => CallParticipantDto.fromMap(raw), returnsNormally);
-      final dto = CallParticipantDto.fromMap(raw);
-      expect(dto.userId, isEmpty);
-      expect(dto.joinedAt, isNull);
-      expect(dto.leftAt, isNull);
+      expect(() => CallParticipantDto.fromMap(raw), throwsFormatException);
     });
   });
 
@@ -537,10 +505,13 @@ void main() {
         'token': 'eyJhbGciOiJIUzI1NiJ9.mock_payload.mock_sig',
         'session': <String, dynamic>{
           'callId': 'call_001',
+          'initiatorId': 'user_001',
           'roomId': 'room_abc123',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
         },
       };
-      final dto = RtcJoinCredentialsDto.fromMap(raw);
+      final dto = decodeRtcJoinCallResult(raw);
       expect(dto.token, startsWith('eyJ'));
       expect(dto.roomId, equals('room_abc123'));
       expect(dto.callId, equals('call_001'));
@@ -551,10 +522,13 @@ void main() {
         'token': 'tok_join',
         'session': <String, dynamic>{
           'callId': 'call_099',
+          'initiatorId': 'user_099',
           'roomId': 'room_nested',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
         },
       };
-      final dto = RtcJoinCredentialsDto.fromMap(raw);
+      final dto = decodeRtcJoinCallResult(raw);
       expect(dto.token, equals('tok_join'));
       expect(dto.roomId, equals('room_nested'));
       expect(dto.callId, equals('call_099'));
@@ -562,11 +536,11 @@ void main() {
   });
 
   group('RtcJoinCredentialsDto — 单轨契约', () {
-    test('缺少字段默认空字符串', () {
-      final dto = RtcJoinCredentialsDto.fromMap(const {});
-      expect(dto.token, isEmpty);
-      expect(dto.roomId, isEmpty);
-      expect(dto.callId, isNull);
+    test('缺少 session 时 fail-closed', () {
+      expect(
+        () => decodeRtcJoinCallResult(const <String, dynamic>{}),
+        throwsFormatException,
+      );
     });
   });
 
@@ -577,11 +551,7 @@ void main() {
         'roomId': null,
         'callId': null,
       };
-      expect(() => RtcJoinCredentialsDto.fromMap(raw), returnsNormally);
-      final dto = RtcJoinCredentialsDto.fromMap(raw);
-      expect(dto.token, isEmpty);
-      expect(dto.roomId, isEmpty);
-      expect(dto.callId, isNull);
+      expect(() => decodeRtcJoinCallResult(raw), throwsFormatException);
     });
   });
 
@@ -601,7 +571,7 @@ void main() {
           'updatedAt': '2026-01-01T00:00:00Z',
         },
       };
-      final dto = RtcInitiateCallResultDto.fromMap(raw);
+      final dto = decodeRtcInitiateCallResult(raw);
       expect(dto.token, equals('tok_i'));
       expect(dto.session.callId, equals('c1'));
       expect(dto.session.roomId, equals('r1'));
@@ -623,11 +593,10 @@ void main() {
           'updatedAt': '2026-01-01T00:00:00Z',
         },
       };
-      final dto = RtcAnswerCallResultDto.fromMap(raw);
+      final dto = decodeRtcAnswerCallResult(raw);
       expect(dto.token, equals('tok_a'));
       expect(dto.roomId, equals('r_a'));
-      expect(dto.session, isNotNull);
-      expect(dto.session!.callId, equals('c2'));
+      expect(dto.session.callId, equals('c2'));
     });
   });
 }

@@ -12,13 +12,18 @@ export const eventCatalog = {
     "appVersion",
     "networkClass"
   ],
+  "context_extensions": [
+    "devicePlatform"
+  ],
   "events": [
     {
       "event_type": "page_open",
       "internal_priority": "critical",
       "log_type": "event",
       "normal_sample_rate": 1,
-      "optional_extensions": [],
+      "optional_extensions": [
+        "readyMs"
+      ],
       "required_extensions": []
     },
     {
@@ -29,6 +34,63 @@ export const eventCatalog = {
       "optional_extensions": [],
       "required_extensions": [
         "durationMs"
+      ]
+    },
+    {
+      "event_type": "page_first_usable",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "surfaceId",
+        "failReasonCode"
+      ],
+      "required_extensions": [
+        "durationMs",
+        "terminalState"
+      ]
+    },
+    {
+      "event_type": "page_error_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action",
+        "durationMs"
+      ],
+      "required_extensions": [
+        "surfaceId",
+        "errorCode",
+        "recoveryAction",
+        "result"
+      ]
+    },
+    {
+      "event_type": "app_anr_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs"
+      ],
+      "required_extensions": [
+        "detectionSource",
+        "result"
+      ]
+    },
+    {
+      "event_type": "app_frame_jank_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [],
+      "required_extensions": [
+        "sampledFrames",
+        "jankyFrames",
+        "worstFrameMs",
+        "jankThresholdMs",
+        "result"
       ]
     },
     {
@@ -66,9 +128,19 @@ export const eventCatalog = {
       "log_type": "event",
       "normal_sample_rate": 1,
       "optional_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "reasonId",
+        "targetType",
+        "targetId",
+        "environment",
         "durationMs",
         "result",
-        "failReasonCode"
+        "failReasonCode",
+        "recoveryAction",
+        "requestId",
+        "traceId"
       ],
       "required_extensions": [
         "journey",
@@ -82,7 +154,10 @@ export const eventCatalog = {
       "normal_sample_rate": 0.1,
       "optional_extensions": [
         "result",
-        "failReasonCode"
+        "failReasonCode",
+        "recoveryAction",
+        "requestId",
+        "traceId"
       ],
       "required_extensions": [
         "operationId",
@@ -96,10 +171,82 @@ export const eventCatalog = {
       "normal_sample_rate": 1,
       "optional_extensions": [
         "durationMs",
-        "failReasonCode"
+        "failReasonCode",
+        "recoveryAction",
+        "requestId",
+        "traceId"
       ],
       "required_extensions": [
         "operationId",
+        "result"
+      ]
+    },
+    {
+      "event_type": "content_publication",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode",
+        "correlationHash",
+        "recoveryAction",
+        "requestId",
+        "traceId"
+      ],
+      "required_extensions": [
+        "publicationStage",
+        "contentType",
+        "objectState",
+        "surfaceId",
+        "result"
+      ]
+    },
+    {
+      "event_type": "rtc_call_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode",
+        "participantCount"
+      ],
+      "required_extensions": [
+        "callType",
+        "result"
+      ]
+    },
+    {
+      "event_type": "rtc_media_qoe",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "disconnectReason",
+        "networkQuality",
+        "participantCount",
+        "failReasonCode"
+      ],
+      "required_extensions": [
+        "callType",
+        "result",
+        "connectTimeMs",
+        "mediaConnected",
+        "reconnectCount"
+      ]
+    },
+    {
+      "event_type": "realtime_connect_result",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode"
+      ],
+      "required_extensions": [
+        "transport",
         "result"
       ]
     },
@@ -110,6 +257,12 @@ export const eventCatalog = {
       "normal_sample_rate": 1,
       "optional_extensions": [
         "ttffMs",
+        "droppedFrames",
+        "processedVideoFrames",
+        "audioUnderrunCount",
+        "rendererMode",
+        "decoderQueueMode",
+        "decoderFallbackEnabled",
         "declaredDurationMs",
         "observedDurationMs",
         "durationMismatch",
@@ -120,8 +273,108 @@ export const eventCatalog = {
         "readyMs",
         "rebufferCount",
         "rebufferMs",
+        "effectivePlaybackMs",
         "seekCount",
+        "seekFailureCount",
+        "seekCommandMaxMs",
+        "seekSettleMaxMs",
+        "seekEvidenceSource",
+        "devicePlatform",
         "playbackMode"
+      ]
+    },
+    {
+      "event_type": "assistant_turn_quality",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode",
+        "operationId"
+      ],
+      "required_extensions": [
+        "turnAction",
+        "result"
+      ]
+    },
+    {
+      "event_type": "search_query_submit",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action"
+      ],
+      "required_extensions": [
+        "requestId",
+        "surfaceId"
+      ]
+    },
+    {
+      "event_type": "search_result_impression",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action"
+      ],
+      "required_extensions": [
+        "requestId",
+        "resultCount",
+        "durationMs"
+      ]
+    },
+    {
+      "event_type": "search_result_click",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action"
+      ],
+      "required_extensions": [
+        "requestId",
+        "objectType",
+        "rankPosition"
+      ]
+    },
+    {
+      "event_type": "search_refine",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [],
+      "required_extensions": [
+        "requestId",
+        "action"
+      ]
+    },
+    {
+      "event_type": "search_zero_result",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action"
+      ],
+      "required_extensions": [
+        "requestId",
+        "durationMs"
+      ]
+    },
+    {
+      "event_type": "search_result_dwell",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "action"
+      ],
+      "required_extensions": [
+        "requestId",
+        "durationMs",
+        "resultCount"
       ]
     }
   ],
@@ -130,13 +383,77 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "audioUnderrunCount": {
+      "minimum": 0,
+      "type": "int"
+    },
     "callStack": {
       "item_max_length": 256,
       "max_items": 10,
       "sensitive": true,
       "type": "string_list"
     },
+    "callType": {
+      "enum": [
+        "audio",
+        "video"
+      ],
+      "type": "string"
+    },
+    "connectTimeMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "contentType": {
+      "enum": [
+        "micro",
+        "article",
+        "image",
+        "video",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "correlationHash": {
+      "max_length": 64,
+      "type": "string"
+    },
     "declaredDurationMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "decoderFallbackEnabled": {
+      "type": "bool"
+    },
+    "decoderQueueMode": {
+      "enum": [
+        "synchronous"
+      ],
+      "type": "string"
+    },
+    "detectionSource": {
+      "enum": [
+        "dart_event_loop_watchdog",
+        "android_application_exit_info",
+        "ios_metric_kit"
+      ],
+      "type": "string"
+    },
+    "devicePlatform": {
+      "enum": [
+        "android",
+        "ios",
+        "ohos",
+        "web",
+        "desktop"
+      ],
+      "type": "string"
+    },
+    "disconnectReason": {
+      "max_length": 128,
+      "type": "string"
+    },
+    "droppedFrames": {
       "minimum": 0,
       "type": "int"
     },
@@ -146,6 +463,19 @@ export const eventCatalog = {
     "durationMs": {
       "minimum": 0,
       "type": "int"
+    },
+    "effectivePlaybackMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ],
+      "type": "string"
     },
     "errorCode": {
       "max_length": 128,
@@ -163,8 +493,46 @@ export const eventCatalog = {
       "minimum": 100,
       "type": "int"
     },
+    "jankThresholdMs": {
+      "minimum": 1,
+      "type": "int"
+    },
+    "jankyFrames": {
+      "minimum": 1,
+      "type": "int"
+    },
     "journey": {
       "max_length": 128,
+      "type": "string"
+    },
+    "mediaConnected": {
+      "type": "bool"
+    },
+    "networkQuality": {
+      "enum": [
+        "excellent",
+        "good",
+        "poor",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "objectId": {
+      "max_length": 256,
+      "type": "string"
+    },
+    "objectState": {
+      "enum": [
+        "draft",
+        "submitting",
+        "retry_wait",
+        "blocked",
+        "published"
+      ],
+      "type": "string"
+    },
+    "objectType": {
+      "max_length": 64,
       "type": "string"
     },
     "observedDurationMs": {
@@ -175,13 +543,41 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "participantCount": {
+      "minimum": 0,
+      "type": "int"
+    },
     "playbackMode": {
       "max_length": 32,
       "type": "string"
     },
+    "processedVideoFrames": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "publicationStage": {
+      "enum": [
+        "editor_ready",
+        "draft_saved",
+        "draft_restored",
+        "submit_started",
+        "queued",
+        "blocked",
+        "published"
+      ],
+      "type": "string"
+    },
+    "rankPosition": {
+      "minimum": 0,
+      "type": "int"
+    },
     "readyMs": {
       "minimum": 0,
       "type": "int"
+    },
+    "reasonId": {
+      "max_length": 256,
+      "type": "string"
     },
     "rebufferCount": {
       "minimum": 0,
@@ -191,13 +587,63 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "reconnectCount": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "recoveryAction": {
+      "max_length": 64,
+      "type": "string"
+    },
+    "rendererMode": {
+      "enum": [
+        "platform_view",
+        "texture_view"
+      ],
+      "type": "string"
+    },
+    "requestId": {
+      "max_length": 256,
+      "type": "string"
+    },
     "result": {
       "max_length": 128,
       "type": "string"
     },
+    "resultCount": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "sampledFrames": {
+      "minimum": 1,
+      "type": "int"
+    },
+    "seekCommandMaxMs": {
+      "minimum": 0,
+      "type": "int"
+    },
     "seekCount": {
       "minimum": 0,
       "type": "int"
+    },
+    "seekEvidenceSource": {
+      "enum": [
+        "controller_command_completion",
+        "native_settled"
+      ],
+      "type": "string"
+    },
+    "seekFailureCount": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "seekSettleMaxMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "surfaceId": {
+      "max_length": 128,
+      "type": "string"
     },
     "tClickToContentMs": {
       "minimum": 0,
@@ -215,7 +661,49 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "targetId": {
+      "max_length": 256,
+      "type": "string"
+    },
+    "targetType": {
+      "max_length": 64,
+      "type": "string"
+    },
+    "terminalState": {
+      "enum": [
+        "content",
+        "empty",
+        "error"
+      ],
+      "type": "string"
+    },
+    "traceId": {
+      "max_length": 256,
+      "type": "string"
+    },
+    "transport": {
+      "enum": [
+        "websocket",
+        "long_poll"
+      ],
+      "type": "string"
+    },
     "ttffMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "turnAction": {
+      "enum": [
+        "submit",
+        "first_answer",
+        "completed",
+        "failed",
+        "cancelled",
+        "stream_failure"
+      ],
+      "type": "string"
+    },
+    "worstFrameMs": {
       "minimum": 0,
       "type": "int"
     }

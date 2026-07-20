@@ -17,4 +17,6 @@ tags:
   environment-smoke:
   home-rec:
   video-playback:
+  search:
+  gamma:
   flaky:

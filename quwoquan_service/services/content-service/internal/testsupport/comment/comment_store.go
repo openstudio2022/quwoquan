@@ -197,6 +197,9 @@ func (s *Store) Commit(
 	if err := validateCommit(commit); err != nil {
 		return commentports.CommitResult{}, err
 	}
+	if err := s.enforceAuthorRateLimitLocked(commit.AuthorRateLimit); err != nil {
+		return commentports.CommitResult{}, err
+	}
 	snapshot := commit.Aggregate.Snapshot()
 	current, exists := s.comments[snapshot.ID]
 	if commit.ExpectedVersion == 0 {
@@ -231,17 +234,48 @@ func (s *Store) Commit(
 	return commentports.CommitResult{Aggregate: aggregate}, nil
 }
 
+func (s *Store) enforceAuthorRateLimitLocked(
+	policy *commentports.AuthorRateLimit,
+) error {
+	if policy == nil {
+		return nil
+	}
+	authorID := strings.TrimSpace(policy.AuthorID)
+	for _, window := range policy.Windows {
+		if authorID == "" || window.Max <= 0 || window.Since.IsZero() {
+			continue
+		}
+		var count int64
+		for _, snapshot := range s.comments {
+			if strings.TrimSpace(snapshot.AuthorID) == authorID &&
+				!snapshot.CreatedAt.Before(window.Since.UTC()) {
+				count++
+			}
+		}
+		if count >= window.Max {
+			return contentgenerated.AppErrorFromCommentRateLimited(
+				"comment author rate window exceeded",
+			)
+		}
+	}
+	return nil
+}
+
 func (s *Store) ListByPost(
 	_ context.Context,
 	postID string,
 	request commentports.PageRequest,
 ) (commentmodel.Page, error) {
+	excludedAuthors := commentExcludedAuthorSet(request.ExcludedAuthorIDs)
 	s.mu.RLock()
 	items := make([]commentmodel.ReadModel, 0)
 	for _, snapshot := range s.comments {
 		if snapshot.PostID == strings.TrimSpace(postID) &&
 			snapshot.ParentCommentID == "" &&
 			snapshot.Status == commentmodel.StatusActive {
+			if _, excluded := excludedAuthors[snapshot.AuthorID]; excluded {
+				continue
+			}
 			items = append(items, readModel(snapshot))
 		}
 	}
@@ -256,12 +290,16 @@ func (s *Store) ListReplies(
 	parentCommentID string,
 	request commentports.PageRequest,
 ) (commentmodel.Page, error) {
+	excludedAuthors := commentExcludedAuthorSet(request.ExcludedAuthorIDs)
 	s.mu.RLock()
 	items := make([]commentmodel.ReadModel, 0)
 	for _, snapshot := range s.comments {
 		if snapshot.PostID == strings.TrimSpace(postID) &&
 			snapshot.ParentCommentID == strings.TrimSpace(parentCommentID) &&
 			snapshot.Status == commentmodel.StatusActive {
+			if _, excluded := excludedAuthors[snapshot.AuthorID]; excluded {
+				continue
+			}
 			items = append(items, readModel(snapshot))
 		}
 	}
@@ -274,6 +312,7 @@ func (s *Store) ReadReplySummaries(
 	_ context.Context,
 	parentCommentIDs []string,
 	previewLimit int,
+	excludedAuthorIDs []string,
 ) (map[string]commentmodel.ReplySummary, error) {
 	parentSet := map[string]struct{}{}
 	for _, parentCommentID := range parentCommentIDs {
@@ -282,9 +321,13 @@ func (s *Store) ReadReplySummaries(
 		}
 	}
 	grouped := make(map[string][]commentmodel.ReadModel, len(parentSet))
+	excludedAuthors := commentExcludedAuthorSet(excludedAuthorIDs)
 	s.mu.RLock()
 	for _, snapshot := range s.comments {
 		if _, found := parentSet[snapshot.ParentCommentID]; !found || snapshot.Status != commentmodel.StatusActive {
+			continue
+		}
+		if _, excluded := excludedAuthors[snapshot.AuthorID]; excluded {
 			continue
 		}
 		grouped[snapshot.ParentCommentID] = append(grouped[snapshot.ParentCommentID], readModel(snapshot))
@@ -320,7 +363,8 @@ func (s *Store) ListByAuthor(
 	items := make([]commentmodel.ReadModel, 0)
 	for _, snapshot := range s.comments {
 		if snapshot.AuthorID == strings.TrimSpace(authorID) &&
-			snapshot.Status == commentmodel.StatusActive {
+			(snapshot.Status == commentmodel.StatusActive ||
+				snapshot.Status == commentmodel.StatusHidden) {
 			items = append(items, readModel(snapshot))
 		}
 	}
@@ -341,12 +385,16 @@ func (s *Store) ListReceivedByPostAuthor(
 			postSet[postID] = struct{}{}
 		}
 	}
+	excludedAuthors := commentExcludedAuthorSet(request.ExcludedAuthorIDs)
 	s.mu.RLock()
 	items := make([]commentmodel.ReadModel, 0)
 	for _, snapshot := range s.comments {
 		if _, found := postSet[snapshot.PostID]; found &&
 			snapshot.AuthorID != strings.TrimSpace(postAuthorID) &&
 			snapshot.Status == commentmodel.StatusActive {
+			if _, excluded := excludedAuthors[snapshot.AuthorID]; excluded {
+				continue
+			}
 			items = append(items, readModel(snapshot))
 		}
 	}
@@ -426,6 +474,31 @@ func (s *Store) FindPostOwnerships(
 		}
 	}
 	return ownerships, nil
+}
+
+func (s *Store) ReadViewerRelations(
+	_ context.Context,
+	_ string,
+	authorPersonaIDs []string,
+) (map[string]commentmodel.ViewerRelation, error) {
+	relations := make(
+		map[string]commentmodel.ViewerRelation,
+		len(authorPersonaIDs),
+	)
+	for _, authorPersonaID := range authorPersonaIDs {
+		authorPersonaID = strings.TrimSpace(authorPersonaID)
+		if authorPersonaID != "" {
+			relations[authorPersonaID] = commentmodel.ViewerRelationNone
+		}
+	}
+	return relations, nil
+}
+
+func (s *Store) ListBlockedPersonaIDs(
+	_ context.Context,
+	_ string,
+) ([]string, error) {
+	return []string{}, nil
 }
 
 func (s *Store) ReadAfter(
@@ -536,6 +609,7 @@ func readModel(snapshot commentmodel.Snapshot) commentmodel.ReadModel {
 		AssistantMentioned:        snapshot.AssistantMentioned,
 		AssistantReplySource:      snapshot.AssistantReplySource,
 		AssistantCorrectionStatus: snapshot.AssistantCorrectionStatus,
+		AuthorIPLocation:          snapshot.AuthorIPLocation,
 		Status:                    snapshot.Status,
 		IsPinned:                  snapshot.IsPinned,
 		PinnedAt:                  cloneTime(snapshot.PinnedAt),
@@ -632,6 +706,7 @@ func cloneSnapshot(snapshot commentmodel.Snapshot) commentmodel.Snapshot {
 	snapshot.AttachmentMediaIDs = cloneStrings(snapshot.AttachmentMediaIDs)
 	snapshot.Mentions = append([]commentmodel.Mention(nil), snapshot.Mentions...)
 	snapshot.PinnedAt = cloneTime(snapshot.PinnedAt)
+	snapshot.HiddenAt = cloneTime(snapshot.HiddenAt)
 	snapshot.DeletedAt = cloneTime(snapshot.DeletedAt)
 	return snapshot
 }
@@ -643,6 +718,16 @@ func cloneOutboxEvents(events []commentports.OutboxEvent) []commentports.OutboxE
 		cloned[index].Payload = append([]byte(nil), event.Payload...)
 	}
 	return cloned
+}
+
+func commentExcludedAuthorSet(authorIDs []string) map[string]struct{} {
+	excluded := make(map[string]struct{}, len(authorIDs))
+	for _, authorID := range authorIDs {
+		if authorID = strings.TrimSpace(authorID); authorID != "" {
+			excluded[authorID] = struct{}{}
+		}
+	}
+	return excluded
 }
 
 func cloneStrings(values []string) []string {

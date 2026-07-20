@@ -3,11 +3,6 @@ service:
   name: user-service
   domain: user
   owner: backend-team
-  commercial_defaults:
-    status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: USER_CONTACT_DISCOVERY_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
   description: 通讯录发现——哈希匹配已注册用户，结果只暴露 subAccountId
 
 api_routes:
@@ -24,11 +19,45 @@ api_routes:
       mutation_target: ContactDiscoveryRecord
       invariant_target: ContactDiscoveryRecord
     description: 上传哈希手机号列表，触发异步匹配
-    security:
-      auth_mode: required
     request_fields: [hashedPhones]
     response_fields: [id, status, expireAt]
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      request_type: InitiateContactDiscoveryCommand
+      response_type: ContactDiscoveryResult
+      request_encoder: encodeInitiateContactDiscoveryCommand
+      response_decoder: decodeContactDiscoveryResult
     rate_limit: 5次/24h/ownerAccountId
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.CONTACT.rate_limited
+      - USER.CONTACT.too_many_contacts
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
 
   - method: GET
     path: /owner/contact-discovery/latest
@@ -45,11 +74,43 @@ api_routes:
       获取最近一次发现结果。matchedSubAccountIds 保留为隐私基线（仅 ID）；
       matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、
       精简 profile 与关系能力位，驱动「添加 / 已添加」。
-    security:
-      auth_mode: required
     response_entity: ContactDiscoveryRecord
     response_read_models: [ContactDiscoveryMatchWire]
     response_fields: [id, status, matchedSubAccountIds, matchCount, expireAt, completedAt]
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      request_type: GetLatestContactDiscoveryQuery
+      response_type: ContactDiscoveryResult
+      request_encoder: encodeGetLatestContactDiscoveryQuery
+      response_decoder: decodeContactDiscoveryResult
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.CONTACT.not_found
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
 
   - method: DELETE
     path: /owner/contact-discovery/{id}
@@ -64,6 +125,42 @@ api_routes:
       mutation_target: ContactDiscoveryRecord
       invariant_target: ContactDiscoveryRecord
     description: 主动删除/忽略发现记录
+    path_params: [id]
+    response_fields: [status]
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      request_type: DismissContactDiscoveryCommand
+      response_type: ContactDiscoveryDismissResult
+      request_encoder: encodeDismissContactDiscoveryCommand
+      response_decoder: decodeContactDiscoveryDismissResult
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.CONTACT.not_found
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
 
 consumers:
   - name: app

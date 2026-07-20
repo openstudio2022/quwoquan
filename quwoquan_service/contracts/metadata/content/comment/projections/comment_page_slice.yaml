@@ -1,8 +1,13 @@
 read_model: CommentPageSlice
 description: |
-  一级评论商用投影分页；由 Comment 白名单字段、回复摘要、ContentReaction 批量计数与
-  viewer 状态、MediaAsset 附件快照及 Post ownership capability 组合，不返回任何聚合。
+  一级评论商用投影分页；由 Comment 白名单字段（含 authorIpLocation 快照）、回复摘要、
+  ContentReaction 批量计数与 viewer 状态、Post 作者赞过事实（authorLiked）、
+  viewer→评论作者关系事实（viewerRelation，来自 persona_follow_projection：
+  none/following/friend，未登录恒 none）、MediaAsset 附件快照及 Post ownership
+  capability 组合，全部批量读取避免 N+1，不返回任何聚合。
+  排序真相源：sort=hot（hotScore 投影分）或 latest；置顶段永远在前。
 source_entities: [Comment, ContentReaction, MediaAsset, Post]
+source_projections: [persona_follow_projection]
 consumers: [app]
 reply_preview_limit: 1
 client_projection:
@@ -16,6 +21,8 @@ fields:
   - likeCount
   - dislikeCount
   - viewerReaction
+  - authorLiked
+  - viewerRelation
   - isAuthor
   - canDelete
   - canReply

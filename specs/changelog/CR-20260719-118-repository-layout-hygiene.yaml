@@ -1,0 +1,259 @@
+id: CR-20260719-118-repository-layout-hygiene
+title: 全仓目录整洁审计、历史入口退役与输出隔离
+slug: repository-layout-hygiene
+revision: 5
+status: completed
+
+affected_nodes:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement
+
+entries:
+  - timestamp: "2026-07-19T12:30:00+08:00"
+    summary: |
+      建立只读全仓 inventory，记录 Git/ignored 路径、WIP 排除、大小、哈希预算、
+      生成/入口/引用分类；报告只写入 QWQ_OUTPUT_ROOT/env/repo/runs。删除服务根
+      Mach-O 测试二进制、失效 App mock-test 根检查及说明、未注册 Data audit 包、
+      Service 重复配置脚本和 specs/gates 下重复上线计划副本。
+    reason: |
+      构建产物和历史入口曾与源码、契约和活动发布文档混在同一层，导致目录门禁漏扫、
+      Data 验证入口重复、发布计划存在第二真相源。当前用户 WIP、运行中环境输出、
+      vendor、fixture 和外部运维脚本必须保持不受清理影响。
+    change_type:
+      - specification
+      - ops
+      - data
+      - service
+      - app
+      - local_contract
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md
+        sections: [目标, 分类契约, 真相源与验证]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/acceptance.yaml
+        sections: [GWT1, GWT2, test_evidence]
+      - path: specs/feature-tree/tree_index.yaml
+        sections: [runtime/system-architecture-and-engineering-guide]
+      - path: quwoquan_ops/cli/repo_hygiene_audit.py
+        sections: [inventory, evidence, WIP exclusion]
+      - path: quwoquan_service/scripts/verify/verify_service_layout.py
+        sections: [tracked artifact scan]
+      - path: quwoquan_data/scripts/verify/handler.py
+        sections: [verify all registrations]
+      - path: .github/workflows/ml_training_pipeline.yml
+        sections: [service-owned training paths, output root]
+      - path: .github/workflows/verify-chat-avatar-commercial-matrix.yml
+        sections: [manifest input]
+      - path: specs/launch-plan/README.md
+        sections: [single launch-plan authority]
+    retained_with_reason:
+      - path: quwoquan_ops/backup/pg_backup.sh
+        reason: 外部 cron/值班调用未知，未取得迁移确认，不删除。
+      - path: quwoquan_ops/backup/mongo_backup.sh
+        reason: 外部 cron/值班调用未知，未取得迁移确认，不删除。
+      - path: quwoquan_service/services/rec-model-service/requirements.txt
+        reason: 推理服务镜像依赖，不能与训练脚本依赖合并。
+      - path: quwoquan_service/services/rec-model-service/scripts/requirements.txt
+        reason: 训练/评估 lane 依赖，CI 与训练镜像明确引用。
+      - path: quwoquan_service/services/rec-model-service/scripts/config_release_rollback.sh
+        reason: 推荐模型 rule-only cutover，与 Ops 配置发布回滚语义不同。
+      - path: quwoquan_service/contracts/metadata/_shared/test_fixtures/media
+        reason: 由媒体 canary 与环境验证消费，不属于可推断的冗余 fixture。
+      - path: quwoquan_app/vendor/plugins
+        reason: 受控平台依赖，需单独供应链/许可证/平台迁移证据。
+      - path: ref
+        reason: 外部参考树，无仓内唯一入口证据，不自动删除。
+    tests:
+      - layer: local_contract
+        intent: 目录、入口和删除项回归
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+      - layer: local_contract
+        intent: Data 唯一 CLI 全量验证
+        evidence:
+          - quwoquan_data/scripts/cli.py
+          - quwoquan_data/scripts/verify/handler.py
+    gates:
+      - python3 quwoquan_ops/cli/repo_hygiene_audit.py
+      - python3 quwoquan_service/scripts/verify/verify_service_layout.py
+      - python3 quwoquan_data/scripts/cli.py verify all
+      - python3 quwoquan_ops/gate/verify_output_layout.py
+      - make gate
+    remaining_blockers:
+      - 当前 Flutter/Xcode/Gradle 进程仍占用 quwoquan_app/build、.dart_tool 与 android/.gradle，本轮只清理未占用缓存；其余缓存需在进程结束后按同一安全规则处理。
+      - 全量 make gate 需在当前 WIP 变更稳定后运行，不能把已有脏改动失败伪装为本 Story 失败。
+  - timestamp: "2026-07-19T12:40:00+08:00"
+    summary: |
+      完成迁移批次与防回归收口：App/Data/Service/工程目录门禁覆盖缓存、tracked 构建产物、
+      失效 Data audit 目录、唯一设备脚本、生成清单和活动文档入口；补充 rename 状态解析
+      防截断回归，并生成最终全仓审计报告。
+    reason: |
+      门禁必须能识别已删除工作树文件、tracked Mach-O/ELF/PE 产物和 rename 的双 NUL 记录，
+      同时不能把 quwoquan_app/vendor 下受控商业 SDK 误判为可删除二进制。
+    change_type:
+      - ops
+      - app
+      - data
+      - service
+      - local_contract
+    changed_documents:
+      - path: quwoquan_app/scripts/runtime/verify_app_layout.py
+        sections: [tracked artifact and cache scan]
+      - path: quwoquan_data/scripts/verify/verify_data_layout.py
+        sections: [retired audit directory]
+      - path: quwoquan_ops/gate/scaffold/verify_engineering_directory.sh
+        sections: [service root artifact scan]
+      - path: quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+        sections: [retired paths, workflow, manifest, rename parsing]
+      - path: .qwq_output/env/repo/runs/20260719T043654Z-repo-hygiene-audit-repo/summary.json
+        sections: [final inventory evidence]
+    tests:
+      - layer: local_contract
+        intent: 目录整洁、唯一入口与审计状态解析回归
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+          - .qwq_output/env/repo/runs/20260719T043654Z-repo-hygiene-audit-repo/summary.json
+    gates:
+      - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+      - bash quwoquan_ops/gate/scaffold/verify_engineering_directory.sh
+      - python3 quwoquan_app/scripts/runtime/verify_app_layout.py
+      - python3 quwoquan_data/scripts/verify/verify_data_layout.py
+      - python3 quwoquan_service/scripts/verify/verify_service_layout.py
+      - PYTHONDONTWRITEBYTECODE=1 bash quwoquan_ops/gate/gate_repo.sh --scope data
+    remaining_blockers:
+      - 全量 gate 已执行；唯一失败为当前既有 WIP 的 quwoquan_service/services/product-ops-service/configs/default/config.yaml 改动未同时带 configs/releases 版本快照，未由本清理批次擅自修改。
+      - 当前 Flutter/Xcode/Gradle 进程仍占用部分 App 缓存；进程结束后才允许按同一安全规则清理剩余 ignored 输出。
+  - timestamp: "2026-07-19T15:30:00+08:00"
+    summary: |
+      完成第二轮全仓反向排查：清除远端 gamma 与旧 workflow 的活动分支、历史特性树
+      计划/就绪清单及失效链接；移除 runtime agentpack 的 tasks.md 状态推断与
+      TaskPack/IngestTaskPack 死分支；新增 Make/Actions/gate 脚本路径和第一方 Markdown
+      本地链接门禁，并为 inventory 增加最大缓存、零字节文件与断链软链接证据。
+    reason: |
+      仅删除已知候选仍会遗漏活动入口中的旧术语、不可达脚本和文档断链。三层特性树、
+      四环境拓扑与 codegen 必须由静态门禁持续证明，不依赖人工记忆。
+    change_type:
+      - specification
+      - ops
+      - service
+      - local_contract
+    changed_documents:
+      - path: quwoquan_ops/gate/verify_entrypoint_script_paths.py
+        sections: [Make, Actions, gate, retired workflow tokens]
+      - path: quwoquan_ops/gate/verify_markdown_local_links.py
+        sections: [tracked first-party Markdown links]
+      - path: quwoquan_service/runtime/agentpack/tree_index.go
+        sections: [three-level scan, retired task-pack path]
+      - path: specs/feature-tree/00_FEATURE_TREE_STANDARD.md
+        sections: [migration completed state]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md
+        sections: [classification contract, static link gates]
+    tests:
+      - layer: local_contract
+        intent: 退役入口、三层索引与文档链接防回归
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+          - quwoquan_service/runtime/agentpack/agentpack_test.go
+    gates:
+      - python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+      - python3 quwoquan_ops/gate/verify_markdown_local_links.py
+      - python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
+      - go test ./runtime/agentpack ./tools/gen_tree_index
+    remaining_blockers:
+      - Flutter/Xcode/Gradle 与提交前门禁仍在运行，quwoquan_app/build、.dart_tool 和 android/.gradle 本轮继续按 WIP/运行占用保护。
+  - timestamp: "2026-07-19T16:25:00+08:00"
+    summary: |
+      完成最终系统复核：删除九份 L1 tree.yaml 第二真相源并由全局 tree_index.yaml
+      单轨承接；修复九份历史 CR 的 YAML 语法并将 148 份 CR 全量解析纳入特性树门禁。
+      最终磁盘审计覆盖 48213 个条目，高置信退役与人工复核候选均为 0，断链软链接为 0。
+    reason: |
+      只检查已知脚本无法证明目录真正收口；特性树镜像和不可解析的历史 CR 同样会破坏
+      单一真相源与自动化治理。运行中的 Flutter/Xcode/Gradle 输出属于明确排除的活动 WIP，
+      不应为了追求空目录而破坏正在执行的用户任务。
+    change_type:
+      - specification
+      - ops
+      - local_contract
+    changed_documents:
+      - path: quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+        sections: [single tree index, changelog YAML syntax]
+      - path: quwoquan_ops/gate/verify_root_layout.py
+        sections: [retired gitmodules]
+      - path: quwoquan_ops/cli/repo_hygiene_audit.py
+        sections: [retired L1 tree mirrors]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md
+        sections: [scope, single source]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/acceptance.yaml
+        sections: [GWT2]
+      - path: .qwq_output/env/repo/runs/20260719T083539Z-repo-hygiene-audit-repo/summary.json
+        sections: [final inventory evidence]
+    tests:
+      - layer: local_contract
+        intent: 唯一特性树、目录整洁与历史入口防回归
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+          - quwoquan_service/runtime/agentpack/agentpack_test.go
+    gates:
+      - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+      - python3 quwoquan_ops/gate/verify_root_layout.py
+      - python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+      - python3 quwoquan_ops/gate/verify_markdown_local_links.py
+      - python3 quwoquan_service/scripts/verify/verify_service_layout.py
+      - python3 quwoquan_app/scripts/runtime/verify_app_layout.py
+      - go test ./runtime/agentpack ./tools/gen_tree_index
+    remaining_blockers:
+      - quwoquan_app/build、.dart_tool、ios/Pods 与 Gradle 缓存仍被活动 Flutter/设备进程占用，按本 Story 的 WIP 保护契约保留；它们不是源码或历史入口。
+  - timestamp: "2026-07-19T17:30:00+08:00"
+    summary: |
+      完成大型 fixture 媒体反向闭包与配置生成复核：删除 3024 个未引用媒体对象和
+      同哈希原始别名，共 1172912817 字节；保留全部权威 fixture、环境/App 引用和
+      11 个已暂存视频 canary。App 资产改为精确声明，退役 4 份无消费者配置、3 份
+      旧 Alpha/Beta 执行说明和 3 份已清零语义 baseline。收紧 6 份 ratchet/allowlist，
+      修复 TTID 默认自比较假绿，并阻断 storage codegen 生成空名 model/store。
+    reason: |
+      原审计把 contracts 媒体整体视为运行资产，只证明正向“引用存在”，未证明
+      物理文件反向可达；宽目录 assets、松弛 baseline 和 entity 为空的辅助表也会让
+      已清理债务回流。门禁现同时验证权威引用物理存在、旧媒体孤儿为零、allowlist
+      与当前命中精确一致，以及 infrastructure-only 表不会生成业务 model/store。
+    change_type:
+      - specification
+      - ops
+      - service
+      - app
+      - local_contract
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/spec.md
+        sections: [范围, 真相源与验证, 非范围]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement/acceptance.yaml
+        sections: [scope, GWT2, execution]
+      - path: quwoquan_ops/gate/verify_alpha_media_fixture_surface.py
+        sections: [global media references, reverse reachability, files-only]
+      - path: quwoquan_service/tools/codegen_storage/gen_model.go
+        sections: [entityless table fail-fast]
+      - path: quwoquan_service/tools/codegen_storage/gen_pg.go
+        sections: [entityless store fail-fast]
+      - path: quwoquan_app/pubspec.yaml
+        sections: [precise assistant config asset]
+    tests:
+      - layer: local_contract
+        intent: Fixture 媒体正反向闭包、存储 codegen 和仓库整洁防回归
+        evidence:
+          - quwoquan_ops/tests/local_contract/verify_seeded_media_ca_path__local_contract_test.py
+          - quwoquan_ops/tests/local_contract/test_repo_hygiene_audit__repository_layout__contract__local_contract_test.py
+          - quwoquan_service/tools/codegen_storage/codegen_storage__local_contract_test.go
+          - quwoquan_app/test/local_contract/app/startup_probe_parser__local_contract_test.py
+          - .qwq_output/env/repo/runs/20260719T084528Z-fixture-media-cleanup/deletion_manifest.json
+          - .qwq_output/env/repo/runs/20260719T092617Z-repo-hygiene-audit-repo/summary.json
+    gates:
+      - python3 quwoquan_ops/gate/verify_alpha_media_fixture_surface.py --files-only
+      - make verify-avatar-user-pool
+      - python3 quwoquan_ops/gate/verify_media_delivery_contract.py
+      - python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py
+      - python3 quwoquan_app/scripts/media/verify_app_avatar_rendering_policy.py
+      - python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
+      - go test ./tools/codegen_storage
+      - go test ./services/user-service/internal/infrastructure/user/persistence ./services/user-service/internal/infrastructure/user/cache
+      - python3 quwoquan_ops/gate/verify_root_layout.py
+      - python3 quwoquan_service/scripts/verify/verify_service_layout.py
+    remaining_blockers:
+      - 全量 verify-metadata 当前被并行 WIP 的 rtc.CallRecording 未登记 canonical object registry 阻断；本轮 greeting_request storage metadata 已通过 commercial validator 到该无关阻断点，storage codegen 与目标包编译均通过。
+      - quwoquan_app/build、.dart_tool、ios/Pods 与 Gradle 缓存继续按活动 Flutter/设备 WIP 保护，不纳入源码退役。

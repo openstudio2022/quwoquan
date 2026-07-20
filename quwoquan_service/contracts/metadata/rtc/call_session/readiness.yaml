@@ -1,0 +1,69 @@
+object: CallSession
+operations:
+  - InitiateCall
+  - AnswerCall
+  - RejectCall
+  - CancelCall
+  - HangupCall
+  - JoinCall
+  - LeaveCall
+  - ReportMediaConnected
+  - InviteToCall
+  - GetCall
+  - ListCalls
+  - ToggleMute
+  - ToggleCamera
+  - StartScreenShare
+  - StopScreenShare
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/rtc-service/internal/domain/call_session/call_session_service.go
+    - quwoquan_service/services/rtc-service/internal/application/call_orchestrator.go
+    - quwoquan_service/services/rtc-service/internal/application/ring_timeout_sweeper.go
+  store:
+    - quwoquan_service/services/rtc-service/internal/infrastructure/persistence/mongo_call_store.go
+  outbox:
+    - quwoquan_service/services/rtc-service/internal/infrastructure/persistence/mongo_call_store.go
+    - quwoquan_service/services/rtc-service/internal/application/call_outbox_relay.go
+    - quwoquan_service/services/rtc-service/internal/adapters/mq/event_publisher.go
+  reader:
+    - quwoquan_service/services/rtc-service/internal/infrastructure/persistence/mongo_call_store.go
+  transport:
+    - quwoquan_service/services/rtc-service/internal/adapters/http/call_handler.go
+    - quwoquan_service/services/rtc-service/cmd/api/main.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/rtc/call_session_contracts.dart
+    - quwoquan_app/lib/cloud/remote/rtc/call_session/call_lifecycle_remote.dart
+    - quwoquan_app/lib/cloud/remote/rtc/call_session/call_participant_remote.dart
+    - quwoquan_app/lib/cloud/remote/rtc/call_session/call_media_control_remote.dart
+    - quwoquan_app/lib/cloud/remote/rtc/call_session/call_screen_share_remote.dart
+    - quwoquan_app/lib/cloud/remote/rtc/call_session/call_query_remote.dart
+  page:
+    - quwoquan_app/lib/ui/rtc/pages/incoming_call_page.dart
+    - quwoquan_app/lib/ui/rtc/pages/outgoing_call_page.dart
+    - quwoquan_app/lib/ui/rtc/pages/voice_call_page.dart
+    - quwoquan_app/lib/ui/rtc/pages/video_call_page.dart
+    - quwoquan_app/lib/ui/rtc/pages/call_participant_picker_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/rtc-service/tests/local_contract/call_state_cache__reliability__local_contract_test.go
+    - quwoquan_service/services/rtc-service/tests/local_contract/call_session_transitions__reliability__local_contract_test.go
+    - quwoquan_service/services/rtc-service/tests/local_contract/ring_timeout_sweeper__reliability__local_contract_test.go
+    - quwoquan_service/services/rtc-service/internal/application/signal_wire_type__local_contract_test.go
+    - quwoquan_service/services/rtc-service/internal/application/call_outbox_relay__local_contract_test.go
+    - quwoquan_service/services/rtc-service/internal/application/call_ringing_contract__local_contract_test.go
+    - quwoquan_service/services/rtc-service/internal/adapters/mq/event_publisher__local_contract_test.go
+    - quwoquan_service/services/chat-service/internal/application/rtc_call_log_projector__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/rtc/rtc_facets_remote__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/rtc/incoming_call_state__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/rtc/providers/call_participants_presentation__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/chat/widgets/rtc_call_log_bubble__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/rtc-service/tests/api_integration/call_timeout_and_connected_contract__api_integration_test.go
+    - quwoquan_service/services/rtc-service/tests/api_integration/call_history_storage__data_consistency__api_integration_test.go
+    - quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
+    - quwoquan_service/services/rtc-service/tests/api_integration/room_management_contract__api_integration_test.go
+    - quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+    - quwoquan_service/services/chat-service/tests/api_integration/rtc_call_log_projection__api_integration_test.go
+  user_acceptance: []
+environments: []

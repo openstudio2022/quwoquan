@@ -10,6 +10,7 @@ import (
 
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/services/integration-service/internal/generated"
 )
 
 type ExternalInteractionStore interface {
@@ -18,6 +19,10 @@ type ExternalInteractionStore interface {
 	reliabletask.DLQRecoveryStore
 	reliabletask.RetentionCleanupStore
 	reliabletask.MetricsStore
+	FindLatestTaskOutboxByAggregateID(
+		ctx context.Context,
+		aggregateID string,
+	) (reliabletask.TaskOutboxRecord, bool, error)
 }
 
 type ExternalInteractionService struct {
@@ -106,8 +111,9 @@ func NewExternalInteractionService(
 	return &ExternalInteractionService{
 		store: store,
 		dispatcher: reliabletask.ExternalInteractionDispatcher{
-			Writer: reliabletask.NewTaskOutboxWriter(store),
-			Now:    now,
+			Writer:           reliabletask.NewTaskOutboxWriter(store),
+			TaskPayloadAllow: externalInteractionTaskPayloadAllowlist(),
+			Now:              now,
 		},
 		worker: reliabletask.ExternalInteractionWorker{
 			Worker: reliabletask.Worker{
@@ -136,6 +142,12 @@ func (s *ExternalInteractionService) Submit(ctx context.Context, req reliabletas
 			"external interaction operation %s is disabled",
 			req.Operation,
 		)
+	}
+	if req.Operation == reliabletask.ExternalInteractionOperationPush {
+		if err := ValidatePushDeliveryRequest(req); err != nil {
+			return reliabletask.ExternalInteractionAccepted{},
+				generated.AppErrorFromPushDeliveryInvalidRequest(err.Error())
+		}
 	}
 	if req.Operation != reliabletask.ExternalInteractionOperationSmsOTP {
 		return s.dispatcher.Submit(ctx, req)
@@ -181,6 +193,56 @@ func (s *ExternalInteractionService) ProcessOne(ctx context.Context) (bool, erro
 
 func (s *ExternalInteractionService) ListAttempts(ctx context.Context, requestID string) ([]reliabletask.ProviderAttemptRecord, error) {
 	return s.store.ListProviderAttempts(ctx, requestID)
+}
+
+// ExternalInteractionRequestState 是 GetExternalInteractionRequest 的归一化
+// 只读切片：状态从最新 provider attempt 派生，无 attempt 时回落到受理态。
+type ExternalInteractionRequestState struct {
+	RequestID string `json:"requestId"`
+	Operation string `json:"operation"`
+	Status    string `json:"status"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+func (s *ExternalInteractionService) GetRequest(
+	ctx context.Context,
+	requestID string,
+) (ExternalInteractionRequestState, bool, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ExternalInteractionRequestState{}, false, fmt.Errorf("requestId is required")
+	}
+	attempts, err := s.store.ListProviderAttempts(ctx, requestID)
+	if err != nil {
+		return ExternalInteractionRequestState{}, false, err
+	}
+	if len(attempts) > 0 {
+		latest := attempts[0]
+		for _, attempt := range attempts[1:] {
+			if attempt.CreatedAt.After(latest.CreatedAt) {
+				latest = attempt
+			}
+		}
+		return ExternalInteractionRequestState{
+			RequestID: requestID,
+			Operation: latest.Operation,
+			Status:    string(latest.Status),
+			UpdatedAt: latest.CreatedAt.UTC().Format(time.RFC3339),
+		}, true, nil
+	}
+	task, found, err := s.store.FindLatestTaskOutboxByAggregateID(ctx, requestID)
+	if err != nil {
+		return ExternalInteractionRequestState{}, false, err
+	}
+	if !found {
+		return ExternalInteractionRequestState{}, false, nil
+	}
+	return ExternalInteractionRequestState{
+		RequestID: requestID,
+		Operation: strings.TrimPrefix(task.TaskType, "external_interaction."),
+		Status:    string(reliabletask.ExternalInteractionStatusAccepted),
+		UpdatedAt: task.UpdatedAt.UTC().Format(time.RFC3339),
+	}, true, nil
 }
 
 type ExternalDeadLetter struct {
@@ -236,6 +298,26 @@ func supportedExternalOperation(operation string) bool {
 	default:
 		return false
 	}
+}
+
+func externalInteractionTaskPayloadAllowlist() []string {
+	allow := append(
+		[]string{},
+		reliabletask.DefaultExternalInteractionPayloadAllowlist()...,
+	)
+	return append(
+		allow,
+		"action",
+		"endpointRef",
+		"deliveryKey",
+		"callId",
+		"targetPersonaId",
+		"callType",
+		"callerName",
+		"sourceLabel",
+		"trustRelation",
+		"occurredAt",
+	)
 }
 
 func isNilDependency(value any) bool {

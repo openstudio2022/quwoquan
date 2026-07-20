@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
@@ -21,8 +23,8 @@ from content.release.canonical import aggregate_release as aggregate_module  # n
 from content.release.canonical.aggregate_release import build_aggregate_release  # noqa: E402
 
 
-EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
-RELEASE_ID = "20260713--travel-homepage-coverage--cn-zhejiang--canary-901"
+EXECUTION_ID = "20260713--travel-homepage-coverage--cn-zhejiang--m1-901"
+RELEASE_ID = "20260713--travel-homepage-coverage--cn-zhejiang--m1-901"
 TAG_REF = "Topic/旅行"
 
 
@@ -130,7 +132,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_roots=[execution_root],
-        rollout_milestone="canary",
+        rollout_milestone="m1",
     )
 
     release = release_root / RELEASE_ID
@@ -148,11 +150,11 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     aggregate = json.loads((release / "attestations/aggregate.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
     assert aggregate["sourceDigest"] == current_source_digest().to_document()
-    assert aggregate["rolloutMilestone"] == "canary"
+    assert aggregate["rolloutMilestone"] == "m1"
     assert aggregate["postCount"] == 0
     assert aggregate["creatorCount"] == 0
     header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
-    assert header["rolloutMilestone"] == "canary"
+    assert header["rolloutMilestone"] == "m1"
     assert header["sourceDigest"] == current_source_digest().to_document()
     assert not (release / "release.json").exists()
     assert not (release / "desired_state.json").exists()
@@ -168,9 +170,50 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_roots=[execution_root],
-        rollout_milestone="canary",
+        rollout_milestone="m1",
     )
     assert rerun["idempotent"] is True
+
+
+def test_canary_release__homepage_only_closure_is_forbidden(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    publish_root, execution_root, release_root, _selected_key, _unrelated_key = _fixture(
+        tmp_path
+    )
+    province = SimpleNamespace(
+        canary_entity_refs=("地点/景区/普陀山",),
+        canary_targets=("普陀山",),
+    )
+    monkeypatch.setattr(
+        "content.release.canonical.rollout_contract.load_rollout_contract",
+        lambda: SimpleNamespace(provinces=(province,)),
+    )
+    monkeypatch.setattr(
+        aggregate_module,
+        "load_cold_start_supply_policy",
+        lambda: SimpleNamespace(
+            content_mix=SimpleNamespace(
+                article=1,
+                image=1,
+                video=1,
+                total_per_entity=3,
+            )
+        ),
+    )
+
+    with pytest.raises(
+        aggregate_module.ObjectTransactionError,
+        match="canary post closure",
+    ):
+        build_aggregate_release(
+            publish_root=publish_root,
+            release_root=release_root,
+            release_id="20260713--travel-cold-start--cn-zhejiang--canary-902",
+            execution_roots=[execution_root],
+            rollout_milestone="canary",
+        )
 
 
 def test_release_aggregate_handler__execution_ids__contract__local_contract(

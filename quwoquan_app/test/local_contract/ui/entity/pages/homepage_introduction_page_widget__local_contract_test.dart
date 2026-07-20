@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_asset.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
@@ -9,7 +11,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_source.g.da
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CloudOperationCancellationSignal;
 
 class _IntroRepository implements HomepageIntroductionRepository {
   _IntroRepository(this.introduction, {this.shouldThrow = false});
@@ -19,8 +25,10 @@ class _IntroRepository implements HomepageIntroductionRepository {
 
   @override
   Future<HomepageIntroduction?> getHomepageIntroduction(
-    String homepageId,
-  ) async {
+    String homepageId, {
+    CloudOperationCancellationSignal? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
     if (shouldThrow) {
       throw StateError('intro failed');
     }
@@ -197,6 +205,84 @@ void main() {
     await tester.pumpWidget(_host(null, shouldThrow: true));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AppSectionErrorCard), findsOneWidget);
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+  });
+
+  testWidgets('页尾三个入口分别直达详情指定 tab', (tester) async {
+    final introduction = HomepageIntroduction(
+      homepageId: 'homepage_sight_west_lake',
+      displayName: '西湖景区',
+      homepageType: 'sight',
+      summary: '西湖景区摘要',
+      sections: <HomepageIntroductionSection>[
+        HomepageIntroductionSection(
+          kind: 'overview',
+          title: '概况',
+          bodyMarkdown: '西湖景区位于杭州。',
+        ),
+      ],
+    );
+    final cases = <(String, HomepageDetailTabTarget)>[
+      (UITextConstants.objectIntroReturnRecord, HomepageDetailTabTarget.record),
+      (
+        UITextConstants.objectIntroReturnDiscussion,
+        HomepageDetailTabTarget.discussion,
+      ),
+      (
+        UITextConstants.objectIntroReturnCircles,
+        HomepageDetailTabTarget.relatedCircles,
+      ),
+    ];
+
+    for (final testCase in cases) {
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.homepageIntroduction(
+          id: 'homepage_sight_west_lake',
+        ),
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoutePaths.homepageIntroductionPathTemplate.replaceAll(
+              '{id}',
+              ':id',
+            ),
+            builder: (_, _) => const HomepageIntroductionPage(
+              homepageId: 'homepage_sight_west_lake',
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+              '{id}',
+              ':id',
+            ),
+            builder: (_, state) {
+              final extra = state.extra as HomepageDetailPageRouteExtra?;
+              return Text('DETAIL_TARGET:${extra?.initialTabTarget?.name}');
+            },
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            homepageIntroductionRepositoryProvider.overrideWithValue(
+              _IntroRepository(introduction),
+            ),
+          ],
+          child: CupertinoApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(testCase.$1),
+        AppSpacing.twoHundredTwenty,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text(testCase.$1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DETAIL_TARGET:${testCase.$2.name}'), findsOneWidget);
+      router.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 }

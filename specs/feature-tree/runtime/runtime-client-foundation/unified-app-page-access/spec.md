@@ -1,13 +1,11 @@
-# L3：统一应用页级埋点（unified-app-page-access）
+# L3 特性：统一应用页级埋点（unified-app-page-access）
 
 ## 索引
 
 | 文档 | 说明 |
 |------|------|
-| [design.md](./design.md) | 方案对比、路由状态机、嵌套 push 约定 |
 | [coverage-surfaces.md](./coverage-surfaces.md) | **全表面分类**与 /dev 核对清单 |
 | [acceptance.yaml](./acceptance.yaml) | 验收与证据矩阵 |
-| [树内计划文档](./树内计划文档) | 实施切片（metadata → 根路由 → pageName → 嵌套审计） |
 | [CR-20260330-013](../../../../changelog/CR-20260330-013-unified-app-page-access-baseline.yaml) | 变更登记 |
 
 ## 背景与目标

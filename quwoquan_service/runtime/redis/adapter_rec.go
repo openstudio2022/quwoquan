@@ -38,6 +38,10 @@ func (a *recAdapter) SAdd(ctx context.Context, key string, members ...string) er
 	return a.client.SAdd(ctx, key, members...)
 }
 
+func (a *recAdapter) SRem(ctx context.Context, key string, members ...string) error {
+	return a.client.SRem(ctx, key, members...)
+}
+
 func (a *recAdapter) SMembers(ctx context.Context, key string) ([]string, error) {
 	return a.client.SMembers(ctx, key)
 }
@@ -64,8 +68,10 @@ func (a *recAdapter) PipelineRead(ctx context.Context, ops []recommendation.Pipe
 
 	hResults := make([]*MapResult, 0, len(ops))
 	sResults := make([]*SliceResult, 0, len(ops))
+	bResults := make([]*BoolResult, 0, len(ops))
 	hIndices := make([]int, 0, len(ops))
 	sIndices := make([]int, 0, len(ops))
+	bIndices := make([]int, 0, len(ops))
 
 	for i, op := range ops {
 		switch op.Type {
@@ -77,6 +83,10 @@ func (a *recAdapter) PipelineRead(ctx context.Context, ops []recommendation.Pipe
 			r := pipe.SMembers(ctx, op.Key)
 			sResults = append(sResults, r)
 			sIndices = append(sIndices, i)
+		case recommendation.PipelineSIsMember:
+			r := pipe.SIsMember(ctx, op.Key, op.Member)
+			bResults = append(bResults, r)
+			bIndices = append(bIndices, i)
 		}
 	}
 
@@ -98,6 +108,14 @@ func (a *recAdapter) PipelineRead(ctx context.Context, ops []recommendation.Pipe
 			return err
 		}
 		ops[idx].Set = val
+	}
+
+	for j, idx := range bIndices {
+		val, err := bResults[j].Result()
+		if err != nil {
+			return err
+		}
+		ops[idx].Bool = val
 	}
 
 	return nil

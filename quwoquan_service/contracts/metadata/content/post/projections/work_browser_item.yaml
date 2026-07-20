@@ -14,7 +14,7 @@ client_projection:
     description: 作品类型闭集归一：image / video / article / micro（moment 别名归 micro）。
     name: normalizedWorkType
     nullable: false
-  - body: "final fromContract = mediaItems\n    .where((item) => item.kind == 'video' && item.url.isNotEmpty)\n    .toList(growable: false);\nif (fromContract.isNotEmpty) return fromContract;\nfinal fallback = videoUrl;\nif (fallback == null || fallback.isEmpty) return const <WorkBrowserMediaItemDto>[];\nreturn <WorkBrowserMediaItemDto>[\n  WorkBrowserMediaItemDto(\n    kind: 'video',\n    url: fallback,\n    coverUrl: thumbnailUrl.isNotEmpty\n        ? thumbnailUrl\n        : (coverUrl.isEmpty ? null : coverUrl),\n    durationMs: durationMs,\n    width: width,\n    height: height,\n    title: null,\n  ),\n];\n"
+  - body: "final fromContract = mediaItems\n    .where((item) => item.kind == 'video' && item.url.isNotEmpty)\n    .toList(growable: false);\nif (fromContract.isNotEmpty) return fromContract;\nfinal fallback = videoUrl;\nif (fallback == null || fallback.isEmpty) return const <WorkBrowserMediaItemDto>[];\nreturn <WorkBrowserMediaItemDto>[\n  WorkBrowserMediaItemDto(\n    kind: 'video',\n    url: fallback,\n    coverUrl: thumbnailUrl.isNotEmpty\n        ? thumbnailUrl\n        : (coverUrl.isEmpty ? null : coverUrl),\n    durationMs: durationMs,\n    mediaAssetId: mediaAssetId,\n    mediaAssetVersion: mediaAssetVersion,\n    previewTrackManifestUrl: previewTrackManifestUrl,\n    previewTrackVersion: previewTrackVersion,\n    width: width,\n    height: height,\n    title: null,\n  ),\n];\n"
     dart_return_type: List<WorkBrowserMediaItemDto>
     description: 视频集序列：mediaItems[kind=video]；为空时由 videoUrl 派生单元素序列。
     name: videoItems
@@ -124,6 +124,26 @@ client_projection:
     name: durationMs
     nullable: true
     source: durationMs
+  - dart_type: String
+    default: 'null'
+    name: mediaAssetId
+    nullable: true
+    source: mediaAssetId
+  - dart_type: int
+    default: 'null'
+    name: mediaAssetVersion
+    nullable: true
+    source: mediaAssetVersion
+  - dart_type: String
+    default: 'null'
+    name: previewTrackManifestUrl
+    nullable: true
+    source: previewTrackManifestUrl
+  - dart_type: int
+    default: 'null'
+    name: previewTrackVersion
+    nullable: true
+    source: previewTrackVersion
   - dart_type: int
     default: 'null'
     name: width

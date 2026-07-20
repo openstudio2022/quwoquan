@@ -82,6 +82,16 @@ entities:
         api_exposure: drop
         ops_exposure: read
 
+      - name: version
+        source: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: CredentialBinding 聚合内部 CAS 版本
+
     unique_constraints:
       - columns: [credentialType, credentialKey]
         description: 同一凭证不能绑定两个 OwnerAccount（全局唯一）
@@ -92,3 +102,52 @@ entities:
       CredentialType:
         values: [phone, carrier_phone, wechat, alipay, qq, apple, passkey, anonymous_device]
         description: 支持的第三方凭证类型
+
+  CredentialBindingCommandResult:
+    description: 凭证绑定/解绑命令的稳定提交回执。
+    fields:
+      - name: credentialType
+        source: credentialType
+        type: enum
+        enum_ref: CredentialType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isActive
+        source: isActive
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: version
+        source: version
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: boolean
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayLabel
+        source: displayLabel
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask

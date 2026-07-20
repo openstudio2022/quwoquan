@@ -50,6 +50,7 @@ class _ContentSession {
 
   /// Last reported play_progress threshold to avoid duplicate reports.
   double lastReportedPlayThreshold = 0.0;
+  bool effectivePlaybackReported = false;
 }
 
 /// Unified content engagement tracker that handles all content types with
@@ -155,7 +156,10 @@ class ContentEngagementTracker {
   }
 
   /// Called when user exits/leaves a content item. Computes final depth.
-  Future<void> trackContentExit(String contentId) async {
+  Future<void> trackContentExit(
+    String contentId, {
+    bool emitDwell = true,
+  }) async {
     final session = _activeSessions.remove(contentId);
     if (session == null) return;
 
@@ -170,27 +174,28 @@ class ContentEngagementTracker {
 
     final ct = session.contentType.wireValue;
     final events = <BehaviorEvent>[
-      BehaviorEvent(
-        contentId: contentId,
-        action: BehaviorAction.dwell,
-        state: 'dwell',
-        clientEventId: _clientEventId(
-          action: BehaviorAction.dwell,
+      if (emitDwell)
+        BehaviorEvent(
           contentId: contentId,
+          action: BehaviorAction.dwell,
+          state: 'dwell',
+          clientEventId: _clientEventId(
+            action: BehaviorAction.dwell,
+            contentId: contentId,
+            feedRequestId: session.feedRequestId,
+          ),
+          contentType: ct,
+          duration: dwellSeconds,
+          tags: session.tags,
           feedRequestId: session.feedRequestId,
+          position: session.position,
+          authorId: session.authorId,
+          referralSource: session.referralSource,
+          engagementDepth: depth,
+          consumedRatio: ratio,
+          totalUnits: totalUnits,
+          entityRefs: session.entityRefs,
         ),
-        contentType: ct,
-        duration: dwellSeconds,
-        tags: session.tags,
-        feedRequestId: session.feedRequestId,
-        position: session.position,
-        authorId: session.authorId,
-        referralSource: session.referralSource,
-        engagementDepth: depth,
-        consumedRatio: ratio,
-        totalUnits: totalUnits,
-        entityRefs: session.entityRefs,
-      ),
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.contentDepth,
@@ -332,6 +337,46 @@ class ContentEngagementTracker {
             contentType: session.contentType.wireValue,
             consumedRatio: ratio,
             totalUnits: (totalDurationMs / 1000).round(),
+            referralSource: session.referralSource,
+            feedRequestId: session.feedRequestId,
+            authorId: session.authorId,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void trackEffectivePlayback(
+    String contentId, {
+    required String playbackSessionId,
+    required int effectivePlayMs,
+    required double consumedRatio,
+    required int totalUnits,
+  }) {
+    final session = _activeSessions[contentId];
+    if (session == null ||
+        session.contentType != ContentType.video ||
+        session.effectivePlaybackReported ||
+        playbackSessionId.trim().isEmpty ||
+        effectivePlayMs < 5000 ||
+        totalUnits <= 0) {
+      return;
+    }
+    session.effectivePlaybackReported = true;
+    _fireAndTrack(
+      _reporter.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: contentId,
+            action: BehaviorAction.effectivePlay,
+            state: 'foreground_visible_playing',
+            clientEventId:
+                'eng:effective_play:$contentId:${playbackSessionId.trim()}',
+            sessionId: playbackSessionId.trim(),
+            contentType: session.contentType.wireValue,
+            effectivePlayMs: effectivePlayMs,
+            consumedRatio: consumedRatio.clamp(0.0, 1.0),
+            totalUnits: totalUnits,
             referralSource: session.referralSource,
             feedRequestId: session.feedRequestId,
             authorId: session.authorId,

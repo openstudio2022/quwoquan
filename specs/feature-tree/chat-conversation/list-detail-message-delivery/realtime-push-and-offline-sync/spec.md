@@ -1,4 +1,4 @@
-# 实时推送与离线同步（Realtime Push & Offline Sync）
+# L3 特性：实时推送与离线同步（Realtime Push & Offline Sync）
 
 > **层级**：L3 story（隶属 L2 `list-detail-message-delivery`，L1 `chat-conversation`）
 > **状态**：implemented（production Remote-only + alpha composition 子集）

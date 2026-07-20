@@ -1,4 +1,4 @@
-# L4 特性：config-rollout-slo-gate
+# L3 特性：config-rollout-slo-gate
 
 ## 功能说明
 

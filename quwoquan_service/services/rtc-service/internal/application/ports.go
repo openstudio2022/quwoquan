@@ -7,23 +7,89 @@ import (
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/model"
 )
 
-// CallStore 是通话用例所需的最小聚合持久化端口。
+// CallOutboxEvent 是与聚合状态在同一事务提交的不可变事实。
+type CallOutboxEvent struct {
+	EventID          string
+	EventType        string
+	AggregateID      string
+	AggregateVersion int64
+	DeliveryKey      string
+	Payload          []byte
+	OccurredAt       time.Time
+}
+
+// CallCommit 声明一次聚合写入的原子提交单元：state（version CAS）、
+// 幂等 receipt 与同库 outbox 在同一事务落盘。
+type CallCommit struct {
+	Session          *model.CallSession
+	ExpectedVersion  int64
+	IdempotencyKey   string
+	CommandName      string
+	CommandDigest    string
+	ReceiptExpiresAt time.Time
+	Events           []CallOutboxEvent
+}
+
+// CallCommitResult 是提交或幂等重放的结果。
+type CallCommitResult struct {
+	Session  *model.CallSession
+	Replayed bool
+}
+
+// CallHistoryQuery 是 CallHistoryReader 的强类型查询，筛选与分页均在权威存储执行。
+type CallHistoryQuery struct {
+	Limit      int
+	Cursor     string
+	Status     string
+	MissedOnly bool
+}
+
+// CallHistoryPage 是 ListCalls 返回的 typed Slice。
+type CallHistoryPage struct {
+	Items      []*model.CallSession `json:"items"`
+	NextCursor string               `json:"nextCursor"`
+}
+
+// CallStore 是通话聚合的对象专属持久化端口：Load + 原子 Commit + 具名 Reader。
 type CallStore interface {
 	CreateCall(ctx context.Context, session *model.CallSession) error
 	FindCallByID(ctx context.Context, id string) (*model.CallSession, error)
-	UpdateCall(ctx context.Context, session *model.CallSession) error
-	ListCallsByUserID(ctx context.Context, userID string, limit int, cursor string) ([]*model.CallSession, error)
+	FindActiveCallForUser(ctx context.Context, userID string) (*model.CallSession, error)
+	// FindOverdueRingingCalls 按 1v1/群聊各自 cutoff 返回到期振铃会话；
+	// 领域 HandleTimeout 在命令管道内再次校验状态与精确边界。
+	FindOverdueRingingCalls(
+		ctx context.Context,
+		oneToOneCutoff time.Time,
+		groupCutoff time.Time,
+		limit int,
+	) ([]*model.CallSession, error)
+	Commit(ctx context.Context, commit CallCommit) (CallCommitResult, error)
+	FindReceipt(ctx context.Context, idempotencyKey, commandName, commandDigest string) (CallCommitResult, bool, error)
+	RecordNoopReceipt(ctx context.Context, receipt CallNoopReceipt) (CallCommitResult, error)
+	ListCallsByUserID(ctx context.Context, userID string, query CallHistoryQuery) (CallHistoryPage, error)
 }
 
-// CallStateCache 是通话编排所需的短期状态缓存端口。
+type CallOutboxStore interface {
+	ReadPendingOutbox(ctx context.Context, limit int) ([]CallOutboxEvent, error)
+	MarkOutboxPublished(ctx context.Context, eventID string, publishedAt time.Time) error
+}
+
+// CallNoopReceipt 记录目标状态已满足的命名意图：写幂等 receipt 但不递增
+// version、不产生 outbox 事实。
+type CallNoopReceipt struct {
+	Session          *model.CallSession
+	IdempotencyKey   string
+	CommandName      string
+	CommandDigest    string
+	ReceiptExpiresAt time.Time
+}
+
+// CallStateCache 是通话编排所需的短期状态缓存端口（storage.yaml redis_cache 同源）。
+// already_in_call 冲突检测走 Mongo FindActiveCallForUser，振铃超时走进程内
+// sweeper（lifecycle_timers.ring_timeout）；不存在 Redis active_call/timeout key。
 type CallStateCache interface {
 	SetCallState(ctx context.Context, session *model.CallSession) error
 	GetCallState(ctx context.Context, callID string) (*model.CallSession, error)
-	SetActiveCallForUser(ctx context.Context, userID, callID string) error
-	GetActiveCallForUser(ctx context.Context, userID string) (string, error)
-	DeleteActiveCallForUser(ctx context.Context, userID string) error
-	SetCallTimeout(ctx context.Context, callID string, timeout time.Duration) error
-	DeleteCallTimeout(ctx context.Context, callID string) error
 }
 
 // RoomParticipant 是应用层可消费的房间参与者快照。
@@ -39,8 +105,6 @@ type RoomManager interface {
 	DeleteRoom(ctx context.Context, roomName string) error
 	ListParticipants(ctx context.Context, roomName string) ([]RoomParticipant, error)
 	RemoveParticipant(ctx context.Context, roomName string, identity string) error
-	StartRoomCompositeEgress(ctx context.Context, roomName, outputBucket string) (string, error)
-	StopEgress(ctx context.Context, egressID string) error
 }
 
 // CallTokenIssuer 为参与者签发加入房间所需的短期令牌。
@@ -50,36 +114,35 @@ type CallTokenIssuer interface {
 
 // CallEventPayload 是事件与实时信令共享的强类型载荷。
 type CallEventPayload struct {
-	Status           string   `json:"status"`
-	ParticipantCount int      `json:"participantCount"`
-	Reason           string   `json:"reason,omitempty"`
-	InviteeIDs       []string `json:"inviteeIds,omitempty"`
+	CallID              string   `json:"callId"`
+	EventID             string   `json:"eventId,omitempty"`
+	CallType            string   `json:"callType,omitempty"`
+	InitiatorID         string   `json:"initiatorId,omitempty"`
+	InitiatorRingtoneID string   `json:"initiatorRingtoneId,omitempty"`
+	TargetPersonaID     string   `json:"targetPersonaId,omitempty"`
+	CallerName          string   `json:"callerName,omitempty"`
+	CallerAvatarURL     string   `json:"callerAvatarUrl"`
+	SourceLabel         string   `json:"sourceLabel,omitempty"`
+	TrustRelation       string   `json:"trustRelation,omitempty"`
+	DeliveryKey         string   `json:"deliveryKey,omitempty"`
+	ConversationID      string   `json:"conversationId,omitempty"`
+	CircleID            string   `json:"circleId,omitempty"`
+	MaxParticipants     int      `json:"maxParticipants,omitempty"`
+	UserID              string   `json:"userId,omitempty"`
+	Role                string   `json:"role,omitempty"`
+	Status              string   `json:"status"`
+	ParticipantCount    int      `json:"participantCount"`
+	EndReason           string   `json:"endReason,omitempty"`
+	DurationMs          int64    `json:"durationMs,omitempty"`
+	StartedAt           string   `json:"startedAt,omitempty"`
+	EndedAt             string   `json:"endedAt,omitempty"`
+	ExpiresAt           string   `json:"expiresAt,omitempty"`
+	InviteeIDs          []string `json:"inviteeIds,omitempty"`
 }
 
-// CallEvent 是发布到跨服务事件通道的应用 DTO。
-type CallEvent struct {
-	Type      string           `json:"type"`
-	CallID    string           `json:"callId"`
-	ActorID   string           `json:"actorId,omitempty"`
-	Timestamp time.Time        `json:"timestamp"`
-	Payload   CallEventPayload `json:"payload"`
-}
-
-// CallEventPublisher 隔离编排用例与消息基础设施。
-type CallEventPublisher interface {
-	Publish(ctx context.Context, event CallEvent) error
-}
-
-// CallSignal 是发送给在线客户端的实时信令 DTO。
-type CallSignal struct {
-	Type    string           `json:"type"`
-	CallID  string           `json:"callId"`
-	ActorID string           `json:"actorId"`
-	Payload CallEventPayload `json:"payload"`
-}
-
-// CallSignaler 隔离编排用例与 WebSocket 连接实现。
-type CallSignaler interface {
-	PushToUser(ctx context.Context, userID string, signal CallSignal)
-	PushToUsers(ctx context.Context, userIDs []string, signal CallSignal)
+// CallRealtimePublisher 是 CallSession outbox 的唯一 relay adapter。
+// CallRinging 只追加 durable stream；其余在线信令按可信 persona 通道发布，
+// CallAnswered/CallEnded 还必须追加 durable cancellation stream。
+type CallRealtimePublisher interface {
+	PublishToPersonas(ctx context.Context, personaIDs []string, wireType string, event CallOutboxEvent) error
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-页面级 A/B/C 治理扫描（与 verify_page_matrix_scan_complete 磁盘集一致，见 scripts/page_disk_scan_paths.py）。
+页面级 A/B/C 治理扫描（与 verify_page_matrix_scan_complete 磁盘集一致，见
+quwoquan_app/scripts/runtime/page_disk_scan_paths.py）。
 
 规范：specs/gates/page_abc_governance.md
 白名单：specs/gates/page_abc_governance_allowlist.yaml

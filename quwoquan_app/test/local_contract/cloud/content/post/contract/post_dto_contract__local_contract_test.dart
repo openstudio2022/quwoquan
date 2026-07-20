@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import '../../../../../support/cloud_services/content/content_mock_data.dart';
 
 /// L1a 契约测试：PostDto — 覆盖 mock.yaml dto_scenarios
 ///

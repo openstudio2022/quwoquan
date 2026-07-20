@@ -40,6 +40,14 @@ func generateModels(ctx *genContext) error {
 	generated := make(map[string]bool)
 
 	if backend == "postgres" || len(ctx.storage.Tables) > 0 {
+		for tableName, table := range ctx.storage.Tables {
+			if !table.InfrastructureOnly && strings.TrimSpace(table.Entity) == "" {
+				return fmt.Errorf(
+					"table %s has no entity; mark infrastructure_only when the model is handwritten",
+					tableName,
+				)
+			}
+		}
 		for _, table := range ctx.storage.Tables {
 			if table.InfrastructureOnly {
 				continue
@@ -241,7 +249,7 @@ func fieldTypeToGoType(_ *genContext, _, fieldName, fieldType string, notNull bo
 		return "string"
 	case "jsonb":
 		return "json.RawMessage"
-	case "string[]":
+	case "string[]", "[]string":
 		return "[]string"
 	default:
 		return "string"

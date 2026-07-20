@@ -1736,3 +1736,133 @@ extension ContextContinuityModeX on ContextContinuityMode {
   }
 }
 
+enum AssistantPreferenceScope {
+  session,
+  longTerm,
+  unknown,
+}
+
+AssistantPreferenceScope parseAssistantPreferenceScope(String raw) {
+  switch (raw.trim()) {
+    case "session":
+      return AssistantPreferenceScope.session;
+    case "long_term":
+      return AssistantPreferenceScope.longTerm;
+    default:
+      return AssistantPreferenceScope.unknown;
+  }
+}
+
+extension AssistantPreferenceScopeX on AssistantPreferenceScope {
+  String get wireName {
+    switch (this) {
+      case AssistantPreferenceScope.session:
+        return "session";
+      case AssistantPreferenceScope.longTerm:
+        return "long_term";
+      case AssistantPreferenceScope.unknown:
+        return "";
+    }
+  }
+}
+
+enum AssistantPreferenceKind {
+  responseStyle,
+  replyLength,
+  tone,
+  language,
+  unknown,
+}
+
+AssistantPreferenceKind parseAssistantPreferenceKind(String raw) {
+  switch (raw.trim()) {
+    case "response_style":
+      return AssistantPreferenceKind.responseStyle;
+    case "reply_length":
+      return AssistantPreferenceKind.replyLength;
+    case "tone":
+      return AssistantPreferenceKind.tone;
+    case "language":
+      return AssistantPreferenceKind.language;
+    default:
+      return AssistantPreferenceKind.unknown;
+  }
+}
+
+extension AssistantPreferenceKindX on AssistantPreferenceKind {
+  String get wireName {
+    switch (this) {
+      case AssistantPreferenceKind.responseStyle:
+        return "response_style";
+      case AssistantPreferenceKind.replyLength:
+        return "reply_length";
+      case AssistantPreferenceKind.tone:
+        return "tone";
+      case AssistantPreferenceKind.language:
+        return "language";
+      case AssistantPreferenceKind.unknown:
+        return "";
+    }
+  }
+}
+
+enum AssistantPreferenceSourceType {
+  explicitRewrite,
+  management,
+  unknown,
+}
+
+AssistantPreferenceSourceType parseAssistantPreferenceSourceType(String raw) {
+  switch (raw.trim()) {
+    case "explicit_rewrite":
+      return AssistantPreferenceSourceType.explicitRewrite;
+    case "management":
+      return AssistantPreferenceSourceType.management;
+    default:
+      return AssistantPreferenceSourceType.unknown;
+  }
+}
+
+extension AssistantPreferenceSourceTypeX on AssistantPreferenceSourceType {
+  String get wireName {
+    switch (this) {
+      case AssistantPreferenceSourceType.explicitRewrite:
+        return "explicit_rewrite";
+      case AssistantPreferenceSourceType.management:
+        return "management";
+      case AssistantPreferenceSourceType.unknown:
+        return "";
+    }
+  }
+}
+
+enum AssistantPreferenceStatus {
+  active,
+  revoked,
+  unknown,
+}
+
+AssistantPreferenceStatus parseAssistantPreferenceStatus(String raw) {
+  switch (raw.trim()) {
+    case "active":
+      return AssistantPreferenceStatus.active;
+    case "revoked":
+      return AssistantPreferenceStatus.revoked;
+    default:
+      return AssistantPreferenceStatus.unknown;
+  }
+}
+
+extension AssistantPreferenceStatusX on AssistantPreferenceStatus {
+  String get wireName {
+    switch (this) {
+      case AssistantPreferenceStatus.active:
+        return "active";
+      case AssistantPreferenceStatus.revoked:
+        return "revoked";
+      case AssistantPreferenceStatus.unknown:
+        return "";
+    }
+  }
+}
+

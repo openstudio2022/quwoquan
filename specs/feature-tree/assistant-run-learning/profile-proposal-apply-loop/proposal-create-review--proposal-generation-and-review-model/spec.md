@@ -1,4 +1,4 @@
-# L4 特性：proposal-generation-and-review-model
+# L3 特性：proposal-generation-and-review-model
 
 ## 功能说明
 - 细化提案生成模型与审核视图的数据结构和解释字段。

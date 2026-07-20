@@ -1960,7 +1960,15 @@ StPageFlipScene _buildInteractiveBackwardStScene() {
 }
 
 String _readAppSource(String relativePath) {
-  return File(relativePath).readAsStringSync();
+  final libraryFile = File(relativePath);
+  final librarySource = libraryFile.readAsStringSync();
+  final partSources = RegExp(r"^part '([^']+)';$", multiLine: true)
+      .allMatches(librarySource)
+      .map((match) {
+        final partPath = match.group(1)!;
+        return File('${libraryFile.parent.path}/$partPath').readAsStringSync();
+      });
+  return <String>[librarySource, ...partSources].join('\n');
 }
 
 List<String> _sourceImportLines(String source) {

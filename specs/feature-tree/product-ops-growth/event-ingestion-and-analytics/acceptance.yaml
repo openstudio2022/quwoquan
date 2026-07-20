@@ -23,21 +23,34 @@ sit_acceptance:
     - networkClass 固定为 wifi/ethernet/5g/4g/mobile/other/none；VPN 叠加时上报底层
       接入，单独 vpn/lte/nr/offline 均被服务端拒绝。
     - session 状态机、页面映射、10s/50条/128KiB、单飞密封批次、重试/死信/actor 隔离可验证。
+    - app_anr_outcome、page_first_usable、page_error_outcome 全量进入同一 Reporter；
+      原生 ANR 仅在产品 outbox accepted 后确认，入队失败保留重试；Dart ANR 去重、
+      TTI 三终态和恢复动作 outcome 有 local_contract。
+    - App 体验三项一级黄金指标的 source、SLO、freshness、低基数下钻与每业务最多三项规则
+      由机器目录和负例门禁共同锁定。
     performance_points: [event_120_per_minute, error_20_per_minute]
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/core/telemetry/app_telemetry_session_store__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/telemetry/app_telemetry_session_context__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/telemetry/app_telemetry_outbox__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/telemetry/app_page_experience_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/observability/runtime_diagnostics__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+      - file: quwoquan_ops/tests/local_contract/test_app_experience_observability__contract__local_contract_test.py
       - file: quwoquan_service/services/product-ops-service/tests/local_contract/visit_event_contract__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
       recorded:
       - file: quwoquan_app/test/local_contract/core/telemetry/app_telemetry_session_context__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/telemetry/app_page_experience_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/observability/runtime_diagnostics__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+      - file: quwoquan_ops/tests/local_contract/test_app_experience_observability__contract__local_contract_test.py
       - file: quwoquan_service/services/product-ops-service/tests/local_contract/visit_event_contract__local_contract_test.go
     status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: telemetry_contract
         cases: [local_contract.product_ops_growth.event_ingestion_and_analytics.sit1]
         envs: [local]
@@ -52,13 +65,14 @@ sit_acceptance:
     performance_points: [summary_p95_2s, drilldown_p95_3s]
     tests:
       planned:
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/sls_event_store__api_integration_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/event_query_facade__api_integration_test.go
-      recorded: []
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
+      recorded:
+      - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: sls_ingestion_and_query
         cases: [api_integration.product_ops_growth.event_ingestion_and_analytics.sit2]
         envs: [beta, gamma]
@@ -83,11 +97,13 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_telemetry_schema_and_privacy
         cases: [local_contract.product_ops_growth.event_ingestion_and_analytics.sit3]
         envs: [local]
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: startup_telemetry_ingress
         cases: [api_integration.product_ops_growth.event_ingestion_and_analytics.sit3]
         envs: [gamma]
@@ -102,13 +118,16 @@ sit_acceptance:
     performance_points: [hotpath_apply_p95_100ms]
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/behavior/behavior_single_outlet__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
-      recorded: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: behavior_once_and_attribution
         cases: [api_integration.discovery_content.feedback_ingestion_sampling.sit4]
         envs: [beta, gamma]
@@ -120,5 +139,5 @@ execution:
   - python3 quwoquan_ops/gate/verify_single_track_contracts.py
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

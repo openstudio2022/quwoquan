@@ -23,7 +23,7 @@ func TestAssistantScenarioFixtureContract(t *testing.T) {
 const assistantScenarioFixtureRelativePath = "assistant/test_fixtures/scenarios/assistant_scenarios.json"
 
 type AssistantScenarioPack struct {
-	Schema          string                      `json:"schema"`
+	Schema                 string                      `json:"schema"`
 	RepositoryExpectations map[string]string           `json:"repositoryExpectations"`
 	SeedSets               map[string]AssistantSeedSet `json:"seedSets"`
 	Scenarios              []AssistantScenarioFixture  `json:"scenarios"`

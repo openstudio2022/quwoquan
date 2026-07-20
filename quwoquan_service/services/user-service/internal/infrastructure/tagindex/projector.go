@@ -5,7 +5,6 @@ package tagindex
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -25,31 +24,15 @@ type ProfileReader interface {
 type Projector struct {
 	coll   *mongo.Collection
 	reader ProfileReader
-	logger *slog.Logger
 }
 
 var _ application.UserEventPublisher = (*Projector)(nil)
 
-type Option func(*Projector)
-
-func WithLogger(logger *slog.Logger) Option {
-	return func(p *Projector) {
-		if logger != nil {
-			p.logger = logger
-		}
-	}
-}
-
-func NewProjector(coll *mongo.Collection, reader ProfileReader, opts ...Option) *Projector {
-	p := &Projector{
+func NewProjector(coll *mongo.Collection, reader ProfileReader) *Projector {
+	return &Projector{
 		coll:   coll,
 		reader: reader,
-		logger: slog.Default(),
 	}
-	for _, opt := range opts {
-		opt(p)
-	}
-	return p
 }
 
 func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ string, payload map[string]any) error {
@@ -62,19 +45,30 @@ func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ s
 	}
 	switch eventType {
 	case event.UserProfileUpdated, event.UserRegistered:
-		p.reconcile(ctx, userID, eventType, payload)
+		return p.reconcile(ctx, userID, eventType, payload)
+	case event.UserAccountClosed:
+		_, err := p.coll.DeleteOne(
+			ctx,
+			bson.M{"objectId": userID, "objectType": "user"},
+		)
+		if err != nil {
+			return fmt.Errorf("delete closed user tag index: %w", err)
+		}
 	default:
 	}
 	return nil
 }
 
-func (p *Projector) reconcile(ctx context.Context, userID, eventType string, payload map[string]any) {
+func (p *Projector) reconcile(
+	ctx context.Context,
+	userID, eventType string,
+	payload map[string]any,
+) error {
 	tagRefs := profileTagRefsFromPayload(payload)
 	if tagRefs == nil && p.reader != nil {
 		profile, err := p.reader.FindByID(ctx, userID)
 		if err != nil {
-			p.logger.Warn("user tag index read-back failed", "event", eventType, "userId", userID, "err", err)
-			return
+			return fmt.Errorf("user tag index read-back: %w", err)
 		}
 		if profile != nil {
 			tagRefs = profileTagRefsFromIdentityTags(profile.IdentityTags)
@@ -99,8 +93,9 @@ func (p *Projector) reconcile(ctx context.Context, userID, eventType string, pay
 		options.UpdateOne().SetUpsert(true),
 	)
 	if err != nil {
-		p.logger.Warn("user tag index upsert failed", "event", eventType, "userId", userID, "err", err)
+		return fmt.Errorf("user tag index upsert: %w", err)
 	}
+	return nil
 }
 
 func profileTagRefsFromPayload(payload map[string]any) []string {

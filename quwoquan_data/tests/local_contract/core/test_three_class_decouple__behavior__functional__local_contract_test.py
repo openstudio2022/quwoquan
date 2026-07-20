@@ -49,7 +49,7 @@ def test_homepage_primary_source_three_encyclopedia_closed_set():
     encyclopedia_priorities = []
     for meta in (
         {"researchLane": "homepage", "sourceKind": "wikipedia", "extractor": "wikipedia_api", "canonicalUrl": "https://zh.wikipedia.org/wiki/西湖", "policyRevision": "encyclopedia-primary"},
-        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_openapi", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary"},
+        {"researchLane": "homepage", "sourceKind": "baidu_baike", "extractor": "baidu_baike_html", "canonicalUrl": "https://baike.baidu.com/item/西湖", "policyRevision": "encyclopedia-primary"},
         {"researchLane": "homepage", "sourceKind": "toutiao_baike", "extractor": "toutiao_baike_html", "canonicalUrl": "https://www.baike.com/wiki/西湖", "policyRevision": "encyclopedia-primary"},
     ):
         priority = _homepage_source_priority(meta)
@@ -71,7 +71,7 @@ def test_homepage_primary_source_three_encyclopedia_closed_set():
 def test_homepage_base_draft_seed_three_encyclopedia_closed_set():
     identities = [
         ("wikipedia", "wikipedia_api", "https://zh.wikipedia.org/wiki/西湖"),
-        ("baidu_baike", "baidu_baike_openapi", "https://baike.baidu.com/item/西湖"),
+        ("baidu_baike", "baidu_baike_html", "https://baike.baidu.com/item/西湖"),
         ("toutiao_baike", "toutiao_baike_html", "https://www.baike.com/wiki/西湖"),
     ]
     for source_kind, extractor, url in identities:

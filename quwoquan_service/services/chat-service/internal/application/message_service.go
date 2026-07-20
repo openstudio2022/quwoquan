@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -30,19 +29,22 @@ const (
 	messageCardAttributeLimit    = 16
 	messageCardAttributeKeyLimit = 64
 	messageCardAttributeValLimit = 256
+	messageMentionLimit          = 50
 )
 
 type MessageService struct {
-	conversations ConversationStore
-	messages      MessageStore
-	members       MemberStore
-	userStates    UserStateStore
-	receipts      ReceiptStore
-	projection    ConversationMessageProjector
-	cache         ConversationCache
-	publisher     EventPublisher
-	relationships RelationshipGate
-	mediaAssets   messageports.MediaAssetDeliveryReader
+	transactions      TransactionRunner
+	conversations     ConversationStore
+	messages          MessageStore
+	members           MemberStore
+	userStates        UserStateStore
+	userStateCommands AggregateCommandStore
+	receipts          ReceiptStore
+	projection        ConversationMessageProjector
+	cache             ConversationCache
+	publisher         EventPublisher
+	relationships     RelationshipGate
+	mediaAssets       messageports.MediaAssetDeliveryReader
 }
 
 func NewMessageService(
@@ -63,16 +65,18 @@ func NewMessageService(
 		panic("chat message application requires MediaAssetDeliveryReader")
 	}
 	return &MessageService{
-		conversations: storage.Conversations,
-		messages:      storage.Messages,
-		members:       storage.Members,
-		userStates:    storage.UserStates,
-		receipts:      storage.Receipts,
-		projection:    storage.MessageProjection,
-		cache:         cache,
-		publisher:     publisher,
-		relationships: relationships,
-		mediaAssets:   mediaAssets,
+		transactions:      storage.Transactions,
+		conversations:     storage.Conversations,
+		messages:          storage.Messages,
+		members:           storage.Members,
+		userStates:        storage.UserStates,
+		userStateCommands: storage.UserStateCommands,
+		receipts:          storage.Receipts,
+		projection:        storage.MessageProjection,
+		cache:             cache,
+		publisher:         publisher,
+		relationships:     relationships,
+		mediaAssets:       mediaAssets,
 	}
 }
 
@@ -121,6 +125,10 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	if err := s.ensureMessageAllowed(ctx, req); err != nil {
+		return nil, err
+	}
+	req.Mentions, err = s.canonicalMentions(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 	card, err := validateMessageCommand(req)
@@ -220,6 +228,71 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	}, nil
 }
 
+// SendAnnouncementSystemMessage 写入一条 type=system_announcement 的会话消息
+// （公告即触达）。该类型不在公开 SendMessage 白名单内，只能由服务端公告命令
+// 内部产生；seq 分配、幂等、outbox 与未读投影复用消息主线。
+func (s *MessageService) SendAnnouncementSystemMessage(
+	ctx context.Context,
+	conversationID, senderID, content, clientMsgID string,
+) error {
+	if strings.TrimSpace(clientMsgID) == "" {
+		return generated.AppErrorFromMessageInvalid("announcement clientMsgId is required")
+	}
+	if strings.TrimSpace(content) == "" {
+		return generated.AppErrorFromMessageInvalid("announcement content is required")
+	}
+	now := time.Now().UTC()
+	msg := messagemodel.Message{
+		ID:              generateID(),
+		ConversationID:  conversationID,
+		ClientMessageID: clientMsgID,
+		SenderID:        senderID,
+		Type:            "system_announcement",
+		Content:         content,
+		Status:          "sent",
+		Timestamp:       now,
+		Version:         1,
+	}
+	commandDigest, err := sendMessageCommandDigest(SendMessageRequest{
+		ConversationId: conversationID,
+		SenderId:       senderID,
+		Type:           msg.Type,
+		Content:        content,
+		ClientMsgId:    clientMsgID,
+	})
+	if err != nil {
+		return err
+	}
+	committed, err := s.messages.CommitMessage(ctx, MessageCommit{
+		Message:       msg,
+		CommandDigest: commandDigest,
+		Events: []MessageOutboxEvent{{
+			EventID:        msg.ID + ":v1:" + messageevent.MessageSent,
+			EventType:      messageevent.MessageSent,
+			ConversationID: conversationID,
+			ActorID:        senderID,
+			Payload: map[string]any{
+				"conversationId": conversationID,
+				"type":           msg.Type,
+				"content":        msg.Content,
+				"clientMsgId":    clientMsgID,
+				"senderId":       senderID,
+			},
+		}},
+	})
+	if err != nil {
+		if errors.Is(err, messagemodel.ErrMessageIdempotencyConflict) {
+			// 同一公告命令重试：消息已写入，视为触达完成。
+			return nil
+		}
+		return err
+	}
+	if err := s.projection.ProjectCommittedMessage(ctx, committed.Message); err != nil {
+		return err
+	}
+	return s.cache.InvalidateConversation(ctx, conversationID)
+}
+
 func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, error) {
 	messageType := strings.TrimSpace(req.Type)
 	if _, ok := map[string]struct{}{
@@ -292,6 +365,78 @@ func sendMessageCommandDigest(req SendMessageRequest) (string, error) {
 	}
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// canonicalMentions 是 SendMessage 提及语义的唯一校验入口。正文只负责显示，
+// 权限、目标和未读推进均消费这里产出的稳定成员 ID。
+func (s *MessageService) canonicalMentions(
+	ctx context.Context,
+	req SendMessageRequest,
+) ([]string, error) {
+	if len(req.Mentions) == 0 {
+		return nil, nil
+	}
+	if len(req.Mentions) > messageMentionLimit {
+		return nil, generated.AppErrorFromMessageInvalid("mentions exceed 50 targets")
+	}
+	conversation, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return nil, err
+	}
+	if conversation.Type != conversationTypeGroup {
+		return nil, generated.AppErrorFromMessageInvalid(
+			"mentions are only supported in group conversations",
+		)
+	}
+	sender, err := s.members.FindMember(ctx, req.ConversationId, req.SenderId)
+	if err != nil {
+		return nil, generated.AppErrorFromMessageInvalid("mention sender is not an active member")
+	}
+
+	canonical := make([]string, 0, len(req.Mentions))
+	seen := make(map[string]struct{}, len(req.Mentions))
+	for _, raw := range req.Mentions {
+		targetID := strings.TrimSpace(raw)
+		if targetID == "" {
+			continue
+		}
+		if targetID == "__all__" {
+			if sender.Role != "owner" && sender.Role != "admin" {
+				return nil, generated.AppErrorFromMessageInvalid(
+					"only group owner or admin may mention all members",
+				)
+			}
+		} else if targetID == "assistant" {
+			assistantMember, findErr := s.members.FindAssistantMember(
+				ctx,
+				req.ConversationId,
+			)
+			if findErr != nil || assistantMember == nil ||
+				strings.TrimSpace(assistantMember.UserId) == "" {
+				return nil, generated.AppErrorFromMessageInvalid(
+					"assistant mention requires an active assistant member",
+				)
+			}
+			targetID = strings.TrimSpace(assistantMember.UserId)
+		} else {
+			member, findErr := s.members.FindMember(
+				ctx,
+				req.ConversationId,
+				targetID,
+			)
+			if findErr != nil || member == nil {
+				return nil, generated.AppErrorFromMessageInvalid(
+					"mention target is not an active conversation member",
+				)
+			}
+		}
+		if _, exists := seen[targetID]; exists {
+			continue
+		}
+		seen[targetID] = struct{}{}
+		canonical = append(canonical, targetID)
+	}
+	return canonical, nil
 }
 
 func (s *MessageService) mentionedAssistantMember(ctx context.Context, conversationID string, mentions []string) (*conversationmodel.ConversationMember, bool) {
@@ -444,26 +589,41 @@ func (s *MessageService) RecallMessage(ctx context.Context, conversationId, mess
 		return generated.AppErrorFromMessageRecallForbidden("recall actor does not own message")
 	}
 
+	if msg.Status == "recalled" {
+		// no-op：已撤回消息重复撤回，重放原结果；事件由唯一索引折叠。
+		return nil
+	}
+
 	if time.Since(msg.Timestamp) > recallTimeLimit {
 		return generated.AppErrorFromMessageRecallExpired("recall window exceeded")
 	}
 
-	if err := s.messages.SetMessageRecalled(ctx, messageId); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.messages.SetMessageRecalled(txCtx, messageId); err != nil {
+			return err
+		}
+		return s.messages.AppendMessageOutboxEvent(
+			txCtx,
+			MessageOutboxEvent{
+				EventID:        chatAggregateEventID("recall:"+messageId, string(messageevent.MessageRecalled)),
+				EventType:      string(messageevent.MessageRecalled),
+				ConversationID: conversationId,
+				ActorID:        senderId,
+				Payload: map[string]any{
+					"messageId":      messageId,
+					"conversationId": conversationId,
+					"seq":            msg.Seq,
+					"recalledAt":     time.Now().UTC(),
+				},
+			},
+			messageId,
+			msg.Version+1,
+		)
+	}); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, conversationId)
-
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), messageevent.MessageRecalled, conversationId, senderId, map[string]any{
-			"messageId":  messageId,
-			"seq":        msg.Seq,
-			"recalledAt": time.Now(),
-		}); err != nil {
-			slog.Error("publish MessageRecalled failed", "err", err, "conversationId", conversationId)
-		}
-	}()
-
 	return nil
 }
 
@@ -533,60 +693,6 @@ func (s *MessageService) hydrateMessageSlices(
 	return slices, nil
 }
 
-type SearchMessagesRequest struct {
-	UserId string
-	Query  string
-	Cursor string
-	Limit  int
-}
-
-func (s *MessageService) SearchMessages(
-	ctx context.Context,
-	req SearchMessagesRequest,
-) (_ []MessageSearchHit, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SearchMessages",
-		attribute.String("user.id", req.UserId),
-		attribute.String("search.query", req.Query))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	query := normalizeSearchQuery(req.Query)
-	if query == "" {
-		return []MessageSearchHit{}, nil
-	}
-	limit := clampSearchLimit(req.Limit, 20)
-	conversations, err := listUserConversations(ctx, s.conversations, s.userStates, req.UserId)
-	if err != nil {
-		return nil, err
-	}
-	results := make([]MessageSearchHit, 0, limit)
-	for _, conversation := range conversations {
-		messages, err := s.messages.ListMessages(ctx, conversation.ID, limit*4, 0, 0)
-		if err != nil {
-			continue
-		}
-		for _, message := range messages {
-			matched, _ := containsQuery(
-				[]string{
-					message.Content,
-					message.SenderID,
-				},
-				query,
-			)
-			if !matched {
-				continue
-			}
-			results = append(results, MessageSearchHit{
-				Conversation: conversation,
-				Message:      message,
-			})
-			if len(results) >= limit {
-				return results, nil
-			}
-		}
-	}
-	return results, nil
-}
-
 type SyncMessagesRequest struct {
 	ConversationId string
 	ViewerID       string
@@ -639,12 +745,29 @@ type MarkAsReadRequest struct {
 	UserId         string
 }
 
+// MarkAsRead 是 ConversationUserState 聚合的已读水位命令：readSeq 只单调
+// 前进，旧水位重放为 no-op；state、命令回执、MessageReceiptFact 与
+// WatermarkAdvanced 事件在同一事务提交。
 func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) (err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.MarkAsRead",
 		attribute.String("conversation.id", req.ConversationId),
 		attribute.String("message.id", req.MessageId))
 	defer func() { rtobs.EndSpan(span, err) }()
 	if err := s.requireConversationMembership(ctx, req.ConversationId, req.UserId); err != nil {
+		return err
+	}
+
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.UserId)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("MarkAsRead", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.userStateCommands, scopedKey, "MarkAsRead", digest, nil,
+	); err != nil || found {
 		return err
 	}
 
@@ -659,68 +782,116 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 		return generated.AppErrorFromMessageNotFound("read target does not belong to conversation")
 	}
 
-	state, err := s.userStates.FindUserState(ctx, req.UserId, req.ConversationId)
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
-		now := time.Now()
-		state = &conversationmodel.ConversationUserState{
-			ID:             generateID(),
-			UserId:         req.UserId,
-			ConversationId: req.ConversationId,
-			UpdatedAt:      now,
-		}
+		return err
 	}
+	return s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		state, stateErr := s.userStates.FindUserState(
+			txCtx,
+			req.UserId,
+			req.ConversationId,
+		)
+		if stateErr != nil {
+			if !errors.Is(stateErr, conversationmodel.ErrUserStateNotFound) {
+				return stateErr
+			}
+			state = &conversationmodel.ConversationUserState{
+				ID:             generateID(),
+				UserId:         req.UserId,
+				ConversationId: req.ConversationId,
+			}
+		}
+		commandReceipt, receiptErr := chatCommandReceipt(
+			scopedKey,
+			"MarkAsRead",
+			digest,
+			state.ID,
+			nil,
+		)
+		if receiptErr != nil {
+			return receiptErr
+		}
+		if msg.Seq <= state.ReadSeq {
+			// no-op：旧水位重放，持久化回执且不回退 readSeq、不产生事件。
+			return mapChatIdempotencyError(
+				s.userStateCommands.CommitAggregateCommand(
+					txCtx,
+					commandReceipt,
+					nil,
+				),
+			)
+		}
 
-	readAdvanced := false
-	if msg.Seq > state.ReadSeq {
-		conv, _ := s.conversations.FindConversationByID(ctx, req.ConversationId)
+		recomputedThroughSeq := state.InboxProjectedSeq
+		if conv.MaxSeq > recomputedThroughSeq {
+			recomputedThroughSeq = conv.MaxSeq
+		}
+		if msg.Seq > recomputedThroughSeq {
+			recomputedThroughSeq = msg.Seq
+		}
+		counts, countErr := s.messages.CountUnreadMessages(
+			txCtx,
+			req.ConversationId,
+			req.UserId,
+			msg.Seq,
+			recomputedThroughSeq,
+		)
+		if countErr != nil {
+			return countErr
+		}
+		now := time.Now().UTC()
 		state.ReadSeq = msg.Seq
-		state.LastReadAt = time.Now()
-		if conv != nil {
-			state.UnreadCount = int(conv.MaxSeq - msg.Seq)
-		} else {
-			state.UnreadCount = 0
-		}
-		if state.UnreadCount < 0 {
-			state.UnreadCount = 0
-		}
-		state.MentionUnreadCount = 0
-		state.UpdatedAt = time.Now()
-		if err := s.userStates.UpsertUserState(ctx, state); err != nil {
+		state.UnreadCount = counts.Total
+		state.MentionUnreadCount = counts.Mentioned
+		state.InboxProjectedSeq = recomputedThroughSeq
+		state.LastReadAt = now
+		state.UpdatedAt = now
+		if err := s.userStates.UpsertUserState(txCtx, state); err != nil {
 			return err
 		}
-		readAdvanced = true
-	}
-
-	if readAdvanced {
-		stateSnapshot := *state
-		go func() {
-			if err := s.publisher.PublishDomainEvent(context.Background(), userstateevent.ConversationReadWatermarkAdvanced, req.ConversationId, req.UserId, map[string]any{
-				"userId":             stateSnapshot.UserId,
-				"messageId":          req.MessageId,
-				"readSeq":            stateSnapshot.ReadSeq,
-				"unreadCount":        stateSnapshot.UnreadCount,
-				"mentionUnreadCount": stateSnapshot.MentionUnreadCount,
-				"readAt":             stateSnapshot.LastReadAt,
-				"updatedAt":          stateSnapshot.UpdatedAt,
-			}); err != nil {
-				slog.Error("publish ConversationReadWatermarkAdvanced failed", "err", err, "conversationId", req.ConversationId)
+		if conv.ReceiptEnabled {
+			// MessageReceiptFact：dedupe key (messageId,userId) 由唯一索引保证。
+			receiptErr := s.receipts.CreateReceipt(
+				txCtx,
+				&messagemodel.MessageReceipt{
+					ID:             generateID(),
+					MessageID:      req.MessageId,
+					ConversationID: req.ConversationId,
+					UserID:         req.UserId,
+					ReadAt:         now,
+				},
+			)
+			if receiptErr != nil &&
+				!errors.Is(
+					receiptErr,
+					messagemodel.ErrMessageReceiptAlreadyExists,
+				) {
+				return receiptErr
 			}
-		}()
-	}
-
-	convForReceipt, _ := s.conversations.FindConversationByID(ctx, req.ConversationId)
-	if convForReceipt != nil && convForReceipt.ReceiptEnabled {
-		receipt := &messagemodel.MessageReceipt{
-			ID:             generateID(),
-			MessageID:      req.MessageId,
-			ConversationID: req.ConversationId,
-			UserID:         req.UserId,
-			ReadAt:         time.Now(),
 		}
-		_ = s.receipts.CreateReceipt(ctx, receipt)
-	}
-
-	return nil
+		return mapChatIdempotencyError(s.userStateCommands.CommitAggregateCommand(
+			txCtx,
+			commandReceipt,
+			[]AggregateOutboxEvent{{
+				EventID:        chatAggregateEventID(scopedKey, string(userstateevent.ConversationReadWatermarkAdvanced)),
+				EventType:      string(userstateevent.ConversationReadWatermarkAdvanced),
+				AggregateID:    state.ID,
+				ConversationID: req.ConversationId,
+				ActorID:        req.UserId,
+				Payload: map[string]any{
+					"conversationId":     req.ConversationId,
+					"userId":             state.UserId,
+					"messageId":          req.MessageId,
+					"readSeq":            state.ReadSeq,
+					"unreadCount":        state.UnreadCount,
+					"mentionUnreadCount": state.MentionUnreadCount,
+					"readAt":             state.LastReadAt,
+					"updatedAt":          state.UpdatedAt,
+				},
+			}},
+		))
+	})
 }
 
 func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId, viewerID string) (_ []messagemodel.MessageReceipt, err error) {

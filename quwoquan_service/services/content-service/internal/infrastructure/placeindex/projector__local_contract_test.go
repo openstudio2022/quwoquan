@@ -3,6 +3,7 @@ package placeindex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -82,16 +83,20 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 type fakeReader struct {
 	byID    map[string]postmodel.Post
 	all     []postmodel.Post
+	loadErr error
 	listErr error
 }
 
-func (r fakeReader) FindByID(_ context.Context, id string) (*postmodel.Post, bool) {
+func (r fakeReader) Load(_ context.Context, id string) (*postmodel.Post, bool, error) {
+	if r.loadErr != nil {
+		return nil, false, r.loadErr
+	}
 	p, ok := r.byID[id]
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 	cp := p
-	return &cp, true
+	return &cp, true, nil
 }
 
 func (r fakeReader) ListAll(_ context.Context) ([]postmodel.Post, error) { return r.all, r.listErr }
@@ -228,6 +233,26 @@ func TestPlaceProjectorIneligibleNotIndexed(t *testing.T) {
 	}
 	if len(f.upserts) != 0 {
 		t.Fatalf("ineligible post must not index a place: %#v", f.upserts)
+	}
+}
+
+func TestPlaceProjectorReadFailureKeepsCheckpointReplayable(t *testing.T) {
+	f := newFakeES()
+	store := NewInMemoryPlaceStore()
+	proj := newProjector(
+		t,
+		f,
+		fakeReader{loadErr: errors.New("malformed Mongo Post")},
+		store,
+	)
+
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
+		Type: "PostSettingsUpdated", AggregateID: "post-corrupt",
+	}); err == nil {
+		t.Fatal("Post read failure must fail place projection")
+	}
+	if len(f.upserts) != 0 || len(f.deletes) != 0 {
+		t.Fatalf("read failure must not mutate place index: upserts=%#v deletes=%#v", f.upserts, f.deletes)
 	}
 }
 

@@ -38,7 +38,7 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 		if !ok {
 			continue
 		}
-		itemConvId, _ := m["conversationId"].(string)
+		itemConvId, _ := m["id"].(string)
 		if itemConvId != convId {
 			continue
 		}
@@ -68,7 +68,7 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 		if !ok {
 			continue
 		}
-		itemConvId, _ := m["conversationId"].(string)
+		itemConvId, _ := m["id"].(string)
 		if itemConvId != convId {
 			continue
 		}

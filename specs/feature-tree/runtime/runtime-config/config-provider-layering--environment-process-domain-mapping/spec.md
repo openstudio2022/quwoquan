@@ -1,4 +1,4 @@
-# L4 细节：environment-process-domain-mapping
+# L3 细节：environment-process-domain-mapping
 
 ## 功能说明
 
@@ -53,7 +53,7 @@
 - A3：门禁可阻断 domain 重复归属与 beta/gamma/prod 漂移
 - A7：部署进程映射不改变领域 API 契约
 - A8：`make verify`/`make gate` 自动执行映射校验
-- A8：`make gate-full` 将 `recommendation-service` 的 Python 测试作为必过项
+- A8：`make gate-release ENV=gamma` 将 `recommendation-service` 的 Python 测试作为必过项
 - A1：all-in-one Sidecar 生产增强模板可在 Kustomize 下按环境参数化渲染
 - A3：从 all-in-one 到独立 Pod 拆分具备明确迁移路径与兼容策略
 - A1：`module_package_mapping.yaml` 可表达 seed-box onebox、单领域 background package、热点 worker package

@@ -38,6 +38,7 @@ class RolloutMilestone(StrEnum):
     M1 = "m1"
     M2 = "m2"
     M3 = "m3"
+    H10K = "h10k"
     LAUNCH = "launch"
 
 
@@ -46,6 +47,121 @@ class DeploymentEnvironment(StrEnum):
     BETA = "beta"
     GAMMA = "gamma"
     PROD = "prod"
+
+
+class ReleaseRunKind(StrEnum):
+    APPLY = "apply"
+    VERIFY = "verify"
+    ROLLBACK = "rollback"
+
+
+class ReleaseRunStatus(StrEnum):
+    COMPLETED = "completed"
+    DRY_RUN = "dry_run"
+
+
+class ContentImportStatus(StrEnum):
+    ACTIVE = "active"
+    DRY_RUN = "dry-run"
+
+
+class ReleaseSyncMode(StrEnum):
+    UPSERT = "upsert"
+    SYNC = "sync"
+
+
+class ReleaseDeletePolicy(StrEnum):
+    TOMBSTONE = "tombstone"
+
+
+class ReleaseSourceOwner(StrEnum):
+    QWQ_DATA = "qwq_data"
+
+
+class AppUatStatus(StrEnum):
+    PASSED = "passed"
+
+
+class AppUatDataSource(StrEnum):
+    REMOTE = "remote"
+
+
+class QueueBackend(StrEnum):
+    LOCAL_FILE = "local_file"
+    RELIABLE_TASK = "reliabletask"
+
+
+class QueueJobState(StrEnum):
+    QUEUED = "queued"
+    LEASED = "leased"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    DEAD = "dead"
+    SPILLED = "spilled"
+
+
+class QueueJobStage(StrEnum):
+    """Closed work kinds accepted by the object execution queue."""
+
+    DOWNLOAD = "download"
+    AUTHOR = "author"
+    PUBLISH = "publish"
+
+
+class QueueFailureKind(StrEnum):
+    """Machine-readable reason class for a queue transition to failure."""
+
+    EXECUTION = "execution"
+    GOVERNANCE = "governance"
+    STARTUP = "startup"
+    RESULT_ENVELOPE = "result_envelope"
+    BUDGET = "budget"
+    TIMEOUT = "timeout"
+
+
+class QueueTimelineEvent(StrEnum):
+    """Auditable queue lifecycle events; free-form text belongs in attrs only."""
+
+    BLOCKED = "blocked"
+    LEASED = "leased"
+    SUCCEEDED = "succeeded"
+    ENVELOPE_ACCEPTED = "envelope_accepted"
+    RECONCILED = "reconciled"
+    FAILED = "failed"
+    REQUEUED = "requeued"
+    REVIVED = "revived"
+    RECLAIMED = "reclaimed"
+
+
+class ReviewItemKind(StrEnum):
+    ARTICLE = "article"
+    FACT = "fact"
+    IMAGE = "image"
+
+
+class ReviewJudgment(StrEnum):
+    CREDIBLE = "credible"
+    DOUBTFUL = "doubtful"
+    UNJUDGED = "unjudged"
+
+
+class ReviewOverride(StrEnum):
+    PUBLISHABLE = "publishable"
+    DISCARD = "discard"
+
+
+class ReviewPublishState(StrEnum):
+    FIX = "fix"
+    DISCARD = "discard"
+    PUBLISHABLE = "publishable"
+
+
+class ImageSafetyReviewStatus(StrEnum):
+    SAFE = "safe"
+    TEXT_HEAVY = "text_heavy"
+    NEEDS_REVIEW = "needs_review"
+    UNSAFE = "unsafe"
 
 
 class SelectionPolicy(StrEnum):
@@ -69,6 +185,36 @@ class RuntimeEnvironment(StrEnum):
 
 class AgentProvider(StrEnum):
     CURSOR_SDK = "cursor_sdk"
+
+
+class AgentRunStatus(StrEnum):
+    """Terminal status returned by the only managed-agent boundary."""
+
+    FINISHED = "finished"
+    ERROR = "error"
+
+
+class ManagedAgentCheckpointStatus(StrEnum):
+    """Lifecycle state of the persisted checkpoint record."""
+
+    COMPLETED = "completed"
+    INTERRUPTED = "interrupted"
+
+
+class AgentFailureKind(StrEnum):
+    """Closed failure classes for Cursor SDK and its isolated subprocess."""
+
+    SDK_UNAVAILABLE = "sdk_unavailable"
+    CREDENTIAL_INVALID = "credential_invalid"
+    BUDGET_EXCEEDED = "budget_exceeded"
+    BRIDGE_UNAVAILABLE = "bridge_unavailable"
+    SDK_EXECUTION_FAILED = "sdk_execution_failed"
+    NO_RESULT = "no_result"
+    SUBPROCESS_TIMEOUT = "subprocess_timeout"
+    SUBPROCESS_OUTPUT_INVALID = "subprocess_output_invalid"
+    SUBPROCESS_EXITED = "subprocess_exited"
+    FUTURE_TIMEOUT = "future_timeout"
+    CHECKPOINT_GATE = "checkpoint_gate"
 
 
 class ReadinessMode(StrEnum):
@@ -124,6 +270,7 @@ EXECUTION_MILESTONES = (
     RolloutMilestone.M1,
     RolloutMilestone.M2,
     RolloutMilestone.M3,
+    RolloutMilestone.H10K,
 )
 MILESTONE_ORDER = EXECUTION_MILESTONES
 MILESTONE_PREDECESSOR = {
@@ -131,6 +278,7 @@ MILESTONE_PREDECESSOR = {
     RolloutMilestone.M1: RolloutMilestone.CANARY,
     RolloutMilestone.M2: RolloutMilestone.M1,
     RolloutMilestone.M3: RolloutMilestone.M2,
+    RolloutMilestone.H10K: RolloutMilestone.M3,
 }
 
 
@@ -138,13 +286,34 @@ __all__ = [
     "EXECUTION_MILESTONES",
     "MILESTONE_ORDER",
     "MILESTONE_PREDECESSOR",
+    "AgentFailureKind",
     "AgentProvider",
+    "AgentRunStatus",
+    "ManagedAgentCheckpointStatus",
+    "AppUatDataSource",
+    "AppUatStatus",
+    "ContentImportStatus",
     "ContentType",
     "DeploymentEnvironment",
     "ExecutionStage",
     "ExecutionStateStatus",
+    "ImageSafetyReviewStatus",
     "PostStage",
     "ReadinessMode",
+    "QueueBackend",
+    "QueueFailureKind",
+    "QueueJobStage",
+    "QueueJobState",
+    "QueueTimelineEvent",
+    "ReleaseDeletePolicy",
+    "ReleaseRunKind",
+    "ReleaseRunStatus",
+    "ReleaseSourceOwner",
+    "ReleaseSyncMode",
+    "ReviewItemKind",
+    "ReviewJudgment",
+    "ReviewOverride",
+    "ReviewPublishState",
     "ReplacementPolicy",
     "RolloutMilestone",
     "RuntimeEnvironment",

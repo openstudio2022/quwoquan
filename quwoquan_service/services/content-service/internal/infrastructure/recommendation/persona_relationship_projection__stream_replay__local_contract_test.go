@@ -39,6 +39,20 @@ func TestPersonaRelationshipProjectionPreservesOrderingAndBlockSemantics(t *test
 	if got := writer.direction("target", "viewer"); got.following || got.version != 4 {
 		t.Fatalf("block did not clear reciprocal direction: %+v", got)
 	}
+	if !writer.blocked["viewer|target"] {
+		t.Fatalf("block did not project directional block marker")
+	}
+
+	unblock := relationshipProjectionTestEvent("evt-unblock", PersonaUnblocked, "viewer", "target", false, 5, now.Add(4*time.Second))
+	if err := projector.Apply(context.Background(), unblock); err != nil {
+		t.Fatalf("project unblock: %v", err)
+	}
+	if writer.blocked["viewer|target"] {
+		t.Fatalf("unblock did not clear block marker")
+	}
+	if got := writer.direction("viewer", "target"); got.following {
+		t.Fatalf("unblock must not restore prior follow: %+v", got)
+	}
 }
 
 func TestPersonaRelationshipProjectionConsumerReplaysAndAcknowledges(t *testing.T) {
@@ -126,11 +140,16 @@ type relationshipProjectionDirection struct {
 
 type recordingRelationshipProjectionWriter struct {
 	directions map[string]relationshipProjectionDirection
+	blocked    map[string]bool
 	events     map[string]struct{}
 }
 
 func newRecordingRelationshipProjectionWriter() *recordingRelationshipProjectionWriter {
-	return &recordingRelationshipProjectionWriter{directions: map[string]relationshipProjectionDirection{}, events: map[string]struct{}{}}
+	return &recordingRelationshipProjectionWriter{
+		directions: map[string]relationshipProjectionDirection{},
+		blocked:    map[string]bool{},
+		events:     map[string]struct{}{},
+	}
 }
 
 func (w *recordingRelationshipProjectionWriter) ApplyFollowState(_ context.Context, event PersonaRelationshipProjectionEvent) error {
@@ -148,9 +167,18 @@ func (w *recordingRelationshipProjectionWriter) ApplyBlocked(ctx context.Context
 	}); err != nil {
 		return err
 	}
-	return w.ApplyFollowState(ctx, PersonaRelationshipProjectionEvent{
+	if err := w.ApplyFollowState(ctx, PersonaRelationshipProjectionEvent{
 		SourcePersonaID: event.TargetPersonaID, TargetPersonaID: event.SourcePersonaID, Following: false, Version: event.Version,
-	})
+	}); err != nil {
+		return err
+	}
+	w.blocked[event.SourcePersonaID+"|"+event.TargetPersonaID] = true
+	return nil
+}
+
+func (w *recordingRelationshipProjectionWriter) ApplyUnblocked(_ context.Context, event PersonaRelationshipProjectionEvent) error {
+	w.blocked[event.SourcePersonaID+"|"+event.TargetPersonaID] = false
+	return nil
 }
 
 func (w *recordingRelationshipProjectionWriter) RecordAppliedEvent(_ context.Context, event PersonaRelationshipProjectionEvent) (bool, error) {

@@ -6,18 +6,22 @@ import (
 )
 
 const (
-	MetricProfileSubjectPublicReadLatencyMs      = "profile_subject_public_read_latency_ms"
-	MetricProfileSubjectVisibilityNotFoundCount  = "profile_subject_visibility_not_found_count"
-	MetricRetiredSubjectAttributionFallbackCount = "retired_subject_attribution_fallback_count"
-	MetricProfileSubjectSyncScopeSubmitCount     = "profile_subject_sync_scope_submit_count"
+	MetricProfileSubjectPublicReadLatencyMs     = "profile_subject_public_read_latency_ms"
+	MetricProfileSubjectVisibilityNotFoundCount = "profile_subject_visibility_not_found_count"
+	MetricProfileSubjectSyncScopeSubmitCount    = "profile_subject_sync_scope_submit_count"
 )
 
+type ProfileSubjectMetricsSink interface {
+	ObserveProfileSubjectPublicReadLatency(milliseconds float64)
+	IncrementProfileSubjectCounter(metricName string)
+}
+
 type ProfileSubjectMetrics struct {
-	mu                              sync.Mutex
-	publicReadLatencyMs             float64
-	visibilityNotFoundCount         float64
-	retiredAttributionFallbackCount float64
-	syncScopeSubmitCount            float64
+	mu                      sync.Mutex
+	sink                    ProfileSubjectMetricsSink
+	publicReadLatencyMs     float64
+	visibilityNotFoundCount float64
+	syncScopeSubmitCount    float64
 }
 
 var defaultProfileSubjectMetrics = &ProfileSubjectMetrics{}
@@ -30,6 +34,15 @@ func Reset() {
 	defaultProfileSubjectMetrics.Reset()
 }
 
+func (m *ProfileSubjectMetrics) SetSink(sink ProfileSubjectMetricsSink) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.sink = sink
+	m.mu.Unlock()
+}
+
 func (m *ProfileSubjectMetrics) Reset() {
 	if m == nil {
 		return
@@ -38,7 +51,6 @@ func (m *ProfileSubjectMetrics) Reset() {
 	defer m.mu.Unlock()
 	m.publicReadLatencyMs = 0
 	m.visibilityNotFoundCount = 0
-	m.retiredAttributionFallbackCount = 0
 	m.syncScopeSubmitCount = 0
 }
 
@@ -51,35 +63,39 @@ func (m *ProfileSubjectMetrics) RecordPublicRead(duration time.Duration) {
 		latencyMs = 0.001
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.publicReadLatencyMs = latencyMs
+	sink := m.sink
+	m.mu.Unlock()
+	if sink != nil {
+		sink.ObserveProfileSubjectPublicReadLatency(latencyMs)
+	}
 }
 
 func (m *ProfileSubjectMetrics) RecordVisibilityNotFound() {
-	if m == nil {
-		return
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.visibilityNotFoundCount++
-}
-
-func (m *ProfileSubjectMetrics) RecordRetiredAttributionFallback() {
-	if m == nil {
-		return
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.retiredAttributionFallbackCount++
+	m.increment(
+		&m.visibilityNotFoundCount,
+		MetricProfileSubjectVisibilityNotFoundCount,
+	)
 }
 
 func (m *ProfileSubjectMetrics) RecordSyncScopeSubmit() {
+	m.increment(
+		&m.syncScopeSubmitCount,
+		MetricProfileSubjectSyncScopeSubmitCount,
+	)
+}
+
+func (m *ProfileSubjectMetrics) increment(target *float64, metricName string) {
 	if m == nil {
 		return
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.syncScopeSubmitCount++
+	(*target)++
+	sink := m.sink
+	m.mu.Unlock()
+	if sink != nil {
+		sink.IncrementProfileSubjectCounter(metricName)
+	}
 }
 
 func (m *ProfileSubjectMetrics) Snapshot() map[string]float64 {
@@ -89,9 +105,8 @@ func (m *ProfileSubjectMetrics) Snapshot() map[string]float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return map[string]float64{
-		MetricProfileSubjectPublicReadLatencyMs:      m.publicReadLatencyMs,
-		MetricProfileSubjectVisibilityNotFoundCount:  m.visibilityNotFoundCount,
-		MetricRetiredSubjectAttributionFallbackCount: m.retiredAttributionFallbackCount,
-		MetricProfileSubjectSyncScopeSubmitCount:     m.syncScopeSubmitCount,
+		MetricProfileSubjectPublicReadLatencyMs:     m.publicReadLatencyMs,
+		MetricProfileSubjectVisibilityNotFoundCount: m.visibilityNotFoundCount,
+		MetricProfileSubjectSyncScopeSubmitCount:    m.syncScopeSubmitCount,
 	}
 }

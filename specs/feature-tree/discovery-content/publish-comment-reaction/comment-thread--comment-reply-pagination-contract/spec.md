@@ -1,4 +1,4 @@
-# L4 特性：comment-reply-pagination-contract
+# L3 特性：comment-reply-pagination-contract
 
 ## 功能说明
 - 评论列表游标分页契约与回复关联契约，保证端云协同一致。

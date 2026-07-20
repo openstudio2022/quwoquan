@@ -4,10 +4,17 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
+import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+
+part 'customizable_chat_input_bar_attachments.part.dart';
+part 'customizable_chat_input_bar_composer.part.dart';
+part 'customizable_chat_input_bar_layout.part.dart';
+part 'customizable_chat_input_bar_voice.part.dart';
 
 /// 与 `CustomizableChatInputBar` 工具栏共享的图标规格（同文件内复用）。
 const double _kChatInputToolbarGlyphSize = AppSpacing.iconMedium;
@@ -61,6 +68,9 @@ class ChatInputSubmitPayload {
   final List<ChatInputAttachment> attachments;
   final List<String> mentions;
 }
+
+typedef ChatInputMentionRequester =
+    Future<ChatInputMentionCandidate?> Function(BuildContext context);
 
 enum ChatInputPanelMode { none, emoji, more }
 
@@ -132,6 +142,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.voiceAmplitudeStream,
     this.onAttachmentChanged,
     this.onToast,
+    this.onMentionRequested,
     this.showAddPanel = true,
     this.showEmojiButton = false,
     this.showXiaoquMentionButton = false,
@@ -163,6 +174,7 @@ class CustomizableChatInputBar extends StatefulWidget {
   final Future<void> Function(ChatInputSubmitPayload payload) onSend;
   final ValueChanged<List<ChatInputAttachment>>? onAttachmentChanged;
   final ValueChanged<String>? onToast;
+  final ChatInputMentionRequester? onMentionRequested;
   final bool showAddPanel;
   final bool showEmojiButton;
   final bool showXiaoquMentionButton;
@@ -201,6 +213,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   bool _isVoiceCancelling = false;
   bool _voicePointerActive = false;
   final Set<String> _pendingMentions = <String>{};
+  late TextEditingValue _lastComposerValue;
+  bool _mentionRequestInFlight = false;
   Offset? _voicePointerStartGlobal;
   DateTime? _recordStartAt;
 
@@ -216,6 +230,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   bool get _canSend => !widget.disabled && (_hasText || _hasAttachments);
   bool get _showAddPanel => _panelMode == ChatInputPanelMode.more;
   bool get _showEmojiPanel => _panelMode == ChatInputPanelMode.emoji;
+
+  void _updateState(VoidCallback update) => setState(update);
 
   Color _cupertinoColor(BuildContext context, CupertinoDynamicColor color) {
     return CupertinoDynamicColor.resolve(color, context);
@@ -245,29 +261,6 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     return Color.lerp(sheet, field, 0.28) ?? field;
   }
 
-  void _insertXiaoquMention() {
-    if (widget.disabled) {
-      return;
-    }
-    const mention = '${UITextConstants.commentAtXiaoqu} ';
-    final text = _controller.text;
-    final selection = _controller.selection;
-    final insertionOffset = selection.isValid
-        ? selection.baseOffset.clamp(0, text.length)
-        : text.length;
-    _controller
-      ..text =
-          text.substring(0, insertionOffset) +
-          mention +
-          text.substring(insertionOffset)
-      ..selection = TextSelection.collapsed(
-        offset: insertionOffset + mention.length,
-      );
-    _pendingMentions.add('assistant');
-    _focusNode.requestFocus();
-    setState(() => _panelMode = ChatInputPanelMode.none);
-  }
-
   /// 与聊天气泡正文一致：Theme `bodyLarge` + 统一行高。
   TextStyle _composerTextStyle(BuildContext context) {
     final fontSize = AppTypography.base;
@@ -286,6 +279,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     _controller = widget.controller ?? TextEditingController();
     _focusNode = widget.focusNode ?? FocusNode();
     _attachments.addAll(widget.initialAttachments);
+    _lastComposerValue = _controller.value;
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
     _waveController = AnimationController(
@@ -333,10 +327,78 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   void _onTextChanged() {
     if (!mounted) return;
-    if (!_controller.text.contains(UITextConstants.commentAtXiaoqu)) {
+    final previous = _lastComposerValue;
+    final current = _controller.value;
+    _lastComposerValue = current;
+    if (!_controller.text.contains(ChatText.commentAtXiaoqu)) {
       _pendingMentions.remove('assistant');
     }
+    _requestMentionForNewAt(previous, current);
     setState(() {});
+  }
+
+  void _requestMentionForNewAt(
+    TextEditingValue previous,
+    TextEditingValue current,
+  ) {
+    final requester = widget.onMentionRequested;
+    if (requester == null ||
+        _mentionRequestInFlight ||
+        !current.selection.isValid ||
+        !current.selection.isCollapsed) {
+      return;
+    }
+    final caret = current.selection.extentOffset;
+    if (caret <= 0 ||
+        caret > current.text.length ||
+        current.text.substring(caret - 1, caret) != '@') {
+      return;
+    }
+    final insertionOffset = (caret - 1).clamp(0, previous.text.length);
+    final expected =
+        '${previous.text.substring(0, insertionOffset)}@'
+        '${previous.text.substring(insertionOffset)}';
+    if (current.text != expected) {
+      return;
+    }
+    _mentionRequestInFlight = true;
+    unawaited(
+      requester(context)
+          .then((mention) {
+            if (!mounted || mention == null) {
+              return;
+            }
+            final triggerOffset = caret - 1;
+            if (triggerOffset >= _controller.text.length ||
+                _controller.text.substring(triggerOffset, triggerOffset + 1) !=
+                    '@') {
+              return;
+            }
+            final controller = _controller;
+            if (controller is ChatMentionTextEditingController) {
+              controller.replaceRangeWithMention(
+                start: triggerOffset,
+                end: triggerOffset + 1,
+                mention: mention,
+              );
+            } else {
+              final next =
+                  '${controller.text.substring(0, triggerOffset)}'
+                  '@${mention.displayName} '
+                  '${controller.text.substring(triggerOffset + 1)}';
+              controller.value = TextEditingValue(
+                text: next,
+                selection: TextSelection.collapsed(
+                  offset: triggerOffset + mention.displayName.length + 2,
+                ),
+              );
+              _pendingMentions.add(mention.id);
+            }
+          })
+          .whenComplete(() {
+            _mentionRequestInFlight = false;
+          }),
+    );
   }
 
   void _onFocusChanged() {
@@ -356,1362 +418,6 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     AppToast.show(context, text);
   }
 
-  bool _acceptAttachmentType(ChatInputAttachmentType type) {
-    if (_attachments.isEmpty) return true;
-    final existingType = _attachments.first.type;
-    if (existingType == type) return true;
-    _emitToast(UITextConstants.chatAttachmentTypeConflict);
-    return false;
-  }
-
-  int get _remainingAttachmentCount =>
-      math.max(0, widget.maxAttachmentCount - _attachments.length);
-
-  Future<void> _addAttachments(List<ChatInputAttachment> attachments) async {
-    if (widget.disabled) return;
-    if (attachments.isEmpty) return;
-    if (_attachments.length >= widget.maxAttachmentCount) {
-      _emitToast(
-        UITextConstants.chatAttachmentMaxCount.replaceFirst(
-          '%s',
-          widget.maxAttachmentCount.toString(),
-        ),
-      );
-      return;
-    }
-    final type = attachments.first.type;
-    if (!_acceptAttachmentType(type)) return;
-    final canAdd = _remainingAttachmentCount;
-    final toAdd = attachments.take(canAdd).toList(growable: false);
-    if (toAdd.isEmpty) return;
-    setState(() {
-      _attachments.addAll(toAdd);
-    });
-    widget.onAttachmentChanged?.call(
-      List<ChatInputAttachment>.from(_attachments),
-    );
-    if (attachments.length > canAdd) {
-      _emitToast(
-        UITextConstants.chatAttachmentMaxCount.replaceFirst(
-          '%s',
-          widget.maxAttachmentCount.toString(),
-        ),
-      );
-    }
-  }
-
-  Future<void> _pickImages() async {
-    if (widget.disabled) return;
-    if (widget.onPickImages == null) return;
-    if (!_acceptAttachmentType(ChatInputAttachmentType.image)) return;
-    final list = await widget.onPickImages!(_remainingAttachmentCount);
-    if (!mounted) return;
-    await _addAttachments(list);
-  }
-
-  Future<void> _pickFiles() async {
-    if (widget.disabled) return;
-    if (widget.onPickFiles == null) return;
-    if (!_acceptAttachmentType(ChatInputAttachmentType.file)) return;
-    final list = await widget.onPickFiles!(_remainingAttachmentCount);
-    if (!mounted) return;
-    await _addAttachments(list);
-  }
-
-  Future<void> _capturePhoto() async {
-    if (widget.disabled) return;
-    if (widget.onCapturePhoto == null) return;
-    if (!_acceptAttachmentType(ChatInputAttachmentType.image)) return;
-    final item = await widget.onCapturePhoto!();
-    if (!mounted || item == null) return;
-    await _addAttachments(<ChatInputAttachment>[item]);
-  }
-
-  void _removeAttachment(String id) {
-    if (widget.disabled) return;
-    setState(() {
-      _attachments.removeWhere((item) => item.id == id);
-    });
-    widget.onAttachmentChanged?.call(
-      List<ChatInputAttachment>.from(_attachments),
-    );
-  }
-
-  void _toggleAddPanel() {
-    if (widget.disabled) return;
-    if (!widget.showAddPanel) return;
-    setState(() {
-      _panelMode = _showAddPanel
-          ? ChatInputPanelMode.none
-          : ChatInputPanelMode.more;
-      if (_panelMode == ChatInputPanelMode.more) {
-        _focusNode.unfocus();
-      }
-    });
-  }
-
-  void _toggleEmojiPanel() {
-    if (widget.disabled) return;
-    if (!widget.showEmojiButton) return;
-    setState(() {
-      _panelMode = _showEmojiPanel
-          ? ChatInputPanelMode.none
-          : ChatInputPanelMode.emoji;
-      if (_panelMode == ChatInputPanelMode.emoji) {
-        _focusNode.unfocus();
-      } else if (!_isVoiceMode) {
-        _focusNode.requestFocus();
-      }
-    });
-  }
-
-  void _toggleVoiceMode() {
-    if (widget.disabled) return;
-    setState(() {
-      _isVoiceMode = !_isVoiceMode;
-      _panelMode = ChatInputPanelMode.none;
-      if (_isVoiceMode) {
-        _focusNode.unfocus();
-      } else {
-        _focusNode.requestFocus();
-      }
-    });
-  }
-
-  Future<void> _send() async {
-    if (!_canSend) return;
-    final payload = ChatInputSubmitPayload(
-      text: _controller.text.trim(),
-      attachments: List<ChatInputAttachment>.from(_attachments),
-      mentions: List<String>.unmodifiable(_pendingMentions),
-    );
-    final hadAttachments = _attachments.isNotEmpty;
-    setState(() {
-      _controller.clear();
-      _attachments.clear();
-      _pendingMentions.clear();
-      _panelMode = ChatInputPanelMode.none;
-    });
-    if (hadAttachments) {
-      widget.onAttachmentChanged?.call(const <ChatInputAttachment>[]);
-    }
-    await widget.onSend(payload);
-  }
-
-  Future<void> _startVoiceRecord() async {
-    if (_isRecording) return;
-    final hasPermission =
-        await (widget.onRequestMicPermission?.call() ??
-            Future<bool>.value(true));
-    if (!mounted) return;
-    if (!hasPermission) {
-      return;
-    }
-    if (!_voicePointerActive) {
-      return;
-    }
-    _recordStartAt = DateTime.now();
-    final didStart = await (widget.onStartRecord?.call() ?? Future.value(true));
-    if (!mounted || !didStart) {
-      _recordStartAt = null;
-      _voicePointerActive = false;
-      _voicePointerStartGlobal = null;
-      return;
-    }
-    if (!_voicePointerActive) {
-      _recordStartAt = null;
-      _voicePointerStartGlobal = null;
-      await widget.onCancelRecord?.call();
-      return;
-    }
-    setState(() {
-      _isRecording = true;
-      _isVoiceCancelling = false;
-    });
-    _voiceMaxTimer?.cancel();
-    _voiceMaxTimer = Timer(const Duration(minutes: 2), () {
-      if (!mounted || !_isRecording) return;
-      _voicePointerActive = false;
-      _voicePointerStartGlobal = null;
-      unawaited(_stopVoiceRecordAndSend());
-    });
-    _startVoiceElapsedTicker();
-    _startWave();
-  }
-
-  Future<void> _stopVoiceRecordAndSend() async {
-    if (!_isRecording) return;
-    if (_isVoiceCancelling) {
-      await _cancelVoiceRecord();
-      return;
-    }
-    final start = _recordStartAt ?? DateTime.now();
-    final duration = DateTime.now().difference(start);
-    _recordStartAt = null;
-    _voicePointerActive = false;
-    _voicePointerStartGlobal = null;
-    _voiceMaxTimer?.cancel();
-    _voiceMaxTimer = null;
-    _voiceElapsedTimer?.cancel();
-    _voiceElapsedTimer = null;
-    _stopWave();
-    setState(() {
-      _isRecording = false;
-      _isVoiceCancelling = false;
-    });
-    await widget.onStopRecord?.call(duration);
-  }
-
-  Future<void> _cancelVoiceRecord() async {
-    if (!_isRecording) return;
-    _recordStartAt = null;
-    _voicePointerActive = false;
-    _voicePointerStartGlobal = null;
-    _voiceMaxTimer?.cancel();
-    _voiceMaxTimer = null;
-    _voiceElapsedTimer?.cancel();
-    _voiceElapsedTimer = null;
-    _stopWave();
-    setState(() {
-      _isRecording = false;
-      _isVoiceCancelling = false;
-    });
-    await widget.onCancelRecord?.call();
-  }
-
-  void _updateVoiceCancelState(Offset globalPosition) {
-    if (!_isRecording) return;
-    final start = _voicePointerStartGlobal;
-    if (start == null) return;
-    final shouldCancel = globalPosition.dy < start.dy - AppSpacing.buttonHeight;
-    if (shouldCancel == _isVoiceCancelling) return;
-    setState(() => _isVoiceCancelling = shouldCancel);
-  }
-
-  void _startWave() {
-    if (!_waveController.isAnimating) {
-      _waveController.repeat(reverse: true);
-    }
-    _voiceAmplitudeSub?.cancel();
-    final stream = widget.voiceAmplitudeStream;
-    if (stream != null) {
-      _voiceAmplitudeSub = stream.listen((samples) {
-        if (!mounted || !_isRecording || samples.isEmpty) return;
-        _pushVoiceAmplitude(_normalizeRawAmplitude(samples.last));
-      });
-      return;
-    }
-    _waveTicker?.cancel();
-    _waveTicker = Timer.periodic(const Duration(milliseconds: 120), (_) {
-      if (!mounted || !_isRecording) return;
-      _pushVoiceAmplitude(0.15);
-    });
-  }
-
-  void _startVoiceElapsedTicker() {
-    _voiceElapsedTimer?.cancel();
-    _voiceElapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || !_isRecording) return;
-      setState(() {});
-    });
-  }
-
-  void _stopWave() {
-    _waveTicker?.cancel();
-    _waveTicker = null;
-    _voiceAmplitudeSub?.cancel();
-    _voiceAmplitudeSub = null;
-    _waveController.stop();
-    _waveController.reset();
-    setState(() {
-      for (var i = 0; i < _waveBars.length; i++) {
-        _waveBars[i] = 0.2;
-      }
-    });
-  }
-
-  double _normalizeRawAmplitude(double db) {
-    const minDb = -60.0;
-    if (db <= minDb) return 0.05;
-    if (db >= 0) return 1.0;
-    return ((db - minDb) / -minDb).clamp(0.05, 1.0).toDouble();
-  }
-
-  void _pushVoiceAmplitude(double value) {
-    setState(() {
-      _waveBars
-        ..removeAt(0)
-        ..add(value.clamp(0.05, 1.0).toDouble());
-    });
-  }
-
-  Duration get _voiceElapsed {
-    final start = _recordStartAt;
-    if (!_isRecording || start == null) return Duration.zero;
-    return DateTime.now().difference(start);
-  }
-
-  String _voiceElapsedText() {
-    final elapsed = _voiceElapsed;
-    final totalSeconds = elapsed.inSeconds.clamp(0, 120);
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  bool get _isVoiceMaxDurationSoon =>
-      _isRecording && _voiceElapsed >= const Duration(seconds: 110);
-
-  ChatInputVisualState _visualState() {
-    return ChatInputVisualState(
-      hasText: _hasText,
-      hasAttachments: _hasAttachments,
-      isVoiceMode: _isVoiceMode,
-      isRecording: _isRecording,
-      panelMode: _panelMode,
-    );
-  }
-
-  ChatInputDefaultActions _defaultActions() {
-    return ChatInputDefaultActions(
-      toggleAddPanel: widget.disabled ? () {} : _toggleAddPanel,
-      toggleVoiceMode: widget.disabled ? () {} : _toggleVoiceMode,
-      toggleEmojiPanel: widget.disabled ? () {} : _toggleEmojiPanel,
-      send: () {
-        if (!widget.disabled) {
-          unawaited(_send());
-        }
-      },
-      openExpandedEditor: () {
-        if (!widget.disabled) {
-          unawaited(_openExpandedEditor());
-        }
-      },
-    );
-  }
-
-  Future<void> _openExpandedEditor() async {
-    if (widget.disabled || !widget.enableExpandedEditor || _isVoiceMode) {
-      return;
-    }
-    final shouldRefocus = _focusNode.hasFocus;
-    final draft = await Navigator.of(context).push<_ExpandedInputDraft>(
-      CupertinoPageRoute<_ExpandedInputDraft>(
-        settings: const RouteSettings(
-          name: PageAccessInternalRoutes.chatInputExpandedDraft,
-        ),
-        fullscreenDialog: true,
-        builder: (context) => _ExpandedChatInputPage(
-          initialText: _controller.text,
-          hintText: widget.hintText ?? UITextConstants.inputHint,
-          showEmojiButton: widget.showEmojiButton,
-        ),
-      ),
-    );
-    if (!mounted || draft == null) {
-      return;
-    }
-    _controller.value = TextEditingValue(
-      text: draft.text,
-      selection: TextSelection.collapsed(offset: draft.text.length),
-    );
-    setState(() {
-      _panelMode = draft.openEmojiPanel && widget.showEmojiButton
-          ? ChatInputPanelMode.emoji
-          : ChatInputPanelMode.none;
-    });
-    if (shouldRefocus && !_showEmojiPanel) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _focusNode.requestFocus();
-        }
-      });
-    }
-  }
-
-  List<Widget> _buildTrailingButtons(
-    BuildContext context, {
-    required bool compact,
-  }) {
-    final buttons = <Widget>[];
-    if (widget.showXiaoquMentionButton && !_isVoiceMode && !compact) {
-      buttons.add(
-        Semantics(
-          button: true,
-          label: UITextConstants.commentAtXiaoqu,
-          child: CupertinoButton(
-            key: TestKeys.chatInputAtXiaoquButton,
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-            minimumSize: Size(
-              AppSpacing.chatInputIconButtonSize,
-              AppSpacing.chatInputIconButtonSize,
-            ),
-            onPressed: widget.disabled ? null : _insertXiaoquMention,
-            child: Text(
-              UITextConstants.commentAtXiaoqu,
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.primaryColor,
-              ),
-            ),
-          ),
-        ),
-      );
-      if (widget.showEmojiButton || _canSend || widget.showAddPanel) {
-        buttons.add(SizedBox(width: AppSpacing.xs));
-      }
-    }
-    if (widget.showEmojiButton) {
-      buttons.add(
-        _buildToolbarPlainIconButton(
-          context: context,
-          key: TestKeys.chatInputEmojiToggleButton,
-          icon: _showEmojiPanel
-              ? _kChatInputKeyboardCompactIcon
-              : _kChatInputEmojiPanelIcon,
-          onTap: widget.disabled ? null : _toggleEmojiPanel,
-          semanticLabel: _showEmojiPanel
-              ? UITextConstants.keyboard
-              : UITextConstants.emoji,
-        ),
-      );
-    }
-    if (widget.showEmojiButton && (_canSend || widget.showAddPanel)) {
-      buttons.add(SizedBox(width: AppSpacing.xs));
-    }
-    if (_canSend) {
-      buttons.add(_buildSendButton(context));
-      return buttons;
-    }
-    if (widget.showAddPanel) {
-      buttons.add(
-        _buildToolbarPlainIconButton(
-          context: context,
-          key: TestKeys.chatInputMoreButton,
-          icon: CupertinoIcons.add,
-          onTap: widget.disabled ? null : _toggleAddPanel,
-          semanticLabel: UITextConstants.more,
-        ),
-      );
-    }
-    return buttons;
-  }
-
-  /// 与工具栏底同色语义：无圆框、透明热区，图标即按钮。
-  Widget _buildToolbarPlainIconButton({
-    required BuildContext context,
-    Key? key,
-    required IconData icon,
-    required VoidCallback? onTap,
-    required String semanticLabel,
-    double iconSize = _kChatInputToolbarGlyphSize,
-  }) {
-    final fg = _foregroundPrimary(
-      context,
-    ).withValues(alpha: onTap == null ? 0.32 : 0.82);
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: CupertinoButton(
-        key: key,
-        padding: EdgeInsets.zero,
-        minimumSize: Size.square(AppSpacing.chatInputIconButtonSize),
-        onPressed: onTap,
-        child: Icon(icon, size: iconSize, color: fg),
-      ),
-    );
-  }
-
-  Widget _buildSendButton(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: UITextConstants.send,
-      onTap: widget.disabled ? null : _send,
-      child: GestureDetector(
-        key: widget.sendButtonKey,
-        onTap: widget.disabled ? null : _send,
-        child: Container(
-          width: AppSpacing.chatInputSendButtonSize,
-          height: AppSpacing.chatInputSendButtonSize,
-          decoration: BoxDecoration(
-            color: widget.disabled
-                ? AppColors.primaryColor.withValues(alpha: 0.35)
-                : AppColors.primaryColor,
-            borderRadius: BorderRadius.circular(
-              AppSpacing.chatInputSendButtonSize,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.arrow_upward_rounded,
-            size: _kChatInputSendGlyphSize,
-            color: _fieldBackground(context),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentPreview() {
-    if (_attachments.isEmpty) return const SizedBox.shrink();
-    final secondaryText = _foregroundSecondary(context);
-    return SizedBox(
-      height: AppSpacing.buttonSize + AppSpacing.sm,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: _attachments
-              .map((item) {
-                final bg = item.type == ChatInputAttachmentType.image
-                    ? _sheetBackground(context)
-                    : _sheetBackground(context).withValues(alpha: 0.82);
-                return Container(
-                  width: AppSpacing.twoHundredTwenty,
-                  margin: EdgeInsets.only(right: AppSpacing.sm),
-                  padding: EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.borderRadius,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      _buildAttachmentLeading(item),
-                      SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              item.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.base,
-                                color: _foregroundPrimary(
-                                  context,
-                                ).withValues(alpha: 0.88),
-                              ),
-                            ),
-                            if ((item.subtitle ?? '').trim().isNotEmpty)
-                              Text(
-                                item.subtitle!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppTypography.sm,
-                                  color: secondaryText,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.xs),
-                      GestureDetector(
-                        onTap: widget.disabled
-                            ? null
-                            : () => _removeAttachment(item.id),
-                        child: Container(
-                          width: AppSpacing.iconButtonMinSizeSm,
-                          height: AppSpacing.iconButtonMinSizeSm,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.close,
-                            size: AppSpacing.iconSmall,
-                            color: secondaryText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              })
-              .toList(growable: false),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentLeading(ChatInputAttachment item) {
-    final radius = BorderRadius.circular(AppSpacing.smallBorderRadius);
-    if (item.thumbnailProvider != null) {
-      return ClipRRect(
-        borderRadius: radius,
-        child: Image(
-          image: item.thumbnailProvider!,
-          width: AppSpacing.buttonSize,
-          height: AppSpacing.buttonSize,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-    return Container(
-      width: AppSpacing.buttonSize,
-      height: AppSpacing.buttonSize,
-      decoration: BoxDecoration(
-        color: _fieldBackground(context),
-        borderRadius: radius,
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        item.type == ChatInputAttachmentType.image
-            ? Icons.image_outlined
-            : Icons.insert_drive_file_outlined,
-        size: AppSpacing.iconMedium,
-        color: _foregroundSecondary(context),
-      ),
-    );
-  }
-
-  Widget _buildVoicePanel() {
-    final isPressed = _isRecording;
-    final fill = _composerInputFill(context);
-    final sepIdle = _separatorColor(context).withValues(alpha: 0.12);
-    final canceling = _isVoiceCancelling;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(_fieldCornerRadius),
-      child: ColoredBox(
-        color: fill,
-        child: SizedBox(
-          height: _composerCenterMinHeight,
-          width: double.infinity,
-          child: Listener(
-            key: TestKeys.chatInputVoiceHoldButton,
-            behavior: HitTestBehavior.opaque,
-            onPointerDown: (event) {
-              if (widget.disabled) {
-                return;
-              }
-              _voicePointerActive = true;
-              _voicePointerStartGlobal = event.position;
-              unawaited(_startVoiceRecord());
-            },
-            onPointerMove: widget.disabled
-                ? null
-                : (event) => _updateVoiceCancelState(event.position),
-            onPointerUp: (_) {
-              if (widget.disabled) {
-                return;
-              }
-              _voicePointerActive = false;
-              _voicePointerStartGlobal = null;
-              unawaited(_stopVoiceRecordAndSend());
-            },
-            onPointerCancel: (_) {
-              if (widget.disabled) {
-                return;
-              }
-              _voicePointerActive = false;
-              _voicePointerStartGlobal = null;
-              unawaited(_cancelVoiceRecord());
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              alignment: Alignment.center,
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              decoration: BoxDecoration(
-                color: isPressed
-                    ? (canceling
-                          ? AppColors.error.withValues(alpha: 0.1)
-                          : AppColors.primaryColor.withValues(alpha: 0.08))
-                    : AppColors.transparent,
-                border: Border.all(
-                  color: isPressed
-                      ? (canceling ? AppColors.error : AppColors.primaryColor)
-                      : sepIdle,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      isPressed
-                          ? (canceling
-                                ? UITextConstants.chatVoiceReleaseCancel
-                                : UITextConstants.chatVoiceReleaseToSend)
-                          : UITextConstants.chatVoiceHoldToTalk,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: _composerTextStyle(context).copyWith(
-                        color: isPressed
-                            ? (canceling
-                                  ? AppColors.error
-                                  : AppColors.primaryColor)
-                            : _foregroundPrimary(context),
-                        fontWeight: AppTypography.regular,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceRecordHud() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      child: !_isRecording
-          ? const SizedBox.shrink()
-          : Padding(
-              key: TestKeys.chatInputVoiceRecordHud,
-              padding: EdgeInsets.only(bottom: AppSpacing.sm),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color:
-                      (_isVoiceCancelling
-                              ? AppColors.error
-                              : AppColors.primaryColor)
-                          .withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
-                  ),
-                  border: Border.all(
-                    color:
-                        (_isVoiceCancelling
-                                ? AppColors.error
-                                : AppColors.primaryColor)
-                            .withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerSm,
-                    vertical: AppSpacing.intraGroupSm,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isVoiceCancelling
-                            ? CupertinoIcons.xmark_circle_fill
-                            : CupertinoIcons.mic_fill,
-                        size: AppSpacing.iconSmall,
-                        color: _isVoiceCancelling
-                            ? AppColors.error
-                            : AppColors.primaryColor,
-                      ),
-                      SizedBox(width: AppSpacing.intraGroupXs),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _isVoiceCancelling
-                                  ? UITextConstants.chatVoiceReleaseCancel
-                                  : (_isVoiceMaxDurationSoon
-                                        ? UITextConstants
-                                              .chatVoiceMaxDurationSoon
-                                        : UITextConstants.chatVoiceSlideCancel),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                fontWeight: AppTypography.medium,
-                                color: _isVoiceCancelling
-                                    ? AppColors.error
-                                    : AppColors.primaryColor,
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.intraGroupXs),
-                            Text(
-                              '${UITextConstants.chatVoiceRecording} ${_voiceElapsedText()}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.xs,
-                                color:
-                                    (_isVoiceCancelling
-                                            ? AppColors.error
-                                            : AppColors.primaryColor)
-                                        .withValues(alpha: 0.72),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.intraGroupXs),
-                      SizedBox(height: AppSpacing.md, child: _buildWaveBars()),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _buildWaveBars() {
-    return AnimatedBuilder(
-      key: TestKeys.chatInputVoiceWaveform,
-      animation: _waveController,
-      builder: (context, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: _waveBars
-              .map((value) {
-                final h = 3 + (AppSpacing.md * 0.85 * value);
-                return Container(
-                  width: AppSpacing.three,
-                  height: h,
-                  margin: EdgeInsets.symmetric(horizontal: AppSpacing.oneHalf),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withValues(
-                      alpha: 0.45 + value * 0.5,
-                    ),
-                    borderRadius: BorderRadius.circular(AppSpacing.three),
-                  ),
-                );
-              })
-              .toList(growable: false),
-        );
-      },
-    );
-  }
-
-  int _estimateLineCount({
-    required String text,
-    required TextStyle style,
-    required double maxWidth,
-  }) {
-    if (text.trim().isEmpty || maxWidth <= 0) {
-      return 1;
-    }
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: maxWidth);
-    return math.max(1, painter.computeLineMetrics().length);
-  }
-
-  Widget _buildTextComposerCenter() {
-    final textStyle = _composerTextStyle(context);
-    final secondary = _foregroundSecondary(context);
-    final hPad = AppSpacing.md;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final estimatedWidth = constraints.maxWidth - hPad * 2;
-        final lineCount = _estimateLineCount(
-          text: _controller.text,
-          style: textStyle,
-          maxWidth: estimatedWidth,
-        );
-        final canExpandInline =
-            widget.enableExpandedEditor && lineCount > widget.maxVisibleLines;
-        final alignVertical = lineCount <= 1
-            ? TextAlignVertical.center
-            : TextAlignVertical.top;
-        final fontSize = textStyle.fontSize ?? AppSpacing.md;
-        final lineHeight = textStyle.height ?? AppTypography.bodyLineHeight;
-        final lineBoxHeight = fontSize * lineHeight;
-        final vPad = lineCount <= 1
-            ? ((_composerCenterMinHeight - lineBoxHeight) / 2).clamp(
-                AppSpacing.xs,
-                AppSpacing.lg,
-              )
-            : AppSpacing.sm;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(_fieldCornerRadius),
-          child: ColoredBox(
-            color: _composerInputFill(context),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: _composerCenterMinHeight,
-              ),
-              child: Stack(
-                children: [
-                  TextField(
-                    key: widget.textFieldKey,
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    scrollController: _textScrollController,
-                    enabled: !widget.disabled && !_isVoiceMode,
-                    maxLength: widget.maxTextLength,
-                    maxLines: widget.maxVisibleLines,
-                    minLines: 1,
-                    textAlignVertical: alignVertical,
-                    cursorColor: AppColors.primaryColor,
-                    style: textStyle,
-                    strutStyle: StrutStyle(
-                      fontSize: fontSize,
-                      height: lineHeight,
-                      leadingDistribution: TextLeadingDistribution.even,
-                      forceStrutHeight: true,
-                    ),
-                    onTap: () {
-                      if (widget.disabled) {
-                        return;
-                      }
-                      if (_panelMode != ChatInputPanelMode.none) {
-                        setState(() => _panelMode = ChatInputPanelMode.none);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      hintText: widget.disabled
-                          ? UITextConstants.chatBlockedConversationInputHint
-                          : widget.hintText ?? UITextConstants.inputHint,
-                      hintStyle: TextStyle(
-                        color: secondary,
-                        fontSize: fontSize,
-                        height: lineHeight,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      counterText: '',
-                      contentPadding: EdgeInsets.fromLTRB(
-                        hPad,
-                        vPad,
-                        hPad,
-                        vPad,
-                      ),
-                    ),
-                  ),
-                  if (canExpandInline)
-                    Positioned(
-                      left: AppSpacing.sm,
-                      top: AppSpacing.xs,
-                      child: CupertinoButton(
-                        key: TestKeys.chatInputExpandButton,
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.square(
-                          AppSpacing.iconButtonMinSizeSm,
-                        ),
-                        onPressed: widget.disabled ? null : _openExpandedEditor,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Icon(
-                            CupertinoIcons.arrow_up_left_arrow_down_right,
-                            size: AppSpacing.iconSmall,
-                            color: secondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildComposerRow() {
-    final state = _visualState();
-    final actions = _defaultActions();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < AppSpacing.compactBreakpoint;
-        final right =
-            widget.rightBuilder?.call(context, state, actions) ??
-            _buildTrailingButtons(context, compact: compact);
-        final left =
-            widget.leftBuilder?.call(context, state, actions) ??
-            (widget.enableVoiceInput
-                ? _buildToolbarPlainIconButton(
-                    context: context,
-                    key: TestKeys.chatInputVoiceToggleButton,
-                    icon: _isVoiceMode
-                        ? _kChatInputKeyboardCompactIcon
-                        : CupertinoIcons.mic,
-                    onTap: widget.disabled ? null : _toggleVoiceMode,
-                    semanticLabel: _isVoiceMode
-                        ? UITextConstants.keyboard
-                        : UITextConstants.voiceInput,
-                  )
-                : const SizedBox.shrink());
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            left,
-            if (left is! SizedBox) SizedBox(width: AppSpacing.intraGroupXs),
-            Expanded(
-              child: _isVoiceMode
-                  ? _buildVoicePanel()
-                  : _buildTextComposerCenter(),
-            ),
-            if (right.isNotEmpty) SizedBox(width: AppSpacing.intraGroupXs),
-            Row(mainAxisSize: MainAxisSize.min, children: right),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildAddPanel() {
-    if (!_showAddPanel) return const SizedBox.shrink();
-    final disableImage =
-        _attachments.isNotEmpty &&
-        _attachments.first.type == ChatInputAttachmentType.file;
-    final disableFile =
-        _attachments.isNotEmpty &&
-        _attachments.first.type == ChatInputAttachmentType.image;
-    final panelItems = <_PanelActionItem>[
-      _PanelActionItem(
-        icon: Icons.photo_library_outlined,
-        text: UITextConstants.chatMorePhoto,
-        disabled: widget.disabled || disableImage,
-        onTap: _pickImages,
-      ),
-      _PanelActionItem(
-        icon: Icons.camera_alt_outlined,
-        text: UITextConstants.chatMoreShoot,
-        disabled: widget.disabled || disableImage,
-        onTap: _capturePhoto,
-      ),
-      _PanelActionItem(
-        icon: Icons.insert_drive_file_outlined,
-        text: UITextConstants.chatMoreFile,
-        disabled: widget.disabled || disableFile,
-        onTap: _pickFiles,
-      ),
-      ...widget.extraPanelItems.map(
-        (item) => _PanelActionItem(
-          icon: item.icon,
-          text: item.text,
-          disabled: widget.disabled || item.disabled,
-          onTap: item.onTap,
-        ),
-      ),
-    ];
-    return Container(
-      margin: EdgeInsets.only(top: AppSpacing.sm),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: _sheetBackground(context),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        border: Border.all(
-          color: _separatorColor(context).withValues(alpha: 0.35),
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = panelItems.length < 4 ? panelItems.length : 4;
-          final itemWidth =
-              (constraints.maxWidth - AppSpacing.sm * (columns - 1)) / columns;
-          return Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.md,
-            children: panelItems
-                .map(
-                  (item) => SizedBox(
-                    width: itemWidth,
-                    child: _buildPanelItem(
-                      icon: item.icon,
-                      text: item.text,
-                      disabled: item.disabled,
-                      onTap: item.onTap,
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPanelItem({
-    required IconData icon,
-    required String text,
-    required bool disabled,
-    required Future<void> Function() onTap,
-  }) {
-    final fg = disabled
-        ? _foregroundPrimary(context).withValues(alpha: 0.25)
-        : _foregroundPrimary(context).withValues(alpha: 0.78);
-    return Semantics(
-      button: true,
-      enabled: !disabled,
-      label: text,
-      child: GestureDetector(
-        onTap: disabled ? null : onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            vertical: AppSpacing.md,
-            horizontal: AppSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: _fieldBackground(
-              context,
-            ).withValues(alpha: disabled ? 0.55 : 1),
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: AppSpacing.buttonSize + AppSpacing.md,
-                height: AppSpacing.buttonSize + AppSpacing.md,
-                decoration: BoxDecoration(
-                  color: _sheetBackground(context),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, size: AppSpacing.iconLarge, color: fg),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              Text(
-                text,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: AppTypography.sm, color: fg),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmojiPanel() {
-    if (!_showEmojiPanel) return const SizedBox.shrink();
-    return Container(
-      margin: EdgeInsets.only(top: AppSpacing.sm),
-      child: UnifiedEmojiPicker(
-        showCloseButton: true,
-        onClose: () => setState(() => _panelMode = ChatInputPanelMode.none),
-        onEmojiSelected: (char) {
-          final next = '${_controller.text}$char';
-          _controller.value = TextEditingValue(
-            text: next,
-            selection: TextSelection.collapsed(offset: next.length),
-          );
-        },
-      ),
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildAttachmentPreview(),
-        if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
-        _buildVoiceRecordHud(),
-        _buildComposerRow(),
-        _buildEmojiPanel(),
-        _buildAddPanel(),
-      ],
-    );
-  }
-}
-
-class _PanelActionItem {
-  const _PanelActionItem({
-    required this.icon,
-    required this.text,
-    required this.disabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String text;
-  final bool disabled;
-  final Future<void> Function() onTap;
-}
-
-class _ExpandedInputDraft {
-  const _ExpandedInputDraft({required this.text, required this.openEmojiPanel});
-
-  final String text;
-  final bool openEmojiPanel;
-}
-
-class _ExpandedChatInputPage extends StatefulWidget {
-  const _ExpandedChatInputPage({
-    required this.initialText,
-    required this.hintText,
-    required this.showEmojiButton,
-  });
-
-  final String initialText;
-  final String hintText;
-  final bool showEmojiButton;
-
-  @override
-  State<_ExpandedChatInputPage> createState() => _ExpandedChatInputPageState();
-}
-
-class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
-  late final TextEditingController _controller;
-  final FocusNode _focusNode = FocusNode();
-  bool _showEmojiPanel = false;
-
-  Color _cupertinoColor(BuildContext context, CupertinoDynamicColor color) {
-    return CupertinoDynamicColor.resolve(color, context);
-  }
-
-  Color _foregroundPrimary(BuildContext context) =>
-      _cupertinoColor(context, CupertinoColors.label);
-
-  Color _foregroundSecondary(BuildContext context) =>
-      _cupertinoColor(context, CupertinoColors.secondaryLabel);
-
-  Color _surfaceBackground(BuildContext context) => _cupertinoColor(
-    context,
-    CupertinoColors.secondarySystemGroupedBackground,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialText);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNode.requestFocus();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _closeEditor() {
-    Navigator.of(context).pop(
-      _ExpandedInputDraft(
-        text: _controller.text,
-        openEmojiPanel: _showEmojiPanel,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final composerFontSize = AppTypography.base;
-    final composerStyle = TextStyle(
-      fontSize: composerFontSize,
-      height: AppTypography.bodyLineHeight,
-      color: _foregroundPrimary(context),
-    );
-    return CupertinoPageScaffold(
-      backgroundColor: _surfaceBackground(context),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.sm,
-                AppSpacing.xs,
-                AppSpacing.sm,
-                AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  CupertinoButton(
-                    key: TestKeys.chatInputCollapseButton,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                    onPressed: _closeEditor,
-                    child: Icon(
-                      CupertinoIcons.chevron_down,
-                      color: _foregroundPrimary(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Container(
-                key: TestKeys.fullscreenModalSurface,
-                width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                padding: EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemBackground.resolveFrom(context),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
-                  ),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  cursorColor: AppColors.primaryColor,
-                  style: composerStyle,
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    hintStyle: composerStyle.copyWith(
-                      color: _foregroundSecondary(context),
-                    ),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (widget.showEmojiButton)
-                    CupertinoButton(
-                      key: TestKeys.chatInputExpandedEmojiToggleButton,
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                      onPressed: () {
-                        setState(() => _showEmojiPanel = !_showEmojiPanel);
-                        if (_showEmojiPanel) {
-                          _focusNode.unfocus();
-                        } else {
-                          _focusNode.requestFocus();
-                        }
-                      },
-                      child: Icon(
-                        _showEmojiPanel
-                            ? _kChatInputKeyboardCompactIcon
-                            : _kChatInputEmojiPanelIcon,
-                        size: _kChatInputToolbarGlyphSize,
-                        color: _foregroundPrimary(
-                          context,
-                        ).withValues(alpha: 0.82),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            if (_showEmojiPanel)
-              UnifiedEmojiPicker(
-                showCloseButton: false,
-                onEmojiSelected: (char) {
-                  final next = '${_controller.text}$char';
-                  _controller.value = TextEditingValue(
-                    text: next,
-                    selection: TextSelection.collapsed(offset: next.length),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _buildInputBar();
 }

@@ -13,6 +13,10 @@ from core.control_types import (
     EXECUTION_MILESTONES,
     DeploymentEnvironment,
     ExecutionStateStatus,
+    ReviewItemKind,
+    ReviewJudgment,
+    ReviewOverride,
+    ReviewPublishState,
 )
 from core.media_processing_policy import media_processing_policy
 from core.paths import DATA_ROOT, REPO_ROOT
@@ -20,16 +24,30 @@ from core.runtime_policy import load_runtime_policy
 from content.execution.recipe import HOMEPAGE_RECIPE, load_recipe
 from content.release.canonical.rollout_contract import load_rollout_contract
 from governance.coverage.cold_start_supply import load_cold_start_supply_policy
-
+from content.review.policy import review_policy
+from verify.control_literal_ast import (
+    contains_string_membership,
+    document_field,
+    looks_like_message_control,
+    qualified_name,
+    uses_closed_type,
+    uses_execution_state_status,
+    uses_queue_job_state,
+)
+from verify.control_literal_text import text_control_literal_issues
 
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 TYPE_OWNER = SCRIPTS_ROOT / "core/control_types.py"
 TYPE_OWNER_LABEL = "quwoquan_data/scripts/core/control_types.py"
 CONTROL_TYPES = {
-    "AgentProvider", "ContentType", "DeploymentEnvironment", "ExecutionStage",
+    "AgentProvider", "AppUatDataSource", "AppUatStatus", "ContentImportStatus",
+    "ContentType", "DeploymentEnvironment", "ExecutionStage",
     "ExecutionSpecStatus", "ExecutionStateStatus", "ImageAssetStrategy",
     "ImageCountPolicy", "ModalityContract",
-    "ReadinessMode", "ReplacementPolicy", "RolloutMilestone",
+    "QueueBackend", "QueueFailureKind", "QueueJobStage", "QueueJobState", "QueueTimelineEvent",
+    "ReleaseDeletePolicy", "ReleaseRunKind", "ReleaseRunStatus", "ReleaseSourceOwner", "ReleaseSyncMode",
+    "ManagedAgentCheckpointStatus", "ReadinessMode", "ReplacementPolicy", "RolloutMilestone",
+    "ReviewItemKind", "ReviewJudgment", "ReviewOverride", "ReviewPublishState",
     "RuntimeEnvironment", "SelectionPolicy", "StageKind", "StageStatus",
 }
 CONTROL_CHOICE_VALUES = {
@@ -57,39 +75,6 @@ RUNTIME_ARGUMENT_NAMES = {
 }
 ENVIRONMENT_VALUES = frozenset(item.value for item in DeploymentEnvironment)
 MILESTONE_VALUES = {item.value for item in EXECUTION_MILESTONES}
-LEGACY_PATTERNS = (
-    re.compile(r"publish/v\d+"),
-    re.compile(r"publish_version_root|publish_active_version"),
-    re.compile(r"chuanxi", re.IGNORECASE),
-    re.compile(r"四川旅行_v5|泰国旅行_v5|欧洲旅行_v5|_v5\b"),
-)
-VERSIONED_CONTRACT_PATTERN = re.compile(
-    r"\b(?:quwoquan_(?:data|service)|quwoquan\.[A-Za-z0-9_.-]+)"
-    r"[A-Za-z0-9_.-]*(?:/[0-9]+|\.v[0-9]+)\b"
-)
-VERSIONED_POLICY_PATTERN = re.compile(
-    r"\b(?:encyclopedia-primary|execution-source-qualification|"
-    r"execution-model-readiness)-v[0-9]+\b"
-)
-VERSION_FIELD_PATTERN = re.compile(
-    r"(?:[\"'](?:schemaVersion|contractVersion)[\"']\s*:|"
-    r"^(?:\s*)(?:schemaVersion|contractVersion)\s*:)",
-    re.IGNORECASE,
-)
-RETIRED_WORKFLOW_TOKENS = (
-    "abandoned" + "Objects",
-    "abandonedContent" + "Objects",
-    "replacement" + "Objects",
-    "partialDelivery" + "Reports",
-    "targetSetChange" + "Events",
-    "targetSetInvalidated" + "Stages",
-    "targetSetRequiresRerun" + "From",
-    "allowContentQuota" + "Shortfall",
-    "allowQuota" + "Shortfall",
-    "allowMinEntity" + "Shortfall",
-    "best_effort_with_reasoned" + "_rejects",
-    "partial_with_replacement" + "_report",
-)
 RETIRED_WORKFLOW_MODULES = {
     "target_" + "replacement.py",
     "target_" + "state.py",
@@ -97,7 +82,6 @@ RETIRED_WORKFLOW_MODULES = {
     "workflow_" + "abandonment.py",
 }
 WORKFLOW_STATE_MUTATORS = {"clear", "get", "pop", "setdefault", "update"}
-
 
 @dataclass(frozen=True, slots=True)
 class _RolloutControlValues:
@@ -122,66 +106,6 @@ def _rollout_control_values() -> _RolloutControlValues:
     return _RolloutControlValues(batch_counts, completion_counts)
 
 
-def _qualified_name(node: ast.AST) -> str:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        prefix = _qualified_name(node.value)
-        return f"{prefix}.{node.attr}" if prefix else node.attr
-    return ""
-
-
-def _uses_closed_type(node: ast.AST, type_name: str) -> bool:
-    qualified = _qualified_name(node)
-    return qualified.startswith(f"{type_name}.") or (
-        isinstance(node, ast.Call) and _qualified_name(node.func) == type_name
-    )
-
-
-def _uses_execution_state_status(node: ast.AST) -> bool:
-    if isinstance(node, ast.IfExp):
-        return _uses_execution_state_status(node.body) and _uses_execution_state_status(
-            node.orelse
-        )
-    qualified = _qualified_name(node)
-    return qualified.startswith("ExecutionStateStatus.") and not qualified.endswith(
-        ".value"
-    )
-
-
-def _contains_string_membership(node: ast.AST) -> bool:
-    return any(
-        isinstance(candidate, ast.Compare)
-        and any(isinstance(operator, (ast.In, ast.NotIn)) for operator in candidate.ops)
-        and any(
-            isinstance(value, ast.Constant) and isinstance(value.value, str)
-            for value in ast.walk(candidate)
-        )
-        for candidate in ast.walk(node)
-    )
-
-
-def _looks_like_message_control(node: ast.AST) -> bool:
-    names = {
-        candidate.id.lower()
-        for candidate in ast.walk(node)
-        if isinstance(candidate, ast.Name)
-    }
-    attributes = {
-        candidate.attr.lower()
-        for candidate in ast.walk(node)
-        if isinstance(candidate, ast.Attribute)
-    }
-    return bool(
-        attributes & {"message", "issues"}
-        or any(
-            token in name
-            for name in names
-            for token in ("issue", "message", "reason", "combined")
-        )
-    )
-
-
 def source_control_literal_issues(source: str, *, label: str) -> list[str]:
     try:
         tree = ast.parse(source, filename=label)
@@ -200,12 +124,132 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
     execution_module = label.startswith(
         "quwoquan_data/scripts/content/execution/"
     )
+    queue_module = label.startswith(
+        "quwoquan_data/scripts/content/execution/queue/"
+    )
+    queue_core_module = label.endswith("content/execution/queue/core.py")
+    queue_codec_module = label.endswith((
+        "content/execution/queue/model.py",
+        "content/execution/queue/jobs.py",
+    ))
+    review_module = label.startswith("quwoquan_data/scripts/content/review/")
+    review_ledger_module = label.endswith("content/review/ledger.py")
+    post_module = label.startswith("quwoquan_data/scripts/content/post/")
+    rollout_attestation_module = label.endswith(
+        "content/release/canonical/rollout_attestation.py"
+    )
+    typed_agent_outcome_module = label.endswith((
+        "content/execution/agent/agent_runner.py",
+        "content/execution/agent/agent_worker.py",
+        "content/execution/agent/managed_checkpoint.py",
+        "content/execution/controller/homepage_author_finalization.py",
+        "content/execution/controller/stage_download_build.py",
+    ))
+    typed_agent_history_module = label.endswith((
+        "content/execution/agent/agent_checkpoint.py",
+        "content/execution/agent/agent_managed.py",
+        "content/execution/agent/managed_checkpoint.py",
+        "content/execution/controller/completion.py",
+        "content/execution/controller/control.py",
+        "content/execution/controller/homepage_author_evidence.py",
+        "content/execution/controller/metrics.py",
+        "content/execution/controller/token_ledger.py",
+        "content/execution/readiness_audit.py",
+        "content/homepage/homepage_review.py",
+    ))
+    agent_history_boundary_module = label.endswith("content/execution/agent/history.py")
     for node in ast.walk(tree):
+        if (
+            typed_agent_history_module
+            and not agent_history_boundary_module
+            and isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in {"state", "audit_state"}
+            and node.attr in {"agent_run_history", "last_agent_run"}
+            and isinstance(node.ctx, ast.Load)
+        ):
+            issues.append(
+                f"{label}:{node.lineno}: managed-agent history must be decoded by agent/history.py"
+            )
+        if queue_module and not queue_core_module and not queue_codec_module:
+            if document_field(node, "state"):
+                if isinstance(node, ast.Subscript) and isinstance(
+                    parents.get(node), (ast.Assign, ast.AnnAssign)
+                ):
+                    assignment = parents[node]
+                    value = assignment.value
+                    if not uses_queue_job_state(value):
+                        issues.append(
+                            f"{label}:{node.lineno}: queue state writes must use QueueJobState"
+                        )
+                elif isinstance(node, ast.Call):
+                    issues.append(
+                        f"{label}:{node.lineno}: queue state must be decoded by queue_job_state() before control flow"
+                    )
+            if document_field(node, "queueBackend") and isinstance(node, ast.Call):
+                issues.append(
+                    f"{label}:{node.lineno}: queue backend must be decoded by queue_job_backend() before control flow"
+                )
+        if review_module and not review_ledger_module:
+            if isinstance(node, ast.Call) and any(
+                document_field(node, field)
+                for field in ("publishState", "agentJudgment", "humanJudgment", "humanOverride")
+            ):
+                issues.append(
+                    f"{label}:{node.lineno}: review verdict fields must be decoded by ReviewVerdict before control flow"
+                )
+        if review_module and isinstance(node, ast.ClassDef) and node.name == "ReviewVerdict" and not review_ledger_module:
+            issues.append(
+                f"{label}:{node.lineno}: ReviewVerdict must be owned by content/review/ledger.py"
+            )
+        if (
+            rollout_attestation_module
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id
+            in {
+                "header",
+                "desired",
+                "payload",
+                "result",
+                "importer",
+                "cases",
+                "api",
+                "app",
+                "rollback",
+                "receipt",
+            }
+        ):
+            issues.append(
+                f"{label}:{node.lineno}: rollout attestation evidence must use typed receipts, not wire get()"
+            )
+        if (
+            typed_agent_outcome_module
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in {"outcome", "job_outcome"}
+        ):
+            issues.append(
+                f"{label}:{node.lineno}: managed-agent control flow must use AgentRunOutcome attributes, not wire get()"
+            )
+        if (
+            typed_agent_outcome_module
+            and isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in {"outcome", "job_outcome"}
+        ):
+            issues.append(
+                f"{label}:{node.lineno}: managed-agent control flow must use AgentRunOutcome attributes, not wire subscripts"
+            )
         if execution_module and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for argument in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]:
                 if argument.arg not in {"state", "audit_state"}:
                     continue
-                annotation = _qualified_name(argument.annotation) if argument.annotation else ""
+                annotation = qualified_name(argument.annotation) if argument.annotation else ""
                 if annotation and not annotation.endswith("ExecutionStateTransition"):
                     issues.append(
                         f"{label}:{node.lineno}: workflow state parameter must use ExecutionStateTransition"
@@ -234,7 +278,7 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 and target.attr == "status"
                 for target in targets
             ):
-                if not _uses_execution_state_status(value):
+                if not uses_execution_state_status(value):
                     issues.append(
                         f"{label}:{node.lineno}: workflow status must store ExecutionStateStatus, not wire values"
                     )
@@ -242,7 +286,7 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
             execution_module
             and isinstance(node, ast.ClassDef)
             and node.name in {"ExecutionSpec", "ExecutionState", "ExecutionRuntimeState"}
-            and any(_qualified_name(base).endswith("Mapping") for base in node.bases)
+            and any(qualified_name(base).endswith("Mapping") for base in node.bases)
         ):
             issues.append(
                 f"{label}:{node.lineno}: execution documents must use explicit frozen fields, not Mapping inheritance"
@@ -298,18 +342,18 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
             if (
                 execution_module
                 and isinstance(node, (ast.If, ast.While, ast.IfExp, ast.Assert))
-                and _contains_string_membership(node.test)
-                and _looks_like_message_control(node.test)
+                and contains_string_membership(node.test)
+                and looks_like_message_control(node.test)
             ):
                 issues.append(
                     f"{label}:{node.lineno}: issue control flow must use DataIssueCode/RecoveryAction, not message substrings"
                 )
             if (
-                execution_module
+                (execution_module or post_module)
                 and isinstance(node, ast.ExceptHandler)
                 and (
                     node.type is None
-                    or _qualified_name(node.type) in {"Exception", "BaseException"}
+                    or qualified_name(node.type) in {"Exception", "BaseException"}
                 )
                 and any(isinstance(statement, ast.Pass) for statement in node.body)
             ):
@@ -332,8 +376,10 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 elif isinstance(node.target, ast.Name):
                     names = [node.target.id]
                 lowered_names = [name.lower() for name in names]
+                module_control_constant = isinstance(parents.get(node), ast.Module)
                 if (
-                    isinstance(value, ast.Constant)
+                    module_control_constant
+                    and isinstance(value, ast.Constant)
                     and isinstance(value.value, (int, float))
                     and any(RUNTIME_CONTROL_NAME.search(name) for name in names)
                 ):
@@ -372,11 +418,32 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 and node.value in rollout_control_values.completion_counts
                 and label.startswith("quwoquan_data/scripts/")
             ):
-                issues.append(
-                    f"{label}:{node.lineno}: rollout scale belongs to rollout contract"
-                )
+                parent = parents.get(node)
+                target_names: list[str] = []
+                if isinstance(parent, ast.Assign):
+                    target_names = [
+                        target.id
+                        for target in parent.targets
+                        if isinstance(target, ast.Name)
+                    ]
+                elif isinstance(parent, ast.AnnAssign) and isinstance(
+                    parent.target, ast.Name
+                ):
+                    target_names = [parent.target.id]
+                lowered = [name.lower() for name in target_names]
+                if any(
+                    "rollout" in name
+                    or "completion" in name
+                    or "coverage_target" in name
+                    or "target_count" in name
+                    or "targetcount" in name
+                    for name in lowered
+                ):
+                    issues.append(
+                        f"{label}:{node.lineno}: rollout scale belongs to rollout contract"
+                    )
             continue
-        call_name = _qualified_name(node.func)
+        call_name = qualified_name(node.func)
         if call_name == "getattr" and len(node.args) >= 3:
             attribute, default = node.args[1:3]
             if (
@@ -405,7 +472,7 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 )
         if call_name.endswith("StageResult"):
             for index, type_name in ((0, "ExecutionStage"), (2, "StageStatus")):
-                if index >= len(node.args) or not _uses_closed_type(node.args[index], type_name):
+                if index >= len(node.args) or not uses_closed_type(node.args[index], type_name):
                     issues.append(
                         f"{label}:{node.lineno}: StageResult argument {index + 1} must use {type_name}"
                     )
@@ -445,27 +512,7 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                     issues.append(
                         f"{label}:{node.lineno}: argparse controlled choices must derive from closed enums/contracts"
                     )
-    for lineno, line in enumerate(source.splitlines(), start=1):
-        if line.lstrip().startswith("#"):
-            continue
-        if VERSION_FIELD_PATTERN.search(line):
-            issues.append(
-                f"{label}:{lineno}: explicit contract version field is forbidden; "
-                "current data contracts are single-track"
-            )
-        if VERSIONED_CONTRACT_PATTERN.search(line) or VERSIONED_POLICY_PATTERN.search(line):
-            issues.append(
-                f"{label}:{lineno}: versioned data contract is forbidden; use the single unversioned contract"
-            )
-        if any(pattern.search(line) for pattern in LEGACY_PATTERNS):
-            issues.append(f"{label}:{lineno}: retired regional/version hardcode")
-        if label.startswith("quwoquan_data/scripts/governance/") and re.search(r"\[timeout:\d+\]", line):
-            issues.append(f"{label}:{lineno}: provider query timeout belongs to runtime policy")
-        for token in RETIRED_WORKFLOW_TOKENS:
-            if token in line:
-                issues.append(
-                    f"{label}:{lineno}: retired mutable-target/partial-delivery contract {token}"
-                )
+    issues.extend(text_control_literal_issues(source, label=label))
     return issues
 
 
@@ -485,21 +532,7 @@ def control_literal_issues() -> list[str]:
                 continue
             label = path.relative_to(REPO_ROOT).as_posix()
             text = path.read_text(encoding="utf-8")
-            for lineno, line in enumerate(text.splitlines(), start=1):
-                if VERSION_FIELD_PATTERN.search(line):
-                    issues.append(
-                        f"{label}:{lineno}: explicit contract version field is forbidden; "
-                        "current data contracts are single-track"
-                    )
-                if VERSIONED_CONTRACT_PATTERN.search(line) or VERSIONED_POLICY_PATTERN.search(line):
-                    issues.append(
-                        f"{label}:{lineno}: versioned data contract is forbidden; use the single unversioned contract"
-                    )
-                for token in RETIRED_WORKFLOW_TOKENS:
-                    if token in line:
-                        issues.append(
-                            f"{label}:{lineno}: retired mutable-target/partial-delivery contract {token}"
-                        )
+            issues.extend(text_control_literal_issues(text, label=label))
 
     recipe = load_recipe(HOMEPAGE_RECIPE)
     forbidden_recipe_keys = {
@@ -517,12 +550,27 @@ def control_literal_issues() -> list[str]:
         load_runtime_policy(str(recipe.get("runtimeProfile") or ""))
         media_processing_policy()
         load_cold_start_supply_policy()
+        policy = review_policy()
         contract = load_rollout_contract()
     except (OSError, TypeError, ValueError) as exc:
         issues.append(f"control truth source invalid: {exc}")
     else:
         if tuple(item.milestone for item in contract.milestones) != EXECUTION_MILESTONES:
             issues.append("rollout milestone keys drift from shared RolloutMilestone")
+        if (
+            policy.policy_id != "review"
+            or policy.minimum_score > policy.maximum_score
+            or not policy.quality_score_bands
+        ):
+            issues.append("review policy contract is invalid")
+    for review_type in (
+        ReviewItemKind,
+        ReviewJudgment,
+        ReviewOverride,
+        ReviewPublishState,
+    ):
+        if not tuple(review_type):
+            issues.append(f"review closed type is empty: {review_type.__name__}")
     state_schema_path = DATA_ROOT / "schema/execution/execution_state.schema.json"
     try:
         state_schema = json.loads(state_schema_path.read_text(encoding="utf-8"))
@@ -535,7 +583,6 @@ def control_literal_issues() -> list[str]:
         if schema_statuses != tuple(item.value for item in ExecutionStateStatus):
             issues.append("execution state schema statuses drift from ExecutionStateStatus")
     return issues
-
 
 def main() -> int:
     issues = control_literal_issues()

@@ -33,6 +33,15 @@ func (s *MongoTagNodeStore) FindByTagRef(ctx context.Context, tagRef string) (*m
 	return &node, nil
 }
 
+// TagRefExists 供 TagFeedback append 校验 tagRef 有效性（tagfeedback.TagRefValidator）。
+func (s *MongoTagNodeStore) TagRefExists(ctx context.Context, tagRef string) (bool, error) {
+	node, err := s.FindByTagRef(ctx, tagRef)
+	if err != nil {
+		return false, err
+	}
+	return node != nil, nil
+}
+
 // ListChildren 读取某 tagRef 的 active 直接子节点，供层级浏览/行政区选择使用。
 func (s *MongoTagNodeStore) ListChildren(ctx context.Context, parentTagRef string, limit int64) ([]model.TagNode, error) {
 	filter := bson.M{

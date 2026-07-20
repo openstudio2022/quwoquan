@@ -37,6 +37,15 @@ def test_execution_id_is_readable_and_strict():
         milestone="m1",
         sequence=3,
     ) == "20260711--travel-homepage-coverage--cn-sichuan--m1-003"
+    assert build_execution_id(
+        run_date="20260711",
+        vertical="travel",
+        content_type="homepage",
+        intent="coverage",
+        scope="cn-sichuan",
+        milestone="h10k",
+        sequence=4,
+    ) == "20260711--travel-homepage-coverage--cn-sichuan--h10k-004"
     try:
         validate_execution_id("task-a__batch-b")
         raise AssertionError("retired task/batch identity must fail")
@@ -60,11 +69,32 @@ def test_execution_facade_invokes_the_canonical_data_cli():
 def test_readiness_calls_only_single_execution_gate():
     calls: list[list[str]] = []
     recipe._readiness(
-        {"execution": {"maxWorkers": 1}, "readiness": {"requireReviewed": True}},
+        {
+            "execution": {"maxWorkers": 1},
+            "readiness": {
+                "requireReviewed": True,
+                "minPassRate": 0.9,
+                "mode": "commercial",
+                "failOnNoGo": True,
+            },
+        },
         EXECUTION_ID,
         lambda argv: calls.append(list(argv)) or 0,
     )
-    assert calls == [["verify", "execution-readiness", "--execution-id", EXECUTION_ID, "--require-reviewed"]]
+    assert calls == [
+        [
+            "verify",
+            "execution-readiness",
+            "--execution-id",
+            EXECUTION_ID,
+            "--min-pass-rate",
+            "0.9",
+            "--mode",
+            "commercial",
+            "--require-reviewed",
+            "--fail-on-no-go",
+        ]
+    ]
 
 
 def test_readiness_accepts_recipe_bounded_parallel_execution():
@@ -74,15 +104,26 @@ def test_readiness_accepts_recipe_bounded_parallel_execution():
         EXECUTION_ID,
         lambda argv: calls.append(argv) or 0,
     )
-    assert calls == [["verify", "execution-readiness", "--execution-id", EXECUTION_ID]]
+    assert calls == [
+        [
+            "verify",
+            "execution-readiness",
+            "--execution-id",
+            EXECUTION_ID,
+            "--min-pass-rate",
+            "1.0",
+            "--mode",
+            "commercial",
+        ]
+    ]
 
 
 def test_preflight_evidence_belongs_to_execution_work_package():
-    argv = recipe._env_ready_argv(EXECUTION_ID)
+    argv = recipe._runtime_preflight_argv(EXECUTION_ID)
     report_path = Path(argv[argv.index("--report-out") + 1])
     assert argv[:2] == ["task", "preflight"]
     assert "--json" not in argv
-    assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "environment_readiness.json"
+    assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "runtime_preflight.json"
 
 
 def test_execute_uses_rollout_contract_with_only_execution_identity():
@@ -117,13 +158,22 @@ def test_execute_routes_cold_start_identity_to_policy_targets(monkeypatch):
     from governance.coverage.cold_start_supply import ColdStartExecutionParameters
 
     execution_id = "20260718--travel-article-cold-start--cn-sichuan--m3-001"
+    homepage_execution_id = (
+        "20260718--travel-homepage-coverage--cn-sichuan--m3-901"
+    )
     received: dict[str, object] = {}
-    monkeypatch.setattr(
-        "governance.coverage.cold_start_supply.cold_start_execution_parameters",
-        lambda **_kwargs: ColdStartExecutionParameters(
+    parameter_call: dict[str, object] = {}
+
+    def _parameters(**kwargs):
+        parameter_call.update(kwargs)
+        return ColdStartExecutionParameters(
             province="四川省",
             target_names=("海螺沟", "九寨沟"),
-        ),
+        )
+
+    monkeypatch.setattr(
+        "governance.coverage.cold_start_supply.cold_start_execution_parameters",
+        _parameters,
     )
     monkeypatch.setattr(
         recipe,
@@ -135,6 +185,7 @@ def test_execute_routes_cold_start_identity_to_policy_targets(monkeypatch):
         argparse.Namespace(
             execution_id=execution_id,
             retry_of=None,
+            homepage_execution_id=homepage_execution_id,
             rollout="travel-cold-start-supply",
             stage="plan-only",
             recover_stage=None,
@@ -146,6 +197,8 @@ def test_execute_routes_cold_start_identity_to_policy_targets(monkeypatch):
     assert received["region"] == "中国/四川省"
     assert received["limit"] == 2
     assert received["mandatory"] == "海螺沟,九寨沟"
+    assert received["homepage_execution_id"] == homepage_execution_id
+    assert parameter_call["homepage_execution_id"] == homepage_execution_id
 
 
 def test_execute_rejects_an_unpaired_recovery_request(monkeypatch):

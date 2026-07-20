@@ -1,0 +1,28 @@
+aggregate: HomepageStatusReport
+layer: contract
+
+scenarios:
+  - name: list_status_report_governance_queue
+    operation: ListHomepageStatusReports
+    assertions:
+      - 默认只返回 pending_review 上报
+      - 证据链接仅向治理 operator 返回且日志脱敏
+      - cursor 分页稳定且不重复不漏项
+
+  - name: create_status_report
+    operation: CreateHomepageStatusReport
+    assertions:
+      - status_201
+      - report_status_pending_review
+
+  - name: review_confirmed_offline_drives_homepage
+    operation: ReviewHomepageStatusReport
+    assertions:
+      - 非治理 operator 返回 permission_denied
+      - confirmed_offline 产生 HomepageStatusReportReviewed outbox 事实
+      - Homepage 经事件消费幂等进入 offline 且搜索可见性同步删除
+
+  - name: report_idempotent_replay
+    operation: CreateHomepageStatusReport
+    assertions:
+      - 相同 Idempotency-Key 重放返回首次 receipt，不创建第二条上报

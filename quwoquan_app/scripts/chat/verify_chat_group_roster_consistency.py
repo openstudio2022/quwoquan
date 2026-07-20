@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CHAT_MOCK_DATA = ROOT / "quwoquan_app/lib/cloud/services/chat/mock/chat_mock_data.dart"
 LOCAL_MEDIA_ORIGIN = ROOT / "quwoquan_ops/cli/lib/local_media_origin.py"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CHAT_SCENARIOS = (
@@ -142,7 +141,7 @@ def _check_mock_dart() -> None:
     )
     if proc.returncode != 0:
         detail = (proc.stdout + proc.stderr).strip()
-        _fail(f"ChatMockData roster check failed:\n{detail}")
+        _fail(f"AlphaChatStateEngine roster check failed:\n{detail}")
 
 
 def main() -> int:

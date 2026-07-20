@@ -6,6 +6,7 @@ enum CircleBehaviorEventType {
   dwell('dwell'),
   like('like'),
   dislike('dislike'),
+  undoDislike('undo_dislike'),
   hideAuthor('hide_author'),
   hideContentType('hide_content_type'),
   report('report'),
@@ -18,12 +19,16 @@ enum CircleBehaviorEventType {
   skip('skip'),
   follow('follow'),
   joinCircle('join_circle'),
+  leaveCircle('leave_circle'),
   addContact('add_contact'),
   authorView('author_view'),
+  entityPageView('entity_page_view'),
   tagClick('tag_click'),
   contentDepth('content_depth'),
   playProgress('play_progress'),
-  assistantInterest('assistant_interest');
+  effectivePlay('effective_play'),
+  assistantInterest('assistant_interest'),
+  onboardingInterest('onboarding_interest');
 
   const CircleBehaviorEventType(this.wireValue);
   final String wireValue;

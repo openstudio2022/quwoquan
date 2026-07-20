@@ -24,19 +24,21 @@ var generatedRouteTable = []routeEntry{
 	{"GET", "/chat/conversations", "ListConversations"},
 	{"POST", "/chat/conversations", "CreateConversation"},
 	{"GET", "/chat/conversations/{conversationId}", "GetConversation"},
+	{"PATCH", "/chat/conversations/{conversationId}/announcement", "UpdateAnnouncement"},
+	{"PATCH", "/chat/conversations/{conversationId}/governance", "UpdateGroupGovernanceSettings"},
 	{"GET", "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "GetReceipts"},
 	{"GET", "/chat/inbox", "ListInbox"},
 	{"GET", "/chat/contacts", "ListContacts"},
 	{"GET", "/chat/group-candidates", "ListGroupCandidates"},
 	{"GET", "/chat/selectable-group-conversations", "ListSelectableGroupConversations"},
 	{"GET", "/chat/selectable-group-conversations/{conversationId}/contact-members", "ListSelectableGroupContactMembers"},
-	{"GET", "/chat/contacts/search", "SearchContacts"},
 	{"POST", "/chat/conversations/{conversationId}/messages", "SendMessage"},
 	{"POST", "/chat/conversations/{conversationId}/messages/{messageId}/recall", "RecallMessage"},
 	{"GET", "/chat/conversations/{conversationId}/messages", "ListMessages"},
 	{"POST", "/chat/conversations/{conversationId}/sync", "SyncMessages"},
 	{"POST", "/chat/conversations/{conversationId}/members", "AddMembers"},
 	{"DELETE", "/chat/conversations/{conversationId}/members/{userId}", "RemoveMember"},
+	{"POST", "/chat/conversations/{conversationId}/leave", "LeaveConversation"},
 	{"POST", "/chat/conversations/{conversationId}/assistant", "InviteAssistant"},
 	{"DELETE", "/chat/conversations/{conversationId}/assistant", "RemoveAssistant"},
 	{"GET", "/chat/conversations/{conversationId}/members", "ListMembers"},
@@ -63,6 +65,10 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 		h.handleCreateConversation(w, r)
 	case "GetConversation":
 		h.handleGetConversation(w, r)
+	case "UpdateAnnouncement":
+		h.handleUpdateAnnouncement(w, r)
+	case "UpdateGroupGovernanceSettings":
+		h.handleUpdateGroupGovernanceSettings(w, r)
 	case "GetReceipts":
 		h.handleGetReceipts(w, r)
 	case "ListInbox":
@@ -75,8 +81,6 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 		h.handleListSelectableGroupConversations(w, r)
 	case "ListSelectableGroupContactMembers":
 		h.handleListSelectableGroupContactMembers(w, r)
-	case "SearchContacts":
-		h.handleSearchContacts(w, r)
 	case "SendMessage":
 		h.handleSendMessage(w, r)
 	case "RecallMessage":
@@ -89,6 +93,8 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 		h.handleAddMembers(w, r)
 	case "RemoveMember":
 		h.handleRemoveMember(w, r)
+	case "LeaveConversation":
+		h.handleLeaveConversation(w, r)
 	case "InviteAssistant":
 		h.handleInviteAssistant(w, r)
 	case "RemoveAssistant":

@@ -48,6 +48,14 @@ extension _CreatePageStateHelpers on _CreatePageState {
   }
 
   Future<void> _onCloseRequest() async {
+    if (_isPublishing) {
+      if (_publicationCancellationSignal != null) {
+        _cancelPublicationUpload();
+      } else {
+        AppToast.show(context, CreatePageText.publicationSubmitting);
+      }
+      return;
+    }
     final state = ref.read(createEditorProvider);
     if (!state.hasContent &&
         _activeDraftId == null &&
@@ -86,8 +94,17 @@ extension _CreatePageStateHelpers on _CreatePageState {
                 try {
                   await _saveDraft(flushReason: 'explicit');
                   _doClose();
-                } catch (_) {
-                  // 保存失败时留在编辑器，顶栏会显示失败状态。
+                } catch (error, stackTrace) {
+                  // 保存失败时留在编辑器，顶栏显示失败状态；独立记录已处理异常。
+                  unawaited(
+                    AppExceptionTelemetryService.instance
+                        .recordHandledException(
+                          source: 'content.create.save_and_exit',
+                          error: error,
+                          stackTrace: stackTrace,
+                          operationId: 'content.local_draft.save',
+                        ),
+                  );
                 }
               },
               child: const Text(UITextConstants.saveDraft),
@@ -157,6 +174,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
           entryMode: mode,
           maxSelection: maxSelection,
           initialSelection: initialSelection,
+          filterRepository: ref.read(imageEditorFilterRepositoryProvider),
         ),
       ),
     );
@@ -165,7 +183,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
   Future<void> _pickImagesForCurrentEditor({
     bool closeWhenEmptyOnCancel = false,
   }) async {
-    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
+    if (!await _requireCreateActionLogin(
+      CreateActionContinuationKind.pickImages,
+      closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
+    )) {
       return;
     }
     if (!mounted) return;
@@ -277,7 +298,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
   }
 
   Future<void> _pickVideoForMedia({bool closeWhenEmptyOnCancel = false}) async {
-    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
+    if (!await _requireCreateActionLogin(
+      CreateActionContinuationKind.pickVideo,
+      closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
+    )) {
       return;
     }
     if (!mounted) return;
@@ -447,11 +471,16 @@ extension _CreatePageStateHelpers on _CreatePageState {
     if (!state.hasVideo) {
       return;
     }
+    final launcher = widget.videoEditorLauncher;
+    if (launcher == null &&
+        !ref.read(platformCapabilitiesProvider).nativeVideoEditing) {
+      AppToast.show(context, UITextConstants.videoEditorCapabilityUnavailable);
+      return;
+    }
     await _flushDraftIfDirty('subpage_push');
     if (!mounted) {
       return;
     }
-    final launcher = widget.videoEditorLauncher;
     final result = launcher != null
         ? await launcher(context, state: state)
         : await Navigator.of(context).push<VideoEditorResult>(
@@ -642,206 +671,6 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
   }
 
-  Widget _buildImmersiveArticlePage(CreateEditorState state) {
-    final background = CupertinoColors.systemBackground.resolveFrom(context);
-    final brightness =
-        CupertinoTheme.of(context).brightness ?? Brightness.light;
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarBrightness: brightness,
-        statusBarIconBrightness: brightness == Brightness.dark
-            ? Brightness.light
-            : Brightness.dark,
-      ),
-    );
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop) {
-          await _onCloseRequest();
-        }
-      },
-      child: CupertinoPageScaffold(
-        backgroundColor: background,
-        // Same transparent Material host as main create route (see [AppScaffold]).
-        child: Material(
-          type: MaterialType.transparency,
-          child: KeyedSubtree(
-            key: TestKeys.createPage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              color: background,
-              child: SafeArea(
-                top: false,
-                bottom: false,
-                child: Column(
-                  children: <Widget>[
-                    _buildImmersiveArticleTopBar(state: state),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: AppSpacing.containerSm),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            if (!_unifiedCreateEditorEnabled) ...<Widget>[
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.containerMd,
-                                ),
-                                child: _buildRollbackBanner(
-                                  CupertinoColors.secondaryLabel.resolveFrom(
-                                    context,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: AppSpacing.interGroupSm),
-                            ],
-                            Expanded(child: _buildTextEditor(state)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImmersiveArticleTopBar({required CreateEditorState state}) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final onAccentLabel = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.badgeForeground,
-    );
-    final title = _pageTitleForState(state);
-    final titleColor = AppNavigationSemanticConstants.barTitleColor(isDark);
-
-    return _buildCreateTopChromeBar(
-      collapseProgress: 1,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          KeyedSubtree(
-            key: TestKeys.createCloseButton,
-            child: AppNavigationBarIconButton(
-              icon: CupertinoIcons.back,
-              onPressed: _onCloseRequest,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: titleColor,
-                  fontSize: AppTypography.iosNavTitle,
-                  fontWeight: AppTypography.regular,
-                ),
-              ),
-            ),
-          ),
-          _buildDraftToolbarAction(immersiveDark: true),
-          SizedBox(width: AppSpacing.intraGroupSm),
-          CupertinoButton(
-            key: TestKeys.createPublishButton,
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-            minimumSize: const Size.square(AppSpacing.buttonHeightSm),
-            color: AppColors.iosAccentLight,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-            onPressed: _isPublishing ? null : _publish,
-            child: _isPublishing
-                ? CupertinoActivityIndicator(color: onAccentLabel)
-                : Text(
-                    UITextConstants.mediaPickerNextStep,
-                    style: TextStyle(
-                      color: onAccentLabel,
-                      fontSize: AppTypography.base,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader({
-    required CreateEditorState state,
-    required double collapseProgress,
-  }) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final onAccentLabel = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.badgeForeground,
-    );
-    final title = _pageTitleForState(state);
-    final titleColor = AppNavigationSemanticConstants.barTitleColor(isDark);
-    return _buildCreateTopChromeBar(
-      collapseProgress: collapseProgress,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          KeyedSubtree(
-            key: TestKeys.createCloseButton,
-            child: AppNavigationBarIconButton(
-              icon: CupertinoIcons.back,
-              onPressed: _onCloseRequest,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Opacity(
-                opacity: _isPhotoCreateFlow(state)
-                    ? 1
-                    : lerpDouble(0.34, 1, collapseProgress)!,
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: titleColor,
-                    fontSize: AppTypography.iosNavTitle,
-                    fontWeight: AppTypography.regular,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          _buildDraftToolbarAction(),
-          SizedBox(width: AppSpacing.intraGroupSm),
-          CupertinoButton(
-            key: TestKeys.createPublishButton,
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-            minimumSize: const Size.square(AppSpacing.buttonHeightSm),
-            color: AppColors.iosAccentLight,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-            onPressed: _isPublishing ? null : _publish,
-            child: _isPublishing
-                ? CupertinoActivityIndicator(color: onAccentLabel)
-                : Text(
-                    UITextConstants.mediaPickerNextStep,
-                    style: TextStyle(
-                      color: onAccentLabel,
-                      fontSize: AppTypography.base,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDraftToolbarAction({bool immersiveDark = false}) {
     return ValueListenableBuilder<CreateDraftSaveStatus>(
       valueListenable: _draftSessionController.saveStatusListenable,
@@ -897,11 +726,8 @@ extension _CreatePageStateHelpers on _CreatePageState {
   }
 
   void _openLocalDrafts() {
-    try {
-      context.push(AppRoutePaths.localDrafts);
-    } catch (_) {
-      // Widget tests may mount the page without a GoRouter.
-    }
+    // Widget tests可在无 GoRouter 的最小树中渲染页面；此时入口安全地保持原地。
+    GoRouter.maybeOf(context)?.push(AppRoutePaths.localDrafts);
   }
 
   Widget _buildMediaEditor(CreateEditorState state) {
@@ -941,7 +767,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
             placeholder: UITextConstants.createMediaBodyPlaceholder,
             decoration: const BoxDecoration(),
             onChanged: (value) {
-              ref.read(createEditorProvider.notifier).updateBody(value);
+              ref.read(createEditorProvider.notifier).updateMediaBody(value);
             },
           ),
         ),

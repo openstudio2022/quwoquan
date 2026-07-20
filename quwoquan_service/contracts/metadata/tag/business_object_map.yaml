@@ -168,7 +168,8 @@ objects:
   invariant_refs: []
   lifecycle_refs: []
   member_bounds: {}
-  mutation_entrypoints: []
+  mutation_entrypoints:
+  - ReportTagFeedback
   object_kind: append_only_fact
   relationships:
   - access: event

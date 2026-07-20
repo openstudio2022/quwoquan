@@ -122,6 +122,11 @@ func (c *client) GetBytes(ctx context.Context, key string) ([]byte, error) {
 	return value, normalizeNotFound(err)
 }
 
+func (c *client) GetDel(ctx context.Context, key string) (string, error) {
+	value, err := c.raw.GetDel(ctx, key).Result()
+	return value, normalizeNotFound(err)
+}
+
 func (c *client) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	return c.raw.Set(ctx, key, value, ttl).Err()
 }
@@ -375,9 +380,11 @@ type pipeline struct {
 	getCommands  []*goredis.StringCmd
 	hashCommands []*goredis.MapStringStringCmd
 	setCommands  []*goredis.StringSliceCmd
+	boolCommands []*goredis.BoolCmd
 	getResults   []*rtredis.StringResult
 	hashResults  []*rtredis.MapResult
 	setResults   []*rtredis.SliceResult
+	boolResults  []*rtredis.BoolResult
 }
 
 func (p *pipeline) Get(ctx context.Context, key string) *rtredis.StringResult {
@@ -409,6 +416,17 @@ func (p *pipeline) SMembers(ctx context.Context, key string) *rtredis.SliceResul
 	return result
 }
 
+func (p *pipeline) SIsMember(
+	ctx context.Context,
+	key string,
+	member string,
+) *rtredis.BoolResult {
+	result := rtredis.NewBoolResult(false, nil)
+	p.boolCommands = append(p.boolCommands, p.raw.SIsMember(ctx, key, member))
+	p.boolResults = append(p.boolResults, result)
+	return result
+}
+
 func (p *pipeline) Exec(ctx context.Context) error {
 	_, err := p.raw.Exec(ctx)
 	if errors.Is(err, goredis.Nil) {
@@ -425,6 +443,10 @@ func (p *pipeline) Exec(ctx context.Context) error {
 	for index, command := range p.setCommands {
 		value, resultErr := command.Result()
 		p.setResults[index].SetResult(value, resultErr)
+	}
+	for index, command := range p.boolCommands {
+		value, resultErr := command.Result()
+		p.boolResults[index].SetResult(value, resultErr)
 	}
 	return err
 }

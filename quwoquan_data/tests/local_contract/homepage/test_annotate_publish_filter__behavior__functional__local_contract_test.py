@@ -23,16 +23,17 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.io import read_json, write_json  # noqa: E402
 from core.article_package import compute_document_sha256  # noqa: E402
+from core.control_types import (  # noqa: E402
+    ReviewItemKind,
+    ReviewJudgment,
+    ReviewOverride,
+    ReviewPublishState,
+)
 from core.paths import ensure_execution_command_layout  # noqa: E402
 from content.post import object_index as content_object  # noqa: E402
 from content.review.ledger import (  # noqa: E402
-    ReviewItem,
     ReviewLedger,
-    JUDGE_DOUBTFUL,
-    KIND_ARTICLE,
-    KIND_IMAGE,
-    STATE_PUBLISHABLE,
-    STATE_DISCARD,
+    ReviewVerdict,
     load_ledger,
     resolve_publish_state,
     save_ledger,
@@ -50,13 +51,13 @@ def _seed_ledger() -> None:
     ensure_execution_command_layout(EXECUTION_ID, "post")
     content_object.register_content_object(EXECUTION_ID, REF, content_type="article", angle="体验", title=REF)
     ledger = ReviewLedger(
-        executionId=EXECUTION_ID,
+        execution_id=EXECUTION_ID,
         ref=REF,
-        article=ReviewItem(kind=KIND_ARTICLE, target=REF, agentJudgment="credible", agentScore=4),
-        images=[
-            ReviewItem(kind=KIND_IMAGE, target="img_safe", agentJudgment="credible", agentScore=4),
-            ReviewItem(kind=KIND_IMAGE, target="img_face", agentJudgment=JUDGE_DOUBTFUL, agentScore=2, reasons=["face"]),
-        ],
+        article=ReviewVerdict(kind=ReviewItemKind.ARTICLE, target=REF, agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
+        images=(
+            ReviewVerdict(kind=ReviewItemKind.IMAGE, target="img_safe", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
+            ReviewVerdict(kind=ReviewItemKind.IMAGE, target="img_face", agent_judgment=ReviewJudgment.DOUBTFUL, agent_score=2, reasons=("face",)),
+        ),
     )
     save_ledger(ledger)
 
@@ -73,33 +74,33 @@ def _decision(**kw) -> AnnotationDecision:
 def test_doubtful_image_blocks_until_human():
     _seed_ledger()
     ledger = load_ledger(EXECUTION_ID, REF)
-    face = ledger.find_item(KIND_IMAGE, "img_face")
+    face = ledger.find_item(ReviewItemKind.IMAGE, "img_face")
     # agent 存疑 + 默认 requireHumanWhenDoubtful → fix（必须人确认）
-    assert resolve_publish_state(face, ledger.policy) != STATE_PUBLISHABLE
+    assert resolve_publish_state(face) is not ReviewPublishState.PUBLISHABLE
 
 
 def test_annotate_human_publishable():
     _seed_ledger()
-    apply_annotation(_decision(ref=REF, kind=KIND_IMAGE, target="img_face", judgment="credible", score=4))
+    apply_annotation(_decision(ref=REF, kind=ReviewItemKind.IMAGE, target="img_face", judgment=ReviewJudgment.CREDIBLE, score=4))
     ledger = load_ledger(EXECUTION_ID, REF)
-    face = ledger.find_item(KIND_IMAGE, "img_face")
-    assert resolve_publish_state(face, ledger.policy) == STATE_PUBLISHABLE
+    face = ledger.find_item(ReviewItemKind.IMAGE, "img_face")
+    assert resolve_publish_state(face) is ReviewPublishState.PUBLISHABLE
 
 
 def test_annotate_override_discard():
     _seed_ledger()
-    apply_annotation(_decision(ref=REF, kind=KIND_IMAGE, target="img_face", override="discard"))
+    apply_annotation(_decision(ref=REF, kind=ReviewItemKind.IMAGE, target="img_face", override=ReviewOverride.DISCARD))
     ledger = load_ledger(EXECUTION_ID, REF)
-    face = ledger.find_item(KIND_IMAGE, "img_face")
-    assert resolve_publish_state(face, ledger.policy) == STATE_DISCARD
+    face = ledger.find_item(ReviewItemKind.IMAGE, "img_face")
+    assert resolve_publish_state(face) is ReviewPublishState.DISCARD
 
 
 def test_annotate_reprocess_count():
     _seed_ledger()
-    apply_annotation(_decision(ref=REF, kind=KIND_IMAGE, target="img_face", reprocess=True))
-    apply_annotation(_decision(ref=REF, kind=KIND_IMAGE, target="img_face", reprocess=True))
+    apply_annotation(_decision(ref=REF, kind=ReviewItemKind.IMAGE, target="img_face", reprocess=True))
+    apply_annotation(_decision(ref=REF, kind=ReviewItemKind.IMAGE, target="img_face", reprocess=True))
     ledger = load_ledger(EXECUTION_ID, REF)
-    assert ledger.find_item(KIND_IMAGE, "img_face").reprocessCount == 2
+    assert ledger.find_item(ReviewItemKind.IMAGE, "img_face").reprocess_count == 2
 
 
 def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
@@ -126,15 +127,15 @@ def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
     )
     # 账本：文章可发布，bad 图 discard
     ledger = ReviewLedger(
-            executionId=EXECUTION_ID, ref=REF,
-        article=ReviewItem(kind=KIND_ARTICLE, target=REF, agentJudgment="credible", agentScore=4),
-        images=[
-            ReviewItem(kind=KIND_IMAGE, target="ok", agentJudgment="credible", agentScore=4),
-            ReviewItem(kind=KIND_IMAGE, target="bad", humanOverride="discard"),
-        ],
+        execution_id=EXECUTION_ID, ref=REF,
+        article=ReviewVerdict(kind=ReviewItemKind.ARTICLE, target=REF, agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
+        images=(
+            ReviewVerdict(kind=ReviewItemKind.IMAGE, target="ok", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=4),
+            ReviewVerdict(kind=ReviewItemKind.IMAGE, target="bad", agent_judgment=ReviewJudgment.CREDIBLE, agent_score=3, human_override=ReviewOverride.DISCARD),
+        ),
     )
     (topic / "5.review").mkdir(parents=True, exist_ok=True)
-    write_json(topic / "5.review" / "review_ledger.json", ledger.to_dict())
+    write_json(topic / "5.review" / "review_ledger.json", ledger.to_document())
 
     verdict = apply_publish_filter(topic, publish_root)
     assert verdict.publishable is True

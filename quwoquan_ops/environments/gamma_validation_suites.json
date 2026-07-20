@@ -3,49 +3,63 @@
   "baselineRequiredSuites": [
     "assistant_main_chain",
     "chat_avatar_sync",
+    "chat_group_lifecycle",
     "content_feed_patrol"
   ],
-  "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；PR 只保留高信号抽样验证，full gamma 验证独立日跑/手动触发。",
+  "futureExpansionRule": "每个业务对象都要补齐至少一个四环境核心用户旅程；PR 只保留高信号抽样验证，gamma-local 完整验证独立日跑或手动触发。",
   "profiles": {
     "pr_light": {
-      "description": "PR 轻量 gamma preflight：探针已运行的共享 gamma（不部署），readiness 阻断、smoke 探针仅记录漂移。不含设备矩阵和 Patrol UI 旅程。",
-      "deploysGamma": false,
+      "description": "PR 轻量 preflight：alpha/beta 本地高信号设备抽样，不启动 gamma-local 完整栈，不含 Patrol 全旅程。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_api_protocol_smoke",
-        "chat_avatar_api_probe"
+        "chat_avatar_api_probe",
+        "chat_group_lifecycle_api_probe"
       ],
       "smokeCasesBlocking": false,
       "uiJourneys": [],
       "deviceMatrix": {
-        "envs": ["alpha", "beta"],
+        "envs": [
+          "alpha",
+          "beta"
+        ],
         "requireAllPlatforms": false,
-        "matrixKinds": ["assistant"]
+        "matrixKinds": [
+          "assistant"
+        ]
       }
     },
     "manual_full": {
-      "description": "手动触发的完整 ECS gamma 验证：打包、部署、readiness、API contract、assistant smoke、chat avatar probe、self-hosted 设备矩阵。用于发布前复验（08）。",
-      "deploysGamma": true,
+      "description": "手动触发的完整 gamma-local 验证：打包、启动、readiness、API contract、assistant smoke、chat avatar probe 与 self-hosted 设备矩阵。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_ui_semantic_smoke",
-        "chat_avatar_api_probe"
+        "chat_avatar_api_probe",
+        "chat_group_lifecycle_api_probe",
+        "recommendation_feed_api_probe"
       ],
       "smokeCasesBlocking": true,
       "uiJourneys": [],
       "deviceMatrix": {
-        "envs": ["gamma"],
+        "envs": [
+          "gamma"
+        ],
         "requireAllPlatforms": false,
-        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
+        "matrixKinds": [
+          "assistant",
+          "chat-avatar",
+          "environment-smoke"
+        ]
       }
     },
     "nightly_full": {
-      "description": "每晚 22:00 UTC+8 自动执行：完整 ECS gamma 部署 + full semantic assistant smoke + 全量 Patrol UI 旅程 + 全量设备矩阵。",
-      "deploysGamma": true,
+      "description": "供手动或外部定时调用：完整 gamma-local 栈 + full semantic assistant smoke + 全量 Patrol UI 旅程 + 全量设备矩阵。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_ui_semantic_smoke",
-        "chat_avatar_api_probe"
+        "chat_avatar_api_probe",
+        "chat_group_lifecycle_api_probe",
+        "recommendation_feed_api_probe"
       ],
       "smokeCasesBlocking": true,
       "uiJourneys": [
@@ -59,21 +73,30 @@
         "chat_notification_entry_patrol",
         "chat_orientation_stability_patrol",
         "ops_event_ingestion_patrol",
-        "ops_event_reliability_replay_patrol"
+        "ops_event_reliability_replay_patrol",
+        "home_recommendation_journey_patrol",
+        "user_profile_journey_patrol"
       ],
       "deviceMatrix": {
-        "envs": ["gamma"],
+        "envs": [
+          "gamma"
+        ],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
+        "matrixKinds": [
+          "assistant",
+          "chat-avatar",
+          "environment-smoke"
+        ]
       }
     },
     "release_candidate": {
-      "description": "发布前回归：基于 nightly_full，再结合 self-hosted gamma 设备矩阵做更高置信度验证。",
-      "deploysGamma": true,
+      "description": "发布前回归：复用 nightly_full 能力，并结合 self-hosted gamma-local 设备矩阵做更高置信度验证。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_ui_semantic_smoke",
-        "chat_avatar_api_probe"
+        "chat_avatar_api_probe",
+        "chat_group_lifecycle_api_probe",
+        "recommendation_feed_api_probe"
       ],
       "smokeCasesBlocking": true,
       "uiJourneys": [
@@ -87,28 +110,41 @@
         "chat_notification_entry_patrol",
         "chat_orientation_stability_patrol",
         "ops_event_ingestion_patrol",
-        "ops_event_reliability_replay_patrol"
+        "ops_event_reliability_replay_patrol",
+        "home_recommendation_journey_patrol"
       ],
       "deviceMatrix": {
-        "envs": ["gamma"],
+        "envs": [
+          "gamma"
+        ],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
+        "matrixKinds": [
+          "assistant",
+          "chat-avatar",
+          "environment-smoke"
+        ]
       }
     },
     "mainline_auto_prod": {
-      "description": "main 自动 promotion 阻断链：只保留 15 分钟内能证明端云正确性的最小链路。包含 beta self-hosted 设备矩阵、gamma hosted readiness/T3/assistant protocol smoke/chat avatar probe，以及 prod 初始灰度后的只读 health/inspect/doctor/integration probes。",
-      "deploysGamma": true,
+      "description": "main 自动 promotion 阻断链：只保留 15 分钟内能证明端云正确性的最小链路。包含 beta self-hosted 设备矩阵，以及 prod gray-initial 后的只读 health/inspect/doctor/integration probes。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_api_protocol_smoke",
-        "chat_avatar_api_probe"
+        "chat_avatar_api_probe",
+        "chat_group_lifecycle_api_probe"
       ],
       "smokeCasesBlocking": true,
       "uiJourneys": [],
       "deviceMatrix": {
-        "envs": ["beta"],
+        "envs": [
+          "beta"
+        ],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
+        "matrixKinds": [
+          "assistant",
+          "chat-avatar",
+          "environment-smoke"
+        ]
       }
     }
   },
@@ -119,7 +155,7 @@
       "tier": "pr",
       "budgetSeconds": 60,
       "longTailType": "environment_coupling",
-      "currentRole": "PR hosted gamma 抽样助手主链验证",
+      "currentRole": "PR 环境协议级助手主链抽样验证",
       "currentPain": "之前 PR 使用 Flutter UI + 真实 stream 收敛，长尾来自冷启动、工具链和等待窗口。",
       "optimizationPlan": "改为 conversation -> turn -> SSE 协议探针，仅校验 turn_started / assistant.model.interaction / final_answer 与非空答案。"
     },
@@ -149,9 +185,29 @@
       "tier": "pr",
       "budgetSeconds": 90,
       "longTailType": "environment_coupling",
-      "currentRole": "gamma chat avatar 黑盒可用性探针",
+      "currentRole": "gamma-local chat avatar 黑盒可用性探针",
       "currentPain": "失败多由环境未就绪、媒体路由或异步任务链路抖动放大。",
-      "optimizationPlan": "保留在 PR，但放到 readiness gate 后执行，并在 full gamma 中复用同一探针口径。"
+      "optimizationPlan": "保留在 PR，但放到 readiness gate 后执行，并在 gamma-local 完整验证中复用同一探针口径。"
+    },
+    "chat_group_lifecycle_api_probe": {
+      "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py",
+      "runner": "python",
+      "tier": "pr",
+      "budgetSeconds": 120,
+      "longTailType": "environment_coupling",
+      "currentRole": "beta/gamma 群聊三来源、建群、消息与 Inbox 黑盒闭环；prod 只读来源隔离验证",
+      "currentPain": "此前群聊仅有头像专项探针，三来源与建群成功回流没有环境级阻断证据。",
+      "optimizationPlan": "beta/gamma 使用 --mutating 验证创建到 Inbox 并自动解散；prod 强制只读并使用独立验收账号。"
+    },
+    "recommendation_feed_api_probe": {
+      "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_recommendation_feed_probe.py",
+      "runner": "python",
+      "tier": "daily",
+      "budgetSeconds": 60,
+      "longTailType": "environment_coupling",
+      "currentRole": "gamma-local 推荐三场景（travel/premium/objectCards）黑盒可用性探针",
+      "currentPain": "此前 stackctl verify 对二期推荐能力零感知，policy overlay/对象卡种子回归无阻断点。",
+      "optimizationPlan": "gamma-local 完整验证（manual_full/nightly_full/release_candidate）执行；--require-object-cards 在种子应用后开启。"
     }
   },
   "uiJourneys": {
@@ -275,13 +331,35 @@
       "currentRole": "运营事件可靠性回放旅程",
       "currentPain": "依赖已有事件与 replay 状态，不适合 PR 阻断链路。",
       "optimizationPlan": "保持在 daily/release，不纳入 PR。"
+    },
+    "home_recommendation_journey_patrol": {
+      "path": "quwoquan_app/test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "首页推荐主链路真机旅程（频道切换/刷新/负反馈路径）",
+      "currentPain": "此前无自动执行点（N2-5），推荐面回归只能靠 feed patrol 间接覆盖。",
+      "optimizationPlan": "挂 nightly_full/release_candidate（发布 profile）；PR 不执行。"
+    },
+    "user_profile_journey_patrol": {
+      "path": "quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "用户主页核心旅程：我的主页渲染/编辑入口 + 他人主页关注取关往返",
+      "currentPain": "涉及真实 bundle 拉取、关注写往返与导航栈恢复。",
+      "optimizationPlan": "保留到 daily/release，不纳入 PR。"
     }
   },
   "suites": {
     "assistant_main_chain": {
       "status": "required",
       "domain": "assistant",
-      "description": "Assistant 主链：PR 使用 API/协议级 hosted smoke，daily/release 使用 full semantic smoke，并保留 self-hosted Android/iOS 设备矩阵。",
+      "description": "Assistant 主链：PR 使用 API/协议级 smoke，daily/release 使用 full semantic smoke，并保留 self-hosted Android/iOS 设备矩阵。",
       "hostedChecks": [
         "assistant_api_protocol_smoke",
         "assistant_ui_semantic_smoke"
@@ -304,7 +382,7 @@
     "content_feed_patrol": {
       "status": "required",
       "domain": "content",
-      "description": "发现页内容 feed Patrol 核心旅程，作为当前 gamma 100 图 curated 子集的必过验收。",
+      "description": "发现页内容 feed Patrol 核心旅程，作为当前 gamma-local curated 子集的必过验收。",
       "hostedChecks": [],
       "selfHostedChecks": [
         "gamma_patrol_matrix"

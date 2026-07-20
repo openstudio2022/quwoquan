@@ -1,4 +1,4 @@
-# Quote Reply Display
+# L3 特性：Quote Reply Display
 
 > L4 Story — 规划阶段
 

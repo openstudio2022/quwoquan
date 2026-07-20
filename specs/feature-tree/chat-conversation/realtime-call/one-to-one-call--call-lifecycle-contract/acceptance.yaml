@@ -3,49 +3,103 @@ node:
   id: one-to-one-call--call-lifecycle-contract
   level: L3_story
   path: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call--call-lifecycle-contract
-  title: one to one call  call lifecycle contract
+  title: CallSession lifecycle contract
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: one to one call  call lifecycle contract 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: CallSession/CallParticipant 状态、服务端 CAS、receipt/outbox 与 answer/connected 分离合同。
+  in_scope:
+  - initiated/ringing/connecting/in_call/ended
+  - no_answer、命名结束意图与 ended 终态
+  - ReportMediaConnected、actor-scoped receipt、BOLA
+  out_of_scope:
+  - 离线 Push provider、页面视觉、媒体 QoE rollup
 gwt_acceptance:
-  GWT1:
-    title: one to one call  call lifecycle contract GWT
+  GWT1_answer_connected_timeout:
+    title: AnswerCall、ReportMediaConnected 与 no_answer 严格分离
     given:
-    - 前置条件明确。
+    - 一个合法的 audio 或 video CallSession 已发起。
     when:
-    - 用户或系统动作发生。
+    - 被叫接听并建立媒体，或 30 秒未接。
     then:
-    - 可观察结果符合预期。
+    - 接听只推进 connecting；媒体上报后才进入 in_call；未接进入 ended/no_answer。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 状态、startedAt、participant status 与 endReason 在真实 store 中一致。
+    edge_cases:
+    - Answer 与 timeout/cancel 并发时仅一个终态提交成功，重放返回稳定结果。
+    contract_refs:
+    - rtc/call_session/fields.yaml#CallStatus
+    - rtc/call_session/service.yaml#ReportMediaConnected
+    performance_points:
+    - command P95 300ms；媒体 connectTime 由 QoE Story 单独度量。
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      recorded:
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: call_lifecycle_state_api_integration
+        cases:
+        - api_integration.chat_conversation.realtime_call.call_lifecycle.answer_connected_timeout
+        envs: &integration_envs
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: call_lifecycle_state_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.call_lifecycle.answer_connected_timeout
+        envs: &local_envs
+        - local
+    notes:
+    - 现有测试不覆盖新规划文件的全部 connected/timeout 时间断言，因此保持 partial。
+  GWT2_cas_receipt_outbox:
+    title: CAS、幂等 receipt 与 outbox 原子提交
+    given:
+    - 同一 actor 对同一 CallSession 并发或重复发送命名 command。
+    when:
+    - Mongo CAS 发生纯竞态、同 key 重放或目标态已满足。
+    then:
+    - 服务端有限重载重放；同 key 返回首次结果；no-op receipt 不递增 version；outbox 不重复。
+    done_when:
+    - state、receipt、outbox 同 transaction，并通过非参与者与重放负例。
+    edge_cases:
+    - 同 key 不同 payload 返回 idempotency_conflict；非参与者不得观察对象存在性。
+    contract_refs:
+    - rtc/call_session/aggregate.yaml#business_rules
+    - rtc/call_session/errors.yaml
+    performance_points:
+    - 纯 CAS 重放不超过 operation reliability.max_attempts。
+    tests:
+      planned:
+      recorded:
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/internal/application/call_outbox_relay__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        execution_profile: baseline
+        suite: call_lifecycle_receipt_local_contract
         cases:
-        - local_contract.chat_conversation.realtime_call.one_to_one_call_call_lifecycle_contract.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
+        - local_contract.chat_conversation.realtime_call.call_lifecycle.receipt_outbox
+        envs: *local_envs
+      - layer: api_integration
+        execution_profile: integration
+        suite: call_lifecycle_receipt_api_integration
         cases:
-        - local_contract.chat_conversation.realtime_call.one_to_one_call_call_lifecycle_contract.gwt1_local_contract
-        envs: *id001
+        - api_integration.chat_conversation.realtime_call.call_lifecycle.receipt_outbox
+        envs: *integration_envs
       supporting: []
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

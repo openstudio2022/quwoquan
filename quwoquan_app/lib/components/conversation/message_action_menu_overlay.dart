@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
@@ -34,9 +34,6 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
   Color _separatorColor(BuildContext context) =>
       _cupertinoColor(context, CupertinoColors.separator);
 
-  Color _destructiveColor(BuildContext context) =>
-      _cupertinoColor(context, CupertinoColors.systemRed);
-
   IconData _iconForAction(String action) {
     switch (action) {
       case 'forward':
@@ -47,8 +44,6 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
         return Icons.copy;
       case 'recall':
         return Icons.undo;
-      case 'delete':
-        return Icons.delete_outline;
       default:
         return Icons.more_horiz;
     }
@@ -76,11 +71,10 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
     final isSelf = message.isSelf;
     final canRecall = isSelf && _isWithinRecallWindow(message);
     final actions = <MapEntry<String, String>>[
-      MapEntry('forward', UITextConstants.messageActionForward),
-      MapEntry('select', UITextConstants.messageActionSelect),
-      if (type == 'text') MapEntry('copy', UITextConstants.messageActionCopy),
-      if (canRecall) MapEntry('recall', UITextConstants.messageActionRecall),
-      MapEntry('delete', UITextConstants.messageActionDelete),
+      MapEntry('forward', ChatText.messageActionForward),
+      MapEntry('select', ChatText.messageActionSelect),
+      if (type == 'text') MapEntry('copy', ChatText.messageActionCopy),
+      if (canRecall) MapEntry('recall', ChatText.messageActionRecall),
     ];
     const menuWidth = 200.0;
     const menuPadding = 10.0;
@@ -127,10 +121,7 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
                     children: actions.asMap().entries.map((indexedEntry) {
                       final index = indexedEntry.key;
                       final entry = indexedEntry.value;
-                      final isDelete = entry.key == 'delete';
-                      final foreground = isDelete
-                          ? _destructiveColor(context)
-                          : _labelColor(context);
+                      final foreground = _labelColor(context);
                       return DecoratedBox(
                         decoration: BoxDecoration(
                           border: index == 0

@@ -1,0 +1,23 @@
+entity: FilterCatalogRelease
+tests:
+  - name: filter_catalog_stage_validation_contract
+    operation: StageFilterCatalogRelease
+    go_func: TestFilterCatalogStageValidatesCanonicalPayload
+    command: StageFilterCatalogRelease
+  - name: filter_catalog_digest_idempotency_contract
+    operation: StageFilterCatalogRelease
+    go_func: TestFilterCatalogStageDigestIdempotent
+    command: StageFilterCatalogRelease
+  - name: filter_catalog_single_active_contract
+    operation: ActivateFilterCatalogRelease
+    go_func: TestFilterCatalogActivateSingleActive
+    command: ActivateFilterCatalogRelease
+  - name: filter_catalog_rollback_contract
+    operation: RollbackFilterCatalogRelease
+    go_func: TestFilterCatalogRollbackRetiredRelease
+    command: RollbackFilterCatalogRelease
+  - name: filter_catalog_public_reader_contract
+    operation: GetActiveFilterCatalog
+    go_func: TestFilterCatalogPublicReaderReturnsOnlyActiveRelease
+    command: GetActiveFilterCatalog
+

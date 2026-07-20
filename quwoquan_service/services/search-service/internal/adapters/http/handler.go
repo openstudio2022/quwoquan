@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterrors "quwoquan_service/runtime/errors"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/search-service/internal/application"
@@ -28,9 +30,16 @@ const maxRequestBodyBytes = 64 << 10 // 64 KiB
 
 // Handler serves the canonical search routes.
 type Handler struct {
-	svc       *application.SearchService
-	decorator *application.RankingDecorator
-	observer  application.SearchRequestObserver
+	svc           *application.SearchService
+	decorator     *application.RankingDecorator
+	observer      application.SearchRequestObserver
+	hotQueries    application.TermHeatProvider
+	intersections *application.IntersectionAttacher
+}
+
+type HandlerConfig struct {
+	HotQueries    application.TermHeatProvider
+	Intersections *application.IntersectionAttacher
 }
 
 // NewHandler 构造 HTTP 适配器；observer 可为空。
@@ -38,16 +47,105 @@ func NewHandler(
 	svc *application.SearchService,
 	decorator *application.RankingDecorator,
 	observer application.SearchRequestObserver,
+	hotQueries ...application.TermHeatProvider,
 ) *Handler {
-	return &Handler{svc: svc, decorator: decorator, observer: observer}
+	handler := &Handler{svc: svc, decorator: decorator, observer: observer}
+	if len(hotQueries) > 0 {
+		handler.hotQueries = hotQueries[0]
+	}
+	return handler
+}
+
+func NewHandlerWithConfig(
+	svc *application.SearchService,
+	decorator *application.RankingDecorator,
+	observer application.SearchRequestObserver,
+	config HandlerConfig,
+) *Handler {
+	return &Handler{
+		svc:           svc,
+		decorator:     decorator,
+		observer:      observer,
+		hotQueries:    config.HotQueries,
+		intersections: config.Intersections,
+	}
 }
 
 // Routes registers the canonical search routes (method-scoped patterns).
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /search", h.handleSearch)
-	mux.HandleFunc("POST /search/feedback", h.handleFeedback)
+	h.Register(mux)
 	return mux
+}
+
+// Register 挂载搜索路由到既有 mux（与 RecentSearchHandler.Register 组合使用）。
+func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc(mustOperationPattern(searchQueryOperation), h.handleSearch)
+	mux.HandleFunc(mustOperationPattern(listHotQueriesOperation), h.handleHotQueries)
+	mux.HandleFunc(mustOperationPattern(reportFeedbackOperation), h.handleFeedback)
+}
+
+type hotQueryWire struct {
+	Query     string  `json:"query"`
+	Relevance float64 `json:"relevance"`
+}
+
+func (h *Handler) handleHotQueries(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFrom(r)
+	if h.hotQueries == nil {
+		writeErr(
+			w,
+			requestID,
+			rterrors.NewUnavailable(
+				moduleSearch,
+				"热词暂时不可用，请稍后再试。",
+				"term-heat reader is not configured",
+			),
+		)
+		return
+	}
+	limit := 10
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 || parsed > 20 {
+			writeErr(
+				w,
+				requestID,
+				rterrors.NewInvalidArgument(
+					moduleSearch,
+					"热词数量参数不正确。",
+					"hot query limit must be between 1 and 20",
+				),
+			)
+			return
+		}
+		limit = parsed
+	}
+	heats, err := h.hotQueries.RelatedTerms(r.Context(), "", limit)
+	if err != nil {
+		writeErr(
+			w,
+			requestID,
+			rterrors.NewUnavailable(
+				moduleSearch,
+				"热词暂时不可用，请稍后再试。",
+				"list hot queries: "+err.Error(),
+			),
+		)
+		return
+	}
+	items := make([]hotQueryWire, 0, len(heats))
+	for _, heat := range heats {
+		query := strings.TrimSpace(heat.NormalizedTerm)
+		if query == "" {
+			continue
+		}
+		items = append(items, hotQueryWire{
+			Query:     query,
+			Relevance: heat.Relevance,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 type searchRequestWire struct {
@@ -109,14 +207,13 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Near:        parseNear(body),
 	}
 
-	// Time only the retrieve so the latency SLI reflects user-perceived search
-	// latency (logging happens off this path, after the response is served).
+	// 计时覆盖召回、排序与交集 attach；异步 query log 仍在响应后执行。
 	start := time.Now()
 	resp, err := h.svc.Search(r.Context(), in, viewer)
-	elapsed := time.Since(start).Seconds()
 	if err != nil {
 		h.observeSearch(application.SearchObservation{
-			Mode: body.Mode, Bucket: application.BucketControl, Seconds: elapsed, Err: true,
+			Mode: body.Mode, Bucket: application.BucketControl,
+			Seconds: time.Since(start).Seconds(), Err: true,
 		})
 		writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "搜索暂时不可用，请稍后再试。", "retrieve: "+err.Error()))
 		return
@@ -124,6 +221,10 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	ranked := h.decorator.Decorate(r.Context(), resp, normalizedQuery, subjectKeyFor(viewer, r, requestID))
 	resp.Hits = ranked.Hits
+	if h.intersections != nil {
+		resp = h.intersections.Attach(r.Context(), viewerPersonaIDFrom(r), resp)
+	}
+	elapsed := time.Since(start).Seconds()
 
 	termHeatApplied := ranked.ExperimentBucket == application.BucketTermHeat && len(ranked.RelatedTerms) > 0
 	h.observeSearch(application.SearchObservation{
@@ -181,6 +282,7 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, requestID, rterrors.NewInvalidArgument(moduleSearch, "反馈缺少必要字段。", "missing searchRequestId/eventType"))
 		return
 	}
+	ev.ViewerID = viewerFrom(r).UserID
 	if err := h.svc.ReportFeedback(r.Context(), ev); err != nil {
 		writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "反馈暂时无法记录。", "record feedback: "+err.Error()))
 		return
@@ -249,7 +351,23 @@ func parseNear(body searchRequestWire) *rtsearch.GeoNear {
 func viewerFrom(r *http.Request) rtsearch.Viewer {
 	// Visibility is implicit; the cloud path only returns public objects.
 	// chat.* private content stays local_only on the App.
-	return rtsearch.Viewer{UserID: strings.TrimSpace(r.Header.Get("X-User-Id"))}
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return rtsearch.Viewer{}
+	}
+	viewerID := strings.TrimSpace(principal.Actor.PersonaID)
+	if viewerID == "" {
+		viewerID = strings.TrimSpace(principal.Actor.AccountID)
+	}
+	return rtsearch.Viewer{UserID: viewerID}
+}
+
+func viewerPersonaIDFrom(r *http.Request) string {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(principal.Actor.PersonaID)
 }
 
 func requestIDFrom(r *http.Request) string {

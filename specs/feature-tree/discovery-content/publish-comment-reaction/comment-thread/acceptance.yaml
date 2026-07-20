@@ -1,4 +1,4 @@
-version: 3
+version: 4
 node:
   id: comment-thread
   level: L3_story
@@ -8,15 +8,18 @@ node:
   parent_business_capability: publish-comment-reaction
 
 scope:
-  summary: Comment 与 ContentReaction 经对象专属 Facade、generated client、Mongo/outbox 和统一 Runtime execution path 完成二层评论闭环。
+  summary: Comment 与 ContentReaction 经对象专属 Facade、generated client、Mongo/outbox、治理投影和统一 Runtime execution path 完成可排序、可治理、可追溯的二层评论闭环。
   in_scope:
     - typed Comment command/query、reply Slice、ContentReaction 与服务端能力投影。
     - production Remote-only、alpha fixture 隔离、严格 decoder 与 RuntimeFailure。
-    - pinned-first 稳定顺序、CAS、幂等、outbox、计数和投影收敛。
-    - Feed、沉浸式、文章、个人互动入口与登录续接。
+    - hot/latest 两档服务端 keyset、pinned-first、hotScore、CAS、幂等、outbox、计数和投影收敛。
+    - hidden/restore/tombstoned 治理、创建频控、Post 删除级联与审计事实。
+    - authorIpLocation、authorLiked、viewerRelation、拉黑过滤与批量读投影。
+    - Feed、沉浸式、文章、个人互动、通知深链、举报与登录续接。
   out_of_scope:
     - recommended/latest/most_liked 三档排序及任何兼容参数。
-    - IP 属地、作者赞过、评论搜索、翻译、视频附件和 ML rerank。
+    - 评论搜索、翻译、语音评论、视频附件、AI 摘要与 ML rerank。
+    - same_circle 关系标签、个性化热评和 hotScore 时间衰减。
     - generic Repository、动态 Map DTO、失败回退 Mock 与 PostService 评论第二通路。
 
 gwt_acceptance:
@@ -42,11 +45,13 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_surface
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt1_local_contract]
           envs: [local]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: comment_device_journey
           cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey]
           envs: [gamma_local]
@@ -72,11 +77,13 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_surface
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt2_local_contract]
           envs: [local]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: comment_device_journey
           cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey]
           envs: [gamma_local]
@@ -104,15 +111,18 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_auth_continuation
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt3_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt3_api_integration]
           envs: [beta, gamma]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: comment_device_journey
           cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey]
           envs: [gamma_local]
@@ -140,43 +150,51 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_projection
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt4_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt4_api_integration]
           envs: [beta, gamma]
       supporting: []
 
   GWT5:
-    title: 一级评论只有 pinned-first 稳定顺序
-    given: [帖子含置顶和未置顶一级评论]
-    when: [分页读取评论]
+    title: 一级评论按 hot/latest 服务端稳定排序
+    given: [帖子含置顶评论及不同互动量、创建时间的未置顶一级评论]
+    when: [用户按默认 hot 或切换 latest 分页读取评论]
     then:
-      - 顺序固定为 isPinned、pinnedAt、createdAt、id。
-      - App 不传 sort、不显示排序菜单、不做本地重排。
-    done_when: [旧三档排序类型、metadata、UI 和测试全部删除]
-    edge_cases: [同时间戳, 翻页期间新增, 取消置顶]
-    contract_refs: [content.comment.ListComments, Comment storage indexes]
-    performance_points: [查询命中复合索引且无阻塞 SORT]
+      - 默认 hot 顺序固定为 isPinned、pinnedAt、hotScore、createdAt、id。
+      - latest 顺序固定为 isPinned、pinnedAt、createdAt、id。
+      - App 只传 hot/latest 并重新请求服务端，不做本地重排。
+      - recommended/most_liked 与旧三档类型、参数、测试扫描为零。
+    done_when: [两档 keyset、Mongo explain、App 切换与重入恢复全部通过]
+    edge_cases: [同分同时间戳, 翻页期间新增, 取消置顶, 非法 sort]
+    contract_refs: [content.comment.ListComments, Comment hot/latest storage indexes]
+    performance_points: [两档查询均命中复合索引且无 COLLSCAN 或阻塞 SORT]
     tests:
       planned: []
       recorded:
         - file: quwoquan_app/test/local_contract/cloud/services/content/content_comment_facet__local_contract_test.dart
+        - file: quwoquan_service/services/content-service/internal/application/comment/comment_hot_score_projector__local_contract_test.go
         - file: quwoquan_service/services/content-service/tests/api_integration/comment_keyset_explain_bench__api_integration_test.go
-    status: implemented
+    status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_facet
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt5_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_keyset
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt5_api_integration]
           envs: [beta, gamma]
       supporting: []
+    notes: [local_contract 已覆盖默认 hot；真实 Mongo 两档 explain 与 Gamma 切换证据需按 V4 重跑]
 
   GWT6:
     title: ContentReaction 三态互斥并由列表投影恢复
@@ -199,10 +217,12 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_projection
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt6_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt6_api_integration]
           envs: [beta, gamma]
@@ -230,11 +250,13 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_contract
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt7_local_contract]
           envs: [local]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: comment_device_journey
           cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey]
           envs: [gamma_local]
@@ -264,14 +286,17 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: smoke
           suite: alpha_comment_facet
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt8_local_contract]
           envs: [alpha]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt8_api_integration]
           envs: [beta, gamma]
         - layer: user_acceptance
+          execution_profile: release
           suite: comment_device_journey
           cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey]
           envs: [gamma_local]
@@ -292,17 +317,18 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-        - file: quwoquan_app/test/local_contract/ui/user/pages/profile_comments_page__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
         - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: profile_comments
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt9_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt9_api_integration]
           envs: [beta, gamma]
@@ -329,6 +355,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_contract
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt10_local_contract]
           envs: [local]
@@ -354,6 +381,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_projection
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt11_local_contract]
           envs: [local]
@@ -381,10 +409,12 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_aggregate
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt12_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_pin
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt12_api_integration]
           envs: [beta, gamma]
@@ -413,10 +443,12 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_object
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt13_local_contract]
           envs: [local]
         - layer: api_integration
+          execution_profile: integration
           suite: comment_api
           cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt13_api_integration]
           envs: [beta, gamma]
@@ -445,11 +477,224 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: comment_package_boundary
           cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt14_local_contract]
           envs: [local, alpha]
       supporting: []
     notes: [production wiring purity、runtime single path、security cutover 与 package graph 门禁已绿；真实 AOT/SBOM 和 Gamma Remote Journey 尚未形成]
+
+  GWT15:
+    title: Comment 四态生命周期与举报治理单轨
+    given: [active 或 hidden Comment、具备权限的作者/operator 及 Report target=comment]
+    when: [作者删除、operator 隐藏/恢复，或宿主 Post 删除]
+    then:
+      - 状态只允许 active→deleted、active→hidden→active、active|hidden→tombstoned。
+      - deleted/tombstoned 为终态，非法迁移与陈旧 expectedVersion 返回稳定 conflict。
+      - 前台列表、回复和计数只包含 active；作者私有投影可见 hidden 状态。
+      - 举报只写既有 Report 聚合，ResolveReport 通过治理命令处置并保留 CommentModerated 审计事实。
+    done_when: [状态机、HTTP、真实 Mongo/outbox、Report 协作和 operator 权限负例全部通过]
+    edge_cases: [重复删除, hidden 后 PostDeleted, 非 operator, 已 tombstoned 恢复]
+    contract_refs: [content.comment.HideComment, content.comment.RestoreComment, content.report.CreateReport, PostDeleted]
+    performance_points: [批量 tombstone 不逐评论 N+1，投影收敛有 SLI]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_aggregate__command_query__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/adapters/http/comment_operations__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/application/comment/comment_tombstone_projector__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/application/comment/comment_count_projector__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/application/moderation/comment_report_resolution_projector__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_governance
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt15_local_contract]
+          envs: [local]
+        - layer: api_integration
+          execution_profile: integration
+          suite: comment_governance_api
+          cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt15_api_integration]
+          envs: [beta, gamma]
+      supporting: []
+    notes: [本地状态机已落地；真实 Report→治理、PostDeleted 批量级联与环境回放证据需重跑]
+
+  GWT16:
+    title: CreateComment 滑动窗口频控可配置且失败可恢复
+    given: [authenticated persona 在短窗或日窗内连续创建评论]
+    when: [创建量达到配置阈值后再次提交]
+    then:
+      - 服务端在 Comment 创建事务内按 authorId 串行化，再查询权威短窗/日窗并返回 comment_rate_limited。
+      - 默认阈值为 30 秒不超过 5 条且 24 小时不超过 200 条，配置变更不改协议。
+      - 幂等重放在频控前返回原 receipt；并发请求不会超卖额度，删除评论不能绕过计数。
+      - App 保留草稿并消费 RuntimeFailure/RuntimeRecoveryPolicy，不伪造成功或切换 Mock。
+    done_when: [边界时刻、跨窗、并发、错误映射与 Widget 恢复均通过]
+    edge_cases: [窗口临界点, 日窗超限, 存储失败, 幂等重放]
+    contract_refs: [content.comment.CreateComment, content.comment.comment_rate_limited]
+    performance_points: [频控查询命中 author+createdAt 索引]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_hot_sort_rate_limit__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_rate_limit_concurrency__local_contract_test.go
+        - file: quwoquan_service/services/content-service/cmd/api/main_comment_rate_limit_runtime__local_contract_test.go
+        - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_input_overlay__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_rate_limit
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt16_local_contract]
+          envs: [local]
+      supporting: []
+    notes: [事务内并发频控与配置 fail-fast 本地证据已补；真实并发 Mongo 边界与 App 429 恢复 UAT 尚未形成]
+
+  GWT17:
+    title: 属地、作者赞过、关系与拉黑事实由服务端批量投影
+    given: [Comment 作者、Post 作者、viewer 之间存在不同 reaction/relationship/block 事实]
+    when: [viewer 读取一级评论、回复或个人互动 Slice]
+    then:
+      - authorIpLocation 为创建时快照，境内只到省级、境外只到国家级，解析失败为空且不臆造。
+      - authorLiked 只来自 Post 作者的 ContentReaction 事实。
+      - viewerRelation 只允许 none/following/friend，匿名恒 none。
+      - 任一方向拉黑或 viewer 拉黑 Post owner 时服务端过滤评论、回复摘要与计数；投影不可用时 fail closed。
+      - reaction、relationship、block 与附件读取均批量执行，禁止 N+1 和端侧拼装。
+    done_when: [local contract、真实 Mongo projection、严格 codec 与页面渲染负例一致]
+    edge_cases: [匿名 viewer, 互关, 单向关注, 拉黑回复作者, 投影不可用]
+    contract_refs: [CommentPageSlice, persona_follow_projection, ContentReaction]
+    performance_points: [每页投影读取次数有界且不随评论条数线性增长]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_block_visibility__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_hot_sort_rate_limit__local_contract_test.go
+        - file: quwoquan_app/test/local_contract/cloud/content/contract/content_comment_contract__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_facet_widget__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_display_projection
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt17_local_contract]
+          envs: [local]
+      supporting: []
+    notes: [拉黑与 typed codec 本地证据已落；真实 projection 数据与 Gamma 窄屏渲染待验]
+
+  GWT18:
+    title: 评论、回复、提及与置顶通知回到原评论
+    given: [CommentCreated 或 CommentPinChanged 事实含 post/comment/parent/mentioned user identity]
+    when: [notification-service 投影消息且接收者点击通知]
+    then:
+      - 一级评论通知 Post 作者，回复通知 reply target，mentions 通知被提及用户，置顶通知评论作者。
+      - 自评、自回与自提及去重，单一事实不会向同一接收者重复投递。
+      - AppMessage source/target 携带稳定 comment identity，App 经 MediaViewerCommentContext 定位并高亮原评论。
+      - 目标删除、隐藏或无权访问时进入结构化失效态，不跳到错误对象。
+    done_when: [projection local contract、真实 stream API、App 深链与 Gamma 点击 Journey 全部通过]
+    edge_cases: [同一用户同时是回复目标和 mention, 目标不在首屏, 已删除目标, 重复事件]
+    contract_refs: [CommentCreated, CommentPinChanged, notification.app_message, MediaViewerCommentContext]
+    performance_points: [通知投影 replay-safe，深链定位小于 320ms]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_projection__local_contract_test.go
+        - file: quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go
+        - file: quwoquan_app/test/local_contract/core/models/media_viewer_comment_context__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_notification_projection
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt18_local_contract]
+          envs: [local]
+        - layer: api_integration
+          execution_profile: integration
+          suite: comment_notification_stream
+          cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt18_api_integration]
+          envs: [gamma]
+      supporting:
+        - layer: user_acceptance
+          execution_profile: release
+          suite: comment_notification_deeplink
+          cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.gwt18_deeplink]
+          envs: [gamma_local]
+    notes: [投影与深链代码已存在；真实 stream 和设备点击证据未在 V4 重跑]
+
+  GWT19:
+    title: 非 alpha 环境只使用真实双栈离线 IP 属地库
+    given: [content-service 分别以 alpha、beta、gamma、prod composition 启动]
+    when: [装配 Comment IP location resolver 并创建评论]
+    then:
+      - alpha 只允许 deterministic fixture resolver。
+      - beta/gamma/prod 只允许 ip2region IPv4+IPv6 离线库，缺库、损坏、错误 provider 或数据超过 45 天均启动失败。
+      - 镜像固定数据版本与双库 SHA256，保留 Apache-2.0 许可证；原始 IP 不落 Comment、不写日志。
+      - lookup outcome 与 data age 有 Prometheus 指标和告警，解析失败只落空串。
+    done_when: [composition contract、镜像 checksum、gamma 双栈样本、Prometheus readback 与 prod preflight 全部通过]
+    edge_cases: [IPv6, 私网地址, 非法记录, 数据库损坏, 数据版本过期]
+    contract_refs: [content-service runtime config, Comment.authorIpLocation]
+    performance_points: [离线查询不访问公网且不增加请求级外部依赖]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/content-service/cmd/api/main_ip_location_runtime__local_contract_test.go
+        - file: quwoquan_service/services/content-service/internal/infrastructure/iplocation/ip2region_resolver__local_contract_test.go
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_ip_location_composition
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt19_local_contract]
+          envs: [local]
+      supporting:
+        - layer: api_integration
+          execution_profile: release
+          suite: comment_ip_location_dual_stack
+          cases: [api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt19_dual_stack]
+          envs: [gamma]
+    notes: [生产旁路已从 composition 删除；镜像和真实 gamma/prod 证据仍需执行后方可准出]
+
+  GWT20:
+    title: 评论动作、输入与无障碍体验达到统一商用 surface
+    given: [用户在 compact/regular/expanded、light/dark、键盘和弱网场景打开评论]
+    when: [切换排序、输入 @/emoji/图片、回复、复制、举报或删除]
+    then:
+      - "@ 按钮打开 typed 关注候选选择器，不默认写入固定账号；已选 mention 可见、可移除并随草稿恢复。"
+      - 删除先二次确认，复制/举报/删除按服务端 capability 显示，游客登录成功续接原动作且关闭登录回安全态。
+      - 排序与动作触控区域不小于 44pt，具有 button/selected 语义和清晰焦点顺序。
+      - 窄屏、动态字体下正文、属地和 badge 不裁切；失败保留已有内容或草稿并提供显式恢复动作。
+    done_when: [Widget contract、语义树、golden/像素、Gamma iOS/Android/Web capability profile Journey 全部通过]
+    edge_cases: [无关注候选, 超长属地, 多 badge, 动态字体 200%, 取消登录, 删除冲突]
+    contract_refs: [ContentCommentFacet, AuthContinuation, PlatformCapabilities]
+    performance_points: [评论 surface 打开动画小于 300ms，输入无明显掉帧]
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_input_overlay__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_facet_widget__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_item_actions__local_contract_test.dart
+        - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+    status: partial
+    test_evidence:
+      primary:
+        - layer: local_contract
+          execution_profile: baseline
+          suite: comment_commercial_surface
+          cases: [local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt20_local_contract]
+          envs: [local]
+        - layer: user_acceptance
+          execution_profile: release
+          suite: comment_device_journey
+          cases: [user_acceptance.discovery_content.publish_comment_reaction.comment_thread.gwt20_device]
+          envs: [gamma_local]
+      supporting: []
+    notes: [typed 输入、删除确认和游客举报登录续接已补本地契约；语义树、golden/像素、动态字体和真实视觉仍需闭环]
 
 execution:
   local_gate:
@@ -458,9 +703,11 @@ execution:
     - make -C quwoquan_service verify-ddd-cqrs-baseline
     - make -C quwoquan_service verify-contract-graph-commercial
     - make -C quwoquan_service verify-production-wiring-purity
-  full_gate:
+    - cd quwoquan_service && go test ./services/content-service/internal/application/comment ./services/content-service/internal/infrastructure/iplocation ./services/content-service/tests/local_contract ./services/notification-service/tests/local_contract
+    - cd quwoquan_app && flutter test --concurrency=1 test/local_contract/ui/components/comment_system test/local_contract/cloud/content/contract/content_comment_contract__local_contract_test.dart test/local_contract/cloud/services/content/content_comment_remote__local_contract_test.dart
+  profile_gates:
     - make verify-app-cloud-runtime-single-path
     - make verify-app-cloud-security-cutovers
     - make verify-app-cloud-package-boundaries
-    - stackctl verify --env gamma --kind all --tier all
-    - make gate-full
+    - stackctl verify --env gamma --kind all --profile release
+    - make gate-release ENV=gamma

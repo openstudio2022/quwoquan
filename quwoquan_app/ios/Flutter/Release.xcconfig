@@ -4,3 +4,4 @@
 // 明确设置 SDK 路径，避免 native_assets 构建错误
 SDKROOT = iphoneos
 SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+QWQ_APS_ENVIRONMENT = production

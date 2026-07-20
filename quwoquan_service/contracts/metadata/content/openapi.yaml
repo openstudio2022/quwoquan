@@ -40,6 +40,13 @@ paths:
                 facet: ArticleAssistanceCommandFacet
                 method: generateArticleSummary
                 aggregateOwner: Post
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -172,6 +179,33 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/entity-wishlist-state:
+        get:
+            operationId: GetEntityWishlistState
+            x-contract-operation-id: content.post.GetEntityWishlistState
+            x-object-id: content.post
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: EntityWishlistQueryFacet
+                method: getEntityWishlistState
+                reader: EntityWishlistStateReader
+                slice: EntityWishlistStateSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityWishlistState'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /content/feed:
         get:
             operationId: GetFeed
@@ -200,6 +234,31 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
+    /content/filter-catalog:
+        get:
+            operationId: GetActiveFilterCatalog
+            x-contract-operation-id: content.filter_catalog_release.GetActiveFilterCatalog
+            x-object-id: content.filter_catalog_release
+            x-actor: none
+            x-application:
+                kind: query
+                facet: FilterCatalogQueryFacet
+                method: getActiveFilterCatalog
+                reader: ActiveFilterCatalogReader
+                slice: FilterCatalogSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FilterCatalogSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
     /content/footprint:
         get:
             operationId: GetMyFootprint
@@ -331,6 +390,41 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/IntersectionInboxSummary'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/intersections/visit:
+        post:
+            operationId: MarkIntersectionsVisited
+            x-contract-operation-id: content.intersection_visit_state.MarkIntersectionsVisited
+            x-object-id: content.intersection_visit_state
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: IntersectionVisitCommandFacet
+                method: markVisited
+                aggregateOwner: IntersectionVisitState
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MarkIntersectionsVisitedRequest'
+            responses:
+                "204":
+                    description: No Content
                 default:
                     description: Runtime failure
                     content:
@@ -1203,33 +1297,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /content/posts/search:
-        get:
-            operationId: SearchPosts
-            x-contract-operation-id: content.post.SearchPosts
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: PostSearchQueryFacet
-                method: searchPosts
-                reader: PostSearchReader
-                slice: PostSearchResultSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SearchPostsPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /content/posts:publish:
         post:
             operationId: SubmitPostPublication
@@ -1446,6 +1513,50 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/reports/{reportId}:dismiss:
+        post:
+            operationId: DismissReport
+            x-contract-operation-id: content.report.DismissReport
+            x-object-id: content.report
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ReportCommandFacet
+                method: dismissReport
+                aggregateOwner: Report
+            parameters:
+                - name: reportId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DismissReportRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReportCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /content/sub-accounts/{subAccountId}/author-impact:
         get:
             operationId: GetAuthorImpact
@@ -1512,17 +1623,17 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/interactions/{interactionId}/state:
-        patch:
+    /content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts:
+        post:
             operationId: UpdateProfileInteractionState
-            x-contract-operation-id: content.post.UpdateProfileInteractionState
-            x-object-id: content.post
+            x-contract-operation-id: content.profile_interaction_read_fact.UpdateProfileInteractionState
+            x-object-id: content.profile_interaction_read_fact
             x-actor: persona
             x-application:
                 kind: command
-                facet: ProfileInteractionCommandFacet
-                method: updateProfileInteractionState
-                aggregateOwner: Post
+                facet: ProfileInteractionReadFactAppendFacet
+                method: appendReadFact
+                appendSink: ProfileInteractionReadFact
             parameters:
                 - name: subAccountId
                   in: path
@@ -1534,15 +1645,25 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateProfileInteractionStateRequest'
+                            $ref: '#/components/schemas/ProfileInteractionReadFact'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProfileInteractionReadFactAck'
                 default:
                     description: Runtime failure
                     content:
@@ -1554,15 +1675,15 @@ paths:
     /content/sub-accounts/{subAccountId}/interactions/received:
         get:
             operationId: ListProfileInteractionActivitiesReceived
-            x-contract-operation-id: content.post.ListProfileInteractionActivitiesReceived
-            x-object-id: content.post
+            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
+            x-object-id: content.profile_interaction_activity_view
             x-actor: persona
             x-application:
                 kind: query
-                facet: ProfileInteractionQueryFacet
-                method: listProfileInteractionActivitiesReceived
-                reader: ReceivedProfileInteractionReader
-                slice: ProfileInteractionPageSlice
+                facet: ProfileInteractionActivityQueryFacet
+                method: listReceived
+                reader: ReceivedProfileInteractionActivityReader
+                slice: ProfileInteractionActivityPageSlice
             parameters:
                 - name: subAccountId
                   in: path
@@ -1587,15 +1708,15 @@ paths:
     /content/sub-accounts/{subAccountId}/interactions/sent:
         get:
             operationId: ListProfileInteractionActivitiesSent
-            x-contract-operation-id: content.post.ListProfileInteractionActivitiesSent
-            x-object-id: content.post
+            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
+            x-object-id: content.profile_interaction_activity_view
             x-actor: persona
             x-application:
                 kind: query
-                facet: ProfileInteractionQueryFacet
-                method: listProfileInteractionActivitiesSent
-                reader: SentProfileInteractionReader
-                slice: ProfileInteractionPageSlice
+                facet: ProfileInteractionActivityQueryFacet
+                method: listSent
+                reader: SentProfileInteractionActivityReader
+                slice: ProfileInteractionActivityPageSlice
             parameters:
                 - name: subAccountId
                   in: path
@@ -1697,6 +1818,240 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ListCommentsForPostAuthorPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/users/me/reports:
+        get:
+            operationId: ListMyReports
+            x-contract-operation-id: content.report.ListMyReports
+            x-object-id: content.report
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: ReportQueryFacet
+                method: listMyReports
+                reader: MyReportReader
+                slice: MyReportPageSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListMyReportsPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/comments/{commentId}:hide:
+        post:
+            operationId: HideComment
+            x-contract-operation-id: content.comment.HideComment
+            x-object-id: content.comment
+            x-actor: account
+            x-application:
+                kind: command
+                facet: CommentCommandFacet
+                method: hideComment
+                aggregateOwner: Comment
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HideCommentRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/comments/{commentId}:restore:
+        post:
+            operationId: RestoreComment
+            x-contract-operation-id: content.comment.RestoreComment
+            x-object-id: content.comment
+            x-actor: account
+            x-application:
+                kind: command
+                facet: CommentCommandFacet
+                method: restoreComment
+                aggregateOwner: Comment
+            parameters:
+                - name: commentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RestoreCommentRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/filter-catalog-releases:
+        post:
+            operationId: StageFilterCatalogRelease
+            x-contract-operation-id: content.filter_catalog_release.StageFilterCatalogRelease
+            x-object-id: content.filter_catalog_release
+            x-actor: account
+            x-application:
+                kind: command
+                facet: FilterCatalogReleaseCommandFacet
+                method: stage
+                aggregateOwner: FilterCatalogRelease
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/FilterCatalogRelease'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FilterCatalogRelease'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/filter-catalog-releases/{releaseId}:activate:
+        post:
+            operationId: ActivateFilterCatalogRelease
+            x-contract-operation-id: content.filter_catalog_release.ActivateFilterCatalogRelease
+            x-object-id: content.filter_catalog_release
+            x-actor: account
+            x-application:
+                kind: command
+                facet: FilterCatalogReleaseCommandFacet
+                method: activate
+                aggregateOwner: FilterCatalogRelease
+            parameters:
+                - name: releaseId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ActivateFilterCatalogReleaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FilterCatalogRelease'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/filter-catalog-releases/{releaseId}:rollback:
+        post:
+            operationId: RollbackFilterCatalogRelease
+            x-contract-operation-id: content.filter_catalog_release.RollbackFilterCatalogRelease
+            x-object-id: content.filter_catalog_release
+            x-actor: account
+            x-application:
+                kind: command
+                facet: FilterCatalogReleaseCommandFacet
+                method: rollback
+                aggregateOwner: FilterCatalogRelease
+            parameters:
+                - name: releaseId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RollbackFilterCatalogReleaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FilterCatalogRelease'
                 default:
                     description: Runtime failure
                     content:
@@ -1876,6 +2231,39 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/GetMediaAssetReferenceResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/posts/{postId}/moderation-case:
+        get:
+            operationId: GetCurrentPostModerationCase
+            x-contract-operation-id: content.post_moderation_case.GetCurrentPostModerationCase
+            x-object-id: content.post_moderation_case
+            x-actor: account
+            x-application:
+                kind: query
+                facet: PostModerationCaseQueryFacet
+                method: getCurrentPostModerationCase
+                reader: CurrentPostModerationCaseReader
+                slice: PostModerationCaseOpsSlice
+            parameters:
+                - name: postId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostModerationCaseOpsSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2087,6 +2475,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AbortMediaUploadRequest
             x-contract-placeholder: true
+        ActivateFilterCatalogReleaseRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ActivateFilterCatalogReleaseRequest
+            x-contract-placeholder: true
         AuthorCommentPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2161,6 +2554,26 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: DecidePostModerationRequest
+            x-contract-placeholder: true
+        DismissReportRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DismissReportRequest
+            x-contract-placeholder: true
+        EntityWishlistState:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EntityWishlistState
+            x-contract-placeholder: true
+        FilterCatalogRelease:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FilterCatalogRelease
+            x-contract-placeholder: true
+        FilterCatalogSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FilterCatalogSlice
             x-contract-placeholder: true
         GenerateArticleSummaryRequest:
             type: object
@@ -2237,6 +2650,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetPostPublicationEligibilityResponse
+            x-contract-placeholder: true
+        HideCommentRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HideCommentRequest
             x-contract-placeholder: true
         InitMediaUploadRequest:
             type: object
@@ -2323,6 +2741,19 @@ components:
                     type: string
                     nullable: true
             x-contract-entity: IntersectionReason
+        ListMyReportsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MyReportItemSlice'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: MyReportItemSlice
         ListProfileInteractionActivitiesReceivedPage:
             type: object
             required:
@@ -2331,11 +2762,11 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/ProfileInteractionActivityWire'
+                        $ref: '#/components/schemas/ProfileInteractionActivityView'
                 nextCursor:
                     type: string
                     nullable: true
-            x-contract-entity: ProfileInteractionActivityWire
+            x-contract-entity: ProfileInteractionActivityView
         ListProfileInteractionActivitiesSentPage:
             type: object
             required:
@@ -2344,11 +2775,11 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/ProfileInteractionActivityWire'
+                        $ref: '#/components/schemas/ProfileInteractionActivityView'
                 nextCursor:
                     type: string
                     nullable: true
-            x-contract-entity: ProfileInteractionActivityWire
+            x-contract-entity: ProfileInteractionActivityView
         ListReportsPage:
             type: object
             required:
@@ -2375,6 +2806,16 @@ components:
                     type: string
                     nullable: true
             x-contract-entity: ContentPostProjection
+        MarkIntersectionsVisitedRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MarkIntersectionsVisitedRequest
+            x-contract-placeholder: true
+        MyReportItemSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MyReportItemSlice
+            x-contract-placeholder: true
         OpenPostModerationCaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2390,15 +2831,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: Post
             x-contract-placeholder: true
-        PostSearchItemView:
+        PostModerationCaseOpsSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PostSearchItemView
+            x-contract-entity: PostModerationCaseOpsSlice
             x-contract-placeholder: true
-        ProfileInteractionActivityWire:
+        ProfileInteractionActivityView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ProfileInteractionActivityWire
+            x-contract-entity: ProfileInteractionActivityView
+            x-contract-placeholder: true
+        ProfileInteractionReadFact:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ProfileInteractionReadFact
+            x-contract-placeholder: true
+        ProfileInteractionReadFactAck:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ProfileInteractionReadFactAck
             x-contract-placeholder: true
         PromotePostToWorkRequest:
             type: object
@@ -2455,24 +2906,21 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ResolveReportRequest
             x-contract-placeholder: true
+        RestoreCommentRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RestoreCommentRequest
+            x-contract-placeholder: true
         ReviewPostModerationCaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReviewPostModerationCaseRequest
             x-contract-placeholder: true
-        SearchPostsPage:
+        RollbackFilterCatalogReleaseRequest:
             type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/PostSearchItemView'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: PostSearchItemView
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RollbackFilterCatalogReleaseRequest
+            x-contract-placeholder: true
         SelectAutoVideoCoverRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2497,9 +2945,4 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UpdatePostSettingsRequest
-            x-contract-placeholder: true
-        UpdateProfileInteractionStateRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateProfileInteractionStateRequest
             x-contract-placeholder: true

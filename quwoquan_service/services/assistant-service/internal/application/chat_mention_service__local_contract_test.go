@@ -41,6 +41,7 @@ func TestHandleAssistantMentionedReadsConversationContextAndReplies(t *testing.T
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		nil,
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithChatGroundingClient(chat),
 	)
 

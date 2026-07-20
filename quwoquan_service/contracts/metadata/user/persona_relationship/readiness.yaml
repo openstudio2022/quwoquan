@@ -1,0 +1,51 @@
+object: PersonaRelationship
+operations:
+  - FollowUser
+  - UnfollowUser
+  - ListFollowing
+  - ListFollowers
+  - GetRelationship
+  - GetRelationshipCapability
+  - BlockUser
+  - UnblockUser
+  - ListBlockedUsers
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model/persona_relationship.go
+    - quwoquan_service/services/user-service/internal/application/relationship/persona_relationship/persona_relationship_service.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence/pg_persona_relationship_store.go
+  reader:
+    - quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence/pg_persona_relationship_store.go
+  outbox:
+    - quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence/pg_persona_relationship_store.go
+    - quwoquan_service/services/user-service/internal/application/relationship/persona_relationship/outbox_relay.go
+    - quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/projection/counter_projector.go
+    - quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/projection/counter_reconciler.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+    - quwoquan_service/services/user-service/internal/adapters/http/user_handler_relationships.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/user/persona_relationship_contracts.dart
+    - quwoquan_app/lib/cloud/remote/user/persona_relationship/persona_relationship_remote.dart
+    - quwoquan_app/lib/cloud/remote/user/persona_relationship/persona_relationship_follow_remote.dart
+    - quwoquan_app/lib/cloud/services/user/relationship_capability_repository.dart
+  page:
+    - quwoquan_app/lib/ui/user/pages/blocked_users_page.dart
+    - quwoquan_app/lib/ui/user/widgets/profile_action_bar.dart
+    - quwoquan_app/lib/ui/user/widgets/profile_shell.dart
+tests:
+  local_contract:
+    - quwoquan_app/test/local_contract/cloud/user/persona_relationship_block_facets__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/user_profile_wire_dto_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/block_contract__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/subject_follow_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/user/blocked_user_management_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/journeys/user/contact_relationship_lifecycle_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
+environments: []

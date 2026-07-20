@@ -1,4 +1,6 @@
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
@@ -28,15 +30,20 @@ void main() {
 
     final prepared = await buildPostPublicationPayloadWithRemoteMedia(
       media: media,
-      fileStorageGateway: fileStorage,
       state: state,
-      uploadObject:
+      sourceReader: _JourneyContentMediaSourceReader(fileStorage.bytesByPath),
+      uploadStream:
           (
             uri,
             bytes, {
+            required contentLength,
             required contentType,
             required expectedSha256,
-          }) async {},
+            abortTrigger,
+          }) async {
+            final uploadedBytes = await bytes.expand((chunk) => chunk).toList();
+            expect(uploadedBytes.length, contentLength);
+          },
     );
     final command = submitContentPostPublicationCommandFromPreparedPayload(
       prepared.payload,
@@ -59,6 +66,22 @@ void main() {
       'image_asset_3',
     ]);
   });
+}
+
+class _JourneyContentMediaSourceReader implements ContentMediaSourceReader {
+  const _JourneyContentMediaSourceReader(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  Future<PreparedContentMediaSource> prepare(String localPath) async {
+    final bytes = bytesByPath[localPath]!;
+    return PreparedContentMediaSource(
+      fileSize: bytes.length,
+      sha256Digest: sha256.convert(bytes).toString(),
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
+  }
 }
 
 class _JourneyFileStorageGateway implements FileStorageGateway {

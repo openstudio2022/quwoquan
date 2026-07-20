@@ -85,8 +85,22 @@ routes:
     path: /settings
   - id: settingsPermissions
     path: /settings/permissions
+  - id: blockedUsers
+    path: /settings/blocked-users
   - id: settingsDarkMode
     path: /settings/dark-mode
+  - id: settingsNotifications
+    path: /settings/notifications
+  - id: settingsPrivacy
+    path: /settings/privacy
+  - id: settingsCalls
+    path: /settings/calls
+  - id: settingsAccountSecurity
+    path: /settings/account-security
+  - id: blockedKeywords
+    path: /settings/blocked-keywords
+  - id: myReports
+    path: /settings/my-reports
   - id: settingsAbout
     path: /settings/about
   - id: profileEdit
@@ -95,8 +109,6 @@ routes:
     path: /profile/career-interests
   - id: profilePersonas
     path: /profile/personas
-  - id: profileComments
-    path: /profile/comments
   - id: profileStats
     path: /profile/stats
     query_params: [type, userId]
@@ -111,6 +123,8 @@ routes:
     query_params: [type]
   - id: chatDetail
     path: /chat/{id}
+  - id: greetingInbox
+    path: /chat/greetings
   - id: chatSettings
     path: /chat/{id}/settings
   - id: chatAddMembers
@@ -123,6 +137,8 @@ routes:
     path: /chat/{id}/admins
   - id: chatMemberSearch
     path: /chat/{id}/member-search
+  - id: chatAnnouncement
+    path: /chat/{id}/announcement
   - id: rtcOutgoing
     path: /rtc/outgoing/{callId}
   - id: rtcIncoming

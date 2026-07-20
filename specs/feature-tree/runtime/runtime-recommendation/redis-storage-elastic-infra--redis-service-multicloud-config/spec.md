@@ -1,4 +1,4 @@
-# L4 对象任务：redis-service-multicloud-config
+# L3 对象任务：redis-service-multicloud-config
 
 ## 功能说明
 

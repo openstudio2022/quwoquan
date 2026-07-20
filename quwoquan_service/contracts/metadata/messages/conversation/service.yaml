@@ -5,7 +5,7 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
+    block_reason: operation 尚未逐项完成商业证据绑定
     gap_id: CHAT_CONVERSATION_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   description: 会话管理、消息收发（seq 有序 + clientMsgId 幂等）、讨论成员、离线同步、已读回执、小趣助手会话内参与
@@ -17,15 +17,38 @@ api_routes:
 
     operation: ListConversations
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ConversationQueryFacet
       method: listConversations
       reader: ConversationListReader
       slice: ConversationPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
     query_params: [cursor, limit]
     response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: owner
@@ -38,20 +61,51 @@ api_routes:
 
     operation: ListConversationTimestamps
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ConversationQueryFacet
       method: listConversationTimestamps
       reader: ConversationTimestampReader
       slice: ConversationTimestampIndexSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 会话时间戳索引（用于本地缓存增量同步）
     response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /chat/conversations
 
     operation: CreateConversation
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationLifecycleCommandFacet
@@ -59,37 +113,119 @@ api_routes:
       aggregate_owner: Conversation
       mutation_target: Conversation
       invariant_target: Conversation
-    description: 创建会话（自动创建 ConversationMember + ConversationUserState；圈子发起的默认群仍使用 group + circleId）
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      创建会话（自动创建 ConversationMember + ConversationUserState；圈子发起的默认群仍使用 group + circleId）。
+      direct 会话按参与者对唯一：重复创建返回既有会话；group 创建以 Idempotency-Key receipt 保证重放返回首个会话。
+      group 的 maxGroupSize 缺省为 1000 且不可超过 1000；direct/encrypted 固定为 2。
     request_entity: Conversation
     writable_fields: [type, title, circleId, circleGroupId, originType, bindingType, lifecyclePolicy, maxGroupSize, initialMemberIds]
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.not_mutual, CHAT.USER.greeting_required, CHAT.USER.blocked, CHAT.USER.group_member_not_mutual, CHAT.USER.group_member_blocked, CHAT.USER.group_full, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /chat/conversations/batch
 
     operation: BatchGetConversations
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ConversationQueryFacet
       method: batchGetConversations
       reader: BatchConversationReader
       slice: ConversationBatchSlice
-    description: 批量拉取指定会话的完整信息
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 批量拉取指定会话的完整信息（仅返回请求者为成员的会话）
     response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /chat/conversations/{conversationId}
 
     operation: GetConversation
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ConversationQueryFacet
       method: getConversation
       reader: ConversationDetailReader
       slice: ConversationDetailSlice
-    description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt）
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt；群设置页与聊天信息页共用本事实源，App 不得另建群设置读取旁路）
     response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: owner
@@ -102,6 +238,8 @@ api_routes:
 
     operation: UpdateConversationTitle
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationLifecycleCommandFacet
@@ -109,24 +247,170 @@ api_routes:
       aggregate_owner: Conversation
       mutation_target: Conversation
       invariant_target: Conversation
-    description: 更新会话展示标题。商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      更新会话展示标题。HTTP 门槛为会话成员；当群治理开关 nameEditableByAdminOnly=true 时，
+      聚合 invariant 仅放行 owner/admin（否则返回 group_governance_forbidden）。
+      商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。标题已一致为 no-op 并重放原回执。
     writable_fields: [title]
     response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: PATCH
+    path: /chat/conversations/{conversationId}/announcement
+
+    operation: UpdateAnnouncement
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationGovernanceCommandFacet
+      method: updateAnnouncement
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner_or_admin
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      更新群公告（仅群聊；owner/admin）。发布非空公告时同事务写入一条
+      type=system_announcement 的会话消息触达全员（公告即触达）；
+      公告内容一致为 no-op 并重放原回执。
+    writable_fields: [announcement]
+    response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.USER.message_too_long, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: PATCH
+    path: /chat/conversations/{conversationId}/governance
+
+    operation: UpdateGroupGovernanceSettings
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationGovernanceCommandFacet
+      method: updateGroupGovernanceSettings
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner_or_admin
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      更新群治理开关（仅群聊；owner/admin）。当前唯一开关：nameEditableByAdminOnly。
+      设置一致为 no-op 并重放原回执；变更递增 membersRosterRevision 并发布
+      ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。
+    writable_fields: [nameEditableByAdminOnly]
+    response_entity: Conversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   # ── 已读回执 ──────────────────────────────────
   - method: GET
     path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
 
     operation: GetReceipts
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: MessageReceiptQueryFacet
       method: getReceipts
       reader: MessageReceiptReader
       slice: MessageReceiptPageSlice
-    description: 获取消息回执列表（仅 receiptEnabled 会话可用）
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 获取消息回执列表（仅 receiptEnabled 会话可用；读取 MessageReceiptFact append-only 事实）
     response_entity: MessageReceipt
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.SYSTEM.internal_error]
     security:
@@ -141,6 +425,8 @@ api_routes:
 
     operation: DissolveConversation
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationGovernanceCommandFacet
@@ -148,15 +434,44 @@ api_routes:
       aggregate_owner: Conversation
       mutation_target: Conversation
       invariant_target: Conversation
-    description: 解散讨论
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: |
+      解散群聊（仅群主；圈子绑定群禁止）。写入终态 status=dissolved 并发布
+      ConversationDissolved 事件实时收敛成员端；已解散重复请求为 no-op 并重放原回执。
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   # ── 收件箱 ──────────────────────────────────
   - method: GET
     path: /chat/inbox
 
     operation: ListInbox
     actor: persona
+    commercial:
+      status: ready
     authorization:
       principal: persona
       ownership_policy: active_persona_inbox
@@ -199,150 +514,310 @@ api_routes:
 
     operation: ListMessageHome
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: MessageHomeQueryFacet
       method: listMessageHome
       reader: MessageHomeReader
       slice: MessageHomePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
     query_params: [filter, cursor, limit]
     response_entity: MessageHomeRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
-  # ── 聊天媒体上传 ──────────────────────────────
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+  # ── 联系人 ──────────────────────────────
   - method: GET
     path: /chat/contacts
 
     operation: ListContacts
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ContactQueryFacet
       method: listContacts
       reader: ContactListReader
       slice: ContactPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 联系人列表
     response_entity: ChatContactListRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /chat/contact-home
 
     operation: ListContactHome
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: ContactQueryFacet
       method: listContactHome
       reader: ContactHomeReader
       slice: ContactHomePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
     query_params: [filter, cursor, limit]
     response_entity: ContactHomeRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /chat/groups/{conversationId}/home
 
     operation: GetGroupHome
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: GroupHomeQueryFacet
       method: getGroupHome
       reader: GroupHomeReader
       slice: GroupHomeSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
     response_entity: GroupHome
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /chat/group-candidates
 
     operation: ListGroupCandidates
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: GroupCandidateQueryFacet
       method: listGroupCandidates
       reader: GroupCandidateReader
       slice: GroupCandidatePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
     query_params: [conversationId, cursor, limit]
     response_entity: ChatContactListRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /chat/selectable-group-conversations
 
     operation: ListSelectableGroupConversations
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: GroupCandidateQueryFacet
       method: listSelectableGroupConversations
       reader: SelectableGroupConversationReader
       slice: SelectableGroupConversationPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: |
-      「从群聊中选择联系人」群列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
+      「从群聊/圈子中选择联系人」来源列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
       由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
-    query_params: [cursor, limit, query]
+      可选 source=group 仅返回 circleId 为空的私建群，source=circle 仅返回 circleId 非空的圈子绑定群；其它值拒绝，避免端侧分页后过滤导致来源漏项。
+    query_params: [cursor, limit, query, source]
     response_entity: SelectableGroupConversationRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /chat/selectable-group-conversations/{conversationId}/contact-members
 
     operation: ListSelectableGroupContactMembers
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: GroupCandidateQueryFacet
       method: listSelectableGroupContactMembers
       reader: SelectableGroupContactReader
       slice: SelectableGroupContactPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: |
       「从群聊中选择联系人」群成员列表（图五）。返回指定群成员中与当前用户互关的联系人（排除当前用户、排除已屏蔽），供发起群聊/添加成员选人。
       与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
     query_params: [cursor, limit, query]
     response_entity: ChatContactListRow
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
-  - method: GET
-    path: /chat/contacts/search
-
-    operation: SearchContacts
-    actor: persona
-    application:
-      kind: query
-      facet: ChatSearchQueryFacet
-      method: searchContacts
-      reader: ContactSearchReader
-      slice: ContactSearchResultSlice
-    description: 全局搜索联系人结果，直接承接“联系人”联想分组
-    query_params: [query, cursor, limit]
-    response_entity: ContactSearchItemView
-    security:
-      auth_mode: required
-  - method: GET
-    path: /chat/conversations/search
-
-    operation: SearchConversations
-    actor: persona
-    application:
-      kind: query
-      facet: ChatSearchQueryFacet
-      method: searchConversations
-      reader: ConversationSearchReader
-      slice: ConversationSearchResultSlice
-    description: 全局搜索会话结果
-    query_params: [query, cursor, limit]
-    response_entity: ConversationSearchItemView
-    security:
-      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 consumers:
   - name: app
-    capabilities: [list_conversations, list_inbox, list_message_home, list_contact_home, get_group_home, create_conversation, update_conversation_title, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts, search_conversations, search_messages]
+    capabilities: [list_conversations, list_inbox, list_message_home, list_contact_home, get_group_home, create_conversation, update_conversation_title, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts]
   - name: platform-ops
     capabilities: [read_conversation, read_messages, read_members]
   - name: assistant-service
@@ -366,31 +841,6 @@ contract_test:
           route: GET /chat/inbox
           assertions: [status_200, items_match_schema, sorted_by_pinned_then_last_message_time, unread_and_mention_counts_present]
 
-        - name: send_message_with_seq
-          route: POST /chat/conversations/{id}/messages
-          variants: [text, image, video, card]
-          assertions: [status_201, message_id_returned, seq_returned, seq_monotonic]
-
-        - name: send_message_idempotent
-          route: POST /chat/conversations/{id}/messages
-          assertions: [duplicate_clientMsgId_returns_same_id_and_seq]
-
-        - name: recall_message
-          route: POST /chat/conversations/{id}/messages/{msgId}/recall
-          assertions: [status_200, message_status_recalled]
-
-        - name: sync_messages_gap_fill
-          route: POST /chat/conversations/{id}/sync
-          assertions: [returns_messages_after_lastSeq, hasMore_flag_correct]
-
-        - name: mark_as_read
-          route: POST /chat/conversations/{id}/messages/{msgId}/read
-          assertions: [readSeq_updated, unreadCount_decremented]
-
-        - name: list_members
-          route: GET /chat/conversations/{id}/members
-          assertions: [status_200, items_match_schema, pagination_works]
-
         - name: group_chat_lifecycle
           routes:
             - POST /chat/conversations
@@ -407,80 +857,23 @@ contract_test:
       mock_targets: [cross_service_clients]
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "DeleteMany for conversations, messages, messages_sequences, messages_command_receipts, messages_outbox, messages_outbox_sequences, messages_projection_checkpoints, conversation_memberships, conversation_user_states, message_receipts"
+        cleanup: "DeleteMany for conversations, conversations_command_receipts, conversations_outbox, messages, messages_sequences, messages_command_receipts, messages_outbox, messages_outbox_sequences, messages_projection_checkpoints, conversation_memberships, conversation_memberships_command_receipts, conversation_memberships_outbox, conversation_user_states, conversation_user_states_command_receipts, conversation_user_states_outbox, message_receipts, chat_projection_checkpoints, chat_aggregate_outbox_sequences"
         redis_cleanup: miniredis.FlushAll()
       scenarios:
-        - name: send_message_seq_assignment
-          command: SendMessage
-          seed: [fixture.NewConversation(type='direct')]
+        - name: create_direct_conversation_unique
+          command: CreateConversation (direct, duplicate participants)
           assertions:
-            - "db.messages.FindOne({_id: result.id}).seq → monotonically increasing"
-            - "db.conversations.FindOne({_id}).maxSeq → equals message.seq"
-            - "db.conversations.FindOne({_id}).lastMessagePreview → matches content"
-            - "eventSpy.AssertPublished('MessageSent', {conversationId, seq, clientMsgId})"
-            - "db.messages_sequences.FindOne({_id: conversationId}).seq → equals message.seq"
+            - "second create returns existing conversation id"
+            - "db.conversations.CountDocuments({type:'direct', participants}) → 1"
 
-        - name: send_message_clientmsgid_dedup
-          command: SendMessage (duplicate clientMsgId)
-          seed: [fixture.NewConversation(), fixture.NewMessage(clientMsgId='uuid-1')]
+        - name: dissolve_conversation_noop_replay
+          command: DissolveConversation (repeat with same Idempotency-Key)
           assertions:
-            - "result.id → equals existing message id"
-            - "result.seq → equals existing message seq"
-            - "db.messages.CountDocuments({clientMsgId: 'uuid-1'}) → 1"
-            - "db.messages_command_receipts.CountDocuments({messageId: result.id}) → 1"
-            - "db.messages_outbox.CountDocuments({aggregateId: result.id}) → expected event count"
-
-        - name: send_message_clientmsgid_conflict
-          command: SendMessage (same clientMsgId, different semantic payload)
-          seed: [fixture.NewConversation()]
-          assertions:
-            - "HTTP status → 409"
-            - "error.code → CHAT.USER.message_idempotency_conflict"
-            - "db.messages.CountDocuments({clientMsgId: 'uuid-1'}) → 1"
-
-        - name: recall_within_time_limit
-          command: RecallMessage
-          seed: [fixture.NewConversation(), fixture.NewMessage(timestamp=now-1min)]
-          assertions:
-            - "db.messages.FindOne({_id}).status → 'recalled'"
-            - "db.messages.FindOne({_id}).recalledAt → NOT NULL"
-            - "eventSpy.AssertPublished('MessageRecalled', {seq})"
-
-        - name: recall_after_time_limit
-          command: RecallMessage
-          seed: [fixture.NewConversation(), fixture.NewMessage(timestamp=now-5min)]
-          assertions:
-            - "error returned: recall time exceeded"
-            - "db.messages.FindOne({_id}).status → 'sent' (unchanged)"
-
-        - name: sync_messages_gap_fill
-          command: SyncMessages(lastSeq=50)
-          seed: [fixture.NewConversation(), fixture.NewMessages(seq=1..100)]
-          assertions:
-            - "result.messages → seq 51..100 (50 messages)"
-            - "result.hasMore → false"
-
-        - name: add_member_updates_count
-          command: AddMembers
-          seed: [fixture.NewConversation(memberCount=3)]
-          assertions:
-            - "db.conversation_memberships.CountDocuments({conversationId}) → 4"
-            - "db.conversations.FindOne({_id}).memberCount → 4"
-            - "eventSpy.AssertPublished('ConversationMemberAdded', {memberCount: 4})"
-
-        - name: add_member_exceeds_max_group_size
-          command: AddMembers (total > maxGroupSize)
-          seed: [fixture.NewConversation(memberCount=999, maxGroupSize=1000)]
-          assertions:
-            - "error returned: group size exceeded"
-            - "db.conversation_memberships.CountDocuments → 999 (unchanged)"
+            - "first call archives conversation and writes receipt + outbox in one transaction"
+            - "replay returns original receipt without new outbox event"
 
   coverage_requirements:
     - all conversation types (direct/group/encrypted, with circle input merged into group) covered
     - circleGroupId compatibility link covered
-    - message seq monotonicity verified under concurrent sends
-    - clientMsgId dedup verified
-    - sync gap fill boundary conditions
-    - member count consistency
+    - governance commands write state/receipt/outbox in one transaction
     - receipt enabled/disabled paths
-    - assistant invite/remove/mention lifecycle

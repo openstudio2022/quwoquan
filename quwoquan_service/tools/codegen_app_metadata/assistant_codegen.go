@@ -94,6 +94,9 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		}
 		return err
 	}
+	if err := validateAssistantEnumDefaults(enumCatalog); err != nil {
+		return err
+	}
 	contractIndex, err := loadAssistantContractIndex(metadataDir)
 	if err != nil {
 		return err
@@ -398,6 +401,26 @@ func renderAssistantRuntimeEnumsDart(catalog *assistantEnumCatalog) string {
 		b.WriteString("}\n\n")
 	}
 	return b.String()
+}
+
+func validateAssistantEnumDefaults(catalog *assistantEnumCatalog) error {
+	for _, enumDef := range catalog.Enums {
+		defaultName := assistantEnumDefault(enumDef.Name)
+		for _, value := range enumDef.Values {
+			if value.Name == defaultName {
+				defaultName = ""
+				break
+			}
+		}
+		if defaultName != "" {
+			return fmt.Errorf(
+				"assistant enum %s is missing parser default value %s",
+				enumDef.Name,
+				defaultName,
+			)
+		}
+	}
+	return nil
 }
 
 func assistantSubagentPlanExtraFields(schema *assistantSubagentPlanSchema) []assistantFieldDef {

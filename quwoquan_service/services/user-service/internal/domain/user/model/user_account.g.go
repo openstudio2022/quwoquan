@@ -20,7 +20,7 @@ type UserAccount struct {
 	BackgroundURL            string    `json:"backgroundUrl" db:"background_url"`
 	BackgroundAssetID        string    `json:"backgroundAssetId" db:"background_asset_id"`
 	Bio                      string    `json:"bio" db:"bio"`
-	IdentityTags             string    `json:"identityTags" db:"identity_tags"`
+	IdentityTags             []string  `json:"identityTags" db:"identity_tags"`
 	Gender                   string    `json:"gender" db:"gender"`
 	BirthDate                *string   `json:"birthDate" db:"birth_date"`
 	Region                   string    `json:"region" db:"region"`

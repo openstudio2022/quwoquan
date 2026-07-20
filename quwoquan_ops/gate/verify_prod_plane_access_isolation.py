@@ -32,6 +32,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ACCESS = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
 TOPOLOGY = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
 INVENTORY = ROOT / "quwoquan_ops/environments/workload_topology_inventory.yaml"
+PROCESS_DOMAIN_MAPPING = (
+    ROOT / "quwoquan_ops/environments/process_domain_mapping.yaml"
+)
 CONTROL_PLANE = (
     ROOT / "quwoquan_service/contracts/metadata/_control_plane/platform/control_plane.yaml"
 )
@@ -48,7 +51,7 @@ def load_yaml(path: Path):
 
 
 def main() -> int:
-    for path in (ACCESS, TOPOLOGY, INVENTORY):
+    for path in (ACCESS, TOPOLOGY, INVENTORY, PROCESS_DOMAIN_MAPPING):
         if not path.exists():
             print(f"FAIL: 缺少 {path}", file=sys.stderr)
             return 1
@@ -56,6 +59,7 @@ def main() -> int:
     access = load_yaml(ACCESS)
     topology = load_yaml(TOPOLOGY)
     inventory = load_yaml(INVENTORY)
+    process_domain_mapping = load_yaml(PROCESS_DOMAIN_MAPPING)
 
     # 1. 顶层契约
     if access.get("schema") != "prod-plane-access-isolation":
@@ -94,6 +98,17 @@ def main() -> int:
         *(inventory.get("external_workloads") or []),
     ]
     inv_plane_of = {w["name"]: w.get("plane") for w in inventory_workloads}
+    prod_processes = (
+        (process_domain_mapping.get("environments") or {}).get("prod") or {}
+    )
+    domain_owner: dict[str, str] = {}
+    for process_name, process in prod_processes.items():
+        for domain in (process or {}).get("domains") or []:
+            domain_owner[str(domain)] = str(process_name)
+    split_parent = {
+        str(candidate.get("domain")): str(candidate.get("parent"))
+        for candidate in (inventory.get("split_candidates") or [])
+    }
 
     seen_accounts: dict[str, str] = {}
     seen_secrets: dict[str, str] = {}
@@ -167,6 +182,55 @@ def main() -> int:
                 )
             if ".." in Path(media_state_ref).parts:
                 errors.append("service: mediaStateRef 禁止路径穿越")
+            rootless_services = set(
+                p.get("rootlessGovernedComposeServices") or []
+            )
+            bindings = p.get("rootlessProjectionBindings") or []
+            binding_services = [
+                str(binding.get("composeService") or "")
+                for binding in bindings
+            ]
+            if set(binding_services) != rootless_services:
+                errors.append(
+                    "service: rootlessProjectionBindings 必须与 "
+                    "rootlessGovernedComposeServices 一一对应"
+                )
+            if len(binding_services) != len(set(binding_services)):
+                errors.append(
+                    "service: rootlessProjectionBindings 存在重复 composeService"
+                )
+            for binding in bindings:
+                compose_service = str(
+                    binding.get("composeService") or ""
+                )
+                owner_workload = str(
+                    binding.get("ownerWorkload") or ""
+                )
+                domain = str(binding.get("domain") or "")
+                runtime_role = str(binding.get("runtimeRole") or "")
+                if owner_workload not in governed:
+                    errors.append(
+                        f"service: {compose_service} ownerWorkload "
+                        f"{owner_workload!r} 不在 governedWorkloads"
+                    )
+                    continue
+                if domain:
+                    if domain_owner.get(domain) != owner_workload:
+                        errors.append(
+                            f"service: {compose_service} domain={domain} "
+                            f"归属应为 {domain_owner.get(domain)!r}，"
+                            f"实际 ownerWorkload={owner_workload!r}"
+                        )
+                    if split_parent.get(domain) != owner_workload:
+                        errors.append(
+                            f"service: {compose_service} domain={domain} "
+                            "不是 workload inventory 声明的 split projection"
+                        )
+                elif compose_service != owner_workload and not runtime_role:
+                    errors.append(
+                        f"service: {compose_service} 是 {owner_workload} "
+                        "的运行投影别名，必须声明 runtimeRole"
+                    )
 
     # 7. 退役断言：访问隔离层不得重新引入单一全权 kube 凭据或远端 gamma
     raw = ACCESS.read_text(encoding="utf-8")

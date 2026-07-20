@@ -5,15 +5,15 @@ service:
   description: AuthenticationChallenge 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: ACCOUNT_OBJECT_PACKET_WIRING
+    block_reason: operation must carry explicit commercial evidence before enablement
+    gap_id: USER_AUTHENTICATION_CHALLENGE_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
     path: /auth/otp/send
 
     operation: SendOtp
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AuthenticationChallengeCommandFacade
@@ -57,12 +57,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/authentication_challenge_contracts.dart
+      request_type: SendOtpCommand
+      response_type: OtpChallengeIssueResult
+      request_encoder: encodeSendOtpCommand
+      response_decoder: decodeOtpChallengeIssueResult
 
   - method: POST
     path: /auth/authorization/alipay
 
     operation: CreateAlipayAuthorizationRequest
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AuthenticationChallengeCommandFacade
@@ -109,12 +115,18 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/authentication_challenge_contracts.dart
+      request_type: CreateAlipayAuthorizationRequestCommand
+      response_type: AlipayAuthorizationGrant
+      request_encoder: encodeCreateAlipayAuthorizationRequestCommand
+      response_decoder: decodeAlipayAuthorizationGrant
 
   - method: POST
     path: /auth/login/one-tap/hint
 
     operation: ResolveOneTapLoginHint
-    actor: device
+    actor: none
     application:
       kind: command
       facet: AuthenticationChallengeCommandFacade
@@ -164,3 +176,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
+    client_contract:
+      dart_import: ../user/authentication_challenge_contracts.dart
+      request_type: ResolveOneTapLoginHintCommand
+      response_type: OneTapLoginHint
+      request_encoder: encodeResolveOneTapLoginHintCommand
+      response_decoder: decodeOneTapLoginHint

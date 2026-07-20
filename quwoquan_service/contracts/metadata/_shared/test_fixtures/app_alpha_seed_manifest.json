@@ -1,6 +1,12 @@
 {
   "environment": "alpha",
   "description": "alpha 共享池双通道装载清单：默认 flutter run 走本地 mock fixture，同时同一 seedRef 也必须可写入服务测试存储。",
+  "releaseInputs": [
+    {
+      "objectId": "content.filter_catalog_release",
+      "manifestPath": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/alpha.seed.json"
+    }
+  ],
   "seedRefs": [
     {
       "domain": "assistant",
@@ -99,6 +105,9 @@
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "greeting_core",
+        "subject_follow_core",
+        "contact_discovery_core",
         "following_subject_core",
         "settings_core"
       ],
@@ -106,7 +115,9 @@
       "targetStore": "alpha-local-mock+user-service:test_store",
       "verifiedEndpoints": [
         "/user/profile",
-        "/user/following-subjects"
+        "/user/following-subjects",
+        "/user/greeting-request/inbox",
+        "/owner/contact-discovery/latest"
       ],
       "deliveryChannels": [
         "app-fixture-json",
@@ -180,8 +191,53 @@
         "app-fixture-json",
         "rtc-service:test_store"
       ]
+    },
+    {
+      "domain": "tag",
+      "fixturePath": "tag/test_fixtures/scenarios/tag_scenarios.json",
+      "refs": [
+        "tag_launch_subset",
+        "tag_catalog_core"
+      ],
+      "resetScope": "fixture_tag_*",
+      "targetStore": "alpha-local-mock+tag-service:test_store",
+      "verifiedEndpoints": [
+        "/tag/children",
+        "/tag/resolve"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json",
+        "tag-service:test_store"
+      ]
+    },
+    {
+      "domain": "search",
+      "fixturePath": "search/test_fixtures/scenarios/search_scenarios.json",
+      "refs": [
+        "search_hot_queries_core"
+      ],
+      "resetScope": "fixture_search_*",
+      "targetStore": "alpha-local-mock+search-service:test_store",
+      "verifiedEndpoints": [
+        "/search/hot-queries"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json",
+        "search-service:test_store"
+      ]
     }
   ],
+  "mediaSeedRef": "quwoquan_ops/environments/media_delivery_manifest.json",
+  "mediaCanary": {
+    "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
+    "readyAssetIds": [
+      "media-canary-seek-125s",
+      "media-canary-hour-boundary-3595s"
+    ],
+    "rejectionAssetIds": [
+      "media-canary-over-limit-3605s"
+    ]
+  },
   "appAssets": {
     "alphaOnlyFixtureAllowlist": [
       "content/test_fixtures/scenarios/content_scenarios.json",
@@ -193,7 +249,9 @@
       "notification/test_fixtures/scenarios/notification_scenarios.json",
       "rtc/test_fixtures/scenarios/rtc_scenarios.json",
       "user/following_subject/test_fixtures/scenarios/following_subject_scenarios.json",
-      "assistant/test_fixtures/scenarios/assistant_scenarios.json"
+      "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "tag/test_fixtures/scenarios/tag_scenarios.json",
+      "search/test_fixtures/scenarios/search_scenarios.json"
     ]
   },
   "gateway": {

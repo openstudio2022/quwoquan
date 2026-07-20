@@ -25,13 +25,10 @@ import cv2  # noqa: E402
 
 from core import image_safety as I  # noqa: E402
 
-FIXTURE_MEDIA = (
-    DATA_ROOT.parent
-    / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
+FACE_FIXTURE = (
+    DATA_ROOT
+    / "tests/support/fixtures/image_safety/public_domain_face.jpg"
 )
-FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
-
-
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="img_safety_test_"))
 _WRITE_SEQ = [0]
 
@@ -61,10 +58,6 @@ def _text_heavy_image() -> Path:
     for y in range(40, 400, 32):
         cv2.putText(img, "the quick brown fox jumps over lazy dog", (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
     return _write(img)
-
-
-def _first_face_fixture() -> Path | None:
-    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_backends_present():
@@ -183,15 +176,31 @@ def test_publish_prefilter_uses_publish_budget_and_blocks_unreadable_images():
     assert "image_dimensions_unreadable" in unreadable_verdict.reasons
 
 
-def test_face_image_needs_review():
-    face = _first_face_fixture()
-    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
-    v = I.assess_image(face)
+def test_face_signal_needs_review():
+    face_signal_input = _clean_image()
+    original_detector = I._detect_faces
+    I._ASSESS_CACHE.clear()
+    try:
+        I._detect_faces = lambda _: 1
+        v = I.assess_image(face_signal_input, require_ocr=False)
+    finally:
+        I._detect_faces = original_detector
+        I._ASSESS_CACHE.clear()
     assert v.faces > 0, v.to_dict()
     # 含人脸的图：水印命中则 unsafe，否则 needs_review；两者都不允许自动图文发布
     assert v.blocks_image_publish is True, v.to_dict()
     if not v.has_watermark:
         assert v.status == I.STATUS_NEEDS_REVIEW, v.to_dict()
+
+
+def test_public_domain_face_fixture_exercises_real_cv_backend():
+    assert FACE_FIXTURE.is_file(), f"缺少 Data 自有固定人脸 fixture: {FACE_FIXTURE}"
+    I._ASSESS_CACHE.clear()
+    verdict = I.assess_image(FACE_FIXTURE, require_ocr=False)
+
+    assert verdict.faces > 0, verdict.to_dict()
+    assert verdict.status == I.STATUS_NEEDS_REVIEW, verdict.to_dict()
+    assert verdict.blocks_image_publish is True, verdict.to_dict()
 
 
 def test_near_duplicate_dedupe():

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/media/generated/content_media_upload_policy.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 
 void main() {
@@ -30,10 +32,14 @@ void main() {
       expect(error, isNull);
     });
 
-    test('所有 Category 都有默认策略', () {
+    test('所有 Category 都映射到 metadata 生成策略', () {
       for (final category in MediaCategory.values) {
-        expect(defaultPolicies[category], isNotNull,
-            reason: 'Missing policy for $category');
+        expect(
+          ContentMediaUploadPolicy.mediaTypes[
+              contentMediaTypeForCategory(category).name],
+          isNotNull,
+          reason: 'Missing generated policy for $category',
+        );
       }
     });
   });
@@ -56,8 +62,10 @@ void main() {
         fileSize: 20 * 1024 * 1024,
         contentType: 'audio/mp4',
       );
-      expect(error, isNotNull);
-      expect(error, contains('文件大小超过限制'));
+      expect(
+        error,
+        ContentErrorMessages.zh[ContentErrorCode.mediaFileTooLarge],
+      );
     });
 
     test('chatVoice 不允许 video/mp4', () {
@@ -66,17 +74,30 @@ void main() {
         fileSize: 48000,
         contentType: 'video/mp4',
       );
-      expect(error, isNotNull);
-      expect(error, contains('不支持的文件类型'));
+      expect(
+        error,
+        ContentErrorMessages.zh[ContentErrorCode.mediaTypeUnsupported],
+      );
     });
 
-    test('chatImage 超过 20MB 被拒绝', () {
+    test('chatImage 遵循 canonical 50MiB 上限', () {
+      expect(
+        validateUpload(
+          category: MediaCategory.chatImage,
+          fileSize: 30 * 1024 * 1024,
+          contentType: 'image/jpeg',
+        ),
+        isNull,
+      );
       final error = validateUpload(
         category: MediaCategory.chatImage,
-        fileSize: 30 * 1024 * 1024,
+        fileSize: 50 * 1024 * 1024 + 1,
         contentType: 'image/jpeg',
       );
-      expect(error, isNotNull);
+      expect(
+        error,
+        ContentErrorMessages.zh[ContentErrorCode.mediaFileTooLarge],
+      );
     });
   });
 }

@@ -1,0 +1,27 @@
+aggregate: FollowedSubjectVisitState
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 MongoDB）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  mongodb: testcontainers
+
+scenarios:
+  - name: mark_visited_monotonic_watermark
+    command: MarkFollowedSubjectVisited x2 (second with earlier visitedAt)
+    assertions:
+      - last_visited_at_never_regresses
+      - unique_persona_subject_row
+
+  - name: client_request_id_replays_receipt
+    command: MarkFollowedSubjectVisited x2 (same clientRequestId)
+    assertions:
+      - second_call_returns_original_receipt
+      - no_duplicate_state_write
+
+  - name: bola_persona_scoped
+    command: MarkFollowedSubjectVisited with foreign persona
+    assertions:
+      - watermark_bound_to_authenticated_persona_only

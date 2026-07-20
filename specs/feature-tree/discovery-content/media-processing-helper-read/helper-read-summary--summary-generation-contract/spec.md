@@ -1,4 +1,4 @@
-# L4 特性：summary-generation-contract
+# L3 特性：summary-generation-contract
 
 ## 功能说明
 - 细化 summary-generation-contract 特性的功能边界与端云协同行为。

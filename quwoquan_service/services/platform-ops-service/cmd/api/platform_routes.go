@@ -49,13 +49,6 @@ func newServerMux(service *platformService) *http.ServeMux {
 		}
 		service.handleListPlaneBindings(w, r)
 	})
-	mux.HandleFunc("/control-plane/platform/topology/planes/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleUpdatePlaneBinding(w, r)
-	})
 	mux.HandleFunc("/control-plane/platform/topology/environments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
@@ -68,58 +61,33 @@ func newServerMux(service *platformService) *http.ServeMux {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "runtime_clusters")
+		service.handleListRuntimeClusters(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/services", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "runtime_services")
+		service.handleListRuntimeServices(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/instances", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "runtime_instances")
-	})
-	mux.HandleFunc("/control-plane/platform/topology/dependencies", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "dependency_profiles")
-	})
-	mux.HandleFunc("/control-plane/platform/topology/capacity", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "capacity_profiles")
+		service.handleListRuntimeInstances(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/layers", func(w http.ResponseWriter, r *http.Request) {
 		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs/resolve", func(w http.ResponseWriter, r *http.Request) {
 		service.configLayers.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("/control-plane/platform/configs/packages", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "config_packages")
+	mux.HandleFunc("/control-plane/platform/configs/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		service.configLayers.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/control-plane/platform/configs/domains", func(w http.ResponseWriter, r *http.Request) {
+		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs/instances", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -135,75 +103,26 @@ func newServerMux(service *platformService) *http.ServeMux {
 		}
 		service.handleReportConfigInstance(w, r)
 	})
-	mux.HandleFunc("/control-plane/platform/governance/bindings", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/control-plane/platform/alerts/ingest", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleIngestAlertmanagerWebhook(w, r)
+	})
+	mux.HandleFunc("/control-plane/platform/alerts/active", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "governance_bindings")
+		service.handleListActiveAlerts(w, r)
 	})
-	mux.HandleFunc("/control-plane/platform/governance/templates", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+	mux.HandleFunc("/control-plane/platform/alerts/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":ack") {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "governance_templates")
-	})
-	mux.HandleFunc("/control-plane/platform/governance/bindings/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleUpdateNamespaceDocument(w, r, "governance_bindings", "governance_binding_updated")
-	})
-	mux.HandleFunc("/control-plane/platform/observability/slos", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "slo_policies")
-	})
-	mux.HandleFunc("/control-plane/platform/observability/alerts", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "alert_templates")
-	})
-	mux.HandleFunc("/control-plane/platform/observability/dashboards/cards", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "dashboard_cards")
-	})
-	mux.HandleFunc("/control-plane/platform/runbooks", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "runbooks")
-	})
-	mux.HandleFunc("/control-plane/platform/runbooks/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":runDrill") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleRunDrill(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/gates", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListNamespace(w, r, "gate_rules")
-	})
-	mux.HandleFunc("/control-plane/platform/gates/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":override") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleUpdateNamespaceDocument(w, r, "gate_rules", "gate_rule_overridden")
+		service.handleAckAlert(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/audits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -250,15 +169,12 @@ func newServerMux(service *platformService) *http.ServeMux {
 		}
 		service.handleListReleases(w, r.URL.Query().Get("service"))
 	})
-	mux.HandleFunc("/control-plane/platform/releases/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":apply"):
-			service.handleApplyRelease(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollback"):
-			service.handleRollbackRelease(w, r)
-		default:
+	mux.HandleFunc("/control-plane/platform/rollout/routing-policy", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
+			return
 		}
+		service.handleGetGrayRoutingPolicy(w, r)
 	})
 	return mux
 }

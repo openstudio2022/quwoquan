@@ -1,0 +1,32 @@
+# PushDelivery 是 ExternalInteraction 的类型化外部引用（payload.operation=
+# push_delivery.send），无独立 transport operation。readiness 只登记仓内实现与
+# 本地协议证据；真实 beta/gamma/prod 凭据和发布 SLO 尚未取得，禁止伪造环境通过。
+object: PushDelivery
+operations: []
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/integration-service/internal/application/push_delivery.go
+  store: []
+  outbox:
+    - quwoquan_service/services/integration-service/internal/application/external_interaction_service.go
+  reader: []
+  transport:
+    - quwoquan_service/services/integration-service/cmd/api/external_provider_wiring.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/apns_voip_provider.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/fcm_provider.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/push_http_safety.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/push_jwt.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/user_push_endpoint_client.go
+  app_client: []
+  page: []
+tests:
+  local_contract:
+    - quwoquan_service/services/integration-service/tests/local_contract/push_delivery_protocol__security_reliability__local_contract_test.go
+    - quwoquan_service/services/integration-service/tests/local_contract/push_delivery_dispatch__reliability__local_contract_test.go
+    - quwoquan_service/services/integration-service/tests/local_contract/push_delivery_payload__contract__local_contract_test.go
+    - quwoquan_service/services/integration-service/tests/local_contract/http_external_provider__contract__local_contract_test.go
+    - quwoquan_service/services/integration-service/cmd/api/push_config__security__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/integration-service/tests/api_integration/push_delivery_worker__idempotency__api_integration_test.go
+  user_acceptance: []
+environments: []

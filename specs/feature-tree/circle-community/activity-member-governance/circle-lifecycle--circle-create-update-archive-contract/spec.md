@@ -1,4 +1,4 @@
-# L4 特性：circle-create-update-archive-contract
+# L3 特性：circle-create-update-archive-contract
 
 ## 功能说明
 - 细化 circle-create-update-archive-contract 特性的功能边界与端云协同行为。

@@ -12,7 +12,7 @@ affected_nodes:
   - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship
   - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read
   - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
-  - specs/feature-tree/user-identity-profile-relationship/tree.yaml
+  - specs/feature-tree/tree_index.yaml
   - specs/feature-tree/tree_index.yaml
 
 entries:
@@ -393,7 +393,7 @@ entries:
       - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md
         sections:
           - 背景与动机
-      - path: specs/feature-tree/user-identity-profile-relationship/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - persona-follow-graph.l3
       - path: specs/feature-tree/tree_index.yaml
@@ -754,7 +754,7 @@ entries:
       - "`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已通过。"
       - "`go test ./services/user-service/...` 已通过，形成 user-service 的 T2/T3 证据。"
       - "`flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart` 已通过，形成 App contract/path 的 T2 证据。"
-      - `test/ui/user/widgets/sub_account_management_page_test.dart` 受仓库内无关的 `conversation_cache_service.dart` 重复声明阻塞，未纳入本次通过证据。
+      - "`test/ui/user/widgets/sub_account_management_page_test.dart` 受仓库内无关的 `conversation_cache_service.dart` 重复声明阻塞，未纳入本次通过证据。"
   - timestamp: "2026-04-23T18:20:00+08:00"
     summary: >
       完成 persona-management 的 M1 复核补齐：将分身管理与资料同步开关接入 runtime config，

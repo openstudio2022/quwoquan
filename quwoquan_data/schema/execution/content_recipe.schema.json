@@ -64,6 +64,10 @@
         "mandatory": {
           "type": "string",
           "description": "必保实体逗号分隔；显式空串=空 mandatory（覆盖 select-targets 缺省）"
+        },
+        "homepageExecutionId": {
+          "type": "string",
+          "description": "post execution 显式绑定的同省同档 homepage executionId"
         }
       },
       "additionalProperties": false
@@ -96,6 +100,7 @@
               "name",
               "title",
               "intentLabel",
+              "homepageExecutionId",
               "mandatory",
               "limit"
             ]

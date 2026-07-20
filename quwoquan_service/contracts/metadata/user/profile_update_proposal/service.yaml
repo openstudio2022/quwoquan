@@ -4,11 +4,6 @@ service:
   domain: user
   owner: identity-platform
   description: ProfileUpdateProposal 对象专属 command/query packet。
-  commercial_defaults:
-    status: blocked
-    block_reason: Gamma Remote 行为、页面 user_acceptance 与四环境证据尚未完成
-    gap_id: USER_PROFILE_UPDATE_PROPOSAL_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: POST
@@ -62,6 +57,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona
@@ -119,6 +116,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona
@@ -176,6 +175,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona
@@ -233,6 +234,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona
@@ -288,6 +291,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona
@@ -343,6 +348,8 @@ api_routes:
     authorization:
       principal: persona
       ownership_policy: target_persona_owner
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: persona

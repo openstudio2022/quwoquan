@@ -7,24 +7,26 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camera/camera.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
+import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -54,8 +56,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markLaunchPromptDismissed() async {}
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -63,14 +65,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -78,6 +77,20 @@ class _AuthedSessionStore implements AuthSessionStore {
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
+}
+
+class _AuthenticatedSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'user_001',
+    activeSubAccountId: 'user_001',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+  );
 }
 
 class _AuthWarmup extends ConsumerWidget {
@@ -167,6 +180,25 @@ class _FakeMediaPickerJourneyPage extends StatelessWidget {
   }
 }
 
+class _FakePickerImageEditorPage extends StatelessWidget {
+  const _FakePickerImageEditorPage({required this.result});
+
+  final Map<String, Object> result;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      child: Center(
+        child: CupertinoButton(
+          key: const ValueKey<String>('fake-picker-editor-confirm'),
+          onPressed: () => Navigator.of(context).pop(result),
+          child: const Text('确认编辑'),
+        ),
+      ),
+    );
+  }
+}
+
 Widget _buildApp(_QueuedMediaPickerLauncher launcher) {
   return ProviderScope(
     overrides: [
@@ -174,6 +206,9 @@ Widget _buildApp(_QueuedMediaPickerLauncher launcher) {
       ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      authSessionControllerProvider.overrideWith(
+        _AuthenticatedSessionController.new,
+      ),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -249,7 +284,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
     ];
   }
@@ -291,6 +326,26 @@ void _usePhoneSurface(WidgetTester tester) {
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    AppPermissionCoordinator.instance.ensureLifecycleAttached();
+    AppPermissionCoordinator.instance.phaseReaders[AppPermissionKind.photos] =
+        () async => AppPermissionPhase.granted;
+    AppPermissionCoordinator.instance.grantCheckers[AppPermissionKind.photos] =
+        () async => true;
+    AppPermissionCoordinator.instance.requesters[AppPermissionKind.photos] =
+        () async => true;
+  });
+
+  tearDown(() {
+    AppPermissionCoordinator.instance.phaseReaders.remove(
+      AppPermissionKind.photos,
+    );
+    AppPermissionCoordinator.instance.grantCheckers.remove(
+      AppPermissionKind.photos,
+    );
+    AppPermissionCoordinator.instance.requesters.remove(
+      AppPermissionKind.photos,
+    );
+    AppPermissionCoordinator.instance.clearSession();
   });
 
   testWidgets('创作页重入图片选择器时新图片追加到原列表末尾', (tester) async {
@@ -355,61 +410,90 @@ void main() {
     _usePhoneSurface(tester);
     CreateMediaPickerResult? result;
     await tester.pumpWidget(
-      CupertinoApp(
-        home: Builder(
-          builder: (context) => CupertinoButton(
-            child: const Text('open picker'),
-            onPressed: () async {
-              result = await Navigator.of(context)
-                  .push<CreateMediaPickerResult>(
-                    CupertinoPageRoute<CreateMediaPickerResult>(
-                      builder: (_) => CreateMediaPickerPage(
-                        entryMode: MediaPickerEntryMode.image,
-                        maxSelection: 9,
-                        mediaPickerService: _EmptyMediaPickerService(),
-                        cameraBuilder:
-                            (
-                              context,
-                              caller,
-                              entrySource,
-                              selectedCountBeforeCapture,
-                            ) => CameraCapturePage(
-                              initialMode: MediaPickerEntryMode.image,
-                              allowVideoMode: false,
-                              caller: caller,
-                              entrySource: entrySource,
-                              selectedCountBeforeCapture:
-                                  selectedCountBeforeCapture,
-                              previewBuilder: _fakePreview,
-                              previewCameraDescriptions:
-                                  _fakeBackAndFrontCameras,
-                              filterRepository: _FakeFilterRepository(),
-                              photoCapture: _fakeCapture,
-                              imageEditorLauncher: _fakePickerEditor,
-                            ),
+      ProviderScope(
+        child: CupertinoApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              child: const Text('open picker'),
+              onPressed: () async {
+                result = await Navigator.of(context)
+                    .push<CreateMediaPickerResult>(
+                      CupertinoPageRoute<CreateMediaPickerResult>(
+                        builder: (_) => CreateMediaPickerPage(
+                          entryMode: MediaPickerEntryMode.image,
+                          maxSelection: 9,
+                          filterRepository: _FakeFilterRepository(),
+                          mediaPickerService: _EmptyMediaPickerService(),
+                          imageEditorBuilder: (context, request) =>
+                              _FakePickerImageEditorPage(
+                                result: <String, Object>{
+                                  'index': request.index,
+                                  'path': request.initialPath,
+                                  'paths': request.imagePaths,
+                                  'action': 'continueToCreate',
+                                },
+                              ),
+                          cameraBuilder:
+                              (
+                                context,
+                                caller,
+                                entrySource,
+                                selectedCountBeforeCapture,
+                              ) => CameraCapturePage(
+                                initialMode: MediaPickerEntryMode.image,
+                                allowVideoMode: false,
+                                caller: caller,
+                                entrySource: entrySource,
+                                selectedCountBeforeCapture:
+                                    selectedCountBeforeCapture,
+                                previewBuilder: _fakePreview,
+                                previewCameraDescriptions:
+                                    _fakeBackAndFrontCameras,
+                                filterRepository: _FakeFilterRepository(),
+                                photoCapture: _fakeCapture,
+                                imageEditorLauncher: _fakePickerEditor,
+                              ),
+                        ),
                       ),
-                    ),
-                  );
-            },
+                    );
+              },
+            ),
           ),
         ),
       ),
     );
 
     await tester.tap(find.text('open picker'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(
       find.byKey(const ValueKey<String>('media-picker-camera-tile')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(
       find.byKey(const ValueKey<String>('camera-capture-action')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text(UITextConstants.cameraUsePhoto));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('完成(1)'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(
+      find.text(
+        mediaPickerCompletionLabel(
+          mode: MediaPickerEntryMode.image,
+          selectionCount: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('fake-picker-editor-confirm')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(result?.items.map((item) => item.path), <String>[
       '/tmp/picker-camera-edited.jpg',

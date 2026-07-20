@@ -36,6 +36,11 @@ except ImportError:
     lgb = None
 
 from diversity_metrics import compute_diversity_metrics
+from privacy_guard import closed_subject_ids
+from training_sample_policy import (
+    DEFAULT_MAX_FEATURE_LAG_SECONDS,
+    filter_point_in_time_rows,
+)
 
 
 def _gauc(y_true, y_pred, user_ids):
@@ -106,8 +111,20 @@ def main():
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--model-path", default=None, help="Explicit path to LightGBM model (optional; defaults to registry)")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
     p.add_argument("--split", default="test", choices=["test", "val", "all"])
+    p.add_argument(
+        "--replay-dataset",
+        default=None,
+        help="Fixed replay dataset id (W13/B20): evaluate on the frozen sample set "
+        "from rec_replay_datasets for reproducible cross-version comparison",
+    )
+    p.add_argument(
+        "--max-feature-lag-seconds",
+        type=float,
+        default=DEFAULT_MAX_FEATURE_LAG_SECONDS,
+        help="与训练相同的 PIT 样本准入阈值；replay 评估也必须 fail-closed",
+    )
     args = p.parse_args()
 
     if np is None or roc_auc_score is None:
@@ -134,28 +151,69 @@ def main():
 
     samples_coll = db["rec_training_samples"]
 
-    sample_scenario = args.scenario
-    rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
-    if not rows and args.scenario.endswith("_multiobjective"):
-        sample_scenario = args.scenario.removesuffix("_multiobjective")
-        rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
-    if not rows:
-        print("No samples found", file=sys.stderr)
-        return 1
-    if sample_scenario != args.scenario:
-        print(f"[evaluate] using samples from scenario={sample_scenario} for registry scenario={args.scenario}", file=sys.stderr)
-
-    n = len(rows)
-    train_end = int(n * 0.70)
-    val_end = int(n * 0.85)
-
-    if args.split == "test":
-        eval_rows = rows[val_end:]
-    elif args.split == "val":
-        eval_rows = rows[train_end:val_end]
+    replay_dataset_id = None
+    if args.replay_dataset:
+        # 固定 replay dataset（W13/N0-5）：从物化快照（rec_replay_samples）读取
+        # 完整样本文档，独立于 rec_training_samples 生命周期（--clean 不摧毁）。
+        dataset = db["rec_replay_datasets"].find_one({"_id": args.replay_dataset})
+        if not dataset:
+            print(f"[evaluate] replay dataset {args.replay_dataset} not found", file=sys.stderr)
+            return 1
+        if dataset.get("privacyStatus") != "active":
+            print(
+                f"[evaluate] replay dataset {args.replay_dataset} is not active "
+                f"(privacyStatus={dataset.get('privacyStatus')})",
+                file=sys.stderr,
+            )
+            return 1
+        snapshot_coll = db[dataset.get("snapshotCollection", "rec_replay_samples")]
+        eval_rows = list(
+            snapshot_coll.find({"datasetId": args.replay_dataset}).sort("ts", 1)
+        )
+        closed = closed_subject_ids(
+            db,
+            (row.get("userId", "") for row in eval_rows),
+        )
+        if closed:
+            print(
+                "[evaluate] replay dataset contains closed-account samples",
+                file=sys.stderr,
+            )
+            return 1
+        replay_dataset_id = args.replay_dataset
+        print(
+            f"[evaluate] using frozen replay dataset {replay_dataset_id} "
+            f"({len(eval_rows)} materialized samples, frozenAt={dataset.get('frozenAt')})",
+            file=sys.stderr,
+        )
     else:
-        eval_rows = rows
+        sample_scenario = args.scenario
+        rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
+        if not rows and args.scenario.endswith("_multiobjective"):
+            sample_scenario = args.scenario.removesuffix("_multiobjective")
+            rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
+        if not rows:
+            print("No samples found", file=sys.stderr)
+            return 1
+        if sample_scenario != args.scenario:
+            print(f"[evaluate] using samples from scenario={sample_scenario} for registry scenario={args.scenario}", file=sys.stderr)
 
+        n = len(rows)
+        train_end = int(n * 0.70)
+        val_end = int(n * 0.85)
+
+        if args.split == "test":
+            eval_rows = rows[val_end:]
+        elif args.split == "val":
+            eval_rows = rows[train_end:val_end]
+        else:
+            eval_rows = rows
+
+    input_eval_count = len(eval_rows)
+    eval_rows, dropped_lag_rows = filter_point_in_time_rows(
+        eval_rows,
+        args.max_feature_lag_seconds,
+    )
     if len(eval_rows) < 10:
         print(f"Only {len(eval_rows)} eval samples", file=sys.stderr)
         return 1
@@ -184,6 +242,21 @@ def main():
 
     metrics["eval_size"] = len(eval_rows)
     metrics["positive_rate"] = round(float(y_true.mean()), 4)
+    metrics["pit_input_samples"] = input_eval_count
+    metrics["pit_accepted_samples"] = len(eval_rows)
+    metrics["pit_dropped_samples"] = dropped_lag_rows
+    metrics["pit_max_feature_lag_seconds"] = args.max_feature_lag_seconds
+    if closed_subject_ids(
+        db,
+        (row.get("userId", "") for row in eval_rows),
+    ):
+        print(
+            "[evaluate] account closure occurred during evaluation; discard result",
+            file=sys.stderr,
+        )
+        return 1
+    if replay_dataset_id:
+        metrics["replay_dataset_id"] = replay_dataset_id
 
     y_dislike = np.array([float((r.get("labels") or {}).get("dislike", 0)) for r in eval_rows])
     if y_dislike.sum() > 0:

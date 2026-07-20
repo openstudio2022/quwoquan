@@ -60,7 +60,8 @@ sit_acceptance:
       - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/cross_domain_search_journey__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/search/cross_domain_search_journey__user_acceptance_test.dart
     status: partial
     notes:
     - canonical provider routing、local_contract/local_contract/api_integration/user_acceptance
@@ -81,12 +82,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.global_search_experience.search_provider_routing_and_storage_topology.sit1.sit1_api_integration
@@ -95,6 +98,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.sit1.sit1_local_contract
@@ -103,5 +107,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

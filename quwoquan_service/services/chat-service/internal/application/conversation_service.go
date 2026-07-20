@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -10,20 +9,29 @@ import (
 	userstateevent "quwoquan_service/services/chat-service/internal/domain/chat/conversation_user_state/event"
 	conversationevent "quwoquan_service/services/chat-service/internal/domain/chat/event"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
+	generated "quwoquan_service/services/chat-service/internal/generated"
+)
+
+const (
+	defaultGroupSizeLimit = 1000
+	maxGroupSizeLimit     = 1000
 )
 
 type ConversationService struct {
-	transactions  TransactionRunner
-	conversations ConversationStore
-	members       MemberStore
-	userStates    UserStateStore
-	cache         ConversationCache
-	publisher     EventPublisher
-	profiles      ProfileSnapshotResolver
-	relationships RelationshipGate
-	media         GroupAvatarAssetizer
-	syncPublisher UserSyncPublisher
-	scheduler     GroupAvatarTaskScheduler
+	transactions         TransactionRunner
+	conversations        ConversationStore
+	members              MemberStore
+	userStates           UserStateStore
+	conversationCommands AggregateCommandStore
+	userStateCommands    AggregateCommandStore
+	cache                ConversationCache
+	publisher            EventPublisher
+	profiles             ProfileSnapshotResolver
+	relationships        RelationshipGate
+	media                GroupAvatarAssetizer
+	syncPublisher        UserSyncPublisher
+	scheduler            GroupAvatarTaskScheduler
+	announcementSender   AnnouncementMessageSender
 }
 
 func NewConversationService(
@@ -45,17 +53,19 @@ func NewConversationService(
 	}
 	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	return &ConversationService{
-		transactions:  storage.Transactions,
-		conversations: storage.Conversations,
-		members:       storage.Members,
-		userStates:    storage.UserStates,
-		cache:         cache,
-		publisher:     publisher,
-		profiles:      profiles,
-		relationships: relationships,
-		media:         media,
-		syncPublisher: sync,
-		scheduler:     scheduler,
+		transactions:         storage.Transactions,
+		conversations:        storage.Conversations,
+		members:              storage.Members,
+		userStates:           storage.UserStates,
+		conversationCommands: storage.ConversationCommands,
+		userStateCommands:    storage.UserStateCommands,
+		cache:                cache,
+		publisher:            publisher,
+		profiles:             profiles,
+		relationships:        relationships,
+		media:                media,
+		syncPublisher:        sync,
+		scheduler:            scheduler,
 	}
 }
 
@@ -73,14 +83,49 @@ type CreateConversationRequest struct {
 	InitialMemberIds []string
 }
 
+// CreateConversation 是公开创建命令：direct/encrypted 会话按参与者对唯一
+// （重复创建返回既有会话），group 创建以 actor-scoped Idempotency-Key 回执
+// 保证重放返回首个会话；事件在同一事务写入 conversations_outbox。
 func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (*model.Conversation, error) {
-	return s.createDirectConversation(ctx, req, false)
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.CreatorId)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := chatCommandDigest("CreateConversation", req)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, scopedKey, "CreateConversation", digest, &replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
+	created, err := s.createDirectConversation(ctx, req, false, &commandReceiptSpec{
+		ScopedKey:     scopedKey,
+		CommandName:   "CreateConversation",
+		CommandDigest: digest,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+// commandReceiptSpec 携带公开命令的幂等回执材料；内部复用路径传 nil。
+type commandReceiptSpec struct {
+	ScopedKey     string
+	CommandName   string
+	CommandDigest string
 }
 
 func (s *ConversationService) createDirectConversation(
 	ctx context.Context,
 	req CreateConversationRequest,
 	bypassRelationshipGate bool,
+	receiptSpec *commandReceiptSpec,
 ) (*model.Conversation, error) {
 	now := time.Now()
 	req.Type = strings.TrimSpace(req.Type)
@@ -97,13 +142,14 @@ func (s *ConversationService) createDirectConversation(
 	if req.Type == conversationTypeGroup {
 		originType, bindingType, lifecyclePolicy = inferGroupConversationSemantics(req, originType, bindingType, lifecyclePolicy)
 	}
-	maxGroupSize := req.MaxGroupSize
-	if maxGroupSize <= 0 {
-		switch req.Type {
-		case conversationTypeDirect, conversationTypeEncrypted:
-			maxGroupSize = 2
-		default:
-			maxGroupSize = 500
+	maxGroupSize := 2
+	if req.Type == conversationTypeGroup {
+		maxGroupSize = req.MaxGroupSize
+		if maxGroupSize <= 0 {
+			maxGroupSize = defaultGroupSizeLimit
+		}
+		if maxGroupSize > maxGroupSizeLimit {
+			return nil, chatGroupFull("max group size exceeds supported limit")
 		}
 	}
 	initialMemberIds := dedupeUserIDs(req.InitialMemberIds, req.CreatorId)
@@ -133,11 +179,7 @@ func (s *ConversationService) createDirectConversation(
 		}
 	}
 	if req.Type == conversationTypeGroup && len(initialMemberIds)+1 > maxGroupSize {
-		return nil, rterr.NewInvalidArgument(
-			rterr.ModuleChat,
-			"群成员数量超过上限",
-			"initial members exceed max group size",
-		)
+		return nil, chatGroupFull("initial members exceed max group size")
 	}
 	if req.Type == conversationTypeGroup && !bypassRelationshipGate && !isCircleBoundCreateRequest(req) {
 		if err := s.validateGroupInitialMembers(ctx, req.CreatorId, initialMemberIds); err != nil {
@@ -227,6 +269,44 @@ func (s *ConversationService) createDirectConversation(
 	conv.MemberCount = len(initialMemberIds) + 1
 	conv.MembersRosterRevision = 1
 	conv.UpdatedAt = time.Now()
+	eventSeed := conv.ID
+	if receiptSpec != nil {
+		eventSeed = receiptSpec.ScopedKey
+	}
+	outboxEvents := []AggregateOutboxEvent{
+		{
+			EventID:        chatAggregateEventID(eventSeed, string(conversationevent.ConversationCreated)),
+			EventType:      string(conversationevent.ConversationCreated),
+			AggregateID:    conv.ID,
+			ConversationID: conv.ID,
+			ActorID:        req.CreatorId,
+			Payload: map[string]any{
+				"type":            conv.Type,
+				"creatorId":       req.CreatorId,
+				"circleId":        conv.CircleId,
+				"circleGroupId":   conv.CircleGroupId,
+				"entityId":        conv.EntityId,
+				"originType":      conv.OriginType,
+				"bindingType":     conv.BindingType,
+				"lifecyclePolicy": conv.LifecyclePolicy,
+				"maxGroupSize":    conv.MaxGroupSize,
+				"receiptEnabled":  conv.ReceiptEnabled,
+				"createdAt":       conv.CreatedAt,
+			},
+		},
+		{
+			EventID:        chatAggregateEventID(eventSeed, string(conversationevent.ConversationRosterUpdated)),
+			EventType:      string(conversationevent.ConversationRosterUpdated),
+			AggregateID:    conv.ID,
+			ConversationID: conv.ID,
+			ActorID:        req.CreatorId,
+			Payload: map[string]any{
+				"membersRosterRevision": conv.MembersRosterRevision,
+				"updatedAt":             conv.UpdatedAt,
+				"aspects":               []string{"members", "created"},
+			},
+		},
+	}
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.conversations.CreateConversation(txCtx, conv); err != nil {
 			return err
@@ -250,6 +330,27 @@ func (s *ConversationService) createDirectConversation(
 				return err
 			}
 		}
+		if receiptSpec != nil {
+			receipt, receiptErr := chatCommandReceipt(
+				receiptSpec.ScopedKey,
+				receiptSpec.CommandName,
+				receiptSpec.CommandDigest,
+				conv.ID,
+				conv,
+			)
+			if receiptErr != nil {
+				return receiptErr
+			}
+			if commitErr := s.conversationCommands.CommitAggregateCommand(
+				txCtx, receipt, outboxEvents,
+			); commitErr != nil {
+				return mapChatIdempotencyError(commitErr)
+			}
+		} else if err := s.conversationCommands.AppendAggregateOutboxEvents(
+			txCtx, outboxEvents,
+		); err != nil {
+			return err
+		}
 		if IsGroupConversation(*conv) {
 			return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
 				ConversationID: conv.ID,
@@ -261,40 +362,6 @@ func (s *ConversationService) createDirectConversation(
 	}); err != nil {
 		return nil, err
 	}
-
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationCreated, conv.ID, req.CreatorId, map[string]any{
-			"type":            conv.Type,
-			"creatorId":       req.CreatorId,
-			"circleId":        conv.CircleId,
-			"circleGroupId":   conv.CircleGroupId,
-			"entityId":        conv.EntityId,
-			"originType":      conv.OriginType,
-			"bindingType":     conv.BindingType,
-			"lifecyclePolicy": conv.LifecyclePolicy,
-			"maxGroupSize":    conv.MaxGroupSize,
-			"receiptEnabled":  conv.ReceiptEnabled,
-			"createdAt":       conv.CreatedAt,
-		}); err != nil {
-			slog.Error("publish ConversationCreated failed", "err", err, "conversationId", conv.ID)
-		}
-	}()
-
-	go func() {
-		convFresh, err := s.conversations.FindConversationByID(context.Background(), conv.ID)
-		if err != nil {
-			slog.Error("publish ConversationRosterUpdated after create", "err", err, "conversationId", conv.ID)
-			return
-		}
-		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationRosterUpdated, conv.ID, req.CreatorId, map[string]any{
-			"membersRosterRevision": convFresh.MembersRosterRevision,
-			"updatedAt":             convFresh.UpdatedAt,
-			"aspects":               []string{"members", "created"},
-		}); err != nil {
-			slog.Error("publish ConversationRosterUpdated failed", "err", err, "conversationId", conv.ID)
-		}
-	}()
-
 	return conv, nil
 }
 
@@ -304,6 +371,19 @@ type DissolveConversationRequest struct {
 }
 
 func (s *ConversationService) DissolveConversation(ctx context.Context, req DissolveConversationRequest) error {
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("DissolveConversation", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, scopedKey, "DissolveConversation", digest, nil,
+	); err != nil || found {
+		return err
+	}
 	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
 		return err
@@ -318,13 +398,47 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 	owner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil || owner.Role != "owner" {
 		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
+			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "group_governance_forbidden"),
 			"仅群主可解散群聊",
 			"only owner can dissolve conversation",
 		)
 	}
-	conv.Status = "deleted"
-	if err := s.conversations.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	receipt, err := chatCommandReceipt(scopedKey, "DissolveConversation", digest, conv.ID, nil)
+	if err != nil {
+		return err
+	}
+	if conv.Status == model.ConversationStatusDissolved {
+		// no-op：已解散，仅持久化回执供相同 key 重放，不再产生事件。
+		if err := s.conversationCommands.CommitAggregateCommand(ctx, receipt, nil); err != nil {
+			return mapChatIdempotencyError(err)
+		}
+		return nil
+	}
+	dissolvedAt := time.Now()
+	conv.Status = model.ConversationStatusDissolved
+	conv.UpdatedAt = dissolvedAt
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		return mapChatIdempotencyError(s.conversationCommands.CommitAggregateCommand(
+			txCtx,
+			receipt,
+			[]AggregateOutboxEvent{{
+				EventID:        chatAggregateEventID(scopedKey, string(conversationevent.ConversationDissolved)),
+				EventType:      string(conversationevent.ConversationDissolved),
+				AggregateID:    conv.ID,
+				ConversationID: conv.ID,
+				ActorID:        req.OperatorId,
+				Payload: map[string]any{
+					"conversationId": conv.ID,
+					"status":         conv.Status,
+					"dissolvedBy":    req.OperatorId,
+					"dissolvedAt":    dissolvedAt,
+				},
+			}},
+		))
+	}); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
@@ -444,30 +558,298 @@ type UpdateConversationTitleRequest struct {
 }
 
 func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req UpdateConversationTitleRequest) (*model.Conversation, error) {
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := chatCommandDigest("UpdateConversationTitle", req)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, scopedKey, "UpdateConversationTitle", digest, &replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
 	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
 		return nil, err
+	}
+	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
+	if err != nil {
+		return nil, chatConversationNotFoundForNonMember(
+			"operator is not a member of this conversation",
+		)
+	}
+	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+		return nil, chatConversationDissolved("conversation is not active")
+	}
+	// 治理开关消费点：仅当群开启 nameEditableByAdminOnly 时收紧为 owner/admin。
+	if conv.Type == "group" && conv.NameEditableByAdminOnly &&
+		operator.Role != "owner" && operator.Role != "admin" {
+		return nil, chatGroupGovernanceForbidden(
+			"group name editing is restricted to owner or admin",
+		)
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleChat, "群名称不能为空", "conversation title is empty")
 	}
+	if conv.Title == title {
+		// no-op：标题已一致，持久化回执但不递增 roster revision、不产生事件。
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "UpdateConversationTitle", digest, conv.ID, conv)
+		if receiptErr != nil {
+			return nil, receiptErr
+		}
+		if err := s.conversationCommands.CommitAggregateCommand(ctx, receipt, nil); err != nil {
+			return nil, mapChatIdempotencyError(err)
+		}
+		return conv, nil
+	}
 	conv.Title = title
 	conv.MembersRosterRevision++
 	conv.UpdatedAt = time.Now()
-	if err := s.conversations.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "UpdateConversationTitle", digest, conv.ID, conv)
+		if receiptErr != nil {
+			return receiptErr
+		}
+		return mapChatIdempotencyError(s.conversationCommands.CommitAggregateCommand(
+			txCtx,
+			receipt,
+			[]AggregateOutboxEvent{{
+				EventID:        chatAggregateEventID(scopedKey, string(conversationevent.ConversationRosterUpdated)),
+				EventType:      string(conversationevent.ConversationRosterUpdated),
+				AggregateID:    conv.ID,
+				ConversationID: conv.ID,
+				ActorID:        req.OperatorId,
+				Payload: map[string]any{
+					"membersRosterRevision": conv.MembersRosterRevision,
+					"updatedAt":             conv.UpdatedAt,
+					"aspects":               []string{"title"},
+				},
+			}},
+		))
+	}); err != nil {
 		return nil, err
 	}
 	_ = s.cache.InvalidateConversation(ctx, conv.ID)
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), conversationevent.ConversationRosterUpdated, conv.ID, req.OperatorId, map[string]any{
-			"membersRosterRevision": conv.MembersRosterRevision,
-			"updatedAt":             conv.UpdatedAt,
-			"aspects":               []string{"title"},
-		}); err != nil {
-			slog.Error("publish ConversationRosterUpdated after title update", "err", err, "conversationId", conv.ID)
+	return conv, nil
+}
+
+// AnnouncementMessageSender 是公告触达端口：公告发布成功后写入一条
+// type=system_announcement 的会话消息（公告即触达，对齐业界群公告语义）。
+type AnnouncementMessageSender interface {
+	SendAnnouncementSystemMessage(ctx context.Context, conversationID, senderID, content, clientMsgID string) error
+}
+
+// SetAnnouncementMessageSender 注入公告触达端口（composition root 必须注入；
+// 生产路径缺失时公告命令 fail-fast，不做静默降级）。
+func (s *ConversationService) SetAnnouncementMessageSender(sender AnnouncementMessageSender) {
+	s.announcementSender = sender
+}
+
+const announcementMaxRunes = 2000
+
+type UpdateAnnouncementRequest struct {
+	ConversationId string
+	OperatorId     string
+	Announcement   string
+}
+
+// UpdateAnnouncement 更新群公告（owner/admin）。发布非空公告成功后写入
+// system_announcement 消息触达全员；公告一致为 no-op 并重放原回执。
+func (s *ConversationService) UpdateAnnouncement(ctx context.Context, req UpdateAnnouncementRequest) (*model.Conversation, error) {
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := chatCommandDigest("UpdateAnnouncement", req)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, scopedKey, "UpdateAnnouncement", digest, &replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return nil, err
+	}
+	if conv.Type != "group" {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"仅群聊支持群公告",
+			"announcement is only supported for group conversations",
+		)
+	}
+	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
+	if err != nil {
+		return nil, chatConversationNotFoundForNonMember(
+			"operator is not a member of this conversation",
+		)
+	}
+	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+		return nil, chatConversationDissolved("conversation is not active")
+	}
+	if operator.Role != "owner" && operator.Role != "admin" {
+		return nil, chatGroupGovernanceForbidden("only owner or admin can update the announcement")
+	}
+	announcement := strings.TrimSpace(req.Announcement)
+	if len([]rune(announcement)) > announcementMaxRunes {
+		return nil, generated.AppErrorFromMessageTooLong("announcement exceeds length limit")
+	}
+	if conv.Announcement == announcement {
+		// no-op：公告一致，持久化回执但不产生事件、不重复触达。
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "UpdateAnnouncement", digest, conv.ID, conv)
+		if receiptErr != nil {
+			return nil, receiptErr
 		}
-	}()
+		if err := s.conversationCommands.CommitAggregateCommand(ctx, receipt, nil); err != nil {
+			return nil, mapChatIdempotencyError(err)
+		}
+		return conv, nil
+	}
+	if announcement != "" && s.announcementSender == nil {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "internal_error"),
+			"消息服务异常，请稍后重试",
+			"announcement message sender is not wired",
+		)
+	}
+	now := time.Now()
+	conv.Announcement = announcement
+	conv.AnnouncementUpdatedBy = req.OperatorId
+	conv.AnnouncementUpdatedAt = &now
+	conv.UpdatedAt = now
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "UpdateAnnouncement", digest, conv.ID, conv)
+		if receiptErr != nil {
+			return receiptErr
+		}
+		return mapChatIdempotencyError(s.conversationCommands.CommitAggregateCommand(txCtx, receipt, nil))
+	}); err != nil {
+		return nil, err
+	}
+	_ = s.cache.InvalidateConversation(ctx, conv.ID)
+	if announcement != "" {
+		// 公告即触达：seq 分配、outbox、未读投影复用消息主线。
+		// clientMsgId 绑定命令 digest，重试不会重复触达。
+		if err := s.announcementSender.SendAnnouncementSystemMessage(
+			ctx, conv.ID, req.OperatorId, announcement, "announcement:"+digest,
+		); err != nil {
+			return nil, err
+		}
+	}
+	return conv, nil
+}
+
+type UpdateGroupGovernanceSettingsRequest struct {
+	ConversationId          string
+	OperatorId              string
+	NameEditableByAdminOnly *bool
+}
+
+// UpdateGroupGovernanceSettings 更新群治理开关（owner/admin）。
+// 变更递增 roster revision 并发布 RosterUpdated(aspects=[governance]) 供端侧定点刷新。
+func (s *ConversationService) UpdateGroupGovernanceSettings(
+	ctx context.Context,
+	req UpdateGroupGovernanceSettingsRequest,
+) (*model.Conversation, error) {
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := chatCommandDigest("UpdateGroupGovernanceSettings", req)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, scopedKey, "UpdateGroupGovernanceSettings", digest, &replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return nil, err
+	}
+	if conv.Type != "group" {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"仅群聊支持群治理设置",
+			"governance settings are only supported for group conversations",
+		)
+	}
+	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
+	if err != nil {
+		return nil, chatConversationNotFoundForNonMember(
+			"operator is not a member of this conversation",
+		)
+	}
+	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+		return nil, chatConversationDissolved("conversation is not active")
+	}
+	if operator.Role != "owner" && operator.Role != "admin" {
+		return nil, chatGroupGovernanceForbidden("only owner or admin can update governance settings")
+	}
+	changed := false
+	if req.NameEditableByAdminOnly != nil && conv.NameEditableByAdminOnly != *req.NameEditableByAdminOnly {
+		conv.NameEditableByAdminOnly = *req.NameEditableByAdminOnly
+		changed = true
+	}
+	receipt, err := chatCommandReceipt(scopedKey, "UpdateGroupGovernanceSettings", digest, conv.ID, conv)
+	if err != nil {
+		return nil, err
+	}
+	if !changed {
+		// no-op：设置一致，持久化回执但不递增 roster revision、不产生事件。
+		if err := s.conversationCommands.CommitAggregateCommand(ctx, receipt, nil); err != nil {
+			return nil, mapChatIdempotencyError(err)
+		}
+		return conv, nil
+	}
+	conv.MembersRosterRevision++
+	conv.UpdatedAt = time.Now()
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		return mapChatIdempotencyError(s.conversationCommands.CommitAggregateCommand(
+			txCtx,
+			receipt,
+			[]AggregateOutboxEvent{{
+				EventID:        chatAggregateEventID(scopedKey, string(conversationevent.ConversationRosterUpdated)),
+				EventType:      string(conversationevent.ConversationRosterUpdated),
+				AggregateID:    conv.ID,
+				ConversationID: conv.ID,
+				ActorID:        req.OperatorId,
+				Payload: map[string]any{
+					"membersRosterRevision": conv.MembersRosterRevision,
+					"updatedAt":             conv.UpdatedAt,
+					"aspects":               []string{"governance"},
+				},
+			}},
+		))
+	}); err != nil {
+		return nil, err
+	}
+	_ = s.cache.InvalidateConversation(ctx, conv.ID)
 	return conv, nil
 }
 
@@ -488,7 +870,7 @@ func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID
 		Type:             conversationTypeDirect,
 		CreatorId:        creatorID,
 		InitialMemberIds: []string{peerID},
-	}, true)
+	}, true, nil)
 }
 
 func (s *ConversationService) HasDirectBetween(ctx context.Context, memberA, memberB string) (bool, error) {
@@ -509,50 +891,6 @@ func (s *ConversationService) ListConversations(ctx context.Context, req ListCon
 	return s.conversations.ListConversationsByUser(ctx, req.UserId, req.Limit, req.Cursor)
 }
 
-type SearchConversationsRequest struct {
-	UserId string
-	Query  string
-	Cursor string
-	Limit  int
-}
-
-func (s *ConversationService) SearchConversations(
-	ctx context.Context,
-	req SearchConversationsRequest,
-) ([]model.Conversation, error) {
-	query := normalizeSearchQuery(req.Query)
-	if query == "" {
-		return []model.Conversation{}, nil
-	}
-	limit := clampSearchLimit(req.Limit, 20)
-	conversations, err := listUserConversations(ctx, s.conversations, s.userStates, req.UserId)
-	if err != nil {
-		return nil, err
-	}
-	results := make([]model.Conversation, 0, limit)
-	for _, conversation := range conversations {
-		matched, highlight := containsQuery(
-			[]string{
-				conversation.Title,
-				conversation.LastMessagePreview,
-				conversation.CircleId,
-			},
-			query,
-		)
-		if !matched {
-			continue
-		}
-		if highlight != "" {
-			conversation.LastMessagePreview = highlight
-		}
-		results = append(results, conversation)
-		if len(results) >= limit {
-			break
-		}
-	}
-	return results, nil
-}
-
 type UpdateSettingsRequest struct {
 	UserId         string
 	ConversationId string
@@ -561,6 +899,19 @@ type UpdateSettingsRequest struct {
 }
 
 func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSettingsRequest) error {
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.UserId)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("UpdateConversationSettings", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.userStateCommands, scopedKey, "UpdateConversationSettings", digest, nil,
+	); err != nil || found {
+		return err
+	}
 	state, err := s.userStates.FindUserState(ctx, req.UserId, req.ConversationId)
 	if err != nil {
 		now := time.Now()
@@ -572,6 +923,20 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSett
 		}
 	}
 
+	receipt, err := chatCommandReceipt(scopedKey, "UpdateConversationSettings", digest, state.ID, nil)
+	if err != nil {
+		return err
+	}
+	unchanged := (req.Muted == nil || state.Muted == *req.Muted) &&
+		(req.Pinned == nil || state.Pinned == *req.Pinned)
+	if unchanged {
+		// no-op：目标设置已满足，持久化回执且不产生事件。
+		if err := s.userStateCommands.CommitAggregateCommand(ctx, receipt, nil); err != nil {
+			return mapChatIdempotencyError(err)
+		}
+		return nil
+	}
+
 	if req.Muted != nil {
 		state.Muted = *req.Muted
 	}
@@ -580,21 +945,32 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSett
 	}
 	state.UpdatedAt = time.Now()
 
-	if err := s.userStates.UpsertUserState(ctx, state); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.userStates.UpsertUserState(txCtx, state); err != nil {
+			return err
+		}
+		return mapChatIdempotencyError(s.userStateCommands.CommitAggregateCommand(
+			txCtx,
+			receipt,
+			[]AggregateOutboxEvent{{
+				EventID:        chatAggregateEventID(scopedKey, string(userstateevent.ConversationUserSettingsChanged)),
+				EventType:      string(userstateevent.ConversationUserSettingsChanged),
+				AggregateID:    state.ID,
+				ConversationID: req.ConversationId,
+				ActorID:        req.UserId,
+				Payload: map[string]any{
+					"conversationId": req.ConversationId,
+					"userId":         req.UserId,
+					"muted":          state.Muted,
+					"pinned":         state.Pinned,
+					"updatedAt":      state.UpdatedAt,
+				},
+			}},
+		))
+	}); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), userstateevent.ConversationUserSettingsChanged, req.ConversationId, req.UserId, map[string]any{
-			"muted":     req.Muted,
-			"pinned":    req.Pinned,
-			"updatedAt": state.UpdatedAt,
-		}); err != nil {
-			slog.Error("publish ConversationUserSettingsChanged failed", "err", err, "conversationId", req.ConversationId)
-		}
-	}()
-
 	return nil
 }

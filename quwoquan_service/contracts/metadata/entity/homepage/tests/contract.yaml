@@ -8,14 +8,21 @@ scenarios:
       - items_match_schema
       - result_contains_homepage_id
 
+  - name: list_homepage_candidates_for_governance
+    operation: ListHomepageCandidates
+    assertions:
+      - 仅返回 candidate 状态主页
+      - cursor 分页按 updatedAt 与 homepageId 稳定倒序
+      - 非治理 operator 返回 permission_denied
+
   - name: suggest_homepage_candidate
     operation: SuggestHomepageCandidate
     assertions:
       - status_201
       - candidate_status_created
 
-  - name: create_claim_request
-    operation: CreateHomepageClaimRequest
+  - name: claimed_basics_server_owned_cas
+    operation: UpdateClaimedHomepageBasics
     assertions:
-      - status_201
-      - claim_request_status_pending_review
+      - 仅认领 owner persona 可更新，非 owner 返回 permission_denied
+      - request 不携带版本字段，纯 CAS 冲突由服务端重载重放

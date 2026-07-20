@@ -11,10 +11,12 @@ import (
 
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
+	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
 )
 
 type config struct {
-	Service struct {
+	Environment string `yaml:"-"`
+	Service     struct {
 		Name string `yaml:"name"`
 		HTTP struct {
 			Addr string `yaml:"addr"`
@@ -43,9 +45,9 @@ type config struct {
 			AMapBaseURL  string `yaml:"amap_base_url"`
 		} `yaml:"location"`
 		ExternalInteraction struct {
-			CallbackSecret string                 `yaml:"callback_secret"`
-			SMS            externalProviderConfig `yaml:"sms"`
-			Push           externalProviderConfig `yaml:"push"`
+			CallbackSecret string                     `yaml:"callback_secret"`
+			SMS            externalProviderConfig     `yaml:"sms"`
+			Push           pushDeliveryProviderConfig `yaml:"push"`
 		} `yaml:"external_interaction"`
 	} `yaml:"integration"`
 }
@@ -58,6 +60,24 @@ type externalProviderConfig struct {
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
+type pushDeliveryProviderConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	Mode               string `yaml:"mode"`
+	TimeoutMs          int    `yaml:"timeout_ms"`
+	UserServiceBaseURL string `yaml:"user_service_base_url"`
+	APNs               struct {
+		Environment string `yaml:"environment"`
+		KeyFile     string `yaml:"key_file"`
+		KeyID       string `yaml:"key_id"`
+		TeamID      string `yaml:"team_id"`
+		Topic       string `yaml:"topic"`
+	} `yaml:"apns"`
+	FCM struct {
+		ServiceAccountFile string `yaml:"service_account_file"`
+		ProjectID          string `yaml:"project_id"`
+	} `yaml:"fcm"`
+}
+
 func loadRuntimeConfig() (config, error) {
 	cfg := config{}
 	serviceName := getenvOrDefault("SERVICE_NAME", "integration-service")
@@ -67,6 +87,7 @@ func loadRuntimeConfig() (config, error) {
 	if !isValidAppEnv(appEnv) {
 		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}
+	cfg.Environment = appEnv
 	if requiresConfigVersion(appEnv) && configVersion == "" {
 		return config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
@@ -98,29 +119,19 @@ func loadRuntimeConfig() (config, error) {
 	}
 
 	defaultPath := filepath.Join("configs", "default", "config.yaml")
-	if _, statErr := os.Stat(defaultPath); statErr == nil {
-		if err := mergeConfigFile(&cfg, defaultPath); err != nil {
-			return config{}, err
-		}
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
-			return config{}, err
-		}
-		if configVersion != "" {
-			if err := mergeConfigFile(
-				&cfg,
-				filepath.Join("configs", "releases", configVersion+".yaml"),
-			); err != nil {
-				return config{}, err
-			}
-		}
-		return cfg, nil
-	} else if !os.IsNotExist(statErr) {
-		return config{}, statErr
+	if err := mergeConfigFile(&cfg, defaultPath); err != nil {
+		return config{}, err
 	}
-
-	current := filepath.Join("configs", "config.yaml")
-	if err := mergeConfigFile(&cfg, current); err != nil {
-		return config{}, fmt.Errorf("read config failed: %w", err)
+	if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
+		return config{}, err
+	}
+	if configVersion != "" {
+		if err := mergeConfigFile(
+			&cfg,
+			filepath.Join("configs", "releases", configVersion+".yaml"),
+		); err != nil {
+			return config{}, err
+		}
 	}
 	return cfg, nil
 }
@@ -197,6 +208,9 @@ func normalizeDefaults(cfg *config) {
 	if cfg.Integration.Location.AMapBaseURL == "" {
 		cfg.Integration.Location.AMapBaseURL = "https://restapi.amap.com"
 	}
+	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
+		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
+	}
 }
 
 func validateRuntimeConfig(cfg config) error {
@@ -210,7 +224,6 @@ func validateRuntimeConfig(cfg config) error {
 	}
 	for operation, providerCfg := range map[string]externalProviderConfig{
 		reliabletask.ExternalInteractionOperationSmsOTP: cfg.Integration.ExternalInteraction.SMS,
-		reliabletask.ExternalInteractionOperationPush:   cfg.Integration.ExternalInteraction.Push,
 	} {
 		if !providerCfg.Enabled {
 			continue
@@ -230,6 +243,90 @@ func validateRuntimeConfig(cfg config) error {
 		if providerCfg.TimeoutMs <= 0 {
 			return fmt.Errorf("external provider timeout is required for enabled operation %s", operation)
 		}
+	}
+	if err := validatePushDeliveryConfig(cfg.Environment, cfg.Integration.ExternalInteraction.Push); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePushDeliveryConfig(
+	appEnv string,
+	push pushDeliveryProviderConfig,
+) error {
+	if !push.Enabled {
+		return nil
+	}
+	mode := strings.TrimSpace(push.Mode)
+	if appEnv == "alpha" {
+		if mode != "fake" {
+			return fmt.Errorf("integration push mode must be fake when APP_ENV=alpha")
+		}
+		if push.TimeoutMs <= 0 {
+			return fmt.Errorf("integration push timeout must be positive")
+		}
+		return nil
+	}
+	if mode != "real" {
+		return fmt.Errorf(
+			"integration push mode must be real when APP_ENV=%s",
+			appEnv,
+		)
+	}
+	required := map[string]string{
+		"user_service_base_url":    push.UserServiceBaseURL,
+		"apns.environment":         push.APNs.Environment,
+		"apns.key_file":            push.APNs.KeyFile,
+		"apns.key_id":              push.APNs.KeyID,
+		"apns.team_id":             push.APNs.TeamID,
+		"apns.topic":               push.APNs.Topic,
+		"fcm.service_account_file": push.FCM.ServiceAccountFile,
+		"fcm.project_id":           push.FCM.ProjectID,
+	}
+	for field, value := range required {
+		if invalidRequiredConfigValue(value) {
+			return fmt.Errorf(
+				"integration push %s is required when APP_ENV=%s",
+				field,
+				appEnv,
+			)
+		}
+	}
+	apnsEnvironment := strings.TrimSpace(push.APNs.Environment)
+	if apnsEnvironment != provider.APNsEnvironmentSandbox &&
+		apnsEnvironment != provider.APNsEnvironmentProduction {
+		return fmt.Errorf("integration push apns.environment must be sandbox or production")
+	}
+	if appEnv == "prod" && apnsEnvironment != provider.APNsEnvironmentProduction {
+		return fmt.Errorf("integration push APNs environment must be production in prod")
+	}
+	if push.TimeoutMs <= 0 {
+		return fmt.Errorf("integration push timeout must be positive")
+	}
+	if err := requireReadableSecretFile("APNs key", push.APNs.KeyFile); err != nil {
+		return err
+	}
+	if err := requireReadableSecretFile(
+		"FCM service-account",
+		push.FCM.ServiceAccountFile,
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requireReadableSecretFile(label string, path string) error {
+	file, err := os.Open(strings.TrimSpace(path))
+	if err != nil {
+		return fmt.Errorf("integration push %s secret file is required: %w", label, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect integration push %s secret file: %w", label, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return fmt.Errorf("integration push %s secret file must be a non-empty regular file", label)
 	}
 	return nil
 }
@@ -301,9 +398,8 @@ func applyEnvOverrides(cfg *config) error {
 	); err != nil {
 		return err
 	}
-	if err := applyExternalProviderEnv(
+	if err := applyPushDeliveryEnv(
 		&cfg.Integration.ExternalInteraction.Push,
-		"INTEGRATION_PUSH",
 	); err != nil {
 		return err
 	}
@@ -336,6 +432,51 @@ func applyExternalProviderEnv(cfg *externalProviderConfig, prefix string) error 
 			return err
 		}
 		cfg.TimeoutMs = value
+	}
+	return nil
+}
+
+func applyPushDeliveryEnv(cfg *pushDeliveryProviderConfig) error {
+	if raw, present := os.LookupEnv("INTEGRATION_PUSH_ENABLED"); present {
+		value, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return fmt.Errorf("INTEGRATION_PUSH_ENABLED must be boolean: %w", err)
+		}
+		cfg.Enabled = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_MODE")); value != "" {
+		cfg.Mode = value
+	}
+	if raw := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_TIMEOUT_MS")); raw != "" {
+		value, err := parsePositiveIntEnv("INTEGRATION_PUSH_TIMEOUT_MS", raw)
+		if err != nil {
+			return err
+		}
+		cfg.TimeoutMs = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_USER_SERVICE_BASE_URL")); value != "" {
+		cfg.UserServiceBaseURL = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_ENVIRONMENT")); value != "" {
+		cfg.APNs.Environment = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_FILE")); value != "" {
+		cfg.APNs.KeyFile = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_ID")); value != "" {
+		cfg.APNs.KeyID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TEAM_ID")); value != "" {
+		cfg.APNs.TeamID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TOPIC")); value != "" {
+		cfg.APNs.Topic = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE")); value != "" {
+		cfg.FCM.ServiceAccountFile = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_PROJECT_ID")); value != "" {
+		cfg.FCM.ProjectID = value
 	}
 	return nil
 }

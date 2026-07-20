@@ -45,6 +45,8 @@ var (
 	redisRouter                *rtredis.Router
 	testEventPublisher         application.EventPublisher
 	testMessageOutboxRelay     *application.MessageOutboxRelay
+	testMessageService         *application.MessageService
+	testAggregateOutboxRelays  []*application.AggregateOutboxRelay
 	testGroupAvatarMedia       application.GroupAvatarAssetizer
 	testUserSyncPublisher      application.UserSyncPublisher
 	testGroupAvatarScheduler   *application.ReliableGroupAvatarTaskScheduler
@@ -54,6 +56,8 @@ var (
 
 var collections = []string{
 	"conversations",
+	"conversations_command_receipts",
+	"conversations_outbox",
 	"messages",
 	"messages_sequences",
 	"messages_command_receipts",
@@ -61,7 +65,15 @@ var collections = []string{
 	"messages_outbox_sequences",
 	"messages_projection_checkpoints",
 	"conversation_memberships",
+	"conversation_memberships_command_receipts",
+	"conversation_memberships_outbox",
 	"conversation_user_states",
+	"conversation_user_states_command_receipts",
+	"conversation_user_states_outbox",
+	"chat_aggregate_outbox_sequences",
+	"chat_projection_checkpoints",
+	"chat_user_account_closed_inbox",
+	"chat_user_account_closed_failures",
 	"message_receipts",
 	"reliable_task_outbox",
 	"reliable_async_task",
@@ -105,7 +117,7 @@ func newGroupAvatarMediaForContractTest() *runtimemedia.GroupAvatarService {
 	}
 	return runtimemedia.NewGroupAvatarService(
 		redisRouter.Scene("general"),
-		"http://127.0.0.1:18081",
+		"https://127.0.0.1:18081",
 		testChatMediaRoot,
 		runtimemedia.WithGroupAvatarHTTPClient(&http.Client{
 			Transport: staticAvatarRoundTripper{png: pngBytes},
@@ -216,7 +228,24 @@ func TestMain(m *testing.M) {
 	}
 	testChatMediaRoot = mediaDir
 
-	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
+	eventPublisher := mq.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
+			members, err := chatStore.ListMembers(
+				ctx,
+				conversationID,
+				application.ListMembersQuery{Limit: 512, Sort: application.MemberListSortJoinedAsc},
+			)
+			if err != nil {
+				return nil, err
+			}
+			ids := make([]string, 0, len(members))
+			for _, member := range members {
+				ids = append(ids, member.UserId)
+			}
+			return ids, nil
+		}),
+	)
 	testEventPublisher = eventPublisher
 	testMessageOutboxRelay = application.NewMessageOutboxRelay(
 		chatStore,
@@ -225,7 +254,28 @@ func TestMain(m *testing.M) {
 		eventPublisher,
 		"chat-api-integration",
 	)
-	const testAvatarCDNBase = "http://127.0.0.1:18081"
+	testProjectionCheckpoints := persistence.NewMongoProjectionCheckpointStore(mongoDB)
+	testAggregateOutboxRelays = []*application.AggregateOutboxRelay{
+		application.NewAggregateOutboxRelay(
+			chatStorage.ConversationCommands.(*persistence.MongoAggregateCommandStore),
+			testProjectionCheckpoints,
+			eventPublisher,
+			"chat-api-integration-conversation",
+		),
+		application.NewAggregateOutboxRelay(
+			chatStorage.MembershipCommands.(*persistence.MongoAggregateCommandStore),
+			testProjectionCheckpoints,
+			eventPublisher,
+			"chat-api-integration-membership",
+		),
+		application.NewAggregateOutboxRelay(
+			chatStorage.UserStateCommands.(*persistence.MongoAggregateCommandStore),
+			testProjectionCheckpoints,
+			eventPublisher,
+			"chat-api-integration-user-state",
+		),
+	}
+	const testAvatarCDNBase = "https://127.0.0.1:18081"
 	application.ConfigureGroupAvatarCDNBase(testAvatarCDNBase)
 	if err := runtimemedia.EnsureDefaultGroupAvatarFile(testChatMediaRoot); err != nil {
 		panic("failed to create default group avatar: " + err.Error())
@@ -278,7 +328,18 @@ func TestMain(m *testing.M) {
 			HasFormalConversation:       true,
 			IsMutual:                    true,
 		},
-		nil,
+		map[string]application.RelationshipCapability{
+			// 关系 gate 负例专用目标：非互关 / 已拉黑。
+			"user_not_mutual_target": {
+				CanCreateDirectConversation: false,
+				CanSendMessage:              false,
+				HasFormalConversation:       false,
+				IsMutual:                    false,
+			},
+			"user_blocked_target": {
+				IsBlocked: true,
+			},
+		},
 	)
 	conversationSvc := application.NewConversationService(
 		chatStorage,
@@ -297,6 +358,9 @@ func TestMain(m *testing.M) {
 		testRelationshipGate,
 		testMediaAssetDeliveryReader{},
 	)
+	testMessageService = messageSvc
+	// 与生产 composition 对齐：公告命令经消息主线触达。
+	conversationSvc.SetAnnouncementMessageSender(messageSvc)
 	memberSvc := application.NewMemberService(
 		chatStorage,
 		convCache,

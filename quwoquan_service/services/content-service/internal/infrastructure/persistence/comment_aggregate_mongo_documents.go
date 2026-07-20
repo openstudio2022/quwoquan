@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+
 	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
 )
 
@@ -24,12 +26,38 @@ type commentAggregateDocument struct {
 	AssistantMentioned        bool                   `bson:"assistantMentioned"`
 	AssistantReplySource      string                 `bson:"assistantReplySource"`
 	AssistantCorrectionStatus string                 `bson:"assistantCorrectionStatus"`
+	AuthorIPLocation          string                 `bson:"authorIpLocation,omitempty"`
 	Status                    string                 `bson:"status"`
 	IsPinned                  bool                   `bson:"isPinned"`
 	PinnedAt                  *time.Time             `bson:"pinnedAt,omitempty"`
-	CreatedAt                 time.Time              `bson:"createdAt"`
-	UpdatedAt                 time.Time              `bson:"updatedAt"`
-	DeletedAt                 *time.Time             `bson:"deletedAt,omitempty"`
+	HiddenAt                  *time.Time             `bson:"hiddenAt,omitempty"`
+	// HotScore 是 relay 维护的排序投影分；创建时以 0 落库，
+	// 聚合更新经 commentAggregateSetFields 排除本字段，禁止覆盖投影值。
+	HotScore  int64      `bson:"hotScore"`
+	CreatedAt time.Time  `bson:"createdAt"`
+	UpdatedAt time.Time  `bson:"updatedAt"`
+	DeletedAt *time.Time `bson:"deletedAt,omitempty"`
+}
+
+// commentAggregateSetFields 把聚合快照转换为 $set 字段集：排除 _id 与
+// relay 拥有的 hotScore；omitempty 指针字段在 nil 时显式写 null 以清除旧值。
+func commentAggregateSetFields(record commentAggregateDocument) (bson.M, error) {
+	raw, err := bson.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+	var fields bson.M
+	if err := bson.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "_id")
+	delete(fields, "hotScore")
+	for _, key := range []string{"pinnedAt", "hiddenAt", "deletedAt", "authorIpLocation"} {
+		if _, present := fields[key]; !present {
+			fields[key] = nil
+		}
+	}
+	return fields, nil
 }
 
 func commentAggregateDocumentFromSnapshot(snapshot commentmodel.Snapshot) commentAggregateDocument {
@@ -50,9 +78,11 @@ func commentAggregateDocumentFromSnapshot(snapshot commentmodel.Snapshot) commen
 		AssistantMentioned:        snapshot.AssistantMentioned,
 		AssistantReplySource:      snapshot.AssistantReplySource,
 		AssistantCorrectionStatus: snapshot.AssistantCorrectionStatus,
+		AuthorIPLocation:          snapshot.AuthorIPLocation,
 		Status:                    string(snapshot.Status),
 		IsPinned:                  snapshot.IsPinned,
 		PinnedAt:                  cloneTime(snapshot.PinnedAt),
+		HiddenAt:                  cloneTime(snapshot.HiddenAt),
 		CreatedAt:                 snapshot.CreatedAt.UTC(),
 		UpdatedAt:                 snapshot.UpdatedAt.UTC(),
 		DeletedAt:                 cloneTime(snapshot.DeletedAt),
@@ -77,9 +107,11 @@ func (d commentAggregateDocument) aggregate() (*commentmodel.Comment, error) {
 		AssistantMentioned:        d.AssistantMentioned,
 		AssistantReplySource:      d.AssistantReplySource,
 		AssistantCorrectionStatus: d.AssistantCorrectionStatus,
+		AuthorIPLocation:          d.AuthorIPLocation,
 		Status:                    commentmodel.Status(d.Status),
 		IsPinned:                  d.IsPinned,
 		PinnedAt:                  cloneTime(d.PinnedAt),
+		HiddenAt:                  cloneTime(d.HiddenAt),
 		CreatedAt:                 d.CreatedAt.UTC(),
 		UpdatedAt:                 d.UpdatedAt.UTC(),
 		DeletedAt:                 cloneTime(d.DeletedAt),
@@ -129,9 +161,11 @@ type commentReadDocument struct {
 	AssistantMentioned        bool                   `bson:"assistantMentioned"`
 	AssistantReplySource      string                 `bson:"assistantReplySource"`
 	AssistantCorrectionStatus string                 `bson:"assistantCorrectionStatus"`
+	AuthorIPLocation          string                 `bson:"authorIpLocation,omitempty"`
 	Status                    string                 `bson:"status"`
 	IsPinned                  bool                   `bson:"isPinned"`
 	PinnedAt                  *time.Time             `bson:"pinnedAt,omitempty"`
+	HotScore                  int64                  `bson:"hotScore,omitempty"`
 	CreatedAt                 time.Time              `bson:"createdAt"`
 	UpdatedAt                 time.Time              `bson:"updatedAt"`
 	DeletedAt                 *time.Time             `bson:"deletedAt,omitempty"`
@@ -155,9 +189,11 @@ func (d commentReadDocument) readModel() commentmodel.ReadModel {
 		AssistantMentioned:        d.AssistantMentioned,
 		AssistantReplySource:      d.AssistantReplySource,
 		AssistantCorrectionStatus: d.AssistantCorrectionStatus,
+		AuthorIPLocation:          d.AuthorIPLocation,
 		Status:                    commentmodel.Status(d.Status),
 		IsPinned:                  d.IsPinned,
 		PinnedAt:                  cloneTime(d.PinnedAt),
+		HotScore:                  d.HotScore,
 		CreatedAt:                 d.CreatedAt.UTC(),
 		UpdatedAt:                 d.UpdatedAt.UTC(),
 		DeletedAt:                 cloneTime(d.DeletedAt),

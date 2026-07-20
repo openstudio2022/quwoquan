@@ -8,12 +8,11 @@ quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation
   - 单图 / 多图轮播 / 九宫格 micro（feed 视图 type=moment）
   - 横屏 / 竖屏 video（feed 视图 type=video，横竖屏由 deviceInfo.width/height 表达）
 
-推荐频道（recommend，feed_query={category:micro, identity:moment}）在 content-service 走
-identity=moment 的 repository 分页（ListPublished 按 createdAt DESC 扫描 posts，绕过推荐引擎），
-命中条件为 contentIdentity=moment + status=published + visibility=public，且不被该 viewer 的
-rec:hidden_authors / rec:negative / rec:hidden_types 抑制。本种子用全新非抑制作者（既有真实作者，
+推荐频道（channelId=recommend）在 content-service 走推荐引擎；PostProjectionSource 从
+ListPublished 读取候选，再经过新鲜度、曝光治理和负反馈过滤。本种子用全新非抑制作者（既有真实作者，
 不创建账号）+ 全新 post id（t4hrec_moment_*）+ 既有真实 archived-* 媒体 object key（origin 可解析），
-createdAt 递减唯一且按运行时 UTC 当前分钟置顶，使推荐频道首刷多形态非空、连续下拉≥2 页曝光不重复。
+createdAt 递减唯一且按运行时 UTC 当前分钟置顶，使推荐引擎在干净 gamma 启动后有新鲜候选，
+首刷多形态非空、连续下拉≥2 页曝光不重复。
 
 幂等：每次以 fixture 为准 $set 全字段 upsert，可重复运行得到确定结果。
 缓存失效：post 详情走 read-through `cache:post:{id}`，本脚本对每个种子 id 执行 redis DEL（幂等，

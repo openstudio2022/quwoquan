@@ -74,11 +74,6 @@ class HomepageMockData {
       averageRating: 4.7,
       ratingCount: 328,
       highlightTags: const <String>['景色开阔', '适合散步', '拍照出片'],
-      dimensionScores: <HomepageReviewDimensionScore>[
-        HomepageReviewDimensionScore(label: '景观', score: 4.9),
-        HomepageReviewDimensionScore(label: '交通', score: 4.5),
-        HomepageReviewDimensionScore(label: '拥挤度', score: 4.2),
-      ],
     ),
     contentPreview: <HomepageContentPreview>[
       HomepageContentPreview(
@@ -143,11 +138,6 @@ class HomepageMockData {
       averageRating: 4.8,
       ratingCount: 157,
       highlightTags: const <String>['出餐快', '夜宵友好', '小份菜丰富'],
-      dimensionScores: <HomepageReviewDimensionScore>[
-        HomepageReviewDimensionScore(label: '口味', score: 4.9),
-        HomepageReviewDimensionScore(label: '价格', score: 4.6),
-        HomepageReviewDimensionScore(label: '环境', score: 4.2),
-      ],
     ),
     contentPreview: <HomepageContentPreview>[
       HomepageContentPreview(
@@ -381,11 +371,6 @@ HomepageDetail _sightHomepage(
       averageRating: 4.8,
       ratingCount: 327,
       highlightTags: <String>['适合攻略', '适合摄影', '同城讨论多'],
-      dimensionScores: <HomepageReviewDimensionScore>[
-        HomepageReviewDimensionScore(label: '景观', score: 4.9),
-        HomepageReviewDimensionScore(label: '交通', score: 4.4),
-        HomepageReviewDimensionScore(label: '内容丰富度', score: 4.7),
-      ],
     ),
     contentPreview: <HomepageContentPreview>[
       HomepageContentPreview(
@@ -431,9 +416,6 @@ HomepageDetail _deepCloneHomepageDetail(HomepageDetail h) {
             averageRating: rs.averageRating,
             ratingCount: rs.ratingCount,
             highlightTags: List<String>.from(rs.highlightTags),
-            dimensionScores: List<HomepageReviewDimensionScore>.from(
-              rs.dimensionScores,
-            ),
           ),
     contentPreview: List<HomepageContentPreview>.from(h.contentPreview),
     questionPreview: List<HomepageQuestionPreview>.from(h.questionPreview),

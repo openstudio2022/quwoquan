@@ -13,7 +13,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": true,
@@ -24,7 +24,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "bool",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.error_message",
@@ -35,7 +35,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "string",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 30,
@@ -46,7 +46,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 800,
@@ -57,7 +57,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 120,
@@ -68,7 +68,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 0.2,
@@ -79,7 +79,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "float",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 0.1,
@@ -90,7 +90,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "float",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 30,
@@ -101,7 +101,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 180,
@@ -112,7 +112,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "environment",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 16,
@@ -123,7 +123,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 10,
@@ -134,7 +134,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 300,
@@ -145,7 +145,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 20,
@@ -156,7 +156,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": 259200,
@@ -167,7 +167,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "int",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": true,
@@ -178,7 +178,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "bool",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "default": true,
@@ -189,7 +189,7 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "rollout": "progressive",
       "scope": "service",
       "type": "bool",
-      "ui_editable": true
+      "ui_editable": false
     }
   ]
 }'''

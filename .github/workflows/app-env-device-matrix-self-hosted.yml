@@ -4,6 +4,9 @@
 # PR 默认 pr_light profile（alpha/beta, allow_missing）；显式或 nightly 调用时可传 nightly_full / manual_full。
 name: 05. App Env Device Matrix
 
+permissions:
+  contents: read
+
 env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
@@ -138,7 +141,7 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 解析当前触发下的矩阵默认值（按 validation_profile 分层）
@@ -372,7 +375,10 @@ jobs:
     env:
       GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
+      ALPHA_TEST_AUTH_TOKEN: ${{ secrets.ALPHA_TEST_AUTH_TOKEN }}
+      BETA_TEST_AUTH_TOKEN: ${{ secrets.BETA_TEST_AUTH_TOKEN }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+      PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
@@ -401,7 +407,7 @@ jobs:
           git -C "${REPO_DIR}" sparse-checkout set quwoquan_ops quwoquan_app quwoquan_service specs docs
           git -C "${REPO_DIR}" read-tree -mu HEAD
           git -C "${REPO_DIR}" clean -ffdx
-          test -f "${REPO_DIR}/quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py"
+          test -f "${REPO_DIR}/quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py"
           rm -rf "${GITHUB_WORKSPACE}/repo"
           ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
       - name: 记录发现结果
@@ -415,11 +421,11 @@ jobs:
             echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
             exit 2
           fi
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
           java-version: "17"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
       - name: Install Flutter (PATH)
@@ -514,7 +520,7 @@ jobs:
                 export API_CONTRACT_ENV="${env_name}"
                 set +e
                 if [ "${matrix_kind}" = "chat-avatar" ]; then
-                  python3 quwoquan_service/services/chat-service/tests/ops/ci/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
+                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
                 elif [ "${matrix_kind}" = "environment-smoke" ]; then
                   smoke_supported=1
@@ -526,6 +532,7 @@ jobs:
                       smoke_gateway_base_url="http://127.0.0.1:17000"
                       smoke_product_ops_base_url="http://127.0.0.1:17010"
                       smoke_media_base_url="http://127.0.0.1:17100"
+                      smoke_test_auth_token="${ALPHA_TEST_AUTH_TOKEN:-local-alpha-token}"
                       ;;
                     beta)
                       smoke_env_alias="beta-local"
@@ -534,6 +541,7 @@ jobs:
                       smoke_gateway_base_url="http://127.0.0.1:18000"
                       smoke_product_ops_base_url="http://127.0.0.1:18010"
                       smoke_media_base_url="http://127.0.0.1:18100"
+                      smoke_test_auth_token="${BETA_TEST_AUTH_TOKEN:-local-beta-token}"
                       ;;
                     gamma)
                       smoke_env_alias="gamma-local"
@@ -542,6 +550,7 @@ jobs:
                       smoke_gateway_base_url="${GAMMA_BASE_URL:-http://127.0.0.1:19000}"
                       smoke_product_ops_base_url="http://127.0.0.1:19010"
                       smoke_media_base_url="${MEDIA_AVATAR_CDN_BASE_URL:-http://127.0.0.1:19100}"
+                      smoke_test_auth_token="${GAMMA_TEST_AUTH_TOKEN:-local-gamma-token}"
                       ;;
                     prod-sim)
                       smoke_env_alias="prod-sim"
@@ -550,6 +559,7 @@ jobs:
                       smoke_gateway_base_url="http://127.0.0.1:20000"
                       smoke_product_ops_base_url="http://127.0.0.1:20010"
                       smoke_media_base_url="http://127.0.0.1:20100"
+                      smoke_test_auth_token="${PROD_TEST_AUTH_TOKEN:-local-prod-sim-token}"
                       ;;
                     *)
                       echo "::error::environment-smoke does not support env=${env_name}"
@@ -565,7 +575,7 @@ jobs:
                       --gateway-base-url "${smoke_gateway_base_url}" \
                       --product-ops-base-url "${smoke_product_ops_base_url}" \
                       --media-base-url "${smoke_media_base_url}" \
-                      --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-local-${env_name}-token}" \
+                      --test-auth-token "${smoke_test_auth_token}" \
                       --platform "${platform}" \
                       --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/environment-smoke-${platform}.json"
                     matrix_exit_code=$?
@@ -573,7 +583,7 @@ jobs:
                     matrix_exit_code=2
                   fi
                 else
-                  python3 quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py --platform "${platform}"
+                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
                 fi
                 set -e
@@ -624,7 +634,7 @@ jobs:
         id: upload_mobile_matrix_report
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
@@ -643,7 +653,7 @@ jobs:
       - name: Retry mobile matrix report upload
         if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
@@ -674,7 +684,7 @@ jobs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 输出 App Env Device Matrix 耗时摘要
@@ -739,7 +749,7 @@ jobs:
       - name: 下载设备矩阵 artifacts
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: app-env-device-matrix-*
           path: ${{ runner.temp }}/app-env-device-matrix-artifacts
@@ -747,14 +757,14 @@ jobs:
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         continue-on-error: true
         run: |
-          python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_device_matrix_evidence.py \
+          python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"
       - name: Upload app env timing summary
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-env-device-matrix-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/app-env-device-matrix-summary.json

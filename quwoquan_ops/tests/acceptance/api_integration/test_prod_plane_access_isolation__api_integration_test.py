@@ -154,9 +154,11 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             PROD_SSH_HOST="203.0.113.10",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("prod-edge-svc@203.0.113.10", result.stdout)
+        self.assertIn("realtime-gateway rtc-service", result.stdout)
+        self.assertIn("edge-gray", result.stdout)
         self.assertIn("prod-service-svc@203.0.113.10", result.stdout)
         self.assertIn("service-gray", result.stdout)
-        self.assertNotIn("prod-edge-svc", result.stdout)
         self.assertNotIn("prod-data-svc", result.stdout)
 
 

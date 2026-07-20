@@ -7,45 +7,78 @@ node:
   parent_domain_service: shared-homepage-network
   parent_business_capability: homepage-discovery-and-attach-journey
 scope:
-  summary: homepage entry and preview 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 从搜索结果、内容卡、关注频道、交集导航进入主页详情并保留原上下文。
+  in_scope:
+  - 搜索/feed 对象卡/关注频道/沉浸浏览器实体提及/交集导航进入 homepageDetail。
+  - 预览摘要（HomepageSummary initialSummary）先渲染，详情数据到达后替换。
+  - 返回后原搜索或发布上下文保留。
+  out_of_scope:
+  - 主页完整内容与口碑消费（homepage-review-and-content-journey）。
+  - 主页搜索候选本身（homepage-search-and-picker）。
 gwt_acceptance:
   GWT1:
-    title: homepage entry and preview GWT
+    title: 多入口进入主页详情且预览到详情无跳变
     given:
-    - 前置条件明确。
+    - 已发布主页可经 /homepages/{id} 访问，入口携带 referralSource 与可选 initialSummary。
     when:
-    - 用户或系统动作发生。
+    - 用户从搜索结果、feed 对象卡、关注频道或交集导航点击进入。
     then:
-    - 可观察结果符合预期。
+    - 详情页按 referralSource 上报曝光（trackEntityPageView），加载失败展示结构化错误态并可重试。
+    - initialSummary 先呈现基础信息，bundle 到达后无信息架构跳变。
+    - 返回（pop）后原上下文（搜索词/feed 位置）保留。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 入口断裂为零：六类入口全部可达 homepageDetail 且埋点带 referralSource。
+    edge_cases:
+    - 主页已下线时展示 homepage_offline(410) 语义错误态与安全返回。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    performance_points:
+    - GetHomepageDetail p95 < 1.5s（L1 spec SLO 同源）。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_record_navigation__functional__local_contract_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_entry_and_preview.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_entry_and_preview.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_entry_and_preview.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        execution_profile: release
+        suite: journey
+        cases:
+        - user_acceptance.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_entry_and_preview.journey
+        envs:
+        - gamma_local
+    notes:
+    - "2026-07-20 M9 商用化审查：六类入口（搜索/feed 对象卡/关注频道/沉浸浏览器实体提及/交集导航/深链）已在代码可达且 planned 证据文件均存在；等 entity-service packet 迁移编译恢复后跑绿回填 recorded。"
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

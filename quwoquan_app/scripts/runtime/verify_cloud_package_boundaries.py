@@ -57,13 +57,16 @@ def package_catalog() -> dict[str, tuple[Path, dict]]:
 
 def local_dependency_graph(
     catalog: dict[str, tuple[Path, dict]],
+    *,
+    include_dev: bool,
 ) -> dict[str, set[str]]:
+    """path 依赖图。production 可达性只看 dependencies（release 构建不含
+    dev_dependencies）；alpha runner 完整性与环检测用全图。"""
     graph = {name: set() for name in catalog}
     for name, (package_root, data) in catalog.items():
-        dependencies = {
-            **(data.get("dependencies") or {}),
-            **(data.get("dev_dependencies") or {}),
-        }
+        dependencies = dict(data.get("dependencies") or {})
+        if include_dev:
+            dependencies.update(data.get("dev_dependencies") or {})
         for dependency, descriptor in dependencies.items():
             if not isinstance(descriptor, dict) or "path" not in descriptor:
                 continue
@@ -126,8 +129,11 @@ def verify_contracts_purity(catalog: dict[str, tuple[Path, dict]]) -> None:
             )
 
 
-def verify_composition_graph(graph: dict[str, set[str]]) -> None:
-    production = reachable(graph, "quwoquan_app")
+def verify_composition_graph(
+    graph: dict[str, set[str]],
+    production_graph: dict[str, set[str]],
+) -> None:
+    production = reachable(production_graph, "quwoquan_app")
     if "quwoquan_cloud_mock" in production:
         raise AssertionError("production App package graph 不得包含 cloud mock")
     alpha = reachable(graph, "quwoquan_app_alpha_runner")
@@ -197,10 +203,11 @@ def main() -> int:
         raise AssertionError(
             f"Cloud package catalog 缺失: {sorted(required - set(catalog))}"
         )
-    graph = local_dependency_graph(catalog)
+    graph = local_dependency_graph(catalog, include_dev=True)
+    production_graph = local_dependency_graph(catalog, include_dev=False)
     verify_acyclic(graph)
     verify_contracts_purity(catalog)
-    verify_composition_graph(graph)
+    verify_composition_graph(graph, production_graph)
     verify_override_sync()
     verify_fixture_rebuild()
     print(

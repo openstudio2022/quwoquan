@@ -11,19 +11,3 @@ class CircleDetailPageRouteExtra {
   final ReferralSource? referralSource;
   final UiErrorAppearanceMode sourceAppearanceMode;
 }
-
-class OtherProfilePageRouteExtra {
-  const OtherProfilePageRouteExtra({
-    this.referralSource,
-    this.subAccountId,
-    this.avatar,
-    this.displayName,
-    this.backgroundImage,
-  });
-
-  final ReferralSource? referralSource;
-  final String? subAccountId;
-  final String? avatar;
-  final String? displayName;
-  final String? backgroundImage;
-}

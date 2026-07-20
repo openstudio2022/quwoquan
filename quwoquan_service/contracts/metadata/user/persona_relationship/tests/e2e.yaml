@@ -1,0 +1,24 @@
+aggregate: PersonaRelationship
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: follow_toggle_from_profile
+    steps:
+      - user A opens user B profile
+      - user A taps follow, then unfollow
+    assertions:
+      - relation_state_transitions_not_following_following_not_following
+      - follower_count_eventually_projected
+      - counter_projection_lag_within_slo
+
+  - name: block_hides_interaction_entries
+    steps:
+      - user A blocks user B
+      - user A reopens user B profile
+    assertions:
+      - capability_disables_follow_greet_message_call
+      - existing_follow_cleared_both_directions

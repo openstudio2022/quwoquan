@@ -1,0 +1,11 @@
+entity: CircleBehaviorFact
+
+scenarios:
+  - name: behavior_fact_append_replay_projection_stream
+    operation: ReportCircleBehavior
+    go_func: TestCircleBehaviorFactRealAppendReplayProjectionAndStream
+    evidence: api_integration
+    assertions:
+      - fact 以唯一 dedupe key append，重放返回首个事实
+      - actor 归因只来自可信 OperationInvocationContext
+      - weekly-active 投影与 Redis stream 收敛

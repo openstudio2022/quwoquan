@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
@@ -26,18 +27,15 @@ type DomainEvent struct {
 	Payload        map[string]any `json:"payload,omitempty"`
 }
 
-func (e DomainEvent) channel() string {
-	return fmt.Sprintf("rt:conversation:%s", e.ConversationID)
-}
-
 // SupportedEventTypes lists all event types published by the chat service.
 var SupportedEventTypes = []string{
 	conversationevent.ConversationCreated,
 	conversationevent.ConversationRosterUpdated,
 	conversationevent.ConversationAvatarUpdated,
-	conversationevent.ConversationArchived,
+	conversationevent.ConversationDissolved,
 	membershipevent.ConversationMemberAdded,
 	membershipevent.ConversationMemberRemoved,
+	membershipevent.ConversationMemberLeft,
 	membershipevent.ConversationMemberRoleChanged,
 	userstateevent.ConversationReadWatermarkAdvanced,
 	userstateevent.ConversationUserSettingsChanged,
@@ -48,17 +46,48 @@ var SupportedEventTypes = []string{
 
 const AssistantMentionedStream = "events.chat.assistant_mentions"
 
-// EventPublisher publishes domain events to Redis Pub/Sub channels.
-// Channel format: rt:conversation:{conversationId}
+const (
+	recipientCacheTTL        = 30 * time.Second
+	recipientCacheMaxEntries = 4096
+)
+
+// ConversationRecipientResolver 返回会话事件的实时接收者（活跃成员）。
+// realtime-gateway 按可信身份只订阅 rt:user:{userId}，因此授权语义
+// （谁能收到会话事件）留在拥有成员数据的 chat-service 发布端。
+type ConversationRecipientResolver interface {
+	ResolveRecipients(ctx context.Context, conversationID string) ([]string, error)
+}
+
+// EventPublisher publishes domain events to per-user realtime channels.
+// Channel format: rt:user:{memberId}（与 realtime-gateway 订阅契约同源）。
 type EventPublisher struct {
-	client rtredis.Client
+	client   rtredis.Client
+	resolver ConversationRecipientResolver
+
+	mu    sync.Mutex
+	cache map[string]recipientCacheEntry
 }
 
-func NewEventPublisher(client rtredis.Client) *EventPublisher {
-	return &EventPublisher{client: client}
+type recipientCacheEntry struct {
+	recipients []string
+	expiresAt  time.Time
 }
 
-// Publish serializes the event and publishes it to the conversation's channel.
+func NewEventPublisher(
+	client rtredis.Client,
+	resolver ConversationRecipientResolver,
+) *EventPublisher {
+	if resolver == nil {
+		panic("chat event publisher requires a conversation recipient resolver")
+	}
+	return &EventPublisher{
+		client:   client,
+		resolver: resolver,
+		cache:    map[string]recipientCacheEntry{},
+	}
+}
+
+// Publish serializes the event and fans it out to each recipient's channel.
 func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
 	if !isSupportedEventType(evt.Type) {
 		return fmt.Errorf("unsupported chat domain event type %q", evt.Type)
@@ -70,7 +99,68 @@ func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
 	if err != nil {
 		return fmt.Errorf("marshal event: %w", err)
 	}
-	return p.client.Publish(ctx, evt.channel(), string(payload))
+	if rosterMutatingEventTypes[evt.Type] {
+		p.invalidateRecipients(evt.ConversationID)
+	}
+	recipients, err := p.recipients(ctx, evt.ConversationID)
+	if err != nil {
+		return fmt.Errorf("resolve recipients for %s: %w", evt.ConversationID, err)
+	}
+	for _, userID := range recipients {
+		if err := p.client.Publish(ctx, "rt:user:"+userID, string(payload)); err != nil {
+			return fmt.Errorf("publish to rt:user:%s: %w", userID, err)
+		}
+	}
+	return nil
+}
+
+// rosterMutatingEventTypes 触发接收者缓存失效：新成员必须立即可达，
+// 被移除成员不得继续收到后续事件。
+var rosterMutatingEventTypes = map[string]bool{
+	membershipevent.ConversationMemberAdded:       true,
+	membershipevent.ConversationMemberRemoved:     true,
+	membershipevent.ConversationMemberLeft:        true,
+	conversationevent.ConversationRosterUpdated:   true,
+	membershipevent.ConversationMemberRoleChanged: true,
+}
+
+func (p *EventPublisher) recipients(
+	ctx context.Context,
+	conversationID string,
+) ([]string, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	if conversationID == "" {
+		return nil, errors.New("conversation id is required")
+	}
+	now := time.Now()
+	p.mu.Lock()
+	if entry, ok := p.cache[conversationID]; ok && entry.expiresAt.After(now) {
+		cached := entry.recipients
+		p.mu.Unlock()
+		return cached, nil
+	}
+	p.mu.Unlock()
+
+	recipients, err := p.resolver.ResolveRecipients(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	if len(p.cache) >= recipientCacheMaxEntries {
+		p.cache = map[string]recipientCacheEntry{}
+	}
+	p.cache[conversationID] = recipientCacheEntry{
+		recipients: recipients,
+		expiresAt:  now.Add(recipientCacheTTL),
+	}
+	p.mu.Unlock()
+	return recipients, nil
+}
+
+func (p *EventPublisher) invalidateRecipients(conversationID string) {
+	p.mu.Lock()
+	delete(p.cache, strings.TrimSpace(conversationID))
+	p.mu.Unlock()
 }
 
 // PublishBatch publishes multiple events sequentially. Stops on first error.

@@ -127,20 +127,21 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     try {
       final coordinator = ContentMediaUploadCoordinator(
         media: ref.read(circleDetailContentMediaFacetProvider),
-        fileStorage: ref.read(fileStorageGatewayProvider),
-        uploadObject: ref.read(contentMediaObjectUploadProvider),
+        telemetry: ref.read(appTelemetryReporterProvider),
       );
       final path = file.path?.trim() ?? '';
-      final uploaded = path.isNotEmpty
-          ? await coordinator.uploadLocalPath(
-              localPath: path,
-              mediaType: ContentMediaType.file,
-            )
-          : await coordinator.uploadBytes(
-              bytes: await file.readAsBytes(),
-              mediaType: ContentMediaType.file,
-              contentType: 'application/octet-stream',
+      final source = path.isNotEmpty
+          ? await ref.read(contentMediaSourceReaderProvider).prepare(path)
+          : await prepareContentMediaSource(
+              fileSize: await file.length(),
+              openRead: file.readAsByteStream,
             );
+      final uploaded = await coordinator.uploadPreparedSource(
+        source: source,
+        mediaType: ContentMediaType.file,
+        contentType: 'application/octet-stream',
+        uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
+      );
       await ref
           .read(circleDetailFileCommandWriterProvider)
           .create(

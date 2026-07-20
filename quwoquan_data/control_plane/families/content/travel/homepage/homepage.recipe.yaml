@@ -23,7 +23,7 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: composer
+  model: composer-2.5
   modelFamily: composer
   reviewModel: gpt-5.5
   reviewModelFamily: gpt

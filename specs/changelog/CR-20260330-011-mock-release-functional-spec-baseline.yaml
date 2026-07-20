@@ -6,7 +6,8 @@ summary: |
   在 mock_data_cloud_integration_policy.md 增补 §5.1（R1–R6 / D1–D4 / 测试代码用语边界 / P4 诚实边界）；
   对齐 .cursor/rules/08-mock-data-isolation.mdc、commands（explore/verify/commit）、specs/00_MASTER_DEVELOPMENT_FLOW.md、
   page_horizontal_quality_pr_checklist §Mock；续写 CR-20260329-007。
-  本 CR 登记 L3 page-horizontal-quality 的 /baseline 文档闭环；实施波次 B 剩余工程项（test/support、P4 条件编译等）仍见 CR-20260330-010。
+  本 CR 登记 L3 page-horizontal-quality 的 /baseline 文档闭环；后续工程状态以
+  mock_data_cloud_integration_policy、L3 acceptance 与当前 mock-isolation gate 为准。
 artifacts:
   - specs/gates/mock_data_cloud_integration_policy.md
   - .cursor/rules/08-mock-data-isolation.mdc

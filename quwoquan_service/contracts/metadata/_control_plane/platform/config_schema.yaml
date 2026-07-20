@@ -7,7 +7,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.config_center.disk_fallback_enabled
     type: bool
@@ -17,7 +17,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   # 运营态错误提示语 override 命名空间（reload: hot，无需重启即生效）。
   # 完整 key 形如 sys.error_message.<MODULE.KIND.reason>.<locale>，
@@ -32,7 +32,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.gateway.rate_limit.per_user_rps
     type: int
@@ -42,7 +42,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.orchestrator.downstream.timeout_ms
     type: int
@@ -52,7 +52,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.content.mongo.max_pool_size
     type: int
@@ -62,7 +62,7 @@ configs:
     reload: restart
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.assistant.otel.trace_sample_ratio
     type: float
@@ -72,7 +72,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   # 登录成功明细仅用于漏斗钻取；聚合指标与错误事件始终全量。
   # alpha/beta/gamma 发布层覆盖为 1.0，prod 默认 0.1，可热更新灰度或回滚。
@@ -84,7 +84,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.user.auth.raw_event_retention_days
     type: int
@@ -94,7 +94,7 @@ configs:
     reload: restart
     rollout: progressive
     risk_level: high
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.user.auth.aggregate_metric_retention_days
     type: int
@@ -104,7 +104,7 @@ configs:
     reload: restart
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.content.worker.concurrency
     type: int
@@ -114,7 +114,7 @@ configs:
     reload: restart
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.flush_delay_sec
     type: int
@@ -124,7 +124,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.retry_delay_sec
     type: int
@@ -134,7 +134,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: medium
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.max_batch_size
     type: int
@@ -144,7 +144,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: low
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.max_pending_age_sec
     type: int
@@ -154,7 +154,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: low
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.flush_on_foreground_resume
     type: bool
@@ -164,7 +164,7 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: low
-    ui_editable: true
+    ui_editable: false
 
   - key: sys.client_state_sync.flush_on_network_recovered
     type: bool
@@ -174,4 +174,4 @@ configs:
     reload: hot
     rollout: progressive
     risk_level: low
-    ui_editable: true
+    ui_editable: false

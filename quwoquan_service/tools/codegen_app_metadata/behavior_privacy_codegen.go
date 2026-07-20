@@ -64,6 +64,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 			switch pf {
 			case "dwellMs":
 				positional = append(positional, "int dwellMs")
+			case "duration":
+				positional = append(positional, "int duration")
 			case "authorId":
 				positional = append(positional, "String authorId")
 			case "circleId":
@@ -78,6 +80,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "int totalUnits")
 			case "effectivePlayMs":
 				positional = append(positional, "int effectivePlayMs")
+			case "state":
+				positional = append(positional, "String state")
 			case "subjectId":
 				positional = append(positional, "String subjectId")
 			case "feedbackKind":

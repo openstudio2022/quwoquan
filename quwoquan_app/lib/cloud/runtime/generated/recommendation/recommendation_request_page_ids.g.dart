@@ -5,18 +5,10 @@ class RecommendationRequestPageIds {
   const RecommendationRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'ActivateRecommendationModelRelease': 'recommendation.activate.recommendation.model.release',
     'BatchScoreRecommendationCandidates': 'recommendation.batch.score.recommendation.candidates',
-    'MarkRecommendationIntersectionsVisited': 'recommendation.mark.recommendation.intersections.visited',
-    'RollbackRecommendationModelRelease': 'recommendation.rollback.recommendation.model.release',
     'ScoreRecommendationCandidates': 'recommendation.score.recommendation.candidates',
-    'StageRecommendationModelRelease': 'recommendation.stage.recommendation.model.release',
   };
 
-  static const String activateRecommendationModelRelease = 'recommendation.activate.recommendation.model.release';
   static const String batchScoreRecommendationCandidates = 'recommendation.batch.score.recommendation.candidates';
-  static const String markRecommendationIntersectionsVisited = 'recommendation.mark.recommendation.intersections.visited';
-  static const String rollbackRecommendationModelRelease = 'recommendation.rollback.recommendation.model.release';
   static const String scoreRecommendationCandidates = 'recommendation.score.recommendation.candidates';
-  static const String stageRecommendationModelRelease = 'recommendation.stage.recommendation.model.release';
 }

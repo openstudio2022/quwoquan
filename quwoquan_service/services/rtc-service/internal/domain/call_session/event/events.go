@@ -2,15 +2,13 @@
 package event
 
 const (
-	CallInitiated        = "CallInitiated"
-	CallRinging          = "CallRinging"
-	CallAnswered         = "CallAnswered"
-	CallConnected        = "CallConnected"
-	CallEnded            = "CallEnded"
-	ParticipantJoined    = "ParticipantJoined"
-	ParticipantLeft      = "ParticipantLeft"
-	CallRecordingStarted = "CallRecordingStarted"
-	CallRecordingStopped = "CallRecordingStopped"
-	ScreenShareStarted   = "ScreenShareStarted"
-	ScreenShareStopped   = "ScreenShareStopped"
+	CallInitiated      = "CallInitiated"
+	CallRinging        = "CallRinging"
+	CallAnswered       = "CallAnswered"
+	CallConnected      = "CallConnected"
+	CallEnded          = "CallEnded"
+	ParticipantJoined  = "ParticipantJoined"
+	ParticipantLeft    = "ParticipantLeft"
+	ScreenShareStarted = "ScreenShareStarted"
+	ScreenShareStopped = "ScreenShareStopped"
 )

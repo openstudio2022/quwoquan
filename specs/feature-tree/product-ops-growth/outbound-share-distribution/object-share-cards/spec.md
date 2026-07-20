@@ -1,4 +1,4 @@
-# L3：对象分享卡片设计（object-share-cards）
+# L3 特性：对象分享卡片设计（object-share-cards）
 
 > 归属：product-ops-growth / outbound-share-distribution / object-share-cards
 > 视角：设计师 + 运营 + 产品。目标是让 5 类对象在微信/海报/口令等站外触点**美观、有吸引力、能驱动点击与回流**。

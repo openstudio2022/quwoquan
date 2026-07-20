@@ -2,7 +2,8 @@ package persistence
 
 import (
 	"context"
-	"time"
+	"errors"
+	"log/slog"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -12,39 +13,29 @@ import (
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 )
 
-// MongoCircleStore 以 MongoDB 实现圈子主记录、指标与版块端口。
+// MongoCircleStore 是 Circle 聚合的具名读端口实现；写路径唯一入口是
+// infrastructure/circle/circle/persistence.MongoAggregateStore。
 type MongoCircleStore struct {
-	coll *mongo.Collection
+	coll   *mongo.Collection
+	logger *slog.Logger
 }
 
-var (
-	_ application.CircleRecordStore  = (*MongoCircleStore)(nil)
-	_ application.CircleMetricsStore = (*MongoCircleStore)(nil)
-	_ application.CircleSectionStore = (*MongoCircleStore)(nil)
-)
+var _ application.CircleRecordStore = (*MongoCircleStore)(nil)
 
 func NewMongoCircleStore(coll *mongo.Collection) *MongoCircleStore {
-	return &MongoCircleStore{coll: coll}
-}
-
-func (s *MongoCircleStore) Create(ctx context.Context, circle *model.Circle) error {
-	_, err := s.coll.InsertOne(ctx, circle)
-	return err
-}
-
-func (s *MongoCircleStore) Update(ctx context.Context, id string, circle *model.Circle) bool {
-	circle.UpdatedAt = time.Now()
-	result, err := s.coll.ReplaceOne(ctx, bson.M{"_id": id}, circle)
-	if err != nil {
-		return false
-	}
-	return result.MatchedCount > 0
+	return &MongoCircleStore{coll: coll, logger: slog.Default()}
 }
 
 func (s *MongoCircleStore) FindByID(ctx context.Context, id string) (*model.Circle, bool) {
 	var c model.Circle
 	err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, false
+	}
 	if err != nil {
+		// 读端口签名保持 (value, bool)；存储故障与 not-found 在日志层面区分，
+		// 避免把基础设施错误静默成业务空态却无观测痕迹。
+		s.logger.Error("circle FindByID storage failure", "circleId", id, "error", err)
 		return nil, false
 	}
 	return &c, true
@@ -80,12 +71,14 @@ func (s *MongoCircleStore) List(ctx context.Context, opts application.ListCircle
 	findOpts := options.Find().SetSort(sortField).SetLimit(int64(opts.Limit))
 	cur, err := s.coll.Find(ctx, filter, findOpts)
 	if err != nil {
+		s.logger.Error("circle List storage failure", "error", err)
 		return nil, ""
 	}
 	defer cur.Close(ctx)
 
 	var circles []model.Circle
 	if err := cur.All(ctx, &circles); err != nil {
+		s.logger.Error("circle List decode failure", "error", err)
 		return nil, ""
 	}
 
@@ -94,29 +87,4 @@ func (s *MongoCircleStore) List(ctx context.Context, opts application.ListCircle
 		nextCursor = circles[len(circles)-1].ID
 	}
 	return circles, nextCursor
-}
-
-func (s *MongoCircleStore) Archive(ctx context.Context, id string) bool {
-	result, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$set": bson.M{"status": string(model.CircleStatusArchived), "updatedAt": time.Now()},
-	})
-	if err != nil {
-		return false
-	}
-	return result.MatchedCount > 0
-}
-
-func (s *MongoCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$inc": bson.M{"storageUsedBytes": deltaBytes},
-		"$set": bson.M{"updatedAt": time.Now()},
-	})
-	return err
-}
-
-func (s *MongoCircleStore) UpdateSections(ctx context.Context, id string, sections []model.CircleSectionConfig) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$set": bson.M{"sectionConfig": sections, "updatedAt": time.Now()},
-	})
-	return err
 }

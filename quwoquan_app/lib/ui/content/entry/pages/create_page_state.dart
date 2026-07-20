@@ -1,4 +1,5 @@
 part of 'create_page.dart';
+
 class _CreatePageState extends ConsumerState<CreatePage>
     with WidgetsBindingObserver, RouteAware {
   static const int _kMaxMediaImages = 20;
@@ -12,13 +13,18 @@ class _CreatePageState extends ConsumerState<CreatePage>
   late final CreateDraftSessionController _draftSessionController;
   bool _didApplyInitialAction = false;
   bool _isPublishing = false;
+  double? _publishUploadProgress;
+  ContentMediaUploadCancellationSignal? _publicationCancellationSignal;
   bool _isHydratingDraft = false;
+  bool _authContinuationResumeScheduled = false;
   double _heroCollapseProgress = 0;
   String? _pressedMediaPath;
   ModalRoute<dynamic>? _observedRoute;
+
   /// 非 null 时 [ArticleEditor] 在该页展开文内图工具栏（如新插入图片后）。
   final ValueNotifier<String?> _revealArticleImageToolbarForPageId =
       ValueNotifier<String?>(null);
+
   /// 按 asset id 展开工具条（多图同页时优先于 [_revealArticleImageToolbarForPageId]）。
   final ValueNotifier<String?> _revealArticleImageToolbarForAssetId =
       ValueNotifier<String?>(null);
@@ -36,6 +42,87 @@ class _CreatePageState extends ConsumerState<CreatePage>
     setState(update);
   }
 
+  Future<bool> _requireCreateActionLogin(
+    CreateActionContinuationKind action, {
+    bool closeWhenEmptyOnCancel = false,
+  }) async {
+    if (AuthGate.isAuthenticated(ref)) {
+      return true;
+    }
+    await _flushDraftIfDirty('reauth');
+    if (!mounted) {
+      return false;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ResumeCreateActionContinuation(
+            action: action,
+            closeWhenEmptyOnCancel: closeWhenEmptyOnCancel,
+          ),
+          ownerToken: 'create:${action.name}',
+        );
+    if (!accepted) {
+      return false;
+    }
+    await requireLogin(
+      ref,
+      context,
+      action == CreateActionContinuationKind.publish
+          ? AuthGateReason.createPost
+          : AuthGateReason.mediaUpload,
+      dismissFallback: AppRoutePaths.home,
+      dismissPolicy: LoginDismissPolicy.safeFallback,
+    );
+    return false;
+  }
+
+  void _resumeCreateActionContinuation({int remainingFrames = 30}) {
+    if (!mounted ||
+        !AuthGate.isAuthenticated(ref) ||
+        _authContinuationResumeScheduled) {
+      return;
+    }
+    _authContinuationResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authContinuationResumeScheduled = false;
+      if (!mounted || !AuthGate.isAuthenticated(ref)) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _resumeCreateActionContinuation(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = ref
+          .read(authContinuationProvider.notifier)
+          .take<ResumeCreateActionContinuation>();
+      if (pending == null) {
+        return;
+      }
+      switch (pending.action) {
+        case CreateActionContinuationKind.publish:
+          unawaited(_publish());
+          return;
+        case CreateActionContinuationKind.pickImages:
+          unawaited(
+            _pickImagesForCurrentEditor(
+              closeWhenEmptyOnCancel: pending.closeWhenEmptyOnCancel,
+            ),
+          );
+          return;
+        case CreateActionContinuationKind.pickVideo:
+          unawaited(
+            _pickVideoForMedia(
+              closeWhenEmptyOnCancel: pending.closeWhenEmptyOnCancel,
+            ),
+          );
+          return;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +133,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _bodyFocusNode.addListener(_handleFocusLossFlush);
     _draftSessionController = CreateDraftSessionController(
       onFlushDirty: (reason) => _saveDraft(silent: true, flushReason: reason),
+      onFlushFailure: (error, stackTrace, reason) {
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'content.create.draft_autosave.$reason',
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+      },
     )..start();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) {
@@ -146,6 +242,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   @override
   void dispose() {
+    _publicationCancellationSignal?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     if (_observedRoute is PageRoute<dynamic>) {
       createDraftRouteObserver.unsubscribe(this);
@@ -179,6 +276,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
   @override
   void didPushNext() {
     unawaited(_flushDraftIfDirty('route_blur'));
+  }
+
+  @override
+  void didPopNext() {
+    _resumeCreateActionContinuation();
   }
 
   void _handleScroll() {
@@ -251,66 +353,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
         (state.mediaKind == CreateMediaKind.video ||
             (state.mediaKind == CreateMediaKind.none &&
                 state.draftFlowKind == CreateDraftFlowKind.video));
-  }
-
-  String? get _activeDraftId {
-    final draftId = ref.read(createEditorProvider).draftId?.trim() ?? '';
-    if (draftId.isNotEmpty) {
-      return draftId;
-    }
-    final initialDraftId = widget.initialDraftId?.trim() ?? '';
-    return initialDraftId.isEmpty ? null : initialDraftId;
-  }
-
-  void _handleFocusLossFlush() {
-    if (_titleFocusNode.hasFocus || _bodyFocusNode.hasFocus) {
-      return;
-    }
-    unawaited(_flushDraftIfDirty('focus_blur'));
-  }
-
-  Future<void> _flushDraftIfDirty(String reason) async {
-    await _draftSessionController.flushIfDirty(reason: reason);
-  }
-
-  String _draftContentFingerprint(CreateEditorState state) {
-    return [
-      state.draftFlowKind.name,
-      state.editorKind.name,
-      state.mediaKind.name,
-      state.imagePaths.join('|'),
-      state.videoPath,
-      state.originalVideoPath,
-      state.videoThumbnail,
-      state.isOneTapMovie,
-      state.oneTapMoviePath,
-      state.oneTapMovieEffectId,
-      state.videoDurationMs,
-      state.videoTrimStartMs,
-      state.videoTrimEndMs,
-      state.videoCoverTimeMs,
-      state.videoMuted,
-      state.currentMediaIndex,
-      state.title,
-      state.body,
-      state.articleDocument.title,
-      state.articleDocument.body,
-      state.articleTemplate.name,
-      state.articlePaperTexture.name,
-      state.articleFontPreset.name,
-      state.articleCoverImagePath,
-      state.titlePresentation.name,
-      state.titleHintDismissed,
-      state.settings.isPublic,
-      state.settings.circleIds.join('|'),
-      state.settings.circleNames.join('|'),
-      state.settings.locationName,
-      state.settings.locationPoi?.id ?? '',
-      state.settings.summary,
-      state.settings.tagRefs.join('|'),
-      state.settings.entityRefs.join('|'),
-      state.settings.assistantUsePolicy,
-    ].join('::');
   }
 
   Future<void> _runAfterOverlayDismissed(Future<void> Function() action) {
@@ -401,10 +443,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   int _mediaColumnsForWidth(double width) {
-    if (width >= 720) {
+    if (width >= AppSpacing.wideBreakpoint) {
       return 5;
     }
-    if (width >= 520) {
+    if (width >= AppSpacing.expandedBreakpoint) {
       return 4;
     }
     return 3;
@@ -456,130 +498,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     return !state.hasVideo && state.imagePaths.length < _kMaxMediaImages;
   }
 
-  Future<void> _saveDraft({
-    bool silent = false,
-    String flushReason = 'explicit',
-  }) async {
-    final state = ref.read(createEditorProvider);
-    if (!state.hasContent && _activeDraftId == null) {
-      _draftSessionController.markIdle();
-      return;
-    }
-    _draftSessionController.markSaving();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final nextId = _activeDraftId ?? state.draftId ?? 'draft_$now';
-    final nextDraft = CreateDraft(
-      id: nextId,
-      updatedAtMs: now,
-      state: state.copyWith(draftId: nextId),
-    );
-    try {
-      ref.read(createEditorProvider.notifier).setDraftId(nextId);
-      final draftStore = ref.read(createDraftStoreProvider.notifier);
-      await draftStore.saveDraft(nextDraft, currentDraftId: nextId);
-      await draftStore.reload();
-      final verified = await draftStore.getDraft(nextId);
-      if (verified == null || verified.id != nextId) {
-        throw StateError('saved draft is not readable: $nextId');
-      }
-      _draftSessionController.markSaved();
-      await reportCreateEditorSurfaceEvent(
-        ref,
-        flushReason == 'explicit'
-            ? 'create_draft_saved'
-            : 'draft_autosave_flush',
-        <String, Object?>{
-          ...createEditorSurfaceExtrasEditorKind(nextDraft.state.editorKind),
-          'reason': flushReason,
-        },
-      );
-      if (!silent && mounted) {
-        AppToast.show(context, UITextConstants.saveDraft);
-      }
-    } catch (error) {
-      _draftSessionController.markFailed();
-      if (!silent && mounted) {
-        await AppActionErrorFeedback.show(
-          context,
-          semantic: runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.backgroundAction,
-            scope: UiErrorScope.global,
-            allowRetry: false,
-          ),
-        );
-      }
-      rethrow;
-    }
-  }
-
-  Future<void> _clearCurrentDraft() async {
-    final currentDraftId = _activeDraftId;
-    if (currentDraftId == null) {
-      return;
-    }
-    ref.read(createEditorProvider.notifier).setDraftId(null);
-    await ref
-        .read(createDraftStoreProvider.notifier)
-        .deleteDraft(currentDraftId);
-    _draftSessionController.markIdle();
-  }
-
-  Future<void> _restoreDraft(CreateDraft draft) async {
-    var effectiveDraft = draft;
-    if (draft.flowKind == CreateDraftFlowKind.video &&
-        draft.state.videoThumbnail.trim().isEmpty &&
-        draft.state.videoPath.trim().isNotEmpty) {
-      final repairedThumbnail = await _generateVideoThumbnail(
-        draft.state.videoPath,
-      );
-      if ((repairedThumbnail?.trim().isNotEmpty ?? false) &&
-          repairedThumbnail != null) {
-        effectiveDraft = CreateDraft(
-          id: draft.id,
-          updatedAtMs: draft.updatedAtMs,
-          state: draft.state.copyWith(
-            draftId: draft.id,
-            videoThumbnail: repairedThumbnail,
-          ),
-          sourceType: draft.sourceType,
-        );
-        await ref
-            .read(createDraftStoreProvider.notifier)
-            .saveDraft(effectiveDraft, currentDraftId: draft.id);
-      }
-    }
-    ref.read(createEditorProvider.notifier).restoreFromDraft(effectiveDraft);
-    _syncControllersFromState(effectiveDraft.state);
-    await ref
-        .read(createDraftStoreProvider.notifier)
-        .setCurrentDraftId(effectiveDraft.id);
-    _draftSessionController.resumeAfterRestore();
-    await reportCreateEditorSurfaceEvent(
-      ref,
-      'draft_restore_success',
-      <String, Object?>{
-        ...createEditorSurfaceExtrasEditorKind(effectiveDraft.state.editorKind),
-        'flowKind': effectiveDraft.flowKind.name,
-      },
-    );
-    if (effectiveDraft.state.editorKind == CreateEditorKind.text) {
-      _focusBodyField();
-    }
-  }
-
   void _doClose() {
     final navigator = Navigator.maybeOf(context);
     if (navigator != null && navigator.canPop()) {
       navigator.pop();
       return;
     }
-    try {
-      context.go(AppRoutePaths.home);
-    } catch (_) {
-      // Widget tests may not mount a GoRouter.
-    }
+    // Widget tests may not mount a GoRouter；无路由时已经没有可关闭的页面栈。
+    GoRouter.maybeOf(context)?.go(AppRoutePaths.home);
   }
 
   /// 为文章编辑器在指定 node 之后插入图片（node 级操作）。
@@ -687,6 +613,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       caller: caller,
       entrySource: entrySource,
       selectedCountBeforeCapture: selectedCountBeforeCapture,
+      filterRepository: ref.read(imageEditorFilterRepositoryProvider),
     );
   }
 
@@ -697,7 +624,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
         imageFormat: ImageFormat.JPEG,
         quality: 80,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.create.video_thumbnail',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }
@@ -713,7 +647,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
         width: size.width.round().clamp(0, 999999999),
         height: size.height.round().clamp(0, 999999999),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.create.video_metadata',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return _VideoMetadataProbe.empty;
     } finally {
       await controller.dispose();
@@ -741,13 +682,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
           name: PageAccessInternalRoutes.createPagePublishConfirm,
         ),
         fullscreenDialog: true,
+        // 推荐圈子位需要真实推荐 operation（规格增量走 /prd）；
+        // 在此之前只展示已加入圈子，不再用本地合成推荐。
         builder: (_) => CreatePublishConfirmSheet(
           initialSettings: state.settings,
           locationCoordinator: ref.read(createLocationCoordinatorProvider),
           joinedCircles: joinedCircles,
-          recommendedCircles: publishFlowRecommendedCircleOptions(
-            ref.read(circleRepositoryProvider),
-          ),
+          recommendedCircles: const [],
         ),
       ),
     );
@@ -769,6 +710,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _resumeCreateActionContinuation();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _resumeCreateActionContinuation();
+        }
+      });
+    }
     ref.listen<CreateEditorState>(createEditorProvider, (previous, next) {
       if (_isHydratingDraft || previous == null) {
         return;
@@ -860,175 +817,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildRollbackBanner(Color secondary) {
-    return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Text(
-        '当前处于编辑器回退模式，保留双编辑器骨架并关闭增强提示。',
-        style: TextStyle(color: secondary, fontSize: AppTypography.sm),
-      ),
-    );
-  }
-
-  /// 创作/沉浸文章顶栏共用：毛玻璃 + 底部分割线，并向上延伸至状态栏区域使背景连续。
-  Widget _buildCreateTopChromeBar({
-    required double collapseProgress,
-    required Widget child,
-    bool immersiveDark = false,
-  }) {
-    final divider = immersiveDark
-        ? AppColors.white.withValues(alpha: 0.12)
-        : CupertinoColors.separator.resolveFrom(context);
-    final chrome = immersiveDark
-        ? AppColors.black
-        : CupertinoColors.systemBackground
-              .resolveFrom(context)
-              .withValues(alpha: lerpDouble(0.78, 0.94, collapseProgress)!);
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
-        child: Container(
-          padding: EdgeInsets.only(
-            top: MediaQuery.viewPaddingOf(context).top,
-            left: AppSpacing.containerSm,
-            right: AppSpacing.containerSm,
-          ),
-          decoration: BoxDecoration(
-            color: chrome,
-            border: Border(
-              bottom: BorderSide(
-                color: divider.withValues(alpha: immersiveDark ? 0.12 : 0.45),
-                width: AppSpacing.hairline,
-              ),
-            ),
-          ),
-          child: SizedBox(height: AppSpacing.toolbarHeight, child: child),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _insertEntityMentionFromSelection(
-    String nodeId,
-    int start,
-    int end,
-  ) async {
-    final selection = await pickArticleEntityMentionHomepage(context);
-    if (!mounted || selection == null) return;
-    final canonical = selection.canonicalEntityId?.trim() ?? '';
-    if (canonical.isEmpty) {
-      return;
-    }
-    ref
-        .read(createEditorProvider.notifier)
-        .attachArticleEntityMention(
-          nodeId,
-          start,
-          end,
-          targetType: 'entity',
-          targetId: canonical,
-          displayText: selection.title,
-        );
-  }
-
-  Widget _buildMediaComposerSection({
-    required CreateEditorState state,
-    required String title,
-    required String trailing,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _buildSectionHeader(title: title, trailing: trailing),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        _buildSurfacePanel(
-          padding: EdgeInsets.all(AppSpacing.containerSm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _buildMediaStrip(
-                state: state,
-                onAdd: state.hasVideo
-                    ? _pickVideoForMedia
-                    : _pickImagesForCurrentEditor,
-                onTapImage: _editCurrentImage,
-                onRemove: (index) {
-                  if (state.mediaKind == CreateMediaKind.video) {
-                    ref.read(createEditorProvider.notifier).clearVideo();
-                  } else {
-                    ref
-                        .read(createEditorProvider.notifier)
-                        .removeImageAt(index);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionHeader({required String title, String? trailing}) {
-    return Row(
-      children: <Widget>[
-        if (title.trim().isNotEmpty)
-          Text(
-            title,
-            style: TextStyle(
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              fontSize: AppTypography.sm,
-              fontWeight: AppTypography.semiBold,
-              letterSpacing: 0.2,
-            ),
-          ),
-        const Spacer(),
-        if (trailing != null)
-          Text(
-            trailing,
-            style: TextStyle(
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              fontSize: AppTypography.sm,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSurfacePanel({required Widget child, EdgeInsets? padding}) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final panelBackground = CupertinoColors.secondarySystemGroupedBackground
-        .resolveFrom(context);
-    final separator = CupertinoColors.separator.resolveFrom(context);
-    return Container(
-      padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: panelBackground,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(
-          color: separator.withValues(alpha: 0.18),
-          width: AppSpacing.hairline,
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.foregroundPrimary,
-            ).withValues(alpha: isDark ? 0.2 : 0.04),
-            blurRadius: AppSpacing.twenty,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: child,
     );
   }
 }

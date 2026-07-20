@@ -297,4 +297,12 @@ report = {
 Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
+if [[ -f "quwoquan_service/services/${service}/deploy/Dockerfile" ]]; then
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    quwoquan_service/scripts/runtime/generate_service_supply_chain.py \
+    --service "$service" \
+    --env "$env_name" \
+    --package-dir "$out_dir"
+fi
+
 echo "service env package prepared: $out_dir"

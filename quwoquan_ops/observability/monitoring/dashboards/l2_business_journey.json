@@ -137,6 +137,67 @@
             "legendFormat": "P95 {{ span_name }}"
           }
         ]
+      },
+      {
+        "title": "群聊创建成功率与 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 56 },
+        "description": "服务端黄金信号；产品侧来源采用率与完成漏斗仍以 SLS journey_action 为单一事实源。",
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])), 1e-9)",
+            "legendFormat": "创建成功率"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])) by (le))",
+            "legendFormat": "创建 P95"
+          }
+        ]
+      },
+      {
+        "title": "群聊/圈子候选源成功率与 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 56 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])), 1e-9)",
+            "legendFormat": "候选源成功率"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])) by (le, route))",
+            "legendFormat": "P95 {{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "群聊 Outbox 与 Inbox 投影健康",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 64 },
+        "targets": [
+          {
+            "expr": "runtime_health_check_status{instance=~\"chat-service(:[0-9]+)?\",check=~\"(message|conversation|membership|user_state)_outbox_relay|inbox_projection\"}",
+            "legendFormat": "{{ check }}"
+          }
+        ]
+      },
+      {
+        "title": "群聊 durable sync 实时补拉",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 72 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_runtime_media_sync_hint_to_pull_delay_ms_bucket{instance=~\"chat-service(:[0-9]+)?\"}[10m])) by (le))",
+            "legendFormat": "hint-to-pull P95 (ms)"
+          },
+          {
+            "expr": "sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\",result=\"failure\"}[10m])) / clamp_min(sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])), 1e-9)",
+            "legendFormat": "hint fanout 失败率"
+          },
+          {
+            "expr": "increase(quwoquan_runtime_media_sync_requires_resync_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])",
+            "legendFormat": "requires resync"
+          }
+        ]
       }
     ]
   }

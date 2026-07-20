@@ -43,8 +43,10 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 	}
 	result := make(map[string]postapp.MediaAssetBindingSlice, len(assets))
 	for assetID, asset := range assets {
-		publicSliceKey := asset.VideoPublicSliceKey
-		if asset.MediaType != "video" {
+		publicSliceKey := asset.ImagePublicSliceKey
+		if asset.MediaType == "video" {
+			publicSliceKey = asset.VideoPublicSliceKey
+		} else if asset.MediaType != "image" {
 			publicSliceKey = runtimemedia.BuildContentMediaPublicSliceKey(
 				asset.MediaType,
 				asset.AssetID,
@@ -52,7 +54,8 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 				asset.ContentType,
 			)
 		}
-		if publicSliceKey == "" {
+		ready := asset.ProcessingStatus == mediamodel.ProcessingStatusReady
+		if ready && publicSliceKey == "" {
 			return nil, fmt.Errorf(
 				"media asset %q cannot derive a canonical public slice key",
 				asset.AssetID,
@@ -61,7 +64,8 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 		result[assetID] = postapp.MediaAssetBindingSlice{
 			AssetID:                      asset.AssetID,
 			OwnerID:                      asset.OwnerID,
-			Ready:                        asset.ProcessingStatus == mediamodel.ProcessingStatusReady,
+			Ready:                        ready,
+			ProcessingStatus:             string(asset.ProcessingStatus),
 			MediaType:                    asset.MediaType,
 			ContentType:                  asset.ContentType,
 			Version:                      asset.Version,
@@ -103,12 +107,23 @@ func (r *PostBindingReader) MaterializePublicSlices(
 			}
 			continue
 		}
+		sourceObjectKey := asset.ObjectKey
 		publicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
 			asset.MediaType,
 			asset.AssetID,
 			asset.Version,
 			asset.ContentType,
 		)
+		if asset.MediaType == "image" {
+			sourceObjectKey = asset.ImageNormalizedObjectKey
+			publicSliceKey = asset.ImagePublicSliceKey
+			if sourceObjectKey == "" {
+				return fmt.Errorf(
+					"ready image asset %q has no normalized source object",
+					asset.AssetID,
+				)
+			}
+		}
 		if publicSliceKey == "" {
 			return fmt.Errorf(
 				"media asset %q cannot derive a canonical public slice key",
@@ -117,7 +132,7 @@ func (r *PostBindingReader) MaterializePublicSlices(
 		}
 		if err := r.publisher.PublishPublicSlice(
 			ctx,
-			asset.ObjectKey,
+			sourceObjectKey,
 			publicSliceKey,
 		); err != nil {
 			return fmt.Errorf(

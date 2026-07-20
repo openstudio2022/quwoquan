@@ -15,10 +15,10 @@ void main() {
       );
     });
 
-    test('web（Web Push + 站内）→ webPushInApp', () {
+    test('web（仅前台 realtime）→ inAppOnly', () {
       expect(
         resolveIncomingCallChannel(CapabilityProfile.web),
-        IncomingCallChannel.webPushInApp,
+        IncomingCallChannel.inAppOnly,
       );
     });
 
@@ -70,10 +70,10 @@ void main() {
       expect(caps.passkeyLogin, isTrue);
     });
 
-    test('web：原生来电屏关、Web Push 开', () {
+    test('web：原生来电屏与未落地 Web Push 均关闭', () {
       final caps = platformCapabilitiesFor(AppPlatform.web);
       expect(caps.incomingCallUi, isFalse);
-      expect(caps.webPushIncomingCall, isTrue);
+      expect(caps.webPushIncomingCall, isFalse);
       expect(caps.realtimeCommunication, isTrue);
       expect(caps.systemCredentialLogin, isFalse);
       expect(caps.passkeyLogin, isFalse);

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -13,7 +14,6 @@ import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -30,6 +30,7 @@ import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 dynamic _openStartupAuthGateOverride() {
@@ -354,8 +355,8 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -363,14 +364,11 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -410,8 +408,8 @@ class _MutableAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -421,16 +419,13 @@ class _MutableAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     authenticated = true;
   }
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -490,7 +485,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(UITextConstants.chatPrimaryContacts),
+          matching: find.text(ChatText.chatPrimaryContacts),
         ),
         findsOneWidget,
       );
@@ -629,10 +624,7 @@ void main() {
         find.text(UITextConstants.createActionAddContactShort),
         findsOneWidget,
       );
-      expect(
-        find.text(UITextConstants.createActionCreateGroupShort),
-        findsOneWidget,
-      );
+      expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
       expect(
         find.text(UITextConstants.createActionCreateCircleShort),
         findsOneWidget,
@@ -778,14 +770,18 @@ void main() {
       final container = ProviderScope.containerOf(loginContext);
       await container
           .read(authSessionControllerProvider.notifier)
-          .applyLoginResult(
-            AuthLoginResultDto(
+          .applyLoginGrant(
+            const AuthSessionGrant(
               accessToken: 'access-token',
               refreshToken: 'refresh-token',
               ownerId: 'user_001',
               accountState: 'active',
               identityOrigin: 'phone',
-              activeSub: const <String, dynamic>{'id': 'user_001'},
+              activeSub: ActivePersonaEnvelope(subAccountId: 'user_001'),
+              logicalShard: 0,
+              anonymousRetentionPolicy: '',
+              subAccountCount: 1,
+              sessionRememberTtlSeconds: 0,
             ),
           );
       GoRouter.of(loginContext).go(AppRoutePaths.home);
@@ -834,7 +830,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(UITextConstants.chatPrimaryContacts),
+          matching: find.text(ChatText.chatPrimaryContacts),
         ),
       );
       await tester.pumpAndSettle();
@@ -1364,7 +1360,7 @@ void main() {
       );
       scrollView.controller!.jumpTo(0);
       await tester.pump(const Duration(milliseconds: 120));
-      expect(find.text(UITextConstants.webPcBrandName), findsOneWidget);
+      expect(find.text(UITextConstants.webPcBrandName), findsWidgets);
       scrollView.controller!.jumpTo(AppSpacing.webPcWelcomeHeroHeight);
       await tester.pump(const Duration(milliseconds: 120));
       expect(

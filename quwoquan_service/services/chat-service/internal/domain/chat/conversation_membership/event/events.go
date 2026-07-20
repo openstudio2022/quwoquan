@@ -5,5 +5,6 @@ package event
 const (
 	ConversationMemberAdded       = "ConversationMemberAdded"
 	ConversationMemberRemoved     = "ConversationMemberRemoved"
+	ConversationMemberLeft        = "ConversationMemberLeft"
 	ConversationMemberRoleChanged = "ConversationMemberRoleChanged"
 )

@@ -4,6 +4,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'source_attribution_dto.g.dart';
 
 class VideoPostDto extends PostBaseDto {
   @override final String id;
@@ -18,6 +19,7 @@ class VideoPostDto extends PostBaseDto {
   @override final List<String> authorIdentityTags;
   @override final bool authorVerified;
   @override final String? body;
+  @override final SourceAttributionDto? sourceAttribution;
   @override final String videoUrl;
   final String thumbnailUrl;
   final String coverUrl;
@@ -54,6 +56,7 @@ class VideoPostDto extends PostBaseDto {
     required this.authorIdentityTags,
     required this.authorVerified,
     this.body,
+    this.sourceAttribution,
     required this.videoUrl,
     required this.thumbnailUrl,
     required this.coverUrl,
@@ -92,6 +95,7 @@ class VideoPostDto extends PostBaseDto {
       authorIdentityTags: _parseStringList(m['authorIdentityTags']) ?? <String>[],
       authorVerified: m['authorVerified'] as bool? ?? false,
       body: m['body']?.toString() ?? null,
+      sourceAttribution: m['sourceAttribution'] == null ? null : SourceAttributionDto.fromMap(_parseStringKeyMap(m['sourceAttribution'])!),
       videoUrl: m['videoUrl']?.toString() ?? '',
       thumbnailUrl: m['thumbnailUrl']?.toString() ?? '',
       coverUrl: m['coverUrl']?.toString() ?? '',
@@ -131,6 +135,7 @@ class VideoPostDto extends PostBaseDto {
       'authorIdentityTags': source['authorIdentityTags'],
       'authorVerified': source['authorVerified'],
       'body': source['body'],
+      'sourceAttribution': source['sourceAttribution'],
       'videoUrl': source['videoUrl'],
       'thumbnailUrl': source['thumbnailUrl'],
       'coverUrl': source['coverUrl'],
@@ -171,6 +176,7 @@ class VideoPostDto extends PostBaseDto {
       'authorIdentityTags': authorIdentityTags,
       'authorVerified': authorVerified,
       'body': body,
+      'sourceAttribution': sourceAttribution,
       'videoUrl': videoUrl,
       'thumbnailUrl': thumbnailUrl,
       'coverUrl': coverUrl,
@@ -209,6 +215,7 @@ class VideoPostDto extends PostBaseDto {
     List<String>? authorIdentityTags,
     bool? authorVerified,
     String? body,
+    SourceAttributionDto? sourceAttribution,
     String? videoUrl,
     String? thumbnailUrl,
     String? coverUrl,
@@ -245,6 +252,7 @@ class VideoPostDto extends PostBaseDto {
       authorIdentityTags: authorIdentityTags ?? this.authorIdentityTags,
       authorVerified: authorVerified ?? this.authorVerified,
       body: body ?? this.body,
+      sourceAttribution: sourceAttribution ?? this.sourceAttribution,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       coverUrl: coverUrl ?? this.coverUrl,
@@ -292,6 +300,17 @@ DateTime? _parseDateTime(dynamic v) {
 List<String>? _parseStringList(dynamic v) {
   if (v == null) return null;
   if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}
+
+Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) {
+    return Map<String, dynamic>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
   return null;
 }
 

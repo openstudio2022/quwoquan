@@ -1,0 +1,18 @@
+entity: AssistantScorecardFact
+
+scenarios:
+  - name: scorecard_append_dedupe
+    operation: ReportScorecard
+    go_func: TestScorecardAppendDedupe
+    evidence: api_integration
+    assertions:
+      - assistant_scorecard_facts 集合按 scoreId unique 索引 dedupe
+      - 重复 scoreId 幂等重放，不产生第二条事实
+
+  - name: scorecard_written_by_run_completion
+    operation: ReportScorecard
+    go_func: TestAssistantRunWritesScorecardOnCompletion
+    evidence: api_integration
+    assertions:
+      - run 完成时服务端自动落 scorecard（端侧不直接上报）
+      - internal path 不经网关对外暴露（拓扑承载）；service principal 强制随 generated transport 迁移收口

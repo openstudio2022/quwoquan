@@ -233,27 +233,34 @@ func (s *CallSessionService) InviteToCall(session *model.CallSession, inviteeIDs
 	return nil
 }
 
-// HandleTimeout checks whether the call has exceeded the ring timeout
+// RingTimeout 返回该会话的振铃超时阈值（1v1 30s / 群 60s），
+// 与 storage.yaml lifecycle_timers.ring_timeout 同源。
+func (s *CallSessionService) RingTimeout(session *model.CallSession) time.Duration {
+	if session.MaxParticipants > model.MaxParticipants1v1 {
+		return 60 * time.Second
+	}
+	return 30 * time.Second
+}
+
+// HandleTimeout checks whether the call has reached the ring timeout
 // (30s for 1v1, 60s for group). Returns true if the call was timed out.
-func (s *CallSessionService) HandleTimeout(session *model.CallSession) (bool, error) {
+// 振铃期无人接听的终态是 no_answer（对齐 contract.yaml call_no_answer_timeout
+// 与「未接来电」读模型语义）；now 由 application 注入，保证边界可确定测试。
+func (s *CallSessionService) HandleTimeout(session *model.CallSession, now time.Time) (bool, error) {
 	if session.Status != model.StatusRinging && session.Status != model.StatusInitiated {
 		return false, nil
 	}
-	timeoutDuration := 30 * time.Second
-	if session.MaxParticipants > model.MaxParticipants1v1 {
-		timeoutDuration = 60 * time.Second
-	}
-	if time.Since(session.CreatedAt) < timeoutDuration {
+	now = now.UTC()
+	if now.Sub(session.CreatedAt.UTC()) < s.RingTimeout(session) {
 		return false, nil
 	}
-	now := time.Now()
 	for i := range session.Participants {
 		if session.Participants[i].Status == model.ParticipantInvited || session.Participants[i].Status == model.ParticipantRinging {
 			session.Participants[i].Status = model.ParticipantTimeout
 		}
 	}
 	session.Status = model.StatusEnded
-	session.EndReason = model.EndReasonTimeout
+	session.EndReason = model.EndReasonNoAnswer
 	session.EndedAt = &now
 	session.UpdatedAt = now
 	return true, nil
@@ -281,33 +288,6 @@ func (s *CallSessionService) ToggleCamera(session *model.CallSession, userID str
 		return errors.New("participant not connected")
 	}
 	p.IsCameraOn = cameraOn
-	session.UpdatedAt = time.Now()
-	return nil
-}
-
-func (s *CallSessionService) StartRecording(session *model.CallSession, userID string) error {
-	if session.Status != model.StatusInCall {
-		return errors.New("can only record active calls")
-	}
-	if session.InitiatorID != userID {
-		return errors.New("only initiator can start recording")
-	}
-	if session.IsRecording {
-		return errors.New("already recording")
-	}
-	session.IsRecording = true
-	session.UpdatedAt = time.Now()
-	return nil
-}
-
-func (s *CallSessionService) StopRecording(session *model.CallSession, userID string) error {
-	if !session.IsRecording {
-		return errors.New("not recording")
-	}
-	if session.InitiatorID != userID {
-		return errors.New("only initiator can stop recording")
-	}
-	session.IsRecording = false
 	session.UpdatedAt = time.Now()
 	return nil
 }
@@ -342,25 +322,40 @@ func (s *CallSessionService) StopScreenShare(session *model.CallSession, userID 
 	return nil
 }
 
-func (s *CallSessionService) SetConnected(session *model.CallSession, userID string) {
-	p := findParticipant(session, userID)
-	if p != nil && (p.Status == model.ParticipantConnecting || p.Status == model.ParticipantRinging) {
-		now := time.Now()
-		p.Status = model.ParticipantConnected
-		p.JoinedAt = &now
+// SetConnected 记录参与者媒体建连事实（ReportMediaConnected 命令的领域行为）：
+// 仅 connecting 参与者可首次进入 connected；≥2 人 connected 时会话进入
+// in_call 并只写一次 startedAt。now 由 application 注入。
+func (s *CallSessionService) SetConnected(session *model.CallSession, userID string, now time.Time) error {
+	if session.Status == model.StatusEnded {
+		return errors.New("cannot report connected on an ended call")
 	}
+	p := findParticipant(session, userID)
+	if p == nil {
+		return errors.New("user not in call")
+	}
+	if p.Status == model.ParticipantConnected {
+		return nil
+	}
+	if p.Status != model.ParticipantConnecting {
+		return errors.New("participant cannot report connected in current state")
+	}
+	now = now.UTC()
+	p.Status = model.ParticipantConnected
+	p.JoinedAt = &now
 	connectedCount := 0
 	for _, pp := range session.Participants {
 		if pp.Status == model.ParticipantConnected {
 			connectedCount++
 		}
 	}
-	if connectedCount >= 2 && session.Status == model.StatusConnecting {
-		now := time.Now()
+	if connectedCount >= 2 && session.Status != model.StatusInCall {
 		session.Status = model.StatusInCall
-		session.StartedAt = &now
+		if session.StartedAt == nil {
+			session.StartedAt = &now
+		}
 	}
-	session.UpdatedAt = time.Now()
+	session.UpdatedAt = now
+	return nil
 }
 
 func findParticipant(session *model.CallSession, userID string) *model.Participant {

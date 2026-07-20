@@ -15,9 +15,10 @@ import (
 )
 
 // PostReader reads posts back so a lifecycle event (carrying only an aggregate
-// id) can be reconciled against the full post.
+// id) can be reconciled against the full post. Load must preserve storage/decode
+// errors so the dedicated Post outbox checkpoint remains replayable.
 type PostReader interface {
-	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
+	Load(ctx context.Context, id string) (*postmodel.Post, bool, error)
 	ListAll(ctx context.Context) ([]postmodel.Post, error)
 }
 
@@ -88,7 +89,11 @@ func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent
 // deleted once its last free-text reference is gone — carried by entity.homepage).
 func (p *PlaceProjector) reconcile(ctx context.Context, postID, eventType string) error {
 	currentID := ""
-	if post, ok := p.reader.FindByID(ctx, postID); ok && post != nil {
+	post, found, err := p.reader.Load(ctx, postID)
+	if err != nil {
+		return fmt.Errorf("load post %s for place reconciliation: %w", postID, err)
+	}
+	if found && post != nil {
 		if ref, eligible := searchprojection.DerivePlaceRef(*post); eligible {
 			currentID = ref.PlaceID
 			if snap, err := p.store.AddReference(ctx, ref, postID); err != nil {

@@ -80,6 +80,14 @@ func (r *RedisClientAdapter) SAdd(ctx context.Context, key string, members ...st
 	return r.client.SAdd(ctx, key, args...).Err()
 }
 
+func (r *RedisClientAdapter) SRem(ctx context.Context, key string, members ...string) error {
+	args := make([]any, 0, len(members))
+	for _, m := range members {
+		args = append(args, m)
+	}
+	return r.client.SRem(ctx, key, args...).Err()
+}
+
 func (r *RedisClientAdapter) SMembers(ctx context.Context, key string) ([]string, error) {
 	return r.client.SMembers(ctx, key).Result()
 }
@@ -235,6 +243,14 @@ func (r *RedisClusterAdapter) SAdd(ctx context.Context, key string, members ...s
 		args = append(args, m)
 	}
 	return r.client.SAdd(ctx, key, args...).Err()
+}
+
+func (r *RedisClusterAdapter) SRem(ctx context.Context, key string, members ...string) error {
+	args := make([]any, 0, len(members))
+	for _, m := range members {
+		args = append(args, m)
+	}
+	return r.client.SRem(ctx, key, args...).Err()
 }
 
 func (r *RedisClusterAdapter) SMembers(ctx context.Context, key string) ([]string, error) {

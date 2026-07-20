@@ -9,18 +9,28 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CandidateInput(BaseModel):
-    """评分 Reader 的候选 transport DTO，不登记为业务对象。"""
+    """评分 Reader 的候选 transport DTO，不登记为业务对象。 N3-3 特征偏斜收口：publishHour 由服务端从 publishedAt 派生随请求下发 （训练-在线同源）；bodyLength/aspectRatio/hasCover 因在线召回投影不携带 已从特征 registry 退役（S1 召回投影补齐后再启用），wire 不传。 """
     contentId: str | None = None
     contentType: str | None = None
     authorId: str | None = None
     tagRefs: list[str] | None = None
     entityRefs: list[str] | None = None
     ageHours: float | None = None
+    publishHour: int | None = None
     viewCount: int | None = None
     likeCount: int | None = None
     commentCount: int | None = None
     shareCount: int | None = None
     recallPath: str | None = None
+    qualityScore: float | None = None
+    contentVertical: str | None = None
+    supplySource: str | None = None
+    intersectionFactStrength: float | None = None
+    intersectionFreshness: float | None = None
+    affinityIntersectionScore: float | None = None
+    intersectionSourceRefTop: str | None = None
+    intersectionConfidenceLabel: str | None = None
+    intersectionClass: str | None = None
 
 
 class CandidateScore(BaseModel):
@@ -42,8 +52,9 @@ class ModelScoreRequest(BaseModel):
 
 
 class ModelScoreResponse(BaseModel):
-    """单次评分 Reader 的 transport 结果。"""
+    """单次评分 Reader 的 transport 结果；模型命中时必须返回具体发布身份供曝光事实审计。"""
     scores: list[CandidateScore]
+    modelReleaseId: str | None = None
 
 
 class BatchModelScoreRequest(BaseModel):

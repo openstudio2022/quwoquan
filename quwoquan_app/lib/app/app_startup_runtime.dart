@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
+import 'package:quwoquan_app/app/startup/startup_telemetry_support.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
@@ -37,6 +39,7 @@ final class AppStartupRuntime {
   bool _nativeSegmentsHydrated = false;
   bool _productStartupReported = false;
   String _startupFailureCode = '';
+  String _startupAttemptId = '';
   AppTelemetryRecorder? _productTelemetry;
   Future<void>? _nativeSegmentsHydration;
 
@@ -83,6 +86,7 @@ final class AppStartupRuntime {
     _nativeSegmentsHydration = null;
     _productStartupReported = false;
     _startupFailureCode = '';
+    _startupAttemptId = '';
     _productTelemetry = null;
     _runAppMs = null;
     _firstFrameMs = null;
@@ -109,7 +113,12 @@ final class AppStartupRuntime {
       return;
     }
     _bootstrapStarted = true;
+    _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
+    _recordPlatformStartupEvent(
+      eventName: 'startup_attempt_started',
+      properties: _snapshotProperties(phase: 'startup_attempt_started'),
+    );
     final platformElapsed = readPlatformStartupElapsedMs();
     _dartElapsedAtDeadlineArmMs = _elapsedMs;
     if (platformElapsed != null) {
@@ -577,15 +586,25 @@ final class AppStartupRuntime {
   }
 
   void _recordPlatformSafeTerminal(String surface) {
+    _recordPlatformStartupEvent(
+      eventName: 'startup_safe_terminal',
+      properties: <String, Object?>{
+        'surface': surface,
+        ..._snapshotProperties(phase: 'startup_safe_terminal'),
+      },
+    );
+  }
+
+  void _recordPlatformStartupEvent({
+    required String eventName,
+    required Map<String, dynamic> properties,
+  }) {
     try {
       recordPlatformStartupEvent(
-        jsonEncode(<String, String>{
-          'eventName': 'startup_safe_terminal',
-          'surface': surface,
-        }),
+        jsonEncode(<String, Object?>{'eventName': eventName, ...properties}),
       );
     } catch (_) {
-      // 该确认仅提升 native/Web 兜底精度，不得反向击穿已经可见的 Flutter UI。
+      // 原生启动证据仅用于诊断，不得反向击穿已经可见的 Flutter UI。
     }
   }
 
@@ -635,8 +654,15 @@ final class AppStartupRuntime {
   }
 
   Map<String, dynamic> _snapshotProperties({required String phase}) {
+    final runtimeSummary = CloudRuntimeConfig.runtimeDefineSummary;
+    final missingDefineKeys = runtimeSummary['missingKeys'] ?? '';
     return <String, dynamic>{
       'phase': phase,
+      'attemptId': _startupAttemptId,
+      'runtimeEnv': runtimeSummary['runtimeEnv'],
+      'launchMode': runtimeSummary['launchMode'],
+      'configurationState': runtimeSummary['configurationState'],
+      if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
       if (_runAppMs != null) 'runAppMs': _runAppMs,
       if (_firstFrameMs != null) 'firstFrameMs': _firstFrameMs,
       if (_welcomeShownMs != null) 'welcomeShownMs': _welcomeShownMs,

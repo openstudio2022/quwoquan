@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -47,6 +49,7 @@ func WithPrincipal(ctx context.Context, principal Principal) context.Context {
 type MiddlewareConfig struct {
 	AccessTokenVerifier  *Verifier
 	DeviceTicketVerifier *Verifier
+	OperatorOIDCVerifier *OIDCVerifier
 }
 
 // Middleware 永远先清除客户端身份头，再从唯一 credential 重建可信 Principal。
@@ -73,11 +76,26 @@ func Middleware(config MiddlewareConfig) func(http.Handler) http.Handler {
 				err    error
 			)
 			if accessSupplied {
-				if accessToken == "" || config.AccessTokenVerifier == nil {
+				if accessToken == "" {
 					writeCredentialError(w, r, ErrInvalidToken)
 					return
 				}
-				claims, err = config.AccessTokenVerifier.Verify(accessToken)
+				if config.AccessTokenVerifier != nil {
+					claims, err = config.AccessTokenVerifier.Verify(accessToken)
+				} else {
+					err = ErrInvalidToken
+				}
+				if err != nil && config.OperatorOIDCVerifier != nil && looksLikeRS256JWT(accessToken) {
+					operatorPrincipal, operatorErr := config.OperatorOIDCVerifier.Verify(accessToken)
+					if operatorErr == nil {
+						principal := operatorPrincipal
+						applyTrustedIdentityHeaders(r.Header, principal.Actor)
+						ctx := WithPrincipal(r.Context(), principal)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+					err = operatorErr
+				}
 			} else {
 				if config.DeviceTicketVerifier == nil {
 					writeCredentialError(w, r, ErrInvalidToken)
@@ -95,6 +113,21 @@ func Middleware(config MiddlewareConfig) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func looksLikeRS256JWT(token string) bool {
+	parts := strings.Split(strings.TrimSpace(token), ".")
+	if len(parts) != 3 {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	var header struct {
+		Alg string `json:"alg"`
+	}
+	return json.Unmarshal(raw, &header) == nil && header.Alg == "RS256"
 }
 
 func principalFromClaims(claims Claims) Principal {
@@ -129,6 +162,9 @@ func writeCredentialError(w http.ResponseWriter, r *http.Request, cause error) {
 	if errors.Is(cause, ErrExpiredToken) {
 		reason = "token_expired"
 		debugMessage = "credential expired"
+	} else if errors.Is(cause, ErrOIDCNotMFA) {
+		reason = "mfa_required"
+		debugMessage = "operator mfa is required"
 	}
 	rterr.WriteHTTPError(
 		w,

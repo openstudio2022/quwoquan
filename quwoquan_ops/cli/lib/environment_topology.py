@@ -21,6 +21,7 @@ TARGETS = (
 URL_FIELDS = (
     "api",
     "realtime",
+    "rtc",
     "productOps",
     "mediaAvatar",
     "mediaImage",
@@ -59,6 +60,7 @@ ENVIRONMENT_CANONICAL_TARGET = {
 LOCAL_PUBLIC_PORT_ROLES = {
     "api": "api-edge",
     "realtime": "api-edge",
+    "rtc": "api-edge",
     "productOps": "product-ops-edge",
     "mediaAvatar": "media-edge",
     "mediaImage": "media-edge",
@@ -421,7 +423,7 @@ def _looks_like_cidr(value: str) -> bool:
 
 
 def _validate_public_base_url(label: str, field: str, value: str) -> list[str]:
-    if field == "realtime":
+    if field in {"realtime", "rtc"}:
         if value.startswith("wss://"):
             return []
         return [f"{label} must use secure wss://"]

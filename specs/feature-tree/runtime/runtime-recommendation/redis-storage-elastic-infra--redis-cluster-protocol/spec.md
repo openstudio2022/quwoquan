@@ -1,4 +1,4 @@
-# L4 对象任务：redis-cluster-protocol
+# L3 对象任务：redis-cluster-protocol
 
 ## 功能说明
 

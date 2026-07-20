@@ -3,7 +3,7 @@ entity: Comment
 scenarios:
   - name: comment_create_outbox_and_post_projection
     operation: CreateComment
-    go_func: TestCommentWithNotification
+    go_func: TestCommentAggregateMongoTransactionAndCAS
     evidence: api_integration
     assertions:
       - comments、comment_command_receipts、comment_outbox 在同一 Mongo transaction 提交
@@ -12,7 +12,7 @@ scenarios:
 
   - name: comment_keyset_page
     operation: ListComments
-    go_func: TestCommentListPagination
+    go_func: TestCommentMongoAdapter_ListQueryUsesDeclaredIndex
     evidence: api_integration
     assertions:
       - pinned-first、createdAt、id 构成稳定 keyset 全序
@@ -21,8 +21,8 @@ scenarios:
 
   - name: comment_reply_page
     operation: ListCommentReplies
-    go_func: TestCommentListPagination
-    evidence: api_integration
+    go_func: TestCommentAggregateNormalizesTwoLevelReplyInvariant
+    evidence: local_contract
     assertions:
       - 回复只允许同 Post active Comment 目标
       - parentCommentId 归一为一级线程根
@@ -67,3 +67,66 @@ scenarios:
     assertions:
       - owned Post IDs 由 PostOwnershipReader 获取
       - 不接受任意 authorId 查询参数
+
+  - name: comment_bind_media_assets
+    operation: BindMediaAssetsToComment
+    go_func: TestBindMediaAssetsToCommentIsOwnerScopedAndIdempotent
+    evidence: local_contract
+    assertions:
+      - 仅 Comment 作者可绑定已验证且归属自己的 MediaAsset
+      - 首次绑定递增 version 并产生 CommentAttachmentsBound
+      - 相同 key 重放原 receipt 且不产生第二个 outbox 事实
+
+  - name: comment_hide_operator_moderation
+    operation: HideComment
+    go_func: TestHideCommentModerationLifecycle
+    evidence: local_contract
+    assertions:
+      - typed HideCommentCommand 仅接受 operatorId、commentId 与审计 reason
+      - active 经服务端 CAS 迁移为 hidden 并从 active reader 与 count 中移除
+      - 相同 Idempotency-Key 重放原 receipt 且只产生一条 CommentModerated
+
+  - name: comment_restore_operator_moderation
+    operation: RestoreComment
+    go_func: TestRestoreCommentModerationLifecycle
+    evidence: local_contract
+    assertions:
+      - hidden 经服务端 CAS 恢复为 active 并清空 hiddenAt
+      - deleted 与 tombstoned 终态拒绝恢复
+      - CommentModerated 携带 operatorId、action、reason 与 occurredAt 审计载荷
+
+  - name: comment_hide_http_operator_guard
+    operation: HideComment
+    go_func: TestCommentModerationHTTPRequiresGeneratedOperatorAuthorization
+    evidence: local_contract
+    assertions:
+      - generated route 直接 dispatch 到 HideComment handler
+      - runtime guard 同时校验 operator principal、ops.case.write scope 与 content.moderation.decide permission
+      - 伪造客户端身份头、普通账号与缺 scope/permission 的 operator 均 fail closed
+
+  - name: comment_restore_http_operator_guard
+    operation: RestoreComment
+    go_func: TestCommentModerationHTTPRequiresGeneratedOperatorAuthorization
+    evidence: local_contract
+    assertions:
+      - generated route 直接 dispatch 到 RestoreComment handler
+      - handler 只从 verified operator account principal 取得 operatorId
+      - 成功响应返回恢复后的服务端 CAS version
+
+  - name: comment_hide_mongo_http
+    operation: HideComment
+    go_func: TestCommentModerationLifecycleApiIntegration
+    evidence: api_integration
+    assertions:
+      - generated route 经 runtime operator guard 到达 typed CommentCommandFacade
+      - Mongo aggregate、receipt 与 CommentModerated outbox 原子提交
+      - active page 与 Post commentCount 投影在 relay 后排除 hidden
+
+  - name: comment_restore_mongo_http
+    operation: RestoreComment
+    go_func: TestCommentModerationLifecycleApiIntegration
+    evidence: api_integration
+    assertions:
+      - Mongo 持久化恢复 active 并清空 hiddenAt
+      - active page 与 Post commentCount 投影在 relay 后重新包含评论
+      - hide 与 restore 的 durable audit payload 均可由 outbox 重放

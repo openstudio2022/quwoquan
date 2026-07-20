@@ -51,7 +51,7 @@ entries:
           - GWT2
           - GWT3
           - UAT1
-      - path: specs/feature-tree/user-identity-profile-relationship/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - profile-homepage-redesign
       - path: specs/feature-tree/journey_scenario_registry.yaml

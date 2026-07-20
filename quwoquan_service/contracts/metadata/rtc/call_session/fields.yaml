@@ -31,23 +31,20 @@ enums:
     values: [pending, ringing, accepted, declined, expired, cancelled]
     description: 通话邀请生命周期状态（用于通话中加人/链接入会的结果反馈）
 
-  ConnectionQuality:
-    values: [excellent, good, poor, unavailable]
-    description: 参与者媒体连接质量（端侧弱网指示来源之一）
-
 entities:
   CallSession:
     description: 通话会话（聚合根）
     fields:
       - name: _id
         source: _id
-        type: ObjectId
+        type: string
         constraints: [PK]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
         client_dart_name: callId
+        description: RFC 4122 UUID；同时作为 iOS CallKit / Android Telecom 的稳定通话标识
 
       - name: callType
         source: callType
@@ -158,27 +155,6 @@ entities:
         ops_exposure: read
         description: API JSON 嵌入参与者列表（非存储字段，客户端 DTO 合成）
 
-      - name: isRecording
-        source: isRecording
-        type: bool
-        constraints: [NOT_NULL]
-        client_default: "false"
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 是否正在录制
-
-      - name: recordingUrl
-        source: recordingUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: INTERNAL
-        log_policy: mask
-        api_exposure: read
-        ops_exposure: read
-        description: 录制文件 URL（通话结束后 Egress 回写）
-
       - name: isScreenSharing
         source: isScreenSharing
         type: bool
@@ -229,7 +205,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 通话建连时间（第一个参与者 connected 时）
+        description: 通话建连时间（至少两个参与者 connected、会话首次进入 in_call 时）
 
       - name: endedAt
         source: endedAt
@@ -334,69 +310,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: displayName
-        source: displayName
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 参与者展示名（来电页/通话格展示，避免端侧再查 user-service）
-
-      - name: avatarUrl
-        source: avatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 参与者头像 URL（无视频时占位展示）
-
-      - name: trustRelation
-        source: trustRelation
-        type: enum
-        enum_ref: TrustRelation
-        constraints: [NOT_NULL]
-        client_default: possibly_unknown
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 信任两态，驱动来源标签与隐私风险提示
-
-      - name: sourceLabel
-        source: sourceLabel
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 来源标签（如“来自当前群聊”“链接加入”），用于信任态展示
-
-      - name: isKnownContact
-        source: isKnownContact
-        type: bool
-        constraints: [NOT_NULL]
-        client_default: "false"
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 是否为当前用户的联系人/同好（trustRelation 派生快照，便于端侧直接判断）
-
-      - name: mutualContext
-        source: mutualContext
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 富信息预留（共同关注的人数量、共同群列表序列化），本轮 UI 不强制展示
-
       - name: inviteStatus
         source: inviteStatus
         type: enum
@@ -417,25 +330,3 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 邀请发起者 userId（区分原始发起人与会中加人邀请方）
-
-      - name: connectionQuality
-        source: connectionQuality
-        type: enum
-        enum_ref: ConnectionQuality
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 媒体连接质量，端侧弱网指示来源之一
-
-      - name: isSpeaking
-        source: isSpeaking
-        type: bool
-        constraints: [NOT_NULL]
-        client_default: "false"
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前是否正在发言（演讲者视图/发言人高亮）

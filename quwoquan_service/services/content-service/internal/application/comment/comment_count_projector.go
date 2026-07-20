@@ -29,7 +29,10 @@ func (p *CommentCountProjector) Publish(ctx context.Context, event commentports.
 	if p == nil || p.counts == nil || p.writer == nil {
 		return fmt.Errorf("Comment count projector is not configured")
 	}
-	if event.EventType != commentCreatedEventType && event.EventType != commentDeletedEventType {
+	if event.EventType != commentCreatedEventType &&
+		event.EventType != commentDeletedEventType &&
+		event.EventType != commentModeratedEventType &&
+		event.EventType != commentsTombstonedEventType {
 		return nil
 	}
 	var payload struct {

@@ -11,6 +11,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtchttp "quwoquan_service/services/rtc-service/internal/adapters/http"
 	"quwoquan_service/services/rtc-service/internal/application"
+	"quwoquan_service/services/rtc-service/internal/application/commandmeta"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	"quwoquan_service/services/rtc-service/internal/generated"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
@@ -24,7 +25,15 @@ func newGateTestOrchestrator(t *testing.T, gate application.RelationshipGate) *a
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
 	domainSvc := callsession.NewCallSessionService()
 	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
-	return application.NewCallOrchestrator(callStore, callCache, domainSvc, nil, tokenIssuer, nil, gate, nil)
+	return application.NewCallOrchestrator(
+		callStore,
+		callCache,
+		domainSvc,
+		nil,
+		tokenIssuer,
+		gate,
+		"wss://livekit.test:7880",
+	)
 }
 
 func rtcRelationshipGateForContractTest(
@@ -55,7 +64,11 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 		rtcRelationshipGateForContractTest(t, application.RelationshipCapability{}),
 	)
 
-	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"gate-reject-not-mutual",
+	)
+	_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
 		InitiatorID: "caller_a",
 		CallType:    "audio",
 		InviteeIDs:  []string{"caller_b"},
@@ -78,7 +91,11 @@ func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 		),
 	)
 
-	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"gate-reject-blocked",
+	)
+	_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
 		InitiatorID: "caller_c",
 		CallType:    "audio",
 		InviteeIDs:  []string{"caller_d"},
@@ -101,7 +118,8 @@ func TestInitiateCall_OneToOne_AllowsMutual(t *testing.T) {
 		),
 	)
 
-	resp, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
+	ctx := commandmeta.WithIdempotencyKey(context.Background(), "gate-allow-mutual")
+	resp, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
 		InitiatorID: "caller_ok",
 		CallType:    "audio",
 		InviteeIDs:  []string{"peer_ok"},

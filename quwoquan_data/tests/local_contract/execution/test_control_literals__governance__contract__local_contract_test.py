@@ -54,6 +54,91 @@ state.status = ExecutionStateStatus.REPAIRING
     ) == []
 
 
+def test_control_literals_reject_raw_queue_state_and_backend_control() -> None:
+    source = '''
+if job.get("state") == "queued":
+    job["state"] = "leased"
+backend = job.get("queueBackend")
+'''
+    issues = source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/execution/queue/runtime.py",
+    )
+    assert any("queue state must be decoded" in issue for issue in issues)
+    assert any("queue state writes must use QueueJobState" in issue for issue in issues)
+    assert any("queue backend must be decoded" in issue for issue in issues)
+
+
+def test_control_literals_accept_typed_queue_state_and_backend_control() -> None:
+    source = '''
+from core.control_types import QueueBackend, QueueJobState
+if job.state is QueueJobState.QUEUED:
+    transition(job)
+backend = job.backend
+assert backend is QueueBackend.LOCAL_FILE
+'''
+    assert source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/execution/queue/runtime.py",
+    ) == []
+
+
+def test_control_literals_reject_raw_review_verdict_fields() -> None:
+    source = '''
+if verdict.get("publishState") == "publishable":
+    publish()
+'''
+    issues = source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/review/publish_filter.py",
+    )
+    assert any("review verdict fields must be decoded" in issue for issue in issues)
+
+
+def test_control_literals_accept_typed_review_verdict_state() -> None:
+    source = '''
+from core.control_types import ReviewPublishState
+if verdict_state is ReviewPublishState.PUBLISHABLE:
+    publish()
+'''
+    assert source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/review/publish_filter.py",
+    ) == []
+
+
+def test_control_literals_reject_wire_receipt_control_in_rollout_attestation() -> None:
+    source = '''
+if receipt.get("status") == "completed":
+    attest()
+'''
+
+    issues = source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/release/canonical/rollout_attestation.py",
+    )
+
+    assert any("typed receipts" in issue for issue in issues)
+
+
+def test_control_literals_reject_wire_status_in_managed_agent_control() -> None:
+    issues = source_control_literal_issues(
+        'def inspect(outcome):\n    return outcome.get("status")\n',
+        label="quwoquan_data/scripts/content/execution/agent/agent_runner.py",
+    )
+
+    assert any("AgentRunOutcome attributes" in issue for issue in issues)
+
+
+def test_control_literals_reject_direct_managed_agent_history_read() -> None:
+    issues = source_control_literal_issues(
+        'def inspect(state):\n    return state.last_agent_run\n',
+        label="quwoquan_data/scripts/content/execution/agent/agent_checkpoint.py",
+    )
+
+    assert any("decoded by agent/history.py" in issue for issue in issues)
+
+
 def test_control_literals_reject_mapping_style_workflow_state_and_wire_status() -> None:
     source = '''
 from core.control_types import ExecutionStateStatus
@@ -91,6 +176,25 @@ request_timeout = 20
     assert any("runtime control number" in issue for issue in issues)
 
 
+def test_control_literals_distinguish_h10k_scale_from_unrelated_numeric_use() -> None:
+    unrelated = '''
+def inspect(text, width, height):
+    sample = text[:5000]
+    return sample if width * height >= 10000 else ""
+'''
+    assert source_control_literal_issues(
+        unrelated,
+        label="quwoquan_data/scripts/content/sample.py",
+    ) == []
+
+    copied_rollout_control = "completion_target_count = 5000\n"
+    issues = source_control_literal_issues(
+        copied_rollout_control,
+        label="quwoquan_data/scripts/content/sample.py",
+    )
+    assert any("rollout scale belongs" in issue for issue in issues)
+
+
 def test_control_literals_reject_string_issue_state_machine_and_legacy_result_issues() -> None:
     source = '''
 from core.control_types import ExecutionStage, StageKind, StageStatus
@@ -122,6 +226,20 @@ except Exception:
     issues = source_control_literal_issues(
         source,
         label="quwoquan_data/scripts/content/execution/sample.py",
+    )
+    assert any("not pass silently" in issue for issue in issues)
+
+
+def test_control_literals_reject_silent_broad_exception_in_post_logic() -> None:
+    source = '''
+try:
+    read_source()
+except Exception:
+    pass
+'''
+    issues = source_control_literal_issues(
+        source,
+        label="quwoquan_data/scripts/content/post/example.py",
     )
     assert any("not pass silently" in issue for issue in issues)
 

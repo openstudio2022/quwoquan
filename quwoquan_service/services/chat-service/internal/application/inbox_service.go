@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"time"
 
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
@@ -64,44 +63,6 @@ func (s *InboxService) ListInbox(ctx context.Context, req ListInboxRequest) ([]I
 	return items, nil
 }
 
-// IncrementUnread increases the unread count for a user in a conversation.
-// Called when a new message is sent by another user.
-func (s *InboxService) IncrementUnread(ctx context.Context, userId, conversationId string) error {
-	state, err := s.userStates.FindUserState(ctx, userId, conversationId)
-	if err != nil {
-		now := time.Now()
-		state = &model.ConversationUserState{
-			ID:             generateID(),
-			UserId:         userId,
-			ConversationId: conversationId,
-			UpdatedAt:      now,
-		}
-	}
-
-	state.UnreadCount++
-	state.UpdatedAt = time.Now()
-	return s.userStates.UpsertUserState(ctx, state)
-}
-
-// MarkAsRead resets the unread count and updates the read sequence for a user.
-func (s *InboxService) MarkAsRead(ctx context.Context, userId, conversationId string, readSeq int64) error {
-	state, err := s.userStates.FindUserState(ctx, userId, conversationId)
-	if err != nil {
-		now := time.Now()
-		state = &model.ConversationUserState{
-			ID:             generateID(),
-			UserId:         userId,
-			ConversationId: conversationId,
-			UpdatedAt:      now,
-		}
-	}
-
-	if readSeq > state.ReadSeq {
-		state.ReadSeq = readSeq
-	}
-	state.UnreadCount = 0
-	state.MentionUnreadCount = 0
-	state.LastReadAt = time.Now()
-	state.UpdatedAt = time.Now()
-	return s.userStates.UpsertUserState(ctx, state)
-}
+// 未读推进的唯一写入口是 InboxProjector（消费 MessageSent 事件），已读
+// 水位的唯一写入口是 MessageService.MarkAsRead 命令；本查询服务不再提供
+// 任何直接改写未读数的方法。

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import yaml
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -269,6 +270,26 @@ def create_execution_manifest(
         if retry_identity.sequence >= identity.sequence:
             raise ValueError("retryOf sequence must be lower than the new execution sequence")
 
+    recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
+    if not isinstance(recipe_payload, dict):
+        raise ValueError(f"recipe must be an object: {recipe_file}")
+    execution_binding = recipe_payload.get("execution")
+    if not isinstance(execution_binding, dict):
+        raise ValueError(f"recipe execution binding is missing: {recipe_file}")
+    from content.release.canonical.rollout_contract import ROLLOUT_PATH
+    from core.cursor_pricing import load_cursor_pricing
+
+    model_binding = {
+        "provider": str(execution_binding.get("agentProvider") or "cursor_sdk"),
+        "authorModel": str(execution_binding.get("model") or ""),
+        "authorModelFamily": str(execution_binding.get("modelFamily") or ""),
+        "reviewerModel": str(execution_binding.get("reviewModel") or ""),
+        "reviewerModelFamily": str(
+            execution_binding.get("reviewModelFamily") or ""
+        ),
+    }
+    if not all(model_binding.values()):
+        raise ValueError(f"recipe model binding is incomplete: {recipe_file}")
     candidate = {
         "executionId": identity.execution_id,
         "vertical": identity.vertical,
@@ -279,6 +300,12 @@ def create_execution_manifest(
         "sequence": identity.sequence,
         "recipe": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
         "sourceDigest": current_source_digest().to_document(),
+        "modelBinding": model_binding,
+        "pricingRevision": load_cursor_pricing().revision,
+        "rolloutContract": {
+            "path": ROLLOUT_PATH.relative_to(core_paths.REPO_ROOT).as_posix(),
+            "sha256": _file_sha256(ROLLOUT_PATH),
+        },
         "resolvedParams": resolved_params,
         "selectionPolicy": selection_policy.value,
         "targetSetRef": target_set_ref,
@@ -299,6 +326,9 @@ def create_execution_manifest(
             "sequence",
             "recipe",
             "sourceDigest",
+            "modelBinding",
+            "pricingRevision",
+            "rolloutContract",
             "resolvedParams",
             "selectionPolicy",
             "targetSetRef",

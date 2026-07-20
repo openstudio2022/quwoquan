@@ -1,4 +1,4 @@
-# L4 特性：settings-change-trace-link
+# L3 特性：settings-change-trace-link
 
 ## 功能说明
 - 细化 settings-change-trace-link 特性的功能边界与端云协同行为。

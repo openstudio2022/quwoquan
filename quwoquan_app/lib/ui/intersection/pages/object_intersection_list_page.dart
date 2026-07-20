@@ -116,6 +116,19 @@ class ObjectIntersectionListPage extends ConsumerWidget {
             isDark: isDark,
             inlineExpandCount: 50,
             onReasonTap: (reason) => _openObject(context, ref, reason),
+            onInlineExpand: (firstReason) {
+              // 全量列表页超过 50 条时的就地展开归因（intersection_expand，B6）。
+              ref
+                  .read(contentBehaviorTrackerProvider)
+                  .trackIntersectionExpand(
+                    contentId: objectId,
+                    intersectionId: firstReason.intersectionId,
+                    intersectionDimension: firstReason.dimension,
+                    intersectionClass: firstReason.intersectionClass,
+                    intersectionSourceRef: firstReason.source,
+                    referralSource: referralSourceForObjectType(objectType),
+                  );
+            },
           );
           if (card == null) {
             return Center(

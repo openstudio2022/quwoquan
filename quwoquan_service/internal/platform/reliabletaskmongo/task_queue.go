@@ -274,6 +274,36 @@ func (s *Store) ClaimReadyTaskByID(
 	return &task, nil
 }
 
+func (s *Store) ListReadyTasks(
+	ctx context.Context,
+	taskTypes []string,
+	limit int,
+	now time.Time,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	cursor, err := s.tasks.Find(
+		ctx,
+		readyTaskFilter(taskTypes, "", now),
+		options.Find().
+			SetSort(bson.D{
+				{Key: "nextAttemptAt", Value: 1},
+				{Key: "_id", Value: 1},
+			}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var tasks []reliabletask.ReliableAsyncTask
+	if err := cursor.All(ctx, &tasks); err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
 func readyTaskFilter(taskTypes []string, taskID string, now time.Time) bson.M {
 	filter := bson.M{
 		"nextAttemptAt": bson.M{"$lte": now.UTC()},

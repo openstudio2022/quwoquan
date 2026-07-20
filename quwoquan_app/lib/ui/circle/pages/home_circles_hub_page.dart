@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CircleDiscoveryFeedQuery, CircleDiscoveryFeedScope;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -19,12 +22,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_entity_bridge_strip.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -72,36 +77,63 @@ double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
 enum _HomeCirclesModuleTab { recommended, mine }
 
 class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
-  static const Set<String> _myCircleIds = <String>{
-    'c-photo-owner',
-    'c-tech-admin',
-    'c1',
-    'c2',
-    'c3',
-    'c-human-1',
-  };
+  Set<String> _myCircleIds = <String>{};
 
-  String _activeCategoryId = 'campus';
+  String _activeCategoryId = '';
   _HomeCirclesModuleTab _activeModuleTab = _HomeCirclesModuleTab.recommended;
   final Map<String, String> _activeSubCategoryIdsByCategory =
       <String, String>{};
   final GlobalKey _categoryBarKey = GlobalKey();
   late List<CircleHubFeedPostEntry> _circleFeedItems;
-  Map<String, CircleCategoryTabConfigDto> _categoryConfig =
+  // 分类配置的唯一真相源是 metadata 投影的 generated 常量。
+  final Map<String, CircleCategoryTabConfigDto> _categoryConfig =
       CircleCategoryTabDefaults.remoteStyleFallback;
   List<CircleDto> _hubCircleDtos = [];
   bool _isBootstrapping = true;
   UiErrorSemantic? _pageErrorSemantic;
+  int _bootstrapGeneration = 0;
+
+  // R20 页面曝光/停留：hub 属列表页，以稳定页面 id 走行为通道（同全局搜索页模式）。
+  static const String _hubPageContentId = 'home_circles_hub';
+  late final DateTime _pageEnteredAt;
+  ContentBehaviorTracker? _behaviorTracker;
 
   @override
   void initState() {
     super.initState();
+    _pageEnteredAt = DateTime.now();
     _circleFeedItems = [];
     unawaited(_bootstrapHubData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
+      _behaviorTracker!.trackImpression(
+        _hubPageContentId,
+        contentType: 'circle_hub_page',
+        referralSource: ReferralSource.organicFeed,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    final tracker = _behaviorTracker;
+    if (tracker != null) {
+      tracker.trackDwell(
+        _hubPageContentId,
+        durationSeconds:
+            DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0,
+        contentType: 'circle_hub_page',
+        referralSource: ReferralSource.organicFeed,
+      );
+    }
+    super.dispose();
   }
 
   Future<void> _bootstrapHubData() async {
-    final repo = ref.read(circleRepositoryProvider);
+    final requestGeneration = ++_bootstrapGeneration;
     if (mounted) {
       setState(() {
         _isBootstrapping = true;
@@ -110,63 +142,86 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     }
     Object? bootstrapError;
     var nextFeedItems = <CircleHubFeedPostEntry>[];
-    var nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
-      CircleCategoryTabDefaults.remoteStyleFallback,
-    );
     var nextCircleDtos = <CircleDto>[];
-    await Future.wait<void>([
-      () async {
-        try {
-          final feed = await repo.listHomeCircleDiscoveryFeed(limit: 200);
-          nextFeedItems = feed
-              .map(CircleHubFeedPostEntry.fromPostDto)
-              .toList(growable: true);
-        } catch (error) {
-          bootstrapError ??= error;
-          nextFeedItems = <CircleHubFeedPostEntry>[];
-        }
-      }(),
-      () async {
-        try {
-          final cfg = await repo.getCircleCategoryConfig().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => Map<String, CircleCategoryTabConfigDto>.from(
-              CircleCategoryTabDefaults.remoteStyleFallback,
-            ),
-          );
-          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
-            cfg,
-          );
-        } catch (_) {
-          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
-            CircleCategoryTabDefaults.remoteStyleFallback,
-          );
-        }
-      }(),
-      () async {
-        try {
-          final circlesMaps = await repo.listCircles(limit: 500);
-          nextCircleDtos = List<CircleDto>.from(circlesMaps);
-        } catch (error) {
-          bootstrapError ??= error;
-          nextCircleDtos = <CircleDto>[];
-        }
-      }(),
-    ]);
+    var nextMyCircleIds = <String>{};
 
-    if (!mounted) {
+    try {
+      final categoryId = _effectiveActiveCategoryId;
+      final subCategoryId = _effectiveSubCategoryId(
+        categoryId,
+        _visibleSubCategoriesFor(categoryId),
+      );
+      final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+      final hasActivePersona =
+          accountId.isNotEmpty &&
+          (await ref.read(
+            activePersonaContextProvider.future,
+          )).subAccountId.trim().isNotEmpty;
+      final queryReader = ref.read(circlesListDiscoveryFeedQueryProvider);
+      final scopes = <CircleDiscoveryFeedScope>[
+        CircleDiscoveryFeedScope.recommended,
+        if (hasActivePersona) CircleDiscoveryFeedScope.mine,
+      ];
+      final pages = await Future.wait(
+        scopes.map(
+          (scope) => queryReader.listDiscoveryFeed(
+            CircleDiscoveryFeedQuery(
+              category: categoryId,
+              subCategory: subCategoryId,
+              scope: scope,
+              limit: 200,
+            ),
+          ),
+        ),
+      );
+      final circleMapper = ref.read(circleProjectionMapperProvider);
+      final postMapper = ref.read(contentPostProjectionMapperProvider);
+      final circlesById = <String, CircleDto>{};
+      final entriesByIdentity =
+          <({String circleId, String postId}), CircleHubFeedPostEntry>{};
+      for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+        final page = pages[pageIndex];
+        if (scopes[pageIndex] == CircleDiscoveryFeedScope.mine) {
+          nextMyCircleIds = page.circles
+              .map((circle) => circle.circleId)
+              .where((circleId) => circleId.isNotEmpty)
+              .toSet();
+        }
+        for (final circle in page.circles) {
+          circlesById[circle.circleId] = circleMapper.toDto(circle);
+        }
+        for (final projection in page.items) {
+          final post = postMapper.toDto(projection.post);
+          entriesByIdentity[(
+            circleId: projection.circleId,
+            postId: post.id,
+          )] = CircleHubFeedPostEntry.fromProjection(
+            projection: projection,
+            post: post,
+          );
+        }
+      }
+      nextCircleDtos = circlesById.values.toList(growable: false);
+      nextFeedItems = entriesByIdentity.values.toList(growable: true);
+    } catch (error) {
+      bootstrapError = error;
+      nextCircleDtos = <CircleDto>[];
+      nextFeedItems = <CircleHubFeedPostEntry>[];
+    }
+
+    if (!mounted || requestGeneration != _bootstrapGeneration) {
       return;
     }
     setState(() {
       _circleFeedItems = nextFeedItems;
-      _categoryConfig = nextCategoryConfig;
       _hubCircleDtos = nextCircleDtos;
+      _myCircleIds = nextMyCircleIds;
       _isBootstrapping = false;
       _pageErrorSemantic = bootstrapError == null
           ? null
           : runtimeErrorSemantic(
               context,
-              error: bootstrapError!,
+              error: bootstrapError,
               category: UiErrorCategory.pageLoad,
               scope: UiErrorScope.page,
             );
@@ -192,7 +247,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   String get _effectiveActiveCategoryId {
     final visibleCategoryIds = _visibleCategoryIds;
     if (visibleCategoryIds.isEmpty) {
-      return _allCategories.isNotEmpty ? _allCategories.first['id']! : 'campus';
+      return _allCategories.isNotEmpty ? _allCategories.first['id']! : '';
     }
     return visibleCategoryIds.contains(_activeCategoryId)
         ? _activeCategoryId
@@ -244,6 +299,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     setState(() {
       _activeSubCategoryIdsByCategory[categoryId] = subCategoryId;
     });
+    unawaited(_bootstrapHubData());
   }
 
   void _handleCategorySwipeDragEnd(DragEndDetails details) {
@@ -273,6 +329,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     setState(() {
       _activeCategoryId = visibleCategoryIds[nextIndex];
     });
+    unawaited(_bootstrapHubData());
   }
 
   bool _isCategoryBarVisible() {
@@ -297,10 +354,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final source =
         _hubCircleDtos
             .where((circle) {
-              if (!isMineMode) {
-                return true;
-              }
-              return _isMyCircleId(circle.id);
+              return isMineMode
+                  ? _isMyCircleId(circle.id)
+                  : !_isMyCircleId(circle.id);
             })
             .toList(growable: true)
           ..sort((left, right) {
@@ -327,41 +383,29 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final circleById = <String, CircleDto>{
       for (final circle in _hubCircleDtos) circle.id: circle,
     };
-    final pool =
-        _filteredLevelOnePosts(tab, categoryId, fallbackToAllWhenEmpty: true)
-            .map((entry) {
-              final item = entry.raw;
-              final circleId = entry.wireCircleId;
-              final sourceCircle = circleById[circleId];
-              final circleName = sourceCircle?.name ?? '';
-              final feedEntry = mergeCircleStoryEntry(
-                Map<String, Object?>.from(item),
-                circleName,
-              );
-              final title =
-                  item['title']?.toString() ??
-                  item['body']?.toString() ??
-                  circleName;
-              return _HomeCircleStoryItem(
-                id:
-                    item['postId']?.toString() ??
-                    item['id']?.toString() ??
-                    circleId,
-                title: title,
-                subtitle: circleName,
-                imageUrl:
-                    item['coverUrl']?.toString() ??
-                    item['thumbnailUrl']?.toString() ??
-                    sourceCircle?.coverUrl ??
-                    '',
-                circleId: circleId,
-                categoryId: sourceCircle?.category ?? 'all',
-                typeLabel: hubCircleStoryTypeLabel(feedEntry.raw),
-                isMine: _isMyCircleId(circleId),
-                feedEntry: feedEntry,
-              );
-            })
-            .toList(growable: false);
+    final pool = _filteredLevelOnePosts(tab, categoryId)
+        .map((entry) {
+          final circleId = entry.circleId;
+          final sourceCircle = circleById[circleId];
+          final circleName = sourceCircle?.name ?? '';
+          final title = entry.title.isNotEmpty
+              ? entry.title
+              : (entry.bodyText.isNotEmpty ? entry.bodyText : circleName);
+          return _HomeCircleStoryItem(
+            id: entry.postId,
+            title: title,
+            subtitle: circleName,
+            imageUrl: entry.coverUrl.isNotEmpty
+                ? entry.coverUrl
+                : sourceCircle?.coverUrl ?? '',
+            circleId: circleId,
+            categoryId: sourceCircle?.category ?? 'all',
+            typeLabel: hubCircleStoryTypeLabel(entry.post),
+            isMine: _isMyCircleId(circleId),
+            feedEntry: entry,
+          );
+        })
+        .toList(growable: false);
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final modeFiltered = pool.where(
       (item) => isMineMode ? item.isMine : !item.isMine,
@@ -373,17 +417,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final categoryFiltered = ordered
         .where((item) => item.categoryId == categoryId)
         .toList(growable: false);
-    final fallbackPool = categoryFiltered.isNotEmpty
-        ? categoryFiltered
-        : ordered;
-    return fallbackPool.take(3).toList(growable: false);
+    return categoryFiltered.take(3).toList(growable: false);
   }
 
   List<CircleHubFeedPostEntry> _filteredLevelOnePosts(
     _HomeCirclesModuleTab tab,
     String categoryId, {
     String? subCategoryId,
-    bool fallbackToAllWhenEmpty = false,
   }) {
     final circleById = <String, CircleDto>{
       for (final circle in _hubCircleDtos) circle.id: circle,
@@ -391,7 +431,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final modeFiltered = _circleFeedItems
         .where((entry) {
-          final circleId = entry.wireCircleId;
+          final circleId = entry.circleId;
           return isMineMode
               ? _isMyCircleId(circleId)
               : !_isMyCircleId(circleId);
@@ -399,27 +439,25 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         .toList(growable: false);
     final categoryFiltered = modeFiltered
         .where((entry) {
-          final circleId = entry.wireCircleId;
+          final circleId = entry.circleId;
           final circle = circleById[circleId];
           return circle?.category == categoryId;
         })
         .toList(growable: false);
     final scopedByCategory = categoryId == 'all'
         ? modeFiltered
-        : (categoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty
-              ? categoryFiltered
-              : modeFiltered);
+        : categoryFiltered;
     final resolvedSubCategory = subCategoryId?.trim() ?? '';
     if (resolvedSubCategory.isEmpty) {
       return scopedByCategory;
     }
     final subCategoryFiltered = scopedByCategory
-        .where((entry) => entry.wireSubCategory == resolvedSubCategory)
+        .where(
+          (entry) =>
+              circleById[entry.circleId]?.subCategory == resolvedSubCategory,
+        )
         .toList(growable: false);
-    if (subCategoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty) {
-      return subCategoryFiltered;
-    }
-    return scopedByCategory;
+    return subCategoryFiltered;
   }
 
   bool _supportsViewer(PostBaseDto post) {
@@ -436,15 +474,15 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     List<CircleHubFeedPostEntry> sourceItems,
   ) async {
     final viewerEntries = sourceItems
-        .map((item) => (hubEntry: item, dto: item.tryResolveDto()))
-        .where((e) => e.dto != null && _supportsViewer(e.dto!))
-        .map((e) => (hubEntry: e.hubEntry, dto: e.dto!))
+        .where((item) => _supportsViewer(item.post))
         .toList(growable: false);
     if (viewerEntries.isEmpty) return;
-    final tappedDto = tapped.tryResolveDto();
-    if (tappedDto == null || !_supportsViewer(tappedDto)) return;
-    final viewerDtos = viewerEntries.map((e) => e.dto).toList(growable: false);
-    final mediaRaws = circleHubMediaViewerRawsByPostId(viewerEntries);
+    final tappedDto = tapped.post;
+    if (!_supportsViewer(tappedDto)) return;
+    final viewerDtos = viewerEntries
+        .map((entry) => entry.post)
+        .toList(growable: false);
+    final mediaRows = circleHubMediaViewerRowsByPostId(viewerEntries);
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
@@ -469,18 +507,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       ),
       extra: MediaViewerExtra(
         posts: viewerDtos
-            .map(
-              (dto) => ContentSurfaceViewMapper.fromDto(
-                dto,
-                wire: mediaRaws[dto.id]?.toDynamicMap() ?? dto.toMap(),
-              ),
-            )
+            .map(ContentSurfaceViewMapper.fromDto)
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
         source: 'circle',
-        circleId: tapped.wireCircleId.isEmpty ? null : tapped.wireCircleId,
-        rawPostsById: mediaRaws,
+        circleId: tapped.circleId.isEmpty ? null : tapped.circleId,
+        rawPostsById: mediaRows,
         interactionSnapshot: interactionSnapshot,
         referralSource: ReferralSource.circlePost,
         feedRequestId: navFeedRequestId,
@@ -558,7 +591,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       _activeModuleTab,
       effectiveActiveCategoryId,
       subCategoryId: effectiveActiveSubCategoryId,
-      fallbackToAllWhenEmpty: true,
     );
 
     return Material(
@@ -594,6 +626,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                       setState(() {
                         _activeCategoryId = nextCategoryId;
                       });
+                      unawaited(_bootstrapHubData());
                     },
                     onHorizontalDragEnd: _handleCategorySwipeDragEnd,
                   ),

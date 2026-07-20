@@ -1,4 +1,4 @@
-# L4 特性：status-transition-and-receipt-model
+# L3 特性：status-transition-and-receipt-model
 
 ## 功能说明
 - 细化 status-transition-and-receipt-model 特性的功能边界与端云协同行为。

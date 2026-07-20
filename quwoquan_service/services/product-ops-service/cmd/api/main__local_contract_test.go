@@ -13,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	generatedcontrolplane "quwoquan_service/generated/control_plane"
+	"quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/controlplane"
 	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
 	rthealth "quwoquan_service/runtime/health"
 	messaging "quwoquan_service/runtime/messaging"
@@ -24,25 +27,82 @@ import (
 
 func newTestProductService(t *testing.T) *productService {
 	t.Helper()
+	telemetryStore := telemetrypersistence.NewMemoryTelemetryStore()
 	return newProductService(
 		controlplanetest.NewFileStore(t.TempDir()+"/product-ops-state.json"),
-		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+		application.NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+		),
 		newTestExperimentFacade(t),
 	)
 }
 
 func newTestProductServiceWithPublisher(t *testing.T, publisher messaging.EventPublisher) *productService {
 	t.Helper()
+	telemetryStore := telemetrypersistence.NewMemoryTelemetryStore()
 	return newProductService(
 		controlplanetest.NewFileStore(t.TempDir()+"/product-ops-state.json"),
-		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+		application.NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+		),
 		newTestExperimentFacade(t),
 		publisher,
 	)
 }
 
+func newTestProductServiceWithRuntimeLogs(t *testing.T) *productService {
+	t.Helper()
+	telemetryStore := telemetrypersistence.NewMemoryTelemetryStore()
+	return newProductServiceWithRuntimeLogs(
+		controlplanetest.NewFileStore(t.TempDir()+"/product-ops-state.json"),
+		application.NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+			telemetryStore,
+		),
+		application.NewRuntimeLogService(telemetryStore, telemetryStore),
+		newTestExperimentFacade(t),
+	)
+}
+
+func requestAsTestPrincipal(request *http.Request, actor string) *http.Request {
+	return request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Actor: operation.ActorContext{AccountID: actor},
+	}))
+}
+
+func requestAsScopedProductOperator(request *http.Request, actor string, scopes ...string) *http.Request {
+	return request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{
+			Roles: []string{"operator"},
+			Scope: strings.Join(scopes, " "),
+		},
+		Actor: operation.ActorContext{AccountID: actor},
+	}))
+}
+
 type capturePublisher struct {
 	events []messaging.DomainEvent
+}
+
+type testPrometheusQuery struct{}
+
+func (testPrometheusQuery) Query(_ context.Context, expression string) (float64, error) {
+	switch {
+	case strings.Contains(expression, "http_server_duration_seconds_bucket"):
+		return 700, nil
+	case strings.Contains(expression, `status=~"5.."`):
+		return 0.5, nil
+	default:
+		return 5, nil
+	}
 }
 
 func (p *capturePublisher) Publish(_ context.Context, event messaging.DomainEvent) error {
@@ -52,6 +112,70 @@ func (p *capturePublisher) Publish(_ context.Context, event messaging.DomainEven
 
 func newTestServerMux(service *productService) *http.ServeMux {
 	return newServerMux(service, rthealth.NewChecker())
+}
+
+func TestRtcMediaQoeSummaryRouteUsesGeneratedOperationDescriptor(t *testing.T) {
+	method, path := mustOpsOperationRoute(getRtcMediaQoeSummaryOperationID)
+	if method != http.MethodGet {
+		t.Fatalf("generated method = %q, want GET", method)
+	}
+
+	server := newTestServerMux(newTestProductService(t))
+	response := httptest.NewRecorder()
+	server.ServeHTTP(
+		response,
+		httptest.NewRequest(method, path, nil),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"GetRtcMediaQoeSummary status=%d body=%s",
+			response.Code,
+			response.Body.String(),
+		)
+	}
+
+	wrongMethod := httptest.NewRecorder()
+	server.ServeHTTP(
+		wrongMethod,
+		httptest.NewRequest(http.MethodPost, path, nil),
+	)
+	if wrongMethod.Code != http.StatusNotFound {
+		t.Fatalf("wrong method status=%d, want 404", wrongMethod.Code)
+	}
+}
+
+func TestRuntimeErrorBoundaryPreservesHTTPStatusClass(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+	}{
+		{name: "bad request", status: http.StatusBadRequest},
+		{name: "unauthorized", status: http.StatusUnauthorized},
+		{name: "forbidden", status: http.StatusForbidden},
+		{name: "not found", status: http.StatusNotFound},
+		{name: "conflict", status: http.StatusConflict},
+		{name: "internal error", status: http.StatusInternalServerError},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/contract-status", nil)
+			writeRuntimeError(
+				response,
+				request,
+				testCase.status,
+				"请求失败",
+				testCase.name,
+			)
+			if response.Code != testCase.status {
+				t.Fatalf(
+					"runtime error status=%d, want %d",
+					response.Code,
+					testCase.status,
+				)
+			}
+		})
+	}
 }
 
 func withTestTelemetryPrincipal(request *http.Request) *http.Request {
@@ -78,6 +202,46 @@ func newTelemetryBatchRequest(t *testing.T, events []map[string]any) *http.Reque
 	return withTestTelemetryPrincipal(request)
 }
 
+func newRuntimeLogBatchRequest(t *testing.T, records []map[string]any) *http.Request {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"records": records})
+	if err != nil {
+		t.Fatalf("marshal runtime log batch: %v", err)
+	}
+	canonical, err := canonicalJSON(body)
+	if err != nil {
+		t.Fatalf("canonicalize runtime log batch: %v", err)
+	}
+	digest := sha256.Sum256(canonical)
+	request := httptest.NewRequest(http.MethodPost, "/ops/runtime-logs", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", hex.EncodeToString(digest[:]))
+	return withTestTelemetryPrincipal(request)
+}
+
+func runtimeDiagnosticRecord(occurredAt time.Time) map[string]any {
+	return map[string]any{
+		"schema":     "observability.slim",
+		"recordId":   "r.runtime.test",
+		"occurredAt": occurredAt.UTC().Format(time.RFC3339Nano),
+		"observedAt": occurredAt.UTC().Format(time.RFC3339Nano),
+		"logKind":    "exception",
+		"severity":   "ERROR",
+		"signal":     "app.exception.flutter",
+		"message":    "uncaught framework exception",
+		"resource": map[string]any{
+			"sourceType": "app",
+			"service":    "quwoquan_app",
+			"appVersion": "1.0.0",
+		},
+		"errorCode": "APP.RUNTIME.uncaught_exception",
+		"attributes": map[string]any{
+			"source":        "flutter",
+			"exceptionType": "StateError",
+		},
+	}
+}
+
 func telemetryEvent(eventType, logType string, occurredAt time.Time) map[string]any {
 	return map[string]any{
 		"logType":            logType,
@@ -89,6 +253,7 @@ func telemetryEvent(eventType, logType string, occurredAt time.Time) map[string]
 		"deviceModel":        "iPhone",
 		"appVersion":         "1.0.0",
 		"networkClass":       "wifi",
+		"devicePlatform":     "ios",
 	}
 }
 
@@ -102,6 +267,319 @@ func TestValidateRequiredRuntimeConfigRejectsMissingMongo(t *testing.T) {
 	err := validateRequiredRuntimeConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "mongodb.uri is required") {
 		t.Fatalf("expected missing mongodb uri failure, got %v", err)
+	}
+}
+
+func TestReportRuntimeLogBatchAcceptsOnlyCanonicalAppDiagnostics(t *testing.T) {
+	service := newTestProductServiceWithRuntimeLogs(t)
+	server := newTestServerMux(service)
+	now := time.Now().UTC()
+	request := newRuntimeLogBatchRequest(t, []map[string]any{runtimeDiagnosticRecord(now)})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("report runtime logs status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	invalid := runtimeDiagnosticRecord(now)
+	invalid["schemaVersion"] = "1"
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, newRuntimeLogBatchRequest(t, []map[string]any{invalid}))
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("versioned runtime log must be rejected, status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRuntimeLogQueriesKeepCorrelationRedactedByDefault(t *testing.T) {
+	service := newTestProductServiceWithRuntimeLogs(t)
+	server := newTestServerMux(service)
+	now := time.Now().UTC().Truncate(time.Second)
+	record := runtimeDiagnosticRecord(now)
+	record["correlation"] = map[string]any{"requestId": "req-sensitive"}
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, newRuntimeLogBatchRequest(t, []map[string]any{record}))
+	if response.Code != http.StatusOK {
+		t.Fatalf("report runtime log status=%d body=%s", response.Code, response.Body.String())
+	}
+	from := now.Add(-time.Minute).Format(time.RFC3339Nano)
+	to := now.Add(time.Minute).Format(time.RFC3339Nano)
+	summaryRequest := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/summary?signal=app.exception.flutter&from="+from+"&to="+to, nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, summaryRequest)
+	if response.Code != http.StatusOK {
+		t.Fatalf("runtime summary status=%d body=%s", response.Code, response.Body.String())
+	}
+	var summary application.RuntimeLogSummary
+	if err := json.Unmarshal(response.Body.Bytes(), &summary); err != nil {
+		t.Fatalf("decode runtime summary: %v", err)
+	}
+	if summary.TotalCount != 1 || summary.DimensionCounters["signal"]["app.exception.flutter"] != 1 {
+		t.Fatalf("unexpected runtime summary: %#v", summary)
+	}
+	drilldownRequest := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?signal=app.exception.flutter&from="+from+"&to="+to, nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, drilldownRequest)
+	if response.Code != http.StatusOK {
+		t.Fatalf("runtime drilldown status=%d body=%s", response.Code, response.Body.String())
+	}
+	var drilldown application.RuntimeLogDrilldown
+	if err := json.Unmarshal(response.Body.Bytes(), &drilldown); err != nil {
+		t.Fatalf("decode runtime drilldown: %v", err)
+	}
+	if len(drilldown.Items) != 1 || len(drilldown.Items[0].Correlation) != 0 {
+		t.Fatalf("runtime correlation must remain hidden by default: %#v", drilldown)
+	}
+	deniedRequest := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?signal=app.exception.flutter&from="+from+"&to="+to+"&revealCorrelation=true", nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, deniedRequest)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("sensitive correlation reveal must be forbidden, status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+// TestRuntimeLogActorAndTextQueries 覆盖日志服务的用户维度与文本检索：
+// - ingest 服务端注入已验证 actorHash（覆盖端侧自报）；
+// - actorHash 查询是敏感操作（无权限 403，ops_admin 放行且只命中该用户）；
+// - messageContains 文本检索命中消息子串。
+func TestRuntimeLogActorAndTextQueries(t *testing.T) {
+	service := newTestProductServiceWithRuntimeLogs(t)
+	server := newTestServerMux(service)
+	now := time.Now().UTC().Truncate(time.Second)
+	record := runtimeDiagnosticRecord(now)
+	record["message"] = "payment flow crashed on submit"
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, newRuntimeLogBatchRequest(t, []map[string]any{record}))
+	if response.Code != http.StatusOK {
+		t.Fatalf("report runtime log status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	from := now.Add(-time.Minute).Format(time.RFC3339Nano)
+	to := now.Add(time.Minute).Format(time.RFC3339Nano)
+
+	// 复算测试 principal 的 actorHash（与 ingest 注入同一派生）。
+	ingestRequest := withTestTelemetryPrincipal(httptest.NewRequest(http.MethodGet, "/", nil))
+	actorHash, ok := verifiedTelemetryActorHash(ingestRequest)
+	if !ok || actorHash == "" {
+		t.Fatalf("test principal must derive an actor hash")
+	}
+
+	denied := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?from="+from+"&to="+to+"&actorHash="+actorHash, nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, denied)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("actor query without sensitive permission must be forbidden, status=%d", response.Code)
+	}
+
+	adminContext := rtauth.WithPrincipal(context.Background(), rtauth.Principal{
+		Claims: rtauth.Claims{Roles: []string{"ops_admin"}},
+		Actor:  operation.ActorContext{AccountID: "ops-admin"},
+	})
+	allowed := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?from="+from+"&to="+to+"&actorHash="+actorHash, nil).
+		WithContext(adminContext)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, allowed)
+	if response.Code != http.StatusOK {
+		t.Fatalf("actor query with ops_admin status=%d body=%s", response.Code, response.Body.String())
+	}
+	var byActor application.RuntimeLogDrilldown
+	if err := json.Unmarshal(response.Body.Bytes(), &byActor); err != nil {
+		t.Fatalf("decode actor drilldown: %v", err)
+	}
+	if len(byActor.Items) != 1 {
+		t.Fatalf("actor query must match the ingested record, got %d items", len(byActor.Items))
+	}
+
+	missRequest := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?from="+from+"&to="+to+"&actorHash=a.nonexistent", nil).
+		WithContext(adminContext)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, missRequest)
+	var missed application.RuntimeLogDrilldown
+	if err := json.Unmarshal(response.Body.Bytes(), &missed); err != nil {
+		t.Fatalf("decode miss drilldown: %v", err)
+	}
+	if len(missed.Items) != 0 {
+		t.Fatalf("unknown actor must not match records: %#v", missed.Items)
+	}
+
+	textHit := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?from="+from+"&to="+to+"&messageContains=payment+flow", nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, textHit)
+	if response.Code != http.StatusOK {
+		t.Fatalf("text query status=%d body=%s", response.Code, response.Body.String())
+	}
+	var byText application.RuntimeLogDrilldown
+	if err := json.Unmarshal(response.Body.Bytes(), &byText); err != nil {
+		t.Fatalf("decode text drilldown: %v", err)
+	}
+	if len(byText.Items) != 1 || !strings.Contains(byText.Items[0].Message, "payment flow") {
+		t.Fatalf("text query must match message substring: %#v", byText.Items)
+	}
+
+	textMiss := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?from="+from+"&to="+to+"&messageContains=nonexistent-phrase", nil)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, textMiss)
+	var textMissed application.RuntimeLogDrilldown
+	if err := json.Unmarshal(response.Body.Bytes(), &textMissed); err != nil {
+		t.Fatalf("decode text miss drilldown: %v", err)
+	}
+	if len(textMissed.Items) != 0 {
+		t.Fatalf("text query must not match unrelated records: %#v", textMissed.Items)
+	}
+}
+
+type testVectorPrometheusQuery struct{}
+
+func (testVectorPrometheusQuery) Query(context.Context, string) (float64, error) { return 1, nil }
+
+func (testVectorPrometheusQuery) QueryVector(_ context.Context, expression string) ([]application.PrometheusVectorSample, error) {
+	switch {
+	case strings.Contains(expression, "histogram_quantile(0.99"):
+		return []application.PrometheusVectorSample{
+			{Labels: map[string]string{"route": "/content/posts"}, Value: 180},
+			{Labels: map[string]string{"route": "/content/feed"}, Value: 320},
+		}, nil
+	case strings.Contains(expression, "duration_seconds_sum"):
+		return []application.PrometheusVectorSample{
+			{Labels: map[string]string{"route": "/content/posts"}, Value: 45},
+			{Labels: map[string]string{"route": "/content/feed"}, Value: 80},
+		}, nil
+	case strings.Contains(expression, `status=~"5.."`):
+		return []application.PrometheusVectorSample{
+			{Labels: map[string]string{"route": "/content/feed"}, Value: 0.05},
+		}, nil
+	default:
+		return []application.PrometheusVectorSample{
+			{Labels: map[string]string{"route": "/content/posts"}, Value: 12},
+			{Labels: map[string]string{"route": "/content/feed"}, Value: 5},
+		}, nil
+	}
+}
+
+// TestServiceRouteREDDrilldown 覆盖每接口 RED 下钻：按 route 输出 QPS、
+// 平均/P99 延迟与成功率，数据源只允许 Prometheus（service+route 维度）。
+func TestServiceRouteREDDrilldown(t *testing.T) {
+	service := newTestProductService(t)
+	service.prometheus = testVectorPrometheusQuery{}
+	server := newTestServerMux(service)
+
+	missing := httptest.NewRecorder()
+	server.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/control-plane/product/metrics/red-routes", nil))
+	if missing.Code == http.StatusOK {
+		t.Fatalf("service parameter must be required, got 200")
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/control-plane/product/metrics/red-routes?service=content-service", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("red routes status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload serviceRouteREDResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode red routes: %v", err)
+	}
+	if payload.Source != "prometheus" || len(payload.Items) != 2 {
+		t.Fatalf("unexpected red routes payload: %+v", payload)
+	}
+	if payload.Items[0].Route != "/content/posts" || payload.Items[0].QPS != 12 {
+		t.Fatalf("items must sort by qps desc: %+v", payload.Items)
+	}
+	var feed serviceRouteREDItem
+	for _, item := range payload.Items {
+		if item.Route == "/content/feed" {
+			feed = item
+		}
+	}
+	if feed.P99Ms != 320 || feed.AvgMs != 80 {
+		t.Fatalf("feed route latency mismatch: %+v", feed)
+	}
+	if feed.SuccessRate >= 100 || feed.SuccessRate <= 98 {
+		t.Fatalf("feed success rate must reflect 5xx ratio: %+v", feed)
+	}
+}
+
+// TestInternalRuntimeLogIngestTokenGate 覆盖云侧服务日志上云内部通道：
+// 机器凭据 fail-closed、幂等摘要校验、app sourceType 拒绝、正常入库可查询。
+func TestInternalRuntimeLogIngestTokenGate(t *testing.T) {
+	t.Setenv("RUNTIME_LOG_INGEST_TOKEN", "test-ingest-token-32bytes-machine")
+	service := newTestProductServiceWithRuntimeLogs(t)
+	telemetryStore := telemetrypersistence.NewMemoryTelemetryStore()
+	service.runtimeLogStore = telemetryStore
+	service.runtimeLogs = application.NewRuntimeLogService(telemetryStore, telemetryStore)
+	server := newTestServerMux(service)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	serviceRecord := map[string]string{
+		"schema":             "observability.slim",
+		"recordId":           "r.service.test",
+		"occurredAt":         now.Format(time.RFC3339Nano),
+		"observedAt":         now.Format(time.RFC3339Nano),
+		"logKind":            "exception",
+		"severity":           "ERROR",
+		"signal":             "service.exception.runtime",
+		"message":            "downstream dependency failed",
+		"resourceSourceType": "service",
+		"resourceService":    "platform-ops-service",
+	}
+	newIngest := func(records []map[string]string, token string) *http.Request {
+		body, err := json.Marshal(map[string]any{"records": records})
+		if err != nil {
+			t.Fatalf("marshal internal ingest: %v", err)
+		}
+		digest := sha256.Sum256(body)
+		request := httptest.NewRequest(http.MethodPost, "/ops/internal/runtime-logs:ingest", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", hex.EncodeToString(digest[:]))
+		if token != "" {
+			request.Header.Set("X-Runtime-Log-Ingest-Token", token)
+		}
+		return request
+	}
+
+	missingToken := httptest.NewRecorder()
+	server.ServeHTTP(missingToken, newIngest([]map[string]string{serviceRecord}, ""))
+	if missingToken.Code != http.StatusUnauthorized {
+		t.Fatalf("missing token must be unauthorized, status=%d", missingToken.Code)
+	}
+	wrongToken := httptest.NewRecorder()
+	server.ServeHTTP(wrongToken, newIngest([]map[string]string{serviceRecord}, "wrong-token"))
+	if wrongToken.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong token must be unauthorized, status=%d", wrongToken.Code)
+	}
+
+	appRecord := map[string]string{}
+	for key, value := range serviceRecord {
+		appRecord[key] = value
+	}
+	appRecord["resourceSourceType"] = "app"
+	appRejected := httptest.NewRecorder()
+	server.ServeHTTP(appRejected, newIngest([]map[string]string{appRecord}, "test-ingest-token-32bytes-machine"))
+	if appRejected.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("app records must be rejected on the internal channel, status=%d body=%s", appRejected.Code, appRejected.Body.String())
+	}
+	if !strings.Contains(appRejected.Body.String(), "runtime_log_batch_invalid") {
+		t.Fatalf("app rejection must use runtime_log_batch_invalid: %s", appRejected.Body.String())
+	}
+
+	accepted := httptest.NewRecorder()
+	server.ServeHTTP(accepted, newIngest([]map[string]string{serviceRecord}, "test-ingest-token-32bytes-machine"))
+	if accepted.Code != http.StatusOK {
+		t.Fatalf("internal ingest status=%d body=%s", accepted.Code, accepted.Body.String())
+	}
+
+	from := now.Add(-time.Minute).Format(time.RFC3339Nano)
+	to := now.Add(time.Minute).Format(time.RFC3339Nano)
+	query := httptest.NewRequest(http.MethodGet, "/ops/runtime-logs/drilldown?sourceType=service&service=platform-ops-service&from="+from+"&to="+to, nil)
+	queryResponse := httptest.NewRecorder()
+	server.ServeHTTP(queryResponse, query)
+	if queryResponse.Code != http.StatusOK {
+		t.Fatalf("query ingested service log status=%d body=%s", queryResponse.Code, queryResponse.Body.String())
+	}
+	var drilldown application.RuntimeLogDrilldown
+	if err := json.Unmarshal(queryResponse.Body.Bytes(), &drilldown); err != nil {
+		t.Fatalf("decode service log drilldown: %v", err)
+	}
+	if len(drilldown.Items) != 1 || drilldown.Items[0].Message != "downstream dependency failed" {
+		t.Fatalf("service log must be queryable after internal ingest: %#v", drilldown.Items)
 	}
 }
 
@@ -127,6 +605,7 @@ func setTestSLSConfig(cfg *config) {
 	cfg.SLS.Project = "test-project"
 	cfg.SLS.RawLogstore = "app-product-telemetry-raw"
 	cfg.SLS.StartupDiagnosticLogstore = "app-startup-diagnostic-raw"
+	cfg.SLS.RuntimeLogstore = "runtime-diagnostics-raw"
 	cfg.SLS.AggregateLogstore = "app-product-telemetry-hourly"
 	cfg.SLS.TimeoutMS = 1200
 }
@@ -143,6 +622,24 @@ func TestValidateRequiredRuntimeConfigRejectsMissingPostgres(t *testing.T) {
 	err := validateRequiredRuntimeConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "postgres.dsn is required") {
 		t.Fatalf("expected missing postgres dsn failure, got %v", err)
+	}
+}
+
+func TestIntegrationRuntimeConfigUsesPostgresTelemetryWithoutSLS(t *testing.T) {
+	cfg := config{}
+	cfg.MongoDB.URI = "mongodb://127.0.0.1:27017"
+	cfg.MongoDB.Database = "product_ops"
+	cfg.Postgres.DSN = "postgres://quwoquan:quwoquan@127.0.0.1:5432/quwoquan?sslmode=disable"
+	cfg.Redis.Rec.Mode = "standalone"
+	cfg.Redis.Rec.Addr = "127.0.0.1:6379"
+	cfg.Redis.General.Mode = "standalone"
+	cfg.Redis.General.Addr = "127.0.0.1:6379"
+
+	if got := postgresTelemetrySchema("gamma-integration"); got != "telemetry_local_gamma" {
+		t.Fatalf("gamma integration schema = %q", got)
+	}
+	if err := validateRequiredRuntimeConfig(cfg, "gamma-integration"); err != nil {
+		t.Fatalf("integration profile must not require SLS credentials: %v", err)
 	}
 }
 
@@ -243,9 +740,10 @@ func TestVisitEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	for range 2 {
+	for index := range 2 {
 		recordReq := httptest.NewRequest(http.MethodPost, "/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding"}`))
 		recordReq.Header.Set("Content-Type", "application/json")
+		recordReq.Header.Set("Idempotency-Key", "visit-key-"+strconv.Itoa(index))
 		recordReq = withTestTelemetryPrincipal(recordReq)
 		recordResp := httptest.NewRecorder()
 		server.ServeHTTP(recordResp, recordReq)
@@ -387,7 +885,7 @@ func TestStartupTelemetryEndpointIsAnonymousRestrictedAndIdempotent(t *testing.T
 	genericRequest := httptest.NewRequest(
 		http.MethodPost,
 		"/ops/events",
-		bytes.NewBufferString(`{"events":[{"eventId":"generic-event","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"normal","producer":"app","occurredAt":"2026-07-17T10:00:00Z"}]}`),
+		bytes.NewBufferString(`{"events":[{"eventId":"generic-event","eventType":"experience","eventName":"page_open","priority":"normal","producer":"app","occurredAt":"2026-07-17T10:00:00Z"}]}`),
 	)
 	genericResponse := httptest.NewRecorder()
 	server.ServeHTTP(genericResponse, genericRequest)
@@ -565,56 +1063,59 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	reviewReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:startReview", nil)
-	reviewReq.Header.Set("X-Actor", "reviewer-1")
-	reviewResp := httptest.NewRecorder()
-	server.ServeHTTP(reviewResp, reviewReq)
-	if reviewResp.Code != http.StatusOK {
-		t.Fatalf("start review status=%d body=%s", reviewResp.Code, reviewResp.Body.String())
+	// 治理/推荐骨架端点已退场：workflow/audit/approval 留痕由真实的
+	// premium-pool 运营链路（upsert → 双签 takedown）产生。
+	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	createBody := `{"contentId":"post_workflow_premium","scope":"global","qualityScore":0.93,"qualityAdmission":"approved","auditId":"audit_workflow_premium","expiresAt":"` + expiresAt + `"}`
+	createReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq = requestAsTestPrincipal(createReq, "premium-editor")
+	createResp := httptest.NewRecorder()
+	server.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("create premium entry status=%d body=%s", createResp.Code, createResp.Body.String())
 	}
 
-	applyBody := bytes.NewBufferString(`{"action":"take_down","actor":"reviewer-1"}`)
-	applyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:applyAction", applyBody)
-	applyReq.Header.Set("Content-Type", "application/json")
-	applyResp := httptest.NewRecorder()
-	server.ServeHTTP(applyResp, applyReq)
-	if applyResp.Code != http.StatusOK {
-		t.Fatalf("apply action status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	firstTakedownReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_workflow_premium:takedown", nil)
+	firstTakedownReq = requestAsTestPrincipal(firstTakedownReq, "ops-approver-1")
+	firstTakedownReq.Header.Set("Idempotency-Key", "premium-workflow-takedown")
+	firstTakedownResp := httptest.NewRecorder()
+	server.ServeHTTP(firstTakedownResp, firstTakedownReq)
+	if firstTakedownResp.Code != http.StatusOK {
+		t.Fatalf("first takedown status=%d body=%s", firstTakedownResp.Code, firstTakedownResp.Body.String())
+	}
+	var pendingPayload struct {
+		Pending       bool   `json:"pending"`
+		ApprovalState string `json:"approvalState"`
+		ApprovalCount int    `json:"approvalCount"`
+	}
+	if err := json.Unmarshal(firstTakedownResp.Body.Bytes(), &pendingPayload); err != nil {
+		t.Fatalf("unmarshal pending takedown payload: %v", err)
+	}
+	if !pendingPayload.Pending || pendingPayload.ApprovalState != "pending_second_principal" || pendingPayload.ApprovalCount != 1 {
+		t.Fatalf("single principal takedown must stay pending, got %+v", pendingPayload)
 	}
 
-	secondApplyBody := bytes.NewBufferString(`{"action":"take_down","actor":"reviewer-2"}`)
-	secondApplyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/moderation/cases/case_post_901:applyAction", secondApplyBody)
-	secondApplyReq.Header.Set("Content-Type", "application/json")
-	secondApplyResp := httptest.NewRecorder()
-	server.ServeHTTP(secondApplyResp, secondApplyReq)
-	if secondApplyResp.Code != http.StatusOK {
-		t.Fatalf("second apply action status=%d body=%s", secondApplyResp.Code, secondApplyResp.Body.String())
+	secondTakedownReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_workflow_premium:takedown", nil)
+	secondTakedownReq = requestAsTestPrincipal(secondTakedownReq, "ops-approver-2")
+	secondTakedownReq.Header.Set("Idempotency-Key", "premium-workflow-takedown")
+	secondTakedownResp := httptest.NewRecorder()
+	server.ServeHTTP(secondTakedownResp, secondTakedownReq)
+	if secondTakedownResp.Code != http.StatusOK {
+		t.Fatalf("second takedown status=%d body=%s", secondTakedownResp.Code, secondTakedownResp.Body.String())
 	}
-
-	recoveryBody := bytes.NewBufferString(`{"decision":"recovered","actor":"approver-1"}`)
-	recoveryReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recovery/cases/recovery_user_1827:submitDecision", recoveryBody)
-	recoveryReq.Header.Set("Content-Type", "application/json")
-	recoveryResp := httptest.NewRecorder()
-	server.ServeHTTP(recoveryResp, recoveryReq)
-	if recoveryResp.Code != http.StatusOK {
-		t.Fatalf("submit recovery decision status=%d body=%s", recoveryResp.Code, recoveryResp.Body.String())
+	var approvedPayload struct {
+		Entry   premiumPoolEntry             `json:"entry"`
+		Pending bool                         `json:"pending"`
+		Receipt controlplane.MutationReceipt `json:"receipt"`
 	}
-
-	policyReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/policies/policy_discovery_rank_v12:activate", nil)
-	policyReq.Header.Set("X-Actor", "ops-approver")
-	policyResp := httptest.NewRecorder()
-	server.ServeHTTP(policyResp, policyReq)
-	if policyResp.Code != http.StatusOK {
-		t.Fatalf("activate recommendation policy status=%d body=%s", policyResp.Code, policyResp.Body.String())
+	if err := json.Unmarshal(secondTakedownResp.Body.Bytes(), &approvedPayload); err != nil {
+		t.Fatalf("unmarshal takedown entry: %v", err)
 	}
-
-	appealBody := bytes.NewBufferString(`{"decision":"approved","actor":"appeal-reviewer"}`)
-	appealReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/appeal/cases/appeal_case_301:submitDecision", appealBody)
-	appealReq.Header.Set("Content-Type", "application/json")
-	appealResp := httptest.NewRecorder()
-	server.ServeHTTP(appealResp, appealReq)
-	if appealResp.Code != http.StatusOK {
-		t.Fatalf("submit appeal decision status=%d body=%s", appealResp.Code, appealResp.Body.String())
+	if approvedPayload.Pending || !approvedPayload.Entry.TakedownEjected ||
+		approvedPayload.Entry.Status != "takedown_ejected" ||
+		approvedPayload.Receipt.IdempotencyKey != "premium-workflow-takedown" {
+		t.Fatalf("dual-signed takedown must atomically eject entry, got %+v", approvedPayload)
 	}
 
 	workflowReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/workflows", nil)
@@ -647,7 +1148,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	if err := json.Unmarshal(auditResp.Body.Bytes(), &auditPayload); err != nil {
 		t.Fatalf("unmarshal audits: %v", err)
 	}
-	if len(auditPayload.Items) < 3 {
+	if len(auditPayload.Items) < 2 {
 		t.Fatalf("expected audit events, got %+v", auditPayload.Items)
 	}
 
@@ -664,7 +1165,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	if err := json.Unmarshal(approvalResp.Body.Bytes(), &approvalPayload); err != nil {
 		t.Fatalf("unmarshal approvals: %v", err)
 	}
-	if len(approvalPayload.Items) < 4 {
+	if len(approvalPayload.Items) < 2 {
 		t.Fatalf("expected approvals, got %+v", approvalPayload.Items)
 	}
 
@@ -684,6 +1185,82 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 	if cards, ok := summaryPayload["l1l4Cards"].([]any); !ok || len(cards) == 0 {
 		t.Fatalf("expected l1l4 cards, got %+v", summaryPayload["l1l4Cards"])
+	}
+}
+
+func TestPremiumPoolTakedownAuthorizationIsMetadataDriven(t *testing.T) {
+	service := newTestProductService(t)
+	directServer := newTestServerMux(service)
+	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/product/recommendation/premium-pool",
+		bytes.NewBufferString(
+			`{"contentId":"post_authz_premium","scope":"global","qualityScore":0.92,"qualityAdmission":"approved","auditId":"audit_authz_premium","expiresAt":"`+expiresAt+`"}`,
+		),
+	)
+	createReq = requestAsTestPrincipal(createReq, "premium-editor")
+	createResp := httptest.NewRecorder()
+	directServer.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("seed premium entry status=%d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	server := rtauth.RequireGeneratedOperationAuthorization(append(
+		operationsecurity.ForDomain("ops"),
+		generatedcontrolplane.ProductOperationSecurityDescriptors...,
+	))(directServer)
+	path := "/control-plane/product/recommendation/premium-pool/post_authz_premium:takedown"
+
+	spoofedReq := httptest.NewRequest(http.MethodPost, path, nil)
+	spoofedReq.Header.Set("X-Actor", "forged-product-admin")
+	spoofedReq.Header.Set("Idempotency-Key", "authz-premium-takedown")
+	spoofedResp := httptest.NewRecorder()
+	server.ServeHTTP(spoofedResp, spoofedReq)
+	if spoofedResp.Code != http.StatusUnauthorized {
+		t.Fatalf("spoofed actor header must not authenticate, status=%d body=%s", spoofedResp.Code, spoofedResp.Body.String())
+	}
+
+	missingScopeReq := requestAsScopedProductOperator(
+		httptest.NewRequest(http.MethodPost, path, nil),
+		"operator-without-scope",
+	)
+	missingScopeReq.Header.Set("Idempotency-Key", "authz-premium-takedown")
+	missingScopeResp := httptest.NewRecorder()
+	server.ServeHTTP(missingScopeResp, missingScopeReq)
+	if missingScopeResp.Code != http.StatusForbidden {
+		t.Fatalf("operator without scope must be forbidden, status=%d body=%s", missingScopeResp.Code, missingScopeResp.Body.String())
+	}
+
+	missingKeyReq := requestAsScopedProductOperator(
+		httptest.NewRequest(http.MethodPost, path, nil),
+		"scoped-operator",
+		"ops.reco.write",
+	)
+	missingKeyResp := httptest.NewRecorder()
+	server.ServeHTTP(missingKeyResp, missingKeyReq)
+	if missingKeyResp.Code != http.StatusBadRequest {
+		t.Fatalf("metadata-required idempotency key must be enforced, status=%d body=%s", missingKeyResp.Code, missingKeyResp.Body.String())
+	}
+
+	allowedReq := requestAsScopedProductOperator(
+		httptest.NewRequest(http.MethodPost, path, nil),
+		"scoped-operator",
+		"ops.reco.write",
+	)
+	allowedReq.Header.Set("X-Actor", "forged-second-actor")
+	allowedReq.Header.Set("Idempotency-Key", "authz-premium-takedown")
+	allowedResp := httptest.NewRecorder()
+	server.ServeHTTP(allowedResp, allowedReq)
+	if allowedResp.Code != http.StatusOK {
+		t.Fatalf("scoped operator must reach takedown approval, status=%d body=%s", allowedResp.Code, allowedResp.Body.String())
+	}
+	approvals, err := service.store.ListApprovals("premium_pool_entry", "post_authz_premium")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(approvals) != 1 || approvals[0].Actor != "scoped-operator" {
+		t.Fatalf("approval actor must come only from verified principal, got %+v", approvals)
 	}
 }
 
@@ -768,18 +1345,45 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 	if createResp2.Code != http.StatusOK {
 		t.Fatalf("create second premium pool status=%d body=%s", createResp2.Code, createResp2.Body.String())
 	}
+	// takedown 是双签动作：单 principal 只登记审批并保持 pending，
+	// 第二个不同 principal 才真正弹出条目。
+	firstTakedownReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_premium_2:takedown", nil)
+	firstTakedownReq = requestAsTestPrincipal(firstTakedownReq, "takedown-approver-1")
+	firstTakedownReq.Header.Set("Idempotency-Key", "premium-pool-2-takedown")
+	firstTakedownResp := httptest.NewRecorder()
+	server.ServeHTTP(firstTakedownResp, firstTakedownReq)
+	if firstTakedownResp.Code != http.StatusOK {
+		t.Fatalf("first takedown status=%d body=%s", firstTakedownResp.Code, firstTakedownResp.Body.String())
+	}
+	var pendingTakedown struct {
+		Pending bool `json:"pending"`
+	}
+	if err := json.Unmarshal(firstTakedownResp.Body.Bytes(), &pendingTakedown); err != nil {
+		t.Fatalf("unmarshal pending takedown: %v", err)
+	}
+	if !pendingTakedown.Pending {
+		t.Fatalf("single principal takedown must be pending, got %s", firstTakedownResp.Body.String())
+	}
 	takedownReq := httptest.NewRequest(http.MethodPost, "/control-plane/product/recommendation/premium-pool/post_premium_2:takedown", nil)
+	takedownReq = requestAsTestPrincipal(takedownReq, "takedown-approver-2")
+	takedownReq.Header.Set("Idempotency-Key", "premium-pool-2-takedown")
 	takedownResp := httptest.NewRecorder()
 	server.ServeHTTP(takedownResp, takedownReq)
 	if takedownResp.Code != http.StatusOK {
 		t.Fatalf("takedown premium pool status=%d body=%s", takedownResp.Code, takedownResp.Body.String())
 	}
-	var ejected premiumPoolEntry
-	if err := json.Unmarshal(takedownResp.Body.Bytes(), &ejected); err != nil {
+	var ejectedPayload struct {
+		Entry   premiumPoolEntry             `json:"entry"`
+		Pending bool                         `json:"pending"`
+		Receipt controlplane.MutationReceipt `json:"receipt"`
+	}
+	if err := json.Unmarshal(takedownResp.Body.Bytes(), &ejectedPayload); err != nil {
 		t.Fatalf("unmarshal takedown response: %v", err)
 	}
-	if !ejected.TakedownEjected || ejected.Status != "takedown_ejected" {
-		t.Fatalf("takedown must eject premium entry, got %+v", ejected)
+	if ejectedPayload.Pending || !ejectedPayload.Entry.TakedownEjected ||
+		ejectedPayload.Entry.Status != "takedown_ejected" ||
+		ejectedPayload.Receipt.IdempotencyKey != "premium-pool-2-takedown" {
+		t.Fatalf("takedown must atomically eject premium entry, got %+v", ejectedPayload)
 	}
 
 	auditReq := httptest.NewRequest(http.MethodGet, "/control-plane/product/audits", nil)
@@ -801,7 +1405,6 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 		premiumPoolEntryUpsertedEvent,
 		premiumPoolEntryRolledBackEvent,
 		premiumPoolEntryUpsertedEvent,
-		premiumPoolEntryTakedownEjectedEvent,
 	}; !equalStrings(got, want) {
 		t.Fatalf("premium pool events=%v want %v", got, want)
 	}
@@ -832,6 +1435,7 @@ func equalStrings(a, b []string) bool {
 
 func TestL1L4MetricsEndpoint(t *testing.T) {
 	service := newTestProductService(t)
+	service.prometheus = testPrometheusQuery{}
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
@@ -868,15 +1472,13 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 			EventSignals    int `json:"eventSignals"`
 		} `json:"coverage"`
 		Alerts []struct {
-			ID           string `json:"id"`
-			State        string `json:"state"`
-			Metric       string `json:"metric"`
-			Source       string `json:"source"`
-			RunbookID    string `json:"runbookId"`
-			RunbookRoute string `json:"runbookRoute"`
-			RepairEntry  string `json:"repairEntry"`
-			AlertID      string `json:"alertId"`
-			Owner        string `json:"owner"`
+			ID          string `json:"id"`
+			State       string `json:"state"`
+			Metric      string `json:"metric"`
+			Source      string `json:"source"`
+			RepairEntry string `json:"repairEntry"`
+			AlertID     string `json:"alertId"`
+			Owner       string `json:"owner"`
 		} `json:"alerts"`
 		Items []struct {
 			Level       string `json:"level"`
@@ -911,7 +1513,7 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	if len(payload.Alerts) == 0 {
 		t.Fatalf("expected derived alerts, got %+v", payload)
 	}
-	if payload.Alerts[0].RunbookRoute == "" || payload.Alerts[0].RepairEntry == "" || payload.Alerts[0].AlertID == "" || payload.Alerts[0].Owner == "" {
+	if payload.Alerts[0].RepairEntry == "" || payload.Alerts[0].AlertID == "" || payload.Alerts[0].Owner == "" {
 		t.Fatalf("expected alert repair semantics, got %+v", payload.Alerts[0])
 	}
 }
@@ -950,14 +1552,13 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 			PageName string `json:"pageName"`
 		} `json:"recentEvents"`
 		BacklogCandidates []struct {
-			ID           string `json:"id"`
-			Category     string `json:"category"`
-			Title        string `json:"title"`
-			NextAction   string `json:"nextAction"`
-			RunbookRoute string `json:"runbookRoute"`
-			RepairEntry  string `json:"repairEntry"`
-			AlertID      string `json:"alertId"`
-			AuditRoute   string `json:"auditRoute"`
+			ID          string `json:"id"`
+			Category    string `json:"category"`
+			Title       string `json:"title"`
+			NextAction  string `json:"nextAction"`
+			RepairEntry string `json:"repairEntry"`
+			AlertID     string `json:"alertId"`
+			AuditRoute  string `json:"auditRoute"`
 		} `json:"backlogCandidates"`
 		RuntimeReady bool   `json:"runtimeReady"`
 		Source       string `json:"source"`
@@ -974,7 +1575,7 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 	if payload.RecentEvents[0].RowKey == "" {
 		t.Fatalf("recent events must use temporary row keys, got %+v", payload.RecentEvents)
 	}
-	if len(payload.BacklogCandidates) > 0 && (payload.BacklogCandidates[0].ID == "" || payload.BacklogCandidates[0].NextAction == "" || payload.BacklogCandidates[0].RunbookRoute == "" || payload.BacklogCandidates[0].RepairEntry == "" || payload.BacklogCandidates[0].AlertID == "" || payload.BacklogCandidates[0].AuditRoute == "") {
+	if len(payload.BacklogCandidates) > 0 && (payload.BacklogCandidates[0].ID == "" || payload.BacklogCandidates[0].NextAction == "" || payload.BacklogCandidates[0].RepairEntry == "" || payload.BacklogCandidates[0].AlertID == "" || payload.BacklogCandidates[0].AuditRoute == "") {
 		t.Fatalf("expected backlog candidate details, got %+v", payload.BacklogCandidates[0])
 	}
 }

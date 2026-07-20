@@ -1,0 +1,46 @@
+entity: Comment
+layer: e2e
+
+description: |
+  Comment 端云旅程。local_contract/api_integration 已可执行；gamma 真实页面
+  制品在 R-AUTH-001 与环境可用性满足前保持 partial，不以退役的
+  POST /content/posts 作为 seed 入口。
+
+execution:
+  environments: [beta, gamma]
+  ci_strategy: pre-release
+  seed_source: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+
+scenarios:
+  - name: create_comment_and_project_count
+    test_type: api_integration
+    service_test: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+    go_func: TestCommentCountersStayConsistentAcrossReadModels
+    steps:
+      - gamma seed manifest 预置已发布 Post
+      - authenticated persona 经 CreateComment 提交评论
+      - Comment state/receipt/outbox 原子提交
+      - 独立 projection checkpoint 推进 Post.commentCount
+    assertions:
+      - 评论只创建一次且重放不重复 outbox
+      - CommentPage 与 Post counter 最终一致
+
+  - name: comment_command_and_query_journey
+    test_type: user_acceptance
+    patrol_flow: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+    status: partial
+    block_reason: Patrol 已切换 gamma seed manifest；仍待真机运行制品回填 readiness environments
+    assertions:
+      - 真实页面可打开评论面板并提交
+      - 成功后新评论与计数可见
+      - rate_limited 等结构化错误不丢失输入且允许恢复
+
+  - name: delete_pin_unpin_and_bind_media
+    test_type: api_integration
+    service_tests:
+      - quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
+      - quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+    assertions:
+      - 删除与置顶命令不接收调用方 version
+      - 服务端 CAS 冲突重载重放且 no-op intent 有稳定 receipt
+      - BindMediaAssetsToComment 只接受已验证且归属 actor 的 MediaAsset

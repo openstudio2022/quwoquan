@@ -9,14 +9,16 @@ import (
 )
 
 var (
-	ErrInvalidComment       = errors.New("invalid comment")
-	ErrInvalidReplyTarget   = errors.New("invalid comment reply target")
-	ErrCommentDeleted       = errors.New("comment is deleted")
-	ErrDeleteForbidden      = errors.New("comment delete forbidden")
-	ErrPinForbidden         = errors.New("comment pin forbidden")
-	ErrPinInvalidTarget     = errors.New("comment pin invalid target")
-	ErrAttachmentForbidden  = errors.New("comment attachment update forbidden")
-	ErrInvalidMutationClock = errors.New("invalid comment mutation clock")
+	ErrInvalidComment          = errors.New("invalid comment")
+	ErrInvalidReplyTarget      = errors.New("invalid comment reply target")
+	ErrCommentDeleted          = errors.New("comment is deleted")
+	ErrDeleteForbidden         = errors.New("comment delete forbidden")
+	ErrPinForbidden            = errors.New("comment pin forbidden")
+	ErrPinInvalidTarget        = errors.New("comment pin invalid target")
+	ErrAttachmentForbidden     = errors.New("comment attachment update forbidden")
+	ErrInvalidMutationClock    = errors.New("invalid comment mutation clock")
+	ErrModerationForbidden     = errors.New("comment moderation forbidden")
+	ErrInvalidStatusTransition = errors.New("invalid comment status transition")
 )
 
 const MaxContentRunes = 1000
@@ -24,8 +26,20 @@ const MaxContentRunes = 1000
 type Status string
 
 const (
-	StatusActive  Status = "active"
+	StatusActive Status = "active"
+	// StatusHidden 表示 operator 治理隐藏；前台不可见，可经 RestoreFromHidden 恢复。
+	StatusHidden  Status = "hidden"
 	StatusDeleted Status = "deleted"
+	// StatusTombstoned 表示宿主 Post 删除后的级联终态；不可恢复。
+	StatusTombstoned Status = "tombstoned"
+)
+
+// ModerationAction 是 CommentModerated 审计事实的动作枚举。
+type ModerationAction string
+
+const (
+	ModerationActionHide    ModerationAction = "hide"
+	ModerationActionRestore ModerationAction = "restore"
 )
 
 // Mention 是随 Comment 聚合持久化的强类型不可变值对象。
@@ -54,9 +68,11 @@ type Snapshot struct {
 	AssistantMentioned        bool
 	AssistantReplySource      string
 	AssistantCorrectionStatus string
+	AuthorIPLocation          string
 	Status                    Status
 	IsPinned                  bool
 	PinnedAt                  *time.Time
+	HiddenAt                  *time.Time
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 	DeletedAt                 *time.Time
@@ -76,6 +92,7 @@ type CreateParams struct {
 	AttachmentMediaIDs        []string
 	Mentions                  []Mention
 	AssistantMentioned        bool
+	AuthorIPLocation          string
 	Now                       time.Time
 }
 
@@ -98,9 +115,11 @@ type Comment struct {
 	assistantMentioned        bool
 	assistantReplySource      string
 	assistantCorrectionStatus string
+	authorIPLocation          string
 	status                    Status
 	isPinned                  bool
 	pinnedAt                  *time.Time
+	hiddenAt                  *time.Time
 	createdAt                 time.Time
 	updatedAt                 time.Time
 	deletedAt                 *time.Time
@@ -123,6 +142,7 @@ func Create(params CreateParams) (*Comment, error) {
 		attachmentMediaIDs:        cloneStrings(params.AttachmentMediaIDs),
 		mentions:                  cloneMentions(params.Mentions),
 		assistantMentioned:        params.AssistantMentioned,
+		authorIPLocation:          strings.TrimSpace(params.AuthorIPLocation),
 		status:                    StatusActive,
 		createdAt:                 now,
 		updatedAt:                 now,
@@ -151,9 +171,11 @@ func Restore(snapshot Snapshot) (*Comment, error) {
 		assistantMentioned:        snapshot.AssistantMentioned,
 		assistantReplySource:      strings.TrimSpace(snapshot.AssistantReplySource),
 		assistantCorrectionStatus: strings.TrimSpace(snapshot.AssistantCorrectionStatus),
+		authorIPLocation:          strings.TrimSpace(snapshot.AuthorIPLocation),
 		status:                    snapshot.Status,
 		isPinned:                  snapshot.IsPinned,
 		pinnedAt:                  cloneTime(snapshot.PinnedAt),
+		hiddenAt:                  cloneTime(snapshot.HiddenAt),
 		createdAt:                 snapshot.CreatedAt.UTC(),
 		updatedAt:                 snapshot.UpdatedAt.UTC(),
 		deletedAt:                 cloneTime(snapshot.DeletedAt),
@@ -164,9 +186,45 @@ func Restore(snapshot Snapshot) (*Comment, error) {
 	return comment, nil
 }
 
+func (c *Comment) Hide(operatorID string, now time.Time) error {
+	if strings.TrimSpace(operatorID) == "" {
+		return ErrModerationForbidden
+	}
+	if c == nil || c.status != StatusActive {
+		return ErrInvalidStatusTransition
+	}
+	if err := c.advance(now); err != nil {
+		return err
+	}
+	c.status = StatusHidden
+	c.isPinned = false
+	c.pinnedAt = nil
+	hiddenAt := c.updatedAt
+	c.hiddenAt = &hiddenAt
+	return nil
+}
+
+func (c *Comment) RestoreFromHidden(operatorID string, now time.Time) error {
+	if strings.TrimSpace(operatorID) == "" {
+		return ErrModerationForbidden
+	}
+	if c == nil || c.status != StatusHidden {
+		return ErrInvalidStatusTransition
+	}
+	if err := c.advance(now); err != nil {
+		return err
+	}
+	c.status = StatusActive
+	c.hiddenAt = nil
+	return nil
+}
+
 func (c *Comment) Delete(actorID string, now time.Time) error {
 	if c == nil || c.status == StatusDeleted {
 		return ErrCommentDeleted
+	}
+	if c.status != StatusActive {
+		return ErrInvalidStatusTransition
 	}
 	if strings.TrimSpace(actorID) == "" || strings.TrimSpace(actorID) != c.authorID {
 		return ErrDeleteForbidden
@@ -183,8 +241,11 @@ func (c *Comment) Delete(actorID string, now time.Time) error {
 }
 
 func (c *Comment) ChangePin(operatorID, postAuthorID string, pinned bool, now time.Time) error {
-	if c == nil || c.status == StatusDeleted {
+	if c == nil || c.status == StatusDeleted || c.status == StatusTombstoned {
 		return ErrCommentDeleted
+	}
+	if c.status != StatusActive {
+		return ErrInvalidStatusTransition
 	}
 	if strings.TrimSpace(operatorID) == "" || strings.TrimSpace(operatorID) != strings.TrimSpace(postAuthorID) {
 		return ErrPinForbidden
@@ -206,8 +267,11 @@ func (c *Comment) ChangePin(operatorID, postAuthorID string, pinned bool, now ti
 }
 
 func (c *Comment) BindAttachments(actorID string, attachmentMediaIDs []string, now time.Time) error {
-	if c == nil || c.status == StatusDeleted {
+	if c == nil || c.status == StatusDeleted || c.status == StatusTombstoned {
 		return ErrCommentDeleted
+	}
+	if c.status != StatusActive {
+		return ErrInvalidStatusTransition
 	}
 	if strings.TrimSpace(actorID) == "" || strings.TrimSpace(actorID) != c.authorID {
 		return ErrAttachmentForbidden
@@ -261,9 +325,11 @@ func (c *Comment) Snapshot() Snapshot {
 		AssistantMentioned:        c.assistantMentioned,
 		AssistantReplySource:      c.assistantReplySource,
 		AssistantCorrectionStatus: c.assistantCorrectionStatus,
+		AuthorIPLocation:          c.authorIPLocation,
 		Status:                    c.status,
 		IsPinned:                  c.isPinned,
 		PinnedAt:                  cloneTime(c.pinnedAt),
+		HiddenAt:                  cloneTime(c.hiddenAt),
 		CreatedAt:                 c.createdAt,
 		UpdatedAt:                 c.updatedAt,
 		DeletedAt:                 cloneTime(c.deletedAt),
@@ -288,7 +354,7 @@ func (c *Comment) validate() error {
 		c.authorID == "" ||
 		c.content == "" ||
 		len([]rune(c.content)) > MaxContentRunes ||
-		(c.status != StatusActive && c.status != StatusDeleted) ||
+		!isKnownStatus(c.status) ||
 		c.createdAt.IsZero() ||
 		c.updatedAt.IsZero() ||
 		c.updatedAt.Before(c.createdAt) {
@@ -305,11 +371,21 @@ func (c *Comment) validate() error {
 		return fmt.Errorf("%w: comment cannot reply to itself", ErrInvalidReplyTarget)
 	}
 	if c.status == StatusDeleted {
-		if c.deletedAt == nil || c.isPinned || c.pinnedAt != nil {
+		if c.deletedAt == nil || c.isPinned || c.pinnedAt != nil || c.hiddenAt != nil {
 			return fmt.Errorf("%w: deleted comment state is inconsistent", ErrInvalidComment)
 		}
 	} else if c.deletedAt != nil {
-		return fmt.Errorf("%w: active comment cannot have deletedAt", ErrInvalidComment)
+		return fmt.Errorf("%w: non-deleted comment cannot have deletedAt", ErrInvalidComment)
+	}
+	if c.status == StatusHidden {
+		if c.hiddenAt == nil || c.isPinned || c.pinnedAt != nil {
+			return fmt.Errorf("%w: hidden comment state is inconsistent", ErrInvalidComment)
+		}
+	} else if c.hiddenAt != nil {
+		return fmt.Errorf("%w: non-hidden comment cannot have hiddenAt", ErrInvalidComment)
+	}
+	if c.status == StatusTombstoned && (c.isPinned || c.pinnedAt != nil) {
+		return fmt.Errorf("%w: tombstoned comment cannot stay pinned", ErrInvalidComment)
 	}
 	if c.isPinned && (c.parentCommentID != "" || c.pinnedAt == nil) {
 		return fmt.Errorf("%w: only top-level comment can be pinned", ErrInvalidComment)
@@ -323,6 +399,15 @@ func (c *Comment) validate() error {
 		}
 	}
 	return nil
+}
+
+func isKnownStatus(status Status) bool {
+	switch status {
+	case StatusActive, StatusHidden, StatusDeleted, StatusTombstoned:
+		return true
+	default:
+		return false
+	}
 }
 
 func cloneStrings(values []string) []string {

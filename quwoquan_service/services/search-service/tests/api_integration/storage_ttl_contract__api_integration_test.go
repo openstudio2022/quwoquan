@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"quwoquan_service/services/search-service/internal/application/recentsearch"
 	"quwoquan_service/services/search-service/internal/infrastructure/feedbackstore"
 	"quwoquan_service/services/search-service/internal/infrastructure/queryheatstore"
 	"quwoquan_service/services/search-service/internal/infrastructure/searchsignals"
@@ -48,6 +49,23 @@ func loadStorageMeta(t *testing.T) storageMeta {
 	return meta
 }
 
+func loadRecentStorageMeta(t *testing.T) storageMeta {
+	t.Helper()
+	path := filepath.Join(
+		"..", "..", "..", "..", "contracts", "metadata", "search",
+		"recent_search_state", "storage.yaml",
+	)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read recent-search storage.yaml: %v", err)
+	}
+	var meta storageMeta
+	if err := yaml.Unmarshal(data, &meta); err != nil {
+		t.Fatalf("unmarshal recent-search storage.yaml: %v", err)
+	}
+	return meta
+}
+
 func loadRedisKeyspaceMeta(t *testing.T) redisKeyspaceMeta {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "..", "contracts", "metadata", "_shared", "redis_keyspace.yaml")
@@ -73,6 +91,14 @@ func TestStorageTTLMatchesMetadata(t *testing.T) {
 	}
 	if got := meta.DerivedReadModels["rm_search_term_heat"].TTL.Seconds; got != queryheatstore.HeatTTLSeconds {
 		t.Fatalf("rm_search_term_heat TTL drift: metadata=%d infra=%d", got, queryheatstore.HeatTTLSeconds)
+	}
+	recentMeta := loadRecentStorageMeta(t)
+	if got := recentMeta.Collections["recent_search_receipts"].TTL.Seconds; got != recentsearch.ReceiptTTLSeconds {
+		t.Fatalf(
+			"recent_search_receipts TTL drift: metadata=%d application=%d",
+			got,
+			recentsearch.ReceiptTTLSeconds,
+		)
 	}
 }
 

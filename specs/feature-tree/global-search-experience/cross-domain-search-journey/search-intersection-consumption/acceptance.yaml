@@ -39,6 +39,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.gwt1_local_contract
@@ -46,6 +47,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.contract
@@ -80,12 +82,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.contract
@@ -101,5 +105,5 @@ execution:
   local_gate:
   - make verify-metadata
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

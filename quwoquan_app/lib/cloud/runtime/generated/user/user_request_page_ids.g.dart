@@ -5,28 +5,24 @@ class UserRequestPageIds {
   const UserRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'AcceptInvite': 'user.accept.invite',
     'ActivatePersona': 'user.personas.activate',
     'ApplyPersonaProfileSync': 'user.personas.profile_sync',
     'ApplyProposal': 'user.apply.proposal',
     'BindCarrierPhoneCredential': 'user.credential.carrier_phone.bind',
-    'BindCredential': 'user.bind.credential',
     'BindPhoneCredential': 'user.credential.phone.bind',
     'BlockUser': 'user.block.create',
     'CancelGreetingRequest': 'user.cancel.greeting.request',
+    'CloseAccount': 'user.close.account',
     'ConfirmProposal': 'user.confirm.proposal',
     'CreateAlipayAuthorizationRequest': 'user.create.alipay.authorization.request',
     'CreatePersona': 'user.personas.create',
     'CreateProfileUpdateProposal': 'user.create.profile.update.proposal',
-    'DeleteEmptyPersona': 'user.personas.delete_empty',
     'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'FollowSubject': 'user.follow.subject',
     'FollowUser': 'user.follow',
-    'GenerateInvite': 'user.generate.invite',
     'GetActivePersonaContext': 'user.personas.active_context',
     'GetAppearanceSettings': 'user.settings.appearance.get',
     'GetCallSettings': 'user.get.call.settings',
-    'GetInviteByCode': 'user.get.invite.by.code',
     'GetLatestContactDiscovery': 'user.get.latest.contact.discovery',
     'GetMeProfile': 'user.get.me.profile',
     'GetNotificationSettings': 'user.notification_settings.get',
@@ -44,6 +40,7 @@ class UserRequestPageIds {
     'GetUserProfile': 'user.profile',
     'IgnoreGreetingRequest': 'user.ignore.greeting.request',
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
+    'InvalidateDevicePushEndpoint': 'user.invalidate.device.push.endpoint',
     'ListBlockedUsers': 'user.block.list',
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
@@ -51,12 +48,8 @@ class UserRequestPageIds {
     'ListFollowingSubjects': 'user.list.following.subjects',
     'ListGreetingInbox': 'user.list.greeting.inbox',
     'ListGreetingOutbox': 'user.list.greeting.outbox',
-    'ListMyInvites': 'user.list.my.invites',
     'ListPersonas': 'user.personas',
     'ListProfileUpdateProposals': 'user.list.profile.update.proposals',
-    'ListUserLifeItems': 'user.lifeItems',
-    'ListUserLikes': 'user.likes',
-    'ListUserWorks': 'user.works',
     'LoginAnonymous': 'user.login.anonymous',
     'LoginOneTap': 'user.login.one.tap',
     'LoginWithAlipay': 'user.login.with.alipay',
@@ -67,11 +60,13 @@ class UserRequestPageIds {
     'MarkFollowedSubjectVisited': 'user.mark.followed.subject.visited',
     'PullUserSync': 'user.pull.user.sync',
     'RefreshToken': 'user.refresh.token',
-    'RegisterDevice': 'user.register.device',
     'RejectProposal': 'user.reject.proposal',
+    'RemoveDevicePushEndpoint': 'user.remove.device.push.endpoint',
     'ReplyGreetingRequest': 'user.reply.greeting.request',
+    'ResolveIncomingCallPushDestinations': 'user.resolve.incoming.call.push.destinations',
     'ResolveOneTapLoginHint': 'user.resolve.one.tap.login.hint',
     'ResolveProfileQrToken': 'user.profile.qr.resolve',
+    'ResolvePushEndpointSecret': 'user.resolve.push.endpoint.secret',
     'RetirePersona': 'user.personas.retire',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
@@ -86,30 +81,27 @@ class UserRequestPageIds {
     'UpdatePersona': 'user.personas.update',
     'UpdatePrivacySettings': 'user.settings.privacy.patch',
     'UpdateUserProfile': 'user.profile.edit',
+    'UpsertDevicePushEndpoint': 'user.upsert.device.push.endpoint',
   };
 
-  static const String acceptInvite = 'user.accept.invite';
   static const String activatePersona = 'user.personas.activate';
   static const String applyPersonaProfileSync = 'user.personas.profile_sync';
   static const String applyProposal = 'user.apply.proposal';
   static const String bindCarrierPhoneCredential = 'user.credential.carrier_phone.bind';
-  static const String bindCredential = 'user.bind.credential';
   static const String bindPhoneCredential = 'user.credential.phone.bind';
   static const String blockUser = 'user.block.create';
   static const String cancelGreetingRequest = 'user.cancel.greeting.request';
+  static const String closeAccount = 'user.close.account';
   static const String confirmProposal = 'user.confirm.proposal';
   static const String createAlipayAuthorizationRequest = 'user.create.alipay.authorization.request';
   static const String createPersona = 'user.personas.create';
   static const String createProfileUpdateProposal = 'user.create.profile.update.proposal';
-  static const String deleteEmptyPersona = 'user.personas.delete_empty';
   static const String dismissContactDiscovery = 'user.dismiss.contact.discovery';
   static const String followSubject = 'user.follow.subject';
   static const String followUser = 'user.follow';
-  static const String generateInvite = 'user.generate.invite';
   static const String getActivePersonaContext = 'user.personas.active_context';
   static const String getAppearanceSettings = 'user.settings.appearance.get';
   static const String getCallSettings = 'user.get.call.settings';
-  static const String getInviteByCode = 'user.get.invite.by.code';
   static const String getLatestContactDiscovery = 'user.get.latest.contact.discovery';
   static const String getMeProfile = 'user.get.me.profile';
   static const String getNotificationSettings = 'user.notification_settings.get';
@@ -127,6 +119,7 @@ class UserRequestPageIds {
   static const String getUserProfile = 'user.profile';
   static const String ignoreGreetingRequest = 'user.ignore.greeting.request';
   static const String initiateContactDiscovery = 'user.initiate.contact.discovery';
+  static const String invalidateDevicePushEndpoint = 'user.invalidate.device.push.endpoint';
   static const String listBlockedUsers = 'user.block.list';
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';
@@ -134,12 +127,8 @@ class UserRequestPageIds {
   static const String listFollowingSubjects = 'user.list.following.subjects';
   static const String listGreetingInbox = 'user.list.greeting.inbox';
   static const String listGreetingOutbox = 'user.list.greeting.outbox';
-  static const String listMyInvites = 'user.list.my.invites';
   static const String listPersonas = 'user.personas';
   static const String listProfileUpdateProposals = 'user.list.profile.update.proposals';
-  static const String listUserLifeItems = 'user.lifeItems';
-  static const String listUserLikes = 'user.likes';
-  static const String listUserWorks = 'user.works';
   static const String loginAnonymous = 'user.login.anonymous';
   static const String loginOneTap = 'user.login.one.tap';
   static const String loginWithAlipay = 'user.login.with.alipay';
@@ -150,11 +139,13 @@ class UserRequestPageIds {
   static const String markFollowedSubjectVisited = 'user.mark.followed.subject.visited';
   static const String pullUserSync = 'user.pull.user.sync';
   static const String refreshToken = 'user.refresh.token';
-  static const String registerDevice = 'user.register.device';
   static const String rejectProposal = 'user.reject.proposal';
+  static const String removeDevicePushEndpoint = 'user.remove.device.push.endpoint';
   static const String replyGreetingRequest = 'user.reply.greeting.request';
+  static const String resolveIncomingCallPushDestinations = 'user.resolve.incoming.call.push.destinations';
   static const String resolveOneTapLoginHint = 'user.resolve.one.tap.login.hint';
   static const String resolveProfileQrToken = 'user.profile.qr.resolve';
+  static const String resolvePushEndpointSecret = 'user.resolve.push.endpoint.secret';
   static const String retirePersona = 'user.personas.retire';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
@@ -169,4 +160,5 @@ class UserRequestPageIds {
   static const String updatePersona = 'user.personas.update';
   static const String updatePrivacySettings = 'user.settings.privacy.patch';
   static const String updateUserProfile = 'user.profile.edit';
+  static const String upsertDevicePushEndpoint = 'user.upsert.device.push.endpoint';
 }

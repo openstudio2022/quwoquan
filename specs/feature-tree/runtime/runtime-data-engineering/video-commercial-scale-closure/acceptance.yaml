@@ -1,0 +1,196 @@
+version: 1
+node:
+  id: video-commercial-scale-closure
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-data-engineering/video-commercial-scale-closure
+  title: video commercial scale closure
+  parent_domain_service: runtime
+  parent_business_capability: runtime-data-engineering
+scope:
+  summary: 浙江、四川真实源旅行视频归因、媒体闭包、H10K 真实发布与 H100K evaluate-only。
+  in_scope:
+  - 抖音、TikTok、微博、头条与旅游垂类站的 discovery/reference 和风险准入
+  - SourceAttribution 端云同源展示
+  - 下载、无水印、音轨、转码、poster、字幕、checksum 与 provenance
+  - Canary/H200/H1000/H10K release/Gamma/App/rollback evidence
+  out_of_scope:
+  - 图片序列视频计入 sourced-video
+  - 去水印或绕过登录、DRM、robots、反爬
+  - 100,000/日实际生产
+gwt_acceptance:
+  GWT1:
+    title: sourced video admission preserves rights facts and user-approved risk
+    given:
+    - 平台来源默认仅为 discovery/reference。
+    when:
+    - 单个视频尝试进入发布候选。
+    then:
+    - 仅无需绕过登录/DRM/反爬、可直接下载、无水印、原创者可识别且 source post/original asset 可追溯的资产可继续。
+    - 无商业授权时必须同时记录 publicationAdmission=risk_accepted_attribution_only 与 commercialAuthorizationStatus=not_verified。
+    - 可下载、署名或去平台标识不得被解释为 licensed/authorized/commercially-cleared。
+    done_when:
+    - 每个 accepted 候选的 source evidence、risk acceptance、takedown policy 与 rights 状态可审计。
+    edge_cases:
+    - 原创者不可识别、媒体链接短期签名、带水印或需要绕过访问控制时保持 blocked。
+    contract_refs:
+    - quwoquan_data/verticals/travel/sources/source_registry.yaml
+    - quwoquan_data/verticals/travel/rights/license_policy.yaml
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/source/test_auto_research_video_lane__behavior__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: sourced_video_admission
+        cases:
+        - local_contract.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt1.admission
+        envs: [local]
+  GWT2:
+    title: SourceAttribution is metadata-first and visible end to end
+    given:
+    - SourceAttribution 字段、隐私、错误、surface 与 projection 已由 metadata 声明。
+    when:
+    - 视频从 Data manifest 经 content service/read model 到 App Feed、分享与沉浸式播放器。
+    then:
+    - isOriginal、original creator id/name/profile、platform、source post、original asset、attribution text、rights basis、commercial authorization、publication admission、evidence、proof、terms、risk、watermark/audio/model/property release、collectedAt 与 takedown policy 同源传递。
+    - 平台虚拟发布作者与原始创作者不得混名，来源链接不得冒充 authorization proof。
+    - App 明确展示原创者与来源，并支持投诉、下架、撤回和纠错链路。
+    done_when:
+    - Data、Service、App DTO 与 UI 不存在第二套归因字段表，动态 UAT 可见。
+    edge_cases:
+    - original creator profile 不可访问时仍展示冻结的 creator name、platform 和 source post。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/video_post.yaml
+    - quwoquan_service/contracts/metadata/content/post/projections/content_post_detail_wire.yaml
+    - quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/discovery/video/works_immersive_video_playback_journey__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: video_attribution_display
+        cases:
+        - user_acceptance.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt2.attribution
+        envs: [gamma_local]
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: video_projection_contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt2.projection
+        envs: [local]
+  GWT3:
+    title: real media package closes playback and rights
+    given:
+    - 视频已通过 GWT1 admission。
+    when:
+    - materialize/package 执行下载、探测、转码和对象事务。
+    then:
+    - 产物包含真实 H.264 MP4、poster、字幕、checksum、source provenance 与对象存储引用。
+    - watermark/OCR 失败时拒绝；音轨权利不明时剥离并替换已授权音轨，禁止去水印。
+    - rights_cleared_image_sequence 保留独立产品类型，但 sourced-video 计数始终排除它。
+    done_when:
+    - Range/CDN 播放、Android/iOS 真机与 SLS QoE 证据均绑定同一 immutable media checksum。
+    edge_cases:
+    - 临时 URL 过期、转码漂移、poster 与视频不匹配或字幕脱轨均阻断发布。
+    contract_refs:
+    - quwoquan_data/scripts/content/post/video/materialize.py
+    - quwoquan_data/scripts/content/post/video/package.py
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/post/test_video_work_package__behavior__contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_media_canary__video_playback__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: sourced_video_media
+        cases:
+        - local_contract.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt3.media
+        envs: [local]
+  GWT4:
+    title: Canary through H10K closes with authoritative cost and Gamma evidence
+    given:
+    - source digest、resolved model、pricing revision、spend cap、对象存储和 VOD 已冻结。
+    when:
+    - 依次执行 3 条真实源 Canary、H200、H1000 与 H10K。
+    then:
+    - 每档 execution succeeded、canonical transaction、immutable release active、Gamma import/API/App UAT、rollback/replay 全部通过。
+    - H10K 每省 5,000、共 10,000 条真实 sourced-video 在 24 小时内 accepted，accepted throughput 不低于 416.67/h。
+    - H10K sourced-video 中 rights_cleared_image_sequence 数量为 0。
+    - TokenLedger 记录真实 usage、billed cost、retry cost、firstPassRate 与 unitPassedCost。
+    done_when:
+    - H10K 媒体、权利、归因、成本、播放 QoE 与下游消费证据全部可复验。
+    edge_cases:
+    - 现有图片序列 3 条、running 状态或 lease 已释放不计真实源 Canary。
+    contract_refs:
+    - quwoquan_data/scripts/content/release/canonical/rollout_attestation.py
+    - quwoquan_data/verticals/travel/coverage/two_province_homepage_rollout.yaml
+    performance_points:
+    - H10K accepted throughput >= 416.67/h，窗口 <= 24h。
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/release/test_rollout_milestone__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+      - file: quwoquan_app/test/user_acceptance/journeys/discovery/video/works_immersive_video_playback_journey__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: sourced_video_h10k_release
+        cases:
+        - api_integration.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt4.release
+        envs: [gamma]
+      supporting:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: sourced_video_h10k_uat
+        cases:
+        - user_acceptance.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt4.playback
+        envs: [gamma_local]
+  GWT5:
+    title: H100K remains evidence-based capacity and budget extrapolation
+    given:
+    - H10K 真实批次与 24h soak 已通过。
+    when:
+    - 评估 100,000/日与 Prod 灰度。
+    then:
+    - 只使用 H10K p50/p95、firstPassRate、unitPassedCost、source-ready capacity、queue lag、转码、对象存储、CDN/VOD、人工审核与 QoE 指标外推 4,166.67/h。
+    - 容量保留至少 20% 余量；gray-initial、carry-on、full 均需非 dry-run 与 rollback 证据。
+    done_when:
+    - 输出诚实 GO/NO_GO、预算 cap 和回滚条件；缺证据时保持 NO_GO。
+    edge_cases:
+    - 来源授权撤回、投诉率、VOD 成本或播放 SLO 越界必须停止扩量。
+    contract_refs:
+    - quwoquan_data/scripts/core/throughput_plan.py
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/governance/test_media_canary__video_playback__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: sourced_video_h100k_evaluation
+        cases:
+        - local_contract.runtime.runtime_data_engineering.video_commercial_scale_closure.gwt5.capacity
+        envs: [local]
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

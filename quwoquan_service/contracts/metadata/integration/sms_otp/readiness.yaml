@@ -1,0 +1,21 @@
+# SmsOtp 是 ExternalInteraction 的类型化外部引用（payload.operation=
+# sms_otp.send），无独立 transport operation；OTP challenge 归 User/Auth。
+# 真实短信外送依赖真实供应商凭据（R-AUTH-001）。
+object: SmsOtp
+operations: []
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/integration-service/internal/application/external_interaction_service.go
+  store: []
+  outbox: []
+  reader: []
+  transport: []
+  app_client: []
+  page: []
+tests:
+  local_contract:
+    - quwoquan_service/services/integration-service/internal/adapters/http/location_handler__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/integration-service/tests/api_integration/external_interaction_mongo_provider__reliability__api_integration_test.go
+  user_acceptance: []
+environments: []

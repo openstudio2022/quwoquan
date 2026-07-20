@@ -1,20 +1,24 @@
 """Object queue lease packet projection for Subagent workers."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
+from core.control_types import ContentType
 from content.execution import production_contracts as pc
-from content.execution.queue.core import DEFAULT_TOOL_PERMISSIONS, QUEUE_BACKEND_LOCAL
+from content.execution.queue.core import (
+    DEFAULT_TOOL_PERMISSIONS,
+)
+from content.execution.queue.model import QueueJob
 
-def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
+def build_lease_packet(job: QueueJob) -> dict[str, Any]:
     """把租到的 job 转成 Subagent 可直接消费的 handoff packet（含 Ralph 自纠环出口约束）。"""
-    meta = dict(job.get("meta") or {})
-    content_type = str(job.get("contentType") or meta.get("contentType") or "")
-    carrier = str(job.get("carrier") or meta.get("carrier") or "")
-    is_image = content_type == "image" or carrier == "image"
-    is_video = content_type == "video" or carrier == "video"
+    meta = job.metadata_document()
+    content_type = job.content_type.value if job.content_type else ""
+    carrier = job.carrier.value if job.carrier else ""
+    is_image = ContentType.IMAGE in {job.content_type, job.carrier}
+    is_video = ContentType.VIDEO in {job.content_type, job.carrier}
     object_packet_refs = {
-        "contentObjectDir": meta.get("contentObjectDir"),
+        "contentObjectDir": job.content_object_dir or None,
         "authorJobPacket": "4.draft/author_job_packet.json",
         "writingPack": "3.compose/writing_pack.json",
         "draftMeta": "4.draft/draft_meta.json",
@@ -62,28 +66,28 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
     )
     return {
         "schema": "quwoquan_data.lease_packet",
-        "jobId": job.get("jobId"),
-        "executionId": job.get("executionId"),
-        "ref": job.get("ref"),
-        "stage": job.get("stage"),
-        "queueBackend": job.get("queueBackend") or QUEUE_BACKEND_LOCAL,
-        "partitionKey": job.get("partitionKey") or job.get("mutexKey") or job.get("ref"),
-        "controllerRunId": job.get("controllerRunId"),
-        "assignmentId": job.get("assignmentId"),
-        "assignmentPath": job.get("assignmentPath") or [],
-        "owner": job.get("owner"),
-        "allowedReadRoots": job.get("allowedReadRoots") or [],
-        "allowedWriteRoots": job.get("allowedWriteRoots") or [],
-        "sourceUnitId": job.get("sourceUnitId") or None,
-        "creatorProfileId": job.get("creatorProfileId") or meta.get("creatorProfileId"),
-        "authorId": job.get("authorId") or meta.get("authorId"),
-        "creatorArchetype": job.get("creatorArchetype") or meta.get("creatorArchetype"),
-        "creatorProfileVersion": job.get("creatorProfileVersion") or meta.get("creatorProfileVersion"),
+        "jobId": job.job_id,
+        "executionId": job.execution_id,
+        "ref": job.ref,
+        "stage": job.stage.value,
+        "queueBackend": job.backend.value,
+        "partitionKey": job.partition_key,
+        "controllerRunId": job.controller_run_id,
+        "assignmentId": job.assignment_id,
+        "assignmentPath": list(job.assignment_path),
+        "owner": job.owner,
+        "allowedReadRoots": list(job.allowed_read_roots),
+        "allowedWriteRoots": list(job.allowed_write_roots),
+        "sourceUnitId": job.source_unit_id or None,
+        "creatorProfileId": job.creator_profile_id or None,
+        "authorId": job.author_id or None,
+        "creatorArchetype": job.creator_archetype or None,
+        "creatorProfileVersion": job.creator_profile_version or None,
         "contentType": content_type or None,
-        "resultEnvelopeRequired": bool(job.get("resultEnvelopeRequired")),
+        "resultEnvelopeRequired": job.result_envelope_required,
         "resultEnvelopeContract": {
             "schema": pc.AGENT_RESULT_ENVELOPE_SCHEMA,
-            "required": bool(job.get("resultEnvelopeRequired")),
+            "required": job.result_envelope_required,
             "completionCommand": "execution controller records the validated AgentResultEnvelope for this execution/job/lease",
             "rules": [
                 "AgentResultEnvelope.files[].path 必须是 batch root 下相对路径",
@@ -94,13 +98,13 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
                 "（promptSha256 = sha256:<本次执行 prompt 全文的 hex>）",
             ],
         },
-        "lease": job.get("lease"),
-        "mutexKey": job.get("mutexKey"),
-        "attempt": job.get("attempt"),
-        "maxAttempts": job.get("maxAttempts"),
-        "leaseExpiresEpoch": job.get("leaseExpiresEpoch"),
-        "deadlineEpoch": job.get("deadlineEpoch"),
-        "maxWallClockSeconds": job.get("maxWallClockSeconds"),
+        "lease": job.lease.holder,
+        "mutexKey": job.mutex_key,
+        "attempt": job.attempt,
+        "maxAttempts": job.max_attempts,
+        "leaseExpiresEpoch": job.lease.expires_epoch,
+        "deadlineEpoch": job.lease.deadline_epoch,
+        "maxWallClockSeconds": job.max_wall_clock_seconds,
         "objectPacketRefs": object_packet_refs,
         # 执行合约 5 要素（harness execution contract）：把模糊 LLM 调用收成有界 agent 调用。
         "executionContract": {
@@ -111,14 +115,14 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
                 "5.review/repair_report.json",
             ],
             "budget": {
-                "maxWallClockSeconds": job.get("maxWallClockSeconds"),
-                "maxAttempts": job.get("maxAttempts"),
-                "maxStartupFailures": job.get("maxStartupFailures"),
-                "stuckThreshold": job.get("stuckThreshold"),
-                "tokenBudget": job.get("tokenBudget"),
-                "costBudgetUsd": job.get("costBudgetUsd"),
+                "maxWallClockSeconds": job.max_wall_clock_seconds,
+                "maxAttempts": job.max_attempts,
+                "maxStartupFailures": job.max_startup_failures,
+                "stuckThreshold": job.stuck_threshold,
+                "tokenBudget": job.token_budget,
+                "costBudgetUsd": job.cost_budget_usd,
             },
-            "permissions": list(job.get("permissions") or DEFAULT_TOOL_PERMISSIONS),
+            "permissions": list(job.permissions or DEFAULT_TOOL_PERMISSIONS),
             "completionConditions": completion_conditions,
             "outputPaths": output_paths,
         },

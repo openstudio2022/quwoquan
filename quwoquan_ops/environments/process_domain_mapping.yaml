@@ -80,6 +80,8 @@ environments:
       domains: [search]
     product-ops-service:
       domains: [ops]
+    platform-ops-service:
+      domains: [platform]
     recommendation-service:
       domains: [recommendation]
     realtime-gateway:
@@ -94,6 +96,8 @@ environments:
       domains: [search]
     product-ops-service:
       domains: [ops]
+    platform-ops-service:
+      domains: [platform]
     recommendation-service:
       domains: [recommendation]
     realtime-gateway:
@@ -108,6 +112,8 @@ environments:
       domains: [search]
     product-ops-service:
       domains: [ops]
+    platform-ops-service:
+      domains: [platform]
     recommendation-service:
       domains: [recommendation]
     realtime-gateway:

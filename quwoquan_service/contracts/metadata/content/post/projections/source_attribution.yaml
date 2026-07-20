@@ -1,0 +1,37 @@
+read_model: SourceAttribution
+
+description: |
+  外部来源视频的原创者归属与权利事实。该对象与平台发布作者相互独立，
+  只承载可公开展示和投诉下架所需的冻结快照。
+
+source_entities:
+  - Post
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: SourceAttributionDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/source_attribution_dto.g.dart
+  fields:
+    - { name: isOriginal, dart_type: bool, nullable: false, source: isOriginal, default: "false" }
+    - { name: originalCreatorId, dart_type: String, nullable: true, source: originalCreatorId, default: "null" }
+    - { name: originalCreatorName, dart_type: String, nullable: false, source: originalCreatorName, default: "''" }
+    - { name: originalCreatorProfileUrl, dart_type: String, nullable: true, source: originalCreatorProfileUrl, default: "null" }
+    - { name: platform, dart_type: String, nullable: false, source: platform, default: "''" }
+    - { name: sourcePostUrl, dart_type: String, nullable: false, source: sourcePostUrl, default: "''" }
+    - { name: originalAssetUrl, dart_type: String, nullable: false, source: originalAssetUrl, default: "''" }
+    - { name: attributionText, dart_type: String, nullable: false, source: attributionText, default: "''" }
+    - { name: rightsBasis, dart_type: String, nullable: false, source: rightsBasis, default: "''" }
+    - { name: commercialAuthorizationStatus, dart_type: String, nullable: false, source: commercialAuthorizationStatus, default: "''" }
+    - { name: publicationAdmission, dart_type: String, nullable: false, source: publicationAdmission, default: "''" }
+    - { name: authorizationProofUrl, dart_type: String, nullable: true, source: authorizationProofUrl, default: "null" }
+    - { name: termsUrl, dart_type: String, nullable: true, source: termsUrl, default: "null" }
+    - { name: riskAcceptanceId, dart_type: String, nullable: true, source: riskAcceptanceId, default: "null" }
+    - { name: watermarkStatus, dart_type: String, nullable: false, source: watermarkStatus, default: "''" }
+    - { name: audioRightsStatus, dart_type: String, nullable: false, source: audioRightsStatus, default: "''" }
+    - { name: modelReleaseStatus, dart_type: String, nullable: false, source: modelReleaseStatus, default: "''" }
+    - { name: propertyReleaseStatus, dart_type: String, nullable: false, source: propertyReleaseStatus, default: "''" }
+    - { name: collectedAt, dart_type: DateTime, nullable: false, source: collectedAt, default: "DateTime(0)" }
+    - { name: takedownPolicy, dart_type: String, nullable: false, source: takedownPolicy, default: "''" }

@@ -1,0 +1,80 @@
+domain: USER
+aggregate: AuthenticationChallenge
+
+description: |
+  AuthenticationChallenge 对象专属错误码。格式：MODULE.KIND.REASON。
+  覆盖 OTP 发送、校验与一次性消费语义；codegen 与 user 域其余对象
+  errors.yaml 聚合生成 Dart UserErrorCode 与 Go errors.go。
+
+errors:
+  - code: USER.AUTH.otp_expired
+    kind: AUTH
+    reason: otp_expired
+    http_status: 400
+    recovery: {action: retry, disruptionLevel: inlineCard}
+    l10n_key: userAuthOtpExpired
+    dart_const: otpExpired
+    go_const: ErrOtpExpired
+    user_message:
+      zh: "验证码已过期，请重新获取"
+      en: "Verification code expired, please request a new one"
+
+  - code: USER.AUTH.otp_mismatch
+    kind: AUTH
+    reason: otp_mismatch
+    http_status: 400
+    recovery: {action: retry, disruptionLevel: inlineCard}
+    l10n_key: userAuthOtpMismatch
+    dart_const: otpMismatch
+    go_const: ErrOtpMismatch
+    user_message:
+      zh: "验证码错误，请重新输入"
+      en: "Incorrect verification code, please try again"
+
+  - code: USER.AUTH.otp_attempts_exceeded
+    kind: AUTH
+    reason: otp_attempts_exceeded
+    http_status: 429
+    recovery: {action: retry, disruptionLevel: inlineCard, afterSeconds: 60}
+    l10n_key: userAuthOtpAttemptsExceeded
+    dart_const: otpAttemptsExceeded
+    go_const: ErrOtpAttemptsExceeded
+    user_message:
+      zh: "验证码错误次数过多，请重新获取"
+      en: "Too many incorrect attempts, please request a new code"
+
+  - code: USER.AUTH.otp_rate_limited
+    kind: AUTH
+    reason: rate_limited
+    http_status: 429
+    recovery: {action: retry, disruptionLevel: inlineCard, afterSeconds: 60}
+    l10n_key: userAuthOtpRateLimited
+    dart_const: otpRateLimited
+    go_const: ErrOtpRateLimited
+    user_message:
+      zh: "操作过于频繁，请稍后重试"
+      en: "Verification code requests are too frequent, please retry later"
+
+  - code: USER.AUTH.otp_provider_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    recovery: {action: retry, disruptionLevel: inlineCard}
+    l10n_key: userAuthOtpProviderFailed
+    dart_const: otpProviderFailed
+    go_const: ErrOtpProviderFailed
+    user_message:
+      zh: "验证码发送失败，请稍后重试"
+      en: "Failed to send verification code, please retry or use another method"
+
+  - code: USER.AUTH.challenge_consumed
+    kind: AUTH
+    reason: challenge_consumed
+    http_status: 400
+    recovery: {action: retry, disruptionLevel: inlineCard}
+    l10n_key: userAuthChallengeConsumed
+    dart_const: challengeConsumed
+    go_const: ErrChallengeConsumed
+    user_message:
+      zh: "验证码已被使用，请重新获取"
+      en: "Verification code already used, please request a new one"

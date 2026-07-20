@@ -78,6 +78,10 @@ environments:
       package: product-ops-service
       domains: [ops]
       modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    platform-ops-service:
+      package: platform-ops-service
+      domains: [platform]
+      modules: [platform.api]
     recommendation-service:
       package: recommendation-service
       domains: [recommendation]
@@ -134,6 +138,10 @@ environments:
       package: product-ops-service
       domains: [ops]
       modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    platform-ops-service:
+      package: platform-ops-service
+      domains: [platform]
+      modules: [platform.api]
     recommendation-service:
       package: recommendation-service
       domains: [recommendation]
@@ -190,6 +198,10 @@ environments:
       package: product-ops-service
       domains: [ops]
       modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    platform-ops-service:
+      package: platform-ops-service
+      domains: [platform]
+      modules: [platform.api]
     recommendation-service:
       package: recommendation-service
       domains: [recommendation]

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
@@ -13,9 +14,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
@@ -24,28 +25,57 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/ui/chat/pages/greeting_inbox_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        AckAppMessageCommand,
+        AppMessage,
+        AppMessageCommandWriter,
+        AppMessageDestination,
+        AppMessageInboxSlice,
+        AppMessageQuery,
+        AppMessageTarget,
+        AppMessageUnreadCountSlice,
+        GetAppMessageQuery,
+        GetAppMessageUnreadCountQuery,
+        GreetingRequestRecord,
+        ListAppMessagesQuery,
+        ReadAppMessageCommand;
 
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+
+const _primaryAvatarDataUri =
+    'data:image/png;base64,'
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PyBqWQAAAABJRU5ErkJggg==';
+const _staleConversationAvatarDataUri =
+    'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
 Widget _scopedApp({
   ChatRepository? mock,
-  GreetingRepository? greetingRepository,
+  Iterable<GreetingRequestRecord> greetingInbox =
+      const <GreetingRequestRecord>[],
   bool isDark = false,
   VisitRecorderService? visitRecorder,
+  _EmptyAppMessageFacet? appMessageFacet,
 }) {
   final repo = mock ?? MockChatRepository();
+  final appMessages = appMessageFacet ?? _EmptyAppMessageFacet();
   return ProviderScope(
+    retry: (_, _) => null,
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repo),
+      chatRepositoryCompositionProvider.overrideWithValue(repo),
       greetingRepositoryProvider.overrideWithValue(
-        greetingRepository ?? MockGreetingRepository(),
+        alphaGreetingRepository(seedInbox: greetingInbox),
       ),
       visitRecorderServiceProvider.overrideWithValue(
         visitRecorder ?? _NoopVisitRecorderService(),
       ),
       isDarkProvider.overrideWithValue(isDark),
+      appMessageQueryProvider.overrideWithValue(appMessages),
+      appMessageCommandWriterProvider.overrideWithValue(appMessages),
     ],
     child: MaterialApp.router(
       theme: AppTheme.lightTheme,
@@ -57,6 +87,10 @@ Widget _scopedApp({
           GoRoute(
             path: '/chat',
             builder: (_, _) => const Scaffold(body: ChatPage()),
+          ),
+          GoRoute(
+            path: AppRoutePaths.greetingInbox,
+            builder: (_, _) => const GreetingInboxPage(),
           ),
           GoRoute(
             path: '/chat/:id',
@@ -78,6 +112,78 @@ final class _NoopVisitRecorderService extends VisitRecorderService {
 
   @override
   Future<void> recordVisit(VisitTarget target) async {}
+}
+
+/// 通知维度的默认云端 inbox fake：空 inbox / 零未读。
+/// 子类覆写 listAppMessages 提供场景数据。
+base class _EmptyAppMessageFacet
+    implements AppMessageQuery, AppMessageCommandWriter {
+  final List<String> readMessageIds = <String>[];
+
+  @override
+  Future<AppMessageInboxSlice> listAppMessages(
+    ListAppMessagesQuery query,
+  ) async {
+    return AppMessageInboxSlice(items: const <AppMessage>[]);
+  }
+
+  @override
+  Future<AppMessage> getAppMessage(GetAppMessageQuery query) async {
+    final slice = await listAppMessages(const ListAppMessagesQuery(limit: 50));
+    return slice.items.firstWhere(
+      (message) => message.messageId == query.messageId,
+    );
+  }
+
+  @override
+  Future<AppMessageUnreadCountSlice> getUnreadCount(
+    GetAppMessageUnreadCountQuery query,
+  ) async {
+    final slice = await listAppMessages(const ListAppMessagesQuery(limit: 50));
+    return AppMessageUnreadCountSlice(
+      unreadCount: slice.items.where((message) => !message.read).length,
+    );
+  }
+
+  @override
+  Future<AppMessage> acknowledge(AckAppMessageCommand command) async {
+    return getAppMessage(GetAppMessageQuery(messageId: command.messageId));
+  }
+
+  @override
+  Future<AppMessage> markRead(ReadAppMessageCommand command) async {
+    readMessageIds.add(command.messageId);
+    return getAppMessage(GetAppMessageQuery(messageId: command.messageId));
+  }
+}
+
+/// B11 场景：云端 inbox 返回主页更新提醒 AppMessage。
+final class _HomepageReminderAppMessageFacet extends _EmptyAppMessageFacet {
+  @override
+  Future<AppMessageInboxSlice> listAppMessages(
+    ListAppMessagesQuery query,
+  ) async {
+    return AppMessageInboxSlice(
+      items: <AppMessage>[
+        AppMessage(
+          messageId: 'app_msg_homepage_reminder',
+          userId: 'mock_me',
+          messageType: 'content',
+          source: 'homepage',
+          sourceId: 'homepage-1',
+          destination: const AppMessageDestination(type: 'user', id: 'mock_me'),
+          title: '主页更新提醒',
+          summary: '北京大学主页有新内容更新',
+          target: const AppMessageTarget(
+            targetType: 'homepage',
+            targetId: 'homepage-1',
+          ),
+          read: false,
+          createdAt: DateTime.utc(2026, 5, 1, 12),
+        ),
+      ],
+    );
+  }
 }
 
 final class _RecordingVisitRecorderService extends VisitRecorderService {
@@ -110,6 +216,13 @@ Finder _findByValueKeyPrefix(String prefix) {
   });
 }
 
+Finder _inboxAvatarFinder(String conversationId) {
+  return find.descendant(
+    of: find.byKey(ValueKey<String>('chat-inbox-row-$conversationId')),
+    matching: find.byType(RoundedSquareAvatar),
+  );
+}
+
 Color? _containerColor(WidgetTester tester, Finder finder) {
   final container = tester.widget<Container>(finder);
   final decoration = container.decoration;
@@ -126,14 +239,14 @@ void main() {
       await tester.pump();
 
       expect(find.byType(ChatPage), findsOneWidget);
-      expect(find.text(UITextConstants.chatPrimaryContacts), findsOneWidget);
-      expect(find.text(UITextConstants.unread), findsOneWidget);
-      expect(find.text(UITextConstants.groupChat), findsOneWidget);
-      expect(find.text(UITextConstants.chatPrivateMessages), findsOneWidget);
-      expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
+      expect(find.text(ChatText.chatPrimaryContacts), findsOneWidget);
+      expect(find.text(ChatText.unread), findsOneWidget);
+      expect(find.text(ChatText.groupChat), findsOneWidget);
+      expect(find.text(ChatText.chatPrivateMessages), findsOneWidget);
+      expect(find.text(ChatText.chatNotifications), findsOneWidget);
       expect(find.text('趣群'), findsNothing);
-      expect(find.text(UITextConstants.atXiaoqu), findsNothing);
-      expect(find.text(UITextConstants.reminders), findsNothing);
+      expect(find.text(ChatText.atXiaoqu), findsNothing);
+      expect(find.text(ChatText.reminders), findsNothing);
     });
 
     testWidgets('进入和切换聊天页会记录页面访问', (tester) async {
@@ -147,7 +260,7 @@ void main() {
         contains(const VisitTarget.page('chat_messages_all')),
       );
 
-      await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
+      await tester.tap(find.text(ChatText.chatPrimaryContacts));
       await tester.pumpAndSettle();
 
       expect(
@@ -162,15 +275,36 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
+      await tester.tap(find.text(ChatText.chatPrimaryContacts));
       await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey<String>('chat-contact-section-label-star')),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.starredFriends), findsOneWidget);
+      expect(find.text(ChatText.starredFriends), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.star_fill), findsNothing);
+    });
+
+    testWidgets('联系人数不超过 20 时隐藏索引，超过阈值后显示', (tester) async {
+      for (final count in <int>[20, 21]) {
+        await tester.pumpWidget(
+          _scopedApp(mock: _ContactIndexThresholdChatRepository(count)),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(ChatText.chatPrimaryContacts));
+        await tester.pumpAndSettle();
+
+        expect(
+          _findByValueKeyPrefix('chat-contact-index-letter-'),
+          count <= 20 ? findsNothing : findsWidgets,
+          reason: '联系人数量为 $count 时索引展示规则不符合阈值契约',
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
     });
 
     testWidgets('包含 Scaffold 结构', (tester) async {
@@ -238,7 +372,7 @@ void main() {
         );
         expect(inboxDivider.color, expectedListDivider);
 
-        await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
+        await tester.tap(find.text(ChatText.chatPrimaryContacts));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
@@ -376,12 +510,17 @@ void main() {
     });
 
     testWidgets('通知分组展示 AppMessage 投影', (tester) async {
+      // B11：通知维度只消费 notification-service 云端 inbox
+      //（ListAppMessages），不再从 chat repo 的 notification filter 拼行。
       await tester.pumpWidget(
-        _scopedApp(mock: _XiaoquDeliveryChatRepository()),
+        _scopedApp(
+          mock: _XiaoquDeliveryChatRepository(),
+          appMessageFacet: _HomepageReminderAppMessageFacet(),
+        ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.chatNotifications));
+      await tester.tap(find.text(ChatText.chatNotifications));
       await tester.pumpAndSettle();
 
       expect(find.text('主页更新提醒'), findsOneWidget);
@@ -408,31 +547,30 @@ void main() {
     });
 
     testWidgets('打招呼请求箱回复后进入正式会话', (tester) async {
-      final greetingRepo = MockGreetingRepository(
-        seedInbox: <GreetingRequestDto>[
-          GreetingRequestDto(
-            id: 'greeting_001',
-            requesterSubAccountId: 'user_requester',
-            targetSubAccountId: 'mock_me',
-            requestMessage: '想和你聊聊川西路线',
-            status: 'pending',
-            source: 'profile',
-            createdAt: DateTime.utc(2026, 1, 1),
-            updatedAt: DateTime.utc(2026, 1, 1),
-          ),
-        ],
-      );
-      await tester.pumpWidget(_scopedApp(greetingRepository: greetingRepo));
+      final greetingInbox = <GreetingRequestRecord>[
+        GreetingRequestRecord(
+          id: 'greeting_001',
+          requesterSubAccountId: 'user_requester',
+          targetSubAccountId: 'mock_me',
+          requestMessage: '想和你聊聊川西路线',
+          status: 'pending',
+          source: 'profile',
+          createdAt: DateTime.utc(2026, 1, 1),
+          updatedAt: DateTime.utc(2026, 1, 1),
+        ),
+      ];
+      await tester.pumpWidget(_scopedApp(greetingInbox: greetingInbox));
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.chatGreetingInboxTitle), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.chatGreetingInboxTitle));
+      expect(find.text(ChatText.chatGreetingInboxTitle), findsOneWidget);
+      await tester.tap(find.text(ChatText.chatGreetingInboxTitle));
       await tester.pumpAndSettle();
       expect(find.text('想和你聊聊川西路线'), findsWidgets);
 
-      await tester.tap(find.text(UITextConstants.chatGreetingInboxReply));
+      await tester.tap(find.text(ChatText.chatGreetingInboxReply));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('下拉刷新不崩溃', (tester) async {
@@ -504,8 +642,8 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
-      expect(find.text(UITextConstants.secretMessage), findsNothing);
+      expect(find.text(ChatText.chatNotifications), findsOneWidget);
+      expect(find.text(ChatText.secretMessage), findsNothing);
 
       await tester.fling(
         find.byType(TabSwipeSwitchRegion).first,
@@ -514,8 +652,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.contactsTabGroups), findsOneWidget);
-      expect(find.text(UITextConstants.secretMessage), findsNothing);
+      expect(find.text(ChatText.contactsTabGroups), findsOneWidget);
+      expect(find.text(ChatText.secretMessage), findsNothing);
     });
   });
 
@@ -525,7 +663,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
-      expect(find.text(UITextConstants.noConversations), findsOneWidget);
+      expect(find.text(ChatText.noConversations), findsOneWidget);
     });
 
     testWidgets('群头像 URL 缺失时显示稳定群占位且不拉成员', (tester) async {
@@ -535,9 +673,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('默认群头像兜底'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
+      final avatarFinder = _inboxAvatarFinder('conv_fallback_group');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
       expect(avatar.imageUrl, isNull);
       expect(repo.memberRequestCount, 0);
       expect(find.text('默'), findsNothing);
@@ -551,15 +689,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('预渲染群头像'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
-      expect(
-        avatar.imageUrl,
-        contains(
-          'media/avatar/s/archived-avatar/conversation/conv_rendered_group',
-        ),
-      );
+      final avatarFinder = _inboxAvatarFinder('conv_rendered_group');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+      expect(avatar.imageUrl, _primaryAvatarDataUri);
     });
 
     testWidgets('群会话 version 为 0 时仍使用会话 avatarUrl 单图', (tester) async {
@@ -569,15 +702,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('非权威群头像'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
-      expect(
-        avatar.imageUrl,
-        contains(
-          'media/avatar/s/archived-avatar/conversation/conv_wrong_group_avatar',
-        ),
-      );
+      final avatarFinder = _inboxAvatarFinder('conv_wrong_group_avatar');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+      expect(avatar.imageUrl, _primaryAvatarDataUri);
       expect(repo.memberRequestCount, 0);
     });
 
@@ -588,11 +716,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('12人测试群'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
-      expect(avatar.imageUrl, isNotNull);
-      expect(avatar.imageUrl, contains('conv_grid_12'));
+      final avatarFinder = _inboxAvatarFinder('conv_grid_12');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+      expect(avatar.imageUrl, _primaryAvatarDataUri);
       expect(repo.memberRequestCount, 0);
     });
 
@@ -603,7 +730,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final avatarFinder = find.byType(RoundedSquareAvatar).first;
+      final avatarFinder = _inboxAvatarFinder('conv_rendered_group');
+      expect(avatarFinder, findsOneWidget);
       final size = tester.getSize(avatarFinder);
 
       expect(size.width, ChatConversationAvatarTokens.listSize);
@@ -617,9 +745,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('组合群头像兜底'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
+      final avatarFinder = _inboxAvatarFinder('conv_composite_group');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
       expect(avatar.imageUrl, isNull);
       expect(repo.memberRequestCount, 0);
       expect(find.text('组'), findsNothing);
@@ -660,10 +788,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('契约撰稿人'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
-      expect(avatar.imageUrl, contains('user_002'));
+      final avatarFinder = _inboxAvatarFinder('conv_direct_fallback');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+      expect(avatar.imageUrl, _primaryAvatarDataUri);
       expect(find.text('契'), findsNothing);
     });
 
@@ -675,18 +803,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('手机端头像一致性'), findsOneWidget);
-      final avatar = tester.widget<RoundedSquareAvatar>(
-        find.byType(RoundedSquareAvatar).first,
-      );
-      expect(
-        avatar.imageUrl,
-        contains('media/avatar/s/archived-avatar/user/user_contact'),
-      );
+      final avatarFinder = _inboxAvatarFinder('conv_direct_consistency');
+      expect(avatarFinder, findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+      expect(avatar.imageUrl, _primaryAvatarDataUri);
     });
   });
 }
 
-class _EmptyChatRepository extends MockChatRepository {
+abstract class _ListInboxDrivenChatRepository extends MockChatRepository {
+  @override
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final inbox = await listInbox(cursor: cursor, limit: limit);
+    return inbox
+        .where((item) {
+          return switch (filter) {
+            'unread' => item.unreadCount > 0 || item.mentionUnreadCount > 0,
+            'group' => item.type == 'group',
+            'direct' => item.type == 'direct' || item.type == 'encrypted',
+            'notification' => false,
+            _ => true,
+          };
+        })
+        .map(
+          (item) => MessageHomeRowDto(
+            id: item.id,
+            conversationId: item.id,
+            conversationType: item.type,
+            title: item.title,
+            summary: item.lastMessagePreview,
+            avatarUrl: item.avatarUrl,
+            groupAvatarVersion: item.groupAvatarVersion,
+            lastActiveAt: item.lastMessageTime,
+            unreadCount: item.unreadCount,
+            mentionUnreadCount: item.mentionUnreadCount,
+            muted: item.muted,
+            pinned: item.pinned,
+            read: item.unreadCount == 0 && item.mentionUnreadCount == 0,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
+class _EmptyChatRepository extends _ListInboxDrivenChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return const <ChatInboxDto>[];
@@ -701,7 +865,7 @@ class _EmptyChatRepository extends MockChatRepository {
   }
 }
 
-class _NavigationChatRepository extends MockChatRepository {
+class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
@@ -769,6 +933,31 @@ class _StarredContactsChatRepository extends MockChatRepository {
         relationState: 'mutual',
       ),
     ];
+  }
+}
+
+class _ContactIndexThresholdChatRepository extends MockChatRepository {
+  _ContactIndexThresholdChatRepository(this.count);
+
+  final int count;
+
+  @override
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return List<ContactHomeRowDto>.generate(
+      count,
+      (index) => ContactHomeRowDto(
+        id: 'threshold_contact_$index',
+        kind: 'user',
+        objectId: 'threshold_contact_$index',
+        userId: 'threshold_contact_$index',
+        title: 'A Contact ${index + 1}',
+        relationState: 'mutual',
+      ),
+    ).take(limit).toList(growable: false);
   }
 }
 
@@ -918,7 +1107,8 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
   }
 }
 
-class _GroupAvatarFallbackChatRepository extends MockChatRepository {
+class _GroupAvatarFallbackChatRepository
+    extends _ListInboxDrivenChatRepository {
   int memberRequestCount = 0;
 
   @override
@@ -965,7 +1155,8 @@ class _GroupAvatarFallbackChatRepository extends MockChatRepository {
   }
 }
 
-class _RenderedGroupAvatarChatRepository extends MockChatRepository {
+class _RenderedGroupAvatarChatRepository
+    extends _ListInboxDrivenChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
@@ -973,8 +1164,7 @@ class _RenderedGroupAvatarChatRepository extends MockChatRepository {
         id: 'conv_rendered_group',
         type: 'group',
         title: '预渲染群头像',
-        avatarUrl:
-            'media/avatar/s/archived-avatar/conversation/conv_rendered_group/v2/mock.png',
+        avatarUrl: _primaryAvatarDataUri,
         groupAvatarVersion: 2,
       ),
     ];
@@ -989,7 +1179,8 @@ class _RenderedGroupAvatarChatRepository extends MockChatRepository {
   }
 }
 
-class _ConvGrid12GroupAvatarChatRepository extends MockChatRepository {
+class _ConvGrid12GroupAvatarChatRepository
+    extends _ListInboxDrivenChatRepository {
   int memberRequestCount = 0;
 
   @override
@@ -999,8 +1190,7 @@ class _ConvGrid12GroupAvatarChatRepository extends MockChatRepository {
         id: 'conv_grid_12',
         type: 'group',
         title: '12人测试群',
-        avatarUrl:
-            'media/avatar/s/archived-avatar/conversation/conv_grid_12/v1/mock.png',
+        avatarUrl: _primaryAvatarDataUri,
         groupAvatarVersion: 1,
       ),
     ];
@@ -1027,7 +1217,8 @@ class _ConvGrid12GroupAvatarChatRepository extends MockChatRepository {
   }
 }
 
-class _NonAuthoritativeGroupAvatarChatRepository extends MockChatRepository {
+class _NonAuthoritativeGroupAvatarChatRepository
+    extends _ListInboxDrivenChatRepository {
   int memberRequestCount = 0;
 
   @override
@@ -1037,8 +1228,7 @@ class _NonAuthoritativeGroupAvatarChatRepository extends MockChatRepository {
         id: 'conv_wrong_group_avatar',
         type: 'group',
         title: '非权威群头像',
-        avatarUrl:
-            'media/avatar/s/archived-avatar/conversation/conv_wrong_group_avatar/v1/mock.png',
+        avatarUrl: _primaryAvatarDataUri,
         groupAvatarVersion: 0,
       ),
     ];
@@ -1081,7 +1271,8 @@ class _NonAuthoritativeGroupAvatarChatRepository extends MockChatRepository {
   }
 }
 
-class _GroupAvatarCompositeChatRepository extends MockChatRepository {
+class _GroupAvatarCompositeChatRepository
+    extends _ListInboxDrivenChatRepository {
   int memberRequestCount = 0;
 
   @override
@@ -1133,7 +1324,8 @@ class _GroupAvatarCompositeChatRepository extends MockChatRepository {
   }
 }
 
-class _DirectAvatarFallbackChatRepository extends MockChatRepository {
+class _DirectAvatarFallbackChatRepository
+    extends _ListInboxDrivenChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
@@ -1172,13 +1364,14 @@ class _DirectAvatarFallbackChatRepository extends MockChatRepository {
       ChatConversationMemberDto(
         userId: 'user_002',
         displayName: '契约撰稿人',
-        avatarUrl: 'media/avatar/s/archived-avatar/user/user_002/v1/avatar.png',
+        avatarUrl: _primaryAvatarDataUri,
       ),
     ];
   }
 }
 
-class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
+class _DirectAvatarConsistencyChatRepository
+    extends _ListInboxDrivenChatRepository {
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[
@@ -1186,7 +1379,7 @@ class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
         id: 'conv_direct_consistency',
         type: 'direct',
         title: '手机端头像一致性',
-        avatarUrl: 'https://example.com/stale-conversation-avatar.jpg',
+        avatarUrl: _staleConversationAvatarDataUri,
       ),
     ];
   }
@@ -1217,14 +1410,14 @@ class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
       ChatConversationMemberDto(
         userId: 'user_contact',
         displayName: '手机端头像一致性',
-        avatarUrl:
-            'media/avatar/s/archived-avatar/user/user_contact/v1/avatar.png',
+        avatarUrl: _primaryAvatarDataUri,
       ),
     ];
   }
 }
 
-class _PrefetchedGroupAvatarChatRepository extends MockChatRepository {
+class _PrefetchedGroupAvatarChatRepository
+    extends _ListInboxDrivenChatRepository {
   int memberRequestCount = 0;
 
   @override

@@ -11,6 +11,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
 )
 
 func TestAccessTokenConfigFailsClosed(t *testing.T) {
@@ -60,6 +61,9 @@ func TestRuntimeDependenciesRejectMissingOrMemoryStorage(t *testing.T) {
 	valid.MongoDB.Database = "quwoquan_assistant"
 	valid.Postgres.DSN = "postgres://assistant:secret@postgres:5432/quwoquan"
 	valid.NotificationService.BaseURL = "http://notification-service:18087"
+	valid.SearchService.BaseURL = "http://search-service:18095"
+	valid.EntityService.BaseURL = "http://entity-service:18084"
+	valid.ContentService.BaseURL = "http://content-service:18080"
 	valid.Redis.General.Mode = "standalone"
 	valid.Redis.General.Addr = "redis:6379"
 	valid.Redis.Rec.Mode = "cluster"
@@ -183,14 +187,39 @@ func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
 	}
 }
 
-func TestGammaAllowsDeterministicModelProviderWhenGateFlagEnabled(t *testing.T) {
-	t.Setenv("ALLOW_DETERMINISTIC_BETA", "")
-	if _, err := buildModelProvider(providerCfg{Provider: "deterministic"}, "gamma"); err == nil {
-		t.Fatal("gamma deterministic provider should require explicit gate flag")
+func TestCommercialEnvironmentsAlwaysRejectDeterministicProviders(t *testing.T) {
+	canonicalSearch, err := searchclient.New(
+		"http://127.0.0.1:18095",
+		&http.Client{Timeout: 100 * time.Millisecond},
+	)
+	if err != nil {
+		t.Fatalf("build canonical search client: %v", err)
 	}
-	t.Setenv("ALLOW_DETERMINISTIC_BETA", "1")
-	if _, err := buildModelProvider(providerCfg{Provider: "deterministic"}, "gamma"); err != nil {
-		t.Fatalf("gamma deterministic provider should be allowed by gate flag: %v", err)
+	for _, appEnv := range []string{"beta", "gamma", "prod"} {
+		if _, err := buildModelProvider(
+			providerCfg{Provider: "deterministic"},
+			appEnv,
+		); err == nil {
+			t.Fatalf("%s deterministic model provider must fail closed", appEnv)
+		}
+		if _, err := buildSearchRegistry(
+			providerCfg{Provider: "disabled"},
+			canonicalSearch,
+			appEnv,
+		); err == nil {
+			t.Fatalf("%s disabled search provider must fail closed", appEnv)
+		}
+	}
+}
+
+func TestModelDebugContentLogIsAlphaOnly(t *testing.T) {
+	if err := validateAssistantModelDebugLogPolicy("alpha", true); err != nil {
+		t.Fatalf("alpha explicit model debug log should be allowed: %v", err)
+	}
+	for _, appEnv := range []string{"beta", "gamma", "prod"} {
+		if err := validateAssistantModelDebugLogPolicy(appEnv, true); err == nil {
+			t.Fatalf("%s model content debug log must fail closed", appEnv)
+		}
 	}
 }
 
@@ -218,16 +247,34 @@ func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
 	}
 }
 
-func TestContentSearchQueryCandidatesStripsAppSearchPrefixes(t *testing.T) {
-	got := contentSearchQueryCandidates("站内查找四川大学攻略指南")
-	want := []string{"站内查找四川大学攻略指南", "四川大学攻略指南"}
-	if len(got) != len(want) {
-		t.Fatalf("candidates=%v want %v", got, want)
+func TestBuildSearchRegistryRequiresCanonicalSearchServiceAndNeverRegistersMock(t *testing.T) {
+	if _, err := buildSearchRegistry(
+		providerCfg{Provider: "disabled"},
+		nil,
+		"alpha",
+	); err == nil {
+		t.Fatal("missing search-service URL must fail closed")
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("candidates[%d]=%q want %q (all=%v)", i, got[i], want[i], got)
-		}
+	canonicalSearch, err := searchclient.New(
+		"http://127.0.0.1:18095",
+		&http.Client{Timeout: 100 * time.Millisecond},
+	)
+	if err != nil {
+		t.Fatalf("build search client: %v", err)
+	}
+	registry, err := buildSearchRegistry(
+		providerCfg{Provider: "disabled"},
+		canonicalSearch,
+		"alpha",
+	)
+	if err != nil {
+		t.Fatalf("build canonical app_search registry: %v", err)
+	}
+	if _, ok := registry.Metadata("app_search"); !ok {
+		t.Fatal("canonical app_search must be registered")
+	}
+	if _, ok := registry.Metadata("mock_search"); ok {
+		t.Fatal("mock_search must never be reachable")
 	}
 }
 

@@ -7,28 +7,28 @@ sources:
     domain_pkg: user
     tables:
       - user_profiles
-      - personas
       - user_auth
-      - user_devices
-      - user_settings
-      - credential_bindings
       - anonymous_device_bindings
       - profile_qr_tokens
     migration_skip_tables:
       - profile_qr_tokens
     name_overrides:
       UserProfile: Profile
-      UserSetting: Setting
-    type_overrides:
-      UserSetting:
-        contentLanguage: "*string"
-        feedPreference: "*string"
     cache_overrides:
       "cache:user_profile:{userId}":
         entity: FullSnapshot
         name: Profile
-      "cache:user_setting:{userId}":
-        name: Setting
+
+  - metadata: user/persona
+    domain_pkg: user
+    tables:
+      - personas
+      - personas_command_receipts
+      - personas_outbox
+    migration_skip_tables:
+      - personas
+      - personas_command_receipts
+      - personas_outbox
 
   - metadata: user/persona_relationship
     domain_pkg: persona_relationship
@@ -51,21 +51,6 @@ sources:
     domain_pkg: user
     name_overrides:
       ContactDiscoveryRecord: ContactDiscovery
-
-  - metadata: user/invite_record
-    domain_pkg: user
-    name_overrides:
-      InviteRecord: Invite
-
-  - metadata: user/user_life_item
-    domain_pkg: user
-    name_overrides:
-      UserLifeItem: LifeItem
-
-  - metadata: user/user_work
-    domain_pkg: user
-    name_overrides:
-      UserWork: Work
 
   - metadata: user/greeting_request
     domain_pkg: user

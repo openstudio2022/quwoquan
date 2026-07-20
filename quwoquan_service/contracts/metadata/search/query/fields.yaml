@@ -13,6 +13,12 @@ entities:
       - { name: sourceVersion, type: int, constraints: [NOT_NULL] }
       - { name: indexedAt, type: timestamp, constraints: [NOT_NULL] }
 
+  HotQueryView:
+    description: 搜索词热力读模型的商用展示切片，供全局搜索默认页「猜你想搜」使用
+    fields:
+      - { name: query, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: relevance, type: float64, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+
   SearchQuery:
     description: 一次搜索请求的查询日志，用于搜索词热力与 relevance 评测
     fields:
@@ -39,11 +45,11 @@ entities:
         source: query
         type: string
         constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
+        classification: PII
+        log_policy: deny
         api_exposure: read
         ops_exposure: read
-        description: 归一化后的查询词串
+        description: 归一化后的私有查询词串；仅用于搜索质量计算，禁止原文日志
 
       - name: mode
         source: mode
@@ -59,8 +65,8 @@ entities:
         source: viewerId
         type: string
         constraints: [NULLABLE]
-        classification: INTERNAL
-        log_policy: deny
+        classification: PII
+        log_policy: hash
         api_exposure: none
         ops_exposure: read
         description: 登录态用户 ID，仅用于会话级个性化与去偏，匿名态为空
@@ -130,6 +136,16 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: viewerId
+        source: viewerId
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+        description: 服务端从已验证 principal 写入，禁止接受客户端 body 伪造
 
       - name: eventType
         source: eventType
@@ -203,6 +219,24 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  UserAccountClosedProjectionInbox:
+    description: Search 已原子应用 UserAccountClosed 的不可逆幂等凭据，不保存账号或 persona 原值。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: appliedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+
+  UserAccountClosedProjectionFailure:
+    description: Search 账户关闭投影的有限重试状态，仅保存不可逆事件与错误摘要并由 TTL 回收。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: errorDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: attempts, type: int64, constraints: [NOT_NULL, DEFAULT_0], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: expireAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
   SearchRecommendationSignal:
     description: 搜索会话信号流事件，供推荐 Feed 在线特征投影消费

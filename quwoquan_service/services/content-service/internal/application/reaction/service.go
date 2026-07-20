@@ -131,12 +131,13 @@ func (s *Service) mutate(
 	} else if found {
 		return reactionResult(replay), nil
 	}
+	targetAuthorID := ""
 	if requireLiveTarget {
-		targetExists, err := s.data.Target.ReactionTargetExists(ctx, identity.Target)
+		targetSlice, err := s.data.Target.FindReactionTarget(ctx, identity.Target)
 		if err != nil {
 			return ContentReactionCommandResult{}, reactionReadFailure(err)
 		}
-		if !targetExists {
+		if !targetSlice.Exists {
 			if identity.Target.Kind == reactiondomain.TargetKindComment {
 				return ContentReactionCommandResult{},
 					contentgenerated.AppErrorFromCommentNotFound("content reaction target Comment does not exist")
@@ -144,6 +145,7 @@ func (s *Service) mutate(
 			return ContentReactionCommandResult{},
 				contentgenerated.AppErrorFromPostNotFound("content reaction target Post does not exist")
 		}
+		targetAuthorID = strings.TrimSpace(targetSlice.AuthorID)
 	}
 
 	aggregate, found, err := s.data.Aggregate.Load(ctx, identity.AggregateID())
@@ -177,6 +179,7 @@ func (s *Service) mutate(
 		aggregate,
 		changed,
 		idempotencyKey,
+		targetAuthorID,
 		now,
 	)
 	if err != nil {
@@ -248,6 +251,7 @@ type reactionStateChangedFact struct {
 	Version        int64     `json:"version"`
 	TargetKind     string    `json:"targetKind"`
 	TargetID       string    `json:"targetId"`
+	TargetAuthorID string    `json:"targetAuthorId,omitempty"`
 	ActorDimension string    `json:"actorDimension"`
 	ActorID        string    `json:"actorId"`
 	Reaction       string    `json:"reaction"`
@@ -259,6 +263,7 @@ func reactionOutboxFacts(
 	aggregate *reactiondomain.ContentReaction,
 	changed bool,
 	idempotencyKey string,
+	targetAuthorID string,
 	now time.Time,
 ) ([]reactionports.OutboxFact, error) {
 	if !changed {
@@ -271,12 +276,16 @@ func reactionOutboxFacts(
 	eventType := EventTypeContentReactionCleared
 	if snapshot.Value != reactiondomain.ValueNone {
 		eventType = EventTypeContentReactionSet
+		if strings.TrimSpace(targetAuthorID) == "" {
+			return nil, errors.New("reaction set fact requires target author for notification recipients")
+		}
 	}
 	payload, err := json.Marshal(reactionStateChangedFact{
 		ReactionID:     snapshot.ID,
 		Version:        snapshot.Version,
 		TargetKind:     string(snapshot.Identity.Target.Kind),
 		TargetID:       snapshot.Identity.Target.ID,
+		TargetAuthorID: strings.TrimSpace(targetAuthorID),
 		ActorDimension: string(snapshot.Identity.Actor.Dimension),
 		ActorID:        snapshot.Identity.Actor.ID,
 		Reaction:       string(snapshot.Value),

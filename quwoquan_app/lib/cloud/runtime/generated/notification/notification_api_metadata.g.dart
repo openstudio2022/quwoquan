@@ -12,10 +12,12 @@ class NotificationApiMetadata {
     '/app-messages/{messageId}',
     '/internal/app-messages',
     '/internal/notifications',
+    '/notifications/incoming-calls',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AckAppMessage': '/app-messages/{messageId}/ack',
+    'AckIncomingCallPresentation': '/notifications/incoming-calls/presentation:ack',
     'CreateAppMessage': '/internal/app-messages',
     'GetAppMessage': '/app-messages/{messageId}',
     'GetAppMessageUnreadCount': '/app-messages/unread-count',
@@ -28,6 +30,7 @@ class NotificationApiMetadata {
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AckAppMessage': 'POST',
+    'AckIncomingCallPresentation': 'POST',
     'CreateAppMessage': 'POST',
     'GetAppMessage': 'GET',
     'GetAppMessageUnreadCount': 'GET',
@@ -41,6 +44,7 @@ class NotificationApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AckAppMessage': 'required',
+    'AckIncomingCallPresentation': 'required',
     'CreateAppMessage': 'required',
     'GetAppMessage': 'required',
     'GetAppMessageUnreadCount': 'required',
@@ -60,6 +64,7 @@ class NotificationApiMetadata {
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'AckIncomingCallPresentation': 'object',
     'GetAppMessage': 'object',
     'GetAppMessageUnreadCount': 'object',
     'GetNotificationDeliveryJobMetrics': 'object',
@@ -69,6 +74,7 @@ class NotificationApiMetadata {
   };
 
   static const String ackAppMessageOperation = 'AckAppMessage';
+  static const String ackIncomingCallPresentationOperation = 'AckIncomingCallPresentation';
   static const String createAppMessageOperation = 'CreateAppMessage';
   static const String getAppMessageOperation = 'GetAppMessage';
   static const String getAppMessageUnreadCountOperation = 'GetAppMessageUnreadCount';
@@ -84,6 +90,7 @@ class NotificationApiMetadata {
       'messageId': messageId,
     });
   }
+  static const String ackIncomingCallPresentationPath = '/notifications/incoming-calls/presentation:ack';
   static const String createAppMessagePath = '/internal/app-messages';
   static const String getAppMessagePathTemplate = '/app-messages/{messageId}';
   static String getAppMessagePath({required String messageId}) {

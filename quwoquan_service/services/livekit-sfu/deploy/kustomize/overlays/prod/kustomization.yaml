@@ -11,6 +11,9 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 2
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --rtc.use_external_ip
   - target:
       kind: HorizontalPodAutoscaler
       name: livekit-sfu

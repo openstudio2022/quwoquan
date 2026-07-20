@@ -30,10 +30,11 @@ ROLLOUT_STAGE="${ROLLOUT_STAGE:-gray-initial}"
 IMAGE_VERSION="${IMAGE_VERSION:-}"
 CONFIG_VERSION="${CONFIG_VERSION:-}"
 PREVIOUS_IMAGE_VERSION="${PREVIOUS_IMAGE_VERSION:-}"
+RELEASE_MANIFEST="${RELEASE_MANIFEST:-}"
 ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
-PROD_IMAGE_DELIVERY_MODE="${PROD_IMAGE_DELIVERY_MODE:-auto}"
+PROD_IMAGE_DELIVERY_MODE="${PROD_IMAGE_DELIVERY_MODE:-prebuilt}"
 
 case "$ROLLOUT_STAGE" in
   gray-initial|carry-on|full) ;;
@@ -48,6 +49,15 @@ fi
 # 退役保险：彻底禁止 PROD_KUBECONFIG 复活。
 if [[ -n "${PROD_KUBECONFIG:-}" ]]; then
   echo "::error::PROD_KUBECONFIG 已退役；prod 改为按平面 SSH 发布，请勿注入该 secret" >&2
+  exit 2
+fi
+
+if [[ "$DRY_RUN" != "true" && -z "$PREVIOUS_IMAGE_VERSION" ]]; then
+  echo "::error::真实发布必须显式提供 PREVIOUS_IMAGE_VERSION，禁止无旧版本回滚" >&2
+  exit 2
+fi
+if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RELEASE_MANIFEST" ]]; then
+  echo "::error::真实发布必须提供可部署的 RELEASE_MANIFEST，禁止按 tag 或本地 latest 发布" >&2
   exit 2
 fi
 
@@ -157,8 +167,9 @@ for p in access.get("planes") or []:
         str(p.get("account")),
         str(p.get("composeProjectRoot")),
         str(p.get("sshKeySecret")),
-        ",".join(governed),
-        ",".join(support),
+        ",".join(governed) or "-",
+        ",".join(support) or "-",
+        str(p.get("credentialsPath") or "-"),
     ]))
 print("\n".join(rows))
 PY
@@ -169,8 +180,8 @@ if [[ -z "$PLANE_PLAN" ]]; then
   exit 2
 fi
 
-# 灰度实例命名：gray-initial 走独立 compose 项目命名空间，full/carry-on 走正式项目。
-if [[ "$ROLLOUT_STAGE" == "gray-initial" ]]; then
+# 灰度阶段始终只更新独立 gray 项目；full 才替换正式项目。
+if [[ "$ROLLOUT_STAGE" == "gray-initial" || "$ROLLOUT_STAGE" == "carry-on" ]]; then
   INSTANCE_SUFFIX="gray"
 else
   INSTANCE_SUFFIX="prod"
@@ -189,7 +200,10 @@ if ! python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage "$
 fi
 
 deploy_plane() {
-  local plane="$1" account="$2" compose_root="$3" secret_name="$4" governed_csv="$5" support_csv="$6"
+  local plane="$1" account="$2" compose_root="$3" secret_name="$4" governed_csv="$5" support_csv="$6" credentials_root="$7"
+  [[ "$governed_csv" == "-" ]] && governed_csv=""
+  [[ "$support_csv" == "-" ]] && support_csv=""
+  [[ "$credentials_root" == "-" ]] && credentials_root=""
   local project="quwoquan-${plane}-${INSTANCE_SUFFIX}"
   local governed_services="${governed_csv//,/ }"
   local support_services="${support_csv//,/ }"
@@ -202,70 +216,123 @@ deploy_plane() {
     return 0
   fi
 
-  if [[ "$plane" == "service" ]]; then
-    local render_dir="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/service-${INSTANCE_SUFFIX}"
+  if [[ "$plane" == "service" || "$plane" == "edge" ]]; then
+    local render_dir="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/${plane}-${INSTANCE_SUFFIX}"
     if [[ "$DRY_RUN" == "true" ]]; then
       # Dry-run 是源码配置的发布计划预览，不得依赖或生成可删除的发布输出。
       # 真正渲染仍在下方非 dry-run 分支中校验 package/report/release provenance。
-      echo "[dry_run] service plane would render verified package into: ${render_dir}"
-      python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
-        --plane service \
-        --host "$PROD_SSH_HOST" \
-        --key-dir "$PROD_SSH_KEY_DIR" \
-        --services "${governed_csv}" \
-        --platform linux/amd64 \
+      echo "[dry_run] ${plane} plane would render verified package into: ${render_dir}"
+      local image_load_args=(
+        --plane "$plane"
+        --host "$PROD_SSH_HOST"
+        --key-dir "$PROD_SSH_KEY_DIR"
+        --services "${governed_csv}"
+        --image-version "$IMAGE_VERSION"
+        --platform linux/amd64
         --dry-run
+      )
+      if [[ -n "$RELEASE_MANIFEST" ]]; then
+        image_load_args+=(--release-manifest "$RELEASE_MANIFEST")
+      fi
+      python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
+        "${image_load_args[@]}"
     else
       python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
-        --plane service \
+        --plane "$plane" \
         --instance "$INSTANCE_SUFFIX" \
+        --rollout-stage "$ROLLOUT_STAGE" \
         --config-version "$CONFIG_VERSION" \
+        --image-version "$IMAGE_VERSION" \
         --output-dir "$render_dir" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
-      elif [[ "$PROD_IMAGE_DELIVERY_MODE" == "remote-build" ]]; then
-        bash quwoquan_ops/cli/prod/sync_prod_build_workspace.sh \
-          --host "$PROD_SSH_HOST" \
-          --key-dir "$PROD_SSH_KEY_DIR" \
-          --services "${governed_csv}" >/dev/null
-        bash quwoquan_ops/cli/prod/build_prod_plane_images_remote.sh \
-          --host "$PROD_SSH_HOST" \
-          --key-dir "$PROD_SSH_KEY_DIR" \
-          --services "${governed_csv}"
-      else
-        if ! python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
-          --plane service \
+      elif [[ "$PROD_IMAGE_DELIVERY_MODE" == "prebuilt" ]]; then
+        python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
+          --plane "$plane" \
           --host "$PROD_SSH_HOST" \
           --key-dir "$PROD_SSH_KEY_DIR" \
           --services "${governed_csv}" \
-          --platform linux/amd64 \
-          --rebuild-if-needed; then
-          echo "[fallback] local amd64 image delivery failed; switching to remote native build" >&2
-          bash quwoquan_ops/cli/prod/sync_prod_build_workspace.sh \
-            --host "$PROD_SSH_HOST" \
-            --key-dir "$PROD_SSH_KEY_DIR" \
-            --services "${governed_csv}" >/dev/null
-          bash quwoquan_ops/cli/prod/build_prod_plane_images_remote.sh \
-            --host "$PROD_SSH_HOST" \
-            --key-dir "$PROD_SSH_KEY_DIR" \
-            --services "${governed_csv}"
-        fi
+          --image-version "$IMAGE_VERSION" \
+          --release-manifest "$RELEASE_MANIFEST" \
+          --platform linux/amd64
+      else
+        echo "::error::PROD_IMAGE_DELIVERY_MODE=${PROD_IMAGE_DELIVERY_MODE} is not allowed; production deploy cannot rebuild images" >&2
+        exit 2
       fi
       bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
-        --plane service \
+        --plane "$plane" \
         --host "$PROD_SSH_HOST" \
         --source-dir "$render_dir"
     fi
   fi
 
   # 远端按平面账号执行：进入本平面 compose 项目根，按目标镜像版本拉起 governedWorkloads。
+  local runtime_credential_preflight=""
+  if [[ "$plane" == "service" && " $startup_services " == *" integration-service "* ]]; then
+    runtime_credential_preflight="
+credential_root='${credentials_root}'
+if [[ \"\$credential_root\" != /* ]]; then
+  echo \"FAIL: integration-service credentialsPath 必须是绝对路径\" >&2
+  exit 2
+fi
+credential_dir=\"\$credential_root/integration\"
+for dir in \"\$credential_root\" \"\$credential_dir\"; do
+  if [[ ! -d \"\$dir\" || -L \"\$dir\" || ! -O \"\$dir\" ]]; then
+    echo \"FAIL: integration-service 凭据目录缺失、不是当前账号所有或为符号链接: \$dir\" >&2
+    exit 2
+  fi
+  if [[ \"\$(stat -c '%a' \"\$dir\")\" != \"700\" ]]; then
+    echo \"FAIL: integration-service 凭据目录权限必须为 700: \$dir\" >&2
+    exit 2
+  fi
+done
+push_env=\"\$credential_dir/push.env\"
+apns_key=\"\$credential_dir/apns-auth-key.p8\"
+fcm_account=\"\$credential_dir/fcm-service-account.json\"
+for path in \"\$push_env\" \"\$apns_key\" \"\$fcm_account\"; do
+  if [[ ! -f \"\$path\" || -L \"\$path\" || ! -O \"\$path\" || ! -r \"\$path\" ]]; then
+    echo \"FAIL: integration-service 凭据文件缺失、不可读、不是当前账号所有或为符号链接: \$path\" >&2
+    exit 2
+  fi
+  case \"\$(stat -c '%a' \"\$path\")\" in
+    400|600) ;;
+    *)
+      echo \"FAIL: integration-service 凭据文件权限必须为 400 或 600: \$path\" >&2
+      exit 2
+      ;;
+  esac
+done
+for key in INTEGRATION_PUSH_APNS_KEY_ID INTEGRATION_PUSH_APNS_TEAM_ID INTEGRATION_PUSH_APNS_TOPIC INTEGRATION_PUSH_FCM_PROJECT_ID; do
+  if ! awk -F= -v expected=\"\$key\" '\$1 == expected && length(substr(\$0, index(\$0, \"=\") + 1)) > 0 { found=1 } END { exit(found ? 0 : 1) }' \"\$push_env\"; then
+    echo \"FAIL: integration-service push.env 缺少非空 \$key\" >&2
+    exit 2
+  fi
+done
+echo \"[plane service] integration push credentials preflight ok\""
+  fi
+  local image_retention=""
+  if [[ "$ROLLOUT_STAGE" == "full" ]]; then
+    image_retention="
+for service in ${governed_services}; do
+  repository=\"localhost/quwoquan_service_\${service}\"
+  while IFS= read -r image; do
+    case \"\$image\" in
+      \"\$repository:${IMAGE_VERSION}\"|\"\$repository:${PREVIOUS_IMAGE_VERSION}\") ;;
+      \"\$repository:\"*) podman image rm \"\$image\" ;;
+    esac
+  done < <(podman images --format '{{.Repository}}:{{.Tag}}')
+done
+echo \"[plane ${plane}] retained exactly current/previous release image tags\""
+  fi
   local remote_cmd
   remote_cmd="set -euo pipefail
 cd '${compose_root}'
 compose_file='docker-compose.prod-hosted.yaml'
 env_file='stack.env'
 export IMAGE_VERSION='${IMAGE_VERSION}' CONFIG_VERSION='${CONFIG_VERSION}' ROLLOUT_STAGE='${ROLLOUT_STAGE}'
+${runtime_credential_preflight}
 podman compose --env-file \"\$env_file\" -f \"\$compose_file\" -p '${project}' up -d --force-recreate --no-deps ${startup_services}
+${image_retention}
 echo \"[plane ${plane}] rollout ok project=${project} services=[${startup_services}]\""
 
   echo "----- plane=${plane} account=${account} project=${project} -----"
@@ -280,36 +347,68 @@ echo \"[plane ${plane}] rollout ok project=${project} services=[${startup_servic
   fi
 
   if ! run_remote_bash "$account" "$secret_name" "$remote_cmd"; then
-    echo "::error::plane=${plane} 发布失败，尝试回滚到 PREVIOUS_IMAGE_VERSION=${PREVIOUS_IMAGE_VERSION}" >&2
-    rollback_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv"
-    exit 2
+    echo "::error::plane=${plane} 发布失败；由 stackctl 全平面事务统一回滚" >&2
+    return 2
   fi
   echo "[plane ${plane}] deploy ok"
 }
 
-rollback_plane() {
-  local plane="$1" account="$2" compose_root="$3" secret_name="$4" workloads_csv="$5"
-  local project="quwoquan-${plane}-${INSTANCE_SUFFIX}"
-  local services="${workloads_csv//,/ }"
-  if [[ -z "$PREVIOUS_IMAGE_VERSION" ]]; then
-    echo "::warning::plane=${plane} 无 PREVIOUS_IMAGE_VERSION，跳过自动回滚（需人工介入）" >&2
-    return 0
+update_stable_gray_router() {
+  local service_account="" service_root="" service_secret=""
+  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials; do
+    if [[ "$plane" == "service" ]]; then
+      service_account="$account"
+      service_root="$compose_root"
+      service_secret="$secret_name"
+      break
+    fi
+  done <<< "$PLANE_PLAN"
+  if [[ -z "$service_account" || -z "$service_root" || -z "$service_secret" ]]; then
+    echo "::error::service plane is required to update the stable gray router" >&2
+    return 2
   fi
-  local remote_cmd
-  remote_cmd="set -euo pipefail
-cd '${compose_root}'
-compose_file='docker-compose.prod-hosted.yaml'
-env_file='stack.env'
-export IMAGE_VERSION='${PREVIOUS_IMAGE_VERSION}' ROLLOUT_STAGE='${ROLLOUT_STAGE}'
-podman compose --env-file \"\$env_file\" -f \"\$compose_file\" -p '${project}' up -d --force-recreate --remove-orphans ${services}
-echo \"[plane ${plane}] rolled back to ${PREVIOUS_IMAGE_VERSION}\""
-  run_remote_bash "$account" "$secret_name" "$remote_cmd" || echo "::error::plane=${plane} 回滚也失败，需人工介入" >&2
+  local render_dir="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/service-router-prod"
+  python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
+    --plane service \
+    --instance prod \
+    --rollout-stage "$ROLLOUT_STAGE" \
+    --config-version "$CONFIG_VERSION" \
+    --image-version "$IMAGE_VERSION" \
+    --output-dir "$render_dir" >/dev/null
+  bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+    --plane service \
+    --host "$PROD_SSH_HOST" \
+    --source-dir "$render_dir"
+  local remote_cmd="set -euo pipefail
+cd '${service_root}'
+podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod up -d --force-recreate --no-deps gamma-proxy
+echo '[plane service] stable Caddy gray routing updated for ${ROLLOUT_STAGE}'"
+  run_remote_bash "$service_account" "$service_secret" "$remote_cmd"
 }
 
-while IFS=$'\t' read -r plane account compose_root secret_name governed_csv support_csv; do
+cleanup_gray_stacks() {
+  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials; do
+    [[ -z "$plane" ]] && continue
+    local project="quwoquan-${plane}-gray"
+    local remote_cmd="set -euo pipefail
+cd '${compose_root}'
+podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p '${project}' down --remove-orphans
+echo '[plane ${plane}] removed completed gray stack ${project}'"
+    run_remote_bash "$account" "$secret_name" "$remote_cmd"
+  done <<< "$PLANE_PLAN"
+}
+
+while IFS=$'\t' read -r plane account compose_root secret_name governed_csv support_csv credentials_root; do
   [[ -z "$plane" ]] && continue
-  deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv"
+  deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv" "$credentials_root"
 done <<< "$PLANE_PLAN"
+
+if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" != "full" ]]; then
+  update_stable_gray_router
+fi
+if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" == "full" ]]; then
+  cleanup_gray_stacks
+fi
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[deploy] dry_run — 已预览各平面 SSH 发布计划，未执行。设置 DRY_RUN=false 并提供各平面 SSH 凭据后真实发布。"

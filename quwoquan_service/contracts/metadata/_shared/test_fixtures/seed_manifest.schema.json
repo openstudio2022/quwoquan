@@ -20,6 +20,12 @@
     "description": {
       "type": "string"
     },
+    "releaseInputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/releaseInputRef"
+      }
+    },
     "seedRefs": {
       "type": "array",
       "items": {
@@ -58,6 +64,24 @@
     }
   },
   "$defs": {
+    "releaseInputRef": {
+      "type": "object",
+      "required": [
+        "objectId",
+        "manifestPath"
+      ],
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "domainSeedRefs": {
       "type": "object",
       "required": [

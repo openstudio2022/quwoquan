@@ -52,6 +52,14 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             self.assertTrue(first.secret_path.is_file())
             self.assertEqual(stat.S_IMODE(first.secret_path.stat().st_mode), 0o600)
             self.assertNotIn(".qwq_output", str(first.secret_path))
+            self.assertGreaterEqual(
+                len(
+                    first.environment[
+                        "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"
+                    ]
+                ),
+                32,
+            )
 
     def test_migrates_existing_auth_secret_with_only_code_ref_key_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -77,6 +85,10 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             self.assertIn("existing-device", migrated.environment.values())
             contents = secret_path.read_text(encoding="utf-8")
             self.assertEqual(contents.count("otp_code_ref_key_b64="), 1)
+            self.assertEqual(
+                contents.count("account_closure_subject_hmac_secret="),
+                1,
+            )
             self.assertEqual(stat.S_IMODE(secret_path.stat().st_mode), 0o600)
 
 

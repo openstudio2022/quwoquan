@@ -200,6 +200,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                               subAccountId: profileSubjectId,
                               previousFollowing: wasFollowing,
                               isFollowing: nextFollowing,
+                              sourceSurfaceId: AppUiSurfaces.homeFeed.id,
                             );
                           },
                         );

@@ -21,6 +21,14 @@ func TestSourceRoutesGeneratedOwnershipToObjectPacket(t *testing.T) {
 	}
 }
 
+func TestFieldTypeToGoTypeAcceptsCanonicalStringSlice(t *testing.T) {
+	t.Parallel()
+
+	if got := fieldTypeToGoType(nil, "Persona", "OverriddenProfileFields", "[]string", false); got != "[]string" {
+		t.Fatalf("canonical []string mapped to %q, want []string", got)
+	}
+}
+
 func TestManifestRejectsDomainPathTraversal(t *testing.T) {
 	t.Parallel()
 
@@ -38,5 +46,45 @@ sources:
 	}
 	if _, err := loadManifest(path); err == nil {
 		t.Fatal("domain_path traversal must be rejected")
+	}
+}
+
+func TestPGStoreRejectsEntitylessBusinessTable(t *testing.T) {
+	t.Parallel()
+
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: t.TempDir()},
+		source: Source{
+			DomainPkg: "user",
+		},
+	}
+	err := generatePGStore(ctx, "greeting_request_outbox", TableDef{})
+	if err == nil {
+		t.Fatal("entityless table must not generate pg__store.g.go")
+	}
+}
+
+func TestModelGenerationRejectsEntitylessBusinessTableBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	outputDir := t.TempDir()
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: outputDir},
+		source: Source{
+			DomainPkg: "user",
+		},
+		storage: &StorageYAML{
+			Backend: "postgresql",
+			Tables: map[string]TableDef{
+				"greeting_request_outbox": {},
+			},
+		},
+		fields: &FieldsYAML{},
+	}
+	if err := generateModels(ctx); err == nil {
+		t.Fatal("entityless table must fail before model generation")
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "domain/user/model/.g.go")); !os.IsNotExist(err) {
+		t.Fatalf("empty-name model must not be written, stat err=%v", err)
 	}
 }

@@ -1,0 +1,66 @@
+version: 2
+node:
+  id: assistant-mentioned-consumer
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-assistant/assistant-mentioned-consumer
+  title: assistant mentioned consumer
+  parent_domain_service: runtime
+  parent_business_capability: runtime-assistant
+scope:
+  summary: 群聊 @小趣 可靠事件消费与会话内回复验收范围。
+  in_scope:
+  - AssistantMentioned Redis Stream 消费与 DLQ
+  - 会话窗口拉取、成员校验、代发回复
+  out_of_scope:
+  - chat 会话成员治理（归 chat-conversation）
+gwt_acceptance:
+  GWT1:
+    title: 群聊 @小趣 消费与回复
+    given:
+    - 小趣是群会话成员，chat 域发布 AssistantMentioned 事件。
+    when:
+    - assistant-service consumer 领取事件。
+    then:
+    - 拉取消息窗口生成回复并经 SendMessage 发回会话。
+    done_when:
+    - 处理失败进入 DLQ 可重放；小趣被移除成员后 ack-and-drop。
+    edge_cases:
+    - chat-service 不可达（熔断）
+    - 重复投递幂等
+    contract_refs:
+    - quwoquan_service/contracts/metadata/assistant/assistant_run/service.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_assistant.assistant_mentioned_consumer.contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.runtime.runtime_assistant.assistant_mentioned_consumer.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - 2026-07-20 补建 story 目录以修复 journey_scenario_registry 引用漂移；四个既有测试文件回填为 recorded 证据。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

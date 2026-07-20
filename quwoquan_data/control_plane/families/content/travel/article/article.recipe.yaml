@@ -4,8 +4,9 @@ title: 旅行文章执行（通用模板）
 presetRef: content/travel/article/base
 runtimeProfile: cursor_local_calibrated
 instanceParams:
-  required: [region, discovery, name, limit]
+  required: [region, discovery, name, limit, homepageExecutionId]
 selection:
+  category: 景区
   intentLabel: 旅行文章生成
   entityHomepagesPerTarget: 0
   entityArticlesPerTarget: 1
@@ -15,7 +16,7 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: composer
+  model: composer-2.5
   modelFamily: composer
   reviewModel: gpt-5.5
   reviewModelFamily: gpt

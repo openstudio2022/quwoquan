@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/content-service/internal/application/identity"
 )
 
@@ -227,12 +228,62 @@ func createReadyPublicationMediaAsset(
 		t.Fatal(err)
 	}
 	assetID := asTestString(completed["assetId"])
+	const processingTargetVersion int64 = 2
 	if mediaType == "video" {
+		videoPublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
+			"video",
+			assetID,
+			processingTargetVersion,
+			"video/mp4",
+		)
+		videoPublicPrefix := strings.TrimSuffix(videoPublicSliceKey, "/source.mp4")
 		performMediaCommand(
 			t,
 			http.MethodPost,
 			"/internal/content/media/"+assetID+":processing-result",
-			`{"processingStatus":"ready"}`,
+			fmt.Sprintf(`{
+				"processingStatus":"ready",
+				"processorProfile":"media_canary_progressive_mp4",
+				"verifiedDurationMs":125000,
+				"videoWidth":540,
+				"videoHeight":960,
+				"videoCodec":"h264",
+				"videoContainer":"mp4",
+				"videoAudioCodec":"aac",
+				"videoKeyframeIntervalMs":2000,
+				"videoFastStart":true,
+				"videoPublicSliceKey":%q,
+				"coverPublicSliceKey":%q,
+				"previewTrackVersion":1,
+				"previewTrackManifestSliceKey":%q
+			}`,
+				videoPublicSliceKey,
+				videoPublicPrefix+"/cover.webp",
+				videoPublicPrefix+"/preview/manifest.json",
+			),
+			ownerID,
+			fmt.Sprintf("media-processing-%d", sequence),
+		)
+	} else if mediaType == "image" {
+		imagePublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
+			"image",
+			assetID,
+			processingTargetVersion,
+			contentType,
+		)
+		performMediaCommand(
+			t,
+			http.MethodPost,
+			"/internal/content/media/"+assetID+":processing-result",
+			fmt.Sprintf(`{
+				"processingStatus":"ready",
+				"processorProfile":"content_image_normalization_v1",
+				"imageWidth":540,
+				"imageHeight":960,
+				"imageDeliveryContentType":"image/jpeg",
+				"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
+				"imagePublicSliceKey":%q
+			}`, assetID, imagePublicSliceKey),
 			ownerID,
 			fmt.Sprintf("media-processing-%d", sequence),
 		)

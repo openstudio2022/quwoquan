@@ -7,45 +7,52 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: media-processing-helper-read
 scope:
-  summary: media status pipeline  media processing state machine 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: MediaAsset processing/ready/rejected/deleted 状态机、ready descriptor 与重试守卫。
+  in_scope:
+  - 聚合跃迁、幂等结果回写、ready/rejected 不变量。
+  out_of_scope:
+  - 页面发布结果回流。
 gwt_acceptance:
   GWT1:
-    title: media status pipeline  media processing state machine GWT
+    title: MediaAsset 只以有效处理结果离开 processing
     given:
-    - 前置条件明确。
+    - MediaAsset 处于 processing 并带有权威私有源对象。
     when:
-    - 用户或系统动作发生。
+    - worker 回写 ready 或 rejected 结果，或重复投递相同事实。
     then:
-    - 可观察结果符合预期。
+    - 合法 descriptor 进入 ready，内容性失败进入 rejected，重复事实对终态 no-op。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - 缺主 slice、封面、尺寸、时长或 H.264/AAC/fast-start 约束的 ready 结果被拒绝。
+    - 基础设施失败不改变聚合状态。
+    edge_cases:
+    - 终态资产重复收到 ready/rejected 结果。
+    - deleted 资产收到滞后 outbox 事实。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/media_asset/fields.yaml
+    - quwoquan_service/contracts/metadata/content/media_asset/events.yaml
     performance_points: []
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_service/services/content-service/tests/local_contract/media/media_aggregates__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/media/media_processing_worker__reliability__local_contract_test.go
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        execution_profile: baseline
+        suite: media_asset_state_machine
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_status_pipeline_media_processing_state_machine.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_status_pipeline_media_processing_state_machine.gwt1_local_contract
-        envs: *id001
+        - local_contract.content.media.asset_ready_invariants
+        - local_contract.content.media.asset_terminal_idempotency
+        envs: [local]
+        test_object: domain_rule
+        quality_facet: contract
       supporting: []
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

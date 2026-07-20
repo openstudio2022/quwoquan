@@ -11,10 +11,12 @@ business_rules:
   - session 必须绑定 accountId、deviceId、issuer 与 audience
   - logout、security revoke 或 expiresAt 后不可恢复
   - anonymous login 也创建受限 AccountSession，不使用 prod mock fallback
+  - login 每次合法创建新 session，不接收调用方幂等键；logout 对已吊销 session 为幂等 no-op
+  - session 状态事件与 aggregate 变更在同一事务经 outbox 提交
 lifecycle:
   states: [active, rotated, revoked, expired]
   optimistic_concurrency: version
-  idempotency: command_receipt
+  idempotency: rotation_lineage_and_natural_idempotency
 ddd_layer_mapping:
   domain_model: internal/domain/account/account_session/model
   ports: internal/domain/account/account_session/ports

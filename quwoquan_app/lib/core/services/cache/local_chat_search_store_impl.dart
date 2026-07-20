@@ -1,6 +1,6 @@
 part of 'local_chat_search_store.dart';
 
-class LocalChatSearchStore {
+class LocalChatSearchStore implements LocalChatSearchReader {
   LocalChatSearchStore({String? databasePath, DatabaseFactory? databaseFactory})
     : this._internal(
         databasePath: databasePath,
@@ -99,6 +99,7 @@ class LocalChatSearchStore {
     await batch.commit(noResult: true);
   }
 
+  @override
   Future<List<LocalChatSearchContactRecord>> searchContacts({
     required LocalSearchNamespace namespace,
     required String query,
@@ -178,6 +179,7 @@ class LocalChatSearchStore {
         .toList(growable: false);
   }
 
+  @override
   Future<List<ConversationSearchItemView>> searchConversations({
     required LocalSearchNamespace namespace,
     required String query,
@@ -229,6 +231,7 @@ class LocalChatSearchStore {
         .toList(growable: false);
   }
 
+  @override
   Future<List<MessageSearchItemView>> searchMessages({
     required LocalSearchNamespace namespace,
     required String query,

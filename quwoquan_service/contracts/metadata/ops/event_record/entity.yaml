@@ -14,6 +14,18 @@ taggable: false
 vector_enabled: false
 
 ddd_layer_mapping:
-  application_port: services/product-ops-service/internal/application/EventLogStore
+  application_ports:
+    appenders:
+      - services/product-ops-service/internal/application/EventBatchAppender
+      - services/product-ops-service/internal/application/StartupBatchAppender
+      - services/product-ops-service/internal/application/RuntimeLogBatchAppender
+    readers:
+      - services/product-ops-service/internal/application/EventAnalyticsReader
+      - services/product-ops-service/internal/application/RuntimeLogAnalyticsReader
+      - services/product-ops-service/internal/application/RtcMediaQoeSummaryReader
+    ledger: services/product-ops-service/internal/application/EventBatchLedger
   adapter_rest: services/product-ops-service/internal/api
-  adapter_storage: services/product-ops-service/internal/infrastructure/sls
+  adapter_storage:
+    production: services/product-ops-service/internal/infrastructure/telemetry/sls
+    integration: services/product-ops-service/internal/infrastructure/telemetry/postgreslocal
+    local_contract: services/product-ops-service/internal/infrastructure/telemetry/memory

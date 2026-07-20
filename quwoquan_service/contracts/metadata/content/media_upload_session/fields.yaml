@@ -73,6 +73,15 @@ fields:
     api_exposure: drop
     ops_exposure: read
 
+  - name: assetId
+    source: assetId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+
   - name: status
     source: status
     type: enum

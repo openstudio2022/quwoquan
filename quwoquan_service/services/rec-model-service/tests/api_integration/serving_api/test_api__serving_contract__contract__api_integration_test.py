@@ -113,7 +113,7 @@ def test_score_empty_candidates_returns_empty_scores() -> None:
     body = {"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []}
     r = client.post(SCORE_PATH, json=body)
     assert r.status_code == 200
-    assert r.json() == {"scores": []}
+    assert r.json() == {"scores": [], "modelReleaseId": None}
 
 
 def test_scoring_requires_service_identity_and_scope() -> None:
@@ -135,7 +135,12 @@ def test_batch_scoring_uses_same_authoritative_reader() -> None:
     request = {"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []}
     response = client.post(BATCH_SCORE_PATH, json={"requests": [request, request]})
     assert response.status_code == 200
-    assert response.json() == {"results": [{"scores": []}, {"scores": []}]}
+    assert response.json() == {
+        "results": [
+            {"scores": [], "modelReleaseId": None},
+            {"scores": [], "modelReleaseId": None},
+        ]
+    }
 
 
 def test_retired_score_route_is_not_compatible() -> None:

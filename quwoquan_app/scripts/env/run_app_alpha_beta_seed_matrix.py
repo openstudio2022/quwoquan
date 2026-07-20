@@ -66,6 +66,8 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
             "127.0.0.1",
             "--listen-port",
             str(port),
+            "--entity-upstream-port",
+            "0",
         ],
         cwd=ROOT,
         stdout=subprocess.PIPE,
@@ -148,6 +150,8 @@ def main() -> int:
             [
                 "flutter",
                 "test",
+                "--dart-define=APP_RUNTIME_ENV=alpha",
+                "--dart-define=APP_DATA_SOURCE=mock",
                 "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
                 "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
             ],

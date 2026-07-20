@@ -66,6 +66,7 @@ func (s *MediaService) InitMediaUpload(
 	ctx context.Context,
 	command InitMediaUploadCommand,
 ) (MediaUploadSessionCommandResult, error) {
+	command = normalizeInitMediaUploadCommand(command)
 	encoded, err := json.Marshal(command)
 	if err != nil {
 		return MediaUploadSessionCommandResult{}, unavailable(err)
@@ -77,6 +78,9 @@ func (s *MediaService) InitMediaUpload(
 		commandDigest,
 	); err != nil || found {
 		return replayed, err
+	}
+	if err := validateInitMediaUploadCommand(command); err != nil {
+		return MediaUploadSessionCommandResult{}, err
 	}
 
 	now := s.now().UTC()
@@ -165,7 +169,16 @@ func (s *MediaService) CompleteMediaUpload(
 	}
 	expectedVersion := session.Version()
 	now := s.now().UTC()
-	if err := session.Complete(command.OwnerID, session.ExpectedSHA256(), now); err != nil {
+	assetID, err := s.newID("mas")
+	if err != nil {
+		return MediaUploadSessionCommandResult{}, unavailable(err)
+	}
+	if err := session.Complete(
+		command.OwnerID,
+		session.ExpectedSHA256(),
+		assetID,
+		now,
+	); err != nil {
 		return MediaUploadSessionCommandResult{}, mapMediaDomainError(err)
 	}
 	completedObject, err := s.objects.CompleteUpload(
@@ -181,21 +194,19 @@ func (s *MediaService) CompleteMediaUpload(
 	if err != nil {
 		return MediaUploadSessionCommandResult{}, unavailable(err)
 	}
-	assetID, err := s.newID("mas")
-	if err != nil {
-		return MediaUploadSessionCommandResult{}, unavailable(err)
-	}
 	asset, err := mediamodel.CreateMediaAsset(mediamodel.CreateMediaAssetParams{
-		ID:                 assetID,
-		OwnerID:            session.OwnerID(),
-		SourceSessionID:    session.ID(),
-		ObjectKey:          completedObject.ObjectKey,
-		SHA256:             completedObject.SHA256,
-		MediaType:          session.MediaType(),
-		ContentType:        session.ContentType(),
-		FileSize:           session.FileSize(),
-		AccessPolicy:       command.AccessPolicy,
-		ProcessingRequired: session.MediaType() != "image",
+		ID:              assetID,
+		OwnerID:         session.OwnerID(),
+		SourceSessionID: session.ID(),
+		ObjectKey:       completedObject.ObjectKey,
+		SHA256:          completedObject.SHA256,
+		MediaType:       session.MediaType(),
+		ContentType:     session.ContentType(),
+		FileSize:        session.FileSize(),
+		AccessPolicy:    command.AccessPolicy,
+		// 图片和视频都必须经过受信处理器验证与归一化；音频/文件没有对应
+		// consumer，保持直接 ready，避免制造永远悬挂的 processing 资产。
+		ProcessingRequired: session.MediaType() == "image" || session.MediaType() == "video",
 		Now:                now,
 	})
 	if err != nil {
@@ -394,6 +405,17 @@ func (s *MediaService) UpdateMediaAssetAccessPolicy(
 	if !found {
 		return MediaAssetCommandResult{}, mediaNotFound(command.AssetID)
 	}
+	// 目标 policy 已满足：持久化 no-op receipt（owner 校验仍须通过），
+	// 不递增版本、不制造伪 access_policy_updated 事实。
+	if asset.OwnerID() == strings.TrimSpace(command.OwnerID) &&
+		asset.AccessPolicy() == command.AccessPolicy {
+		return s.recordAssetNoopReceipt(
+			ctx,
+			asset,
+			"UpdateMediaAssetAccessPolicy",
+			commandDigest,
+		)
+	}
 	expectedVersion := asset.Version()
 	now := s.now().UTC()
 	if err := asset.ChangeAccessPolicy(command.OwnerID, command.AccessPolicy, now); err != nil {
@@ -471,19 +493,8 @@ func (s *MediaService) RequestOriginalMediaAccess(
 		AuditID: auditID, AssetID: asset.AssetID, ViewerID: command.ViewerID,
 		Purpose: purpose, IdempotencyKey: idempotencyKey, GrantedAt: now, ExpiresAt: expiresAt,
 	}
-	payload, err := json.Marshal(mediaOriginalAccessGrantedPayload{
-		AuditID: auditID, AssetID: asset.AssetID, ViewerID: command.ViewerID,
-		Purpose: purpose, GrantedAt: now, ExpiresAt: expiresAt,
-	})
-	if err != nil {
-		return OriginalMediaAccessResult{}, unavailable(err)
-	}
 	appended, err := s.data.OriginalAccess.AppendMediaOriginalAccess(ctx, mediaports.MediaOriginalAccessAppendRequest{
 		Fact: fact, CommandDigest: commandDigest,
-		Event: mediaports.MediaOriginalAccessEvent{
-			EventID: auditID, EventType: "content.media_original_access.granted",
-			Payload: payload, OccurredAt: now,
-		},
 	})
 	if err != nil {
 		return OriginalMediaAccessResult{}, unavailable(err)
@@ -661,7 +672,9 @@ func (s *MediaService) GetMediaAsset(
 		return MediaAssetSlice{}, mediaNotFound(query.AssetID)
 	}
 	deliveryKey := slice.ObjectKey
-	if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
+	if slice.MediaType == "image" && strings.TrimSpace(slice.ImageNormalizedObjectKey) != "" {
+		deliveryKey = slice.ImageNormalizedObjectKey
+	} else if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
 		deliveryKey = slice.VideoPublicSliceKey
 	}
 	deliveryURL, err := s.objects.DeliveryURL(ctx, deliveryKey)
@@ -722,7 +735,9 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 		return MediaAssetDeliveryReferenceSlice{}, unavailable(errors.New("MediaAsset delivery projection is incomplete"))
 	}
 	publicSliceKey := slice.VideoPublicSliceKey
-	if slice.MediaType != "video" {
+	if slice.MediaType == "image" {
+		publicSliceKey = slice.ImagePublicSliceKey
+	} else if slice.MediaType != "video" {
 		publicSliceKey = runtimemedia.BuildContentMediaPublicSliceKey(
 			slice.MediaType,
 			slice.AssetID,
@@ -739,14 +754,17 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 		AssetID: slice.AssetID, OwnerPersonaID: slice.OwnerID,
 		ProcessingStatus: slice.ProcessingStatus, MediaType: slice.MediaType,
 		ContentType: slice.ContentType, FileSize: slice.FileSize,
-		PublicSliceKey: publicSliceKey,
-		DeliveryURL:    slice.DeliveryURL,
-		VerifiedDurationMs: slice.VerifiedDurationMs,
-		VideoWidth: slice.VideoWidth,
-		VideoHeight: slice.VideoHeight,
-		VideoPublicSliceKey: slice.VideoPublicSliceKey,
-		CoverPublicSliceKey: slice.CoverPublicSliceKey,
-		PreviewTrackVersion: slice.PreviewTrackVersion,
+		PublicSliceKey:               publicSliceKey,
+		DeliveryURL:                  slice.DeliveryURL,
+		ImageWidth:                   slice.ImageWidth,
+		ImageHeight:                  slice.ImageHeight,
+		ImageDeliveryContentType:     slice.ImageDeliveryContentType,
+		VerifiedDurationMs:           slice.VerifiedDurationMs,
+		VideoWidth:                   slice.VideoWidth,
+		VideoHeight:                  slice.VideoHeight,
+		VideoPublicSliceKey:          slice.VideoPublicSliceKey,
+		CoverPublicSliceKey:          slice.CoverPublicSliceKey,
+		PreviewTrackVersion:          slice.PreviewTrackVersion,
 		PreviewTrackManifestSliceKey: slice.PreviewTrackManifestSliceKey,
 	}, nil
 }
@@ -763,7 +781,9 @@ func (s *MediaService) GetPublicMediaAsset(
 		return MediaAssetSlice{}, mediaNotFound(query.AssetID)
 	}
 	deliveryKey := slice.ObjectKey
-	if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
+	if slice.MediaType == "image" && strings.TrimSpace(slice.ImagePublicSliceKey) != "" {
+		deliveryKey = slice.ImagePublicSliceKey
+	} else if slice.MediaType == "video" && strings.TrimSpace(slice.VideoPublicSliceKey) != "" {
 		deliveryKey = slice.VideoPublicSliceKey
 	}
 	deliveryURL, err := s.objects.DeliveryURL(ctx, deliveryKey)

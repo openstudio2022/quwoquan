@@ -3,30 +3,24 @@ package model
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
+
+	runtimemedia "quwoquan_service/runtime/media"
 )
-
-var sha256DigestPattern = regexp.MustCompile(`^(sha256:)?[0-9a-f]{64}$`)
-
-var (
-	ErrInvalidUploadSession           = errors.New("invalid media upload session")
-	ErrInvalidUploadSessionTransition = errors.New("invalid media upload session transition")
-	ErrUploadSessionExpired           = errors.New("media upload session expired")
-	ErrUploadSessionOwnerForbidden    = errors.New("media upload session owner forbidden")
-	ErrUploadDigestMismatch           = errors.New("media upload digest mismatch")
-	ErrInvalidMediaAsset              = errors.New("invalid media asset")
-	ErrInvalidMediaAssetTransition    = errors.New("invalid media asset transition")
-	ErrMediaAssetOwnerForbidden       = errors.New("media asset owner forbidden")
-)
-
-type UploadSessionStatus string
 
 const (
-	UploadSessionPending   UploadSessionStatus = "pending"
-	UploadSessionCompleted UploadSessionStatus = "completed"
-	UploadSessionAborted   UploadSessionStatus = "aborted"
+	MaxVideoDurationMs         int64 = 3_600_000
+	MaxVideoKeyframeIntervalMs       = 2_000
+	MaxImageDimension                = 8_192
+	MaxImagePixels             int64 = 64_000_000
+	MaxImageDeliveryDimension        = 2_560
+)
+
+var (
+	ErrInvalidMediaAsset           = errors.New("invalid media asset")
+	ErrInvalidMediaAssetTransition = errors.New("invalid media asset transition")
+	ErrMediaAssetOwnerForbidden    = errors.New("media asset owner forbidden")
 )
 
 type AccessPolicy string
@@ -46,287 +40,6 @@ const (
 	ProcessingStatusDeleted    ProcessingStatus = "deleted"
 )
 
-// UploadSessionSnapshot is the persistence boundary for MediaUploadSession.
-// It deliberately contains no transport-only fields.
-type UploadSessionSnapshot struct {
-	ID             string
-	Version        int64
-	OwnerID        string
-	ObjectKey      string
-	MediaType      string
-	ContentType    string
-	FileSize       int64
-	ExpectedSHA256 string
-	Status         UploadSessionStatus
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	ExpiresAt      time.Time
-	CompletedAt    *time.Time
-	AbortedAt      *time.Time
-}
-
-type CreateUploadSessionParams struct {
-	ID             string
-	OwnerID        string
-	ObjectKey      string
-	MediaType      string
-	ContentType    string
-	FileSize       int64
-	ExpectedSHA256 string
-	ExpiresAt      time.Time
-	Now            time.Time
-}
-
-// MediaUploadSession owns the short-lived upload protocol and never embeds a
-// MediaAsset. A completion command atomically creates a separate asset through
-// the application/store transaction.
-type MediaUploadSession struct {
-	id             string
-	version        int64
-	ownerID        string
-	objectKey      string
-	mediaType      string
-	contentType    string
-	fileSize       int64
-	expectedSHA256 string
-	status         UploadSessionStatus
-	createdAt      time.Time
-	updatedAt      time.Time
-	expiresAt      time.Time
-	completedAt    *time.Time
-	abortedAt      *time.Time
-}
-
-func CreateUploadSession(params CreateUploadSessionParams) (*MediaUploadSession, error) {
-	now := params.Now.UTC()
-	session := &MediaUploadSession{
-		id:             strings.TrimSpace(params.ID),
-		version:        1,
-		ownerID:        strings.TrimSpace(params.OwnerID),
-		objectKey:      strings.TrimSpace(params.ObjectKey),
-		mediaType:      strings.TrimSpace(params.MediaType),
-		contentType:    strings.TrimSpace(params.ContentType),
-		fileSize:       params.FileSize,
-		expectedSHA256: normalizeDigest(params.ExpectedSHA256),
-		status:         UploadSessionPending,
-		createdAt:      now,
-		updatedAt:      now,
-		expiresAt:      params.ExpiresAt.UTC(),
-	}
-	if err := session.validate(); err != nil {
-		return nil, err
-	}
-	if !session.expiresAt.After(now) {
-		return nil, fmt.Errorf("%w: expiration must be after creation", ErrInvalidUploadSession)
-	}
-	return session, nil
-}
-
-func RestoreUploadSession(snapshot UploadSessionSnapshot) (*MediaUploadSession, error) {
-	session := &MediaUploadSession{
-		id:             strings.TrimSpace(snapshot.ID),
-		version:        snapshot.Version,
-		ownerID:        strings.TrimSpace(snapshot.OwnerID),
-		objectKey:      strings.TrimSpace(snapshot.ObjectKey),
-		mediaType:      strings.TrimSpace(snapshot.MediaType),
-		contentType:    strings.TrimSpace(snapshot.ContentType),
-		fileSize:       snapshot.FileSize,
-		expectedSHA256: normalizeDigest(snapshot.ExpectedSHA256),
-		status:         snapshot.Status,
-		createdAt:      snapshot.CreatedAt.UTC(),
-		updatedAt:      snapshot.UpdatedAt.UTC(),
-		expiresAt:      snapshot.ExpiresAt.UTC(),
-		completedAt:    cloneTime(snapshot.CompletedAt),
-		abortedAt:      cloneTime(snapshot.AbortedAt),
-	}
-	if err := session.validate(); err != nil {
-		return nil, err
-	}
-	return session, nil
-}
-
-func (s *MediaUploadSession) Complete(ownerID string, actualSHA256 string, now time.Time) error {
-	if s == nil {
-		return fmt.Errorf("%w: session is required", ErrInvalidUploadSession)
-	}
-	if strings.TrimSpace(ownerID) != s.ownerID {
-		return fmt.Errorf("%w: completion owner does not match", ErrUploadSessionOwnerForbidden)
-	}
-	if s.status != UploadSessionPending {
-		return fmt.Errorf("%w: only pending sessions can complete", ErrInvalidUploadSessionTransition)
-	}
-	now = now.UTC()
-	if now.IsZero() || !now.Before(s.expiresAt) {
-		return fmt.Errorf("%w: expiresAt=%s", ErrUploadSessionExpired, s.expiresAt.Format(time.RFC3339Nano))
-	}
-	if normalizeDigest(actualSHA256) != s.expectedSHA256 {
-		return fmt.Errorf("%w: upload callback digest differs from expected digest", ErrUploadDigestMismatch)
-	}
-	if err := s.advance(now); err != nil {
-		return err
-	}
-	completedAt := s.updatedAt
-	s.status = UploadSessionCompleted
-	s.completedAt = &completedAt
-	return nil
-}
-
-func (s *MediaUploadSession) Abort(ownerID string, now time.Time) error {
-	if s == nil {
-		return fmt.Errorf("%w: session is required", ErrInvalidUploadSession)
-	}
-	if strings.TrimSpace(ownerID) != s.ownerID {
-		return fmt.Errorf("%w: abort owner does not match", ErrUploadSessionOwnerForbidden)
-	}
-	if s.status != UploadSessionPending {
-		return fmt.Errorf("%w: only pending sessions can abort", ErrInvalidUploadSessionTransition)
-	}
-	if err := s.advance(now); err != nil {
-		return err
-	}
-	abortedAt := s.updatedAt
-	s.status = UploadSessionAborted
-	s.abortedAt = &abortedAt
-	return nil
-}
-
-func (s *MediaUploadSession) ID() string {
-	if s == nil {
-		return ""
-	}
-	return s.id
-}
-
-func (s *MediaUploadSession) Version() int64 {
-	if s == nil {
-		return 0
-	}
-	return s.version
-}
-
-func (s *MediaUploadSession) OwnerID() string {
-	if s == nil {
-		return ""
-	}
-	return s.ownerID
-}
-
-func (s *MediaUploadSession) ObjectKey() string {
-	if s == nil {
-		return ""
-	}
-	return s.objectKey
-}
-
-func (s *MediaUploadSession) ExpectedSHA256() string {
-	if s == nil {
-		return ""
-	}
-	return s.expectedSHA256
-}
-
-func (s *MediaUploadSession) MediaType() string {
-	if s == nil {
-		return ""
-	}
-	return s.mediaType
-}
-
-func (s *MediaUploadSession) ContentType() string {
-	if s == nil {
-		return ""
-	}
-	return s.contentType
-}
-
-func (s *MediaUploadSession) FileSize() int64 {
-	if s == nil {
-		return 0
-	}
-	return s.fileSize
-}
-
-func (s *MediaUploadSession) Status() UploadSessionStatus {
-	if s == nil {
-		return ""
-	}
-	return s.status
-}
-
-func (s *MediaUploadSession) ExpiresAt() time.Time {
-	if s == nil {
-		return time.Time{}
-	}
-	return s.expiresAt
-}
-
-func (s *MediaUploadSession) Snapshot() UploadSessionSnapshot {
-	if s == nil {
-		return UploadSessionSnapshot{}
-	}
-	return UploadSessionSnapshot{
-		ID:             s.id,
-		Version:        s.version,
-		OwnerID:        s.ownerID,
-		ObjectKey:      s.objectKey,
-		MediaType:      s.mediaType,
-		ContentType:    s.contentType,
-		FileSize:       s.fileSize,
-		ExpectedSHA256: s.expectedSHA256,
-		Status:         s.status,
-		CreatedAt:      s.createdAt,
-		UpdatedAt:      s.updatedAt,
-		ExpiresAt:      s.expiresAt,
-		CompletedAt:    cloneTime(s.completedAt),
-		AbortedAt:      cloneTime(s.abortedAt),
-	}
-}
-
-func (s *MediaUploadSession) validate() error {
-	if s == nil ||
-		s.id == "" ||
-		s.version < 1 ||
-		s.ownerID == "" ||
-		s.objectKey == "" ||
-		s.mediaType == "" ||
-		s.contentType == "" ||
-		s.fileSize <= 0 ||
-		!sha256DigestPattern.MatchString(s.expectedSHA256) ||
-		!validUploadSessionStatus(s.status) ||
-		s.createdAt.IsZero() ||
-		s.updatedAt.IsZero() ||
-		s.updatedAt.Before(s.createdAt) ||
-		s.expiresAt.IsZero() ||
-		!s.expiresAt.After(s.createdAt) {
-		return fmt.Errorf("%w: required state is missing", ErrInvalidUploadSession)
-	}
-	switch s.status {
-	case UploadSessionPending:
-		if s.completedAt != nil || s.abortedAt != nil {
-			return fmt.Errorf("%w: pending session carries terminal time", ErrInvalidUploadSession)
-		}
-	case UploadSessionCompleted:
-		if s.completedAt == nil || s.abortedAt != nil {
-			return fmt.Errorf("%w: completed session state is inconsistent", ErrInvalidUploadSession)
-		}
-	case UploadSessionAborted:
-		if s.abortedAt == nil || s.completedAt != nil {
-			return fmt.Errorf("%w: aborted session state is inconsistent", ErrInvalidUploadSession)
-		}
-	}
-	return nil
-}
-
-func (s *MediaUploadSession) advance(now time.Time) error {
-	now = now.UTC()
-	if now.IsZero() || now.Before(s.updatedAt) {
-		return fmt.Errorf("%w: transition time is invalid", ErrInvalidUploadSession)
-	}
-	s.version++
-	s.updatedAt = now
-	return nil
-}
-
 // MediaAssetSnapshot is the persistence boundary for MediaAsset.
 type MediaAssetSnapshot struct {
 	ID                           string
@@ -342,11 +55,19 @@ type MediaAssetSnapshot struct {
 	ProcessingStatus             ProcessingStatus
 	ProcessingFailureReason      string
 	ProcessorProfile             string
+	ImageWidth                   int
+	ImageHeight                  int
+	ImageDeliveryContentType     string
+	ImageNormalizedObjectKey     string
+	ImagePublicSliceKey          string
 	VerifiedDurationMs           int64
 	VideoWidth                   int
 	VideoHeight                  int
 	VideoCodec                   string
 	VideoContainer               string
+	VideoAudioCodec              string
+	VideoKeyframeIntervalMs      int
+	VideoFastStart               bool
 	VideoPublicSliceKey          string
 	CoverPublicSliceKey          string
 	PreviewTrackVersion          int
@@ -370,10 +91,35 @@ type VideoProcessingDescriptor struct {
 	VideoHeight                  int
 	VideoCodec                   string
 	VideoContainer               string
+	VideoAudioCodec              string
+	VideoKeyframeIntervalMs      int
+	VideoFastStart               bool
 	VideoPublicSliceKey          string
 	CoverPublicSliceKey          string
 	PreviewTrackVersion          int
 	PreviewTrackManifestSliceKey string
+}
+
+// ImageProcessingDescriptor is the trusted output produced by the image
+// normalization worker. The original CAS object remains immutable; this
+// descriptor points to a private normalized baseline and its stable public
+// slice identity. CDN variants are derived from that baseline by metadata
+// profiles instead of becoming separate business objects.
+type ImageProcessingDescriptor struct {
+	ProcessorProfile         string
+	ImageWidth               int
+	ImageHeight              int
+	ImageDeliveryContentType string
+	ImageNormalizedObjectKey string
+	ImagePublicSliceKey      string
+}
+
+// MediaProcessingDescriptor is a typed union. Exactly one member is populated
+// for an image or video ready result; rejected and non-visual assets carry the
+// zero value.
+type MediaProcessingDescriptor struct {
+	Image ImageProcessingDescriptor
+	Video VideoProcessingDescriptor
 }
 
 type CreateMediaAssetParams struct {
@@ -406,11 +152,19 @@ type MediaAsset struct {
 	processingStatus             ProcessingStatus
 	processingFailureReason      string
 	processorProfile             string
+	imageWidth                   int
+	imageHeight                  int
+	imageDeliveryContentType     string
+	imageNormalizedObjectKey     string
+	imagePublicSliceKey          string
 	verifiedDurationMs           int64
 	videoWidth                   int
 	videoHeight                  int
 	videoCodec                   string
 	videoContainer               string
+	videoAudioCodec              string
+	videoKeyframeIntervalMs      int
+	videoFastStart               bool
 	videoPublicSliceKey          string
 	coverPublicSliceKey          string
 	previewTrackVersion          int
@@ -468,11 +222,19 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 		processingStatus:             snapshot.ProcessingStatus,
 		processingFailureReason:      strings.TrimSpace(snapshot.ProcessingFailureReason),
 		processorProfile:             strings.TrimSpace(snapshot.ProcessorProfile),
+		imageWidth:                   snapshot.ImageWidth,
+		imageHeight:                  snapshot.ImageHeight,
+		imageDeliveryContentType:     strings.TrimSpace(snapshot.ImageDeliveryContentType),
+		imageNormalizedObjectKey:     strings.TrimSpace(snapshot.ImageNormalizedObjectKey),
+		imagePublicSliceKey:          strings.TrimSpace(snapshot.ImagePublicSliceKey),
 		verifiedDurationMs:           snapshot.VerifiedDurationMs,
 		videoWidth:                   snapshot.VideoWidth,
 		videoHeight:                  snapshot.VideoHeight,
 		videoCodec:                   strings.TrimSpace(snapshot.VideoCodec),
 		videoContainer:               strings.TrimSpace(snapshot.VideoContainer),
+		videoAudioCodec:              strings.TrimSpace(snapshot.VideoAudioCodec),
+		videoKeyframeIntervalMs:      snapshot.VideoKeyframeIntervalMs,
+		videoFastStart:               snapshot.VideoFastStart,
 		videoPublicSliceKey:          strings.TrimSpace(snapshot.VideoPublicSliceKey),
 		coverPublicSliceKey:          strings.TrimSpace(snapshot.CoverPublicSliceKey),
 		previewTrackVersion:          snapshot.PreviewTrackVersion,
@@ -493,7 +255,7 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 func (a *MediaAsset) RecordProcessingResult(
 	status ProcessingStatus,
 	failureReason string,
-	descriptor VideoProcessingDescriptor,
+	descriptor MediaProcessingDescriptor,
 	now time.Time,
 ) error {
 	if a == nil || a.processingStatus != ProcessingStatusProcessing {
@@ -508,7 +270,10 @@ func (a *MediaAsset) RecordProcessingResult(
 	if status == ProcessingStatusReady && strings.TrimSpace(failureReason) != "" {
 		return fmt.Errorf("%w: ready asset cannot carry failure reason", ErrInvalidMediaAsset)
 	}
-	if err := a.validateProcessingDescriptor(status, descriptor); err != nil {
+	// 处理产物 slice 绑定本次状态迁移后的聚合版本；worker 同样以
+	// current version + 1 构造 key。先校验再 advance 时必须显式传目标版本，
+	// 否则合法的 v2 产物会被错误地按当前 v1 拒绝。
+	if err := a.validateProcessingDescriptor(status, descriptor, a.version+1); err != nil {
 		return err
 	}
 	if err := a.advance(now); err != nil {
@@ -518,16 +283,29 @@ func (a *MediaAsset) RecordProcessingResult(
 	a.processingStatus = status
 	a.processingFailureReason = strings.TrimSpace(failureReason)
 	if status == ProcessingStatusReady {
-		a.processorProfile = strings.TrimSpace(descriptor.ProcessorProfile)
-		a.verifiedDurationMs = descriptor.VerifiedDurationMs
-		a.videoWidth = descriptor.VideoWidth
-		a.videoHeight = descriptor.VideoHeight
-		a.videoCodec = strings.TrimSpace(descriptor.VideoCodec)
-		a.videoContainer = strings.TrimSpace(descriptor.VideoContainer)
-		a.videoPublicSliceKey = strings.TrimSpace(descriptor.VideoPublicSliceKey)
-		a.coverPublicSliceKey = strings.TrimSpace(descriptor.CoverPublicSliceKey)
-		a.previewTrackVersion = descriptor.PreviewTrackVersion
-		a.previewTrackManifestSliceKey = strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey)
+		switch a.mediaType {
+		case "image":
+			a.processorProfile = strings.TrimSpace(descriptor.Image.ProcessorProfile)
+			a.imageWidth = descriptor.Image.ImageWidth
+			a.imageHeight = descriptor.Image.ImageHeight
+			a.imageDeliveryContentType = strings.TrimSpace(descriptor.Image.ImageDeliveryContentType)
+			a.imageNormalizedObjectKey = strings.TrimSpace(descriptor.Image.ImageNormalizedObjectKey)
+			a.imagePublicSliceKey = strings.TrimSpace(descriptor.Image.ImagePublicSliceKey)
+		case "video":
+			a.processorProfile = strings.TrimSpace(descriptor.Video.ProcessorProfile)
+			a.verifiedDurationMs = descriptor.Video.VerifiedDurationMs
+			a.videoWidth = descriptor.Video.VideoWidth
+			a.videoHeight = descriptor.Video.VideoHeight
+			a.videoCodec = strings.TrimSpace(descriptor.Video.VideoCodec)
+			a.videoContainer = strings.TrimSpace(descriptor.Video.VideoContainer)
+			a.videoAudioCodec = strings.TrimSpace(descriptor.Video.VideoAudioCodec)
+			a.videoKeyframeIntervalMs = descriptor.Video.VideoKeyframeIntervalMs
+			a.videoFastStart = descriptor.Video.VideoFastStart
+			a.videoPublicSliceKey = strings.TrimSpace(descriptor.Video.VideoPublicSliceKey)
+			a.coverPublicSliceKey = strings.TrimSpace(descriptor.Video.CoverPublicSliceKey)
+			a.previewTrackVersion = descriptor.Video.PreviewTrackVersion
+			a.previewTrackManifestSliceKey = strings.TrimSpace(descriptor.Video.PreviewTrackManifestSliceKey)
+		}
 	}
 	a.processedAt = &processedAt
 	return nil
@@ -535,34 +313,102 @@ func (a *MediaAsset) RecordProcessingResult(
 
 func (a *MediaAsset) validateProcessingDescriptor(
 	status ProcessingStatus,
-	descriptor VideoProcessingDescriptor,
+	descriptor MediaProcessingDescriptor,
+	assetVersion int64,
 ) error {
-	if a.mediaType != "video" {
-		if descriptor != (VideoProcessingDescriptor{}) {
-			return fmt.Errorf("%w: non-video processing result carries video descriptor", ErrInvalidMediaAsset)
-		}
-		return nil
-	}
 	if status == ProcessingStatusRejected {
-		if descriptor != (VideoProcessingDescriptor{}) {
-			return fmt.Errorf("%w: rejected video carries descriptor", ErrInvalidMediaAsset)
+		if descriptor != (MediaProcessingDescriptor{}) {
+			return fmt.Errorf("%w: rejected media carries descriptor", ErrInvalidMediaAsset)
 		}
 		return nil
 	}
-	if strings.TrimSpace(descriptor.ProcessorProfile) == "" ||
-		descriptor.VerifiedDurationMs <= 0 ||
-		descriptor.VideoWidth <= 0 ||
-		descriptor.VideoHeight <= 0 ||
-		strings.TrimSpace(descriptor.VideoCodec) == "" ||
-		strings.TrimSpace(descriptor.VideoContainer) == "" ||
-		strings.TrimSpace(descriptor.VideoPublicSliceKey) == "" ||
-		strings.TrimSpace(descriptor.CoverPublicSliceKey) == "" {
-		return fmt.Errorf("%w: ready video requires a complete VOD descriptor", ErrInvalidMediaAsset)
-	}
-	if descriptor.PreviewTrackVersion < 0 ||
-		(descriptor.PreviewTrackVersion == 0 && strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey) != "") ||
-		(descriptor.PreviewTrackVersion > 0 && strings.TrimSpace(descriptor.PreviewTrackManifestSliceKey) == "") {
-		return fmt.Errorf("%w: preview track version and manifest must be paired", ErrInvalidMediaAsset)
+	switch a.mediaType {
+	case "image":
+		if descriptor.Video != (VideoProcessingDescriptor{}) {
+			return fmt.Errorf("%w: ready image carries video descriptor", ErrInvalidMediaAsset)
+		}
+		image := descriptor.Image
+		pixels := int64(image.ImageWidth) * int64(image.ImageHeight)
+		if strings.TrimSpace(image.ProcessorProfile) == "" ||
+			image.ImageWidth <= 0 ||
+			image.ImageHeight <= 0 ||
+			image.ImageWidth > MaxImageDeliveryDimension ||
+			image.ImageHeight > MaxImageDeliveryDimension ||
+			pixels <= 0 ||
+			pixels > MaxImagePixels ||
+			(strings.TrimSpace(image.ImageDeliveryContentType) != "image/jpeg" &&
+				strings.TrimSpace(image.ImageDeliveryContentType) != "image/png") ||
+			strings.TrimSpace(image.ImageNormalizedObjectKey) == "" ||
+			strings.TrimSpace(image.ImagePublicSliceKey) == "" {
+			return fmt.Errorf(
+				"%w: ready image requires a bounded normalized JPEG/PNG descriptor",
+				ErrInvalidMediaAsset,
+			)
+		}
+		expectedPublicSlice := runtimemedia.BuildContentMediaPublicSliceKey(
+			"image",
+			a.id,
+			assetVersion,
+			image.ImageDeliveryContentType,
+		)
+		if strings.TrimSpace(image.ImagePublicSliceKey) != expectedPublicSlice {
+			return fmt.Errorf(
+				"%w: ready image public slice must use canonical asset identity",
+				ErrInvalidMediaAsset,
+			)
+		}
+	case "video":
+		if descriptor.Image != (ImageProcessingDescriptor{}) {
+			return fmt.Errorf("%w: ready video carries image descriptor", ErrInvalidMediaAsset)
+		}
+		video := descriptor.Video
+		if strings.TrimSpace(video.ProcessorProfile) == "" ||
+			video.VerifiedDurationMs <= 0 ||
+			video.VerifiedDurationMs > MaxVideoDurationMs ||
+			video.VideoWidth <= 0 ||
+			video.VideoHeight <= 0 ||
+			!strings.EqualFold(strings.TrimSpace(video.VideoCodec), "h264") ||
+			!strings.EqualFold(strings.TrimSpace(video.VideoContainer), "mp4") ||
+			!strings.EqualFold(strings.TrimSpace(video.VideoAudioCodec), "aac") ||
+			video.VideoKeyframeIntervalMs <= 0 ||
+			video.VideoKeyframeIntervalMs > MaxVideoKeyframeIntervalMs ||
+			!video.VideoFastStart ||
+			strings.TrimSpace(video.VideoPublicSliceKey) == "" ||
+			strings.TrimSpace(video.CoverPublicSliceKey) == "" {
+			return fmt.Errorf(
+				"%w: ready video requires a <=1h fast-start H.264/AAC descriptor with <=2s keyframes",
+				ErrInvalidMediaAsset,
+			)
+		}
+		if video.PreviewTrackVersion < 0 ||
+			(video.PreviewTrackVersion == 0 && strings.TrimSpace(video.PreviewTrackManifestSliceKey) != "") ||
+			(video.PreviewTrackVersion > 0 && strings.TrimSpace(video.PreviewTrackManifestSliceKey) == "") {
+			return fmt.Errorf("%w: preview track version and manifest must be paired", ErrInvalidMediaAsset)
+		}
+		expectedVideoSlice := runtimemedia.BuildContentMediaPublicSliceKey(
+			"video",
+			a.id,
+			assetVersion,
+			"video/mp4",
+		)
+		expectedPrefix := strings.TrimSuffix(expectedVideoSlice, "/source.mp4")
+		if strings.TrimSpace(video.VideoPublicSliceKey) != expectedVideoSlice ||
+			!strings.HasPrefix(
+				strings.TrimSpace(video.CoverPublicSliceKey),
+				expectedPrefix+"/cover.",
+			) ||
+			(video.PreviewTrackVersion > 0 &&
+				strings.TrimSpace(video.PreviewTrackManifestSliceKey) !=
+					expectedPrefix+"/preview/manifest.json") {
+			return fmt.Errorf(
+				"%w: ready video delivery slices must use canonical asset identity",
+				ErrInvalidMediaAsset,
+			)
+		}
+	default:
+		if descriptor != (MediaProcessingDescriptor{}) {
+			return fmt.Errorf("%w: non-visual media carries a processing descriptor", ErrInvalidMediaAsset)
+		}
 	}
 	return nil
 }
@@ -720,6 +566,13 @@ func (a *MediaAsset) ProcessingStatus() ProcessingStatus {
 	return a.processingStatus
 }
 
+func (a *MediaAsset) ProcessingFailureReason() string {
+	if a == nil {
+		return ""
+	}
+	return a.processingFailureReason
+}
+
 func (a *MediaAsset) CoverStrategy() string {
 	if a == nil {
 		return ""
@@ -752,10 +605,41 @@ func (a *MediaAsset) VideoProcessingDescriptor() VideoProcessingDescriptor {
 		VideoHeight:                  a.videoHeight,
 		VideoCodec:                   a.videoCodec,
 		VideoContainer:               a.videoContainer,
+		VideoAudioCodec:              a.videoAudioCodec,
+		VideoKeyframeIntervalMs:      a.videoKeyframeIntervalMs,
+		VideoFastStart:               a.videoFastStart,
 		VideoPublicSliceKey:          a.videoPublicSliceKey,
 		CoverPublicSliceKey:          a.coverPublicSliceKey,
 		PreviewTrackVersion:          a.previewTrackVersion,
 		PreviewTrackManifestSliceKey: a.previewTrackManifestSliceKey,
+	}
+}
+
+func (a *MediaAsset) ImageProcessingDescriptor() ImageProcessingDescriptor {
+	if a == nil {
+		return ImageProcessingDescriptor{}
+	}
+	return ImageProcessingDescriptor{
+		ProcessorProfile:         a.processorProfile,
+		ImageWidth:               a.imageWidth,
+		ImageHeight:              a.imageHeight,
+		ImageDeliveryContentType: a.imageDeliveryContentType,
+		ImageNormalizedObjectKey: a.imageNormalizedObjectKey,
+		ImagePublicSliceKey:      a.imagePublicSliceKey,
+	}
+}
+
+func (a *MediaAsset) ProcessingDescriptor() MediaProcessingDescriptor {
+	if a == nil {
+		return MediaProcessingDescriptor{}
+	}
+	switch a.mediaType {
+	case "image":
+		return MediaProcessingDescriptor{Image: a.ImageProcessingDescriptor()}
+	case "video":
+		return MediaProcessingDescriptor{Video: a.VideoProcessingDescriptor()}
+	default:
+		return MediaProcessingDescriptor{}
 	}
 }
 
@@ -777,11 +661,19 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		ProcessingStatus:             a.processingStatus,
 		ProcessingFailureReason:      a.processingFailureReason,
 		ProcessorProfile:             a.processorProfile,
+		ImageWidth:                   a.imageWidth,
+		ImageHeight:                  a.imageHeight,
+		ImageDeliveryContentType:     a.imageDeliveryContentType,
+		ImageNormalizedObjectKey:     a.imageNormalizedObjectKey,
+		ImagePublicSliceKey:          a.imagePublicSliceKey,
 		VerifiedDurationMs:           a.verifiedDurationMs,
 		VideoWidth:                   a.videoWidth,
 		VideoHeight:                  a.videoHeight,
 		VideoCodec:                   a.videoCodec,
 		VideoContainer:               a.videoContainer,
+		VideoAudioCodec:              a.videoAudioCodec,
+		VideoKeyframeIntervalMs:      a.videoKeyframeIntervalMs,
+		VideoFastStart:               a.videoFastStart,
 		VideoPublicSliceKey:          a.videoPublicSliceKey,
 		CoverPublicSliceKey:          a.coverPublicSliceKey,
 		PreviewTrackVersion:          a.previewTrackVersion,
@@ -826,7 +718,8 @@ func (a *MediaAsset) validate() error {
 		}
 		if err := a.validateProcessingDescriptor(
 			ProcessingStatusReady,
-			a.VideoProcessingDescriptor(),
+			a.ProcessingDescriptor(),
+			a.version,
 		); err != nil {
 			return err
 		}
@@ -836,7 +729,8 @@ func (a *MediaAsset) validate() error {
 		}
 		if err := a.validateProcessingDescriptor(
 			ProcessingStatusRejected,
-			a.VideoProcessingDescriptor(),
+			MediaProcessingDescriptor{},
+			a.version,
 		); err != nil {
 			return err
 		}
@@ -856,15 +750,6 @@ func (a *MediaAsset) advance(now time.Time) error {
 	a.version++
 	a.updatedAt = now
 	return nil
-}
-
-func validUploadSessionStatus(value UploadSessionStatus) bool {
-	switch value {
-	case UploadSessionPending, UploadSessionCompleted, UploadSessionAborted:
-		return true
-	default:
-		return false
-	}
 }
 
 func validAccessPolicy(value AccessPolicy) bool {

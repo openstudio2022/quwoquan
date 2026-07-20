@@ -9,35 +9,22 @@ class RecommendationApiMetadata {
   static const String domain = 'recommendation';
   static const List<String> apiPrefixes = <String>[
     '/internal/recommendation',
-    '/recommendation/intersections',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ActivateRecommendationModelRelease': '/internal/recommendation/model-releases/{releaseId}:activate',
     'BatchScoreRecommendationCandidates': '/internal/recommendation/model-releases:batch-score',
-    'MarkRecommendationIntersectionsVisited': '/recommendation/intersections/visit',
-    'RollbackRecommendationModelRelease': '/internal/recommendation/model-releases/{releaseId}:rollback',
     'ScoreRecommendationCandidates': '/internal/recommendation/model-releases:score',
-    'StageRecommendationModelRelease': '/internal/recommendation/model-releases',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'ActivateRecommendationModelRelease': 'POST',
     'BatchScoreRecommendationCandidates': 'POST',
-    'MarkRecommendationIntersectionsVisited': 'POST',
-    'RollbackRecommendationModelRelease': 'POST',
     'ScoreRecommendationCandidates': 'POST',
-    'StageRecommendationModelRelease': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'ActivateRecommendationModelRelease': 'required',
     'BatchScoreRecommendationCandidates': 'required',
-    'MarkRecommendationIntersectionsVisited': 'required',
-    'RollbackRecommendationModelRelease': 'required',
     'ScoreRecommendationCandidates': 'required',
-    'StageRecommendationModelRelease': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -46,38 +33,11 @@ class RecommendationApiMetadata {
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
-    'MarkRecommendationIntersectionsVisited': 'ack',
   };
 
-  static const String activateRecommendationModelReleaseOperation = 'ActivateRecommendationModelRelease';
   static const String batchScoreRecommendationCandidatesOperation = 'BatchScoreRecommendationCandidates';
-  static const String markRecommendationIntersectionsVisitedOperation = 'MarkRecommendationIntersectionsVisited';
-  static const String rollbackRecommendationModelReleaseOperation = 'RollbackRecommendationModelRelease';
   static const String scoreRecommendationCandidatesOperation = 'ScoreRecommendationCandidates';
-  static const String stageRecommendationModelReleaseOperation = 'StageRecommendationModelRelease';
 
-  static const String activateRecommendationModelReleasePathTemplate = '/internal/recommendation/model-releases/{releaseId}:activate';
-  static String activateRecommendationModelReleasePath({required String releaseId}) {
-    return _fillPath(activateRecommendationModelReleasePathTemplate, <String, String>{
-      'releaseId': releaseId,
-    });
-  }
   static const String batchScoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:batch-score';
-  static const String markRecommendationIntersectionsVisitedPath = '/recommendation/intersections/visit';
-  static const String rollbackRecommendationModelReleasePathTemplate = '/internal/recommendation/model-releases/{releaseId}:rollback';
-  static String rollbackRecommendationModelReleasePath({required String releaseId}) {
-    return _fillPath(rollbackRecommendationModelReleasePathTemplate, <String, String>{
-      'releaseId': releaseId,
-    });
-  }
   static const String scoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:score';
-  static const String stageRecommendationModelReleasePath = '/internal/recommendation/model-releases';
-
-  static String _fillPath(String template, Map<String, String> params) {
-    var path = template;
-    params.forEach((key, value) {
-      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
-    });
-    return path;
-  }
 }

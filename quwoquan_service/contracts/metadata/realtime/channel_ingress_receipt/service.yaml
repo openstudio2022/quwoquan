@@ -5,26 +5,12 @@ service:
   owner: infra-team
   commercial_defaults:
     status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
+    block_reason: 外部渠道互通（IM webhook）无真实调用方，对象整体 V1 deferred；恢复前置条件为出现真实外部渠道
+      接入协议（channelType 枚举 + 验签方案），并补 PostgreSQL append sink、验签、幂等去重与三层测试。
     gap_id: REALTIME_CHANNEL_INGRESS_RECEIPT_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
-  description: ChannelIngressReceipt 外部渠道入站事实操作包。
+  description: ChannelIngressReceipt 外部渠道入站事实操作包（V1 deferred，无公开 transport）。
 
-api_routes:
-  - method: POST
-    path: /channel/{channelType}/webhook
+api_routes: []
 
-    operation: ChannelWebhook
-    actor: none
-    application:
-      kind: command
-      facet: ChannelIngressReceiptCommandFacet
-      method: appendVerifiedReceipt
-      append_sink: ChannelIngressReceipt
-      mutation_target: ChannelIngressReceipt
-      invariant_target: ChannelIngressReceipt
-    description: 外部渠道 Webhook 入口；验签并幂等追加接收事实后再路由到实时 topic
-
-consumers:
-  - name: external-channels
-    capabilities: [channel_webhook]
+consumers: []

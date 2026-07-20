@@ -183,6 +183,45 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+  BlockCommandResult:
+    description: block / unblock 命令的版本化返回
+    fields:
+      - name: targetSubAccountId
+        source: targetSubAccountId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: blocked
+        source: blocked
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PRIVATE
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
   RelationshipView:
     description: 基础关系态查询视图
     fields:
@@ -233,12 +272,36 @@ entities:
         ops_exposure: read
 
   BlockedListItemView:
-    description: 当前 persona 的屏蔽列表项；只暴露目标与屏蔽时间。
+    description: 当前 persona 的屏蔽列表项；只暴露目标的公开展示快照与屏蔽时间。
     fields:
       - name: targetSubAccountId
         source: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -494,6 +557,16 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: canOpenConversation
+        source: canOpenConversation
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否可打开会话入口（canCreateDirectConversation 或已存在正式会话）
 
       - name: canCreateDirectConversation
         source: canCreateDirectConversation

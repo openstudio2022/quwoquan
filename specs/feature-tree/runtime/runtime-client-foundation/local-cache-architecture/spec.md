@@ -1,4 +1,4 @@
-# L3：本地对象缓存架构（local-cache-architecture）
+# L3 特性：本地对象缓存架构（local-cache-architecture）
 
 ## L1 / L2 / L3 映射
 

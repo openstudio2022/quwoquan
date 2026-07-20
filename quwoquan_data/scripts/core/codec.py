@@ -29,6 +29,10 @@ class JsonObject:
     def value(self, key: str) -> object:
         return self._fields.get(key)
 
+    def to_document(self) -> dict[str, object]:
+        """Return a copy only for a schema-validation boundary."""
+        return dict(self._fields)
+
     def string(self, key: str) -> str:
         value = self.value(key)
         if not isinstance(value, str):
@@ -48,6 +52,45 @@ class JsonObject:
         if isinstance(value, bool) or not isinstance(value, int):
             raise JsonObjectDecodeError(f"{key} must be an integer")
         return value
+
+    def boolean(self, key: str) -> bool:
+        value = self.value(key)
+        if not isinstance(value, bool):
+            raise JsonObjectDecodeError(f"{key} must be a boolean")
+        return value
+
+    def optional_string(self, key: str) -> str | None:
+        value = self.value(key)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise JsonObjectDecodeError(f"{key} must be a string or null")
+        return value
+
+    def object(self, key: str) -> "JsonObject":
+        return self.from_value(self.value(key), label=key)
+
+    def object_sequence(self, key: str) -> tuple["JsonObject", ...]:
+        value = self.value(key)
+        if not isinstance(value, list):
+            raise JsonObjectDecodeError(f"{key} must be an array")
+        return tuple(self.from_value(item, label=f"{key} item") for item in value)
+
+    def string_mapping(self, key: str) -> tuple[tuple[str, str], ...]:
+        value = self.value(key)
+        if not isinstance(value, Mapping):
+            raise JsonObjectDecodeError(f"{key} must be an object")
+        rows: list[tuple[str, str]] = []
+        for raw_key, raw_value in value.items():
+            if (
+                not isinstance(raw_key, str)
+                or not raw_key.strip()
+                or not isinstance(raw_value, str)
+                or not raw_value.strip()
+            ):
+                raise JsonObjectDecodeError(f"{key} must map non-empty strings")
+            rows.append((raw_key, raw_value))
+        return tuple(rows)
 
 
 __all__ = ["JsonObject", "JsonObjectDecodeError"]

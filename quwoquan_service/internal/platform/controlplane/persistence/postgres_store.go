@@ -81,6 +81,69 @@ CREATE TABLE IF NOT EXISTS control_plane_audits (
 );
 CREATE INDEX IF NOT EXISTS idx_control_plane_audits_time
   ON control_plane_audits(scope, occurred_at DESC, sequence_id DESC);
+
+CREATE TABLE IF NOT EXISTS control_plane_mutation_receipts (
+  scope TEXT NOT NULL,
+  object_type TEXT NOT NULL,
+  object_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  intent TEXT NOT NULL,
+  payload_digest TEXT NOT NULL,
+  body JSONB NOT NULL,
+  committed_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (scope, object_type, object_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS product_control_plane_outbox (
+  event_id VARCHAR(128) PRIMARY KEY,
+  event_type VARCHAR(128) NOT NULL,
+  aggregate_type VARCHAR(128) NOT NULL,
+  aggregate_id VARCHAR(128) NOT NULL,
+  payload JSONB NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  dispatched_at TIMESTAMPTZ NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_error TEXT NOT NULL DEFAULT '',
+  lease_owner VARCHAR(160) NULL,
+  leased_until TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS idx_product_control_plane_outbox_ready
+  ON product_control_plane_outbox(dispatched_at, next_attempt_at, occurred_at);
+
+CREATE TABLE IF NOT EXISTS platform_control_plane_outbox (
+  event_id VARCHAR(128) PRIMARY KEY,
+  event_type VARCHAR(128) NOT NULL,
+  aggregate_type VARCHAR(128) NOT NULL,
+  aggregate_id VARCHAR(128) NOT NULL,
+  payload JSONB NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  dispatched_at TIMESTAMPTZ NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_error TEXT NOT NULL DEFAULT '',
+  lease_owner VARCHAR(160) NULL,
+  leased_until TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS idx_platform_control_plane_outbox_ready
+  ON platform_control_plane_outbox(dispatched_at, next_attempt_at, occurred_at);
+
+CREATE TABLE IF NOT EXISTS generic_control_plane_outbox (
+  event_id VARCHAR(128) PRIMARY KEY,
+  event_type VARCHAR(128) NOT NULL,
+  aggregate_type VARCHAR(128) NOT NULL,
+  aggregate_id VARCHAR(128) NOT NULL,
+  payload JSONB NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  dispatched_at TIMESTAMPTZ NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_error TEXT NOT NULL DEFAULT '',
+  lease_owner VARCHAR(160) NULL,
+  leased_until TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS idx_generic_control_plane_outbox_ready
+  ON generic_control_plane_outbox(dispatched_at, next_attempt_at, occurred_at);
 `)
 	return err
 }
@@ -331,6 +394,231 @@ WHERE scope=$1 ORDER BY occurred_at DESC, sequence_id DESC`, s.scope)
 	}
 	return out, rows.Err()
 }
+
+func (s *PostgresStore) CommitApprovedMutation(
+	mutation controlplane.ApprovedMutation,
+) (controlplane.MutationReceipt, error) {
+	if err := controlplane.ValidateApprovedMutation(mutation); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	ctx, cancel := s.operationContext()
+	defer cancel()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	committedAt := time.Now().UTC()
+	receipt := controlplane.MutationReceipt{
+		ObjectType:     mutation.ObjectType,
+		ObjectID:       mutation.ObjectID,
+		Intent:         mutation.Intent,
+		PayloadDigest:  mutation.PayloadDigest,
+		IdempotencyKey: mutation.IdempotencyKey,
+		CommittedAt:    committedAt.Format(time.RFC3339Nano),
+	}
+	receiptRaw, err := json.Marshal(receipt)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	var inserted []byte
+	err = tx.QueryRow(ctx, `
+INSERT INTO control_plane_mutation_receipts(
+  scope, object_type, object_id, idempotency_key, intent,
+  payload_digest, body, committed_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+ON CONFLICT (scope, object_type, object_id, idempotency_key) DO NOTHING
+RETURNING body`,
+		s.scope, mutation.ObjectType, mutation.ObjectID,
+		mutation.IdempotencyKey, mutation.Intent, mutation.PayloadDigest,
+		receiptRaw, committedAt,
+	).Scan(&inserted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var existingRaw []byte
+		var existingIntent, existingDigest string
+		if err := tx.QueryRow(ctx, `
+SELECT intent, payload_digest, body
+FROM control_plane_mutation_receipts
+WHERE scope=$1 AND object_type=$2 AND object_id=$3 AND idempotency_key=$4
+FOR UPDATE`,
+			s.scope, mutation.ObjectType, mutation.ObjectID, mutation.IdempotencyKey,
+		).Scan(&existingIntent, &existingDigest, &existingRaw); err != nil {
+			return controlplane.MutationReceipt{}, err
+		}
+		if existingIntent != mutation.Intent || existingDigest != mutation.PayloadDigest {
+			return controlplane.MutationReceipt{}, controlplane.ErrMutationIdempotencyConflict
+		}
+		var existing controlplane.MutationReceipt
+		if err := json.Unmarshal(existingRaw, &existing); err != nil {
+			return controlplane.MutationReceipt{}, err
+		}
+		existing.Replayed = true
+		return existing, nil
+	}
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+
+	// Approval rows are locked for the duration of the commit. Only two
+	// different verified actors approving the exact same digest/intent count.
+	rows, err := tx.Query(ctx, `
+SELECT body FROM control_plane_approvals
+WHERE scope=$1 AND object_type=$2 AND object_id=$3
+FOR SHARE`, s.scope, mutation.ObjectType, mutation.ObjectID)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	actors := map[string]struct{}{}
+	for rows.Next() {
+		var raw []byte
+		var approval controlplane.ApprovalDecision
+		if err := rows.Scan(&raw); err != nil {
+			rows.Close()
+			return controlplane.MutationReceipt{}, err
+		}
+		if err := json.Unmarshal(raw, &approval); err != nil {
+			rows.Close()
+			return controlplane.MutationReceipt{}, err
+		}
+		actor := strings.TrimSpace(approval.Actor)
+		if approval.PayloadDigest == mutation.PayloadDigest &&
+			approval.Decision == mutation.ApprovalDecision &&
+			actor != "" && actor != "unverified" {
+			actors[actor] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return controlplane.MutationReceipt{}, err
+	}
+	rows.Close()
+	if len(actors) < 2 {
+		return controlplane.MutationReceipt{}, controlplane.ErrDualApprovalRequired
+	}
+
+	documentRaw, err := json.Marshal(mutation.Document)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO control_plane_documents(scope, namespace, document_id, body, updated_at)
+VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (scope, namespace, document_id)
+DO UPDATE SET body=EXCLUDED.body, updated_at=EXCLUDED.updated_at`,
+		s.scope, mutation.Namespace, mutation.ObjectID, documentRaw, committedAt,
+	); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+
+	if mutation.Workflow.UpdatedAt == "" {
+		mutation.Workflow.UpdatedAt = committedAt.Format(time.RFC3339Nano)
+	}
+	workflowRaw, err := json.Marshal(mutation.Workflow)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO control_plane_workflows(scope, object_type, object_id, body, updated_at)
+VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (scope, object_type, object_id)
+DO UPDATE SET body=EXCLUDED.body, updated_at=EXCLUDED.updated_at`,
+		s.scope, mutation.ObjectType, mutation.ObjectID,
+		workflowRaw, mutation.Workflow.UpdatedAt,
+	); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+
+	if mutation.Audit.At == "" {
+		mutation.Audit.At = committedAt.Format(time.RFC3339Nano)
+	}
+	auditOccurredAt, err := parseOccurredAt(mutation.Audit.At)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	auditRaw, err := json.Marshal(mutation.Audit)
+	if err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO control_plane_audits(
+  scope, audit_id, object_type, object_id, body, occurred_at
+) VALUES ($1,$2,$3,$4,$5,$6)`,
+		s.scope, mutation.Audit.AuditID, mutation.ObjectType,
+		mutation.ObjectID, auditRaw, auditOccurredAt,
+	); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+
+	outboxTable := s.mutationOutboxTable()
+	for _, event := range mutation.OutboxEvents {
+		occurredAt := committedAt
+		if strings.TrimSpace(event.OccurredAt) != "" {
+			occurredAt, err = parseOccurredAt(event.OccurredAt)
+			if err != nil {
+				return controlplane.MutationReceipt{}, err
+			}
+		}
+		payload, err := json.Marshal(event.Payload)
+		if err != nil {
+			return controlplane.MutationReceipt{}, err
+		}
+		query := fmt.Sprintf(`
+INSERT INTO %s(
+  event_id, event_type, aggregate_type, aggregate_id, payload, occurred_at
+) VALUES ($1,$2,$3,$4,$5,$6)
+ON CONFLICT (event_id) DO NOTHING`, outboxTable)
+		if _, err := tx.Exec(ctx, query,
+			event.EventID, event.EventType, event.AggregateType,
+			event.AggregateID, payload, occurredAt,
+		); err != nil {
+			return controlplane.MutationReceipt{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	return receipt, nil
+}
+
+func (s *PostgresStore) GetMutationReceipt(
+	objectType string,
+	objectID string,
+	idempotencyKey string,
+) (controlplane.MutationReceipt, bool, error) {
+	ctx, cancel := s.operationContext()
+	defer cancel()
+	var raw []byte
+	err := s.pool.QueryRow(ctx, `
+SELECT body FROM control_plane_mutation_receipts
+WHERE scope=$1 AND object_type=$2 AND object_id=$3 AND idempotency_key=$4`,
+		s.scope, objectType, objectID, idempotencyKey,
+	).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return controlplane.MutationReceipt{}, false, nil
+	}
+	if err != nil {
+		return controlplane.MutationReceipt{}, false, err
+	}
+	var receipt controlplane.MutationReceipt
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		return controlplane.MutationReceipt{}, false, err
+	}
+	return receipt, true, nil
+}
+
+func (s *PostgresStore) mutationOutboxTable() string {
+	switch s.scope {
+	case "product-ops":
+		return "product_control_plane_outbox"
+	case "platform-ops":
+		return "platform_control_plane_outbox"
+	default:
+		return "generic_control_plane_outbox"
+	}
+}
+
+var _ controlplane.AtomicMutationStore = (*PostgresStore)(nil)
 
 func (s *PostgresStore) listApprovals(query string, args ...any) ([]controlplane.ApprovalDecision, error) {
 	ctx, cancel := s.operationContext()

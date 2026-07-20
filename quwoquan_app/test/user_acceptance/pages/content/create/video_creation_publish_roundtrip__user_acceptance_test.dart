@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
@@ -59,6 +61,7 @@ void main() {
           home: CreateMediaPickerPage(
             entryMode: MediaPickerEntryMode.video,
             maxSelection: 1,
+            filterRepository: _FakeFilterRepository(),
             mediaPickerService: service,
             cameraBuilder: (context, caller, entrySource, selectedCount) {
               return CameraCapturePage(
@@ -153,15 +156,23 @@ void main() {
 
       final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
-        fileStorageGateway: fileStorage,
         state: state,
-        uploadObject:
+        sourceReader: _RoundtripContentMediaSourceReader(
+          fileStorage.bytesByPath,
+        ),
+        uploadStream:
             (
               uri,
               bytes, {
+              required contentLength,
               required contentType,
               required expectedSha256,
+              abortTrigger,
             }) async {
+              final uploadedBytes = await bytes
+                  .expand((chunk) => chunk)
+                  .toList();
+              expect(uploadedBytes.length, contentLength);
               uploads.add(contentType);
             },
       );
@@ -174,7 +185,9 @@ void main() {
 
       expect(prepared.payload['contentType'], 'video');
       expect(uploads, <String>['video/mp4']);
-      expect(media.selectedAutoCoverMediaIds, <String>['video_asset_1']);
+      // 视频尚处于 processing 时不提前变更聚合；first_frame 随发布绑定原子解析，
+      // 避免封面命令与转码完成事件发生版本竞争。
+      expect(media.selectedAutoCoverMediaIds, isEmpty);
       expect(prepared.payload, isNot(contains('videoUrl')));
       expect(prepared.payload, isNot(contains('thumbnailUrl')));
       expect(prepared.payload, isNot(contains('coverUrl')));
@@ -259,7 +272,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
     ];
   }
@@ -304,6 +317,22 @@ class _FakeMediaPickerService extends MediaPickerService {
   @override
   Future<Uint8List?> loadThumbnail(AssetEntity entity, {int size = 240}) async {
     return Uint8List.fromList(_transparentPngBytes);
+  }
+}
+
+class _RoundtripContentMediaSourceReader implements ContentMediaSourceReader {
+  const _RoundtripContentMediaSourceReader(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  Future<PreparedContentMediaSource> prepare(String localPath) async {
+    final bytes = bytesByPath[localPath]!;
+    return PreparedContentMediaSource(
+      fileSize: bytes.length,
+      sha256Digest: sha256.convert(bytes).toString(),
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
   }
 }
 

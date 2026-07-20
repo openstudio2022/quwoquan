@@ -26,10 +26,10 @@ client_projection:
       source: homepageId
       default: "''"
 
-    - name: requesterUserId
+    - name: requesterPersonaId
       dart_type: String
       nullable: false
-      source: requesterUserId
+      source: requesterPersonaId
       default: "''"
 
     - name: claimTier

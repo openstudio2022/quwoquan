@@ -5,8 +5,8 @@ service:
   description: ConversationUserState 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: CHAT_OBJECT_PACKET_WIRING
+    block_reason: operation 尚未逐项完成商业证据绑定
+    gap_id: CHAT_USER_STATE_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
@@ -14,6 +14,8 @@ api_routes:
 
     operation: MarkAsRead
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: MessageReadCommandFacet
@@ -21,8 +23,28 @@ api_routes:
       aggregate_owner: ConversationUserState
       mutation_target: ConversationUserState
       invariant_target: ConversationUserState
-    description: 标记已读（更新 ConversationUserState.readSeq + unreadCount，receiptEnabled 时写入 MessageReceipt）
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.SYSTEM.internal_error]
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_user_state_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 标记已读（已读水位 readSeq 单调推进 + unreadCount 重算，receiptEnabled 时写入 MessageReceipt；旧水位重放为 no-op 并返回当前状态）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.conversation_not_found, CHAT.USER.message_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: owner
@@ -35,6 +57,8 @@ api_routes:
 
     operation: UpdateConversationSettings
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: ConversationSettingsCommandFacet
@@ -42,6 +66,31 @@ api_routes:
       aggregate_owner: ConversationUserState
       mutation_target: ConversationUserState
       invariant_target: ConversationUserState
-    description: 更新用户级会话设置（mute/pin，写入 ConversationUserState）
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_user_state_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 更新用户级会话设置（mute/pin，写入 ConversationUserState；目标状态已满足时持久化 no-op receipt）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private

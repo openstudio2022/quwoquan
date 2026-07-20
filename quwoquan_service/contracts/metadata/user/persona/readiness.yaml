@@ -1,0 +1,44 @@
+object: Persona
+operations:
+  - CreatePersona
+  - UpdatePersona
+  - UpdateUserProfile
+  - ApplyPersonaProfileSync
+  - RetirePersona
+  - ActivatePersona
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/domain/persona/persona/ports/persona_command_ports.go
+    - quwoquan_service/services/user-service/internal/application/sub_account_service.go
+    - quwoquan_service/services/user-service/internal/application/persona_commands.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence/persona_command_store.go
+  outbox:
+    - quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence/persona_command_store.go
+  reader:
+    - quwoquan_service/services/user-service/internal/infrastructure/user/persistence/pg_persona_store_ext.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/persona_command_handler.go
+    - quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/user/persona_contracts.dart
+    - quwoquan_app/lib/application/user/persona/persona_query.dart
+    - quwoquan_app/lib/cloud/remote/user/persona/persona_remote.dart
+    - quwoquan_app/lib/cloud/remote/user/persona/persona_query_remote.dart
+  page:
+    - quwoquan_app/lib/ui/user/pages/persona_management_page.dart
+    - quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
+tests:
+  local_contract:
+    - quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/providers/persona_management_provider__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/user_repository_contract__local_contract_test.dart
+    - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/user/alpha_b1_identity_facets__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/persona_command_packet__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/active_persona_context_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/user/persona_management_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
+environments: []

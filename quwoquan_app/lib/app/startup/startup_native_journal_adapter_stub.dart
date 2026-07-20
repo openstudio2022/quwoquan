@@ -1,8 +1,8 @@
 import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _eventsKey = 'startup_telemetry_native_journal_v1';
-const _attemptKey = 'startup_telemetry_native_attempt_v1';
+const _eventsKey = 'startup_telemetry_native_journal';
+const _attemptKey = 'startup_telemetry_native_attempt';
 
 final class NativeStartupJournalPayload {
   const NativeStartupJournalPayload({

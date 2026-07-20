@@ -1,0 +1,22 @@
+aggregate: CircleFile
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/circle/
+
+scenarios:
+  - name: file_typed_facet_abi
+    description: Create/Update/Delete 与 list/get typed ABI；Update 显式携带 If-Match
+    assertions:
+      - update_requires_expected_version_header
+      - decoder_rejects_unknown_keys
+      - alpha_facet_matches_remote_shape
+
+  - name: error_code_mapping
+    cases:
+      - http_status: 409
+        code: CIRCLE.USER.storage_quota_exceeded
+        expected_dart_const: storageQuotaExceeded
+      - http_status: 409
+        code: CIRCLE.USER.file_version_conflict
+        expected_dart_const: fileVersionConflict

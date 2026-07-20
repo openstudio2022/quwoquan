@@ -2,13 +2,17 @@ package local_contract
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
 	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
 	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/testsupport"
 	commenttestsupport "quwoquan_service/services/content-service/internal/testsupport/comment"
 )
@@ -463,6 +467,353 @@ func TestCommentReadersReturnDetachedTypedSlicesAndFactsMatchCommit(t *testing.T
 	}
 }
 
+func TestBindMediaAssetsToCommentIsOwnerScopedAndIdempotent(t *testing.T) {
+	service, store := newCommentAggregateService()
+	created := createComment(
+		t,
+		service,
+		"comment-bind-create",
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: "绑定附件的评论",
+		},
+	)
+	command := commentapp.BindCommentAttachmentsCommand{
+		CommentID:          created.ID,
+		ActorID:            "persona-comment-author",
+		AttachmentMediaIDs: []string{"media-1", "media-2"},
+	}
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"comment-bind-media",
+	)
+	bound, err := service.BindAttachments(ctx, command)
+	if err != nil {
+		t.Fatalf("bind comment attachments: %v", err)
+	}
+	replayed, err := service.BindAttachments(ctx, command)
+	if err != nil {
+		t.Fatalf("replay bind comment attachments: %v", err)
+	}
+	if !replayed.Replayed || replayed.Version != bound.Version {
+		t.Fatalf("bind replay must return original receipt: bound=%+v replayed=%+v", bound, replayed)
+	}
+	page, err := service.ListComments(
+		context.Background(),
+		commentapp.ListCommentsQuery{PostID: "post-comment-owner", Limit: 20},
+	)
+	if err != nil {
+		t.Fatalf("list bound comment: %v", err)
+	}
+	if len(page.Items) != 1 ||
+		len(page.Items[0].AttachmentMediaIDs) != 2 ||
+		page.Items[0].AttachmentMediaIDs[0] != "media-1" {
+		t.Fatalf("bound media assets must be visible through typed reader: %+v", page)
+	}
+	outbox := store.OutboxEvents()
+	if len(outbox) != 2 || outbox[1].EventType != "CommentAttachmentsBound" {
+		t.Fatalf("bind must emit one canonical event and replay none: %+v", outbox)
+	}
+	_, err = service.BindAttachments(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-bind-denied"),
+		commentapp.BindCommentAttachmentsCommand{
+			CommentID:          created.ID,
+			ActorID:            "persona-intruder",
+			AttachmentMediaIDs: []string{"media-3"},
+		},
+	)
+	if err == nil {
+		t.Fatal("non-owner must not bind attachments to Comment")
+	}
+}
+
+func TestHideCommentModerationLifecycle(t *testing.T) {
+	service, store := newCommentAggregateService()
+	created := createComment(
+		t,
+		service,
+		"comment-hide-create",
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: "等待治理隐藏的评论",
+		},
+	)
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"comment-hide-command",
+	)
+	command := commentapp.HideCommentCommand{
+		CommentID:  created.ID,
+		OperatorID: "operator-comment-moderation",
+		Reason:     "confirmed abuse",
+	}
+	hidden, err := service.HideComment(ctx, command)
+	if err != nil {
+		t.Fatalf("hide Comment: %v", err)
+	}
+	if hidden.Status != commentmodel.StatusHidden ||
+		hidden.Version != created.Version+1 ||
+		hidden.Replayed {
+		t.Fatalf("unexpected hidden Comment result: %+v", hidden)
+	}
+	aggregate, found, err := store.Load(context.Background(), created.ID)
+	if err != nil || !found {
+		t.Fatalf("load hidden Comment: found=%v err=%v", found, err)
+	}
+	snapshot := aggregate.Snapshot()
+	if snapshot.Status != commentmodel.StatusHidden ||
+		snapshot.HiddenAt == nil ||
+		snapshot.IsPinned ||
+		snapshot.PinnedAt != nil {
+		t.Fatalf("hidden Comment snapshot is inconsistent: %+v", snapshot)
+	}
+	count, err := store.CountByPost(context.Background(), "post-comment-owner")
+	if err != nil || count != 0 {
+		t.Fatalf("hidden Comment must leave the active count: count=%d err=%v", count, err)
+	}
+	page, err := service.ListComments(
+		context.Background(),
+		commentapp.ListCommentsQuery{PostID: "post-comment-owner"},
+	)
+	if err != nil || len(page.Items) != 0 || page.Total != 0 {
+		t.Fatalf("hidden Comment leaked into active page: page=%+v err=%v", page, err)
+	}
+	ownPage, err := service.ListByAuthor(
+		context.Background(),
+		commentapp.ListCommentsByAuthorQuery{ActorID: "persona-comment-author"},
+	)
+	if err != nil ||
+		len(ownPage.Items) != 1 ||
+		ownPage.Items[0].ID != created.ID ||
+		ownPage.Items[0].Status != commentmodel.StatusHidden {
+		t.Fatalf(
+			"hidden Comment must remain visible in its author's private projection: page=%+v err=%v",
+			ownPage,
+			err,
+		)
+	}
+
+	replayed, err := service.HideComment(ctx, command)
+	if err != nil {
+		t.Fatalf("replay HideComment: %v", err)
+	}
+	if !replayed.Replayed ||
+		replayed.Version != hidden.Version ||
+		replayed.Status != commentmodel.StatusHidden {
+		t.Fatalf("HideComment replay did not return the original receipt: %+v", replayed)
+	}
+	if _, err := service.HideComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-hide-illegal"),
+		command,
+	); err == nil {
+		t.Fatal("a second HideComment intent from hidden state must be rejected")
+	} else {
+		assertCommentRuntimeErrorCode(
+			t,
+			err,
+			contentgenerated.AppErrorFromCommentStatusTransitionInvalid(""),
+		)
+	}
+
+	outbox := store.OutboxEvents()
+	if len(outbox) != 2 || outbox[1].EventType != "CommentModerated" {
+		t.Fatalf("HideComment must append one CommentModerated fact: %+v", outbox)
+	}
+	var payload struct {
+		CommentID  string    `json:"commentId"`
+		Version    int64     `json:"version"`
+		PostID     string    `json:"postId"`
+		OperatorID string    `json:"operatorId"`
+		Action     string    `json:"action"`
+		Reason     string    `json:"reason"`
+		OccurredAt time.Time `json:"occurredAt"`
+	}
+	if err := json.Unmarshal(outbox[1].Payload, &payload); err != nil {
+		t.Fatalf("decode CommentModerated payload: %v", err)
+	}
+	if payload.CommentID != created.ID ||
+		payload.Version != hidden.Version ||
+		payload.PostID != "post-comment-owner" ||
+		payload.OperatorID != command.OperatorID ||
+		payload.Action != "hide" ||
+		payload.Reason != command.Reason ||
+		payload.OccurredAt.IsZero() {
+		t.Fatalf("HideComment audit payload drifted: %+v", payload)
+	}
+}
+
+func TestRestoreCommentModerationLifecycle(t *testing.T) {
+	service, store := newCommentAggregateService()
+	created := createComment(
+		t,
+		service,
+		"comment-restore-create",
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: "等待治理恢复的评论",
+		},
+	)
+	if _, err := service.HideComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-restore-hide"),
+		commentapp.HideCommentCommand{
+			CommentID:  created.ID,
+			OperatorID: "operator-comment-moderation",
+			Reason:     "temporary hold",
+		},
+	); err != nil {
+		t.Fatalf("prepare hidden Comment: %v", err)
+	}
+	ctx := commandmeta.WithIdempotencyKey(
+		context.Background(),
+		"comment-restore-command",
+	)
+	command := commentapp.RestoreCommentCommand{
+		CommentID:  created.ID,
+		OperatorID: "operator-comment-moderation",
+		Reason:     "review cleared",
+	}
+	restored, err := service.RestoreComment(ctx, command)
+	if err != nil {
+		t.Fatalf("restore Comment: %v", err)
+	}
+	if restored.Status != commentmodel.StatusActive ||
+		restored.Version != created.Version+2 ||
+		restored.Replayed {
+		t.Fatalf("unexpected restored Comment result: %+v", restored)
+	}
+	aggregate, found, err := store.Load(context.Background(), created.ID)
+	if err != nil || !found {
+		t.Fatalf("load restored Comment: found=%v err=%v", found, err)
+	}
+	if snapshot := aggregate.Snapshot(); snapshot.HiddenAt != nil ||
+		snapshot.Status != commentmodel.StatusActive {
+		t.Fatalf("RestoreComment must clear hidden state: %+v", snapshot)
+	}
+	count, err := store.CountByPost(context.Background(), "post-comment-owner")
+	if err != nil || count != 1 {
+		t.Fatalf("restored Comment must re-enter the active count: count=%d err=%v", count, err)
+	}
+
+	replayed, err := service.RestoreComment(ctx, command)
+	if err != nil {
+		t.Fatalf("replay RestoreComment: %v", err)
+	}
+	if !replayed.Replayed ||
+		replayed.Version != restored.Version ||
+		replayed.Status != commentmodel.StatusActive {
+		t.Fatalf("RestoreComment replay did not return the original receipt: %+v", replayed)
+	}
+	if _, err := service.RestoreComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-restore-illegal"),
+		command,
+	); err == nil {
+		t.Fatal("a second RestoreComment intent from active state must be rejected")
+	} else {
+		assertCommentRuntimeErrorCode(
+			t,
+			err,
+			contentgenerated.AppErrorFromCommentStatusTransitionInvalid(""),
+		)
+	}
+
+	now := time.Now().UTC()
+	deleted, err := commentmodel.Create(commentmodel.CreateParams{
+		ID: "comment-terminal-deleted", PostID: "post-comment-owner",
+		AuthorID: "persona-comment-author", Content: "deleted terminal", Now: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := deleted.Delete("persona-comment-author", now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleted.Hide("operator-comment-moderation", now.Add(2*time.Second)); !errors.Is(
+		err,
+		commentmodel.ErrInvalidStatusTransition,
+	) {
+		t.Fatalf("deleted Comment accepted HideComment: %v", err)
+	}
+	if err := deleted.RestoreFromHidden("operator-comment-moderation", now.Add(2*time.Second)); !errors.Is(
+		err,
+		commentmodel.ErrInvalidStatusTransition,
+	) {
+		t.Fatalf("deleted Comment accepted RestoreComment: %v", err)
+	}
+	tombstoned, err := commentmodel.Restore(commentmodel.Snapshot{
+		ID: "comment-terminal-tombstoned", Version: 3,
+		PostID: "post-comment-owner", AuthorID: "persona-comment-author",
+		Content: "tombstoned terminal", Status: commentmodel.StatusTombstoned,
+		CreatedAt: now, UpdatedAt: now.Add(time.Second),
+	})
+	if err != nil {
+		t.Fatalf("restore tombstoned Comment snapshot: %v", err)
+	}
+	if err := tombstoned.Hide("operator-comment-moderation", now.Add(2*time.Second)); !errors.Is(
+		err,
+		commentmodel.ErrInvalidStatusTransition,
+	) {
+		t.Fatalf("tombstoned Comment accepted HideComment: %v", err)
+	}
+	if err := tombstoned.RestoreFromHidden("operator-comment-moderation", now.Add(2*time.Second)); !errors.Is(
+		err,
+		commentmodel.ErrInvalidStatusTransition,
+	) {
+		t.Fatalf("tombstoned Comment accepted RestoreComment: %v", err)
+	}
+
+	outbox := store.OutboxEvents()
+	if len(outbox) != 3 ||
+		outbox[1].EventType != "CommentModerated" ||
+		outbox[2].EventType != "CommentModerated" {
+		t.Fatalf("restore lifecycle facts drifted: %+v", outbox)
+	}
+	var payload struct {
+		Action     string `json:"action"`
+		Reason     string `json:"reason"`
+		OperatorID string `json:"operatorId"`
+	}
+	if err := json.Unmarshal(outbox[2].Payload, &payload); err != nil {
+		t.Fatalf("decode restored CommentModerated payload: %v", err)
+	}
+	if payload.Action != "restore" ||
+		payload.Reason != command.Reason ||
+		payload.OperatorID != command.OperatorID {
+		t.Fatalf("RestoreComment audit payload drifted: %+v", payload)
+	}
+}
+
+func TestCommentModerationSnapshotValidation(t *testing.T) {
+	now := time.Now().UTC()
+	base := commentmodel.Snapshot{
+		ID:        "comment-moderation-snapshot",
+		Version:   2,
+		PostID:    "post-comment-owner",
+		AuthorID:  "persona-comment-author",
+		Content:   "moderation snapshot validation",
+		CreatedAt: now,
+		UpdatedAt: now.Add(time.Second),
+	}
+	hiddenWithoutTimestamp := base
+	hiddenWithoutTimestamp.Status = commentmodel.StatusHidden
+	if _, err := commentmodel.Restore(hiddenWithoutTimestamp); err == nil {
+		t.Fatal("hidden Comment snapshot without hiddenAt must be rejected")
+	}
+	activeWithHiddenTimestamp := base
+	activeWithHiddenTimestamp.Status = commentmodel.StatusActive
+	activeWithHiddenTimestamp.HiddenAt = cloneCommentTestTime(now.Add(time.Second))
+	if _, err := commentmodel.Restore(activeWithHiddenTimestamp); err == nil {
+		t.Fatal("active Comment snapshot retaining hiddenAt must be rejected")
+	}
+	deletedWithoutTimestamp := base
+	deletedWithoutTimestamp.Status = commentmodel.StatusDeleted
+	if _, err := commentmodel.Restore(deletedWithoutTimestamp); err == nil {
+		t.Fatal("deleted Comment snapshot without deletedAt must be rejected")
+	}
+}
+
 func newCommentAggregateService() (*commentapp.CommentService, *commenttestsupport.Store) {
 	store := commenttestsupport.NewStore()
 	store.SeedPost("post-comment-owner", "persona-post-owner")
@@ -470,6 +821,8 @@ func newCommentAggregateService() (*commentapp.CommentService, *commenttestsuppo
 		store,
 		store,
 		testsupport.NewReactionStore(),
+		store,
+		store,
 	)), store
 }
 
@@ -488,4 +841,28 @@ func createComment(
 		t.Fatalf("create comment: %v", err)
 	}
 	return result
+}
+
+func cloneCommentTestTime(value time.Time) *time.Time {
+	cloned := value.UTC()
+	return &cloned
+}
+
+func assertCommentRuntimeErrorCode(
+	t *testing.T,
+	err error,
+	want *rterr.AppError,
+) {
+	t.Helper()
+	var appError *rterr.AppError
+	if !errors.As(err, &appError) {
+		t.Fatalf("expected Runtime AppError, got %T: %v", err, err)
+	}
+	if appError.Code.String() != want.Code.String() {
+		t.Fatalf(
+			"Runtime error code=%q want=%q",
+			appError.Code.String(),
+			want.Code.String(),
+		)
+	}
 }

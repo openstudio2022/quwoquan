@@ -1,7 +1,8 @@
 read_model: PostPublicationReceipt
 
 description: |
-  SubmitPostPublication 的稳定发布回执。同一 PublishIntent 的任意重放返回同一 postId 与首次接受时间。
+  SubmitPostPublication 的稳定提交回执。同一 PublishIntent 的任意重放返回同一 postId、
+  pending_review/published 状态与首次接受时间；只有 published 允许 App 清理本地草稿。
 
 source_entities:
   - Post
@@ -42,5 +43,5 @@ client_projection:
     - name: acceptedAt
       dart_type: DateTime
       nullable: false
-      source: publishedAt
+      source: createdAt
       default: "DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)"

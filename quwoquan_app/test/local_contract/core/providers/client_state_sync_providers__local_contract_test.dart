@@ -45,17 +45,20 @@ void main() {
         subAccountId: 'profile-1',
         currentFollowing: false,
         shouldFollow: true,
+        sourceSurfaceId: 'userProfile',
       );
 
       var state = container.read(clientStateSyncOutboxProvider);
       expect(state.entries.length, 1);
       expect(state.entries.single.confirmedBoolValue, isFalse);
       expect(state.entries.single.desiredBoolValue, isTrue);
+      expect(state.entries.single.sourceSurfaceId, 'userProfile');
 
       notifier.enqueueFollow(
         subAccountId: 'profile-1',
         currentFollowing: true,
         shouldFollow: false,
+        sourceSurfaceId: 'userProfile',
       );
 
       state = container.read(clientStateSyncOutboxProvider);
@@ -99,6 +102,7 @@ void main() {
         subAccountId: 'profile-1',
         currentFollowing: true,
         shouldFollow: false,
+        sourceSurfaceId: 'userProfile',
       );
       notifier.enqueuePostLike(
         postId: 'post-1',
@@ -132,6 +136,7 @@ void main() {
         subAccountId: 'profile-1',
         currentFollowing: false,
         shouldFollow: true,
+        sourceSurfaceId: 'userProfile',
       );
       notifier.enqueuePostLike(
         postId: 'post-1',

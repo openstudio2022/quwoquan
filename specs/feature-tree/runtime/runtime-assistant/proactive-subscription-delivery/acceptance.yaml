@@ -1,0 +1,56 @@
+version: 2
+node:
+  id: proactive-subscription-delivery
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-assistant/proactive-subscription-delivery
+  title: proactive subscription delivery
+  parent_domain_service: runtime
+  parent_business_capability: runtime-assistant
+scope:
+  summary: 主动订阅触发与用户/会话投递验收范围。
+  in_scope:
+  - SkillSubscription tick lease 与状态机
+  - AppMessage 收件箱投递与会话投递门控
+  out_of_scope:
+  - 通知通道实现（归 notification 域）
+gwt_acceptance:
+  GWT1:
+    title: 订阅触发与投递
+    given:
+    - 用户创建了 active 的主动技能订阅。
+    when:
+    - 内部 tick cron 领取到期订阅。
+    then:
+    - 产出投递到用户收件箱；会话投递前校验成员/频控/静默。
+    done_when:
+    - paused/cancelled 订阅不投递；重复 tick 不重复投递。
+    edge_cases:
+    - lease 竞争（多实例）
+    - notification-service 不可达（熔断）
+    contract_refs:
+    - quwoquan_service/contracts/metadata/assistant/skill_subscription/service.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/notificationclient/client__local_contract_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_assistant.proactive_subscription_delivery.contract
+        envs: &id001
+        - local
+      supporting: []
+    notes:
+    - 2026-07-20 补建 story 目录以修复 journey_scenario_registry 引用漂移；订阅状态机与投递客户端既有测试回填为 recorded 证据。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

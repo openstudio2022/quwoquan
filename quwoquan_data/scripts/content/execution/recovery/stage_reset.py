@@ -373,7 +373,7 @@ def _source_plan_issue_records(
                     )
                 if str(image.get("generationModel") or "").strip() and not allow_generated_images:
                     lane_issues.append(f"image {image.get('url') or '?'} is AI-generated")
-            desired_image_works = int(quotas.get("imageWorksPerTarget") or 0) if "image" in active_lanes else 0
+            desired_image_works = quotas.image_works_per_target if "image" in active_lanes else 0
             required_image_works = (
                 max(1, desired_image_works)
                 if image_count_is_hard_quota(ctx.spec.to_dict())
@@ -393,6 +393,20 @@ def _source_plan_issue_records(
                     "image research needs enough rights-cleared source collections "
                     f"for {required_image_works} image work(s)"
                 )
+            # video 作品的帧来自 video lane 的 rights-cleared 图证；plan 阶段无帧候选
+            # 必须判未就绪并触发 auto research，否则 fetch 必然 0 帧失败。
+            if "video" in active_lanes and quotas.video_works_per_target > 0:
+                video_frame_candidates = [
+                    image for image in images
+                    if str(image.get("researchLane") or "") == "video"
+                ]
+                required_frames = requirements.min_video_frames
+                if required_frames and len(video_frame_candidates) < required_frames:
+                    lane_issues.append(
+                        "video research needs "
+                        f">={required_frames} rights-cleared frame candidate(s), "
+                        f"got {len(video_frame_candidates)}"
+                    )
             source_rights_lanes = [
                 lane for lane in ("homepage", "article")
                 if lane in active_lanes and (lane != "article" or article_quota > 0)

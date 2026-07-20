@@ -1,4 +1,4 @@
-# L4 对象任务：five-core-projectors-implementation
+# L3 对象任务：five-core-projectors-implementation
 
 ## 功能说明
 - **DiscoveryFeedProjector**：消费 PostCreated 等事件，更新 discovery_feed ReadModel（内容发现信息流）。

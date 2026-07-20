@@ -88,6 +88,18 @@ workloads:
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
     notes: summary/drilldown/event 写入尚未接入可信 admin/service principal，prod fail-closed；统一 operation guard 完成后才可重新接入 prod root。
 
+  - name: platform-ops-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: platform-ops-service
+    domains: [platform]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 平台控制面（配置分层/发布执行/告警回流/审计）；prod 经 service plane rootless compose 部署，config_sync 消费方经 PLATFORM_OPS_BASE_URL 打通 ACK。
+
   - name: realtime-gateway
     plane: edge-media
     deploy_kind: standalone-workload
@@ -98,7 +110,11 @@ workloads:
     prod_root_kustomizations: []
     wired_to_prod_root: false
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
-    notes: 缺源码/build provenance 与服务端鉴权合同，prod fail-closed；补齐后才可重新接入 prod root。
+    notes: >-
+      2026-07-19 B10（CR-20260719-121）补齐第一方源码（services/realtime-gateway/{cmd,internal}，
+      ticket 鉴权 + WS/LongPoll + lease/fencing + per-user 订阅路由）与
+      deploy/Dockerfile，gamma-local compose 已从 edge-media-pending 启用。
+      prod root 接入仍待：gamma 运行制品、固定镜像 digest/SBOM 与 kustomize overlay。
 
   - name: rtc-service
     plane: edge-media

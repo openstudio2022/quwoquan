@@ -2296,6 +2296,126 @@
           "canCall": true
         }
       ]
+    },
+    "greeting_core": {
+      "description": "打招呼破冰种子：一条待处理收件、一条已回复升级会话。",
+      "inbox": [
+        {
+          "id": "fixture_greeting_pending_001",
+          "requesterSubAccountId": "user_travel_photographer",
+          "targetSubAccountId": "fixture_user_current",
+          "requestMessage": "你好，看到你的川西照片很棒，想交流一下路线",
+          "status": "pending",
+          "source": "profile",
+          "createdAt": "2026-06-02T08:00:00Z",
+          "updatedAt": "2026-06-02T08:00:00Z"
+        }
+      ],
+      "outbox": [
+        {
+          "id": "fixture_greeting_replied_001",
+          "requesterSubAccountId": "fixture_user_current",
+          "targetSubAccountId": "user_street_photo",
+          "requestMessage": "街拍作品很有味道，想请教构图",
+          "status": "replied",
+          "source": "profile",
+          "promotedConversationId": "fixture_conversation_greeting_001",
+          "createdAt": "2026-06-01T08:00:00Z",
+          "updatedAt": "2026-06-01T09:00:00Z"
+        }
+      ]
+    },
+    "subject_follow_core": {
+      "description": "SubjectFollow 聚合种子：当前用户已关注的主页/圈子主体。",
+      "follows": [
+        {
+          "personaId": "fixture_user_current",
+          "subjectType": "homepage",
+          "subjectId": "homepage_sight_emeishan",
+          "state": "following",
+          "followedAt": "2026-05-24T08:00:00Z"
+        },
+        {
+          "personaId": "fixture_user_current",
+          "subjectType": "circle",
+          "subjectId": "circle_sichuan_travel",
+          "state": "following",
+          "followedAt": "2026-05-22T08:00:00Z"
+        }
+      ]
+    },
+    "contact_discovery_core": {
+      "description": "通讯录哈希匹配种子；仅保存不可逆哈希和匹配后的 subAccountId，不含手机号原文。",
+      "records": [
+        {
+          "id": "fixture_contact_discovery_001",
+          "ownerAccountId": "fixture_user_current",
+          "hashedPhones": [
+            "7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"
+          ],
+          "matchedSubAccountIds": [
+            "fixture_user_photo"
+          ],
+          "status": "completed",
+          "matchCount": 1,
+          "expireAt": "2026-12-31T23:59:59Z",
+          "createdAt": "2026-07-20T00:00:00Z",
+          "completedAt": "2026-07-20T00:00:01Z"
+        }
+      ]
+    },
+    "following_subject_core": {
+      "description": "关注对象动态 strip 种子。",
+      "items": [
+        {
+          "subjectId": "user_travel_photographer",
+          "subjectType": "user",
+          "displayName": "旅行摄影师",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "coverUrl": "",
+          "subtitle": "刚更新了川西路线",
+          "targetRouteId": "user_profile",
+          "targetObjectId": "user_travel_photographer",
+          "followedAt": "2026-05-20T08:00:00Z",
+          "lastVisitedAt": "2026-06-01T08:00:00Z",
+          "latestChangedAt": "2026-06-02T00:30:00Z",
+          "unreadChangeCount": 2,
+          "hasUnreadChanges": true,
+          "latestChangeReason": "发布了新内容"
+        },
+        {
+          "subjectId": "circle_sichuan_travel",
+          "subjectType": "circle",
+          "displayName": "四川旅行圈",
+          "avatarUrl": "",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "subtitle": "圈内有新攻略",
+          "targetRouteId": "circle_detail",
+          "targetObjectId": "circle_sichuan_travel",
+          "followedAt": "2026-05-22T08:00:00Z",
+          "lastVisitedAt": "2026-06-02T01:00:00Z",
+          "latestChangedAt": "2026-06-02T01:00:00Z",
+          "unreadChangeCount": 0,
+          "hasUnreadChanges": false,
+          "latestChangeReason": ""
+        },
+        {
+          "subjectId": "homepage_sight_emeishan",
+          "subjectType": "homepage",
+          "displayName": "峨眉山",
+          "avatarUrl": "",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+          "subtitle": "地点动态有更新",
+          "targetRouteId": "homepage_detail",
+          "targetObjectId": "homepage_sight_emeishan",
+          "followedAt": "2026-05-24T08:00:00Z",
+          "lastVisitedAt": "2026-05-30T08:00:00Z",
+          "latestChangedAt": "2026-06-01T12:20:00Z",
+          "unreadChangeCount": 1,
+          "hasUnreadChanges": true,
+          "latestChangeReason": "新增问答和口碑"
+        }
+      ]
     }
   },
   "scenarios": [

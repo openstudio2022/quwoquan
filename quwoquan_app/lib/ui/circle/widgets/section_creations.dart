@@ -20,17 +20,21 @@ import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_brid
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 import 'package:quwoquan_app/components/content/record_post_card.dart';
 import 'package:quwoquan_app/components/object_page/object_secondary_filter_bar.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part 'section_creations_state.dart';
 part 'section_creations_state_helpers.dart';
 
+enum _CirclePostManagementAction { pin, feature, remove }
+
 /// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格。
 ///
-/// 主数据为 [CircleHubFeedPostEntry]（含 [PostBaseDto] + 写回用 raw）；旧 Map 工具方法仅作
-/// wire 兼容层，新逻辑应优先读 `entry.dto`。
+/// 主数据为 [CircleHubFeedPostEntry]：内容事实读取 [PostBaseDto]，展示字段读取
+/// metadata 生成的 typed presentation，互动结果写回页面模型快照。
 class SectionCreations extends ConsumerStatefulWidget {
   const SectionCreations({
     super.key,

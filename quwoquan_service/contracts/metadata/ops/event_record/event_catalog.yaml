@@ -18,12 +18,20 @@ common_fields:
   - appVersion
   - networkClass
 
+# 九字段公共信封之外、由统一端侧上下文自动注入的低基数字段。
+# 这组字段不属于单个事件的业务扩展，服务端仍按 extension_fields 的类型约束校验。
+context_extensions:
+  - devicePlatform
+
 extension_fields:
   durationMs: { type: int, minimum: 0 }
   result: { type: string, max_length: 128 }
   failReasonCode: { type: string, max_length: 128 }
   errorCode: { type: string, max_length: 128 }
   operationId: { type: string, max_length: 128 }
+  requestId: { type: string, max_length: 256 }
+  traceId: { type: string, max_length: 256 }
+  recoveryAction: { type: string, max_length: 64 }
   httpStatus: { type: int, minimum: 100, maximum: 599 }
   callStack: { type: string_list, max_items: 10, item_max_length: 256, sensitive: true }
   tClickToFirstFrameMs: { type: int, minimum: 0 }
@@ -33,27 +41,110 @@ extension_fields:
   hasError: { type: bool }
   action: { type: string, max_length: 128 }
   journey: { type: string, max_length: 128 }
+  callType: { type: string, enum: [audio, video] }
+  participantCount: { type: int, minimum: 0 }
+  connectTimeMs: { type: int, minimum: 0 }
+  mediaConnected: { type: bool }
+  reconnectCount: { type: int, minimum: 0 }
+  disconnectReason: { type: string, max_length: 128 }
+  networkQuality: { type: string, enum: [excellent, good, poor, unknown] }
+  transport: { type: string, enum: [websocket, long_poll] }
   readyMs: { type: int, minimum: 0 }
   ttffMs: { type: int, minimum: 0 }
   rebufferCount: { type: int, minimum: 0 }
   rebufferMs: { type: int, minimum: 0 }
+  effectivePlaybackMs: { type: int, minimum: 0 }
   seekCount: { type: int, minimum: 0 }
+  seekFailureCount: { type: int, minimum: 0 }
+  seekCommandMaxMs: { type: int, minimum: 0 }
+  seekSettleMaxMs: { type: int, minimum: 0 }
+  droppedFrames: { type: int, minimum: 0 }
+  processedVideoFrames: { type: int, minimum: 0 }
+  audioUnderrunCount: { type: int, minimum: 0 }
+  rendererMode: { type: string, enum: [platform_view, texture_view] }
+  decoderQueueMode: { type: string, enum: [synchronous] }
+  decoderFallbackEnabled: { type: bool }
+  seekEvidenceSource: { type: string, enum: [controller_command_completion, native_settled] }
   declaredDurationMs: { type: int, minimum: 0 }
   observedDurationMs: { type: int, minimum: 0 }
+  turnAction: { type: string, enum: [submit, first_answer, completed, failed, cancelled, stream_failure] }
   durationMismatch: { type: bool }
+  devicePlatform: { type: string, enum: [android, ios, ohos, web, desktop] }
   playbackMode: { type: string, max_length: 32 }
+  publicationStage: { type: string, enum: [editor_ready, draft_saved, draft_restored, submit_started, queued, blocked, published] }
+  contentType: { type: string, enum: [micro, article, image, video, unknown] }
+  objectState: { type: string, enum: [draft, submitting, retry_wait, blocked, published] }
+  surfaceId: { type: string, max_length: 128 }
+  correlationHash: { type: string, max_length: 64 }
+  detectionSource: { type: string, enum: [dart_event_loop_watchdog, android_application_exit_info, ios_metric_kit] }
+  sampledFrames: { type: int, minimum: 1 }
+  jankyFrames: { type: int, minimum: 1 }
+  worstFrameMs: { type: int, minimum: 0 }
+  jankThresholdMs: { type: int, minimum: 1 }
+  terminalState: { type: string, enum: [content, empty, error] }
+  resultCount: { type: int, minimum: 0 }
+  rankPosition: { type: int, minimum: 0 }
+  objectType: { type: string, max_length: 64 }
+  objectId: { type: string, max_length: 256 }
+  reasonId: { type: string, max_length: 256 }
+  targetType: { type: string, max_length: 64 }
+  targetId: { type: string, max_length: 256 }
+  environment: { type: string, enum: [alpha, beta, gamma, prod] }
 
 events:
   - event_type: page_open
     log_type: event
     required_extensions: []
-    optional_extensions: []
+    # readyMs = 路由进入到页面首帧渲染完成的耗时；它不是业务可用 TTI。
+    # 端侧 addPostFrameCallback 真实测量，缺失表示没有渲染管线。
+    optional_extensions: [readyMs]
     normal_sample_rate: 1.0
     internal_priority: critical
 
   - event_type: page_return
     log_type: event
     required_extensions: [durationMs]
+    optional_extensions: []
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # navigation_start -> 首个可用终态；内容、空态和阻塞错误态均必须结算。
+  # page_open.readyMs 只表示路由首帧，不得再解释为业务可用 TTI。
+  - event_type: page_first_usable
+    log_type: event
+    required_extensions: [durationMs, terminalState]
+    optional_extensions: [surfaceId, failReasonCode]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # 页面级阻塞恢复面的展示与恢复动作结果；同一展示可以依次产生 shown、
+  # recovery_started、recovered 或 recovery_failed。
+  - event_type: page_error_outcome
+    log_type: event
+    required_extensions: [surfaceId, errorCode, recoveryAction, result]
+    optional_extensions: [action, durationMs]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # ANR 与 200ms severe frame 严格分离。Dart watchdog 上报本次恢复后的
+  # event-loop stall；Android/iOS 原生事实仅在下一次安全启动原子消费一次。
+  - event_type: app_anr_outcome
+    log_type: event
+    required_extensions: [detectionSource, result]
+    optional_extensions: [durationMs]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # 仅在一个帧批次真实出现卡顿时上报；分子按去重 session 计算，帧计数用于
+  # 下钻严重度，健康批次不上传，禁止把缺样本解释为 0%。
+  - event_type: app_frame_jank_outcome
+    log_type: event
+    required_extensions:
+      - sampledFrames
+      - jankyFrames
+      - worstFrameMs
+      - jankThresholdMs
+      - result
     optional_extensions: []
     normal_sample_rate: 1.0
     internal_priority: critical
@@ -81,20 +172,61 @@ events:
   - event_type: product_action
     log_type: event
     required_extensions: [journey, action]
-    optional_extensions: [durationMs, result, failReasonCode]
+    optional_extensions:
+      - surfaceId
+      - objectType
+      - objectId
+      - reasonId
+      - targetType
+      - targetId
+      - environment
+      - durationMs
+      - result
+      - failReasonCode
+      - recoveryAction
+      - requestId
+      - traceId
     normal_sample_rate: 1.0
     internal_priority: critical
 
   - event_type: performance_sample
     log_type: event
     required_extensions: [operationId, durationMs]
-    optional_extensions: [result, failReasonCode]
+    optional_extensions: [result, failReasonCode, recoveryAction, requestId, traceId]
     normal_sample_rate: 0.1
     internal_priority: normal
 
   - event_type: operation_result
     log_type: event
     required_extensions: [operationId, result]
+    optional_extensions: [durationMs, failReasonCode, recoveryAction, requestId, traceId]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: content_publication
+    log_type: event
+    required_extensions: [publicationStage, contentType, objectState, surfaceId, result]
+    optional_extensions: [durationMs, failReasonCode, correlationHash, recoveryAction, requestId, traceId]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: rtc_call_outcome
+    log_type: event
+    required_extensions: [callType, result]
+    optional_extensions: [durationMs, failReasonCode, participantCount]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: rtc_media_qoe
+    log_type: event
+    required_extensions: [callType, result, connectTimeMs, mediaConnected, reconnectCount]
+    optional_extensions: [disconnectReason, networkQuality, participantCount, failReasonCode]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: realtime_connect_result
+    log_type: event
+    required_extensions: [transport, result]
     optional_extensions: [durationMs, failReasonCode]
     normal_sample_rate: 1.0
     internal_priority: critical
@@ -105,14 +237,82 @@ events:
       - readyMs
       - rebufferCount
       - rebufferMs
+      - effectivePlaybackMs
       - seekCount
+      - seekFailureCount
+      - seekCommandMaxMs
+      - seekSettleMaxMs
+      - seekEvidenceSource
+      - devicePlatform
       - playbackMode
     optional_extensions:
       - ttffMs
+      - droppedFrames
+      - processedVideoFrames
+      - audioUnderrunCount
+      - rendererMode
+      - decoderQueueMode
+      - decoderFallbackEnabled
       - declaredDurationMs
       - observedDurationMs
       - durationMismatch
       - result
       - failReasonCode
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # 小趣助手对话质量事件（R-ASSIST-003 收口；黄金指标真相源：
+  # specs/feature-tree/assistant-run-learning/commercial_slo_observability.md）。
+  # turnAction: submit（提问）/ first_answer（首个可见回答）/ completed /
+  # failed / cancelled / stream_failure（SSE 断流）。
+  - event_type: assistant_turn_quality
+    log_type: event
+    required_extensions: [turnAction, result]
+    optional_extensions: [durationMs, failReasonCode, operationId]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  # 搜索漏斗只记录 requestId、闭集对象类型和聚合数值；禁止记录原始 query、
+  # objectId 或用户身份。query_submit 在服务响应可关联 requestId 后补记，但
+  # occurredAt 保留真实提交时间，确保跨事件漏斗与首个可操作结果耗时可对账。
+  - event_type: search_query_submit
+    log_type: event
+    required_extensions: [requestId, surfaceId]
+    optional_extensions: [action]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: search_result_impression
+    log_type: event
+    required_extensions: [requestId, resultCount, durationMs]
+    optional_extensions: [action]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: search_result_click
+    log_type: event
+    required_extensions: [requestId, objectType, rankPosition]
+    optional_extensions: [action]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: search_refine
+    log_type: event
+    required_extensions: [requestId, action]
+    optional_extensions: []
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: search_zero_result
+    log_type: event
+    required_extensions: [requestId, durationMs]
+    optional_extensions: [action]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: search_result_dwell
+    log_type: event
+    required_extensions: [requestId, durationMs, resultCount]
+    optional_extensions: [action]
     normal_sample_rate: 1.0
     internal_priority: critical

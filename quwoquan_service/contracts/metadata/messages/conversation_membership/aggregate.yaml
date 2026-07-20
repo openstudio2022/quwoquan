@@ -9,6 +9,9 @@ business_rules:
   - identity 固定为 conversationId + memberType + memberId
   - direct conversation 只能拥有两个 persona 成员
   - group conversation 必须至少保留一个 owner，转移 owner 与角色变更原子提交
+  - AddMembers 操作者必须是活跃成员；新成员与操作者互关且无屏蔽（圈子绑定群跳过互关）
+  - RemoveMember 仅 owner/admin；owner 可移出任何非 owner 成员，admin 只能移出普通成员
+  - 自愿退出走 LeaveConversation（left 终态）；owner 退出前必须完成 TransferOwnership
   - Assistant 成员必须绑定有效 skill consent，移除不删除历史消息
   - membership 变化只发布事件，不直接写 Conversation memberCount 投影
 lifecycle:

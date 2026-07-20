@@ -21,7 +21,7 @@
 
 ## 证据要求
 
-- 环境相关收口优先使用：`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all`。
+- 环境相关收口优先使用：`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile smoke|integration|release`；`baseline` 不接受环境参数。
 - hosted prod 操作（含 gray-initial 灰度验证，承接原远端 gamma 验证职责）以 `.qwq_output/env/prod/runs/**`、`QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/**` 和 stackctl summary/report 为证据。
 - 新增 gate 必须说明触发范围、阻断条件、修复方式和是否接入 `make gate` / `gate_repo.sh`。
 

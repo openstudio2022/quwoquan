@@ -4,6 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 ACTION="${1:-up}"
+if [[ "$ACTION" == "-h" || "$ACTION" == "--help" || "$ACTION" == "help" ]]; then
+  cat <<'EOF'
+Usage:
+  quwoquan_ops/cli/beta/start_beta_stack.sh {up|down|status} [options]
+
+Set QWQ_WORKLOAD=content-release to start only the content data plane, or
+QWQ_WORKLOAD=full to include commercial telemetry, Ops services and Portal.
+EOF
+  exit 0
+fi
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env beta --target beta-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 RUNTIME_CONFIG_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process/config"
@@ -34,6 +44,8 @@ CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
 AUTO_OPEN_OPS="${AUTO_OPEN_OPS:-1}"
+PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
+WORKLOAD="${QWQ_WORKLOAD:-full}"
 SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
 MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
@@ -141,6 +153,24 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "$WORKLOAD" in
+  content-release)
+    # 内容导入与消费只依赖内容数据面；商业观测和运营控制面只属于 full。
+    PRODUCT_TELEMETRY_AVAILABLE=0
+    AUTO_OPEN_OPS=0
+    ;;
+  full)
+    if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+      echo "GATE_BLOCK: beta full workload requires product telemetry; use QWQ_WORKLOAD=content-release for the content data plane." >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "GATE_BLOCK: unsupported beta workload: $WORKLOAD" >&2
+    exit 2
+    ;;
+esac
 
 write_env() {
   cat > "$ENV_FILE" <<EOF
@@ -303,6 +333,9 @@ build_app_beta_command() {
   if [[ "$START_APP" != "1" ]]; then
     APP_BETA_CMD+=(--skip-app)
   fi
+  if [[ "$WORKLOAD" == "content-release" ]]; then
+    APP_BETA_CMD+=(--skip-assistant)
+  fi
   if [[ -n "$DEVICE_ID" ]]; then
     APP_BETA_CMD+=(--device-id "$DEVICE_ID")
   fi
@@ -364,17 +397,21 @@ case "$ACTION" in
       echo "[beta] app-beta backend did not become ready" >&2
       exit 1
     }
-    start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
-    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60
-    wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60
-    maybe_open_ops
+    if [[ "$WORKLOAD" == "full" ]]; then
+      start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+      wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60
+      start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' MONGODB_URI='mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true' MONGODB_DATABASE='quwoquan_product_ops' REDIS_GENERAL_ADDR='127.0.0.1:${BETA_REDIS_PORT}' REDIS_REC_ADDR='127.0.0.1:${BETA_REDIS_PORT}' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+      wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60
+      start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
+      wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60
+      maybe_open_ops
+      status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
+      status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
+      status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
+    else
+      echo "[beta] workload=content-release; product-ops, platform-ops and ops-portal are not started."
+    fi
     status_one app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz"
-    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
-    status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
-    status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
     ;;
   down)
     stop_bg app-beta

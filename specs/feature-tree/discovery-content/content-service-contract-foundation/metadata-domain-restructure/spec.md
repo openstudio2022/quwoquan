@@ -1,4 +1,4 @@
-# L3：metadata-domain-restructure
+# L3 特性：metadata-domain-restructure
 
 ## 功能说明
 

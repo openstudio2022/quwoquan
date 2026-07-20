@@ -1,0 +1,14 @@
+entity: ProfileInteractionReadFact
+layer: app_side
+
+scenarios:
+  - name: optimistic_seen_read_rolls_back_on_failure
+    assertions:
+      - App 先更新单行 seen/read 乐观态
+      - generated append Facet 失败时恢复原 items 并保留结构化 error
+      - 错误不得伪装成成功或空列表
+
+  - name: alpha_read_fact_semantic_dedupe
+    assertions:
+      - alpha adapter 按 ownerPersonaId+activityId+state 幂等
+      - read 后 seen 不回退 readAt

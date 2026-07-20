@@ -3,6 +3,7 @@ package local_contract
 import (
 	"context"
 	"testing"
+	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	behavior "quwoquan_service/services/content-service/internal/application/behavior"
@@ -10,6 +11,10 @@ import (
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
+
+func validOccurredAt() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
+}
 
 type fakeIntersectionFeedbackSink struct {
 	calls []intersectionFeedbackCall
@@ -62,6 +67,8 @@ func TestProcessBatchRoutesIntersectionFeedbackToSink(t *testing.T) {
 
 	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{
+			ClientEventID:         "evt-intersection-feedback-001",
+			OccurredAt:            validOccurredAt(),
 			UserID:                "user-300",
 			Action:                "intersection_feedback",
 			SubjectID:             "subj-1",
@@ -88,7 +95,13 @@ func TestProcessBatchDoesNotRouteNonIntersectionFeedback(t *testing.T) {
 	svc := newFeedbackRoutingService(sink)
 
 	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
-		{UserID: "user-301", Action: "dislike", ContentID: "post-1"},
+		{
+			ClientEventID: "evt-dislike-001",
+			OccurredAt:    validOccurredAt(),
+			UserID:        "user-301",
+			Action:        "dislike",
+			ContentID:     "post-1",
+		},
 	})
 	if err != nil {
 		t.Fatalf("ProcessBatch: %v", err)
@@ -128,6 +141,7 @@ func TestProcessBatchProjectsWishlistAddAndRemove(t *testing.T) {
 
 	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{
+			OccurredAt:     validOccurredAt(),
 			UserID:         "user-wish-1",
 			SessionID:      "sess-wish-1",
 			ClientEventID:  "evt-wish-add-1",
@@ -143,6 +157,7 @@ func TestProcessBatchProjectsWishlistAddAndRemove(t *testing.T) {
 			UserID:        "user-wish-1",
 			SessionID:     "sess-wish-1",
 			ClientEventID: "evt-wish-remove-1",
+			OccurredAt:    validOccurredAt(),
 			Action:        "wishlist_remove",
 			ObjectID:      "homepage_west_lake",
 			ObjectKind:    "homepage",

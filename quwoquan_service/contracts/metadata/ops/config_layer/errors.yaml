@@ -1,6 +1,6 @@
 domain: OPS
-aggregate: ConfigLayer
-description: 平台 ConfigLayer 命令与 Reader 的稳定错误语义。
+aggregate: ConfigSnapshot
+description: 平台 IaC 配置只读快照查询的稳定错误语义。
 errors:
   - code: OPS.USER.config_invalid
     kind: USER
@@ -9,31 +9,15 @@ errors:
     recovery_action: surface
     dart_const: configInvalid
     go_const: ErrConfigInvalid
-    user_message: { zh: "配置值或作用域无效", en: "The config value or scope is invalid" }
-  - code: OPS.USER.config_layer_not_found
+    user_message: { zh: "配置查询作用域无效", en: "The config query scope is invalid" }
+  - code: OPS.USER.config_snapshot_not_found
     kind: USER
-    reason: config_layer_not_found
+    reason: config_snapshot_not_found
     http_status: 404
     recovery_action: refresh
-    dart_const: configLayerNotFound
-    go_const: ErrConfigLayerNotFound
-    user_message: { zh: "配置层不存在", en: "The config layer was not found" }
-  - code: OPS.USER.config_version_conflict
-    kind: USER
-    reason: config_version_conflict
-    http_status: 409
-    recovery_action: refresh
-    dart_const: configVersionConflict
-    go_const: ErrConfigVersionConflict
-    user_message: { zh: "配置已更新，请刷新后重试", en: "The config changed; refresh and retry" }
-  - code: OPS.USER.config_idempotency_conflict
-    kind: USER
-    reason: config_idempotency_conflict
-    http_status: 409
-    recovery_action: refresh
-    dart_const: configIdempotencyConflict
-    go_const: ErrConfigIdempotencyConflict
-    user_message: { zh: "重复配置请求与原操作不一致", en: "The repeated config request differs from the original operation" }
+    dart_const: configSnapshotNotFound
+    go_const: ErrConfigSnapshotNotFound
+    user_message: { zh: "配置快照不存在", en: "The config snapshot was not found" }
   - code: OPS.SYSTEM.config_storage_read_failed
     kind: SYSTEM
     reason: config_storage_read_failed
@@ -43,12 +27,3 @@ errors:
     dart_const: configStorageReadFailed
     go_const: ErrConfigStorageReadFailed
     user_message: { zh: "配置读取失败，请稍后重试", en: "Config read failed; retry later" }
-  - code: OPS.SYSTEM.config_storage_write_failed
-    kind: SYSTEM
-    reason: config_storage_write_failed
-    http_status: 500
-    recovery_action: retry
-    recovery_after_seconds: 2
-    dart_const: configStorageWriteFailed
-    go_const: ErrConfigStorageWriteFailed
-    user_message: { zh: "配置写入失败，请稍后重试", en: "Config write failed; retry later" }

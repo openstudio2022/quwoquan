@@ -1,21 +1,35 @@
 domain: user
 aggregate_root: DeviceRegistration
 object_kind: aggregate_root
-description: Account 的设备身份、平台能力、push token 与安全吊销生命周期聚合。
+description: Account 的设备登记聚合；拥有最多两个按 provider kind 区分的推送 endpoint。
 storage_backend: postgres
 capabilities: [commandable, queryable, idempotent_commands]
-members: []
+members:
+  - entity: DevicePushEndpoint
+    relation: 1:N
+    object_kind: owned_entity
+    aggregate_owner: DeviceRegistration
+    max_cardinality: 2
+    cascade_delete: true
+    description: 只能经 DeviceRegistration 命令维护的 APNs VoIP / FCM endpoint。
 business_rules:
   - identity 固定为 accountId + deviceId
-  - pushToken 必须加密存储且同一 token 同时只属于一个 active registration
-  - platform capability 由受信 App attestation 提供，客户端 actor 字段无效
-  - logout 或安全事件可吊销设备，吊销后必须重新登记
+  - DevicePushEndpoint identity 固定为 accountId + deviceId + endpointKind，不能独立于父聚合访问
+  - endpointKind 只允许 apns_voip 或 fcm，同一设备可同时拥有两种 endpoint
+  - token 明文只允许存在于命令/secret reader 内存与内部 HTTP body；持久化只保存 AES-GCM 密文与 keyed fingerprint
+  - 同一 token fingerprint 同时只能属于一个 active endpoint
+  - UpsertDevicePushEndpoint 按 owned identity 自然幂等；token 轮换递增 endpoint 与父聚合 version
+  - RemoveDevicePushEndpoint 清除 token material 并迁移为 revoked；provider 永久失效迁移为 stale
+  - 父聚合在任一 child active 时为 active；无 active child 时按 revoked/stale child 状态同步
 lifecycle:
   states: [active, revoked, stale]
   optimistic_concurrency: version
-  idempotency: command_receipt
+  idempotency: natural_upsert
+  child_states: [active, revoked, stale]
+  child_optimistic_concurrency: version
 ddd_layer_mapping:
   domain_model: internal/domain/account/device_registration/model
   ports: internal/domain/account/device_registration/ports
   application: internal/application/account/device_registration
   persistence: internal/infrastructure/account/device_registration/persistence
+  adapter_rest: internal/adapters/http

@@ -135,11 +135,8 @@ PersonalAssistantProcessSummary _projectProcessSummary(
   }
 
   if (_isAnswerEvent(event)) {
-    finalAnswerSummary = UITextConstants.assistantProcessFinalAnswerNarrative;
-    finalAnswerReady =
-        finalAnswerReady ||
-        event.eventType == 'assistant.answer.final' ||
-        event.eventType == 'final_answer';
+    finalAnswerSummary = AssistantText.assistantProcessFinalAnswerNarrative;
+    finalAnswerReady = finalAnswerReady || event.eventType == 'final_answer';
   }
 
   switch (event.eventType) {
@@ -204,9 +201,7 @@ String _processLineForEvent(AssistantStreamEventWire event) {
     return processingSummary;
   }
   switch (event.eventType) {
-    case 'assistant.answer.delta':
     case 'partial_answer':
-    case 'assistant.answer.final':
     case 'final_answer':
       return '';
     case 'tool_result_received':
@@ -399,12 +394,9 @@ String _retrievalDesignFromSearchPlans(AssistantStreamEventWire event) {
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {
   final text = turn.input['text']?.toString().trim();
   if (text != null && text.isNotEmpty) {
-    return '已打开主动提醒：$text';
+    return AssistantText.assistantProactiveReminderOpened(text);
   }
-  if (turn.skillId.trim().isNotEmpty) {
-    return '已打开主动提醒：${turn.skillId}';
-  }
-  return '已打开主动提醒。';
+  return AssistantText.assistantProactiveReminderOpenedDefault;
 }
 
 List<AssistantTranscriptTimelineRow> _appendOpenedTurnTranscript(
@@ -416,7 +408,7 @@ List<AssistantTranscriptTimelineRow> _appendOpenedTurnTranscript(
     ...current,
     _personalAssistantAssistantRow(
       id: 'proactive_source_${turn.turnId}',
-      text: '来自云侧主动触发',
+      text: AssistantText.assistantProactiveReminderSource,
       turnId: turn.turnId,
       proactive: true,
     ),
@@ -470,7 +462,7 @@ UserTranscriptTimelineRow _personalAssistantUserRow({
     type: 'text',
     content: text,
     senderId: 'current_user',
-    senderName: '我',
+    senderName: AssistantText.assistantCurrentUserSenderName,
     timestamp: _personalAssistantTimestamp(),
     status: '',
     isRead: true,
@@ -849,15 +841,16 @@ ProcessStepId _processStepIdForProcessIndex(int index) {
 String _personalAssistantTimestamp() => DateTime.now().toIso8601String();
 
 String _projectAnswer(String current, AssistantStreamEventWire event) {
+  if (event.eventType == 'answer_reset') {
+    return '';
+  }
   final text = _payloadText(event);
   if (text.isEmpty) {
     return current;
   }
   switch (event.eventType) {
-    case 'assistant.answer.delta':
     case 'partial_answer':
       return '$current$text';
-    case 'assistant.answer.final':
     case 'final_answer':
       return text;
     default:
@@ -867,9 +860,7 @@ String _projectAnswer(String current, AssistantStreamEventWire event) {
 
 bool _isAnswerEvent(AssistantStreamEventWire event) {
   switch (event.eventType) {
-    case 'assistant.answer.delta':
     case 'partial_answer':
-    case 'assistant.answer.final':
     case 'final_answer':
       return true;
     default:
@@ -907,7 +898,8 @@ String _failureMessageForEvent(AssistantStreamEventWire event) {
     return _runtimeFailureMessage(failure);
   }
   if (event.eventType == 'turn_failed') {
-    return '找私助执行遇到问题，请稍后重试。';
+    // 无 runtimeFailure 的 turn_failed 兜底提示；文案归口 UITextConstants。
+    return AssistantText.assistantTurnFailedFallback;
   }
   return '';
 }

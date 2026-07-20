@@ -64,6 +64,20 @@ void main() {
       expect(code, ContentErrorCode.mediaNotReady);
     });
 
+    test('parse_media_file_too_large → mediaFileTooLarge', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.media_file_too_large',
+      );
+      expect(code, ContentErrorCode.mediaFileTooLarge);
+    });
+
+    test('parse_media_type_unsupported → mediaTypeUnsupported', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.media_type_unsupported',
+      );
+      expect(code, ContentErrorCode.mediaTypeUnsupported);
+    });
+
     test('parse_storage_write_failed → storageWriteFailed', () {
       final code = ContentErrorCode.fromCode(
         'CONTENT.SYSTEM.storage_write_failed',
@@ -94,6 +108,14 @@ void main() {
       expect(ContentErrorMessages.zh[ContentErrorCode.postNotFound], isNotNull);
       expect(ContentErrorMessages.zh[ContentErrorCode.rateLimited], isNotNull);
       expect(
+        ContentErrorMessages.zh[ContentErrorCode.mediaFileTooLarge],
+        isNotNull,
+      );
+      expect(
+        ContentErrorMessages.zh[ContentErrorCode.mediaTypeUnsupported],
+        isNotNull,
+      );
+      expect(
         ContentErrorMessages.zh[ContentErrorCode.upstreamTimeout],
         isNotNull,
       );
@@ -117,6 +139,8 @@ void main() {
       'CONTENT.USER.rate_limited': 429,
       'CONTENT.USER.content_too_long': 400,
       'CONTENT.USER.media_not_ready': 400,
+      'CONTENT.USER.media_file_too_large': 413,
+      'CONTENT.USER.media_type_unsupported': 415,
       'CONTENT.SYSTEM.storage_write_failed': 500,
       'CONTENT.SYSTEM.storage_read_failed': 500,
       'CONTENT.SYSTEM.internal_error': 500,
@@ -136,6 +160,8 @@ void main() {
         'CONTENT.USER.rate_limited': 429,
         'CONTENT.USER.content_too_long': 400,
         'CONTENT.USER.media_not_ready': 400,
+        'CONTENT.USER.media_file_too_large': 413,
+        'CONTENT.USER.media_type_unsupported': 415,
       };
       for (final entry in userErrors.entries) {
         expect(

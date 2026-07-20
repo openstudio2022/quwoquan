@@ -38,6 +38,12 @@ type pgColData struct {
 }
 
 func generatePGStore(ctx *genContext, tableName string, table TableDef) error {
+	if strings.TrimSpace(table.Entity) == "" {
+		return fmt.Errorf(
+			"table %s has no entity; mark infrastructure_only when the store is handwritten",
+			tableName,
+		)
+	}
 	dir := filepath.Join(ctx.outputDir(), ctx.source.infrastructurePath("persistence"))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err

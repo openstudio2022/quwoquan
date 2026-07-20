@@ -7,45 +7,64 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: media-processing-helper-read
 scope:
-  summary: media status pipeline 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: completed 上传事实到 MediaAsset ready/rejected 与可发布派生物的单轨状态流水线。
+  in_scope:
+  - durable outbox、worker、FFmpeg/FFprobe、对象存储、聚合终态和 Post 绑定读取。
+  out_of_scope:
+  - 播放器 QoE 与 adaptive streaming。
 gwt_acceptance:
   GWT1:
-    title: media status pipeline GWT
+    title: 视频上传完成后生成可发布 ready 资产
     given:
-    - 前置条件明确。
+    - 用户完成 ownerOnly 视频上传，MediaAsset 状态为 processing 且 outbox 事实已提交。
     when:
-    - 用户或系统动作发生。
+    - 媒体处理 worker 消费事实并运行 ffprobe、转码、封面和预览轨道生成。
     then:
-    - 可观察结果符合预期。
+    - MediaAsset 进入 ready，公开 slice 可读且 ready descriptor 满足视频不变量。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 带音轨与无音轨输入均产生 H.264/AAC progressive fast-start MP4。
+    - width/height/duration/audio/cover/preview manifest 与实际派生对象一致。
+    - Post 发布绑定能读取 ready 资产且只投影 MediaAsset ID 派生的公开引用。
+    edge_cases:
+    - 无音轨视频注入 AAC 静音轨。
+    - 重复 outbox 事实对已 ready 资产 no-op。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/media_asset/events.yaml
+    - quwoquan_service/contracts/metadata/content/media_asset/fields.yaml
+    - quwoquan_service/contracts/metadata/content/media_asset/preview_track_manifest.schema.json
+    performance_points:
+    - 2 秒样例视频在本地集成环境 30 秒内进入 ready。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
+      - layer: api_integration
+        execution_profile: integration
+        suite: media_processing_worker
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_status_pipeline.contract
-        envs: &id001
-        - local
+        - api_integration.content.media.video_ready_with_audio
+        - api_integration.content.media.video_ready_with_injected_silence
+        - api_integration.content.media.invalid_bytes_rejected
+        envs: [beta, gamma]
+        test_object: workflow
+        quality_facet: data_consistency
       - layer: local_contract
-        suite: gwt1_local_contract
+        execution_profile: baseline
+        suite: video_publication_media_contract
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_status_pipeline.gwt1_local_contract
-        envs: *id001
+        - local_contract.content.create.video_media_asset_only_payload
+        envs: [local]
+        test_object: application_service
+        quality_facet: contract
       supporting: []
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

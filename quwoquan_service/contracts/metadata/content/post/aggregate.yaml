@@ -27,15 +27,22 @@ business_rules:
   - 用户发布前内容只存在于端侧 LocalPostDraft；远端 Post 不承载编辑中的草稿
   - SubmitPostPublication 只接受本地草稿唯一且不可变的 publishIntentId，同一意图的任意重放返回同一 Post
   - mediaAssetIds 必须全部 ready、归调用者所有并在 Post 提交前完成公开 slice 物化
+  - SubmitPostPublication 必须依次通过 publication_policy.yaml 的长度、Persona 频控和内容安全准入；安全依赖不可用时只允许创建不可公开的 pending_review Post 并打开人工 Case，禁止 fail-open 发布
   - sourcePostId 仅表达引用发布，不复制或修改源 Post
   - Post 不保存互动计数、Circle placement、审核状态、搜索向量或 URL 投影真相
   - 首次发布不接受调用方版本字段；服务端按 publishIntentId/localDraftId 唯一约束、聚合 CAS、永久字段和事务 outbox 保证幂等
   - 发布后设置修改由服务端内部 version CAS 保护；只有确有多写者覆盖写的操作才可显式声明 If-Match
 lifecycle:
-  states: [published, deleted]
+  states: [pending_review, published, rejected, deleted]
   transitions:
+    - { from: none, command: SubmitPostPublication, to: pending_review }
     - { from: none, command: SubmitPostPublication, to: published }
+    - { from: pending_review, command: ApplyPostModerationDecision, to: published }
+    - { from: pending_review, command: ApplyPostModerationDecision, to: rejected }
+    - { from: published, command: ApplyPostModerationDecision, to: rejected }
     - { from: published, command: DeletePost, to: deleted }
+    - { from: pending_review, command: DeletePost, to: deleted }
+    - { from: rejected, command: DeletePost, to: deleted }
   optimistic_concurrency: server_owned_version
   idempotency: publish_intent_unique_fields_plus_command_receipt
 
@@ -50,9 +57,19 @@ ddd_layer_mapping:
 
 counter_strategy:
   description: |
-    热点 Post 计数使用 Redis 原子递增 + 异步批量回写 MongoDB。
-    避免热点文档高频更新导致 MongoDB 写锁竞争。
-  redis_key: "counter:{postId}:{type}"
-  types: [like, comment, share, view]
-  flush_interval_seconds: 10
-  flush_batch_size: 100
+    Post 只承载可重建计数投影，不拥有互动事实。like 来自 ContentReaction
+    权威去重集合，comment 来自 Comment 权威集合，share 来自
+    OutboundShareFact 权威集合；三者均在 outbox 重放时重算精确值并以 $set
+    投影到 posts 与 rm_discovery_feed。view 来自服务端确认的 impressed 行为事实，
+    以持久 relay 事件 ID 作为水位执行幂等 $inc。禁止另建 Redis 计数真相源或由
+    客户端 shareIntent/shareClick 直接驱动 shareCount。
+  projection_only: true
+  sources:
+    like: content.ContentReaction
+    comment: content.Comment
+    share: content.OutboundShareFact
+    view: content.BehaviorFact.impressed
+  targets: [posts, rm_discovery_feed]
+  replay:
+    exact_set: [like, comment, share]
+    event_watermark_increment: [view]

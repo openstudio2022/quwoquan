@@ -1,0 +1,29 @@
+aggregate: UserSettings
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  执行：flutter test test/local_contract/cloud/user/
+
+scenarios:
+  - name: user_setting_dto_parity
+    description: 端侧 DTO 与 fields.yaml 字段全集对齐（含 calls/appearance/feedPreference）
+    assertions:
+      - all_read_write_fields_present_in_dto
+      - appearance_version_read_only
+
+  - name: settings_write_request_shape
+    description: 四个强类型命令只发送各自声明的 request_fields
+    assertions:
+      - notification_command_never_sends_privacy_fields
+      - appearance_command_carries_apply_scope
+
+  - name: error_code_mapping
+    description: 设置错误码端侧映射
+    cases:
+      - http_status: 400
+        code: USER.SETTING.invalid_call_ringtone
+        expected_dart_const: invalidCallRingtone
+      - http_status: 400
+        code: USER.SETTING.invalid_appearance_scope
+        expected_dart_const: invalidAppearanceScope

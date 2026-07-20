@@ -1,4 +1,4 @@
-# L4 契约/任务：article-magazine-cover（Dark Paper）
+# L3 契约/任务：article-magazine-cover（Dark Paper）
 
 > 2026-06-11 更新（Work Browser V1.0 Dark Paper）：浏览器内文章舞台为**深色纸张杂志阅读**。上一版“白底杂志阅读”不再作为当前真相源；文章必须与图片、视频保持沉浸连续性。页码 `‹ n / m ›` 为页面内容尾部元素（正文后、作者工具栏前），顶部禁止页码；翻页机制复用 `ArticleReaderFlipHost` / 降级 pager。
 

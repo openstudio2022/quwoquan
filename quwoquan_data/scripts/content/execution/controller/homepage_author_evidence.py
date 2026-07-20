@@ -2,24 +2,22 @@
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type
 from content.execution.support import Any, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, ExecutionStateTransition, Mapping, Path, _IMAGE_SOURCE_TEXT_NOISE_PATTERNS, _IMAGE_SOURCE_TEXT_NOISE_TOKENS, _active_spec, _is_homepage_only_execution, data_issue, execution_root, load_execution_state, os, re, read_json, require_domain_etype, save_execution_state, shutil, store, write_json
-def _managed_finished_author_outcomes_by_ref(state: ExecutionStateTransition) -> dict[str, Mapping[str, Any]]:
-    rows: list[Any] = []
-    history = state.agent_run_history
-    if isinstance(history, list):
-        rows.extend(history)
-    last = state.last_agent_run
-    if isinstance(last, Mapping):
-        rows.append(last)
-    outcomes_by_ref: dict[str, Mapping[str, Any]] = {}
-    for run in rows:
-        if not isinstance(run, Mapping) or str(run.get("stage") or "") != "post_author":
+
+
+def _managed_finished_author_outcomes_by_ref(
+    state: ExecutionStateTransition,
+) -> dict[str, "AgentRunOutcome"]:
+    from content.execution.agent.history import state_managed_agent_runs
+
+    outcomes_by_ref: dict[str, "AgentRunOutcome"] = {}
+    for run in state_managed_agent_runs(state):
+        if run.stage.value != "post_author":
             continue
-        for outcome in run.get("outcomes") or []:
-            if not isinstance(outcome, Mapping) or str(outcome.get("status") or "") != "finished":
+        for job_outcome in run.outcomes:
+            if not job_outcome.succeeded:
                 continue
-            ref = str(outcome.get("ref") or "").strip()
-            if ref:
-                outcomes_by_ref[ref] = outcome
+            if job_outcome.ref:
+                outcomes_by_ref[job_outcome.ref] = job_outcome.outcome
     return outcomes_by_ref
 
 def _image_source_text_semantic_tokens(text: str) -> list[str]:
@@ -145,8 +143,8 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
             if finalize_video_author_meta(
                 ctx.execution_id,
                 ref,
-                run_id=str(outcome.get("runId") or meta.get("agentRunId") or ""),
-                agent_id=outcome.get("agentId") or meta.get("agentId"),
+                run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
+                agent_id=outcome.agent_id or meta.get("agentId"),
                 model=str(meta.get("model") or ctx.model or ""),
             ):
                 finalized += 1
@@ -178,8 +176,8 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                     "generator": "image_evidence_pack",
                     "status": "completed",
                     "model": meta.get("model") or ctx.model,
-                    "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
-                    "agentId": outcome.get("agentId") or meta.get("agentId"),
+                    "agentRunId": outcome.run_id or meta.get("agentRunId"),
+                    "agentId": outcome.agent_id or meta.get("agentId"),
                     "citedSourcePaths": [str(item) for item in cited_paths],
                     "promptSha256": facts.get("promptSha256"),
                     "writingPackSha256": facts.get("writingPackSha256"),
@@ -215,8 +213,8 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 "generator": "agent",
                 "status": "completed",
                 "model": meta.get("model") or ctx.model,
-                "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
-                "agentId": outcome.get("agentId") or meta.get("agentId"),
+                "agentRunId": outcome.run_id or meta.get("agentRunId"),
+                "agentId": outcome.agent_id or meta.get("agentId"),
                 "citedSourcePaths": [str(item) for item in cited_paths],
                 "promptSha256": facts.get("promptSha256"),
                 "writingPackSha256": facts.get("writingPackSha256"),
@@ -255,7 +253,7 @@ def _write_homepage_author_evidence(
     domain: str,
     etype: str,
     entity: str,
-    outcome: Mapping[str, Any],
+    outcome: "AgentRunOutcome",
     draft_meta: Mapping[str, Any],
 ) -> None:
     """Mint controller evidence from one finished Cursor author run.
@@ -271,6 +269,8 @@ def _write_homepage_author_evidence(
         sha256_file,
         validate_agent_result_envelope,
     )
+    from content.execution.agent.outcome import AgentRunOutcome
+    from content.execution.queue.core import stable_job_id
     from content.post.article.draft_io import is_placeholder
     from core.schema import assert_valid
     from governance.coverage.entity_extract import entity_ref
@@ -282,10 +282,10 @@ def _write_homepage_author_evidence(
         raise ValueError("homepage author evidence requires page.md, prompt.md, and author_job_packet.json")
     packet = read_json(packet_path)
     object_ref = entity_ref(domain, etype, entity)
-    run_id = str(outcome.get("runId") or "").strip()
-    provider = str(
-        outcome.get("agentProvider") or draft_meta.get("provider") or ctx.agent_provider or ""
-    ).strip()
+    if not outcome.succeeded:
+        raise ValueError("homepage author evidence requires a finished AgentRunOutcome")
+    run_id = outcome.run_id
+    provider = outcome.provider.value
     model = str(draft_meta.get("model") or ctx.model or "").strip()
     prompt_sha = str(draft_meta.get("promptSha256") or "").strip()
     draft_sha = sha256_file(page_path)
@@ -337,10 +337,10 @@ def _write_homepage_author_evidence(
     )
     envelope = build_agent_result_envelope(
         job={
-            "jobId": f"homepage-author:{ctx.execution_id}:{object_ref}",
+            "jobId": stable_job_id(ctx.execution_id, object_ref, "author"),
             "executionId": ctx.execution_id,
             "ref": object_ref,
-            "stage": "homepage_author",
+            "stage": "author",
         },
         files=[{"path": "page.md", "sha256": draft_sha, "role": "homepage_draft"}],
         gates=[gate],
@@ -348,7 +348,7 @@ def _write_homepage_author_evidence(
         model=model,
         run_id=run_id,
         prompt_sha256=prompt_sha,
-        agent_id=str(outcome.get("agentId") or "").strip() or None,
+        agent_id=outcome.agent_id or None,
     )
     assert_valid(self_check, "content", "author_self_check", label=f"author_self_check:{entity}")
     assert_valid(envelope, "content", "agent_result_envelope", label=f"agent_result_envelope:{entity}")

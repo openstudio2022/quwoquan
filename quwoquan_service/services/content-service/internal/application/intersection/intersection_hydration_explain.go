@@ -384,13 +384,14 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 	case "sharedCircle", "coMemberCircle":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
-			return ""
+			// §20.4 降级链第二级：无可证圈子名时用锚点真实计数作宾语，不造名不隐瞒。
+			return countedFallbackPrimaryText(r, anchor, n)
 		}
 		return fmt.Sprintf("%s都加入了%s", representativeSubject(r, anchor, n), objectName)
 	case "coCommented", "sharedDiscussion":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
-			return ""
+			return countedFallbackPrimaryText(r, anchor, n)
 		}
 		if action := interactionActionPhraseForReason(r); action != "" {
 			return fmt.Sprintf("%s%s%s", representativeSubject(r, anchor, n), action, objectName)
@@ -414,19 +415,19 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 	case "coVisitedEntity":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
-			return ""
+			return countedFallbackPrimaryText(r, anchor, n)
 		}
 		return fmt.Sprintf("%s都去过%s", representativeSubject(r, anchor, n), objectName)
 	case "coWishlistedEntity":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
-			return ""
+			return countedFallbackPrimaryText(r, anchor, n)
 		}
 		return fmt.Sprintf("%s都想去%s", representativeSubject(r, anchor, n), objectName)
 	case "sharedEntityAttention":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
-			return ""
+			return countedFallbackPrimaryText(r, anchor, n)
 		}
 		return fmt.Sprintf("%s也关注了%s", representativeSubject(r, anchor, n), objectName)
 	case "followeeVisited":
@@ -481,8 +482,27 @@ func concreteObjectNameForReason(r IntersectionReasonView) string {
 	}
 }
 
+// containerObjectNameForReason 解析「容器/第三方对象位」（圈子/地点/内容/实体）的名字。
+// person reason 的 DisplayName 是对方人名，禁止冒充容器对象名（V3 修复：
+// 曾产出「…都加入了『<人名>』」错句）；无真实容器名时返回空，由调用方降级为
+// 纯计数句或隐藏（§20.4 降级链），不造名。
+func containerObjectNameForReason(r IntersectionReasonView) string {
+	if strings.TrimSpace(r.ObjectKind) == "person" {
+		return ""
+	}
+	return concreteObjectNameForReason(r)
+}
+
 func renderedObjectNameForReason(r IntersectionReasonView, kind string) string {
-	name := concreteObjectNameForReason(r)
+	var name string
+	switch kind {
+	case "sharedFollowees", "commonFollower":
+		// 宾语=被共同关注的人本身，人名合法。
+		name = concreteObjectNameForReason(r)
+	default:
+		// 宾语=圈子/地点/内容/实体等第三方对象，人名不得占位（V3）。
+		name = containerObjectNameForReason(r)
+	}
 	if name == "" {
 		return ""
 	}
@@ -492,6 +512,62 @@ func renderedObjectNameForReason(r IntersectionReasonView, kind string) string {
 	default:
 		return "「" + name + "」"
 	}
+}
+
+// countedFallbackObjectPhrase 是容器对象名缺失时的纯计数宾语（§20.4 降级链第二级：
+// 具名样本 → 纯计数 → 隐藏）。count 来自锚点真实计数，可证；不足 1 视为不可降级。
+func countedFallbackObjectPhrase(kind string, count int) string {
+	if count <= 0 {
+		return ""
+	}
+	switch kind {
+	case "sharedCircle", "coMemberCircle":
+		return fmt.Sprintf("%d个共同圈子", count)
+	case "coCommented", "sharedDiscussion":
+		return fmt.Sprintf("%d条相同内容", count)
+	case "coVisitedEntity":
+		return fmt.Sprintf("%d个相同的地方", count)
+	case "coWishlistedEntity":
+		return fmt.Sprintf("%d个相同的地方", count)
+	case "sharedEntityAttention":
+		return fmt.Sprintf("%d个相同对象", count)
+	default:
+		return ""
+	}
+}
+
+// countedFallbackPredicate 是计数降级句的谓语（与 spans 模板共享，保证
+// join(primarySpans.text)==primaryText 不变量在降级形态下同样成立）。
+func countedFallbackPredicate(kind string) string {
+	switch kind {
+	case "sharedCircle", "coMemberCircle":
+		return "和你都加入了"
+	case "coCommented", "sharedDiscussion":
+		return "和你都讨论过"
+	case "coVisitedEntity":
+		return "和你都去过"
+	case "coWishlistedEntity":
+		return "和你都想去"
+	case "sharedEntityAttention":
+		return "和你都关注了"
+	default:
+		return ""
+	}
+}
+
+// countedFallbackPrimaryText 组装计数降级结论句：主语（代表人）+ 谓语 + 纯计数宾语。
+// 与 primaryStatementSpansForReason 的降级分支同源（同一 predicate/phrase 函数）。
+func countedFallbackPrimaryText(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
+	predicate := countedFallbackPredicate(anchor.SourceRef)
+	phrase := countedFallbackObjectPhrase(anchor.SourceRef, anchor.Count)
+	if predicate == "" || phrase == "" {
+		return ""
+	}
+	subject := representativeSubject(r, anchor, n)
+	if strings.TrimSpace(subject) == "" {
+		return ""
+	}
+	return subject + predicate + phrase
 }
 
 func sharedTagSampleObjectName(r IntersectionReasonView, anchor IntersectionPointView) string {

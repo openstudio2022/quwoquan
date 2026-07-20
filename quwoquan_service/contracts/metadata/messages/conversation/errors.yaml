@@ -185,6 +185,50 @@ errors:
       zh: "存在已屏蔽的成员，无法发起群聊"
       en: "Cannot start a group while some members are blocked"
 
+  - code: CHAT.USER.group_governance_forbidden
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: groupGovernanceForbidden
+    go_const: ErrGroupGovernanceForbidden
+    user_message:
+      zh: "只有群主或管理员可以执行该操作"
+      en: "Only the group owner or an admin can perform this action"
+
+  - code: CHAT.USER.group_full
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: groupFull
+    go_const: ErrGroupFull
+    user_message:
+      zh: "群成员已达上限"
+      en: "The group has reached its member limit"
+
+  - code: CHAT.USER.conversation_dissolved
+    kind: USER
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: conversationDissolved
+    go_const: ErrConversationDissolved
+    user_message:
+      zh: "该群聊已解散"
+      en: "This group has been dissolved"
+
+  - code: CHAT.USER.group_owner_must_transfer_before_leave
+    kind: USER
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: groupOwnerMustTransferBeforeLeave
+    go_const: ErrGroupOwnerMustTransferBeforeLeave
+    user_message:
+      zh: "群主退群前需先转让群主"
+      en: "Transfer ownership before leaving the group"
+
   - code: CHAT.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

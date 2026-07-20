@@ -1,51 +1,88 @@
-import 'dart:io';
-
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/user/pages/add_contact_page.dart';
+import '../../../../support/fakes/contact_profile_queries.dart';
 
-File _repoFile(String path) {
-  final direct = File(path);
-  if (direct.existsSync()) {
-    return direct;
-  }
-  return File('../$path');
-}
+const _qrCard = ProfileQrCardData(
+  publicProfileUrl: 'https://app.quwoquan.com/u/current',
+  qrPayload: 'https://app.quwoquan.com/u/current?qr=fixture',
+  qrTokenId: 'fixture-qr',
+  styleVersion: 'v1',
+  avatarUrl: '',
+  displayName: '当前用户',
+  region: '杭州',
+  shareText: 'https://app.quwoquan.com/u/current?qr=fixture',
+);
 
 void main() {
-  test('addContact page coverage evidence is declared', () {
-    const surfaceId = 'addContact';
-    const owner = 'user';
-    const routeId = 'addContact';
-    const sourceEvidence = <String>[
-    'quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart',
-    'quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart',
-  ];
-    const apiEvidence = <String>[
-    'quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go',
-    'quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go',
-  ];
-    const requiredCaseIds = <String>[
-    'user_acceptance.page.addContact.load_success',
-    'user_acceptance.page.addContact.empty_permission_error',
-    'user_acceptance.page.addContact.primary_cta',
-    'user_acceptance.page.addContact.trace_context',
-    'user_acceptance.page.addContact.request_wait_recovery',
-  ];
+  testWidgets('添加联系人主页真实承载搜索、扫码、通讯录与二维码入口', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/add-contact',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/add-contact',
+          builder: (_, _) => const AddContactPage(),
+        ),
+        GoRoute(
+          path: '/add-contact/search',
+          builder: (_, _) => const Text('search-destination'),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          profileEditQueryProvider.overrideWith(
+            (ref, surface) => ContactProfileEditQueryFake(qrCard: _qrCard),
+          ),
+          contactDiscoveryRepositoryProvider.overrideWith(
+            (ref) => _EmptyContactDiscoveryRepository(),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    expect(surfaceId, isNotEmpty);
-    expect(owner, isNotEmpty);
-    expect(routeId, isNotEmpty);
-    expect(sourceEvidence, isNotEmpty);
-    expect(apiEvidence, isNotEmpty);
-    expect(requiredCaseIds, containsAll(<String>[
-      'user_acceptance.page.$surfaceId.load_success',
-      'user_acceptance.page.$surfaceId.empty_permission_error',
-      'user_acceptance.page.$surfaceId.primary_cta',
-      'user_acceptance.page.$surfaceId.trace_context',
-      'user_acceptance.page.$surfaceId.request_wait_recovery',
-    ]));
+    expect(
+      find.text(UITextConstants.addContactSearchHubPlaceholder),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.editProfileQrScanAction), findsOneWidget);
+    expect(
+      find.text(UITextConstants.addContactPhoneEntryTitle),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.editProfileQrCardHeading), findsOneWidget);
 
-    for (final path in <String>[...sourceEvidence, ...apiEvidence]) {
-      expect(_repoFile(path).existsSync(), isTrue, reason: path);
-    }
+    await tester.tap(
+      find.byKey(const ValueKey<String>('add-contact-search-entry')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('search-destination'), findsOneWidget);
   });
+}
+
+final class _EmptyContactDiscoveryRepository
+    implements ContactDiscoveryRepository {
+  @override
+  Future<void> dismiss(String id) async {}
+
+  @override
+  Future<ContactDiscoveryResultView?> getLatest() async => null;
+
+  @override
+  Future<ContactDiscoveryResultView> initiate(List<String> hashedPhones) async {
+    return ContactDiscoveryResultView.empty;
+  }
 }

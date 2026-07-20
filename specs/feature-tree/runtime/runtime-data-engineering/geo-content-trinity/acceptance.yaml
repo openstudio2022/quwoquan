@@ -47,6 +47,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: geo_content_rights
         cases:
         - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1.rights
@@ -85,11 +86,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: geo_content_partial_delivery
         cases:
         - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt2.partial_delivery
         envs: [local]
       - layer: api_integration
+        execution_profile: integration
         suite: geo_content_release
         cases:
         - api_integration.runtime.runtime_data_engineering.geo_content_trinity.gwt2.release
@@ -100,5 +103,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

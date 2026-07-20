@@ -37,13 +37,15 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
           .read(oneTapLoginClientProvider)
           .requestLoginToken();
       await ref
-          .read(authRepositoryProvider)
-          .bindCarrierPhone(
-            vendor: token.vendor,
-            carrierToken: token.carrierToken,
-            deviceId: '',
-            platform: CloudRequestHeaders.platform(),
-            displayLabel: token.maskedPhone,
+          .read(appCredentialBindingCommandWriterProvider)
+          .bindCarrierPhoneCredential(
+            BindCarrierPhoneCredentialCommand(
+              vendor: token.vendor,
+              carrierToken: token.carrierToken,
+              deviceId: ref.read(authSessionControllerProvider).installId,
+              platform: CloudRequestHeaders.platform(),
+              displayLabel: token.maskedPhone,
+            ),
           );
       if (!mounted) {
         return;
@@ -53,6 +55,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         displayLabel: token.maskedPhone,
         isBound: true,
       );
+      _trackPhoneAction('carrier_phone_bind', 'succeeded');
       AppToast.show(context, UITextConstants.editProfilePhoneBindSuccess);
       Navigator.of(context).pop(credential);
     } catch (error) {
@@ -60,6 +63,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         return;
       }
       setState(() => _busy = false);
+      _trackPhoneAction('carrier_phone_bind', 'failed');
       await _showPhoneError(error);
     }
   }
@@ -72,12 +76,14 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
     setState(() => _busy = true);
     try {
       await ref
-          .read(authRepositoryProvider)
+          .read(authenticationChallengeCommandWriterProvider)
           .sendOtp(
-            phone: phone,
-            platform: CloudRequestHeaders.platform(),
-            appVersion: CloudRequestHeaders.appVersion,
-            sourceOperation: 'bind_phone',
+            SendOtpCommand(
+              phone: phone,
+              platform: CloudRequestHeaders.platform(),
+              appVersion: CloudRequestHeaders.appVersion,
+              sourceOperation: 'bind_phone',
+            ),
           );
       if (mounted) {
         setState(() => _busy = false);
@@ -100,8 +106,10 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
     setState(() => _busy = true);
     try {
       await ref
-          .read(authRepositoryProvider)
-          .bindPhoneWithOtp(phone: phone, otpCode: otp);
+          .read(appCredentialBindingCommandWriterProvider)
+          .bindPhoneCredential(
+            BindPhoneCredentialCommand(phone: phone, otpCode: otp),
+          );
       if (!mounted) {
         return;
       }
@@ -110,6 +118,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         displayLabel: _maskPhone(phone),
         isBound: true,
       );
+      _trackPhoneAction('otp_phone_bind', 'succeeded');
       AppToast.show(context, UITextConstants.editProfilePhoneBindSuccess);
       Navigator.of(context).pop(credential);
     } catch (error) {
@@ -117,6 +126,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         return;
       }
       setState(() => _busy = false);
+      _trackPhoneAction('otp_phone_bind', 'failed');
       await _showPhoneError(error);
     }
   }
@@ -146,6 +156,19 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         presentation: resolved.presentation,
         tone: resolved.tone,
       ),
+    );
+  }
+
+  void _trackPhoneAction(String action, String outcome) {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'profile_edit',
+            action: 'phone_$action',
+            pageName: 'EditProfilePage',
+            payload: <String, dynamic>{'result': outcome},
+          ),
     );
   }
 

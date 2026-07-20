@@ -227,6 +227,99 @@ func (s *MemoryStore) ClaimReadyTaskByID(ctx context.Context, taskID string, wor
 	return &task, nil
 }
 
+func (s *MemoryStore) ListReadyTasks(
+	ctx context.Context,
+	taskTypes []string,
+	limit int,
+	now time.Time,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	tasks := make([]ReliableAsyncTask, 0, limit)
+	for _, task := range s.tasks {
+		if len(taskTypes) > 0 && !contains(task.TaskType, taskTypes) {
+			continue
+		}
+		leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
+		eligible := task.Status == TaskStatusReady ||
+			task.Status == TaskStatusRetryWait ||
+			(task.Status == TaskStatusProcessing && leaseExpired)
+		if !eligible || task.NextAttemptAt.After(now) {
+			continue
+		}
+		task.Payload = CloneStringMap(task.Payload)
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].NextAttemptAt.Equal(tasks[j].NextAttemptAt) {
+			return tasks[i].TaskID < tasks[j].TaskID
+		}
+		return tasks[i].NextAttemptAt.Before(tasks[j].NextAttemptAt)
+	})
+	if len(tasks) > limit {
+		tasks = tasks[:limit]
+	}
+	return tasks, nil
+}
+
+func (s *MemoryStore) RenewTaskLease(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	leaseTTL time.Duration,
+	now time.Time,
+) (time.Time, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return time.Time{}, ErrTaskNotFound
+	}
+	now = now.UTC()
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != strings.TrimSpace(leaseToken) ||
+		!task.LeaseUntil.After(now) {
+		return time.Time{}, ErrLeaseMismatch
+	}
+	if leaseTTL <= 0 {
+		leaseTTL = 30 * time.Second
+	}
+	task.LeaseUntil = now.Add(leaseTTL).UTC()
+	task.UpdatedAt = now
+	s.tasks[task.TaskID] = task
+	return task.LeaseUntil, nil
+}
+
+func (s *MemoryStore) RecordTaskResult(
+	ctx context.Context,
+	taskID string,
+	leaseToken string,
+	result map[string]string,
+	now time.Time,
+) error {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return ErrTaskNotFound
+	}
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != strings.TrimSpace(leaseToken) ||
+		!task.LeaseUntil.After(now.UTC()) {
+		return ErrLeaseMismatch
+	}
+	task.Result = CloneStringMap(result)
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return nil
+}
+
 func (s *MemoryStore) CompleteTask(ctx context.Context, taskID string, leaseToken string) error {
 	_ = ctx
 	s.mu.Lock()
@@ -235,7 +328,9 @@ func (s *MemoryStore) CompleteTask(ctx context.Context, taskID string, leaseToke
 	if !ok {
 		return ErrTaskNotFound
 	}
-	if task.LeaseToken != leaseToken {
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != leaseToken ||
+		!task.LeaseUntil.After(time.Now().UTC()) {
 		return ErrLeaseMismatch
 	}
 	task.Status = TaskStatusSucceeded
@@ -254,7 +349,9 @@ func (s *MemoryStore) FailTask(ctx context.Context, taskID string, leaseToken st
 	if !ok {
 		return ErrTaskNotFound
 	}
-	if task.LeaseToken != leaseToken {
+	if task.Status != TaskStatusProcessing ||
+		task.LeaseToken != leaseToken ||
+		!task.LeaseUntil.After(now.UTC()) {
 		return ErrLeaseMismatch
 	}
 	task.Attempts++
@@ -522,6 +619,30 @@ func (s *MemoryStore) ListDeadTasks(ctx context.Context, taskTypes []string, lim
 		}
 	}
 	return out, nil
+}
+
+// FindLatestTaskOutboxByAggregateID 与 Mongo store 行为对齐：返回聚合的
+// 最新任务 outbox 记录，供外部交互请求状态查询派生归一化状态。
+func (s *MemoryStore) FindLatestTaskOutboxByAggregateID(
+	ctx context.Context,
+	aggregateID string,
+) (TaskOutboxRecord, bool, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	aggregateID = strings.TrimSpace(aggregateID)
+	var latest TaskOutboxRecord
+	found := false
+	for _, record := range s.outboxes {
+		if record.AggregateID != aggregateID {
+			continue
+		}
+		if !found || record.UpdatedAt.After(latest.UpdatedAt) {
+			latest = record
+			found = true
+		}
+	}
+	return latest, found, nil
 }
 
 func (s *MemoryStore) RecoverDeadTask(ctx context.Context, taskID string, now time.Time) error {

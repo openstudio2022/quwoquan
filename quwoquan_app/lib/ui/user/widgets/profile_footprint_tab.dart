@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/my_footprint_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 
@@ -59,7 +60,7 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
     return UiErrorSemantic(
       category: resolved.category,
       scope: resolved.scope,
-      title: '${UITextConstants.myFootprintTitle}暂不可用',
+      title: UITextConstants.myFootprintUnavailableTitle,
       message: resolved.message,
       secondaryMessage: resolved.secondaryMessage,
       primaryAction:
@@ -123,13 +124,38 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
             AppSpacing.containerMd,
             AppSpacing.intraGroupSm,
           ),
-          child: Text(
-            UITextConstants.myFootprintPrivacyHint,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-              height: AppSpacing.textLineHeightCaption,
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  UITextConstants.myFootprintPrivacyHint,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: AppColors.iosSecondaryLabel(context),
+                    height: AppSpacing.textLineHeightCaption,
+                  ),
+                ),
+              ),
+              SizedBox(width: AppSpacing.intraGroupSm),
+              CupertinoButton(
+                key: const ValueKey<String>('profile-footprint-view-all'),
+                padding: EdgeInsets.zero,
+                minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                onPressed: () => context.push(
+                  AppRoutePaths.myFootprint(
+                    type: _selectedType.isEmpty ? null : _selectedType,
+                  ),
+                ),
+                child: Text(
+                  UITextConstants.searchViewAll,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         _buildBody(context, state),
@@ -226,15 +252,17 @@ class _FootprintInlineTile extends StatelessWidget {
   final FootprintEntry entry;
   final VoidCallback onTap;
 
-  String _relativeTime() {
+  String _relativeTime(BuildContext context) {
     final time = DateTime.tryParse(entry.occurredAt);
     if (time == null) return '';
+    final l10n = context.l10n;
     final diff = DateTime.now().toUtc().difference(time.toUtc());
-    if (diff.inMinutes < 1) return AppStrings.justNow;
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) return '${diff.inHours}小时前';
-    if (diff.inDays < 30) return '${diff.inDays}天前';
-    return '${time.toLocal().month}月${time.toLocal().day}日';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inHours < 1) return l10n.minutesAgoTemplate(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
+    if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
+    final local = time.toLocal();
+    return l10n.monthDayTemplate(local.month, local.day);
   }
 
   @override
@@ -291,7 +319,7 @@ class _FootprintInlineTile extends StatelessWidget {
                       <String>[
                         if (post != null && post.displayName.trim().isNotEmpty)
                           post.displayName.trim(),
-                        _relativeTime(),
+                        _relativeTime(context),
                       ].where((text) => text.trim().isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

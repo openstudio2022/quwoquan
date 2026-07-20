@@ -11,14 +11,16 @@ from pydantic import BaseModel, ConfigDict
 class LearningEvent(BaseModel):
     """Read model: LearningEvents, collection: rec_learning_events"""
     _id: str | None = None
+    eventId: str | None = None
     userId: str | None = None
-    sessionId: str | None = None
+    personaId: str | None = None
     scenario: str | None = None
     eventType: str | None = None
     targetId: str | None = None
-    targetType: str | None = None
-    payload: dict[str, Any] | None = None
-    ts: float | None = None
+    labels: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    occurredAt: float | None = None
+    createdAt: float | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -29,11 +31,14 @@ class TrainingSample(BaseModel):
     scenario: str | None = None
     userId: str | None = None
     targetId: str | None = None
+    requestId: str | None = None
     userFeatures: dict[str, Any] | None = None
     itemFeatures: dict[str, Any] | None = None
     contextFeatures: dict[str, Any] | None = None
     labels: dict[str, Any] | None = None
     ts: float | None = None
+    featureSnapshotAt: float | None = None
+    featureLagSeconds: dict[str, Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 

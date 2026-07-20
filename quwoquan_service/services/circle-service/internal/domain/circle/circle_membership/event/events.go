@@ -3,7 +3,9 @@ package event
 
 // Event type constants for CircleMembership.
 const (
+	CircleMembershipRequested   = "CircleMembershipRequested"
 	CircleMembershipJoined      = "CircleMembershipJoined"
 	CircleMembershipLeft        = "CircleMembershipLeft"
 	CircleMembershipRoleChanged = "CircleMembershipRoleChanged"
+	CircleMembershipRejected    = "CircleMembershipRejected"
 )

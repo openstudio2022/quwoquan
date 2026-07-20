@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -10,6 +12,35 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
+
+final ImageEditorFilterRepository _filterRepository =
+    ImageEditorFilterRepository(
+      catalogLoader: () async => const ImageEditorFilterConfig(
+        releaseId: 'test-filter-release',
+        canonicalDigest:
+            'b7285b97911eccf95828beb2dc8ba34cc47d2eb3a36957aba8a36564f8c468a3',
+        categories: <ImageEditorFilterCategory>[
+          ImageEditorFilterCategory(
+            id: 'camera_photo',
+            label: '相机',
+            sort: 0,
+            enabled: true,
+          ),
+        ],
+        presets: <ImageEditorFilterPreset>[
+          ImageEditorFilterPreset(
+            id: 'original',
+            categoryId: 'camera_photo',
+            name: '原图',
+            sort: 0,
+            enabled: true,
+            defaultStrength: 0,
+            adjustments: ImageEditorFilterAdjustments(),
+          ),
+        ],
+        recommendedFallbackPresetIds: <String>['original'],
+      ),
+    );
 
 void main() {
   group('video media picker dark flow', () {
@@ -67,6 +98,7 @@ void main() {
           home: CreateMediaPickerPage(
             entryMode: MediaPickerEntryMode.video,
             maxSelection: 1,
+            filterRepository: _filterRepository,
             mediaPickerService: service,
           ),
         ),

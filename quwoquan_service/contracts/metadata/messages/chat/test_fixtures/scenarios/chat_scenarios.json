@@ -24952,7 +24952,7 @@
             "displayName": "契约同伴一",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
-            "role": "member",
+            "role": "admin",
             "isCurrentUser": false
           },
           {
@@ -25012,7 +25012,7 @@
             "displayName": "契约同伴一",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
-            "role": "member",
+            "role": "admin",
             "isCurrentUser": false
           },
           {
@@ -31153,7 +31153,7 @@
       },
       "userStates": [
         {
-          "_id": "fixture_state_fixture_conv_direct_current",
+          "id": "fixture_state_fixture_conv_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct",
           "readSeq": 5,
@@ -31164,7 +31164,7 @@
           "updatedAt": "2026-06-10T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_group_current",
+          "id": "fixture_state_fixture_conv_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_group",
           "readSeq": 7,
@@ -31175,7 +31175,7 @@
           "updatedAt": "2026-06-10T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photo_group_current",
+          "id": "fixture_state_fixture_conv_photo_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photo_group",
           "readSeq": 7,
@@ -31186,7 +31186,7 @@
           "updatedAt": "2026-06-10T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_group_current",
+          "id": "fixture_state_fixture_conv_travel_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_group",
           "readSeq": 7,
@@ -31197,7 +31197,7 @@
           "updatedAt": "2026-06-10T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_article_direct_current",
+          "id": "fixture_state_fixture_conv_article_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_article_direct",
           "readSeq": 5,
@@ -31208,7 +31208,7 @@
           "updatedAt": "2026-06-10T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_friend_current",
+          "id": "fixture_state_fixture_conv_direct_current_friend_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_friend",
           "readSeq": 5,
@@ -31219,7 +31219,7 @@
           "updatedAt": "2026-06-10T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_photo_current",
+          "id": "fixture_state_fixture_conv_direct_current_photo_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_photo",
           "readSeq": 5,
@@ -31230,7 +31230,7 @@
           "updatedAt": "2026-06-10T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_article_current",
+          "id": "fixture_state_fixture_conv_direct_current_article_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_article",
           "readSeq": 5,
@@ -31241,7 +31241,7 @@
           "updatedAt": "2026-06-10T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_01_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_01",
           "readSeq": 5,
@@ -31252,7 +31252,7 @@
           "updatedAt": "2026-06-10T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_02_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_02",
           "readSeq": 5,
@@ -31263,7 +31263,7 @@
           "updatedAt": "2026-06-10T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_03_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_03",
           "readSeq": 5,
@@ -31274,7 +31274,7 @@
           "updatedAt": "2026-06-11T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_04_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_04",
           "readSeq": 5,
@@ -31285,7 +31285,7 @@
           "updatedAt": "2026-06-11T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_05_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_05",
           "readSeq": 5,
@@ -31296,7 +31296,7 @@
           "updatedAt": "2026-06-11T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_06_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_06",
           "readSeq": 5,
@@ -31307,7 +31307,7 @@
           "updatedAt": "2026-06-11T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_07_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_07",
           "readSeq": 5,
@@ -31318,7 +31318,7 @@
           "updatedAt": "2026-06-11T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_01_current",
+          "id": "fixture_state_fixture_conv_direct_photography_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_01",
           "readSeq": 5,
@@ -31329,7 +31329,7 @@
           "updatedAt": "2026-06-11T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_02_current",
+          "id": "fixture_state_fixture_conv_direct_photography_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_02",
           "readSeq": 5,
@@ -31340,7 +31340,7 @@
           "updatedAt": "2026-06-11T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_03_current",
+          "id": "fixture_state_fixture_conv_direct_photography_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_03",
           "readSeq": 5,
@@ -31351,7 +31351,7 @@
           "updatedAt": "2026-06-11T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_04_current",
+          "id": "fixture_state_fixture_conv_direct_photography_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_04",
           "readSeq": 5,
@@ -31362,7 +31362,7 @@
           "updatedAt": "2026-06-11T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_05_current",
+          "id": "fixture_state_fixture_conv_direct_photography_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_05",
           "readSeq": 5,
@@ -31373,7 +31373,7 @@
           "updatedAt": "2026-06-11T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_06_current",
+          "id": "fixture_state_fixture_conv_direct_photography_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_06",
           "readSeq": 5,
@@ -31384,7 +31384,7 @@
           "updatedAt": "2026-06-11T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_07_current",
+          "id": "fixture_state_fixture_conv_direct_photography_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_07",
           "readSeq": 5,
@@ -31395,7 +31395,7 @@
           "updatedAt": "2026-06-11T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_01_current",
+          "id": "fixture_state_fixture_conv_direct_travel_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_01",
           "readSeq": 5,
@@ -31406,7 +31406,7 @@
           "updatedAt": "2026-06-12T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_02_current",
+          "id": "fixture_state_fixture_conv_direct_travel_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_02",
           "readSeq": 5,
@@ -31417,7 +31417,7 @@
           "updatedAt": "2026-06-12T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_03_current",
+          "id": "fixture_state_fixture_conv_direct_travel_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_03",
           "readSeq": 5,
@@ -31428,7 +31428,7 @@
           "updatedAt": "2026-06-12T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_04_current",
+          "id": "fixture_state_fixture_conv_direct_travel_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_04",
           "readSeq": 5,
@@ -31439,7 +31439,7 @@
           "updatedAt": "2026-06-12T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_05_current",
+          "id": "fixture_state_fixture_conv_direct_travel_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_05",
           "readSeq": 5,
@@ -31450,7 +31450,7 @@
           "updatedAt": "2026-06-12T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_06_current",
+          "id": "fixture_state_fixture_conv_direct_travel_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_06",
           "readSeq": 5,
@@ -31461,7 +31461,7 @@
           "updatedAt": "2026-06-12T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_07_current",
+          "id": "fixture_state_fixture_conv_direct_travel_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_07",
           "readSeq": 5,
@@ -31472,7 +31472,7 @@
           "updatedAt": "2026-06-12T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_01_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_01",
           "readSeq": 5,
@@ -31483,7 +31483,7 @@
           "updatedAt": "2026-06-12T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_02_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_02",
           "readSeq": 5,
@@ -31494,7 +31494,7 @@
           "updatedAt": "2026-06-12T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_03_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_03",
           "readSeq": 5,
@@ -31505,7 +31505,7 @@
           "updatedAt": "2026-06-12T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_04_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_04",
           "readSeq": 5,
@@ -31516,7 +31516,7 @@
           "updatedAt": "2026-06-12T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_05_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_05",
           "readSeq": 5,
@@ -31527,7 +31527,7 @@
           "updatedAt": "2026-06-12T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_06_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_06",
           "readSeq": 5,
@@ -31538,7 +31538,7 @@
           "updatedAt": "2026-06-13T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_07_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_07",
           "readSeq": 5,
@@ -31549,7 +31549,7 @@
           "updatedAt": "2026-06-13T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_01_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_01",
           "readSeq": 5,
@@ -31560,7 +31560,7 @@
           "updatedAt": "2026-06-13T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_02_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_02",
           "readSeq": 5,
@@ -31571,7 +31571,7 @@
           "updatedAt": "2026-06-13T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_03_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_03",
           "readSeq": 5,
@@ -31582,7 +31582,7 @@
           "updatedAt": "2026-06-13T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_04_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_04",
           "readSeq": 5,
@@ -31593,7 +31593,7 @@
           "updatedAt": "2026-06-13T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_05_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_05",
           "readSeq": 5,
@@ -31604,7 +31604,7 @@
           "updatedAt": "2026-06-13T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_06_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_06",
           "readSeq": 5,
@@ -31615,7 +31615,7 @@
           "updatedAt": "2026-06-13T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_07_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_07",
           "readSeq": 5,
@@ -31626,7 +31626,7 @@
           "updatedAt": "2026-06-13T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_01_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_01",
           "readSeq": 5,
@@ -31637,7 +31637,7 @@
           "updatedAt": "2026-06-13T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_02_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_02",
           "readSeq": 5,
@@ -31648,7 +31648,7 @@
           "updatedAt": "2026-06-13T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_03_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_03",
           "readSeq": 5,
@@ -31659,7 +31659,7 @@
           "updatedAt": "2026-06-13T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_04_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_04",
           "readSeq": 5,
@@ -31670,7 +31670,7 @@
           "updatedAt": "2026-06-14T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_05_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_05",
           "readSeq": 5,
@@ -31681,7 +31681,7 @@
           "updatedAt": "2026-06-14T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_06_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_06",
           "readSeq": 5,
@@ -31692,7 +31692,7 @@
           "updatedAt": "2026-06-14T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_07_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_07",
           "readSeq": 5,
@@ -31703,7 +31703,7 @@
           "updatedAt": "2026-06-14T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_01_current",
+          "id": "fixture_state_fixture_conv_direct_food_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_01",
           "readSeq": 5,
@@ -31714,7 +31714,7 @@
           "updatedAt": "2026-06-14T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_02_current",
+          "id": "fixture_state_fixture_conv_direct_food_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_02",
           "readSeq": 5,
@@ -31725,7 +31725,7 @@
           "updatedAt": "2026-06-14T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_03_current",
+          "id": "fixture_state_fixture_conv_direct_food_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_03",
           "readSeq": 5,
@@ -31736,7 +31736,7 @@
           "updatedAt": "2026-06-14T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_04_current",
+          "id": "fixture_state_fixture_conv_direct_food_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_04",
           "readSeq": 5,
@@ -31747,7 +31747,7 @@
           "updatedAt": "2026-06-14T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_05_current",
+          "id": "fixture_state_fixture_conv_direct_food_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_05",
           "readSeq": 5,
@@ -31758,7 +31758,7 @@
           "updatedAt": "2026-06-14T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_06_current",
+          "id": "fixture_state_fixture_conv_direct_food_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_06",
           "readSeq": 5,
@@ -31769,7 +31769,7 @@
           "updatedAt": "2026-06-14T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_07_current",
+          "id": "fixture_state_fixture_conv_direct_food_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_07",
           "readSeq": 5,
@@ -31780,7 +31780,7 @@
           "updatedAt": "2026-06-14T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_01_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_01",
           "readSeq": 5,
@@ -31791,7 +31791,7 @@
           "updatedAt": "2026-06-14T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_02_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_02",
           "readSeq": 5,
@@ -31802,7 +31802,7 @@
           "updatedAt": "2026-06-15T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_03_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_03",
           "readSeq": 5,
@@ -31813,7 +31813,7 @@
           "updatedAt": "2026-06-15T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_04_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_04",
           "readSeq": 5,
@@ -31824,7 +31824,7 @@
           "updatedAt": "2026-06-15T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_05_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_05",
           "readSeq": 5,
@@ -31835,7 +31835,7 @@
           "updatedAt": "2026-06-15T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_06_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_06",
           "readSeq": 5,
@@ -31846,7 +31846,7 @@
           "updatedAt": "2026-06-15T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_07_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_07",
           "readSeq": 5,
@@ -31857,7 +31857,7 @@
           "updatedAt": "2026-06-15T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_01_current",
+          "id": "fixture_state_fixture_conv_direct_pet_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_01",
           "readSeq": 5,
@@ -31868,7 +31868,7 @@
           "updatedAt": "2026-06-15T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_02_current",
+          "id": "fixture_state_fixture_conv_direct_pet_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_02",
           "readSeq": 5,
@@ -31879,7 +31879,7 @@
           "updatedAt": "2026-06-15T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_03_current",
+          "id": "fixture_state_fixture_conv_direct_pet_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_03",
           "readSeq": 5,
@@ -31890,7 +31890,7 @@
           "updatedAt": "2026-06-15T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_04_current",
+          "id": "fixture_state_fixture_conv_direct_pet_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_04",
           "readSeq": 5,
@@ -31901,7 +31901,7 @@
           "updatedAt": "2026-06-15T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_05_current",
+          "id": "fixture_state_fixture_conv_direct_pet_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_05",
           "readSeq": 5,
@@ -31912,7 +31912,7 @@
           "updatedAt": "2026-06-15T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_06_current",
+          "id": "fixture_state_fixture_conv_direct_pet_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_06",
           "readSeq": 5,
@@ -31923,7 +31923,7 @@
           "updatedAt": "2026-06-15T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_07_current",
+          "id": "fixture_state_fixture_conv_direct_pet_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_07",
           "readSeq": 5,
@@ -31934,7 +31934,7 @@
           "updatedAt": "2026-06-16T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_01_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_01",
           "readSeq": 5,
@@ -31945,7 +31945,7 @@
           "updatedAt": "2026-06-16T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_02_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_02",
           "readSeq": 5,
@@ -31956,7 +31956,7 @@
           "updatedAt": "2026-06-16T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_03_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_03",
           "readSeq": 5,
@@ -31967,7 +31967,7 @@
           "updatedAt": "2026-06-16T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_04_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_04",
           "readSeq": 5,
@@ -31978,7 +31978,7 @@
           "updatedAt": "2026-06-16T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_05_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_05",
           "readSeq": 5,
@@ -31989,7 +31989,7 @@
           "updatedAt": "2026-06-16T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_06_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_06",
           "readSeq": 5,
@@ -32000,7 +32000,7 @@
           "updatedAt": "2026-06-16T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_07_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_07",
           "readSeq": 5,
@@ -32011,7 +32011,7 @@
           "updatedAt": "2026-06-16T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_01_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_01",
           "readSeq": 5,
@@ -32022,7 +32022,7 @@
           "updatedAt": "2026-06-16T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_02_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_02",
           "readSeq": 5,
@@ -32033,7 +32033,7 @@
           "updatedAt": "2026-06-16T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_03_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_03",
           "readSeq": 5,
@@ -32044,7 +32044,7 @@
           "updatedAt": "2026-06-16T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_04_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_04",
           "readSeq": 5,
@@ -32055,7 +32055,7 @@
           "updatedAt": "2026-06-16T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_05_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_05",
           "readSeq": 5,
@@ -32066,7 +32066,7 @@
           "updatedAt": "2026-06-17T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_06_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_06",
           "readSeq": 5,
@@ -32077,7 +32077,7 @@
           "updatedAt": "2026-06-17T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_07_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_07",
           "readSeq": 5,
@@ -32088,7 +32088,7 @@
           "updatedAt": "2026-06-17T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_01_current",
+          "id": "fixture_state_fixture_conv_direct_tech_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_01",
           "readSeq": 5,
@@ -32099,7 +32099,7 @@
           "updatedAt": "2026-06-17T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_02_current",
+          "id": "fixture_state_fixture_conv_direct_tech_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_02",
           "readSeq": 5,
@@ -32110,7 +32110,7 @@
           "updatedAt": "2026-06-17T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_03_current",
+          "id": "fixture_state_fixture_conv_direct_tech_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_03",
           "readSeq": 5,
@@ -32121,7 +32121,7 @@
           "updatedAt": "2026-06-17T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_04_current",
+          "id": "fixture_state_fixture_conv_direct_tech_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_04",
           "readSeq": 5,
@@ -32132,7 +32132,7 @@
           "updatedAt": "2026-06-17T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_05_current",
+          "id": "fixture_state_fixture_conv_direct_tech_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_05",
           "readSeq": 5,
@@ -32143,7 +32143,7 @@
           "updatedAt": "2026-06-17T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_06_current",
+          "id": "fixture_state_fixture_conv_direct_tech_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_06",
           "readSeq": 5,
@@ -32154,7 +32154,7 @@
           "updatedAt": "2026-06-17T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_07_current",
+          "id": "fixture_state_fixture_conv_direct_tech_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_07",
           "readSeq": 5,
@@ -32165,7 +32165,7 @@
           "updatedAt": "2026-06-17T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_neworiental_alumni_current",
+          "id": "fixture_state_fixture_conv_circle_neworiental_alumni_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_neworiental_alumni",
           "readSeq": 7,
@@ -32176,7 +32176,7 @@
           "updatedAt": "2026-06-17T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_gold_invest_current",
+          "id": "fixture_state_fixture_conv_circle_gold_invest_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_gold_invest",
           "readSeq": 7,
@@ -32187,7 +32187,7 @@
           "updatedAt": "2026-06-18T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_food_current",
+          "id": "fixture_state_fixture_conv_circle_food_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_food",
           "readSeq": 7,
@@ -32198,7 +32198,7 @@
           "updatedAt": "2026-06-18T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_tech_current",
+          "id": "fixture_state_fixture_conv_circle_tech_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_tech",
           "readSeq": 7,
@@ -32209,7 +32209,7 @@
           "updatedAt": "2026-06-18T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_life_current",
+          "id": "fixture_state_fixture_conv_circle_life_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_life",
           "readSeq": 7,
@@ -32220,7 +32220,7 @@
           "updatedAt": "2026-06-18T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_city_current",
+          "id": "fixture_state_fixture_conv_circle_city_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_city",
           "readSeq": 7,
@@ -32231,7 +32231,7 @@
           "updatedAt": "2026-06-18T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_travel_current",
+          "id": "fixture_state_fixture_conv_circle_travel_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_travel",
           "readSeq": 7,
@@ -32242,7 +32242,7 @@
           "updatedAt": "2026-06-18T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_photo_current",
+          "id": "fixture_state_fixture_conv_circle_photo_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_photo",
           "readSeq": 7,
@@ -32253,7 +32253,7 @@
           "updatedAt": "2026-06-18T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_01_current",
+          "id": "fixture_state_fixture_conv_photography_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_01",
           "readSeq": 7,
@@ -32264,7 +32264,7 @@
           "updatedAt": "2026-06-18T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_02_current",
+          "id": "fixture_state_fixture_conv_photography_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_02",
           "readSeq": 7,
@@ -32275,7 +32275,7 @@
           "updatedAt": "2026-06-18T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_03_current",
+          "id": "fixture_state_fixture_conv_photography_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_03",
           "readSeq": 7,
@@ -32286,7 +32286,7 @@
           "updatedAt": "2026-06-18T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_04_current",
+          "id": "fixture_state_fixture_conv_photography_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_04",
           "readSeq": 7,
@@ -32297,7 +32297,7 @@
           "updatedAt": "2026-06-18T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_05_current",
+          "id": "fixture_state_fixture_conv_photography_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_05",
           "readSeq": 7,
@@ -32308,7 +32308,7 @@
           "updatedAt": "2026-06-18T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_06_current",
+          "id": "fixture_state_fixture_conv_photography_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_06",
           "readSeq": 7,
@@ -32319,7 +32319,7 @@
           "updatedAt": "2026-06-19T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_01_current",
+          "id": "fixture_state_fixture_conv_travel_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_01",
           "readSeq": 7,
@@ -32330,7 +32330,7 @@
           "updatedAt": "2026-06-19T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_02_current",
+          "id": "fixture_state_fixture_conv_travel_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_02",
           "readSeq": 7,
@@ -32341,7 +32341,7 @@
           "updatedAt": "2026-06-19T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_03_current",
+          "id": "fixture_state_fixture_conv_travel_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_03",
           "readSeq": 7,
@@ -32352,7 +32352,7 @@
           "updatedAt": "2026-06-19T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_04_current",
+          "id": "fixture_state_fixture_conv_travel_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_04",
           "readSeq": 7,
@@ -32363,7 +32363,7 @@
           "updatedAt": "2026-06-19T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_05_current",
+          "id": "fixture_state_fixture_conv_travel_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_05",
           "readSeq": 7,
@@ -32374,7 +32374,7 @@
           "updatedAt": "2026-06-19T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_06_current",
+          "id": "fixture_state_fixture_conv_travel_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_06",
           "readSeq": 7,
@@ -32385,7 +32385,7 @@
           "updatedAt": "2026-06-19T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_01_current",
+          "id": "fixture_state_fixture_conv_citywalk_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_01",
           "readSeq": 7,
@@ -32396,7 +32396,7 @@
           "updatedAt": "2026-06-19T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_02_current",
+          "id": "fixture_state_fixture_conv_citywalk_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_02",
           "readSeq": 7,
@@ -32407,7 +32407,7 @@
           "updatedAt": "2026-06-19T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_03_current",
+          "id": "fixture_state_fixture_conv_citywalk_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_03",
           "readSeq": 7,
@@ -32418,7 +32418,7 @@
           "updatedAt": "2026-06-19T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_04_current",
+          "id": "fixture_state_fixture_conv_citywalk_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_04",
           "readSeq": 7,
@@ -32429,7 +32429,7 @@
           "updatedAt": "2026-06-19T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_05_current",
+          "id": "fixture_state_fixture_conv_citywalk_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_05",
           "readSeq": 7,
@@ -32440,7 +32440,7 @@
           "updatedAt": "2026-06-19T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_06_current",
+          "id": "fixture_state_fixture_conv_citywalk_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_06",
           "readSeq": 7,
@@ -32451,7 +32451,7 @@
           "updatedAt": "2026-06-20T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_01_current",
+          "id": "fixture_state_fixture_conv_food_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_01",
           "readSeq": 7,
@@ -32462,7 +32462,7 @@
           "updatedAt": "2026-06-20T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_02_current",
+          "id": "fixture_state_fixture_conv_food_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_02",
           "readSeq": 7,
@@ -32473,7 +32473,7 @@
           "updatedAt": "2026-06-20T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_03_current",
+          "id": "fixture_state_fixture_conv_food_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_03",
           "readSeq": 7,
@@ -32484,7 +32484,7 @@
           "updatedAt": "2026-06-20T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_04_current",
+          "id": "fixture_state_fixture_conv_food_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_04",
           "readSeq": 7,
@@ -32495,7 +32495,7 @@
           "updatedAt": "2026-06-20T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_05_current",
+          "id": "fixture_state_fixture_conv_food_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_05",
           "readSeq": 7,
@@ -32506,7 +32506,7 @@
           "updatedAt": "2026-06-20T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_06_current",
+          "id": "fixture_state_fixture_conv_food_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_06",
           "readSeq": 7,
@@ -32517,7 +32517,7 @@
           "updatedAt": "2026-06-20T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_01_current",
+          "id": "fixture_state_fixture_conv_coffee_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_01",
           "readSeq": 7,
@@ -32528,7 +32528,7 @@
           "updatedAt": "2026-06-20T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_02_current",
+          "id": "fixture_state_fixture_conv_coffee_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_02",
           "readSeq": 7,
@@ -32539,7 +32539,7 @@
           "updatedAt": "2026-06-20T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_03_current",
+          "id": "fixture_state_fixture_conv_coffee_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_03",
           "readSeq": 7,
@@ -32550,7 +32550,7 @@
           "updatedAt": "2026-06-20T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_04_current",
+          "id": "fixture_state_fixture_conv_coffee_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_04",
           "readSeq": 7,
@@ -32561,7 +32561,7 @@
           "updatedAt": "2026-06-20T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_05_current",
+          "id": "fixture_state_fixture_conv_coffee_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_05",
           "readSeq": 7,
@@ -32572,7 +32572,7 @@
           "updatedAt": "2026-06-20T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_06_current",
+          "id": "fixture_state_fixture_conv_coffee_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_06",
           "readSeq": 7,
@@ -32583,7 +32583,7 @@
           "updatedAt": "2026-06-21T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_01_current",
+          "id": "fixture_state_fixture_conv_lifestyle_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_01",
           "readSeq": 7,
@@ -32594,7 +32594,7 @@
           "updatedAt": "2026-06-21T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_02_current",
+          "id": "fixture_state_fixture_conv_lifestyle_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_02",
           "readSeq": 7,
@@ -32605,7 +32605,7 @@
           "updatedAt": "2026-06-21T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_03_current",
+          "id": "fixture_state_fixture_conv_lifestyle_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_03",
           "readSeq": 7,
@@ -32616,7 +32616,7 @@
           "updatedAt": "2026-06-21T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_04_current",
+          "id": "fixture_state_fixture_conv_lifestyle_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_04",
           "readSeq": 7,
@@ -32627,7 +32627,7 @@
           "updatedAt": "2026-06-21T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_05_current",
+          "id": "fixture_state_fixture_conv_lifestyle_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_05",
           "readSeq": 7,
@@ -32638,7 +32638,7 @@
           "updatedAt": "2026-06-21T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_06_current",
+          "id": "fixture_state_fixture_conv_lifestyle_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_06",
           "readSeq": 7,
@@ -32649,7 +32649,7 @@
           "updatedAt": "2026-06-21T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_01_current",
+          "id": "fixture_state_fixture_conv_fitness_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_01",
           "readSeq": 7,
@@ -32660,7 +32660,7 @@
           "updatedAt": "2026-06-21T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_02_current",
+          "id": "fixture_state_fixture_conv_fitness_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_02",
           "readSeq": 7,
@@ -32671,7 +32671,7 @@
           "updatedAt": "2026-06-21T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_03_current",
+          "id": "fixture_state_fixture_conv_fitness_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_03",
           "readSeq": 7,
@@ -32682,7 +32682,7 @@
           "updatedAt": "2026-06-21T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_04_current",
+          "id": "fixture_state_fixture_conv_fitness_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_04",
           "readSeq": 7,
@@ -32693,7 +32693,7 @@
           "updatedAt": "2026-06-21T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_05_current",
+          "id": "fixture_state_fixture_conv_fitness_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_05",
           "readSeq": 7,
@@ -32704,7 +32704,7 @@
           "updatedAt": "2026-06-21T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_06_current",
+          "id": "fixture_state_fixture_conv_fitness_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_06",
           "readSeq": 7,
@@ -32715,7 +32715,7 @@
           "updatedAt": "2026-06-22T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_01_current",
+          "id": "fixture_state_fixture_conv_pet_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_01",
           "readSeq": 7,
@@ -32726,7 +32726,7 @@
           "updatedAt": "2026-06-22T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_02_current",
+          "id": "fixture_state_fixture_conv_pet_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_02",
           "readSeq": 7,
@@ -32737,7 +32737,7 @@
           "updatedAt": "2026-06-22T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_03_current",
+          "id": "fixture_state_fixture_conv_pet_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_03",
           "readSeq": 7,
@@ -32748,7 +32748,7 @@
           "updatedAt": "2026-06-22T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_04_current",
+          "id": "fixture_state_fixture_conv_pet_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_04",
           "readSeq": 7,
@@ -32759,7 +32759,7 @@
           "updatedAt": "2026-06-22T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_05_current",
+          "id": "fixture_state_fixture_conv_pet_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_05",
           "readSeq": 7,
@@ -32770,7 +32770,7 @@
           "updatedAt": "2026-06-22T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_06_current",
+          "id": "fixture_state_fixture_conv_pet_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_06",
           "readSeq": 7,
@@ -32781,7 +32781,7 @@
           "updatedAt": "2026-06-22T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_01_current",
+          "id": "fixture_state_fixture_conv_parenting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_01",
           "readSeq": 7,
@@ -32792,7 +32792,7 @@
           "updatedAt": "2026-06-22T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_02_current",
+          "id": "fixture_state_fixture_conv_parenting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_02",
           "readSeq": 7,
@@ -32803,7 +32803,7 @@
           "updatedAt": "2026-06-22T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_03_current",
+          "id": "fixture_state_fixture_conv_parenting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_03",
           "readSeq": 7,
@@ -32814,7 +32814,7 @@
           "updatedAt": "2026-06-22T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_04_current",
+          "id": "fixture_state_fixture_conv_parenting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_04",
           "readSeq": 7,
@@ -32825,7 +32825,7 @@
           "updatedAt": "2026-06-22T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_05_current",
+          "id": "fixture_state_fixture_conv_parenting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_05",
           "readSeq": 7,
@@ -32836,7 +32836,7 @@
           "updatedAt": "2026-06-22T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_06_current",
+          "id": "fixture_state_fixture_conv_parenting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_06",
           "readSeq": 7,
@@ -32847,7 +32847,7 @@
           "updatedAt": "2026-06-23T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_01_current",
+          "id": "fixture_state_fixture_conv_outdoor_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_01",
           "readSeq": 7,
@@ -32858,7 +32858,7 @@
           "updatedAt": "2026-06-23T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_02_current",
+          "id": "fixture_state_fixture_conv_outdoor_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_02",
           "readSeq": 7,
@@ -32869,7 +32869,7 @@
           "updatedAt": "2026-06-23T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_03_current",
+          "id": "fixture_state_fixture_conv_outdoor_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_03",
           "readSeq": 7,
@@ -32880,7 +32880,7 @@
           "updatedAt": "2026-06-23T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_04_current",
+          "id": "fixture_state_fixture_conv_outdoor_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_04",
           "readSeq": 7,
@@ -32891,7 +32891,7 @@
           "updatedAt": "2026-06-23T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_05_current",
+          "id": "fixture_state_fixture_conv_outdoor_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_05",
           "readSeq": 7,
@@ -32902,7 +32902,7 @@
           "updatedAt": "2026-06-23T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_06_current",
+          "id": "fixture_state_fixture_conv_outdoor_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_06",
           "readSeq": 7,
@@ -32913,7 +32913,7 @@
           "updatedAt": "2026-06-23T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_01_current",
+          "id": "fixture_state_fixture_conv_tech_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_01",
           "readSeq": 7,
@@ -32924,7 +32924,7 @@
           "updatedAt": "2026-06-23T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_02_current",
+          "id": "fixture_state_fixture_conv_tech_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_02",
           "readSeq": 7,
@@ -32935,7 +32935,7 @@
           "updatedAt": "2026-06-23T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_03_current",
+          "id": "fixture_state_fixture_conv_tech_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_03",
           "readSeq": 7,
@@ -32946,7 +32946,7 @@
           "updatedAt": "2026-06-23T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_04_current",
+          "id": "fixture_state_fixture_conv_tech_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_04",
           "readSeq": 7,
@@ -32957,7 +32957,7 @@
           "updatedAt": "2026-06-23T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_05_current",
+          "id": "fixture_state_fixture_conv_tech_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_05",
           "readSeq": 7,
@@ -32968,7 +32968,7 @@
           "updatedAt": "2026-06-23T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_06_current",
+          "id": "fixture_state_fixture_conv_tech_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_06",
           "readSeq": 7,
@@ -32979,7 +32979,7 @@
           "updatedAt": "2026-06-24T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_designwriting_01_current",
+          "id": "fixture_state_fixture_conv_designwriting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_designwriting_01",
           "readSeq": 7,
@@ -64137,7 +64137,7 @@
       },
       "userStates": [
         {
-          "_id": "fixture_state_fixture_conv_direct_current",
+          "id": "fixture_state_fixture_conv_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct",
           "readSeq": 5,
@@ -64148,7 +64148,7 @@
           "updatedAt": "2026-06-10T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_group_current",
+          "id": "fixture_state_fixture_conv_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_group",
           "readSeq": 7,
@@ -64159,7 +64159,7 @@
           "updatedAt": "2026-06-10T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photo_group_current",
+          "id": "fixture_state_fixture_conv_photo_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photo_group",
           "readSeq": 7,
@@ -64170,7 +64170,7 @@
           "updatedAt": "2026-06-10T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_group_current",
+          "id": "fixture_state_fixture_conv_travel_group_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_group",
           "readSeq": 7,
@@ -64181,7 +64181,7 @@
           "updatedAt": "2026-06-10T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_article_direct_current",
+          "id": "fixture_state_fixture_conv_article_direct_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_article_direct",
           "readSeq": 5,
@@ -64192,7 +64192,7 @@
           "updatedAt": "2026-06-10T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_friend_current",
+          "id": "fixture_state_fixture_conv_direct_current_friend_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_friend",
           "readSeq": 5,
@@ -64203,7 +64203,7 @@
           "updatedAt": "2026-06-10T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_photo_current",
+          "id": "fixture_state_fixture_conv_direct_current_photo_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_photo",
           "readSeq": 5,
@@ -64214,7 +64214,7 @@
           "updatedAt": "2026-06-10T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_current_article_current",
+          "id": "fixture_state_fixture_conv_direct_current_article_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_current_article",
           "readSeq": 5,
@@ -64225,7 +64225,7 @@
           "updatedAt": "2026-06-10T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_01_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_01",
           "readSeq": 5,
@@ -64236,7 +64236,7 @@
           "updatedAt": "2026-06-10T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_02_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_02",
           "readSeq": 5,
@@ -64247,7 +64247,7 @@
           "updatedAt": "2026-06-10T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_03_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_03",
           "readSeq": 5,
@@ -64258,7 +64258,7 @@
           "updatedAt": "2026-06-11T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_04_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_04",
           "readSeq": 5,
@@ -64269,7 +64269,7 @@
           "updatedAt": "2026-06-11T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_05_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_05",
           "readSeq": 5,
@@ -64280,7 +64280,7 @@
           "updatedAt": "2026-06-11T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_06_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_06",
           "readSeq": 5,
@@ -64291,7 +64291,7 @@
           "updatedAt": "2026-06-11T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_lifestyle_07_current",
+          "id": "fixture_state_fixture_conv_direct_lifestyle_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_lifestyle_07",
           "readSeq": 5,
@@ -64302,7 +64302,7 @@
           "updatedAt": "2026-06-11T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_01_current",
+          "id": "fixture_state_fixture_conv_direct_photography_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_01",
           "readSeq": 5,
@@ -64313,7 +64313,7 @@
           "updatedAt": "2026-06-11T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_02_current",
+          "id": "fixture_state_fixture_conv_direct_photography_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_02",
           "readSeq": 5,
@@ -64324,7 +64324,7 @@
           "updatedAt": "2026-06-11T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_03_current",
+          "id": "fixture_state_fixture_conv_direct_photography_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_03",
           "readSeq": 5,
@@ -64335,7 +64335,7 @@
           "updatedAt": "2026-06-11T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_04_current",
+          "id": "fixture_state_fixture_conv_direct_photography_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_04",
           "readSeq": 5,
@@ -64346,7 +64346,7 @@
           "updatedAt": "2026-06-11T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_05_current",
+          "id": "fixture_state_fixture_conv_direct_photography_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_05",
           "readSeq": 5,
@@ -64357,7 +64357,7 @@
           "updatedAt": "2026-06-11T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_06_current",
+          "id": "fixture_state_fixture_conv_direct_photography_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_06",
           "readSeq": 5,
@@ -64368,7 +64368,7 @@
           "updatedAt": "2026-06-11T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_photography_07_current",
+          "id": "fixture_state_fixture_conv_direct_photography_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_photography_07",
           "readSeq": 5,
@@ -64379,7 +64379,7 @@
           "updatedAt": "2026-06-11T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_01_current",
+          "id": "fixture_state_fixture_conv_direct_travel_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_01",
           "readSeq": 5,
@@ -64390,7 +64390,7 @@
           "updatedAt": "2026-06-12T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_02_current",
+          "id": "fixture_state_fixture_conv_direct_travel_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_02",
           "readSeq": 5,
@@ -64401,7 +64401,7 @@
           "updatedAt": "2026-06-12T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_03_current",
+          "id": "fixture_state_fixture_conv_direct_travel_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_03",
           "readSeq": 5,
@@ -64412,7 +64412,7 @@
           "updatedAt": "2026-06-12T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_04_current",
+          "id": "fixture_state_fixture_conv_direct_travel_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_04",
           "readSeq": 5,
@@ -64423,7 +64423,7 @@
           "updatedAt": "2026-06-12T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_05_current",
+          "id": "fixture_state_fixture_conv_direct_travel_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_05",
           "readSeq": 5,
@@ -64434,7 +64434,7 @@
           "updatedAt": "2026-06-12T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_06_current",
+          "id": "fixture_state_fixture_conv_direct_travel_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_06",
           "readSeq": 5,
@@ -64445,7 +64445,7 @@
           "updatedAt": "2026-06-12T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_travel_07_current",
+          "id": "fixture_state_fixture_conv_direct_travel_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_travel_07",
           "readSeq": 5,
@@ -64456,7 +64456,7 @@
           "updatedAt": "2026-06-12T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_01_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_01",
           "readSeq": 5,
@@ -64467,7 +64467,7 @@
           "updatedAt": "2026-06-12T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_02_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_02",
           "readSeq": 5,
@@ -64478,7 +64478,7 @@
           "updatedAt": "2026-06-12T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_03_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_03",
           "readSeq": 5,
@@ -64489,7 +64489,7 @@
           "updatedAt": "2026-06-12T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_04_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_04",
           "readSeq": 5,
@@ -64500,7 +64500,7 @@
           "updatedAt": "2026-06-12T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_05_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_05",
           "readSeq": 5,
@@ -64511,7 +64511,7 @@
           "updatedAt": "2026-06-12T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_06_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_06",
           "readSeq": 5,
@@ -64522,7 +64522,7 @@
           "updatedAt": "2026-06-13T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_citywalk_07_current",
+          "id": "fixture_state_fixture_conv_direct_citywalk_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_citywalk_07",
           "readSeq": 5,
@@ -64533,7 +64533,7 @@
           "updatedAt": "2026-06-13T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_01_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_01",
           "readSeq": 5,
@@ -64544,7 +64544,7 @@
           "updatedAt": "2026-06-13T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_02_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_02",
           "readSeq": 5,
@@ -64555,7 +64555,7 @@
           "updatedAt": "2026-06-13T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_03_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_03",
           "readSeq": 5,
@@ -64566,7 +64566,7 @@
           "updatedAt": "2026-06-13T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_04_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_04",
           "readSeq": 5,
@@ -64577,7 +64577,7 @@
           "updatedAt": "2026-06-13T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_05_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_05",
           "readSeq": 5,
@@ -64588,7 +64588,7 @@
           "updatedAt": "2026-06-13T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_06_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_06",
           "readSeq": 5,
@@ -64599,7 +64599,7 @@
           "updatedAt": "2026-06-13T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_designwriting_07_current",
+          "id": "fixture_state_fixture_conv_direct_designwriting_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_designwriting_07",
           "readSeq": 5,
@@ -64610,7 +64610,7 @@
           "updatedAt": "2026-06-13T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_01_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_01",
           "readSeq": 5,
@@ -64621,7 +64621,7 @@
           "updatedAt": "2026-06-13T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_02_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_02",
           "readSeq": 5,
@@ -64632,7 +64632,7 @@
           "updatedAt": "2026-06-13T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_03_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_03",
           "readSeq": 5,
@@ -64643,7 +64643,7 @@
           "updatedAt": "2026-06-13T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_04_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_04",
           "readSeq": 5,
@@ -64654,7 +64654,7 @@
           "updatedAt": "2026-06-14T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_05_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_05",
           "readSeq": 5,
@@ -64665,7 +64665,7 @@
           "updatedAt": "2026-06-14T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_06_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_06",
           "readSeq": 5,
@@ -64676,7 +64676,7 @@
           "updatedAt": "2026-06-14T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_coffee_07_current",
+          "id": "fixture_state_fixture_conv_direct_coffee_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_coffee_07",
           "readSeq": 5,
@@ -64687,7 +64687,7 @@
           "updatedAt": "2026-06-14T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_01_current",
+          "id": "fixture_state_fixture_conv_direct_food_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_01",
           "readSeq": 5,
@@ -64698,7 +64698,7 @@
           "updatedAt": "2026-06-14T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_02_current",
+          "id": "fixture_state_fixture_conv_direct_food_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_02",
           "readSeq": 5,
@@ -64709,7 +64709,7 @@
           "updatedAt": "2026-06-14T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_03_current",
+          "id": "fixture_state_fixture_conv_direct_food_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_03",
           "readSeq": 5,
@@ -64720,7 +64720,7 @@
           "updatedAt": "2026-06-14T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_04_current",
+          "id": "fixture_state_fixture_conv_direct_food_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_04",
           "readSeq": 5,
@@ -64731,7 +64731,7 @@
           "updatedAt": "2026-06-14T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_05_current",
+          "id": "fixture_state_fixture_conv_direct_food_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_05",
           "readSeq": 5,
@@ -64742,7 +64742,7 @@
           "updatedAt": "2026-06-14T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_06_current",
+          "id": "fixture_state_fixture_conv_direct_food_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_06",
           "readSeq": 5,
@@ -64753,7 +64753,7 @@
           "updatedAt": "2026-06-14T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_food_07_current",
+          "id": "fixture_state_fixture_conv_direct_food_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_food_07",
           "readSeq": 5,
@@ -64764,7 +64764,7 @@
           "updatedAt": "2026-06-14T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_01_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_01",
           "readSeq": 5,
@@ -64775,7 +64775,7 @@
           "updatedAt": "2026-06-14T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_02_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_02",
           "readSeq": 5,
@@ -64786,7 +64786,7 @@
           "updatedAt": "2026-06-15T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_03_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_03",
           "readSeq": 5,
@@ -64797,7 +64797,7 @@
           "updatedAt": "2026-06-15T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_04_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_04",
           "readSeq": 5,
@@ -64808,7 +64808,7 @@
           "updatedAt": "2026-06-15T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_05_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_05",
           "readSeq": 5,
@@ -64819,7 +64819,7 @@
           "updatedAt": "2026-06-15T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_06_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_06",
           "readSeq": 5,
@@ -64830,7 +64830,7 @@
           "updatedAt": "2026-06-15T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_fitness_07_current",
+          "id": "fixture_state_fixture_conv_direct_fitness_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_fitness_07",
           "readSeq": 5,
@@ -64841,7 +64841,7 @@
           "updatedAt": "2026-06-15T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_01_current",
+          "id": "fixture_state_fixture_conv_direct_pet_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_01",
           "readSeq": 5,
@@ -64852,7 +64852,7 @@
           "updatedAt": "2026-06-15T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_02_current",
+          "id": "fixture_state_fixture_conv_direct_pet_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_02",
           "readSeq": 5,
@@ -64863,7 +64863,7 @@
           "updatedAt": "2026-06-15T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_03_current",
+          "id": "fixture_state_fixture_conv_direct_pet_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_03",
           "readSeq": 5,
@@ -64874,7 +64874,7 @@
           "updatedAt": "2026-06-15T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_04_current",
+          "id": "fixture_state_fixture_conv_direct_pet_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_04",
           "readSeq": 5,
@@ -64885,7 +64885,7 @@
           "updatedAt": "2026-06-15T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_05_current",
+          "id": "fixture_state_fixture_conv_direct_pet_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_05",
           "readSeq": 5,
@@ -64896,7 +64896,7 @@
           "updatedAt": "2026-06-15T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_06_current",
+          "id": "fixture_state_fixture_conv_direct_pet_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_06",
           "readSeq": 5,
@@ -64907,7 +64907,7 @@
           "updatedAt": "2026-06-15T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_pet_07_current",
+          "id": "fixture_state_fixture_conv_direct_pet_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_pet_07",
           "readSeq": 5,
@@ -64918,7 +64918,7 @@
           "updatedAt": "2026-06-16T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_01_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_01",
           "readSeq": 5,
@@ -64929,7 +64929,7 @@
           "updatedAt": "2026-06-16T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_02_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_02",
           "readSeq": 5,
@@ -64940,7 +64940,7 @@
           "updatedAt": "2026-06-16T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_03_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_03",
           "readSeq": 5,
@@ -64951,7 +64951,7 @@
           "updatedAt": "2026-06-16T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_04_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_04",
           "readSeq": 5,
@@ -64962,7 +64962,7 @@
           "updatedAt": "2026-06-16T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_05_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_05",
           "readSeq": 5,
@@ -64973,7 +64973,7 @@
           "updatedAt": "2026-06-16T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_06_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_06",
           "readSeq": 5,
@@ -64984,7 +64984,7 @@
           "updatedAt": "2026-06-16T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_parenting_07_current",
+          "id": "fixture_state_fixture_conv_direct_parenting_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_parenting_07",
           "readSeq": 5,
@@ -64995,7 +64995,7 @@
           "updatedAt": "2026-06-16T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_01_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_01",
           "readSeq": 5,
@@ -65006,7 +65006,7 @@
           "updatedAt": "2026-06-16T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_02_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_02",
           "readSeq": 5,
@@ -65017,7 +65017,7 @@
           "updatedAt": "2026-06-16T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_03_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_03",
           "readSeq": 5,
@@ -65028,7 +65028,7 @@
           "updatedAt": "2026-06-16T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_04_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_04",
           "readSeq": 5,
@@ -65039,7 +65039,7 @@
           "updatedAt": "2026-06-16T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_05_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_05",
           "readSeq": 5,
@@ -65050,7 +65050,7 @@
           "updatedAt": "2026-06-17T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_06_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_06",
           "readSeq": 5,
@@ -65061,7 +65061,7 @@
           "updatedAt": "2026-06-17T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_outdoor_07_current",
+          "id": "fixture_state_fixture_conv_direct_outdoor_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_outdoor_07",
           "readSeq": 5,
@@ -65072,7 +65072,7 @@
           "updatedAt": "2026-06-17T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_01_current",
+          "id": "fixture_state_fixture_conv_direct_tech_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_01",
           "readSeq": 5,
@@ -65083,7 +65083,7 @@
           "updatedAt": "2026-06-17T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_02_current",
+          "id": "fixture_state_fixture_conv_direct_tech_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_02",
           "readSeq": 5,
@@ -65094,7 +65094,7 @@
           "updatedAt": "2026-06-17T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_03_current",
+          "id": "fixture_state_fixture_conv_direct_tech_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_03",
           "readSeq": 5,
@@ -65105,7 +65105,7 @@
           "updatedAt": "2026-06-17T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_04_current",
+          "id": "fixture_state_fixture_conv_direct_tech_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_04",
           "readSeq": 5,
@@ -65116,7 +65116,7 @@
           "updatedAt": "2026-06-17T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_05_current",
+          "id": "fixture_state_fixture_conv_direct_tech_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_05",
           "readSeq": 5,
@@ -65127,7 +65127,7 @@
           "updatedAt": "2026-06-17T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_06_current",
+          "id": "fixture_state_fixture_conv_direct_tech_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_06",
           "readSeq": 5,
@@ -65138,7 +65138,7 @@
           "updatedAt": "2026-06-17T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_direct_tech_07_current",
+          "id": "fixture_state_fixture_conv_direct_tech_07_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_direct_tech_07",
           "readSeq": 5,
@@ -65149,7 +65149,7 @@
           "updatedAt": "2026-06-17T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_neworiental_alumni_current",
+          "id": "fixture_state_fixture_conv_circle_neworiental_alumni_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_neworiental_alumni",
           "readSeq": 7,
@@ -65160,7 +65160,7 @@
           "updatedAt": "2026-06-17T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_gold_invest_current",
+          "id": "fixture_state_fixture_conv_circle_gold_invest_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_gold_invest",
           "readSeq": 7,
@@ -65171,7 +65171,7 @@
           "updatedAt": "2026-06-18T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_food_current",
+          "id": "fixture_state_fixture_conv_circle_food_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_food",
           "readSeq": 7,
@@ -65182,7 +65182,7 @@
           "updatedAt": "2026-06-18T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_tech_current",
+          "id": "fixture_state_fixture_conv_circle_tech_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_tech",
           "readSeq": 7,
@@ -65193,7 +65193,7 @@
           "updatedAt": "2026-06-18T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_life_current",
+          "id": "fixture_state_fixture_conv_circle_life_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_life",
           "readSeq": 7,
@@ -65204,7 +65204,7 @@
           "updatedAt": "2026-06-18T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_city_current",
+          "id": "fixture_state_fixture_conv_circle_city_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_city",
           "readSeq": 7,
@@ -65215,7 +65215,7 @@
           "updatedAt": "2026-06-18T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_travel_current",
+          "id": "fixture_state_fixture_conv_circle_travel_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_travel",
           "readSeq": 7,
@@ -65226,7 +65226,7 @@
           "updatedAt": "2026-06-18T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_circle_photo_current",
+          "id": "fixture_state_fixture_conv_circle_photo_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_circle_photo",
           "readSeq": 7,
@@ -65237,7 +65237,7 @@
           "updatedAt": "2026-06-18T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_01_current",
+          "id": "fixture_state_fixture_conv_photography_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_01",
           "readSeq": 7,
@@ -65248,7 +65248,7 @@
           "updatedAt": "2026-06-18T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_02_current",
+          "id": "fixture_state_fixture_conv_photography_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_02",
           "readSeq": 7,
@@ -65259,7 +65259,7 @@
           "updatedAt": "2026-06-18T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_03_current",
+          "id": "fixture_state_fixture_conv_photography_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_03",
           "readSeq": 7,
@@ -65270,7 +65270,7 @@
           "updatedAt": "2026-06-18T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_04_current",
+          "id": "fixture_state_fixture_conv_photography_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_04",
           "readSeq": 7,
@@ -65281,7 +65281,7 @@
           "updatedAt": "2026-06-18T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_05_current",
+          "id": "fixture_state_fixture_conv_photography_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_05",
           "readSeq": 7,
@@ -65292,7 +65292,7 @@
           "updatedAt": "2026-06-18T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_photography_06_current",
+          "id": "fixture_state_fixture_conv_photography_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_photography_06",
           "readSeq": 7,
@@ -65303,7 +65303,7 @@
           "updatedAt": "2026-06-19T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_01_current",
+          "id": "fixture_state_fixture_conv_travel_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_01",
           "readSeq": 7,
@@ -65314,7 +65314,7 @@
           "updatedAt": "2026-06-19T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_02_current",
+          "id": "fixture_state_fixture_conv_travel_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_02",
           "readSeq": 7,
@@ -65325,7 +65325,7 @@
           "updatedAt": "2026-06-19T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_03_current",
+          "id": "fixture_state_fixture_conv_travel_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_03",
           "readSeq": 7,
@@ -65336,7 +65336,7 @@
           "updatedAt": "2026-06-19T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_04_current",
+          "id": "fixture_state_fixture_conv_travel_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_04",
           "readSeq": 7,
@@ -65347,7 +65347,7 @@
           "updatedAt": "2026-06-19T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_05_current",
+          "id": "fixture_state_fixture_conv_travel_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_05",
           "readSeq": 7,
@@ -65358,7 +65358,7 @@
           "updatedAt": "2026-06-19T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_travel_06_current",
+          "id": "fixture_state_fixture_conv_travel_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_travel_06",
           "readSeq": 7,
@@ -65369,7 +65369,7 @@
           "updatedAt": "2026-06-19T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_01_current",
+          "id": "fixture_state_fixture_conv_citywalk_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_01",
           "readSeq": 7,
@@ -65380,7 +65380,7 @@
           "updatedAt": "2026-06-19T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_02_current",
+          "id": "fixture_state_fixture_conv_citywalk_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_02",
           "readSeq": 7,
@@ -65391,7 +65391,7 @@
           "updatedAt": "2026-06-19T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_03_current",
+          "id": "fixture_state_fixture_conv_citywalk_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_03",
           "readSeq": 7,
@@ -65402,7 +65402,7 @@
           "updatedAt": "2026-06-19T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_04_current",
+          "id": "fixture_state_fixture_conv_citywalk_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_04",
           "readSeq": 7,
@@ -65413,7 +65413,7 @@
           "updatedAt": "2026-06-19T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_05_current",
+          "id": "fixture_state_fixture_conv_citywalk_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_05",
           "readSeq": 7,
@@ -65424,7 +65424,7 @@
           "updatedAt": "2026-06-19T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_citywalk_06_current",
+          "id": "fixture_state_fixture_conv_citywalk_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_citywalk_06",
           "readSeq": 7,
@@ -65435,7 +65435,7 @@
           "updatedAt": "2026-06-20T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_01_current",
+          "id": "fixture_state_fixture_conv_food_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_01",
           "readSeq": 7,
@@ -65446,7 +65446,7 @@
           "updatedAt": "2026-06-20T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_02_current",
+          "id": "fixture_state_fixture_conv_food_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_02",
           "readSeq": 7,
@@ -65457,7 +65457,7 @@
           "updatedAt": "2026-06-20T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_03_current",
+          "id": "fixture_state_fixture_conv_food_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_03",
           "readSeq": 7,
@@ -65468,7 +65468,7 @@
           "updatedAt": "2026-06-20T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_04_current",
+          "id": "fixture_state_fixture_conv_food_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_04",
           "readSeq": 7,
@@ -65479,7 +65479,7 @@
           "updatedAt": "2026-06-20T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_05_current",
+          "id": "fixture_state_fixture_conv_food_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_05",
           "readSeq": 7,
@@ -65490,7 +65490,7 @@
           "updatedAt": "2026-06-20T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_food_06_current",
+          "id": "fixture_state_fixture_conv_food_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_food_06",
           "readSeq": 7,
@@ -65501,7 +65501,7 @@
           "updatedAt": "2026-06-20T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_01_current",
+          "id": "fixture_state_fixture_conv_coffee_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_01",
           "readSeq": 7,
@@ -65512,7 +65512,7 @@
           "updatedAt": "2026-06-20T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_02_current",
+          "id": "fixture_state_fixture_conv_coffee_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_02",
           "readSeq": 7,
@@ -65523,7 +65523,7 @@
           "updatedAt": "2026-06-20T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_03_current",
+          "id": "fixture_state_fixture_conv_coffee_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_03",
           "readSeq": 7,
@@ -65534,7 +65534,7 @@
           "updatedAt": "2026-06-20T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_04_current",
+          "id": "fixture_state_fixture_conv_coffee_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_04",
           "readSeq": 7,
@@ -65545,7 +65545,7 @@
           "updatedAt": "2026-06-20T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_05_current",
+          "id": "fixture_state_fixture_conv_coffee_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_05",
           "readSeq": 7,
@@ -65556,7 +65556,7 @@
           "updatedAt": "2026-06-20T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_coffee_06_current",
+          "id": "fixture_state_fixture_conv_coffee_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_coffee_06",
           "readSeq": 7,
@@ -65567,7 +65567,7 @@
           "updatedAt": "2026-06-21T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_01_current",
+          "id": "fixture_state_fixture_conv_lifestyle_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_01",
           "readSeq": 7,
@@ -65578,7 +65578,7 @@
           "updatedAt": "2026-06-21T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_02_current",
+          "id": "fixture_state_fixture_conv_lifestyle_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_02",
           "readSeq": 7,
@@ -65589,7 +65589,7 @@
           "updatedAt": "2026-06-21T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_03_current",
+          "id": "fixture_state_fixture_conv_lifestyle_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_03",
           "readSeq": 7,
@@ -65600,7 +65600,7 @@
           "updatedAt": "2026-06-21T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_04_current",
+          "id": "fixture_state_fixture_conv_lifestyle_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_04",
           "readSeq": 7,
@@ -65611,7 +65611,7 @@
           "updatedAt": "2026-06-21T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_05_current",
+          "id": "fixture_state_fixture_conv_lifestyle_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_05",
           "readSeq": 7,
@@ -65622,7 +65622,7 @@
           "updatedAt": "2026-06-21T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_lifestyle_06_current",
+          "id": "fixture_state_fixture_conv_lifestyle_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_lifestyle_06",
           "readSeq": 7,
@@ -65633,7 +65633,7 @@
           "updatedAt": "2026-06-21T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_01_current",
+          "id": "fixture_state_fixture_conv_fitness_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_01",
           "readSeq": 7,
@@ -65644,7 +65644,7 @@
           "updatedAt": "2026-06-21T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_02_current",
+          "id": "fixture_state_fixture_conv_fitness_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_02",
           "readSeq": 7,
@@ -65655,7 +65655,7 @@
           "updatedAt": "2026-06-21T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_03_current",
+          "id": "fixture_state_fixture_conv_fitness_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_03",
           "readSeq": 7,
@@ -65666,7 +65666,7 @@
           "updatedAt": "2026-06-21T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_04_current",
+          "id": "fixture_state_fixture_conv_fitness_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_04",
           "readSeq": 7,
@@ -65677,7 +65677,7 @@
           "updatedAt": "2026-06-21T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_05_current",
+          "id": "fixture_state_fixture_conv_fitness_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_05",
           "readSeq": 7,
@@ -65688,7 +65688,7 @@
           "updatedAt": "2026-06-21T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_fitness_06_current",
+          "id": "fixture_state_fixture_conv_fitness_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_fitness_06",
           "readSeq": 7,
@@ -65699,7 +65699,7 @@
           "updatedAt": "2026-06-22T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_01_current",
+          "id": "fixture_state_fixture_conv_pet_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_01",
           "readSeq": 7,
@@ -65710,7 +65710,7 @@
           "updatedAt": "2026-06-22T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_02_current",
+          "id": "fixture_state_fixture_conv_pet_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_02",
           "readSeq": 7,
@@ -65721,7 +65721,7 @@
           "updatedAt": "2026-06-22T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_03_current",
+          "id": "fixture_state_fixture_conv_pet_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_03",
           "readSeq": 7,
@@ -65732,7 +65732,7 @@
           "updatedAt": "2026-06-22T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_04_current",
+          "id": "fixture_state_fixture_conv_pet_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_04",
           "readSeq": 7,
@@ -65743,7 +65743,7 @@
           "updatedAt": "2026-06-22T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_05_current",
+          "id": "fixture_state_fixture_conv_pet_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_05",
           "readSeq": 7,
@@ -65754,7 +65754,7 @@
           "updatedAt": "2026-06-22T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_pet_06_current",
+          "id": "fixture_state_fixture_conv_pet_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_pet_06",
           "readSeq": 7,
@@ -65765,7 +65765,7 @@
           "updatedAt": "2026-06-22T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_01_current",
+          "id": "fixture_state_fixture_conv_parenting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_01",
           "readSeq": 7,
@@ -65776,7 +65776,7 @@
           "updatedAt": "2026-06-22T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_02_current",
+          "id": "fixture_state_fixture_conv_parenting_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_02",
           "readSeq": 7,
@@ -65787,7 +65787,7 @@
           "updatedAt": "2026-06-22T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_03_current",
+          "id": "fixture_state_fixture_conv_parenting_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_03",
           "readSeq": 7,
@@ -65798,7 +65798,7 @@
           "updatedAt": "2026-06-22T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_04_current",
+          "id": "fixture_state_fixture_conv_parenting_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_04",
           "readSeq": 7,
@@ -65809,7 +65809,7 @@
           "updatedAt": "2026-06-22T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_05_current",
+          "id": "fixture_state_fixture_conv_parenting_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_05",
           "readSeq": 7,
@@ -65820,7 +65820,7 @@
           "updatedAt": "2026-06-22T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_parenting_06_current",
+          "id": "fixture_state_fixture_conv_parenting_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_parenting_06",
           "readSeq": 7,
@@ -65831,7 +65831,7 @@
           "updatedAt": "2026-06-23T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_01_current",
+          "id": "fixture_state_fixture_conv_outdoor_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_01",
           "readSeq": 7,
@@ -65842,7 +65842,7 @@
           "updatedAt": "2026-06-23T03:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_02_current",
+          "id": "fixture_state_fixture_conv_outdoor_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_02",
           "readSeq": 7,
@@ -65853,7 +65853,7 @@
           "updatedAt": "2026-06-23T05:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_03_current",
+          "id": "fixture_state_fixture_conv_outdoor_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_03",
           "readSeq": 7,
@@ -65864,7 +65864,7 @@
           "updatedAt": "2026-06-23T07:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_04_current",
+          "id": "fixture_state_fixture_conv_outdoor_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_04",
           "readSeq": 7,
@@ -65875,7 +65875,7 @@
           "updatedAt": "2026-06-23T09:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_05_current",
+          "id": "fixture_state_fixture_conv_outdoor_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_05",
           "readSeq": 7,
@@ -65886,7 +65886,7 @@
           "updatedAt": "2026-06-23T11:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_outdoor_06_current",
+          "id": "fixture_state_fixture_conv_outdoor_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_outdoor_06",
           "readSeq": 7,
@@ -65897,7 +65897,7 @@
           "updatedAt": "2026-06-23T13:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_01_current",
+          "id": "fixture_state_fixture_conv_tech_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_01",
           "readSeq": 7,
@@ -65908,7 +65908,7 @@
           "updatedAt": "2026-06-23T15:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_02_current",
+          "id": "fixture_state_fixture_conv_tech_02_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_02",
           "readSeq": 7,
@@ -65919,7 +65919,7 @@
           "updatedAt": "2026-06-23T17:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_03_current",
+          "id": "fixture_state_fixture_conv_tech_03_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_03",
           "readSeq": 7,
@@ -65930,7 +65930,7 @@
           "updatedAt": "2026-06-23T19:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_04_current",
+          "id": "fixture_state_fixture_conv_tech_04_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_04",
           "readSeq": 7,
@@ -65941,7 +65941,7 @@
           "updatedAt": "2026-06-23T21:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_05_current",
+          "id": "fixture_state_fixture_conv_tech_05_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_05",
           "readSeq": 7,
@@ -65952,7 +65952,7 @@
           "updatedAt": "2026-06-23T23:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_tech_06_current",
+          "id": "fixture_state_fixture_conv_tech_06_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_tech_06",
           "readSeq": 7,
@@ -65963,7 +65963,7 @@
           "updatedAt": "2026-06-24T01:00:00Z"
         },
         {
-          "_id": "fixture_state_fixture_conv_designwriting_01_current",
+          "id": "fixture_state_fixture_conv_designwriting_01_current",
           "userId": "fixture_user_current",
           "conversationId": "fixture_conv_designwriting_01",
           "readSeq": 7,
@@ -66013,7 +66013,7 @@
           "pinned": false,
           "announcement": "契约群公告：周末集合时间已确认",
           "adminUserIds": [
-            "fixture_user_current"
+            "fixture_user_weekend_1"
           ],
           "transferCandidateUserIds": [
             "fixture_user_weekend_1",

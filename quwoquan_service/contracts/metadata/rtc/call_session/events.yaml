@@ -10,7 +10,7 @@ events:
     client_ws_type: call.initiated
     payload_entity: CallSession
     payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, conversationId, circleId, maxParticipants, createdAt]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: CallRinging
     source: CallRinging
@@ -19,32 +19,50 @@ events:
     consumers: [realtime-gateway, notification-service]
     channel: event_store
     client_ws_type: call.ringing
-    payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, targetUserId, conversationId]
-    optional_client_string_fields: [callerName, sourceLabel, trustRelation, expiresAt]
+    payload_fields: [eventId, callId, targetPersonaId, callType, callerName, callerAvatarUrl, sourceLabel, trustRelation, expiresAt, deliveryKey]
+    required_client_string_fields: [eventId, callId, targetPersonaId, callType, callerName, callerAvatarUrl, sourceLabel, trustRelation, expiresAt, deliveryKey]
     client_payload_defaults:
-      callType: voice
-    realtime_channel: "rt:rtc:user:{targetUserId}"
+      callType: audio
+    durable_stream: events.rtc.call_ringing
+    delivery_identity: "sha256(callId + '\\x00' + targetPersonaId)"
+    telemetry:
+      metric: rtc_call_outbox_relay_total
+      labels: [event_type, transport, outcome]
+    realtime_channel: "rt:rtc:persona:{targetPersonaId}"
+    expiry_policy:
+      one_to_one_seconds: 30
+      group_seconds: 60
     push_policy:
-      online: websocket
+      coordinator: notification-service
+      online: realtime_then_presentation_ack
+      presentation_ack_grace_ms: 750
       offline_ios: voip_push
       offline_android: fcm_high_priority_full_screen_intent
-      offline_web: web_push_service_worker
       description: >-
-        在线走 WS 推送；离线按平台分发：iOS VoIP Push（PushKit→收到即上报 CallKit），
-        Android FCM 高优先级+全屏意图（14+ 不可用降级 heads-up），Web Web Push+Service Worker（PWA 安装后）。
+        notification-service 按设备 PresenceView 单选投递：在线先走 realtime，750ms 内
+        收到设备级 presentation ACK 即结束；未 ACK 或离线才进入 iOS VoIP Push /
+        Android FCM 高优先级队列。Web Push 不属于 M2。
       payload_contract: >-
-        推送负载统一含 callId、callType、initiatorId/callerName、sourceLabel（来源会话/群）、
-        trustRelation（known/possibly_unknown 信任标记）、expiresAt（过期时间，端侧幂等去重）。
+        realtime 来电帧保留 callerAvatarUrl；移动 provider 外送按 integration
+        PushDeliveryRequest 只含 action、endpointRef、deliveryKey、callId、
+        targetPersonaId、callType、callerName、sourceLabel、trustRelation、
+        expiresAt 与 occurredAt，禁止携带 endpoint token。CallAnswered/CallEnded
+        对已展示或已提交 ring 的 endpoint 发送同 deliveryKey 的 action=cancel；
+        终端必须结束来电面并压制乱序迟到 ring。
 
   - name: CallAnswered
     source: CallAnswered
     description: 通话接听（参与者进入 connecting 状态）
     producer: rtc-service
-    consumers: [realtime-gateway]
+    consumers: [realtime-gateway, notification-service]
     channel: event_store
     client_ws_type: call.answered
     payload_fields: [callId, userId]
-    realtime_channel: "rt:rtc:call:{callId}"
+    durable_stream: events.rtc.call_answered
+    telemetry:
+      metric: rtc_call_outbox_relay_total
+      labels: [event_type, transport, outcome]
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: CallConnected
     source: CallConnected
@@ -54,7 +72,7 @@ events:
     channel: event_store
     client_ws_type: call.connected
     payload_fields: [callId, userId, participantCount]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: CallEnded
     source: CallEnded
@@ -65,7 +83,11 @@ events:
     client_ws_type: call.ended
     payload_entity: CallSession
     payload_fields: [callId, callType, initiatorId, conversationId, endReason, durationMs, participantCount, startedAt, endedAt]
-    realtime_channel: "rt:rtc:call:{callId}"
+    durable_stream: events.rtc.call_ended
+    telemetry:
+      metric: rtc_call_outbox_relay_total
+      labels: [event_type, transport, outcome]
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
     chat_integration:
       description: chat-service 消费此事件，在关联会话中插入通话记录消息（type=system_call_log）
 
@@ -77,7 +99,7 @@ events:
     channel: event_store
     client_ws_type: participant.joined
     payload_fields: [callId, userId, role, participantCount]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: ParticipantLeft
     source: ParticipantLeft
@@ -87,27 +109,7 @@ events:
     channel: event_store
     client_ws_type: participant.left
     payload_fields: [callId, userId, participantCount]
-    realtime_channel: "rt:rtc:call:{callId}"
-
-  - name: CallRecordingStarted
-    source: CallRecordingStarted
-    description: 通话录制开始（LiveKit Egress 触发）
-    producer: rtc-service
-    consumers: [realtime-gateway]
-    channel: event_store
-    client_ws_type: call.recording_started
-    payload_fields: [callId, startedByUserId]
-    realtime_channel: "rt:rtc:call:{callId}"
-
-  - name: CallRecordingStopped
-    source: CallRecordingStopped
-    description: 通话录制停止
-    producer: rtc-service
-    consumers: [realtime-gateway]
-    channel: event_store
-    client_ws_type: call.recording_stopped
-    payload_fields: [callId, recordingUrl]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: ScreenShareStarted
     source: ScreenShareStarted
@@ -117,7 +119,7 @@ events:
     channel: event_store
     client_ws_type: screen_share.started
     payload_fields: [callId, userId]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"
 
   - name: ScreenShareStopped
     source: ScreenShareStopped
@@ -127,4 +129,4 @@ events:
     channel: event_store
     client_ws_type: screen_share.stopped
     payload_fields: [callId, userId]
-    realtime_channel: "rt:rtc:call:{callId}"
+    realtime_channel: "rt:rtc:persona:{participantPersonaId}"

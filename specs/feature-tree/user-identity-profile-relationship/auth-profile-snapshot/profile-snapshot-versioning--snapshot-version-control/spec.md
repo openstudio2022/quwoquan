@@ -1,4 +1,4 @@
-# L4 特性：snapshot-version-control
+# L3 特性：snapshot-version-control
 
 ## 功能说明
 - 细化 snapshot-version-control 特性的功能边界与端云协同行为。

@@ -190,6 +190,14 @@ def handle_verify(args: argparse.Namespace) -> None:
     print("[verify] PASSED")
 
 
+def _run_filter_catalog_gate() -> int:
+    from content.filter_catalog.artifact import validate_repository
+
+    report = validate_repository(paths.REPO_ROOT)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if report["passed"] else 1
+
+
 def handle_all() -> None:
     """Run the repository-owned static Data gate through the one public CLI.
 
@@ -211,6 +219,10 @@ def handle_all() -> None:
     from verify import verify_script_architecture
     from verify import verify_python_symbols
     from verify import verify_control_literals
+    from verify import verify_prompt_templates
+    from verify import verify_no_flat_roots
+    from verify import verify_no_runtime_draft_kit
+    from verify import verify_tag_tree
     from verify import verify_source_digest
     from verify import verify_single_contract_source
     from verify import verify_works_classification
@@ -224,6 +236,10 @@ def handle_all() -> None:
         ("script-architecture", verify_script_architecture.main),
         ("python-symbols", verify_python_symbols.main),
         ("control-literals", verify_control_literals.main),
+        ("prompt-templates", verify_prompt_templates.main),
+        ("no-flat-roots", verify_no_flat_roots.main),
+        ("no-runtime-draft-kit", verify_no_runtime_draft_kit.main),
+        ("tag-tree", lambda: verify_tag_tree.main([])),
         ("source-digest", lambda: verify_source_digest.main([])),
         ("execution-identity-purity", verify_execution_identity_purity.main),
         ("content-execution-layout", verify_content_execution_layout.main),
@@ -232,6 +248,7 @@ def handle_all() -> None:
         ("output-root-isolation", verify_output_root_isolation.main),
         ("coverage-static-identity", verify_coverage_static_identity.main),
         ("media-release-contract", verify_media_release_contract.main),
+        ("filter-catalog", _run_filter_catalog_gate),
         ("publish-purity", verify_publish_purity.main),
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),

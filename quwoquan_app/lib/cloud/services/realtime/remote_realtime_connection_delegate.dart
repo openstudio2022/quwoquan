@@ -25,6 +25,14 @@ typedef RemoteRealtimeWebSocketFactory =
       required VoidCallback onDisconnect,
     });
 
+typedef RealtimeConnectTelemetryRecorder =
+    Future<void> Function({
+      required String transport,
+      required String result,
+      required int durationMs,
+      String? failReasonCode,
+    });
+
 /// Remote 实现：WebSocket + LongPoll，行为与 refactor 前 [RealtimeConnectionManager] 一致。
 class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   RemoteRealtimeConnectionDelegate({
@@ -33,6 +41,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     required this.currentUserIdResolver,
     required this.authTokenProvider,
     this.onStateChanged,
+    this.telemetryRecorder,
     RealtimeConfig? config,
     RemoteRealtimeLongPollFactory? longPollFactory,
     RemoteRealtimeWebSocketFactory? webSocketFactory,
@@ -72,6 +81,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   final String Function() currentUserIdResolver;
   final CloudAuthTokenProvider authTokenProvider;
   final RealtimeConnectionStateListener? onStateChanged;
+  final RealtimeConnectTelemetryRecorder? telemetryRecorder;
   final RealtimeConfig _config;
   final RemoteRealtimeLongPollFactory _longPollFactory;
   final RemoteRealtimeWebSocketFactory _webSocketFactory;
@@ -151,6 +161,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }
 
   Future<void> _connectWebSocket() async {
+    final startedAt = DateTime.now();
     _teardownWebSocket();
     _reconnectAttempt = 0;
 
@@ -172,6 +183,15 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       onDisconnect: _onWebSocketDisconnect,
     );
     await _ws!.connect(topics: topics);
+    final connected = _ws?.isConnected.value ?? false;
+    unawaited(
+      _recordConnectResult(
+        transport: 'websocket',
+        result: connected ? 'success' : 'failed',
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        failReasonCode: connected ? null : 'connection_not_established',
+      ),
+    );
   }
 
   void _onWebSocketDisconnect() {
@@ -217,6 +237,13 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       onEvents: _onLongPollEvents,
     );
     _longPoll!.start();
+    unawaited(
+      _recordConnectResult(
+        transport: 'long_poll',
+        result: 'started',
+        durationMs: 0,
+      ),
+    );
   }
 
   void _onLongPollEvents(List<Map<String, dynamic>> events) {
@@ -252,5 +279,21 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     _cancelIdleTimer();
     _teardownWebSocket();
     _teardownLongPoll();
+  }
+
+  Future<void> _recordConnectResult({
+    required String transport,
+    required String result,
+    required int durationMs,
+    String? failReasonCode,
+  }) async {
+    final recorder = telemetryRecorder;
+    if (recorder == null) return;
+    await recorder(
+      transport: transport,
+      result: result,
+      durationMs: durationMs,
+      failReasonCode: failReasonCode,
+    );
   }
 }

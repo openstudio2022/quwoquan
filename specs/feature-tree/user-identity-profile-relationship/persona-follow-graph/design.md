@@ -171,9 +171,10 @@
 
 - `isPrimary`
 - `isActive`
+- `status`
+- `retiredAt`
 - `inheritanceState`
 - `lastSyncedAt`
-- `hasAttributedHistory`
 
 ### KD5：公开与内部边界
 

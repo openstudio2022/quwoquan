@@ -1,4 +1,4 @@
-# L3：privacy-ui-config-contract
+# L3 特性：privacy-ui-config-contract
 
 ## 功能说明
 

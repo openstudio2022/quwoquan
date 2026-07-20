@@ -10,14 +10,18 @@ import (
 
 func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "user_avatar_sync", "avatar_sync")
+	personaID := createProfileUpdateFixture(
+		t,
+		"user_avatar_sync",
+		"avatar_sync",
+	)
 
 	rec := doRequest(
 		t,
 		http.MethodPatch,
 		"/user/profile",
 		`{"avatarAssetId":"ua_user_avatar_sync","avatarUrl":"https://cdn.example.com/u1.png?v=2"}`,
-		authHeaders("user_avatar_sync"),
+		authHeadersForPersona("user_avatar_sync", personaID),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -58,7 +62,11 @@ func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 
 func TestUpdateProfile_PublishesUserAvatarUpdatedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "user_avatar_event", "avatar_event")
+	personaID := createProfileUpdateFixture(
+		t,
+		"user_avatar_event",
+		"avatar_event",
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -75,7 +83,7 @@ func TestUpdateProfile_PublishesUserAvatarUpdatedEvent(t *testing.T) {
 		http.MethodPatch,
 		"/user/profile",
 		`{"avatarAssetId":"ua_user_avatar_event","avatarUrl":"https://cdn.example.com/u2.png?v=3"}`,
-		authHeaders("user_avatar_event"),
+		authHeadersForPersona("user_avatar_event", personaID),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

@@ -10,10 +10,7 @@ from pathlib import Path
 
 from core.cursor_startup_probe import cursor_startup_probe_suite
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
-from core.python_environment import (
-    prepare_data_runtime_cache,
-    runtime_report,
-)
+from core.python_environment import prepare_data_runtime_cache
 from core.python_runtime import environment_preflight
 from core.runtime_policy import active_runtime_policy
 from content.release.canonical.rollout_contract import load_rollout_contract
@@ -40,20 +37,6 @@ def _report_output_path(value: object) -> Path:
         "[task preflight] GATE_BLOCK: data runtime evidence must be under "
         "tasks/<executionId>/... or data/local/cache/..."
     )
-
-
-def _print_report(report: dict, *, as_json: bool) -> None:
-    if as_json:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        return
-    print(f"[env] currentPython={report['currentPython']}")
-    print(f"[env] requirements={report['requirements']}")
-    print(f"[env] resolvedPython={report.get('resolvedPython') or '<missing>'}")
-    for row in report.get("candidates") or []:
-        status = "ready" if row.get("ready") else "missing"
-        print(f"  - {status}: {row.get('python')}")
-        for item in row.get("missing") or []:
-            print(f"      {item}")
 
 
 def _print_preflight(report: dict, *, as_json: bool) -> None:
@@ -175,33 +158,6 @@ def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
 
 def _startup_timeout_seconds(args: argparse.Namespace) -> float:
     return float(active_runtime_policy().startup_timeout_seconds)
-
-
-def handle_doctor(args: argparse.Namespace) -> None:
-    report = runtime_report()
-    _print_report(report, as_json=bool(getattr(args, "json", False)))
-    if not report.get("ready"):
-        raise SystemExit(1)
-
-
-def handle_prepare(args: argparse.Namespace) -> None:
-    report = prepare_data_runtime_cache()
-    if bool(getattr(args, "json", False)):
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-    else:
-        print(f"[env prepare] python={report['python']}")
-        print(f"[env prepare] requirements={report['requirements']}")
-        print(f"[env prepare] installReturnCode={report['installReturnCode']}")
-        if report.get("stdoutTail"):
-            print(report["stdoutTail"].rstrip())
-        if report.get("stderrTail"):
-            print(report["stderrTail"].rstrip(), file=sys.stderr)
-        print("[env prepare] READY" if report.get("ready") else "[env prepare] FAILED")
-        if report.get("missing"):
-            for item in report["missing"]:
-                print(f"  - {item}", file=sys.stderr)
-    if not report.get("ready"):
-        raise SystemExit(1)
 
 
 def handle_preflight(args: argparse.Namespace) -> None:

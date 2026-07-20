@@ -7,15 +7,57 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/projection"
 )
 
+type fixedCreationGrounding struct{}
+
+func (fixedCreationGrounding) ResolveTagRefs(context.Context, []string) ([]string, error) {
+	return []string{"Topic/旅行", "Topic/摄影"}, nil
+}
+
+func (fixedCreationGrounding) ResolveHomepages(
+	_ context.Context,
+	ids []string,
+) ([]assistant.AssistantSuggestedHomepageView, error) {
+	if len(ids) == 0 {
+		return []assistant.AssistantSuggestedHomepageView{}, nil
+	}
+	return []assistant.AssistantSuggestedHomepageView{{
+		ID:                ids[0],
+		Type:              "sight",
+		CanonicalEntityID: "entity_emeishan",
+		DisplayName:       "峨眉山",
+		Reason:            "已作为主关联主页",
+	}}, nil
+}
+
+type fixedXiaoquSearchReader struct{}
+
+func (fixedXiaoquSearchReader) Retrieve(
+	context.Context,
+	string,
+	[]string,
+	int,
+) (rtsearch.RetrieveResponse, error) {
+	return rtsearch.RetrieveResponse{
+		Citations: []rtsearch.Citation{
+			{CitationID: "citation-article", ObjectType: "article", ObjectID: "post-1", Snippet: "露营路线", BadgeLabel: "内容", SourceDomain: "content", Score: 0.95},
+			{CitationID: "citation-entity", ObjectType: "entity", ObjectID: "homepage-1", Snippet: "露营地主页", BadgeLabel: "主页", SourceDomain: "entity", Score: 0.92},
+			{CitationID: "citation-web", ObjectType: "web", ObjectID: "web-1", Snippet: "公开信息", BadgeLabel: "网页", SourceDomain: "web", Score: 0.88},
+		},
+		Provenance: rtsearch.Provenance{Provider: "search-service"},
+	}, nil
+}
+
 func TestReportInteractionEvents_DerivesFeedbackAndDedups(t *testing.T) {
 	store := persistence.NewMemoryEventStore()
 	cache := rtredis.NewMemoryClient()
-	service := NewAssistantService(store, persistence.NewMemoryConsentStore(), cache)
+	service := NewAssistantService(store, persistence.NewMemoryConsentStore(), cache,
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()))
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 
@@ -78,6 +120,7 @@ func TestListSkillsIncludesP0CloudManagedSkills(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 
 	view, err := service.ListSkills(context.Background(), "user_1", 64)
@@ -111,7 +154,9 @@ func TestSuggestCreationAssistanceRequiresEnabledSkill(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+		WithCreationSuggestGrounding(fixedCreationGrounding{}),
 	)
 
 	resp, err := service.SuggestCreationAssistance(context.Background(), "user_1", assistant.AssistantCreationSuggestRequest{
@@ -130,7 +175,9 @@ func TestSuggestCreationAssistanceReturnsTraceableSuggestions(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+		WithCreationSuggestGrounding(fixedCreationGrounding{}),
 	)
 	if _, err := service.CreateSkillSubscription(context.Background(), "user_1", assistant.CreateSkillSubscriptionInput{
 		SkillID:  "creation_assistant",
@@ -161,8 +208,11 @@ func TestSuggestCreationAssistanceReturnsTraceableSuggestions(t *testing.T) {
 	if len(resp.SuggestedHomepages) != 1 || resp.SuggestedHomepages[0].ID != "homepage_sight_emeishan" {
 		t.Fatalf("homepages=%+v", resp.SuggestedHomepages)
 	}
-	if resp.SuggestedHomepages[0].CanonicalEntityID != "" {
-		t.Fatalf("fallback homepages should not fabricate canonical entity ids: %+v", resp.SuggestedHomepages)
+	if resp.SuggestedHomepages[0].CanonicalEntityID != "entity_emeishan" {
+		t.Fatalf("homepages must carry canonical entity identity: %+v", resp.SuggestedHomepages)
+	}
+	if resp.SuggestedTitle != "我和峨眉山有关的一次发现" {
+		t.Fatalf("title=%q", resp.SuggestedTitle)
 	}
 }
 
@@ -171,6 +221,8 @@ func TestSearchXiaoquResultsUsesCanonicalCitations(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		WithXiaoquSearchReader(fixedXiaoquSearchReader{}),
 	)
 
 	result, err := service.SearchXiaoquResults(context.Background(), assistant.SearchRequest{
@@ -277,7 +329,8 @@ func TestModelDrivenSkillRuntimeUsesManifestHintBeforeModel(t *testing.T) {
 func TestReportScorecards_DedupsAndWritesAggregateHotPath(t *testing.T) {
 	store := persistence.NewMemoryEventStore()
 	cache := rtredis.NewMemoryClient()
-	service := NewAssistantService(store, persistence.NewMemoryConsentStore(), cache)
+	service := NewAssistantService(store, persistence.NewMemoryConsentStore(), cache,
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()))
 	now := time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 
@@ -322,7 +375,8 @@ func TestReportScorecards_DedupsAndWritesAggregateHotPath(t *testing.T) {
 }
 
 func TestReportScorecards_RejectsOutOfRangeScore(t *testing.T) {
-	service := NewAssistantService(persistence.NewMemoryEventStore(), persistence.NewMemoryConsentStore(), rtredis.NewMemoryClient())
+	service := NewAssistantService(persistence.NewMemoryEventStore(), persistence.NewMemoryConsentStore(), rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()))
 	_, err := service.ReportScorecards(context.Background(), []assistant.Scorecard{{
 		ScoreID:    "score_bad",
 		EventID:    "evt_1",
@@ -343,6 +397,7 @@ func TestGetLearningOpsSummary_UsesProjectedProfile(t *testing.T) {
 		store,
 		persistence.NewMemoryConsentStore(),
 		cache,
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithLearningProfileStore(profiles),
 	)
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)

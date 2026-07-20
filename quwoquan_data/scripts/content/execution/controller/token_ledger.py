@@ -12,8 +12,16 @@ from core.data_issue import (
 from core.io import read_json
 from core.paths import execution_root
 from core.control_types import ContentType, ExecutionStage
+from core.runtime_policy import active_runtime_policy
 from content.execution.context import ExecutionContext
 from content.execution.contracts import ExecutionStateTransition
+
+
+_CONTENT_OBJECT_AGENT_STAGES = {
+    ExecutionStage.BUILD_HOMEPAGE,
+    ExecutionStage.POST_AUTHOR,
+    ExecutionStage.POST_REVIEW,
+}
 
 
 def required_creator_profile_id(
@@ -34,34 +42,6 @@ def required_creator_profile_id(
             ),
         )
     )
-
-
-def _agent_run_key(row: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
-    scheduler = row.get("scheduler") if isinstance(row.get("scheduler"), Mapping) else {}
-    refs = ",".join(
-        sorted(str(ref) for ref in (row.get("refs") or []) if str(ref).strip())
-    )
-    return (
-        str(row.get("stage") or ""),
-        str((scheduler or {}).get("startedAt") or ""),
-        str(row.get("finishedAt") or (scheduler or {}).get("finishedAt") or ""),
-        str(row.get("plannedJobCount") or row.get("jobCount") or ""),
-        refs,
-    )
-
-
-def dedupe_agent_runs(rows: list[Any]) -> list[Mapping[str, Any]]:
-    seen: set[tuple[str, str, str, str, str]] = set()
-    unique: list[Mapping[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        key = _agent_run_key(row)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(row)
-    return unique
 
 
 def _dedupe_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -100,25 +80,21 @@ def _managed_entries(
     from content.post.article.draft_io import read_writing_pack
     from content.execution.production_contracts import build_token_ledger_entry
 
-    rows: list[Any] = list(state.agent_run_history or [])
-    if isinstance(state.last_agent_run, Mapping):
-        rows.append(state.last_agent_run)
+    from content.execution.agent.history import state_managed_agent_runs
+
     entries: list[dict[str, Any]] = []
-    for row in dedupe_agent_runs(rows):
-        stage = str(row.get("stage") or "")
-        outcomes = row.get("outcomes") or []
-        if not isinstance(outcomes, list):
-            continue
-        for outcome in outcomes:
-            if not isinstance(outcome, Mapping):
+    for run in state_managed_agent_runs(state):
+        stage = run.stage
+        for job_outcome in run.outcomes:
+            outcome = job_outcome.outcome
+            usage_mode = outcome.usage_measurement_mode
+            used_tokens = outcome.used_tokens
+            cost_usd = outcome.cost_usd if outcome.cost_known else None
+            if not outcome.started and not usage_mode and used_tokens <= 0:
                 continue
-            usage_mode = str(outcome.get("usageMeasurementMode") or "").strip()
-            used_tokens = int(outcome.get("usedTokens") or 0)
-            cost_usd = float(outcome.get("costUsd") or 0.0)
-            if not usage_mode and used_tokens <= 0 and cost_usd <= 0:
-                continue
-            ref = str(outcome.get("ref") or "")
-            if stage == ExecutionStage.BUILD_HOMEPAGE:
+            ref = job_outcome.ref
+            object_scope = bool(ref) and stage in _CONTENT_OBJECT_AGENT_STAGES
+            if object_scope and stage == ExecutionStage.BUILD_HOMEPAGE:
                 content_type = ContentType.HOMEPAGE.value
                 entity_payload_path = execution_root(ctx.execution_id) / ref / "_entity.json"
                 creator_payload = (
@@ -126,10 +102,13 @@ def _managed_entries(
                     if ref and entity_payload_path.is_file()
                     else {}
                 )
-            else:
+            elif object_scope:
                 coords = content_object.content_coords(ctx.execution_id, ref) if ref else {}
                 creator_payload = read_writing_pack(ctx.execution_id, ref) if ref else {}
-                content_type = str(coords.get("contentType") or stage).strip()
+                content_type = str(coords.get("contentType") or stage.value).strip()
+            else:
+                creator_payload = {}
+                content_type = ctx.spec.content.carriers[0].value
             if not content_type:
                 raise DataIssueError(
                     (
@@ -137,39 +116,48 @@ def _managed_entries(
                             DataIssueCode.CONTRACT_INVALID,
                             stage=DataIssueStage.CONTENT_PLAN,
                             message="contentType is required before usage is recorded",
-                            ref=ref or str(outcome.get("runId") or "managed-agent-run"),
+                            ref=ref or outcome.run_id or "managed-agent-run",
                         ),
                     )
                 )
-            creator_profile_id = required_creator_profile_id(
-                creator_payload,
-                ref=ref or str(outcome.get("runId") or "managed-agent-run"),
+            creator_profile_id = (
+                required_creator_profile_id(
+                    creator_payload,
+                    ref=ref or outcome.run_id or "managed-agent-run",
+                )
+                if object_scope
+                else ""
             )
-            timing = (
-                outcome.get("timing")
-                if isinstance(outcome.get("timing"), Mapping)
-                else {}
-            )
-            job_id = str(
-                outcome.get("runId")
-                or f"managed:{stage}:{ref or outcome.get('jobIndex')}:{timing.get('finishedAt') or row.get('finishedAt') or ''}"
+            timing = dict(job_outcome.timing)
+            job_id = outcome.run_id or (
+                f"managed:{stage.value}:{ref or job_outcome.job_index}:"
+                f"{timing.get('finishedAt') or run.finished_at}"
             )
             entries.append(
                 build_token_ledger_entry(
                     execution_id=ctx.execution_id,
                     job_id=job_id,
-                    run_id=str(outcome.get("runId") or job_id),
+                    run_id=outcome.run_id or job_id,
                     creator_profile_id=creator_profile_id,
                     content_type=content_type,
-                    budget_tokens=max(default_budget, used_tokens),
+                    budget_tokens=default_budget,
                     used_tokens=used_tokens,
+                    input_tokens=outcome.input_tokens,
+                    output_tokens=outcome.output_tokens,
+                    cache_read_tokens=outcome.cache_read_tokens,
+                    cache_write_tokens=outcome.cache_write_tokens,
                     cost_usd=cost_usd,
-                    provider=str(
-                        row.get("agentProvider")
-                        or outcome.get("provider")
-                        or "cursor_sdk"
-                    ),
-                    model=str(row.get("model") or outcome.get("model") or ""),
+                    cost_budget_usd=active_runtime_policy().default_object_cost_budget_usd,
+                    cost_source=outcome.cost_source,
+                    cost_issue=outcome.cost_issue,
+                    pricing_revision=outcome.pricing_revision,
+                    retry_cost_usd=outcome.retry_cost_usd,
+                    scope="content_object" if object_scope else "execution_stage",
+                    execution_stage=stage.value,
+                    content_object_ref=ref if object_scope else "",
+                    passed=outcome.succeeded,
+                    provider=outcome.provider.value,
+                    model=outcome.resolved_model_id or ctx.model,
                 )
             )
     return _dedupe_entries(entries)
@@ -182,6 +170,10 @@ def build_token_ledger_payload(
     estimated_entries: list[dict[str, Any]],
     default_budget: int,
 ) -> dict[str, Any]:
+    from content.execution.controller.token_ledger_journal import (
+        existing_usage_journal,
+    )
+
     queue_entries = _queue_entries(ctx.execution_id)
     managed_entries = _managed_entries(ctx, state, default_budget=default_budget)
     authoritative_entries = _dedupe_entries([*queue_entries, *managed_entries])
@@ -195,24 +187,63 @@ def build_token_ledger_payload(
     else:
         measurement_mode = "estimated_from_artifacts"
     total_tokens = sum(int(entry.get("usedTokens") or 0) for entry in entries)
-    total_cost = sum(float(entry.get("costUsd") or 0.0) for entry in entries)
+    total_input = sum(int(entry.get("inputTokens") or 0) for entry in entries)
+    total_output = sum(int(entry.get("outputTokens") or 0) for entry in entries)
+    total_cache_read = sum(
+        int(entry.get("cacheReadTokens") or 0) for entry in entries
+    )
+    total_cache_write = sum(
+        int(entry.get("cacheWriteTokens") or 0) for entry in entries
+    )
+    known_costs = [
+        float(entry["costUsd"])
+        for entry in entries
+        if isinstance(entry.get("costUsd"), (int, float))
+    ]
+    unknown_cost_count = len(entries) - len(known_costs)
+    total_cost = sum(known_costs)
+    passed_object_refs = {
+        str(entry.get("contentObjectRef") or "")
+        for entry in entries
+        if entry.get("passed") is True
+        and entry.get("scope") == "content_object"
+        and str(entry.get("contentObjectRef") or "")
+    }
+    unit_passed_cost = (
+        round(total_cost / len(passed_object_refs), 9)
+        if passed_object_refs and not unknown_cost_count
+        else None
+    )
     return {
         "schema": "quwoquan.token_ledger",
         "executionId": ctx.execution_id,
         "measurementMode": measurement_mode,
         "entries": entries,
+        "usageJournal": existing_usage_journal(ctx.execution_id),
         "summary": {
             "entryCount": len(entries),
             "usedTokens": total_tokens,
+            "inputTokens": total_input,
+            "outputTokens": total_output,
+            "cacheReadTokens": total_cache_read,
+            "cacheWriteTokens": total_cache_write,
             "averageUsedTokens": round(total_tokens / len(entries), 2) if entries else 0,
-            "costUsd": round(total_cost, 6),
-            "unitPassedCostUsd": 0.0,
+            "costUsd": round(total_cost, 9) if not unknown_cost_count else None,
+            "unknownCostEntryCount": unknown_cost_count,
+            "retryCostUsd": round(
+                sum(float(entry.get("retryCostUsd") or 0.0) for entry in entries),
+                9,
+            ),
+            "passedObjectCount": len(passed_object_refs),
+            "unitPassedCostUsd": unit_passed_cost,
+            "budgetExceededCount": sum(
+                1 for entry in entries if entry.get("budgetExceeded") is True
+            ),
         },
     }
 
 
 __all__ = [
     "build_token_ledger_payload",
-    "dedupe_agent_runs",
     "required_creator_profile_id",
 ]

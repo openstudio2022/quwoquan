@@ -221,19 +221,28 @@ class _ReplyPreviewItem extends ConsumerWidget {
     final body = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: canReplyToReply ? () => onReplySelected?.call(reply) : null,
-          child: RoundedSquareAvatar(
-            size: AppSpacing.commentReplyAvatarSize,
-            imageUrl: reply.authorAvatarUrlSnapshot,
-            name: reply.authorDisplayNameSnapshot,
-            borderRadius: AppSpacing.commentReplyAvatarSize / 2,
-            backgroundColor: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.backgroundSecondary,
+        Semantics(
+          button: true,
+          label: UITextConstants.goToUserProfile,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _openCommentAuthorProfile(context, reply),
+            child: SizedBox.square(
+              dimension: AppSpacing.minInteractiveSize,
+              child: Center(
+                child: RoundedSquareAvatar(
+                  size: AppSpacing.commentReplyAvatarSize,
+                  imageUrl: reply.authorAvatarUrlSnapshot,
+                  name: reply.authorDisplayNameSnapshot,
+                  borderRadius: AppSpacing.commentReplyAvatarSize / 2,
+                  backgroundColor: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundSecondary,
+                  ),
+                  fallbackIcon: CupertinoIcons.person_fill,
+                ),
+              ),
             ),
-            fallbackIcon: CupertinoIcons.person_fill,
           ),
         ),
         SizedBox(width: AppSpacing.xs),
@@ -294,7 +303,9 @@ class _ReplyPreviewItem extends ConsumerWidget {
                 ),
               ],
               SizedBox(height: AppSpacing.xs),
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
                 children: [
                   Text(
                     formatCommentRelativeTime(context, reply.createdAt),
@@ -307,23 +318,53 @@ class _ReplyPreviewItem extends ConsumerWidget {
                     ),
                   ),
                   if (reply.canReply) ...[
-                    SizedBox(width: AppSpacing.md),
-                    GestureDetector(
-                      onTap: canReplyToReply
-                          ? () => onReplySelected?.call(reply)
-                          : null,
-                      child: Text(
-                        UITextConstants.replyAction,
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundSecondary,
+                    Semantics(
+                      button: true,
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size.square(
+                          AppSpacing.minInteractiveSize,
+                        ),
+                        onPressed: canReplyToReply
+                            ? () => onReplySelected?.call(reply)
+                            : null,
+                        child: Text(
+                          UITextConstants.replyAction,
+                          style: TextStyle(
+                            fontSize: AppTypography.xs,
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundSecondary,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ],
+                  Semantics(
+                    button: true,
+                    label: UITextConstants.commentMoreActions,
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size.square(
+                        AppSpacing.minInteractiveSize,
+                      ),
+                      onPressed: () => showCommentItemActionsSheet(
+                        context,
+                        ref,
+                        postId: postId,
+                        comment: reply,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.ellipsis,
+                        size: AppSpacing.iconSmall,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -338,18 +379,27 @@ class _ReplyPreviewItem extends ConsumerWidget {
           showDeleteAction: reply.canDelete,
           likeCount: reply.likeCount,
           dislikeCount: reply.dislikeCount,
-          onLike: () => ref
-              .read(commentProviderFamily(postId).notifier)
-              .toggleLike(reply.id),
+          onLike: () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+            ref
+                .read(commentProviderFamily(postId).notifier)
+                .toggleLike(reply.id);
+          }),
           onDislike: reply.canDelete
               ? null
-              : () => ref
-                    .read(commentProviderFamily(postId).notifier)
-                    .toggleDislike(reply.id),
+              : () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+                  ref
+                      .read(commentProviderFamily(postId).notifier)
+                      .toggleDislike(reply.id);
+                }),
           onDelete: reply.canDelete
-              ? () => ref
-                    .read(commentProviderFamily(postId).notifier)
-                    .deleteComment(reply.id)
+              ? () => unawaited(
+                  _deleteCommentWithConfirmation(
+                    context,
+                    ref,
+                    postId: postId,
+                    commentId: reply.id,
+                  ),
+                )
               : null,
         ),
       ],
@@ -368,7 +418,16 @@ class _ReplyPreviewItem extends ConsumerWidget {
             : AppColors.transparent,
         borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
       ),
-      child: body,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onLongPress: () => showCommentItemActionsSheet(
+          context,
+          ref,
+          postId: postId,
+          comment: reply,
+        ),
+        child: body,
+      ),
     );
   }
 }
@@ -377,21 +436,29 @@ class _CommentActions extends StatelessWidget {
   const _CommentActions({
     required this.comment,
     required this.isDark,
+    required this.onMore,
     this.onReply,
     this.onPin,
   });
 
   final ContentCommentListItem comment;
   final bool isDark;
+  final VoidCallback onMore;
   final VoidCallback? onReply;
   final VoidCallback? onPin;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final ipLocation = comment.authorIpLocation?.trim() ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _formatTime(context, comment.createdAt),
+          // IP 属地为创建时服务端快照；解析不出为空则只显示时间，绝不臆造。
+          ipLocation.isEmpty
+              ? _formatTime(context, comment.createdAt)
+              : '${_formatTime(context, comment.createdAt)}'
+                    ' ${UITextConstants.commentIpLocationPrefix}$ipLocation',
           style: TextStyle(
             fontSize: AppTypography.xs,
             color: AppColorsFunctional.getColor(
@@ -400,39 +467,73 @@ class _CommentActions extends StatelessWidget {
             ),
           ),
         ),
-        if (onReply != null) ...[
-          SizedBox(width: AppSpacing.md),
-          GestureDetector(
-            onTap: onReply,
-            child: Text(
-              UITextConstants.replyAction,
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.foregroundSecondary,
+        Wrap(
+          spacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (onReply != null)
+              Semantics(
+                button: true,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                  onPressed: onReply,
+                  child: Text(
+                    UITextConstants.replyAction,
+                    style: TextStyle(
+                      fontSize: AppTypography.xs,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (onPin != null)
+              Semantics(
+                button: true,
+                selected: comment.isPinned,
+                label: comment.isPinned
+                    ? UITextConstants.commentUnpinAction
+                    : UITextConstants.commentPinAction,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                  onPressed: onPin,
+                  child: Icon(
+                    comment.isPinned
+                        ? CupertinoIcons.pin_fill
+                        : CupertinoIcons.pin,
+                    size: AppSpacing.iconSmall,
+                    color: comment.isPinned
+                        ? AppColors.primaryColor
+                        : AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundTertiary,
+                          ),
+                  ),
+                ),
+              ),
+            Semantics(
+              button: true,
+              label: UITextConstants.commentMoreActions,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                onPressed: onMore,
+                child: Icon(
+                  CupertinoIcons.ellipsis,
+                  size: AppSpacing.iconSmall,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundTertiary,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-        const Spacer(),
-        if (onPin != null) ...[
-          GestureDetector(
-            onTap: onPin,
-            child: Icon(
-              comment.isPinned ? CupertinoIcons.pin_fill : CupertinoIcons.pin,
-              size: AppSpacing.iconSmall,
-              color: comment.isPinned
-                  ? AppColors.primaryColor
-                  : AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundTertiary,
-                    ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm),
-        ],
+          ],
+        ),
       ],
     );
   }
@@ -482,6 +583,7 @@ class _CommentReactionGroup extends StatelessWidget {
         children: [
           _ReactionIconButton(
             selected: likeSelected,
+            semanticLabel: UITextConstants.like,
             icon: CupertinoIcons.heart,
             selectedIcon: CupertinoIcons.heart_fill,
             count: likeCount,
@@ -491,6 +593,7 @@ class _CommentReactionGroup extends StatelessWidget {
           if (showDeleteAction)
             _ReactionIconButton(
               selected: false,
+              semanticLabel: UITextConstants.commentDeleteAction,
               icon: CupertinoIcons.trash,
               selectedIcon: CupertinoIcons.trash,
               reserveCountSlot: true,
@@ -499,6 +602,7 @@ class _CommentReactionGroup extends StatelessWidget {
           else
             _ReactionIconButton(
               selected: dislikeSelected,
+              semanticLabel: UITextConstants.commentDislike,
               icon: CupertinoIcons.hand_thumbsdown,
               selectedIcon: CupertinoIcons.hand_thumbsdown_fill,
               count: dislikeCount,
@@ -513,6 +617,7 @@ class _CommentReactionGroup extends StatelessWidget {
 class _ReactionIconButton extends StatelessWidget {
   const _ReactionIconButton({
     required this.selected,
+    required this.semanticLabel,
     required this.icon,
     required this.selectedIcon,
     this.count = 0,
@@ -521,6 +626,7 @@ class _ReactionIconButton extends StatelessWidget {
   });
 
   final bool selected;
+  final String semanticLabel;
   final IconData icon;
   final IconData selectedIcon;
   final int count;
@@ -533,40 +639,122 @@ class _ReactionIconButton extends StatelessWidget {
     final foreground = selected
         ? AppColors.error
         : AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        width: AppSpacing.commentReactionColumnWidth,
-        // 计数置于图标左侧定宽右对齐：数字宽度变化只向左扩展，
-        // 图标恒定贴按钮右缘，确保一级/二级赞踩图标右对齐且上下对齐。
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (reserveCountSlot)
-              SizedBox(
-                width: AppSpacing.commentReactionCountWidth,
-                child: Text(
-                  count > 0 ? formatCompactActionCount(count) : '',
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundTertiary,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: semanticLabel,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(
+          AppSpacing.commentReactionColumnWidth,
+          AppSpacing.minInteractiveSize,
+        ),
+        onPressed: onTap,
+        child: SizedBox(
+          width: AppSpacing.commentReactionColumnWidth,
+          height: AppSpacing.minInteractiveSize,
+          // 计数置于图标左侧定宽右对齐：数字宽度变化只向左扩展，
+          // 图标恒定贴按钮右缘，确保一级/二级赞踩图标右对齐且上下对齐。
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (reserveCountSlot)
+                SizedBox(
+                  width: AppSpacing.commentReactionCountWidth,
+                  child: Text(
+                    count > 0 ? formatCompactActionCount(count) : '',
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: AppTypography.xs,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundTertiary,
+                      ),
                     ),
                   ),
                 ),
+              SizedBox(width: AppSpacing.xs),
+              Icon(
+                selected ? selectedIcon : icon,
+                size: AppSpacing.commentReactionIconSize,
+                color: foreground,
               ),
-            SizedBox(width: AppSpacing.xs),
-            Icon(
-              selected ? selectedIcon : icon,
-              size: AppSpacing.commentReactionIconSize,
-              color: foreground,
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 一级评论排序切换（热门/最新）：切换只重新请求服务端，禁止本地重排。
+/// 选中态只用颜色与字重微差表达（几何稳定，无位移跳变）。
+class _CommentSortSwitcher extends StatelessWidget {
+  const _CommentSortSwitcher({
+    required this.sort,
+    required this.isDark,
+    required this.onChanged,
+  });
+
+  final ContentCommentSort sort;
+  final bool isDark;
+  final ValueChanged<ContentCommentSort> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          _sortOption(
+            label: UITextConstants.commentSortHot,
+            selected: sort == ContentCommentSort.hot,
+            onTap: () => onChanged(ContentCommentSort.hot),
+          ),
+          SizedBox(width: AppSpacing.md),
+          _sortOption(
+            label: UITextConstants.commentSortLatest,
+            selected: sort == ContentCommentSort.latest,
+            onTap: () => onChanged(ContentCommentSort.latest),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sortOption({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        minimumSize: const Size(
+          AppSpacing.minInteractiveSize,
+          AppSpacing.minInteractiveSize,
+        ),
+        onPressed: selected ? null : onTap,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.xs,
+            fontWeight: selected ? AppTypography.medium : AppTypography.regular,
+            color: selected
+                ? AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundPrimary,
+                  )
+                : AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundTertiary,
+                  ),
+          ),
         ),
       ),
     );

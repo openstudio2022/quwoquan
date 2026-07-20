@@ -13,13 +13,31 @@ RemoteHomepageRepository buildRemoteHomepageRepositoryForTest({
   required String baseUrl,
 }) {
   final gatewayBaseUri = Uri.parse(baseUrl);
+  final client = buildGeneratedCloudOperationClient(
+    httpClient: httpClient,
+    clientContextProvider: const _HomepageTestClientContext(),
+    telemetrySink: const _NoopHomepageTelemetrySink(),
+    environment: CloudRuntimeEnvironment(
+      environment: CloudEnvironment.gamma,
+      gatewayBaseUri: gatewayBaseUri,
+    ),
+  );
   return RemoteHomepageRepository(
     queryAdapter: buildHomepageQueryAdapterForTest(
       httpClient: httpClient,
       gatewayBaseUri: gatewayBaseUri,
     ),
-    httpClient: httpClient,
-    baseUrl: baseUrl,
+    client: client,
+    commandContext: (clientPageId, surface) => CloudOperationInvocationContext(
+      surfaceId: surface.id,
+      routeId: surface.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: 'test-idempotency-key',
+      actor: const CloudOperationActorContext(
+        accountId: 'test-account',
+        personaId: 'test-persona',
+      ),
+    ),
   );
 }
 

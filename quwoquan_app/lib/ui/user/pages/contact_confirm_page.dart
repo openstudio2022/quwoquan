@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
@@ -48,8 +51,9 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
   }
 
   Future<_ConfirmData> _load() async {
-    final repo = ref.read(userProfileRepositoryProvider);
-    final profile = await repo.getSubAccountProfile(widget.targetUserId);
+    final profile = await ref
+        .read(personaQueryProvider(AppUiSurfaces.addContactConfirm))
+        .getSubAccountProfile(widget.targetUserId);
     final capability = await ref
         .read(relationshipCapabilityRepositoryProvider)
         .getCapability(widget.targetUserId);
@@ -70,13 +74,30 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
     setState(() => _adding = true);
     try {
       await ref
-          .read(userProfileRepositoryProvider)
-          .followUser(widget.targetUserId);
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
+            widget.targetUserId,
+            currentFollowing: false,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactConfirm,
+          );
       if (!mounted) {
         return;
       }
       setState(() => _localAddState = ContactAddState.added);
       AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'relationship',
+              action: 'follow_contact_confirmed',
+              pageName: 'ContactConfirmPage',
+              targetType: 'user',
+              targetKey: widget.targetUserId,
+              payload: <String, dynamic>{'source': widget.source},
+            ),
+      );
     } catch (error) {
       if (!mounted) {
         return;

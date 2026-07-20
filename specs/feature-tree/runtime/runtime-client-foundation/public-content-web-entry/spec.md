@@ -1,4 +1,4 @@
-# L3：公开内容 Web 入口闭环（public-content-web-entry）
+# L3 特性：公开内容 Web 入口闭环（public-content-web-entry）
 
 ## L1 / L2 / L3 映射
 

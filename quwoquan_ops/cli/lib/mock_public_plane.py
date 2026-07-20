@@ -105,6 +105,16 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         path, _query = self._split_path()
         if self.mode == "api" and self._handle_auth_post(path):
             return
+        if self.mode == "api" and path == "/search":
+            self._send_json(
+                {
+                    "requestId": "alpha-search-request",
+                    "rankingVersion": "alpha-mock-v1",
+                    "hits": [],
+                    "mockBoundary": True,
+                }
+            )
+            return
         if self.mode == "api" and path == "/user/sync":
             self._send_json(
                 {

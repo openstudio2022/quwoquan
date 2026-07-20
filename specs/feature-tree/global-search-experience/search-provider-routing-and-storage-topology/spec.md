@@ -156,6 +156,13 @@ App / assistant tool
 | WP-E 索引长稳 | 写时投影器常驻增量、ES 重启后一致性与补偿恢复长稳；真集群 batch / 启动 SLA 重校准；单一根 Go module 构建门禁常驻 | `quwoquan_service/services/content-service/internal/infrastructure/{searchindex,placeindex}/**`、`quwoquan_service/runtime/search/es/**`、`quwoquan_service/services/search-service/deploy/Dockerfile`、`quwoquan_service/go.mod`/`go.sum` | api_integration 长稳（增量 / 重启恢复 / backfill 一致）+ 根 module CI 构建可复现 | R-S06-S-1 / R-S06-S-2 | 🔴 阻断：真集群/长稳未闭合；根 module 已闭合 |
 | WP-F 推荐信号 api_integration | 真实 Redis + search-service & content-service 双服务端到端，证明 `events.search.recommendation_signals → rm_recommend_feature → RuleScorer` 注入推荐 Feed | `quwoquan_service/services/search-service/**`、`.../content-service/internal/infrastructure/recommendation/**`、`runtime/redis/**` | api_integration 集成（真实 Redis 双服务冒烟）+ stackctl verify | R-S07-5 | ✅ 已完成：真实 Redis 双服务 api_integration 绿，证据已迁移 canonical run evidence（`search_signal_t3_report.json`） |
 | WP-G 上线准出 | 三层测试 证据矩阵齐全、stackctl gamma/prod-sim 准出、SLO/告警/AB/回滚演练、高并发负载模型与可重复性、商用上线门槛 | `quwoquan_ops/cli/stackctl.py`、`configs/observability/search_slo.yaml`、`quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml`、本 spec | api_integration stackctl verify + user_acceptance UAT + 回滚演练记录 + 高并发压测 + 可重复性 golden | R-IX07 / R-S06-S-1/2 | 🟡 部分：高并发 SLO/负载模型已冻结（`search_slo.yaml#load_model`）、背压(in-flight shed)/热点缓存已实现+单测、可重复性已冻结（稳定全序+AB 粘性+golden diff 0 跳变）、压测/profiling 证据落盘、user_acceptance 跨域 journey 已 recorded（`cross_domain_search_journey_test.dart`）、故障/回滚演练已 recorded（已迁移 canonical run evidence：`search_rollback_rehearsal.md`、`search_rollback_rehearsal_report.json`）；根 Go module 已闭合；**仍阻断**：prod-sim、真集群 measured 容量（R-S06-S-1） |
+| WP-H 可用性与工程收口（2026-07-20 商用复审新增） | 消除「remote 实际不可用」的直接根因与工程债 | `quwoquan_app/lib/core/services/remote_search_repository.dart`、`quwoquan_service/runtime/search/core.go`、`services/{search,circle,entity,user,content}-service/configs/gamma/config.yaml`、`services/search-service/internal/adapters/http/**`、`quwoquan_app/lib/core/services/search_repository*.dart` | local_contract（repository/provider 契约 + wire 小写断言）+ api_integration（`/search` 200 + rankReasons 透传 + recent 指标）+ user_acceptance（默认页历史旅程） | 复审报告 §8 | 🟡 部分：RemoteSearchRepository 断链、`Reason/Evidence/Facet/DegradeSignal/Provenance/Citation` json tag 漂移、gamma ES 超时已修（2026-07-20）；启动期 EnsureIndex 语义统一 / recent Prometheus / receipts storage 登记 / 静默 catch / typed payload 待做 |
+| WP-I 环境数据 env-seed-first（新增） | beta/gamma「搜什么都有」 | `contracts/metadata/search/test_fixtures/**`、各域 seed manifest、`search/query/tests/e2e.yaml` | local_contract fixture parity + api_integration gamma 非空断言 + user_acceptance beta 人工验收 | 复审报告 §8（R-S09 候选） | 🔴 未开始：beta/gamma 无搜索 seed；热门圈子/地点伪热榜需真热度读模型或语义降级 |
+| WP-J 交集 attach（新增，差异化核心） | `connectionState/intersectionReason` 死字段变真字段 | `services/search-service/internal/application/**`（attach 阶段）、content-service `IntersectionService.ObjectIntersections` 消费、`quwoquan_app/lib/ui/search/**`（诚实空态） | local_contract attach 单测（含降级）+ api_integration 双服务真实交集断言 + user_acceptance 交集 Tab 两态旅程 | 复审报告 §7（R-S08 候选） | 🔴 未开始：云侧无生产者；未落地前交集 Tab 必须诚实降级 |
+| WP-K 对象完备与语义收口（新增） | 对象—页面双向闭环 | `quwoquan_app/lib/ui/search/**`（user 分区 / Tab l10n / 失效反馈 / 无结果回显）、tag 检索决策 CR | local_contract widget + api_integration user 召回断言 + user_acceptance 跨对象旅程 | 复审报告 §5.2 | 🔴 未开始：user 已投影无承载；tag 未投影待决策 |
+| WP-L 观测与黄金指标（新增） | search 专有事件 + 三黄金指标 + 发布门禁搜索 job | `contracts/metadata/ops/event_record/event_catalog.yaml`、SLS 大盘、`.github/workflows/{delivery-gate,pre-release-gate}.yml` | local_contract 事件契约 + api_integration 指标可读 + user_acceptance 漏斗对账 | 复审报告 §8 | 🔴 未开始 |
+
+> 2026-07-20 商用复审（M5 专项）：完整报告见 [`docs/search-commercial-maturity-plan.md`](../../../../docs/search-commercial-maturity-plan.md)（对象全景 / 生命周期 / 双向矩阵 / P0–P5 / 标杆 / 交集规划 / GATE 清单）。
 
 ### `/plan-review` 商用缺口台账（2026-06-16）
 
@@ -168,7 +175,7 @@ App / assistant tool
 | PR-SR-03 | 高并发规格不能只写 P95；需覆盖 shard/replica/cache/refresh/bulk/circuit/Redis lag/index freshness | 架构 / 运维 | 纳入 R-S06-S-1，发布前阻断 | `search_slo.yaml#load_model` + `search-storage-topology-and-elasticity#容量校准` + 真集群 measured api_integration |
 | PR-SR-04 | 搜索准确性需可解释、可复现、可运营，不只“返回结果” | 产品 / 测试 / 运营 | 本轮补齐 | `rankReasons/rankPosition/matchedTerms/evidence/rankingVersion/experimentBucket`；repeatability golden；真集群 preference 验收 |
 | PR-SR-05 | 搜索词热力和推荐排序闭环需写清 local_contract/api_integration/AB 证据，不得只停留在投影 | 推荐 / 运营 | 本轮补齐 | WP-F 已 completed；线上 AB 收益为发布后观察项；acceptance 增加 searchTermAffinity scorer 消费证据 |
-| PR-SR-06 | search-service 曾使用独立 module，依赖图和容器构建无法由根门禁统一证明 | 自动化 / 运维 | 已收口为唯一根 Go module，服务保持独立二进制与部署单元 | `verify_go_single_module.py` + `verify_search_service_module.sh --with-tests` + `make build` |
+| PR-SR-06 | search-service 曾使用独立 module，依赖图和容器构建无法由根门禁统一证明 | 自动化 / 运维 | 已收口为唯一根 Go module，服务保持独立二进制与部署单元 | `verify_go_single_module.py` + service gate 的根构建/测试 |
 | PR-SR-07 | 写时增量与 backfill 幂等长稳未闭合 | 运维 / 测试 | 纳入 R-S06-S-2，长稳 /dev | publish/update/unpublish 投影 soak、backfill rerun count/hash、ES restart recovery |
 
 ### 刷新后任务清单（进入后续 `/baseline` 或 `/dev` 的唯一清单）
@@ -185,7 +192,7 @@ App / assistant tool
    - 状态：local 已完成，真集群待办。
 3. **高并发与弹性 measured 准出**
    - 内容：在 prod-sim / 原生 ES/OpenSearch 跑 baseline/peak/spike、warm/cold cache、热点/长尾、混合读写、ES restart、Redis delay、backfill 并发；回填 RPS/P95/P99/错误率/degrade/cache hit/threadpool/heap/GC/Redis lag。
-   - 测试：`QWQ_OUTPUT_ROOT/env/repo/runs/search-load/**` + 真集群 report；`stackctl verify --env gamma|prod --kind all --tier all`。
+   - 测试：`QWQ_OUTPUT_ROOT/env/repo/runs/search-load/**` + 真集群 report；`stackctl verify --env gamma|prod --kind all --profile release`。
    - 关联 backlog：R-S06-S-1。
    - 状态：发布前阻断。
 4. **写时增量 / backfill 幂等长稳**
@@ -200,7 +207,7 @@ App / assistant tool
    - 状态：链路完成，收益观察。
 6. **发布打包 / CI 干净检出可复现**
    - 内容：所有服务统一消费 `quwoquan_service/go.mod/go.sum`，从根 package path 构建独立二进制；search-service 的 deploy/release config 继续遵守版本与灰度合同。
-   - 测试：`verify_go_single_module.py`、`verify_search_service_module.sh --with-tests`、`verify_config_pr_policy.sh`、`gate_repo.sh --scope service`。
+   - 测试：`verify_go_single_module.py`、`verify_config_pr_policy.sh`、`gate_repo.sh --scope service`（根 module 构建与搜索服务测试）。
    - 关联 backlog：R-S06-S-3。
    - 状态：根 module 与搜索构建测试已完成；release config 由通用配置门禁持续验证。
 
@@ -216,7 +223,7 @@ App / assistant tool
 商用上线门槛（全部满足方可宣称商用上线）：
 
 1. local_contract/local_contract/api_integration 全绿（推荐信号真实 Redis 双服务 api_integration 已绿，WP-F）；跨域搜索 user_acceptance journey 补齐（WP-G）。
-2. stackctl `verify --env gamma --kind all --tier all` 与 prod-sim（`prod` rollout gray-initial）准出通过。
+2. stackctl `verify --env gamma --kind all --profile release` 与 prod-sim（`prod` rollout gray-initial）准出通过。
 3. SLO（`suggest` 即时、`result` P95 ≤ 1.5s、单域降级不阻塞）、告警（`quwoquan_search` 组）、AB 切桶（control / term_heat）可观测且大盘按桶切分。
 4. 高并发负载模型与 SLO 冻结（suggest/result/feedback/indexing 四类流量），可重复压测覆盖 warm/cold/突刺/混合读写/ES 重启，未达 SLO 即 NO-GO。
 5. 搜索结果可重复性冻结：稳定 sort tie-break、AB bucket sticky、重复查询 golden diff，同一查询不无故跳变。

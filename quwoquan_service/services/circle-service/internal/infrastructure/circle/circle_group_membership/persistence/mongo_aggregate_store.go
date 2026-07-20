@@ -128,7 +128,11 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request ports.Comm
 			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&sequence); sequenceErr != nil {
 			return nil, sequenceErr
 		}
-		payloadJSON, marshalErr := json.Marshal(eventPayload(next))
+		groupOwnerID, ownerErr := store.groupOwnerPersonaID(txCtx, next.GroupID)
+		if ownerErr != nil {
+			return nil, ownerErr
+		}
+		payloadJSON, marshalErr := json.Marshal(eventPayload(next, groupOwnerID))
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
@@ -247,9 +251,33 @@ func optionalTime(value time.Time) *time.Time {
 	return &result
 }
 
-func eventPayload(value model.CircleGroupMembership) map[string]any {
+// groupOwnerPersonaID 在提交事务内读取群主，用于事件 payload 自包含通知
+// 接收者；群主缺失（如群主自建事件本身）时返回空串，由通知投影按无接收者跳过。
+func (store *MongoAggregateStore) groupOwnerPersonaID(ctx context.Context, groupID string) (string, error) {
+	var document struct {
+		PersonaID string `bson:"personaId"`
+	}
+	err := store.memberships.FindOne(
+		ctx,
+		bson.M{
+			"groupId": strings.TrimSpace(groupID),
+			"role":    model.CircleGroupMembershipRoleOwner,
+			"state":   model.CircleGroupMembershipStateActive,
+		},
+		options.FindOne().SetProjection(bson.D{{Key: "personaId", Value: 1}}),
+	).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(document.PersonaID), nil
+}
+
+func eventPayload(value model.CircleGroupMembership, groupOwnerPersonaID string) map[string]any {
 	payload := map[string]any{
-		"_id": value.ID, "version": value.Version, "groupId": value.GroupID, "circleId": value.CircleID,
+		"id": value.ID, "version": value.Version, "groupId": value.GroupID, "circleId": value.CircleID,
 		"personaId": value.PersonaID, "role": value.Role, "state": value.State,
 		"createdAt": value.CreatedAt.UTC(), "updatedAt": value.UpdatedAt.UTC(),
 	}
@@ -261,6 +289,9 @@ func eventPayload(value model.CircleGroupMembership) map[string]any {
 	}
 	if !value.DecidedAt.IsZero() {
 		payload["decidedAt"] = value.DecidedAt.UTC()
+	}
+	if groupOwnerPersonaID != "" {
+		payload["groupOwnerPersonaId"] = groupOwnerPersonaID
 	}
 	return payload
 }

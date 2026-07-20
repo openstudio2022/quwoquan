@@ -457,7 +457,10 @@ func validateObjectSemantics(
 		))
 	}
 	if object.ObjectKind == ast.ObjectKindAggregateRoot {
-		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 {
+		declared, declaredExists := canonicalObjects[domainObjectKey(domain, object.CanonicalObject)]
+		deferredRoot := declaredExists && len(declared.DeferredOperations) > 0
+		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 &&
+			!deferredRoot {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.ZERO_ENTRYPOINT_ROOT",
 				sourcePath,

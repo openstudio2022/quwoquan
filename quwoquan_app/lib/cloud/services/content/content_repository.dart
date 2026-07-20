@@ -1,15 +1,13 @@
 import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 
 export 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
-export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
@@ -18,19 +16,10 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
-import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
     show
         ContentReadRepository,
-        ContentPostDetailReader,
-        ContentAuthorPostsReader,
-        ContentPostSearchRepository,
         ContentWriteRepository,
         ContentEngagementRepository,
         ContentConfigRepository,
@@ -42,10 +31,11 @@ export 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart'
     show DiscoveryFeedPage;
 export 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
     show
+        ContentDiscoveryFeedQuery,
         ContentReadRepository,
         ContentPostDetailReader,
+        ContentEntityWishlistStateReader,
         ContentAuthorPostsReader,
-        ContentPostSearchRepository,
         ContentWriteRepository,
         ContentEngagementRepository,
         ContentConfigRepository,
@@ -65,6 +55,8 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ContentCommentReactionCommandResult,
         ContentCommentReactionValue,
         ContentCommentReplyPageSlice,
+        ContentCommentSort,
+        ContentCommentViewerRelation,
         ContentPostReactionFacet,
         ContentCommentQuery,
         ContentCommentReactionWriter,
@@ -74,7 +66,7 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         DeleteContentCommentCommand,
         ReactToContentCommentCommand;
 
-part 'content_repository_mock.dart';
-part 'content_repository_mock_posts.dart';
-part 'content_repository_mock_search.dart';
+// 生产组合根 Remote-only：Mock 聚合替身已物理迁至
+// test/support/cloud_services/content/mock_content_repository.dart（测试）
+// 与 runners/alpha 的 fixture 回放实现（alpha 设备），生产 lib 不再包含。
 part 'content_repository_remote.dart';

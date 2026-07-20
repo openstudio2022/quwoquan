@@ -160,7 +160,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 		if !cronMatchesMinute(subscription.Trigger.Cron, now) {
 			continue
 		}
-		if !s.claimSubscriptionTick(subscription.SubscriptionID, now) {
+		if !s.claimSubscriptionTick(ctx, subscription.SubscriptionID, now) {
 			continue
 		}
 		turn, message, err := s.createProactiveTurnMessage(ctx, subscription, now)
@@ -234,6 +234,7 @@ func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input 
 		SearchQueryPlan: searchPlan,
 		Trigger:         trigger,
 		Destination:     destination,
+		ClientRequestID: strings.TrimSpace(input.ClientRequestID),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}, nil
@@ -262,7 +263,7 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 	if err != nil {
 		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 	}
-	if _, err := s.BuildFakeTurnStream(ctx, subscription.Owner.OwnerID, turn.TurnID); err != nil {
+	if _, err := s.ExecuteTurn(ctx, subscription.Owner.OwnerID, turn.TurnID); err != nil {
 		return assistant.AssistantTurn{}, NotificationAppMessageReceipt{}, err
 	}
 	switch subscription.Destination.DestinationType {
@@ -323,15 +324,23 @@ func (s *AssistantService) loadProactiveInterestProfile(ctx context.Context, use
 	return profile
 }
 
-func (s *AssistantService) claimSubscriptionTick(subscriptionID string, now time.Time) bool {
-	key := subscriptionID + ":" + now.UTC().Format("200601021504")
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.cronClaims[key] {
+// claimSubscriptionTick 以 Redis SetNX + TTL 领取订阅调度租约
+// （key 契约见 skill_subscription/storage.yaml）。同一 tick 窗口只有一个
+// 租约持有者，多实例并发安全；进程崩溃后租约随 TTL 过期可被重新领取。
+// Redis 不可用时返回 false（fail-closed：宁可漏发一次，不可重复投递）。
+func (s *AssistantService) claimSubscriptionTick(ctx context.Context, subscriptionID string, now time.Time) bool {
+	if s.cache == nil {
 		return false
 	}
-	s.cronClaims[key] = true
-	return true
+	window := now.UTC().Format("200601021504")
+	key := "assistant:cron:lease:" + subscriptionID + ":" + window
+	acquired, err := s.cache.SetNX(ctx, key, "1", 5*time.Minute)
+	if err != nil {
+		slog.WarnContext(ctx, "assistant subscription tick lease acquisition failed; skipping delivery",
+			slog.String("subscriptionId", subscriptionID), slog.String("error", err.Error()))
+		return false
+	}
+	return acquired
 }
 
 func normalizeSubscriptionStatus(raw string) (string, error) {

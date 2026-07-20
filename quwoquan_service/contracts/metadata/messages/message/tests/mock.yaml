@@ -1,0 +1,40 @@
+aggregate: Message
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/chat/
+
+scenarios:
+  - name: send_message_command_encode
+    description: ChatSendMessageCommand 编码（clientMsgId 即 Idempotency-Key，一次提交语义）
+    assertions:
+      - client_msg_id_required_and_non_empty
+      - idempotency_key_equals_client_msg_id
+      - writable_fields_only
+
+  - name: send_message_result_decode
+    description: ChatSendMessageResult 解析（messageId + seq + timestamp）
+    assertions:
+      - message_id_non_empty
+      - seq_positive
+      - replayed_result_matches_first_send
+
+  - name: send_message_offline_queue_replay
+    description: 持久化待发队列在进程重启后按原 clientMsgId 重放
+    assertions:
+      - queued_command_survives_restart
+      - replay_uses_original_client_msg_id
+      - accepted_message_removed_from_queue
+
+  - name: recall_message_noop
+    description: 已撤回消息重复撤回返回原结果
+    assertions:
+      - recalled_status_rendered_once
+      - repeat_recall_does_not_duplicate_bubble_state
+
+  - name: message_dto_parse
+    description: ChatMessageDto 解析（text/image/video/card、mentions、reply）
+    assertions:
+      - required_fields_non_empty
+      - card_attributes_bounded_at_16
+      - recalled_message_renders_placeholder

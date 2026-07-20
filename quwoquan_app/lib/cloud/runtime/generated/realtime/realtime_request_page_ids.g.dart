@@ -5,17 +5,19 @@ class RealtimeRequestPageIds {
   const RealtimeRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'ChannelWebhook': 'realtime.channel.webhook',
+    'GetPersonaPresence': 'realtime.get.persona.presence',
     'GetRealtimeConfig': 'realtime.config.get',
     'HealthCheck': 'realtime.health.check',
+    'IssueConnectionTicket': 'realtime.issue.connection.ticket',
     'LongPoll': 'chat.longpoll',
     'Metrics': 'realtime.metrics',
     'WebSocketUpgrade': 'chat.realtime',
   };
 
-  static const String channelWebhook = 'realtime.channel.webhook';
+  static const String getPersonaPresence = 'realtime.get.persona.presence';
   static const String getRealtimeConfig = 'realtime.config.get';
   static const String healthCheck = 'realtime.health.check';
+  static const String issueConnectionTicket = 'realtime.issue.connection.ticket';
   static const String longPoll = 'chat.longpoll';
   static const String metrics = 'realtime.metrics';
   static const String webSocketUpgrade = 'chat.realtime';

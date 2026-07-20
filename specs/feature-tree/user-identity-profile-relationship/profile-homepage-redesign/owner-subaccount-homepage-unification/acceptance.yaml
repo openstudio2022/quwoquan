@@ -44,6 +44,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_widget_contract
         cases:
         - local_contract.user.profile.interaction.share.navigation
@@ -78,6 +79,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_row_contract
         cases:
         - local_contract.user.profile.interaction.share.row_semantics
@@ -110,6 +112,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_preview_contract
         cases:
         - local_contract.user.profile.interaction.share.preview
@@ -139,13 +142,13 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/post/profile_share_interaction__local_contract_test.go
-      - file: quwoquan_service/services/content-service/internal/adapters/http/profile_share_interaction__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+      - file: quwoquan_service/services/content-service/internal/application/content/profile_interaction/profile_interaction_projectors__data_consistency__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_read_state_contract
         cases:
         - local_contract.user.profile.interaction.share.read_state
@@ -154,6 +157,7 @@ gwt_acceptance:
         quality_facet: observability
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: profile_share_api
         cases:
         - api_integration.content.profile_share.read_state
@@ -186,12 +190,13 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
-      - file: quwoquan_service/services/content-service/internal/application/post/profile_share_interaction__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+      - file: quwoquan_service/services/content-service/internal/application/content/profile_interaction/profile_interaction_projectors__data_consistency__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_state_contract
         cases:
         - local_contract.user.profile.interaction.share.cache_pagination
@@ -200,6 +205,7 @@ gwt_acceptance:
         quality_facet: performance
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: profile_share_api
         cases:
         - api_integration.content.profile_share.cursor
@@ -232,6 +238,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_navigation_contract
         cases:
         - local_contract.user.profile.interaction.share.navigation_priority
@@ -262,12 +269,13 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
-      - file: quwoquan_service/services/content-service/internal/adapters/http/profile_share_interaction__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/api_integration/profile_share_interaction__api_integration_test.go
+      - file: quwoquan_service/services/content-service/internal/application/content/profile_interaction/profile_interaction_projectors__data_consistency__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: profile_share_security
         cases:
         - api_integration.content.profile_share.owner_isolation
@@ -276,6 +284,7 @@ gwt_acceptance:
         quality_facet: security
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: profile_share_journey
         cases:
         - user_acceptance.user.profile.interaction.share.identity_switch
@@ -284,6 +293,7 @@ gwt_acceptance:
         test_object: page
         quality_facet: experience
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_identity_cache_contract
         cases:
         - local_contract.user.profile.interaction.share.identity_switch
@@ -318,6 +328,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_share_observability_contract
         cases:
         - local_contract.user.profile.interaction.share.observability
@@ -326,6 +337,7 @@ gwt_acceptance:
         quality_facet: observability
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: profile_share_journey
         cases:
         - user_acceptance.user.profile.interaction.share.full_journey
@@ -334,6 +346,7 @@ gwt_acceptance:
         test_object: page
         quality_facet: experience
       - layer: api_integration
+        execution_profile: integration
         suite: profile_share_observability_api
         cases:
         - api_integration.content.profile_share.contract
@@ -345,5 +358,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -6,6 +6,7 @@ class NotificationRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AckAppMessage': 'notification.ack.app.message',
+    'AckIncomingCallPresentation': 'notification.ack.incoming.call.presentation',
     'CreateAppMessage': 'notification.create.app.message',
     'GetAppMessage': 'notification.get.app.message',
     'GetAppMessageUnreadCount': 'notification.get.app.message.unread.count',
@@ -17,6 +18,7 @@ class NotificationRequestPageIds {
   };
 
   static const String ackAppMessage = 'notification.ack.app.message';
+  static const String ackIncomingCallPresentation = 'notification.ack.incoming.call.presentation';
   static const String createAppMessage = 'notification.create.app.message';
   static const String getAppMessage = 'notification.get.app.message';
   static const String getAppMessageUnreadCount = 'notification.get.app.message.unread.count';

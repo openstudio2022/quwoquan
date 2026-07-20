@@ -1,4 +1,4 @@
-# L4 特性：circle-kpi-dashboard-model
+# L3 特性：circle-kpi-dashboard-model
 
 ## 功能说明
 - 细化 circle-kpi-dashboard-model 特性的功能边界与端云协同行为。

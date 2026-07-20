@@ -1,4 +1,4 @@
-# L4 对象任务：page-session-longterm-assembly
+# L3 对象任务：page-session-longterm-assembly
 
 ## 功能说明
 - **PageContext Manager**：端侧上报接口 + 解析 + Redis 存储；支持 8 种页面场景（content_detail、feed、chat、circle 等）；含 userActions 数组；TTL 自动过期。

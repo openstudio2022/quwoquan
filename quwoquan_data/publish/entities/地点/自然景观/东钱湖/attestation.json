@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260719--travel-homepage-coverage--cn-zhejiang--canary-001",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/自然景观/东钱湖",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "gpt-5.5",
+    "modelFamily": "gpt",
+    "runId": "run-c6be3169-609e-43ce-96b0-ddf7bef8e830",
+    "resultHash": "sha256:48b638eaeaed39b7ed4fc158b191ccd5ba403d160ed00c96f4117a4ac79fbcb0"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

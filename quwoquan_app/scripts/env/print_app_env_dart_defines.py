@@ -31,6 +31,7 @@ DEFINE_KEYS = {
     "currentUserId": "APP_CURRENT_USER_ID",
     "appInstanceId": "APP_INSTANCE_ID",
     "appInstanceNamespace": "APP_INSTANCE_NAMESPACE",
+    "launchMode": "QWQ_APP_LAUNCH_MODE",
 }
 
 
@@ -77,6 +78,7 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         "currentUserId": args.current_user_id,
         "appInstanceId": args.app_instance_id,
         "appInstanceNamespace": args.app_instance_namespace,
+        "launchMode": args.launch_mode or os.environ.get("QWQ_APP_LAUNCH_MODE", ""),
         "appRolloutMode": args.rollout_mode or os.environ.get("APP_ROLLOUT_MODE", ""),
     }
     url_keys = {
@@ -107,6 +109,7 @@ def main() -> int:
     parser.add_argument("--current-user-id", default="")
     parser.add_argument("--app-instance-id", default="")
     parser.add_argument("--app-instance-namespace", default="")
+    parser.add_argument("--launch-mode", default="")
     parser.add_argument("--rollout-mode", default="")
     args = parser.parse_args()
 

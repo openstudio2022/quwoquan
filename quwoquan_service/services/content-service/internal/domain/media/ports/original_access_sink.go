@@ -2,22 +2,13 @@ package ports
 
 import (
 	"context"
-	"time"
 
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
 )
 
-type MediaOriginalAccessEvent struct {
-	EventID    string
-	EventType  string
-	Payload    []byte
-	OccurredAt time.Time
-}
-
 type MediaOriginalAccessAppendRequest struct {
 	Fact          mediamodel.MediaOriginalAccessFact
 	CommandDigest string
-	Event         MediaOriginalAccessEvent
 }
 
 type MediaOriginalAccessAppendResult struct {
@@ -26,7 +17,8 @@ type MediaOriginalAccessAppendResult struct {
 }
 
 // MediaOriginalAccessAppendSink is the only write port for original access
-// audit facts. Implementations must atomically append fact, receipt and outbox.
+// audit facts. Implementations must atomically append the fact and idempotency
+// receipt; the fact itself is the durable audit record.
 type MediaOriginalAccessAppendSink interface {
 	AppendMediaOriginalAccess(
 		context.Context,

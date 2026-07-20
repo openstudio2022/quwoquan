@@ -9,7 +9,8 @@ service:
     gap_id: USER_CREATOR_RUNTIME_PROFILE_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 
-# 不新增平行 API：公开读取复用 user_profile 与 user_work 已有 routes。
+# 不新增平行 API：公开读取复用 user_profile 已有 routes
+# （user_work/user_life_item 投影已随 B3/M12 裁决删除）。
 api_routes: []
 
 consumers:

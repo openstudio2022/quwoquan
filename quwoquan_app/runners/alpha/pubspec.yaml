@@ -13,6 +13,8 @@ dependencies:
   flutter_riverpod: ^3.2.1
   quwoquan_app:
     path: ../..
+  quwoquan_cloud_contracts:
+    path: ../../packages/quwoquan_cloud_contracts
   quwoquan_cloud_mock:
     path: ../../packages/quwoquan_cloud_mock
 

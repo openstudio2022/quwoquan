@@ -1,4 +1,4 @@
-# L5 叶子：sample-feature-train-registry
+# L3 特性：sample-feature-train-registry
 
 训练管线最小可交付单元：样本生成与存储、特征工程与注册表、模型训练与评估、模型注册与存储。保证 events 到 samples、dataset、model、registry 全链路打通，特征注册表与推理侧一致。
 

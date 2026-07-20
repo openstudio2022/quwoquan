@@ -16,6 +16,9 @@ business_rules:
   - reviewer 不能是 requester，且必须具备 claim review 权限
   - approved 或 rejected 后不可再次裁决
 lifecycle:
-  states: [pending, approved, rejected, withdrawn]
+  states: [pending_review, approved, rejected]
+  transitions:
+    - { from: pending_review, command: ReviewHomepageClaimRequest.approve, to: approved }
+    - { from: pending_review, command: ReviewHomepageClaimRequest.reject, to: rejected }
   optimistic_concurrency: version
   idempotency: command_receipt

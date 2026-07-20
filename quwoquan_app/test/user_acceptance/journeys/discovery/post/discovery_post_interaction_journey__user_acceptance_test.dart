@@ -27,6 +27,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 import '../../../../support/cloud_services/test_content_post_reaction_facet.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 // ── 测试辅助 ─────────────────────────────────────────────────────────────────
 

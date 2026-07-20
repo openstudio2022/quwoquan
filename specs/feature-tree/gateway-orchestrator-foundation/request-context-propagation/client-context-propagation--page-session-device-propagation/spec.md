@@ -1,4 +1,4 @@
-# L4 特性：page-session-device-propagation
+# L3 特性：page-session-device-propagation
 
 ## 功能说明
 - 待补充

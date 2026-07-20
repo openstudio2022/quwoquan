@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -37,7 +38,7 @@ Widget _wrap({
 }) {
   return ProviderScope(
     overrides: [
-      chatRepositoryProvider.overrideWithValue(repository),
+      chatRepositoryCompositionProvider.overrideWithValue(repository),
       chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
       if (externalShareService != null)
         forwardExternalShareServiceProvider.overrideWithValue(
@@ -103,10 +104,8 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.forwardMostContacted), findsOneWidget);
-    final title = tester.widget<Text>(
-      find.text(UITextConstants.forwardMostContacted),
-    );
+    expect(find.text(ChatText.forwardMostContacted), findsOneWidget);
+    final title = tester.widget<Text>(find.text(ChatText.forwardMostContacted));
     expect(title.style?.fontSize, AppTypography.iosTitle3);
     final surface = tester.widget<AppBottomModalSurface>(
       find.byType(AppBottomModalSurface),
@@ -122,15 +121,9 @@ void main() {
       ),
     );
     expect(find.byType(ForwardRecentRecipientItem), findsNWidgets(10));
-    expect(find.text(UITextConstants.forwardActionAppContacts), findsOneWidget);
-    expect(
-      find.text(UITextConstants.forwardActionWechatFriend),
-      findsOneWidget,
-    );
-    expect(
-      find.text(UITextConstants.forwardActionWechatMoments),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.forwardActionAppContacts), findsOneWidget);
+    expect(find.text(ChatText.forwardActionWechatFriend), findsOneWidget);
+    expect(find.text(ChatText.forwardActionWechatMoments), findsOneWidget);
     expect(find.text(UITextConstants.editProfileQrSaveAction), findsNothing);
     expect(find.text(UITextConstants.editProfileQrScanAction), findsNothing);
     expect(
@@ -161,7 +154,7 @@ void main() {
       find.text(UITextConstants.sectionLoadFailedTitleDefault),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.forwardActionAppContacts), findsOneWidget);
+    expect(find.text(ChatText.forwardActionAppContacts), findsOneWidget);
 
     repository.failListConversations = false;
     await tester.tap(find.text(UITextConstants.tryAgain));
@@ -188,7 +181,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.forwardActionWechatFriend));
+    await tester.tap(find.text(ChatText.forwardActionWechatFriend));
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));
     expect(externalShareService.targets, <ForwardExternalShareTarget>[
@@ -196,7 +189,7 @@ void main() {
     ]);
     expect(externalShareService.payloads.single.title, _payload.title);
 
-    await tester.tap(find.text(UITextConstants.forwardActionWechatMoments));
+    await tester.tap(find.text(ChatText.forwardActionWechatMoments));
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));
     expect(externalShareService.targets, <ForwardExternalShareTarget>[
@@ -306,13 +299,13 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.forwardActionAppContacts));
+    await tester.tap(find.text(ChatText.forwardActionAppContacts));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.forwardSelectChatTitle), findsOneWidget);
-    expect(find.text(UITextConstants.forwardRecentForwards), findsNothing);
+    expect(find.text(ChatText.forwardSelectChatTitle), findsOneWidget);
+    expect(find.text(ChatText.forwardRecentForwards), findsNothing);
     expect(find.byType(ForwardRecentRecipientItem), findsNothing);
-    expect(find.text(UITextConstants.forwardRecentChats), findsOneWidget);
+    expect(find.text(ChatText.forwardRecentChats), findsOneWidget);
     expect(find.byType(ForwardRecipientListCard), findsWidgets);
     expect(
       tester.getTopLeft(find.text('最近 11')).dy,
@@ -323,7 +316,7 @@ void main() {
       Offset(0, -AppSpacing.oneHundred * 8),
     );
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.forwardContacts), findsOneWidget);
+    expect(find.text(ChatText.forwardContacts), findsOneWidget);
     expect(find.text('联系人 A'), findsOneWidget);
     expect(find.text('群聊 A'), findsOneWidget);
     expect(find.text('圈子行'), findsNothing);
@@ -365,7 +358,7 @@ void main() {
     expect(input.keyboardType, TextInputType.multiline);
     await tester.enterText(find.byType(CupertinoTextField), '一起看看');
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.send).last);
+    await tester.tap(find.text(ChatText.send).last);
     await tester.pumpAndSettle();
 
     expect(repository.sendCallCount, 1);

@@ -1,48 +1,18 @@
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 
-/// 圈子 Hub：wire / mock 行 → [CircleDto] 与 [CircleHubFeedPostEntry] 的单点适配（见 gap 清单 policy.non_assistant_ui_wire_adapter_entrypoints）。
-CircleDto circleDtoFromHubMockMap(Map<String, Object?> circle) {
-  return CircleDto.fromMap(Map<String, dynamic>.from(circle));
-}
-
-/// 合并圈子名到 wire 行，供 [CircleHubFeedPostEntry.fromMap] 使用。
-Map<String, dynamic> mergeCircleStoryRaw(
-  Map<String, Object?> item,
-  String circleName,
-) {
-  return <String, dynamic>{
-    ...Map<String, dynamic>.from(item),
-    if (!item.containsKey('circleName')) 'circleName': circleName,
-  };
-}
-
-/// 合并圈子展示名后解析为 [CircleHubFeedPostEntry]（单点入口，避免各处重复 `fromMap(merge...)`）。
-CircleHubFeedPostEntry mergeCircleStoryEntry(
-  Map<String, Object?> item,
-  String circleName,
-) {
-  return CircleHubFeedPostEntry.fromMap(mergeCircleStoryRaw(item, circleName));
-}
-
-String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
-  final type = (item['contentType'] ?? '').toString();
-  switch (type) {
-    case 'image':
-      return UITextConstants.discoveryTabPhoto;
-    case 'video':
-      return UITextConstants.discoveryTabVideo;
-    case 'article':
-      return UITextConstants.creationSubArticle;
-    case 'micro':
-      final hasVideo = (item['videoUrl']?.toString().trim() ?? '').isNotEmpty;
-      final imageUrls = item['imageUrls'];
-      final hasImages = imageUrls is List && imageUrls.isNotEmpty;
-      if (hasVideo) return UITextConstants.discoveryTabVideo;
-      if (hasImages) return UITextConstants.discoveryTabPhoto;
-      return UITextConstants.creationSubMicro;
-    default:
-      return UITextConstants.homeCirclesStoryTypeCreation;
+String hubCircleStoryTypeLabel(PostBaseDto post) {
+  if (post.isVideoLike || post.hasVideo) {
+    return UITextConstants.discoveryTabVideo;
   }
+  if (post.hasImages) {
+    return UITextConstants.discoveryTabPhoto;
+  }
+  if (post.isArticleLike) {
+    return UITextConstants.creationSubArticle;
+  }
+  if (post.type == 'micro') {
+    return UITextConstants.creationSubMicro;
+  }
+  return UITextConstants.homeCirclesStoryTypeCreation;
 }

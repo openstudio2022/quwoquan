@@ -1,4 +1,4 @@
-# 消息交互体验增强（Message Interaction Polish）
+# L3 特性：消息交互体验增强（Message Interaction Polish）
 
 > **层级**：L3_subfeature（隶属 L2 `list-detail-message-delivery`，L1 `chat-conversation`）
 > **状态**：specified

@@ -137,8 +137,8 @@ def main() -> int:
                 "T3": t3,
                 "T4": t4,
             },
-            "cloudGateReminder": (
-                "Local gamma mirror does not replace cloud gamma, prod SLO, "
+            "prodGateReminder": (
+                "Local gamma mirror does not replace prod-hosted validation, prod SLO, "
                 "rollback drill, or prod observability gates."
             ),
         }

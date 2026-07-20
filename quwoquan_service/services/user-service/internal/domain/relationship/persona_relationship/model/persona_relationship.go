@@ -121,6 +121,8 @@ type OutboxPayload struct {
 	SourcePersonaID         string    `json:"sourcePersonaId"`
 	TargetPersonaID         string    `json:"targetPersonaId"`
 	Following               bool      `json:"following"`
+	SourceFollowCleared     bool      `json:"sourceFollowCleared,omitempty"`
+	TargetFollowCleared     bool      `json:"targetFollowCleared,omitempty"`
 	ClearedFollowDirections int       `json:"clearedFollowDirections,omitempty"`
 	Version                 int64     `json:"version"`
 	OccurredAt              time.Time `json:"occurredAt"`

@@ -142,8 +142,8 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     cancel?.call();
   }
 
-  Future<void> applyLoginResult(AuthLoginResultDto result) async {
-    await _store.saveLoginResult(result);
+  Future<void> applyLoginGrant(AuthSessionGrant result) async {
+    await _store.saveLoginGrant(result);
     final stored = await _store.read();
     _syncDeviceActorId(stored.installId);
     if (!ref.mounted) {
@@ -166,13 +166,13 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
-  Future<void> applyRememberedLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> applyRememberedLoginGrant(
+    AuthSessionGrant result, {
     required AuthRememberedLoginMethod rememberedLoginMethod,
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {
-    await _store.saveLoginResult(
+    await _store.saveLoginGrant(
       result,
       rememberedLoginMethod: rememberedLoginMethod,
       rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
@@ -200,18 +200,14 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
-  Future<void> applyRefreshResult(AuthLoginResultDto result) async {
+  Future<void> applyRefreshGrant(TokenRefreshGrant result) async {
     final current = state;
     final accessToken = result.accessToken.trim();
     final refreshToken = result.refreshToken.trim();
     if (accessToken.isEmpty || refreshToken.isEmpty) {
       throw StateError('refresh result missing tokens');
     }
-    await _store.saveRefreshedTokens(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    );
-    await _store.saveRefreshedAccountHint(result.accountHint);
+    await _store.saveRefreshGrant(result);
     final stored = await _store.read();
     _syncDeviceActorId(stored.installId);
     if (!ref.mounted) {
@@ -332,6 +328,23 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
+  /// 云端账号已进入不可逆 closed 终态后，本地持久层即使异常也必须立即切到游客态。
+  ///
+  /// 该方法不替代 [hardLogout]；仅供 CloseAccount 已成功、但本地安全存储清理失败时
+  /// fail-closed，避免失效 token 继续驱动已登录 UI 或形成登录门循环。
+  void forceGuestAfterTerminalAccountClosure() {
+    if (!ref.mounted) {
+      return;
+    }
+    final installId = state.installId;
+    _syncDeviceActorId(installId);
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.manualLoggedOut,
+      installId: installId,
+    );
+  }
+
   /// 兼容旧调用：等价于彻底退出。新代码应显式使用 softLogout / hardLogout。
   Future<void> clearForLogout() => hardLogout();
 
@@ -366,13 +379,12 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     }
     try {
       final result = await _awaitRefreshResult(
-        ref.read(authSessionRefreshExecutorProvider)(
-          refreshToken,
-          abortTrigger: abortTrigger,
-        ),
+        ref
+            .read(accountSessionLifecycleCommandWriterProvider)
+            .refreshToken(RefreshTokenCommand(refreshToken: refreshToken)),
         abortTrigger: abortTrigger,
       );
-      await applyRefreshResult(result);
+      await applyRefreshGrant(result);
       return true;
     } catch (e) {
       if (e is http.RequestAbortedException ||
@@ -398,16 +410,16 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     }
   }
 
-  Future<AuthLoginResultDto> _awaitRefreshResult(
-    Future<AuthLoginResultDto> refresh, {
+  Future<TokenRefreshGrant> _awaitRefreshResult(
+    Future<TokenRefreshGrant> refresh, {
     Future<void>? abortTrigger,
   }) {
     if (abortTrigger == null) {
       return refresh;
     }
-    return Future.any<AuthLoginResultDto>(<Future<AuthLoginResultDto>>[
+    return Future.any<TokenRefreshGrant>(<Future<TokenRefreshGrant>>[
       refresh,
-      abortTrigger.then<AuthLoginResultDto>(
+      abortTrigger.then<TokenRefreshGrant>(
         (_) => throw const CloudOperationCancelledException(),
       ),
     ]);
@@ -427,6 +439,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   bool _shouldClearSessionForRefreshFailure(Object error) {
+    if (error is AccountSessionTokenExpiredException) {
+      return true;
+    }
     if (error is CloudException) {
       return error.type == CloudErrorType.unauthorized ||
           error.type == CloudErrorType.forbidden;

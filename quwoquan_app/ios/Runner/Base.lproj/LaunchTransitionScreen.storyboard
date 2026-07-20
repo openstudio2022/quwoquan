@@ -22,8 +22,11 @@
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" image="LaunchBrandCluster" translatesAutoresizingMaskIntoConstraints="NO" id="QWQ-LAUNCH-BRAND-CLUSTER">
                                 <rect key="frame" x="0.0" y="176" width="393" height="500"/>
                             </imageView>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" image="LaunchBrandFooter" translatesAutoresizingMaskIntoConstraints="NO" id="QWQ-LAUNCH-BRAND-FOOTER">
+                                <rect key="frame" x="0.0" y="756" width="393" height="96"/>
+                            </imageView>
                         </subviews>
-                        <color key="backgroundColor" red="0.0392156863" green="0.5176470588" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.0274509804" green="0.3647058824" blue="0.9058823529" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="QWQ-LAUNCH-TRANSITION-BACKGROUND" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="QWQ-LAUNCH-TRANSITION-TOP"/>
                             <constraint firstItem="QWQ-LAUNCH-TRANSITION-BACKGROUND" firstAttribute="bottom" secondItem="Ze5-6b-2t3" secondAttribute="bottom" id="QWQ-LAUNCH-TRANSITION-BOTTOM"/>
@@ -33,6 +36,10 @@
                             <constraint firstItem="QWQ-LAUNCH-BRAND-CLUSTER" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="QWQ-LAUNCH-BRAND-CENTER-Y"/>
                             <constraint firstItem="QWQ-LAUNCH-BRAND-CLUSTER" firstAttribute="width" constant="393" id="QWQ-LAUNCH-BRAND-WIDTH"/>
                             <constraint firstItem="QWQ-LAUNCH-BRAND-CLUSTER" firstAttribute="height" constant="500" id="QWQ-LAUNCH-BRAND-HEIGHT"/>
+                            <constraint firstItem="QWQ-LAUNCH-BRAND-FOOTER" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="QWQ-LAUNCH-BRAND-FOOTER-CENTER-X"/>
+                            <constraint firstItem="QWQ-LAUNCH-BRAND-FOOTER" firstAttribute="bottom" secondItem="Ze5-6b-2t3" secondAttribute="bottom" id="QWQ-LAUNCH-BRAND-FOOTER-BOTTOM"/>
+                            <constraint firstItem="QWQ-LAUNCH-BRAND-FOOTER" firstAttribute="width" constant="393" id="QWQ-LAUNCH-BRAND-FOOTER-WIDTH"/>
+                            <constraint firstItem="QWQ-LAUNCH-BRAND-FOOTER" firstAttribute="height" constant="96" id="QWQ-LAUNCH-BRAND-FOOTER-HEIGHT"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -43,6 +50,7 @@
     </scenes>
     <resources>
         <image name="LaunchBrandCluster" width="393" height="500"/>
+        <image name="LaunchBrandFooter" width="393" height="96"/>
         <image name="LaunchTransitionBackground" width="1" height="3"/>
     </resources>
 </document>

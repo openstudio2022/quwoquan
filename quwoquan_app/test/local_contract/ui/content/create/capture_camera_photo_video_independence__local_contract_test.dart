@@ -105,18 +105,24 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 400));
     }
-    await tester.tap(find.byKey(const ValueKey<String>('camera-record-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-record-action')),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
     // 视频先进预览确认（重拍/下一步），不会落到图片确认文案。
     expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
     expect(find.text(UITextConstants.cameraUsePhoto), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey<String>('camera-use-video-action')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('camera-use-video-action')),
+    );
     await tester.pumpAndSettle();
 
     expect(result?.type, CreateMediaType.video);
@@ -172,7 +178,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
     ];
   }

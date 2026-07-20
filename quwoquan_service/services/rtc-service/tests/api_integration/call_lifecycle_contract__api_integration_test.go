@@ -265,40 +265,51 @@ func TestContract_ToggleCamera(t *testing.T) {
 	}
 }
 
-func TestContract_Recording_StartStop(t *testing.T) {
+func TestContract_ServerOwnedCASAndNoopReceipt(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := createTestCall(t, "user_rec_001")
+	resp := createTestCall(t, "user_cas_001")
 	callID := extractSessionID(t, resp)
-
 	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
 	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_rec_001", http.StatusOK)
+	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_cas_001", http.StatusOK)
 
-	startResp := doPost(t, "/rtc/calls/"+callID+"/recording/start", `{}`, "user_rec_001", http.StatusOK)
-	if startResp["isRecording"] != true {
-		t.Errorf("expected isRecording=true, got %v", startResp["isRecording"])
+	// 首次静音成功，版本推进。
+	firstCode, first := doPostWithKey(t, "/rtc/calls/"+callID+"/mute", `{"muted":true}`, "user_cas_001", "mute-key-1")
+	if firstCode != http.StatusOK {
+		t.Fatalf("first mute status = %d: %v", firstCode, first)
+	}
+	firstVersion := first["version"]
+
+	// 相同 Idempotency-Key 重放：返回首次结果，版本不变。
+	replayCode, replay := doPostWithKey(t, "/rtc/calls/"+callID+"/mute", `{"muted":true}`, "user_cas_001", "mute-key-1")
+	if replayCode != http.StatusOK || replay["version"] != firstVersion {
+		t.Fatalf("replay must return first result: code=%d version=%v want %v", replayCode, replay["version"], firstVersion)
 	}
 
-	stopResp := doPost(t, "/rtc/calls/"+callID+"/recording/stop", `{}`, "user_rec_001", http.StatusOK)
-	if stopResp["isRecording"] != false {
-		t.Errorf("expected isRecording=false, got %v", stopResp["isRecording"])
+	// 新 key、目标状态已满足（已静音）：no-op receipt，版本不递增。
+	noopCode, noop := doPostWithKey(t, "/rtc/calls/"+callID+"/mute", `{"muted":true}`, "user_cas_001", "mute-key-2")
+	if noopCode != http.StatusOK {
+		t.Fatalf("noop mute status = %d: %v", noopCode, noop)
+	}
+	if noop["version"] != firstVersion {
+		t.Fatalf("noop must not advance version: got %v want %v", noop["version"], firstVersion)
 	}
 }
 
-func TestContract_Recording_OnlyInitiator(t *testing.T) {
+func TestContract_NonParticipantIsRejected(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	resp := createTestCall(t, "user_rec_002")
+	resp := createTestCall(t, "user_bola_owner")
 	callID := extractSessionID(t, resp)
 
-	doPost(t, "/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_invitee_001", http.StatusOK)
-	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_rec_002", http.StatusOK)
-
-	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/recording/start", `{}`, "user_invitee_001")
+	code, _ := doGet(t, "/rtc/calls/"+callID, "user_bola_intruder")
 	if code == http.StatusOK {
-		t.Error("non-initiator should not start recording")
+		t.Fatalf("non-participant GetCall must not succeed, got %d", code)
+	}
+	mutateCode, _ := doPostAny(t, "/rtc/calls/"+callID+"/hangup", `{}`, "user_bola_intruder")
+	if mutateCode == http.StatusOK {
+		t.Fatalf("non-participant hangup must not succeed, got %d", mutateCode)
 	}
 }
 

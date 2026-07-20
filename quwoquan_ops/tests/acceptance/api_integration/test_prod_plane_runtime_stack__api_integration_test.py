@@ -27,8 +27,13 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             "user-service",
             "assistant-service",
             "product-ops-service",
+            "platform-ops-service",
             "tag-service",
             "entity-service",
+            "integration-service",
+            "notification-service",
+            "realtime-gateway",
+            "rtc-service",
         ]
         for service in service_names:
             package = output_root / "env/prod/release/service" / service
@@ -103,8 +108,11 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "user-service",
                     "assistant-service",
                     "product-ops-service",
+                    "platform-ops-service",
                     "tag-service",
                     "entity-service",
+                    "integration-service",
+                    "notification-service",
                 ],
             )
             self.assertEqual(report["supportComposeServices"], ["gamma-proxy"])
@@ -136,25 +144,74 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             # prod-hosted 首波不含 elasticsearch，write-time 投影必须关闭。
             self.assertEqual(entity_env["SEARCH_ES_ENABLED"], "false")
             self.assertNotIn("SEARCH_ES_ENDPOINTS", entity_env)
+            integration = compose_payload["services"]["integration-service"]
+            integration_env = integration["environment"]
+            self.assertEqual(
+                integration_env["INTEGRATION_MONGO_URI"],
+                "mongodb://host.containers.internal:19410/?directConnection=true",
+            )
+            self.assertEqual(integration_env["INTEGRATION_PUSH_ENABLED"], "true")
+            self.assertEqual(integration_env["INTEGRATION_PUSH_MODE"], "real")
+            self.assertEqual(
+                integration_env["INTEGRATION_PUSH_APNS_ENVIRONMENT"],
+                "production",
+            )
+            self.assertEqual(
+                integration["env_file"],
+                ["/home/prod-service-svc/credentials/integration/push.env"],
+            )
+            self.assertIn(
+                "/home/prod-service-svc/credentials/integration/apns-auth-key.p8:"
+                "/run/secrets/quwoquan/integration/apns-auth-key.p8:ro",
+                integration["volumes"],
+            )
+            self.assertIn(
+                "/home/prod-service-svc/credentials/integration/"
+                "fcm-service-account.json:/run/secrets/quwoquan/integration/"
+                "fcm-service-account.json:ro",
+                integration["volumes"],
+            )
+            notification_env = compose_payload["services"]["notification-service"][
+                "environment"
+            ]
+            self.assertEqual(
+                notification_env["NOTIFICATION_MONGO_URI"],
+                "mongodb://host.containers.internal:19410/?directConnection=true",
+            )
+            self.assertEqual(
+                notification_env["NOTIFICATION_REDIS_ADDR"],
+                "host.containers.internal:19420",
+            )
+            self.assertEqual(
+                notification_env["NOTIFICATION_REALTIME_BASE_URL"],
+                "http://host.containers.internal:"
+                "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}",
+            )
             env_text = (out_dir / "stack.env").read_text(encoding="utf-8")
             self.assertIn("LOCAL_GAMMA_IMAGE_VERSION=1.20260617.rootless-service-plane", env_text)
             self.assertIn("LOCAL_GAMMA_HTTPS_PORT=18443", env_text)
             self.assertIn("LOCAL_GAMMA_ADMIN_PORT=12019", env_text)
+            self.assertIn("LOCAL_GAMMA_INTEGRATION_PORT=19310", env_text)
+            self.assertIn("LOCAL_GAMMA_NOTIFICATION_PORT=19320", env_text)
+            self.assertIn("LOCAL_GAMMA_REALTIME_PORT=19340", env_text)
+            self.assertNotIn("INTEGRATION_PUSH_APNS_KEY_ID", env_text)
+            self.assertNotIn("INTEGRATION_PUSH_FCM_PROJECT_ID", env_text)
             caddy_text = (out_dir / "runtime/Caddyfile").read_text(encoding="utf-8")
             self.assertNotIn("/v1/", caddy_text)
+            self.assertNotIn("\n:80 {", caddy_text)
             self.assertIn("handle /config/app", caddy_text)
             self.assertIn("@api_tag path /tag*", caddy_text)
             self.assertIn(
-                "@pub_user path /auth* /owner* /user* /me /me/*",
+                "@api_user path /auth* /owner* /user* /me /me/*",
                 caddy_text,
             )
             self.assertIn("@api_entity path /homepages*", caddy_text)
-            self.assertIn("@pub_entity path /homepages*", caddy_text)
-            self.assertEqual(caddy_text.count("reverse_proxy entity-service:18084"), 2)
-            self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 2)
+            self.assertNotIn("@pub_entity path /homepages*", caddy_text)
+            self.assertEqual(caddy_text.count("reverse_proxy entity-service:18084"), 1)
+            self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 1)
             self.assertEqual(
                 caddy_text.count('Content-Type "text/html; charset=utf-8"'),
-                2,
+                1,
             )
             content_prod = yaml.safe_load(
                 (out_dir / "runtime/config-root/configs/content-service/prod/config.yaml").read_text(
@@ -211,7 +268,84 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("LOCAL_GAMMA_HTTP_PORT=29000", env_text)
             self.assertIn("LOCAL_GAMMA_CONTENT_PORT=29220", env_text)
             self.assertIn("LOCAL_GAMMA_ENTITY_PORT=29290", env_text)
+            self.assertIn("LOCAL_GAMMA_INTEGRATION_PORT=29310", env_text)
+            self.assertIn("LOCAL_GAMMA_NOTIFICATION_PORT=29320", env_text)
+            self.assertIn("LOCAL_GAMMA_REALTIME_PORT=29340", env_text)
+            self.assertIn("LOCAL_GAMMA_RTC_PORT=29350", env_text)
             self.assertIn("LOCAL_GAMMA_POSTGRES_PORT=29400", env_text)
+
+    def test_render_edge_plane_wires_realtime_and_rtc_with_external_data(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "edge"
+            env, _ = self._render_env(tmp)
+            result = subprocess.run(
+                [
+                    "python3",
+                    "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+                    "--plane",
+                    "edge",
+                    "--instance",
+                    "prod",
+                    "--config-version",
+                    "local-gamma-v1",
+                    "--image-version",
+                    "d6ccc4c96adb",
+                    "--output-dir",
+                    str(out_dir),
+                ],
+                cwd=str(ROOT),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(
+                (out_dir / "provenance.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(report["plane"], "edge")
+            self.assertEqual(
+                report["governedComposeServices"],
+                ["realtime-gateway", "rtc-service"],
+            )
+            compose = yaml.safe_load(
+                (out_dir / "docker-compose.prod-hosted.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                set(compose["services"]),
+                {"realtime-gateway", "rtc-service"},
+            )
+            realtime_env = compose["services"]["realtime-gateway"]["environment"]
+            rtc_env = compose["services"]["rtc-service"]["environment"]
+            self.assertEqual(
+                realtime_env["REALTIME_REDIS_ADDR"],
+                "host.containers.internal:19420",
+            )
+            self.assertEqual(
+                rtc_env["MONGO_URI"],
+                "mongodb://host.containers.internal:19410/?directConnection=true",
+            )
+            self.assertEqual(rtc_env["REDIS_ADDR"], "host.containers.internal:19420")
+            self.assertIn("PROD_LIVEKIT_PUBLIC_URL", rtc_env["LIVEKIT_URL"])
+            self.assertNotIn("depends_on", compose["services"]["realtime-gateway"])
+            self.assertNotIn("depends_on", compose["services"]["rtc-service"])
+            env_text = (out_dir / "stack.env").read_text(encoding="utf-8")
+            self.assertIn(
+                "LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE="
+                "localhost/quwoquan_service_realtime-gateway:d6ccc4c96adb",
+                env_text,
+            )
+            self.assertIn(
+                "LOCAL_GAMMA_RTC_SERVICE_IMAGE="
+                "localhost/quwoquan_service_rtc-service:d6ccc4c96adb",
+                env_text,
+            )
+            self.assertIn("LOCAL_GAMMA_REALTIME_PORT=19340", env_text)
+            self.assertIn("LOCAL_GAMMA_RTC_PORT=19350", env_text)
 
     def test_render_rejects_package_without_release_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -252,6 +386,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     str(key_dir),
                     "--services",
                     "content-service,tag-service",
+                    "--image-version",
+                    "test-build-123",
                     "--dry-run",
                 ],
                 cwd=str(ROOT),
@@ -264,11 +400,11 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertEqual(report["services"], ["content-service", "tag-service"])
             self.assertEqual(
                 report["images"]["content-service"],
-                "localhost/quwoquan_service_content-service:latest",
+                "localhost/quwoquan_service_content-service:test-build-123",
             )
             self.assertEqual(
                 report["images"]["tag-service"],
-                "localhost/quwoquan_service_tag-service:latest",
+                "localhost/quwoquan_service_tag-service:test-build-123",
             )
 
 

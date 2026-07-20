@@ -25,6 +25,7 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	}
 	for _, relativePath := range []string{
 		"assistant/assistant_interaction_event/fields.yaml",
+		"assistant/assistant_preference_fact/fields.yaml",
 		"assistant/assistant_scorecard_fact/fields.yaml",
 	} {
 		additional, readErr := readFields(filepath.Join(metadataDir, relativePath))
@@ -38,6 +39,16 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 			ff.Entities[name] = entity
 		}
 	}
+	preferenceService, err := readService(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant_preference_fact",
+		"service.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	svc.APIRoutes = append(svc.APIRoutes, preferenceService.APIRoutes...)
 	names := collectAssistantWireEntities(ff, svc)
 	out := renderAssistantCloudApiWireDart(ff, names)
 	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "assistant", "assistant_cloud_api_wire.g.dart")
@@ -366,8 +377,6 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 		return `(json['queryEcho'] ?? '').toString().trim()`
 	case "taskId":
 		return `(json['taskId'] ?? '').toString()`
-	case "memoryId":
-		return `(json['memoryId'] ?? '').toString()`
 	case "skillId":
 		return `(json['skillId'] ?? '').toString()`
 	case "displayName":
@@ -396,16 +405,8 @@ func assistantWireFromJsonExpr(ff *fieldsFile, entityName string, f fieldDef) st
 		if entityName == "AssistantUserTaskView" {
 			return `(json['status'] ?? 'pending').toString()`
 		}
-	case "sourceType":
-		if entityName == "AssistantUserMemoryView" {
-			return `json['sourceType']?.toString()`
-		}
-	case "createdAt":
-		if entityName == "AssistantUserMemoryView" {
-			return `json['createdAt']?.toString()`
-		}
 	case "updatedAt":
-		if entityName == "AssistantUserMemoryView" || entityName == "AssistantUserTaskView" {
+		if entityName == "AssistantUserTaskView" {
 			return `json['updatedAt']?.toString()`
 		}
 	case "dueAt":

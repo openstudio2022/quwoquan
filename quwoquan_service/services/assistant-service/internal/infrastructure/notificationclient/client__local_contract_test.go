@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	serviceclients "quwoquan_service/generated/serviceclients"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/assistant-service/internal/application"
 )
@@ -20,7 +21,7 @@ func (c fixedCredentials) AuthorizationHeader(context.Context) (string, error) {
 func TestClientSendsTypedIdempotentNotificationCommand(t *testing.T) {
 	var received createAppMessageRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != createAppMessagePath {
+		if r.Method != http.MethodPost || r.URL.Path != serviceclients.NotificationCreateAppMessagePath {
 			http.NotFound(w, r)
 			return
 		}

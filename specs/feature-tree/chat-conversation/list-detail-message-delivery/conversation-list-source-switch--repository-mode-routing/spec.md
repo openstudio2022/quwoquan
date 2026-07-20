@@ -1,4 +1,4 @@
-# L4 特性：repository-mode-routing
+# L3 特性：repository-mode-routing
 
 ## 功能说明
 - 细化 repository-mode-routing 特性的功能边界与端云协同行为。

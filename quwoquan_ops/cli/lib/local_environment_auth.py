@@ -20,7 +20,13 @@ from urllib.parse import urlparse
 from .output_paths import deployment_work_root
 
 
-_SECRET_KEYS = ("jwt_secret", "device_ticket_secret", "otp_code_ref_key_b64")
+_SECRET_KEYS = (
+    "jwt_secret",
+    "device_ticket_secret",
+    "otp_code_ref_key_b64",
+    "push_token_encryption_key_b64",
+    "account_closure_subject_hmac_secret",
+)
 _LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
 
 
@@ -78,6 +84,12 @@ def prepare_local_environment_auth(
                 {key_version: values["otp_code_ref_key_b64"]},
                 separators=(",", ":"),
             ),
+            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": values[
+                "push_token_encryption_key_b64"
+            ],
+            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
+                "account_closure_subject_hmac_secret"
+            ],
         },
         secret_path=secret_path,
     )
@@ -164,6 +176,7 @@ def request_local_environment_json(
     resolve_host: str = "127.0.0.1",
     method: str = "GET",
     body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     timeout_seconds: float = 12.0,
 ) -> dict[str, Any]:
     """Call a local environment JSON endpoint using bearer auth without logging it."""
@@ -172,19 +185,23 @@ def request_local_environment_json(
     payload = (
         json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     )
-    headers = {
+    request_headers = {
         "Accept": "application/json",
         "Authorization": session.authorization_header(),
         "X-Client-Session-Id": "local-acceptance-" + session.owner_id[-12:],
     }
+    for name, value in (headers or {}).items():
+        if name.lower() == "authorization":
+            raise ValueError("local environment request headers cannot override Authorization")
+        request_headers[name] = value
     if payload is not None:
-        headers["Content-Type"] = "application/json"
+        request_headers["Content-Type"] = "application/json"
     status, response = _loopback_json_request(
         method=method,
         url=base_url.rstrip("/") + normalized_path,
         resolve_host=resolve_host,
         body=payload,
-        headers=headers,
+        headers=request_headers,
         timeout_seconds=timeout_seconds,
     )
     if status < 200 or status >= 300:
@@ -289,16 +306,21 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         _require_mode(path, 0o600)
         values = _read_secret_file(path)
         missing = [key for key in _SECRET_KEYS if not values.get(key)]
-        if missing == ["otp_code_ref_key_b64"]:
-            values["otp_code_ref_key_b64"] = base64.b64encode(
-                secrets.token_bytes(32)
-            ).decode("ascii")
+        generated_keys = {
+            "otp_code_ref_key_b64",
+            "push_token_encryption_key_b64",
+            "account_closure_subject_hmac_secret",
+        }
+        if missing and set(missing).issubset(generated_keys):
             with path.open("a", encoding="utf-8") as handle:
-                handle.write(
-                    "otp_code_ref_key_b64="
-                    + values["otp_code_ref_key_b64"]
-                    + "\n"
-                )
+                for key in missing:
+                    if key == "account_closure_subject_hmac_secret":
+                        values[key] = secrets.token_urlsafe(48)
+                    else:
+                        values[key] = base64.b64encode(
+                            secrets.token_bytes(32)
+                        ).decode("ascii")
+                    handle.write(f"{key}={values[key]}\n")
                 handle.flush()
                 os.fsync(handle.fileno())
             return values
@@ -311,6 +333,10 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         "jwt_secret": secrets.token_urlsafe(48),
         "device_ticket_secret": secrets.token_urlsafe(48),
         "otp_code_ref_key_b64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+        "push_token_encryption_key_b64": base64.b64encode(
+            secrets.token_bytes(32)
+        ).decode("ascii"),
+        "account_closure_subject_hmac_secret": secrets.token_urlsafe(48),
     }
     fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:

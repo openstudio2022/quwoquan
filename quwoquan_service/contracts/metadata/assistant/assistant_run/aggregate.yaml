@@ -8,7 +8,6 @@ description: |
   轮次是由执行事件投影出的 AssistantTurnView，交互事件与评分卡通过 typed
   append-only sink 写入，也不嵌入 AssistantRun 一致性边界。
   MongoDB 存储，支撑高频写入和灵活 schema（LLM 输出多变）。
-  contextEmbedding 支持 RAG 语义检索记录 run。
 
 storage_backend: mongodb
 cache_layer: redis
@@ -17,15 +16,21 @@ cache_ttl_seconds: 60
 capabilities:
   - queryable
   - aggregatable
-  - vector_searchable
 
 taggable: false
-vector_enabled: true
+vector_enabled: false
 
-members: []
+members:
+  - entity: AssistantPreferenceSnapshot
+    relation: 1:N
+    object_kind: value_object
+    aggregate_owner: AssistantRun
+    max_cardinality: 32
+    description: Run 创建时复制的 active 偏好快照，不允许独立 Store/Facade。
 
 business_rules:
   - run 必须绑定 actor persona、conversationId、输入摘要与当前 consent snapshot
+  - run 创建时必须原子读取并固化最多 16 个 session 与 16 个 long_term active 偏好快照
   - 同一 clientRequestId 只启动一个 run，重放返回同一 run identity
   - run 只能从 queued 进入 running，再进入 completed、failed 或 cancelled
   - tool 调用必须经过 operation allowlist 与目标上下文公开 Facade

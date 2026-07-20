@@ -9,6 +9,13 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_transport.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 
+const _environment = 'gamma';
+const _primaryAccountId = 'account-a';
+const _secondaryAccountId = 'account-b';
+const _personaId = 'persona-a';
+const _deviceId = 'install-a';
+final _testNow = DateTime.utc(2026, 7, 18, 8);
+
 void main() {
   late Directory tempDirectory;
   late ActorQueuePartition partition;
@@ -18,10 +25,10 @@ void main() {
     tempDirectory = await Directory.systemTemp.createTemp('telemetry_outbox_');
     Hive.init(tempDirectory.path);
     partition = ActorQueuePartition(
-      environment: 'gamma',
-      accountId: 'account-a',
-      personaId: 'persona-a',
-      deviceId: 'install-a',
+      environment: _environment,
+      accountId: _primaryAccountId,
+      personaId: _personaId,
+      deviceId: _deviceId,
     );
     storage = ActorQueueStorage(keyStore: _MemoryKeyStore());
   });
@@ -39,6 +46,7 @@ void main() {
       partition: partition,
       storage: storage,
       transport: transport,
+      now: () => _testNow,
     );
     await outbox.enqueue(_record(1));
     await outbox.enqueue(_record(2));
@@ -52,12 +60,39 @@ void main() {
     expect(transport.keys.toSet(), hasLength(1));
   });
 
+  test('product-ops 不可达时保留主体隔离的批次且不阻断调用方', () async {
+    final unavailable = _RecordingTransport()..failAfterAcceptOnce = true;
+    final outbox = AppTelemetryOutbox(
+      partition: partition,
+      storage: storage,
+      transport: unavailable,
+      now: () => _testNow,
+    );
+    await outbox.enqueue(_record(1));
+
+    expect(await outbox.flush(), AppTelemetryFlushResult.deferred);
+    expect(await outbox.pendingCount(), 1);
+
+    final otherActor = AppTelemetryOutbox(
+      partition: ActorQueuePartition(
+        environment: _environment,
+        accountId: _secondaryAccountId,
+        personaId: _personaId,
+        deviceId: _deviceId,
+      ),
+      storage: storage,
+      transport: unavailable,
+    );
+    expect(await otherActor.pendingCount(), 0);
+  });
+
   test('422 整批进入加密 DLQ，401 保留密封批次等待主体变化', () async {
     final invalidTransport = _RecordingTransport()..statusCode = 422;
     final invalid = AppTelemetryOutbox(
       partition: partition,
       storage: storage,
       transport: invalidTransport,
+      now: () => _testNow,
     );
     await invalid.enqueue(_record(1));
     expect(await invalid.flush(), AppTelemetryFlushResult.deadLettered);
@@ -72,6 +107,7 @@ void main() {
       partition: partition,
       storage: storage,
       transport: blockedTransport,
+      now: () => _testNow,
     );
     await blocked.enqueue(_record(2));
     expect(await blocked.flush(), AppTelemetryFlushResult.identityBlocked);

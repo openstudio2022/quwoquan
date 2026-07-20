@@ -26,12 +26,27 @@ def main() -> int:
     issues: list[str] = []
 
     help_result = run(["python3", str(STACKCTL), "--help"])
-    if help_result.returncode != 0 or "package" not in help_result.stdout or "deploy" not in help_result.stdout or "roll" not in help_result.stdout:
-        issues.append("stackctl --help must list package, roll and deploy commands")
+    required_commands = ("package", "content-readiness", "deploy", "roll")
+    if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
+        issues.append("stackctl --help must list package, content-readiness, roll and deploy commands")
+
+    readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
+    if (
+        readiness_help.returncode != 0
+        or "--target" in readiness_help.stdout
+        or "--phase" not in readiness_help.stdout
+        or "--env" not in readiness_help.stdout
+    ):
+        issues.append("stackctl content-readiness must require phase/env and forbid target override")
 
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
-    if verify_help.returncode != 0 or "--kind" not in verify_help.stdout or "--tier" not in verify_help.stdout:
-        issues.append("stackctl verify --help must expose --kind/--tier")
+    if (
+        verify_help.returncode != 0
+        or "--kind" not in verify_help.stdout
+        or "--profile" not in verify_help.stdout
+        or "--" + "tier" in verify_help.stdout
+    ):
+        issues.append("stackctl verify --help must expose --kind/--profile and forbid --tier")
 
     health_help = run(["python3", str(STACKCTL), "health", "--help"])
     if health_help.returncode != 0 or "--scope" not in health_help.stdout:
@@ -42,8 +57,13 @@ def main() -> int:
         issues.append("stackctl inspect --help must expose --kind alias")
 
     up_help = run(["python3", str(STACKCTL), "up", "--help"])
-    if up_help.returncode != 0 or "--env" not in up_help.stdout or "--device-id" not in up_help.stdout:
-        issues.append("stackctl up --help must expose --env/--device-id")
+    if (
+        up_help.returncode != 0
+        or "--env" not in up_help.stdout
+        or "--device-id" not in up_help.stdout
+        or "--workload" not in up_help.stdout
+    ):
+        issues.append("stackctl up --help must expose --env/--device-id/--workload")
     if "--gateway-base-url" in up_help.stdout:
         issues.append("stackctl up user surface must not expose gateway override flags")
 
@@ -52,8 +72,13 @@ def main() -> int:
         issues.append("stackctl roll --help must expose --mode/--target")
 
     deploy_help = run(["python3", str(STACKCTL), "deploy", "--help"])
-    if deploy_help.returncode != 0 or "--mode" not in deploy_help.stdout:
-        issues.append("stackctl deploy --help must expose --mode")
+    if (
+        deploy_help.returncode != 0
+        or "--mode" not in deploy_help.stdout
+        or "--stage" not in deploy_help.stdout
+        or "carry-on" not in deploy_help.stdout
+    ):
+        issues.append("stackctl deploy --help must expose --mode and all rollout stages")
 
     profile_result = run(
         ["python3", str(PORT_PROFILE), "--profile", "beta-local", "--format", "json"]

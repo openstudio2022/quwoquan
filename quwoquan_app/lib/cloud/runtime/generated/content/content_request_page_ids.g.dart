@@ -6,6 +6,7 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'ActivateFilterCatalogRelease': 'content.activate.filter.catalog.release',
     'BeginReportReview': 'content.begin.report.review',
     'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
     'CompleteMediaUpload': 'content.media.complete',
@@ -15,11 +16,15 @@ class ContentRequestPageIds {
     'DecidePostModeration': 'content.decide.post.moderation',
     'DeleteComment': 'content.comment.delete',
     'DeletePost': 'content.post.delete',
+    'DismissReport': 'content.dismiss.report',
     'GenerateArticleSummary': 'content.article.summary',
+    'GetActiveFilterCatalog': 'content.get.active.filter.catalog',
     'GetAppConfig': 'content.get.app.config',
     'GetAuthorImpact': 'content.get.author.impact',
     'GetContentReactionState': 'content.post.reactions',
     'GetCounters': 'content.post.counters',
+    'GetCurrentPostModerationCase': 'content.get.current.post.moderation.case',
+    'GetEntityWishlistState': 'content.get.entity.wishlist.state',
     'GetFeed': 'content.feed.list',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
@@ -33,6 +38,7 @@ class ContentRequestPageIds {
     'GetPost': 'content.post.get',
     'GetPostPublicationEligibility': 'content.get.post.publication.eligibility',
     'GetReport': 'content.get.report',
+    'HideComment': 'content.hide.comment',
     'InitMediaUpload': 'content.media.init',
     'LikePost': 'content.post.like',
     'ListAuthorImpactEvidence': 'content.list.author.impact.evidence',
@@ -41,10 +47,12 @@ class ContentRequestPageIds {
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
     'ListMyIntersections': 'content.list.my.intersections',
+    'ListMyReports': 'content.list.my.reports',
     'ListProfileInteractionActivitiesReceived': 'content.profile.interactions.received',
     'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
     'ListReports': 'content.list.reports',
     'ListUserPosts': 'content.user.posts',
+    'MarkIntersectionsVisited': 'content.mark.intersections.visited',
     'OpenPostModerationCase': 'content.open.post.moderation.case',
     'PinComment': 'content.pin.comment',
     'PromotePostToWork': 'content.post.promote',
@@ -53,10 +61,12 @@ class ContentRequestPageIds {
     'ReportBehaviors': 'content.behaviors.report',
     'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
+    'RestoreComment': 'content.restore.comment',
     'ReviewPostModerationCase': 'content.review.post.moderation.case',
-    'SearchPosts': 'content.search',
+    'RollbackFilterCatalogRelease': 'content.rollback.filter.catalog.release',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
+    'StageFilterCatalogRelease': 'content.stage.filter.catalog.release',
     'SubmitPostPublication': 'content.post.publish',
     'SupersedePostModerationCase': 'content.supersede.post.moderation.case',
     'UnlikePost': 'content.post.unlike',
@@ -67,6 +77,7 @@ class ContentRequestPageIds {
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String activateFilterCatalogRelease = 'content.activate.filter.catalog.release';
   static const String beginReportReview = 'content.begin.report.review';
   static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
   static const String completeMediaUpload = 'content.media.complete';
@@ -76,11 +87,15 @@ class ContentRequestPageIds {
   static const String decidePostModeration = 'content.decide.post.moderation';
   static const String deleteComment = 'content.comment.delete';
   static const String deletePost = 'content.post.delete';
+  static const String dismissReport = 'content.dismiss.report';
   static const String generateArticleSummary = 'content.article.summary';
+  static const String getActiveFilterCatalog = 'content.get.active.filter.catalog';
   static const String getAppConfig = 'content.get.app.config';
   static const String getAuthorImpact = 'content.get.author.impact';
   static const String getContentReactionState = 'content.post.reactions';
   static const String getCounters = 'content.post.counters';
+  static const String getCurrentPostModerationCase = 'content.get.current.post.moderation.case';
+  static const String getEntityWishlistState = 'content.get.entity.wishlist.state';
   static const String getFeed = 'content.feed.list';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
@@ -94,6 +109,7 @@ class ContentRequestPageIds {
   static const String getPost = 'content.post.get';
   static const String getPostPublicationEligibility = 'content.get.post.publication.eligibility';
   static const String getReport = 'content.get.report';
+  static const String hideComment = 'content.hide.comment';
   static const String initMediaUpload = 'content.media.init';
   static const String likePost = 'content.post.like';
   static const String listAuthorImpactEvidence = 'content.list.author.impact.evidence';
@@ -102,10 +118,12 @@ class ContentRequestPageIds {
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
   static const String listMyIntersections = 'content.list.my.intersections';
+  static const String listMyReports = 'content.list.my.reports';
   static const String listProfileInteractionActivitiesReceived = 'content.profile.interactions.received';
   static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
   static const String listReports = 'content.list.reports';
   static const String listUserPosts = 'content.user.posts';
+  static const String markIntersectionsVisited = 'content.mark.intersections.visited';
   static const String openPostModerationCase = 'content.open.post.moderation.case';
   static const String pinComment = 'content.pin.comment';
   static const String promotePostToWork = 'content.post.promote';
@@ -114,10 +132,12 @@ class ContentRequestPageIds {
   static const String reportBehaviors = 'content.behaviors.report';
   static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';
+  static const String restoreComment = 'content.restore.comment';
   static const String reviewPostModerationCase = 'content.review.post.moderation.case';
-  static const String searchPosts = 'content.search';
+  static const String rollbackFilterCatalogRelease = 'content.rollback.filter.catalog.release';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
+  static const String stageFilterCatalogRelease = 'content.stage.filter.catalog.release';
   static const String submitPostPublication = 'content.post.publish';
   static const String supersedePostModerationCase = 'content.supersede.post.moderation.case';
   static const String unlikePost = 'content.post.unlike';

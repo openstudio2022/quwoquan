@@ -38,12 +38,13 @@ void main() {
 
   testWidgets('相机不可用时展示深色错误语义且隐藏无意义拍照与切换按钮', (tester) async {
     await tester.pumpWidget(
-      const CupertinoApp(
-        theme: CupertinoThemeData(brightness: Brightness.light),
+      CupertinoApp(
+        theme: const CupertinoThemeData(brightness: Brightness.light),
         home: CameraCapturePage(
           initialMode: MediaPickerEntryMode.image,
           allowVideoMode: false,
           cameraDiscovery: _noAvailableCameras,
+          filterRepository: _FakeFilterRepository(),
         ),
       ),
     );
@@ -73,12 +74,13 @@ void main() {
 
   testWidgets('图片拍摄确认态不展示录像切换和右上角相机切换', (tester) async {
     await tester.pumpWidget(
-      const CupertinoApp(
+      CupertinoApp(
         home: CameraCapturePage(
           initialMode: MediaPickerEntryMode.image,
           allowVideoMode: false,
           initialCapturedPhotoPath: '/tmp/captured.jpg',
           cameraDiscovery: _noAvailableCameras,
+          filterRepository: _FakeFilterRepository(),
         ),
       ),
     );
@@ -96,12 +98,13 @@ void main() {
 
   testWidgets('拍照后确认态支持重新拍摄', (tester) async {
     await tester.pumpWidget(
-      const CupertinoApp(
+      CupertinoApp(
         home: CameraCapturePage(
           initialMode: MediaPickerEntryMode.image,
           allowVideoMode: false,
           initialCapturedPhotoPath: '/tmp/captured.jpg',
           cameraDiscovery: _noAvailableCameras,
+          filterRepository: _FakeFilterRepository(),
         ),
       ),
     );
@@ -282,7 +285,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
       ImageEditorFilterPreset(
         id: 'cool',
@@ -291,7 +294,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 2,
         enabled: true,
         defaultStrength: 80,
-        params: <String, double>{'temperature': -12},
+        adjustments: ImageEditorFilterAdjustments(temperature: -12),
       ),
     ];
   }

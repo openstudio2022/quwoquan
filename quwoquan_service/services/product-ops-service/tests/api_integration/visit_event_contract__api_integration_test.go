@@ -121,3 +121,102 @@ func TestMongoVisitStoreKeepsVisitFactWithoutEventCollection(t *testing.T) {
 		t.Fatalf("event_records must not be recreated: %v", names)
 	}
 }
+
+// TestVisitRecordIdempotentReplayDoesNotDoubleCount 覆盖 visit_record 契约
+// visit_idempotent_replay 与 visit_count_increment 场景：相同 actor+Idempotency-Key
+// 的重放回读当前计数，不重复累加；不同 key 的真实访问正常递增。
+func TestVisitRecordIdempotentReplayDoesNotDoubleCount(t *testing.T) {
+	ctx := context.Background()
+	if _, err := telemetryMongoDB.Collection("visit_records").DeleteMany(ctx, bson.D{}); err != nil {
+		t.Fatalf("clear visits: %v", err)
+	}
+	schema := fmt.Sprintf("visit_ledger_test_%d", time.Now().UnixNano())
+	ledger, err := telemetrypersistence.NewPostgresTelemetryStore(controlPlanePGPool, schema)
+	if err != nil {
+		t.Fatalf("new telemetry ledger: %v", err)
+	}
+	if err := ledger.EnsureSchema(ctx); err != nil {
+		t.Fatalf("ensure ledger schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = controlPlanePGPool.Exec(context.Background(), `DROP SCHEMA "`+schema+`" CASCADE`)
+	})
+	service := application.NewTelemetryService(realVisitStore, ledger, ledger)
+
+	input := application.VisitInput{
+		UserID: "visit-replay-user", TargetType: "page", TargetKey: "circle_detail",
+	}
+	first, err := service.RecordVisit(ctx, input, "visit-key-1")
+	if err != nil || first.VisitCount != 1 || first.Replayed {
+		t.Fatalf("first visit result=%+v err=%v", first, err)
+	}
+	replayed, err := service.RecordVisit(ctx, input, "visit-key-1")
+	if err != nil || replayed.VisitCount != 1 || !replayed.Replayed {
+		t.Fatalf("idempotent replay must not double count: result=%+v err=%v", replayed, err)
+	}
+	second, err := service.RecordVisit(ctx, input, "visit-key-2")
+	if err != nil || second.VisitCount != 2 || second.Replayed {
+		t.Fatalf("distinct key must increment: result=%+v err=%v", second, err)
+	}
+	if _, err := service.RecordVisit(ctx, input, "  "); err == nil {
+		t.Fatal("missing idempotency key must be rejected")
+	}
+	record, found, err := realVisitStore.GetVisit(ctx, "visit-replay-user", "page", "circle_detail")
+	if err != nil || !found || record.VisitCount != 2 {
+		t.Fatalf("stored visit count mismatch: record=%+v found=%v err=%v", record, found, err)
+	}
+}
+
+func TestPostgresTelemetryLocalCompositionUsesTypedPortsAndIsolatableSchema(t *testing.T) {
+	ctx := context.Background()
+	schema := fmt.Sprintf("telemetry_local_test_%d", time.Now().UnixNano())
+	store, err := telemetrypersistence.NewPostgresTelemetryStore(controlPlanePGPool, schema)
+	if err != nil {
+		t.Fatalf("new postgres telemetry store: %v", err)
+	}
+	if err := store.EnsureSchema(ctx); err != nil {
+		t.Fatalf("ensure telemetry schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = controlPlanePGPool.Exec(context.Background(), `DROP SCHEMA "`+schema+`" CASCADE`)
+	})
+
+	service := application.NewTelemetryService(store, store, store)
+	occurredAt := time.Now().UTC().Add(-time.Minute)
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          "page_open",
+		SessionID:          "s.dXNlci0x.1",
+		PageName:           "home",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+	}
+	if _, err := service.ReportEventBatch(ctx, strings.Repeat("a", 64), []application.EventRecordInput{event}); err != nil {
+		t.Fatalf("report event batch: %v", err)
+	}
+	summary, err := service.GetEventSummary(ctx, application.EventSummaryQuery{
+		From: time.Now().UTC().Add(-time.Hour),
+		To:   time.Now().UTC().Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("get postgres summary: %v", err)
+	}
+	if summary.TotalCount != 1 || summary.SessionCount != 1 || summary.SourceKind != "raw_records" {
+		t.Fatalf("unexpected postgres summary: %+v", summary)
+	}
+	drilldown, err := service.GetEventDrilldown(ctx, application.EventDrilldownQuery{
+		From:  time.Now().UTC().Add(-time.Hour),
+		To:    time.Now().UTC().Add(time.Minute),
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("get postgres drilldown: %v", err)
+	}
+	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 {
+		t.Fatalf("unexpected postgres drilldown: %+v", drilldown)
+	}
+}

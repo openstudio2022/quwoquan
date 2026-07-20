@@ -1666,12 +1666,12 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         FIXTURE_CURRENT_USER_DEFAULT_NICKNAME,
         "主评论示例",
         0,
-        ipLocation="浙江",
+        authorIpLocation="浙江",
         isPinned=True,
         pinnedAt="2026-06-05T12:30:00Z",
         authorLiked=True,
         likeCount=128,
-        recommendedScore=128.0,
+        hotScore=128.0,
     )
     add_comment(
         "fixture_comment_reply_001",
@@ -1679,7 +1679,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约评论者",
         "回复示例",
         5,
-        ipLocation="广东",
+        authorIpLocation="广东",
         parentCommentId="fixture_comment_parent_001",
         replyToCommentId="fixture_comment_parent_001",
         replyToUserId="fixture_user_current",
@@ -1693,9 +1693,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约好友",
         "零回复评论示例",
         10,
-        ipLocation="北京",
+        authorIpLocation="北京",
         likeCount=3,
-        recommendedScore=3.0,
+        hotScore=3.0,
     )
     # 5 条回复（首次展开即加载完毕）。
     add_comment(
@@ -1704,9 +1704,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约摄影师",
         "五条回复评论示例",
         20,
-        ipLocation="上海",
+        authorIpLocation="上海",
         likeCount=12,
-        recommendedScore=12.0,
+        hotScore=12.0,
     )
     add_replies("fixture_comment_thread_five", "fixture_user_photo", "契约摄影师", 5, 100)
     # 10 条回复（演示 1→5→10 三段展开 + 图片回复）。
@@ -1716,9 +1716,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约评论者",
         "十条回复评论示例",
         30,
-        ipLocation="江苏",
+        authorIpLocation="江苏",
         likeCount=24,
-        recommendedScore=24.0,
+        hotScore=24.0,
     )
     add_replies(
         "fixture_comment_thread_ten",
@@ -1735,9 +1735,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约好友",
         "五十条回复评论示例",
         40,
-        ipLocation="四川",
+        authorIpLocation="四川",
         likeCount=56,
-        recommendedScore=56.0,
+        hotScore=56.0,
     )
     add_replies("fixture_comment_thread_fifty", "fixture_user_friend", "契约好友", 50, 400)
     # 110 条回复（100+ 大磁度）。
@@ -1747,9 +1747,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         "契约摄影师",
         "上百条回复评论示例",
         50,
-        ipLocation="广东",
+        authorIpLocation="广东",
         likeCount=210,
-        recommendedScore=210.0,
+        hotScore=210.0,
     )
     add_replies("fixture_comment_thread_hundred", "fixture_user_photo", "契约摄影师", 110, 1000)
 
@@ -1848,10 +1848,23 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
             "persona_core": {"description": "当前 sub-account、候选 sub-account 与 active context。", "activeSubAccountId": "fixture_persona_daily", "personas": [{"subAccountId": "fixture_persona_daily", "name": "日常我", "description": "默认日常 sub-account"}, {"subAccountId": "fixture_persona_work", "name": "工作我", "description": "工作场景 sub-account"}]},
             "profile_feed_core": {"description": "我的作品、作者作品、生活记录与评论。", "myPostIds": my_posts or ["fixture_moment_001", "fixture_photo_001"], "authorPostIds": author_posts or ["fixture_photo_001", "fixture_photo_002"], "commentIds": ["fixture_comment_photo_001"]},
             "relationship_core": {"description": "关注、互关、拉黑、可聊天、可通话能力矩阵。", "relationships": [{"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_photo", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_friend", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_weekend_1", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}]},
-            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
+            "greeting_core": {
+                "description": "打招呼破冰种子：一条待处理收件、一条已回复升级会话。",
+                "inbox": [{"id": "fixture_greeting_pending_001", "requesterSubAccountId": "user_travel_photographer", "targetSubAccountId": "fixture_user_current", "requestMessage": "你好，看到你的川西照片很棒，想交流一下路线", "status": "pending", "source": "profile", "createdAt": "2026-06-02T08:00:00Z", "updatedAt": "2026-06-02T08:00:00Z"}],
+                "outbox": [{"id": "fixture_greeting_replied_001", "requesterSubAccountId": "fixture_user_current", "targetSubAccountId": "user_street_photo", "requestMessage": "街拍作品很有味道，想请教构图", "status": "replied", "source": "profile", "promotedConversationId": "fixture_conversation_greeting_001", "createdAt": "2026-06-01T08:00:00Z", "updatedAt": "2026-06-01T09:00:00Z"}],
+            },
+            "subject_follow_core": {
+                "description": "SubjectFollow 聚合种子：当前用户已关注的主页/圈子主体。",
+                "follows": [{"personaId": "fixture_user_current", "subjectType": "homepage", "subjectId": "homepage_sight_emeishan", "state": "following", "followedAt": "2026-05-24T08:00:00Z"}, {"personaId": "fixture_user_current", "subjectType": "circle", "subjectId": "circle_sichuan_travel", "state": "following", "followedAt": "2026-05-22T08:00:00Z"}],
+            },
+            "contact_discovery_core": {
+                "description": "通讯录哈希匹配种子；仅保存不可逆哈希和匹配后的 subAccountId，不含手机号原文。",
+                "records": [{"id": "fixture_contact_discovery_001", "ownerAccountId": "fixture_user_current", "hashedPhones": ["7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"], "matchedSubAccountIds": ["fixture_user_photo"], "status": "completed", "matchCount": 1, "expireAt": "2026-12-31T23:59:59Z", "createdAt": "2026-07-20T00:00:00Z", "completedAt": "2026-07-20T00:00:01Z"}],
+            },
+            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
             "settings_core": {"description": "外观、通话设置与开发者诊断最小数据。", "appearance": {"themeMode": "system", "fontScale": 1.0}, "callSettings": {"allowVoiceCall": True, "allowVideoCall": True}, "diagnostics": [{"id": "fixture_ops_event_settings", "message": "契约设置诊断事件"}]},
         },
-        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": [FIXTURE_CURRENT_USER_DEFAULT_NICKNAME, "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
+        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "greeting_core", "subject_follow_core", "contact_discovery_core", "following_subject_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": [FIXTURE_CURRENT_USER_DEFAULT_NICKNAME, "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
     }
 
 

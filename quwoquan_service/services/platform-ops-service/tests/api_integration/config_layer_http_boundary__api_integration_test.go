@@ -1,86 +1,197 @@
 package api_integration
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	operationsecurity "quwoquan_service/generated/operationsecurity"
-	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	confighttp "quwoquan_service/services/platform-ops-service/internal/adapters/http/config_layer"
 	configapp "quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer"
-	configpersistence "quwoquan_service/services/platform-ops-service/internal/infrastructure/platform_ops/config_layer/persistence"
 )
 
-var (
-	platformOpsEmbeddedPG *embeddedpostgres.EmbeddedPostgres
-	platformOpsPGPool     *pgxpool.Pool
-)
+// TestConfigSnapshotHTTPBoundary 覆盖 tests/contract.yaml 的
+// config_resolve_reads_release_package_only / config_snapshot_files_and_versions /
+// config_domains_catalog：generated 授权 fail-closed + IaC 只读快照语义。
+func TestConfigSnapshotHTTPBoundary(t *testing.T) {
+	repoRoot := seedConfigSnapshotTree(t)
+	guarded := platformConfigAuthenticatedHandler(t, newConfigSnapshotHandler(t, repoRoot))
 
-func TestMain(m *testing.M) {
-	const port = uint32(15437)
-	platformOpsEmbeddedPG = embeddedpostgres.NewDatabase(
-		embeddedpostgres.DefaultConfig().
-			Version(testinfra.StableEmbeddedPostgresVersion).
-			Port(port).
-			Username("postgres").
-			Password("postgres"),
+	unauthorized := performPlatformConfigRequest(
+		guarded, http.MethodGet, "/control-plane/platform/configs/resolve?env=gamma&service=content-service", "", "",
 	)
-	if err := platformOpsEmbeddedPG.Start(); err != nil {
-		panic("platform-ops embedded-postgres start: " + err.Error())
+	assertPlatformConfigError(t, unauthorized, http.StatusUnauthorized, "GATEWAY.USER.unauthorized")
+
+	readToken := platformConfigAccessToken(t, "ops.platform.config.read")
+
+	resolved := performPlatformConfigRequest(
+		guarded, http.MethodGet,
+		"/control-plane/platform/configs/resolve?env=gamma&service=content-service",
+		"", readToken,
+	)
+	if resolved.Code != http.StatusOK {
+		t.Fatalf("resolve status=%d body=%s", resolved.Code, resolved.Body.String())
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	var err error
-	platformOpsPGPool, err = pgxpool.New(ctx, fmt.Sprintf(
-		"postgres://postgres:postgres@127.0.0.1:%d/postgres?sslmode=disable", port,
-	))
-	if err != nil {
-		panic(err)
+	var resolveResponse controlplane.ConfigResolveResponse
+	if err := json.Unmarshal(resolved.Body.Bytes(), &resolveResponse); err != nil {
+		t.Fatalf("decode resolve: %v", err)
 	}
-	if err := platformOpsPGPool.Ping(ctx); err != nil {
-		panic(err)
+	if resolveResponse.Source != "release-package" || resolveResponse.DesiredHash == "" {
+		t.Fatalf("resolve must read release package snapshot: %+v", resolveResponse)
 	}
-	code := m.Run()
-	platformOpsPGPool.Close()
-	if err := platformOpsEmbeddedPG.Stop(); err != nil && code == 0 {
-		code = 1
+	foundOverride := false
+	for _, value := range resolveResponse.Values {
+		if value.Key == "sys.content.mongo.max_pool_size" {
+			foundOverride = true
+			if got := int(asFloat(value.Value)); got != 130 {
+				t.Fatalf("release override must win: got %d want 130", got)
+			}
+			if value.SourceLayer == "config_schema" {
+				t.Fatalf("override source must be a release package file: %+v", value)
+			}
+		}
 	}
-	os.Exit(code)
+	if !foundOverride {
+		t.Fatalf("resolve must include sys.content.mongo.max_pool_size")
+	}
+
+	missingEnv := performPlatformConfigRequest(
+		guarded, http.MethodGet, "/control-plane/platform/configs/resolve", "", readToken,
+	)
+	assertPlatformConfigError(t, missingEnv, http.StatusBadRequest, "OPS.USER.config_invalid")
+
+	snapshot := performPlatformConfigRequest(
+		guarded, http.MethodGet,
+		"/control-plane/platform/configs/snapshot?env=gamma&service=content-service",
+		"", readToken,
+	)
+	if snapshot.Code != http.StatusOK {
+		t.Fatalf("snapshot status=%d body=%s", snapshot.Code, snapshot.Body.String())
+	}
+	var view configapp.ConfigSnapshotView
+	if err := json.Unmarshal(snapshot.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if view.Domain != "cloud-service" || len(view.Files) == 0 || view.MergedSha256 == "" {
+		t.Fatalf("snapshot must expose files and merged digest: %+v", view)
+	}
+	if len(view.ReleaseVersions) != 2 {
+		t.Fatalf("release versions must keep exactly current+previous: %v", view.ReleaseVersions)
+	}
+	for _, file := range view.Files {
+		if file.SHA256 == "" || file.Content == "" {
+			t.Fatalf("snapshot file must expose sha256+content: %+v", file)
+		}
+	}
+
+	unknown := performPlatformConfigRequest(
+		guarded, http.MethodGet,
+		"/control-plane/platform/configs/snapshot?env=gamma&service=missing-service",
+		"", readToken,
+	)
+	assertPlatformConfigError(t, unknown, http.StatusNotFound, "OPS.USER.config_snapshot_not_found")
+
+	domains := performPlatformConfigRequest(
+		guarded, http.MethodGet, "/control-plane/platform/configs/domains", "", readToken,
+	)
+	if domains.Code != http.StatusOK {
+		t.Fatalf("domains status=%d body=%s", domains.Code, domains.Body.String())
+	}
+	var domainSlice configapp.ConfigDomainSlice
+	if err := json.Unmarshal(domains.Body.Bytes(), &domainSlice); err != nil {
+		t.Fatalf("decode domains: %v", err)
+	}
+	domainSet := map[string]bool{}
+	for _, item := range domainSlice.Items {
+		domainSet[item.Domain] = true
+	}
+	for _, want := range []string{"cloud-service", "app", "data"} {
+		if !domainSet[want] {
+			t.Fatalf("domain catalog missing %q", want)
+		}
+	}
+
+	catalog := performPlatformConfigRequest(
+		guarded, http.MethodGet, "/control-plane/platform/configs", "", readToken,
+	)
+	if catalog.Code != http.StatusOK || !strings.Contains(catalog.Body.String(), `"uiEditable":false`) {
+		t.Fatalf("config key catalog must be read-only (uiEditable=false): status=%d body=%s", catalog.Code, catalog.Body.String())
+	}
+	if strings.Contains(catalog.Body.String(), `"uiEditable":true`) {
+		t.Fatalf("IaC catalog must not expose editable keys: %s", catalog.Body.String())
+	}
 }
 
-func TestConfigLayerHTTPBoundaryUsesGeneratedGuardAndAtomicPostgres(t *testing.T) {
-	store, err := configpersistence.NewPostgresStore(platformOpsPGPool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	if err := store.EnsureSchema(ctx); err != nil {
-		t.Fatalf("ensure config layer schema: %v", err)
-	}
-	if _, err := platformOpsPGPool.Exec(ctx, `
-TRUNCATE platform_config_layer_receipts, platform_ops_outbox, platform_config_layers CASCADE`); err != nil {
-		t.Fatalf("truncate config layer tables: %v", err)
-	}
-	catalog, err := configpersistence.NewGeneratedConfigKeyCatalog(
-		generatedcontrolplane.MustLoadPlatformConfigSchema(),
+// TestConfigWriteRoutesRetiredAPI 覆盖 config_write_routes_retired：
+// 写路径与 layers 视图在 HTTP 边界彻底退场。
+func TestConfigWriteRoutesRetiredAPI(t *testing.T) {
+	repoRoot := seedConfigSnapshotTree(t)
+	guarded := platformConfigAuthenticatedHandler(t, newConfigSnapshotHandler(t, repoRoot))
+	writeToken := platformConfigAccessToken(t, "ops.platform.config.read ops.platform.config.write")
+
+	update := performPlatformConfigRequest(
+		guarded, http.MethodPost,
+		"/control-plane/platform/configs/sys.content.mongo.max_pool_size:update",
+		`{"value":{"kind":"int","intValue":130}}`, writeToken,
 	)
+	if update.Code == http.StatusOK {
+		t.Fatalf("config write endpoint must be retired, got 200: %s", update.Body.String())
+	}
+
+	layers := performPlatformConfigRequest(
+		guarded, http.MethodGet, "/control-plane/platform/configs/layers", "", writeToken,
+	)
+	if layers.Code == http.StatusOK {
+		t.Fatalf("config layers endpoint must be retired, got 200: %s", layers.Body.String())
+	}
+}
+
+func seedConfigSnapshotTree(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	mustWrite := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	base := filepath.Join(root, "quwoquan_service", "services", "content-service", "configs")
+	mustWrite(filepath.Join(base, "default", "config.yaml"),
+		"config:\n  version: \"1.0.0\"\nsys.content.mongo.max_pool_size: 120\n")
+	mustWrite(filepath.Join(base, "gamma", "config.yaml"),
+		"sys.content.mongo.max_pool_size: 130\n")
+	mustWrite(filepath.Join(base, "releases", "v1.0.1.yaml"), "config:\n  version: \"1.0.1\"\n")
+	mustWrite(filepath.Join(base, "releases", "v1.0.0.yaml"), "config:\n  version: \"1.0.0\"\n")
+	mustWrite(filepath.Join(root, "quwoquan_app", "configs", "gamma", "app_runtime.yaml"),
+		"gatewayBaseUrl: https://gamma.example.test\n")
+	mustWrite(filepath.Join(root, "quwoquan_data", "control_plane", "_shared", "catalogs", "region_catalog.yaml"),
+		"regions: []\n")
+	return root
+}
+
+func newConfigSnapshotHandler(t *testing.T, repoRoot string) http.Handler {
+	t.Helper()
+	catalog, err := configapp.NewConfigKeyCatalog(generatedcontrolplane.MustLoadPlatformConfigSchema())
 	if err != nil {
 		t.Fatalf("build generated config catalog: %v", err)
 	}
-	facade, err := configapp.NewFacade(store, store, catalog)
+	source, err := configapp.NewSnapshotSource("", repoRoot)
+	if err != nil {
+		t.Fatalf("build snapshot source: %v", err)
+	}
+	facade, err := configapp.NewFacade(source, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,58 +199,7 @@ TRUNCATE platform_config_layer_receipts, platform_ops_outbox, platform_config_la
 	if err != nil {
 		t.Fatal(err)
 	}
-	guarded := platformConfigAuthenticatedHandler(t, handler)
-	path := "/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
-	body := `{"layerId":"service:gamma:gamma-user-a:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`
-
-	unauthorized := performPlatformConfigRequest(guarded, http.MethodPost, path, body, "", "config-api-1")
-	assertPlatformConfigError(t, unauthorized, http.StatusUnauthorized, "GATEWAY.USER.unauthorized")
-
-	readOnly := platformConfigAccessToken(t, "ops.platform.config.read")
-	forbidden := performPlatformConfigRequest(guarded, http.MethodPost, path, body, readOnly, "config-api-1")
-	assertPlatformConfigError(t, forbidden, http.StatusForbidden, "GATEWAY.USER.forbidden")
-
-	writeToken := platformConfigAccessToken(t, "ops.platform.config.write")
-	created := performPlatformConfigRequest(guarded, http.MethodPost, path, body, writeToken, "config-api-1")
-	if created.Code != http.StatusOK {
-		t.Fatalf("create config layer status=%d body=%s", created.Code, created.Body.String())
-	}
-	replayed := performPlatformConfigRequest(guarded, http.MethodPost, path, body, writeToken, "config-api-1")
-	if replayed.Code != http.StatusOK || !strings.Contains(replayed.Body.String(), `"replayed":true`) {
-		t.Fatalf("replay config layer status=%d body=%s", replayed.Code, replayed.Body.String())
-	}
-	conflictBody := strings.Replace(body, `"intValue":120`, `"intValue":121`, 1)
-	conflict := performPlatformConfigRequest(guarded, http.MethodPost, path, conflictBody, writeToken, "config-api-1")
-	assertPlatformConfigError(t, conflict, http.StatusConflict, "OPS.USER.config_idempotency_conflict")
-
-	readToken := platformConfigAccessToken(t, "ops.platform.config.read")
-	layers := performPlatformConfigRequest(
-		guarded, http.MethodGet, "/control-plane/platform/configs/layers", "", readToken, "",
-	)
-	if layers.Code != http.StatusOK || !strings.Contains(layers.Body.String(), "service:gamma:gamma-user-a:content-service") {
-		t.Fatalf("list config layers status=%d body=%s", layers.Code, layers.Body.String())
-	}
-	resolved := performPlatformConfigRequest(
-		guarded, http.MethodGet,
-		"/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service",
-		"", readToken, "",
-	)
-	if resolved.Code != http.StatusOK || !strings.Contains(resolved.Body.String(), `"intValue":120`) {
-		t.Fatalf("resolve config status=%d body=%s", resolved.Code, resolved.Body.String())
-	}
-
-	var layerCount, receiptCount, outboxCount int
-	err = platformOpsPGPool.QueryRow(ctx, `
-SELECT
-  (SELECT COUNT(*) FROM platform_config_layers),
-  (SELECT COUNT(*) FROM platform_config_layer_receipts),
-  (SELECT COUNT(*) FROM platform_ops_outbox)`).Scan(&layerCount, &receiptCount, &outboxCount)
-	if err != nil {
-		t.Fatalf("inspect config layer transaction: %v", err)
-	}
-	if layerCount != 1 || receiptCount != 1 || outboxCount != 1 {
-		t.Fatalf("atomic config commit counts layer=%d receipt=%d outbox=%d", layerCount, receiptCount, outboxCount)
-	}
+	return handler
 }
 
 func platformConfigAuthenticatedHandler(t *testing.T, next http.Handler) http.Handler {
@@ -177,16 +237,12 @@ func platformConfigTokenConfig() rtauth.TokenConfig {
 
 func performPlatformConfigRequest(
 	handler http.Handler,
-	method, path, body, token, idempotencyKey string,
+	method, path, body, token string,
 ) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
-	}
-	if idempotencyKey != "" {
-		request.Header.Set("Idempotency-Key", idempotencyKey)
-		request.Header.Set("If-Match", `"0"`)
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -204,5 +260,16 @@ func assertPlatformConfigError(t *testing.T, recorder *httptest.ResponseRecorder
 	}
 	if response.Code != code {
 		t.Fatalf("error code=%q want=%q body=%s", response.Code, code, recorder.Body.String())
+	}
+}
+
+func asFloat(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case int:
+		return float64(typed)
+	default:
+		return -1
 	}
 }

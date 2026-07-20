@@ -1,4 +1,4 @@
-# L3：外链深链回流与微信唤起（external-inbound-deeplink-routing）
+# L3 特性：外链深链回流与微信唤起（external-inbound-deeplink-routing）
 
 ## 背景与动机
 

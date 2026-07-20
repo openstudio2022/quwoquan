@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Callable, Iterable, Mapping
 
 from core.control_types import (
     AgentProvider,
@@ -37,6 +37,9 @@ from content.execution.contracts import (
 )
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.workspace import ExecutionWorkspace, execution_command_packet_path, execution_state_path
+
+if TYPE_CHECKING:
+    from content.execution.agent.outcome import AgentRunOutcome
 
 EXECUTION_STATE_CONTRACT = "quwoquan.content.execution_state"
 
@@ -165,9 +168,12 @@ class ExecutionContext:
     model: str = DEFAULT_CURSOR_AGENT_MODEL
     agent_provider: AgentProvider = AgentProvider.CURSOR_SDK
     release_only: bool = False
-    agent_runner: Callable[[str], Mapping[str, object]] | None = None
+    agent_runner: Callable[[str], "AgentRunOutcome"] | None = None
     force_clean_workspace_agent_state: bool = False
     controller_run_id: str | None = None
+    agent_usage_scope: str = "execution_stage"
+    agent_content_object_ref: str = ""
+    agent_execution_stage: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -195,6 +201,15 @@ class ExecutionContext:
             )
         if self.until is not None and not isinstance(self.until, ExecutionStage):
             object.__setattr__(self, "until", ExecutionStage(str(self.until)))
+        if self.agent_usage_scope not in {"execution_stage", "content_object"}:
+            raise ValueError("agent_usage_scope must be execution_stage or content_object")
+        if (
+            self.agent_usage_scope == "content_object"
+            and not self.agent_content_object_ref.strip()
+        ):
+            raise ValueError(
+                "content_object agent usage requires agent_content_object_ref"
+            )
 
     @property
     def workspace(self) -> ExecutionWorkspace:

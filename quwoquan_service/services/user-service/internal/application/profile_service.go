@@ -25,7 +25,6 @@ import (
 type ProfileService struct {
 	profiles userrepo.UserProfileStore
 	personas PersonaStore
-	settings userrepo.UserSettingsStore
 	pcache   ProfileSnapshotCache
 	events   UserEventPublisher
 	sync     UserSyncStream
@@ -73,7 +72,6 @@ func WithProfileTagValidator(validator ProfileTagValidator) ProfileServiceOption
 func NewProfileService(
 	profiles userrepo.UserProfileStore,
 	personas PersonaStore,
-	settings userrepo.UserSettingsStore,
 	pcache ProfileSnapshotCache,
 	events UserEventPublisher,
 	sync UserSyncStream,
@@ -83,7 +81,6 @@ func NewProfileService(
 	service := &ProfileService{
 		profiles:             profiles,
 		personas:             personas,
-		settings:             settings,
 		pcache:               pcache,
 		events:               events,
 		sync:                 sync,
@@ -120,19 +117,17 @@ func (s *ProfileService) GetProfile(ctx context.Context, userID string) (snap *m
 	}
 
 	activePersona, _ := s.personas.FindActiveByUserID(ctx, userID)
-	setting, _ := s.settings.FindByUserID(ctx, userID)
 
 	snap = &model.FullSnapshot{
 		Profile:       profile,
 		ActivePersona: activePersona,
-		Settings:      setting,
 	}
 
 	_ = s.pcache.Set(ctx, userID, snap)
 	return snap, nil
 }
 
-func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data map[string]any) (_ *model.UserProfile, err error) {
+func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, command ProfileUpdateCommand) (_ *model.UserProfile, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.UpdateProfile",
 		attribute.String("user.id", userID))
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -144,19 +139,16 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 	if profile == nil {
 		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
-	if _, ok := data["userHandle"]; ok {
-		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
-	}
 
 	// 昵称已不再要求全局唯一（唯一性由 userId/subAccountId/userHandle 承担）；
 	// 用户主动改名后置 nicknameCustomized=true，本人主页据此不再展示编辑画笔。
 	// nickname 与 displayName 互为别名：编辑页可能任一字段携带新昵称。
 	nicknameChanged := false
 	newNickname := ""
-	if v, ok := data["nickname"].(string); ok && strings.TrimSpace(v) != "" {
-		newNickname = strings.TrimSpace(v)
-	} else if v, ok := data["displayName"].(string); ok && strings.TrimSpace(v) != "" {
-		newNickname = strings.TrimSpace(v)
+	if command.Nickname != nil && strings.TrimSpace(*command.Nickname) != "" {
+		newNickname = strings.TrimSpace(*command.Nickname)
+	} else if command.DisplayName != nil && strings.TrimSpace(*command.DisplayName) != "" {
+		newNickname = strings.TrimSpace(*command.DisplayName)
 	}
 	if newNickname != "" && newNickname != strings.TrimSpace(profile.Nickname) {
 		profile.Nickname = newNickname
@@ -167,15 +159,15 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 	oldAvatarAssetID := strings.TrimSpace(profile.AvatarAssetID)
 	oldAvatarVersion := profile.AvatarVersion
 	avatarChanged := false
-	if v, ok := data["avatarAssetId"].(string); ok {
-		assetID := strings.TrimSpace(v)
+	if command.AvatarAssetID != nil {
+		assetID := strings.TrimSpace(*command.AvatarAssetID)
 		if assetID != "" {
 			profile.AvatarAssetID = assetID
 			profile.AvatarURL = profileMediaURL("profile_avatar", assetID)
 		}
 	}
-	if v, ok := data["avatarUrl"].(string); ok {
-		nextAvatarURL := strings.TrimSpace(v)
+	if command.AvatarURL != nil {
+		nextAvatarURL := strings.TrimSpace(*command.AvatarURL)
 		if isLocalProfileMediaReference(nextAvatarURL) {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("avatarUrl must be uploaded before PATCH")
 		}
@@ -194,15 +186,15 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		}
 	}
 	backgroundChanged := false
-	if v, ok := data["backgroundAssetId"].(string); ok {
-		assetID := strings.TrimSpace(v)
+	if command.BackgroundAssetID != nil {
+		assetID := strings.TrimSpace(*command.BackgroundAssetID)
 		if assetID != "" {
 			profile.BackgroundAssetID = assetID
 			profile.BackgroundURL = profileMediaURL("profile_cover", assetID)
 		}
 	}
-	if v, ok := data["backgroundUrl"].(string); ok {
-		nb := strings.TrimSpace(v)
+	if command.BackgroundURL != nil {
+		nb := strings.TrimSpace(*command.BackgroundURL)
 		if isLocalProfileMediaReference(nb) {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("backgroundUrl must be uploaded before PATCH")
 		}
@@ -214,21 +206,21 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 			backgroundChanged = true
 		}
 	}
-	if v, ok := data["bio"].(string); ok {
-		if len([]rune(v)) > 60 {
+	if command.Bio != nil {
+		if len([]rune(*command.Bio)) > 60 {
 			return nil, generated.AppErrorFromInvalidArgument("bio exceeds 60 characters")
 		}
-		profile.Bio = v
+		profile.Bio = *command.Bio
 	}
-	if v, ok := data["gender"].(string); ok {
-		gender := strings.TrimSpace(v)
+	if command.Gender != nil {
+		gender := strings.TrimSpace(*command.Gender)
 		if !isValidProfileGender(gender) {
 			return nil, generated.AppErrorFromInvalidArgument("invalid gender")
 		}
 		profile.Gender = gender
 	}
-	if v, ok := data["birthDate"].(string); ok {
-		birthDate, err := normalizeProfileBirthDate(v, time.Now())
+	if command.BirthDate != nil {
+		birthDate, err := normalizeProfileBirthDate(*command.BirthDate, time.Now())
 		if err != nil {
 			return nil, generated.AppErrorFromInvalidArgument(err.Error())
 		}
@@ -238,8 +230,8 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 			profile.BirthDate = &birthDate
 		}
 	}
-	if v, ok := data["regionTagRef"].(string); ok {
-		regionTagRef := strings.TrimSpace(v)
+	if command.RegionTagRef != nil {
+		regionTagRef := strings.TrimSpace(*command.RegionTagRef)
 		resolver := s.regionTags
 		if resolver == nil {
 			resolver = PathRegionTagResolver{}
@@ -250,14 +242,14 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		}
 		profile.RegionCode = regionTagRef
 		profile.Region = region
-	} else if v, ok := data["region"].(string); ok {
-		if strings.TrimSpace(v) != "" {
+	} else if command.Region != nil {
+		if strings.TrimSpace(*command.Region) != "" {
 			return nil, generated.AppErrorFromProfileInvalidRegion("regionTagRef is required")
 		}
 		profile.Region = ""
 		profile.RegionCode = ""
 	}
-	if nextTags, ok := profileIdentityTagsFromUpdate(data, parsePgTextArray(profile.IdentityTags)); ok {
+	if nextTags, ok := profileIdentityTagsFromUpdate(command, parsePgTextArray(profile.IdentityTags)); ok {
 		if err := validateProfileTagRefs(nextTags); err != nil {
 			return nil, generated.AppErrorFromProfileInvalidTagRef(err.Error())
 		}
@@ -330,7 +322,16 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 	return profile, nil
 }
 
-func (s *ProfileService) GetEditSnapshot(ctx context.Context, userID string, credentials []model.CredentialBinding) (_ map[string]any, err error) {
+// ProfileCredentialView 是资料编辑快照所需的最小凭据切片。
+// Adapter 从 CredentialBinding 对象的 query view 显式映射，避免 Profile
+// application service 依赖另一个对象的 aggregate 或 legacy generated model。
+type ProfileCredentialView struct {
+	CredentialType string
+	DisplayLabel   string
+	IsActive       bool
+}
+
+func (s *ProfileService) GetEditSnapshot(ctx context.Context, userID string, credentials []ProfileCredentialView) (_ map[string]any, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.GetProfileEditSnapshot",
 		attribute.String("user.id", userID))
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -477,12 +478,17 @@ func (s *ProfileService) propagateOwnerProfileToActivePersona(
 	}
 }
 
-func profileIdentityTagsFromUpdate(data map[string]any, current []string) ([]string, bool) {
-	if explicit, ok := stringSliceFromAny(data["identityTags"]); ok {
-		return explicit, true
+func profileIdentityTagsFromUpdate(command ProfileUpdateCommand, current []string) ([]string, bool) {
+	if command.IdentityTags != nil {
+		return dedupeStrings(command.IdentityTags), true
 	}
-	occupation, occupationTouched := data["occupationTagRef"].(string)
-	interests, interestsTouched := stringSliceFromAny(data["interestTagRefs"])
+	occupationTouched := command.OccupationTagRef != nil
+	occupation := ""
+	if occupationTouched {
+		occupation = *command.OccupationTagRef
+	}
+	interestsTouched := command.InterestTagRefs != nil
+	interests := dedupeStrings(command.InterestTagRefs)
 	if !occupationTouched && !interestsTouched {
 		return nil, false
 	}
@@ -584,7 +590,7 @@ func interestTagRefs(tags []string) []string {
 	return result
 }
 
-func phoneCredentialSummary(credentials []model.CredentialBinding) map[string]any {
+func phoneCredentialSummary(credentials []ProfileCredentialView) map[string]any {
 	for _, credential := range credentials {
 		credType := strings.TrimSpace(credential.CredentialType)
 		if credType != credentialPhone && credType != credentialCarrierPhone {

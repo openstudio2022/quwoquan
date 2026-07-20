@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_d
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_card_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ProfileCredentialSummaryData {
   const ProfileCredentialSummaryData({
@@ -25,6 +26,16 @@ class ProfileCredentialSummaryData {
       credentialType: row.credentialType,
       displayLabel: row.displayLabel,
       isBound: row.isActive,
+    );
+  }
+
+  factory ProfileCredentialSummaryData.fromProjection(
+    ProfileCredentialSummaryProjection projection,
+  ) {
+    return ProfileCredentialSummaryData(
+      credentialType: projection.credentialType,
+      displayLabel: projection.displayLabel,
+      isBound: projection.isBound,
     );
   }
 
@@ -81,6 +92,23 @@ class ProfileQrCardData {
       region: wire.region,
       shareText: wire.shareText,
       expiresAt: wire.expiresAt,
+    );
+  }
+
+  factory ProfileQrCardData.fromProjection(ProfileQrCardProjection projection) {
+    if (projection.qrPayload.isEmpty) {
+      throw StateError('Profile QR card qrPayload is required');
+    }
+    return ProfileQrCardData(
+      publicProfileUrl: projection.publicProfileUrl,
+      qrPayload: projection.qrPayload,
+      qrTokenId: projection.qrTokenId,
+      styleVersion: projection.styleVersion,
+      avatarUrl: projection.avatarUrl,
+      displayName: projection.displayName,
+      region: projection.region,
+      shareText: projection.shareText,
+      expiresAt: projection.expiresAt,
     );
   }
 
@@ -195,6 +223,39 @@ class ProfileEditSnapshotData {
       qrCard: wire.qrCard == null
           ? null
           : ProfileQrCardData.fromMap(wire.qrCard!),
+    );
+  }
+
+  factory ProfileEditSnapshotData.fromProjection(
+    ProfileEditSnapshotProjection projection,
+  ) {
+    return ProfileEditSnapshotData(
+      ownerUserId: projection.ownerUserId,
+      subAccountId: projection.subAccountId,
+      avatarUrl: projection.avatarUrl,
+      avatarAssetId: projection.avatarAssetId,
+      avatarVersion: projection.avatarVersion,
+      backgroundUrl: projection.backgroundUrl,
+      backgroundAssetId: projection.backgroundAssetId,
+      nickname: projection.nickname.isEmpty
+          ? projection.displayName
+          : projection.nickname,
+      gender: projection.gender,
+      birthDate: projection.birthDate,
+      region: projection.region,
+      regionTagRef: projection.regionTagRef,
+      userHandle: projection.userHandle,
+      bio: projection.bio,
+      occupationTagRef: projection.occupationTagRef,
+      interestTagRefs: projection.interestTagRefs,
+      phoneCredential: projection.phoneCredential == null
+          ? null
+          : ProfileCredentialSummaryData.fromProjection(
+              projection.phoneCredential!,
+            ),
+      qrCard: projection.qrCard == null
+          ? null
+          : ProfileQrCardData.fromProjection(projection.qrCard!),
     );
   }
 

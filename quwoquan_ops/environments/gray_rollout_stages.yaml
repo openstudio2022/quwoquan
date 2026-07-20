@@ -1,24 +1,31 @@
 # 灰度阶段配置（可扩展）
-# 供 deploy-prod-auto 等 workflow 读取，计算 STEP 与各阶段是否需审批
+# 供 deploy-prod-auto / deploy-prod-gray workflow 与 platform-ops-service 读取。
 #
-# 与五环境/波次：D（生产灰度）与 E（生产全量）在 process_domain_mapping 中均为 prod，差别仅本 stages；
-# 非第二套拓扑。详见 quwoquan_ops/environments/environment_matrix.md。
+# 单一真相源边界（防止第二套数）：
+# - 本文件只声明 stage 名称、step、独立执行目标与 rollback_on_slo_gate；
+# - SLO 阈值 / readback 窗口 / 最小样本唯一来源是
+#   quwoquan_ops/policies/config-release/slo_thresholds.yaml（readback 段）；
+# - 阶段审批由 GitHub `environment: production` required reviewers 承担，
+#   不在本文件重复声明 approval 字段。
 #
-# STEP 映射：STEP = (replicas / total_replicas) * 100，取最接近 5|25|50|100
-# 当前 2 副本：1 -> 50，2 -> 100
-
-total_replicas: 2
+# 与五环境/波次：D（生产灰度）与 E（生产全量）在 process_domain_mapping 中均为 prod，
+# 差别仅本 stages；非第二套拓扑。详见 quwoquan_ops/environments/environment_matrix.md。
+#
+# gray-initial / carry-on 只更新独立 gray compose，并由稳定 Caddy 按
+# gray_routing_policy.stageDimensions 导入真实流量；full 才替换 prod compose。
 stages:
-  - name: initial
-    replicas: 1
-    auto: true   # 全自动，无需审批
+  - name: gray-initial
+    step: 5
+    execution_target: gray
+    routing_profile: gray-initial
+    rollback_on_slo_gate: true
+  - name: carry-on
+    step: 25
+    execution_target: gray
+    routing_profile: carry-on
+    rollback_on_slo_gate: true
   - name: full
-    replicas: 2  # 100%
-    auto: true   # 全自动推进，失败由 SLO gate + rollback 闭环兜底
-
-# 未来 4 副本示例：
-# total_replicas: 4
-# stages:
-#   - { name: initial, replicas: 1, auto: true }
-#   - { name: mid, replicas: 2, auto: false }
-#   - { name: full, replicas: 4, auto: false }
+    step: 100
+    execution_target: prod
+    routing_profile: full
+    rollback_on_slo_gate: true

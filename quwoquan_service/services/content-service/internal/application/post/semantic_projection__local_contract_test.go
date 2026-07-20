@@ -12,7 +12,13 @@ import (
 
 func TestSubmitPostPublicationProjectsPublishedSemanticMentions(t *testing.T) {
 	store := testsupport.NewPostStore(nil)
-	service := NewPostService(BindDataPorts(store))
+	service := NewPostService(
+		BindDataPorts(store),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := semanticPublicationCommand(
 		"semantic-mention-publication",
 		nil,
@@ -63,7 +69,13 @@ func TestSubmitPostPublicationProjectsPublishedSemanticMentions(t *testing.T) {
 }
 
 func TestSubmitPostPublicationRejectsPublishedMentionWithInvalidTargetRef(t *testing.T) {
-	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)))
+	service := NewPostService(
+		BindDataPorts(testsupport.NewPostStore(nil)),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := semanticPublicationCommand(
 		"semantic-mention-invalid-target",
 		nil,
@@ -83,7 +95,13 @@ func TestSubmitPostPublicationRejectsPublishedMentionWithInvalidTargetRef(t *tes
 }
 
 func TestSubmitPostPublicationRejectsClientSuppliedRefsDivergingFromMentions(t *testing.T) {
-	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)))
+	service := NewPostService(
+		BindDataPorts(testsupport.NewPostStore(nil)),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := semanticPublicationCommand(
 		"semantic-mention-diverging-refs",
 		[]string{"/entity/地点/景区/不存在的实体"},
@@ -103,7 +121,13 @@ func TestSubmitPostPublicationRejectsClientSuppliedRefsDivergingFromMentions(t *
 }
 
 func TestSubmitPostPublicationRequiresTransportIdempotencyContext(t *testing.T) {
-	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)))
+	service := NewPostService(
+		BindDataPorts(testsupport.NewPostStore(nil)),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := semanticPublicationCommand("semantic-no-transport-key", nil, nil)
 	if _, err := service.SubmitPostPublication(context.Background(), command); err == nil {
 		t.Fatal("SubmitPostPublication must reject a missing transport idempotency key")

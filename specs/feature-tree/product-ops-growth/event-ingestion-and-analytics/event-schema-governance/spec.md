@@ -28,6 +28,16 @@
 `app_startup` 当前固定 `normal_sample_rate: 1.0`，正常、慢启动和 `hasError=true` 均全量采集；
 `slow_threshold_ms: 3000` 仅作为聚合、看板和告警分类阈值，不得影响是否入队。
 
+App 体验事件固定为三条独立事实，均全量采集且不得由自由 Map 代替：
+
+- `app_anr_outcome`：Dart event-loop watchdog 的本次 stall，或 Android
+  `ApplicationExitInfo` / iOS MetricKit 在下次安全启动补报的上一进程 hang；200ms
+  severe frame 仍只是 jank，不得冒充 ANR。
+- `page_first_usable`：`navigation_start → first_usable_content`，并以
+  `terminalState=content|empty|error` 明确结算；`page_open.readyMs` 只表示路由首帧。
+- `page_error_outcome`：统一阻塞错误面依次记录 `shown/recovery_started/recovered/recovery_failed`，
+  必须带受控 `surfaceId/errorCode/recoveryAction`。
+
 ## 幂等与时间
 
 - 事件不生成逐条 ID；每个密封批次以 canonical JSON SHA-256 作为 `Idempotency-Key`。
@@ -56,4 +66,7 @@
   `5g/4g/mobile`；仅 VPN 为 `other`，`vpn` 入站必须被拒绝。
 - 相同 canonical batch 重放只形成一批 raw 事实并返回 duplicateBatch。
 - `/ops/startup-events` 拒绝产品/身份字段，且匿名 `/ops/events` 始终 401。
+- ANR 原生事实采用 `read → 产品 outbox accepted → acknowledge` 两阶段转存；入队拒绝或异常时
+  必须保留原生标记供下次启动重试，确认后不得重复补报。Dart watchdog 在 10 秒窗口内去重；
+  页面 TTI 每个 visit 只接受首个明确终态；统一错误面展示和恢复动作产生可关联 outcome。
 - 缺真实 SLS/gamma/真机证据时状态保持 partial。

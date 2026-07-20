@@ -15,8 +15,7 @@
 | 02. Service Pipeline | `service_pipeline.yml` | `push main`、手动 | main 后 Go 构建、Python 镜像、prod 校验 | G2 / post-main |
 | 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成与 curated 媒体路由复验 | G5c |
 | 01. App Pipeline | `app_pipeline.yml` | `v*` tag、手动 | 端侧发布构建（macOS） | 发布 |
-| 06. Deploy To Prod (Gray) | 手动触发的半自动生产灰度 workflow（见 `.github/workflows`） | 手动 | 半自动灰度 | G5c |
-| 09. Gamma Full Validation | `gamma-full-validation.yml` | 每晚 22:00 UTC+8、手动 | Nightly 全量验证：local-gamma full semantic smoke + Patrol UI + 设备矩阵（远端 gamma 已退役，无远端 ECS deploy） | G5b |
+| 06. Deploy To Prod (Gray) | `deploy-prod-gray.yml` | 手动 | 半自动灰度 | G5c |
 
 ## 2. 进入 `main` 的主链
 
@@ -37,11 +36,11 @@ feature / dev1.0
 
 所有门禁和脚本统一消费 `quwoquan_ops/environments/gamma_validation_suites.json` 中的 profile 定义：
 
-| Profile | 用途 | 部署 gamma | readiness 阻断 | smoke 阻断 | UI 旅程 | 设备矩阵 |
+| Profile | 用途 | 启动 gamma-local | readiness 阻断 | smoke 阻断 | UI 旅程 | 设备矩阵 |
 |---------|------|-----------|---------------|-----------|---------|---------|
 | `pr_light` | PR 默认 | 否（探针 local-gamma） | 是 | 否（漂移告警） | 无 | alpha/beta, allow_missing |
 | `manual_full` | 手动触发 | 是（local-gamma full） | 是 | 是 | 无 | gamma, allow_missing |
-| `nightly_full` | 每晚 22:00 自动 | 是（local-gamma full） | 是 | 是 | 全量 Patrol UI | gamma, require_all |
+| `nightly_full` | 手动或外部定时调用 | 是（local-gamma full） | 是 | 是 | 全量 Patrol UI | gamma, require_all |
 | `release_candidate` | 发布前回归 | 是 | 是 | 是 | 全量 Patrol UI | gamma, require_all |
 
 > 远端真实集成 / curated 媒体路由复验不再由 gamma profile 承担，已下沉到 prod `gray-initial`（见 `07`）。
@@ -57,9 +56,9 @@ feature / dev1.0
 | 巡检 | `stackctl inspect --target <target> --scope logs|network|data|metrics|config|security|all` |
 | 聚合诊断 | `stackctl doctor --target <target>` |
 | 修复 | `stackctl repair --target <target> --fix <class>` |
-| hosted prod rollout（唯一远端目标） | `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` |
+| hosted prod rollout（唯一远端目标） | `PROMETHEUS_URL=<url> stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step>`；非 dry-run 自动从 Prometheus 回读 SLO，阈值来自 `slo_thresholds.yaml` |
 
-## 4. `04` / `05` / `09` 的职责分工
+## 4. `04` / `05` 的职责分工
 
 ### 4.1 `04. Pre-Release Gate`
 
@@ -78,25 +77,18 @@ PR 轻量 local-gamma preflight（默认 `pr_light` profile）：
 本地 self-hosted 设备矩阵唯一入口（支持 `validation_profile` 分层）：
 
 - PR 默认 `pr_light`：alpha/beta 环境，`allow_missing_platforms=true`。
-- `nightly_full`：alpha/beta/gamma 全环境，`require_all_platforms`。
+- `nightly_full`：gamma 环境，`require_all_platforms`。
 - `manual_full`：gamma 单环境，`allow_missing_platforms=false`。
 - 通过 `flutter devices --machine` 动态发现设备。
 - alpha/beta 环境包与 public URL 由 `stackctl package --env alpha|beta` 统一生成。
 
-### 4.3 远端 gamma 部署（已退役）
+### 4.3 完整本地验证与远端发布
 
-旧 `08. Deploy Gamma ECS` 远端 ECS gamma 部署与 prod 复验链已退役。真实远端发布、就地升级与 prod 复验统一由 `07. Deploy To Prod (Auto)` 在 `gray-initial -> carry-on/checks -> full` rollout stage 完成；`gray-initial` 同时承接旧 gamma-hosted 的 readiness、T3 API contract、chat avatar probe 等真实远端集成与 curated 媒体路由复验。等价 CLI 入口：`stackctl deploy --target prod-hosted ...`。
-
-### 4.4 `09. Gamma Full Validation`
-
-Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 local-gamma：
-
-- local-gamma full semantic 复验（`full_semantic` profile，无远端 ECS deploy）
-- Patrol full UI profile（全量 UI 旅程）
-- gamma assistant 设备矩阵（`nightly_full` profile）
-- gamma chat-avatar 设备矩阵（`nightly_full` profile）
-- gamma environment-smoke 页面矩阵（首页 / 我的 / 他人主页 / 记录列表 / 视频流，`nightly_full` profile）
-- `stackctl inspect --target gamma-local --scope all` 报告归档到 nightly artifact。
+- `05. App Env Device Matrix` 可由手动或 `workflow_call` 传入 `manual_full`、
+  `nightly_full`、`release_candidate`，执行 gamma-local full semantic、Patrol 与设备矩阵。
+- 仓库内不维护独立 `09` nightly workflow；如由外部调度调用，仍必须复用 `05` 和同一 profile registry。
+- 唯一远端发布由 `07. Deploy To Prod (Auto)` 执行
+  `prod-hosted gray-initial → carry-on → full`，并承接真实远端集成与 curated 媒体路由复验。
 
 ## 5. 依赖与前置
 
@@ -107,6 +99,9 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 | `secrets.PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY` | prod-hosted 发布三平面读写 SSH 私钥（`07` 使用） |
 | `GAMMA_TEST_AUTH_TOKEN` | local-gamma / self-hosted 链路鉴权 |
 | `PROD_TEST_AUTH_TOKEN` | prod-hosted `gray-initial` 页面 smoke 固定测试身份 |
+| `vars.PROD_PROMETHEUS_URL` | prod-hosted 非 dry-run 发布的 Prometheus SLO readback |
+| `PROD_SERVICE_NETWORK`（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network |
+| `ALERTMANAGER_WEBHOOK_SECRET_FILE`（prod-hosted 主机文件） | Alertmanager 通知 webhook 文件路径，不进入 GitHub secrets |
 | `gamma_base_url` workflow input / 本地环境变量覆盖 | 仅在需要覆盖 topology `gamma-local.publicBases.api` 时使用 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | chat-avatar 媒体基址 |
 | `vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX` | 控制 PR 是否启用 self-hosted 设备矩阵 |
@@ -132,7 +127,7 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 2. `04` 默认轻量探针 local-gamma：readiness 阻断，smoke 仅告警。
 3. `05` PR 默认 alpha/beta `pr_light` profile，允许缺席平台跳过。
 4. 远端真实集成 / curated 媒体路由 / 页面级基本可用性复验由 `07` 在 prod `gray-initial` 承接（远端 gamma 已退役）。
-5. `09` nightly 22:00 自动执行全量验证（local-gamma full semantic + Patrol UI + 全设备矩阵）。
+5. 完整本地验证只通过 `05` 的 full profile 执行；仓库内无第二个 nightly workflow。
 6. `quwoquan_ops/environments/gamma_validation_suites.json` 是 profile/suite 唯一真相源。
 7. 门禁脚本 `verify_gamma_validation_profiles.py`、`verify_ci_profile_consistency.py`、`verify_environment_topology_manifest.py`、`verify_local_env_port_manifest.py`、`verify_public_vs_upstream_url_contract.py`、`verify_environment_packaging_contract.py`、`verify_env_artifact_isolation.py`、`verify_prod_package_purity.py` 已串联 `make gate` 或 `stackctl verify`。
 8. T1~T4 证据均可从 `.qwq_output/env/<env>/runs/**`、`.qwq_output/env/gamma/local/gamma-local/process/**` 与 workflow artifact 回放。
@@ -142,10 +137,6 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 - `quwoquan_ops/environments/environment_matrix.md`
 - `quwoquan_ops/environments/branch_strategy.md`
 - `quwoquan_ops/environments/deliver_to_production_runbook.md`
-- `quwoquan_ops/environments/workflow_consolidation_plan.md`
 - `quwoquan_ops/environments/gamma_validation_suites.json`
 - `.github/workflows/pre-release-gate.yml`
 - `.github/workflows/app-env-device-matrix-self-hosted.yml`
-- `.github/workflows/gamma-ecs-pre-hosted-core.yml`
-- `.github/workflows/gamma-pr-hosted-core.yml`
-- `.github/workflows/gamma-full-validation.yml`

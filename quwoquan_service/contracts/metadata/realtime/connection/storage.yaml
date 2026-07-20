@@ -7,14 +7,39 @@ description: |
   PresenceEntry 通过 Redis Hash 实现多节点共享在线查询。
 
 redis_cache:
-  - key: "presence:user:{userId}"
+  - key: "rt:ticket:{ticket}"
+    ttl_seconds: 30
+    type: string
+    scene: realtime
+    description: |
+      短期一次性连接 ticket。value = JSON{accountId, personaId, deviceId, issuedAt}。
+      签发时 SET NX EX 30 写入；WS/LongPoll 升级时 GETDEL 一次性消费，
+      不存在=invalid、已消费=replayed、超 TTL 自动过期=expired。
+
+  - key: "rt:conn:lease:{personaId}:{deviceId}:{connId}"
+    ttl_seconds: 60
+    type: string
+    scene: realtime
+    description: |
+      连接租约（lease + fencing）。value = 单调递增 fencing token
+      （INCR rt:conn:fence:{personaId}:{deviceId} 派生）。
+      心跳续租；节点崩溃后租约过期自动出清；旧连接携带过期 fencing token 的写入一律拒绝。
+
+  - key: "rt:conn:fence:{personaId}:{deviceId}"
+    ttl_seconds: 86400
+    type: string
+    scene: realtime
+    description: 每 persona/device fencing token 单调计数器（INCR，任何新连接取号，保证旧连接不可回写）。
+
+  - key: "presence:persona:{personaId}"
     ttl_seconds: 120
     type: hash
     scene: realtime
     description: |
-      用户在线状态 Hash。field = connId, value = JSON{nodeId, transport, lastHeartbeatAt}。
-      TTL 与 ws_heartbeat_timeout_sec 对齐，无心跳自动过期。
-      HSET 在建连时写入，HDEL 在断连时删除，HGETALL 用于在线查询。
+      Persona 设备级在线状态 Hash。field = deviceId，
+      value = JSON{accountId,personaId,deviceId,connId,nodeId,transport,lastHeartbeatAt}。
+      整体 TTL 只作进程崩溃兜底；PresenceView reader 必须按 lastHeartbeatAt
+      对每个 hash field 独立剔除陈旧设备，不能由活跃设备续命 stale field。
 
   - key: "presence:node:{nodeId}:count"
     ttl_seconds: 60
@@ -22,7 +47,7 @@ redis_cache:
     scene: realtime
     description: 节点当前连接数（INCR/DECR，用于负载均衡和容量限流）
 
-  - key: "transport:state:{userId}:{deviceId}"
+  - key: "transport:state:{personaId}:{deviceId}"
     ttl_seconds: 300
     type: string
     scene: realtime

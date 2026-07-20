@@ -63,7 +63,7 @@ def default_cases() -> list[ProbeCase]:
         {"query": "probe", "limit": 1},
         ensure_ascii=False,
     ).encode("utf-8")
-    json_headers = {"Content-Type": "application/json", "X-Test-Local-Gamma": "true"}
+    json_headers = {"Content-Type": "application/json"}
     return [
         ProbeCase("healthz", "GET", "/healthz", "ok_or_business"),
         ProbeCase("config_app_unversioned", "GET", "/config/app", "ok_or_business"),

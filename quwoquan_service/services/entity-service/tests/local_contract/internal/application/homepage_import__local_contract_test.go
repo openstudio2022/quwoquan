@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/entity-service/internal/application"
+	"quwoquan_service/services/entity-service/internal/testsupport"
 )
 
 func importedSightInput(title string) application.ImportedHomepageInput {
@@ -52,8 +54,13 @@ func reconcileImportedHomepages(
 	})
 }
 
+func newEmptyHomepageService() *application.HomepageService {
+	service, _ := testsupport.NewEmptyHomepageService()
+	return service
+}
+
 func TestReconcileImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("九寨沟")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("upsert failed: %v", err)
@@ -122,7 +129,7 @@ func TestReconcileImportedHomepagesCreatesPublishedHomepage(t *testing.T) {
 }
 
 func TestReconcileImportedHomepagesIsIdempotentBySourceEntityRef(t *testing.T) {
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	first, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("黄龙")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("first upsert: %v", err)
@@ -144,23 +151,53 @@ func TestReconcileImportedHomepagesIsIdempotentBySourceEntityRef(t *testing.T) {
 }
 
 func TestReconcileImportedHomepagesPreservesClaimedEdits(t *testing.T) {
-	svc := application.NewHomepageService()
-	ctx := context.Background()
+	svc := newEmptyHomepageService()
+	ctx := operation.WithContext(context.Background(), operation.Context{
+		OperationID:    "entity.homepage.UpdateClaimedHomepageBasics",
+		RequestID:      "req-import-preserve",
+		TraceID:        "trace-import-preserve",
+		IdempotencyKey: "import-preserve",
+		Actor: operation.ActorContext{
+			AccountID: "fixture-reviewer-account",
+			PersonaID: "fixture_operator",
+		},
+	})
 	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("武侯祠")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
 		t.Fatalf("seed upsert: %v", err)
 	}
 	id := report.Created[0]
 	claim, err := svc.CreateHomepageClaimRequest(ctx, id, application.ClaimRequestInput{
-		RequesterUserID: "fixture_operator",
-		ClaimTier:       "business",
-		ContactPhone:    "13800000000",
+		RequesterPersonaID: "fixture_operator",
+		ClaimTier:          "business",
+		ContactPhone:       "13800000000",
 	})
 	if err != nil {
 		t.Fatalf("claim request: %v", err)
 	}
-	if _, err := svc.ReviewHomepageClaimRequest(ctx, id, claim.ID, application.ClaimReviewInput{Status: "approved"}); err != nil {
+	if err := svc.ApplyClaimRequestedProjection(
+		ctx,
+		"test-import-claim-requested",
+		id,
+	); err != nil {
+		t.Fatalf("project pending claim: %v", err)
+	}
+	if _, err := svc.ReviewHomepageClaimRequest(
+		ctx,
+		id,
+		claim.ClaimRequestID,
+		application.ClaimReviewInput{Status: "approved"},
+	); err != nil {
 		t.Fatalf("approve claim: %v", err)
+	}
+	if err := svc.ApplyClaimReviewedProjection(
+		ctx,
+		"test-import-claim-reviewed",
+		id,
+		"fixture_operator",
+		true,
+	); err != nil {
+		t.Fatalf("project approved claim: %v", err)
 	}
 	if _, err := svc.UpdateClaimedHomepageBasics(ctx, id, application.HomepageBasicInput{
 		CoverURL: "https://claimed.example/cover.jpg",
@@ -187,7 +224,7 @@ func TestReconcileImportedHomepagesPreservesClaimedEdits(t *testing.T) {
 }
 
 func TestReconcileImportedHomepagesRejectsInvalidType(t *testing.T) {
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	bad := importedSightInput("九寨沟")
 	bad.HomepageType = "galaxy"
 	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{bad}, application.HomepageImportModeUpsert, "release-001")
@@ -201,7 +238,7 @@ func TestReconcileImportedHomepagesRejectsInvalidType(t *testing.T) {
 
 func TestReconcileImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
 	// 地点类主页类型闭集与 metadata HomepageType 枚举 / 数据工程试点 scope 对齐（WP3-4）。
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	pilotTypes := []string{
 		"museum", "heritage_site", "ancient_town", "religious_site",
 		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park",
@@ -223,7 +260,7 @@ func TestReconcileImportedHomepagesAcceptsPilotScopePlaceTypes(t *testing.T) {
 
 func TestReconcileImportedHomepagesKeepsExistingTagsWhenImportHasNone(t *testing.T) {
 	// 数据工程无打标时不清空既有 categoryTags（保护存量/运营侧标签）。
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	ctx := context.Background()
 	report, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{importedSightInput("青城山")}, application.HomepageImportModeUpsert, "release-001")
 	if err != nil {
@@ -245,7 +282,7 @@ func TestReconcileImportedHomepagesKeepsExistingTagsWhenImportHasNone(t *testing
 }
 
 func TestSyncImportedHomepagesOfflinesOnlyStaleDataOwnedHomepages(t *testing.T) {
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	first, err := reconcileImportedHomepages(
 		t,
 		svc,
@@ -291,7 +328,7 @@ func TestSyncImportedHomepagesOfflinesOnlyStaleDataOwnedHomepages(t *testing.T) 
 }
 
 func TestSyncImportedHomepagesRejectsInvalidInputBeforeMutation(t *testing.T) {
-	svc := application.NewHomepageService()
+	svc := newEmptyHomepageService()
 	valid := importedSightInput("海螺沟")
 	if _, err := reconcileImportedHomepages(t, svc, []application.ImportedHomepageInput{valid}, application.HomepageImportModeUpsert, "release-001"); err != nil {
 		t.Fatalf("initial import: %v", err)

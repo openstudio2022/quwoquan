@@ -1,4 +1,4 @@
-# L3：统一分享面板与渠道编排（share-channel-panel）
+# L3 特性：统一分享面板与渠道编排（share-channel-panel）
 
 > 归属：product-ops-growth / outbound-share-distribution / share-channel-panel
 

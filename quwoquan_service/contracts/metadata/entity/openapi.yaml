@@ -4,6 +4,40 @@ info:
     title: quwoquan entity API
     version: v1
 paths:
+    /homepage-claim-requests:
+        get:
+            operationId: ListHomepageClaimRequests
+            x-contract-operation-id: entity.homepage_claim_request.ListHomepageClaimRequests
+            x-object-id: entity.homepage_claim_request
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HomepageClaimQueryFacade
+                method: listQueue
+                reader: HomepageClaimQueueReader
+                slice: HomepageClaimRequestSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageClaimRequest'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /homepage-reviews/{reviewId}:
         patch:
             operationId: UpdateHomepageReview
@@ -21,12 +55,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateHomepageReviewRequest'
+                            $ref: '#/components/schemas/HomepageReview'
             responses:
                 "200":
                     description: OK
@@ -58,9 +98,53 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageReview'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /homepage-status-reports:
+        get:
+            operationId: ListHomepageStatusReports
+            x-contract-operation-id: entity.homepage_status_report.ListHomepageStatusReports
+            x-object-id: entity.homepage_status_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HomepageStatusReportQueryFacade
+                method: listQueue
+                reader: HomepageStatusReportQueueReader
+                slice: HomepageStatusReportSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageStatusReport'
                 default:
                     description: Runtime failure
                     content:
@@ -120,6 +204,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -127,8 +217,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/HomepageClaimRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageClaimRequest'
                 default:
                     description: Runtime failure
                     content:
@@ -159,6 +253,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -166,8 +266,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ReviewHomepageClaimRequestRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageClaimRequest'
                 default:
                     description: Runtime failure
                     content:
@@ -193,77 +297,18 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateClaimedHomepageBasicsRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /homepages/{homepageId}/follow:
-        post:
-            operationId: FollowHomepage
-            x-contract-operation-id: entity.homepage.FollowHomepage
-            x-object-id: entity.homepage
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: HomepageFollowCommandFacade
-                method: follow
-                aggregateOwner: Homepage
-            parameters:
-                - name: homepageId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/FollowHomepageRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Homepage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-        delete:
-            operationId: UnfollowHomepage
-            x-contract-operation-id: entity.homepage.UnfollowHomepage
-            x-object-id: entity.homepage
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: HomepageFollowCommandFacade
-                method: unfollow
-                aggregateOwner: Homepage
-            parameters:
-                - name: homepageId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
             responses:
                 "200":
                     description: OK
@@ -449,6 +494,39 @@ paths:
                 - bearerAuth: []
                 - {}
     /homepages/{homepageId}/reviews:
+        get:
+            operationId: ListHomepageReviews
+            x-contract-operation-id: entity.homepage_review.ListHomepageReviews
+            x-object-id: entity.homepage_review
+            x-actor: none
+            x-application:
+                kind: query
+                facet: HomepageReviewQueryFacade
+                method: listByHomepage
+                reader: HomepageReviewPageReader
+                slice: HomepageReviewPageSlice
+            parameters:
+                - name: homepageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageReview'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
         post:
             operationId: CreateHomepageReview
             x-contract-operation-id: entity.homepage_review.CreateHomepageReview
@@ -465,12 +543,51 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateHomepageReviewRequest'
+                            $ref: '#/components/schemas/HomepageReview'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageReview'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /homepages/{homepageId}/reviews/mine:
+        get:
+            operationId: GetMyHomepageReview
+            x-contract-operation-id: entity.homepage_review.GetMyHomepageReview
+            x-object-id: entity.homepage_review
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: HomepageReviewQueryFacade
+                method: getMine
+                reader: MyHomepageReviewReader
+                slice: HomepageReviewSlice
+            parameters:
+                - name: homepageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -537,6 +654,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -544,8 +667,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/HomepageStatusReport'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageStatusReport'
                 default:
                     description: Runtime failure
                     content:
@@ -576,6 +703,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -583,8 +716,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ReviewHomepageStatusReportRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageStatusReport'
                 default:
                     description: Runtime failure
                     content:
@@ -594,6 +731,39 @@ paths:
             security:
                 - bearerAuth: []
     /homepages/candidates:
+        get:
+            operationId: ListHomepageCandidates
+            x-contract-operation-id: entity.homepage.ListHomepageCandidates
+            x-object-id: entity.homepage
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HomepageGovernanceQueryFacade
+                method: listCandidates
+                reader: HomepageSearchReader
+                slice: HomepageCandidateQueueSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageSearchItemView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
         post:
             operationId: IntakeHomepageCandidate
             x-contract-operation-id: entity.homepage.IntakeHomepageCandidate
@@ -604,6 +774,13 @@ paths:
                 facet: HomepageImportCommandFacade
                 method: intakeCandidate
                 aggregateOwner: Homepage
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -638,6 +815,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -666,6 +849,13 @@ paths:
                 facet: HomepageCommandFacade
                 method: suggestCandidate
                 aggregateOwner: Homepage
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -751,20 +941,10 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        CreateHomepageReviewRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateHomepageReviewRequest
-            x-contract-placeholder: true
         EntityImpactSummary:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: EntityImpactSummary
-            x-contract-placeholder: true
-        FollowHomepageRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: FollowHomepageRequest
             x-contract-placeholder: true
         Homepage:
             type: object
@@ -840,9 +1020,4 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UpdateClaimedHomepageBasicsRequest
-            x-contract-placeholder: true
-        UpdateHomepageReviewRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateHomepageReviewRequest
             x-contract-placeholder: true

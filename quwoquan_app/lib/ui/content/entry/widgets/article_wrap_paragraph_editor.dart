@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_layout.dart';
 

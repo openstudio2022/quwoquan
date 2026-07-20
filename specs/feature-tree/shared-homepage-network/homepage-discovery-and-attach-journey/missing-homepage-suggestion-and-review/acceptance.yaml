@@ -7,45 +7,74 @@ node:
   parent_domain_service: shared-homepage-network
   parent_business_capability: homepage-discovery-and-attach-journey
 scope:
-  summary: missing homepage suggestion and review 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 搜索无结果时补充主页提交进入候选态，并返回原上下文。
+  in_scope:
+  - suggestHomepage 页最小必要信息提交（SuggestHomepageCandidate）。
+  - 提交进入 candidate 态，不直接公开。
+  - 提交后返回搜索/发布上下文。
+  out_of_scope:
+  - 候选发布审核后台（homepage-candidate-intake-and-publish 的治理消费面）。
+  - 认领申请。
 gwt_acceptance:
   GWT1:
-    title: missing homepage suggestion and review GWT
+    title: 用户补充缺失主页并进入候选待审
     given:
-    - 前置条件明确。
+    - 已登录 persona 在搜索无结果或地点落地页点击「补充主页/提升为主页」。
     when:
-    - 用户或系统动作发生。
+    - 填写类型、名称等最小信息并提交。
     then:
-    - 可观察结果符合预期。
+    - 服务端以可信 persona 落库 candidate（sourceType=user_suggested），不进入公开搜索。
+    - 提交失败不丢失已填内容；成功后返回原上下文并有明确反馈。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - SuggestHomepageCandidate per-op ready；候选不可公开浏览由状态机保证。
+    edge_cases:
+    - 同名主页已存在时给出去重提示或直接引导至现有主页。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
     performance_points: []
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/entity/suggest_homepage/suggest_homepage_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.missing_homepage_suggestion_and_review.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.missing_homepage_suggestion_and_review.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_discovery_and_attach_journey.missing_homepage_suggestion_and_review.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        execution_profile: release
+        suite: journey
+        cases:
+        - user_acceptance.shared_homepage_network.homepage_discovery_and_attach_journey.missing_homepage_suggestion_and_review.journey
+        envs:
+        - gamma_local
+    notes:
+    - "2026-07-20 M9 商用化审查：提交侧（suggest 页 + SuggestHomepageCandidate ready）可闭环；「进入候选后被审核发布」依赖治理消费面（gap ENTITY_GOVERNANCE_OPS_PORTAL_SURFACE，target_story=app-cloud-business-object-commercial-closure），在该 gap 关闭前本 story 不得宣称 completed。"
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

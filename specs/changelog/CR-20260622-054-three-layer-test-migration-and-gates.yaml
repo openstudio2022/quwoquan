@@ -194,7 +194,7 @@ entries:
       - "cd quwoquan_service/services/search-service && go test ./tests/api_integration -count=1"
     notes:
       - 本 CR 收口的是迁移与门禁，不把 `quwoquan_data` 既有业务红测或 `user-service` 长跑 api_integration 误记为绿色。
-      - 生产灰度语义统一为 `env: prod` + `rollout_stage: gray_initial`，不新增 `prod-gray` 第二环境。
+      - "生产灰度语义统一为 `env: prod` + `rollout_stage: gray_initial`，不新增 `prod-gray` 第二环境。"
   - timestamp: "2026-06-22T22:30:00+08:00"
     summary: |
       继续按 `/continue-dev` 对 `R-TST06` 做 feature-tree 级 burn-down，本轮不新增测试实现，只回填已有
@@ -512,9 +512,9 @@ entries:
       - "make verify-test-no-fake"
       - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
-      - `exposure-observability-capacity` 使用的是 direct canonical `local_contract`，不新增 legacy source / allowlist。
-      - `config-and-reliability-governance` 使用的是 canonical `api_integration` 入口承接既有控制面 HTTP 测试，不新增第二套实现或 shim。
-      - full strict 诊断已归零，`R-TST06` 已从 backlog 正式关闭。
+      - "`exposure-observability-capacity` 使用的是 direct canonical `local_contract`，不新增 legacy source / allowlist。"
+      - "`config-and-reliability-governance` 使用的是 canonical `api_integration` 入口承接既有控制面 HTTP 测试，不新增第二套实现或 shim。"
+      - "full strict 诊断已归零，`R-TST06` 已从 backlog 正式关闭。"
   - timestamp: "2026-06-22T23:58:00+08:00"
     summary: |
       在 `R-TST06` 归零后继续沿 `/continue-dev` 清 `R-TST07`。本轮不碰 `RUN_T4_PATROL` /
@@ -662,7 +662,7 @@ entries:
       - "make verify-test-specs"
     notes:
       - 本轮没有扩 allowlist，也没有新增“隐式 return 伪跳过”；所有移除的 skip 都改成了更诚实的测试前置契约。
-      - `content-service/tests/comment_keyset_explain_bench_test.go` 的深分页回归去掉 `-short` 跳过后依然快速通过，没有形成新的慢测债。
+      - "`content-service/tests/comment_keyset_explain_bench_test.go` 的深分页回归去掉 `-short` 跳过后依然快速通过，没有形成新的慢测债。"
   - timestamp: "2026-06-23T00:30:00+08:00"
     summary: |
       继续沿 `R-TST07` 做低成本真清债，本轮再收两个独立 legacy skip：
@@ -714,8 +714,8 @@ entries:
       - "make verify-test-directory-layout"
       - "make verify-test-specs"
     notes:
-      - `cmd/import` 现在和其他 service L2 测试一样，在缺少显式 Mongo URI 时优先尝试 testcontainer；本地无 Docker 时整包提前退出，而不是让单用例残留 skip。
-      - `http_model_client_test.go` 保留了原本对 method/path/body/response 的完整断言，只是去掉了与 loopback 环境相关的非业务噪音。
+      - "`cmd/import` 现在和其他 service L2 测试一样，在缺少显式 Mongo URI 时优先尝试 testcontainer；本地无 Docker 时整包提前退出，而不是让单用例残留 skip。"
+      - "`http_model_client_test.go` 保留了原本对 method/path/body/response 的完整断言，只是去掉了与 loopback 环境相关的非业务噪音。"
   - timestamp: "2026-06-23T00:55:00+08:00"
     summary: |
       继续沿 `R-TST07` 清理 `user-service` 剩余的 Mongo 依赖 grandfathered 例外。本轮没有把包级
@@ -797,8 +797,8 @@ entries:
       - "make verify-test-directory-layout"
       - "make verify-test-specs"
     notes:
-      - `requireMongoBackedRuntime` 不再把 Mongo 前置散落为文件级 skip；它把约束收回到统一 helper，允许 mixed runtime 包先跑非 Mongo 用例，再在真正触达 follow/history 语义时显式升级。
-      - 本轮未扩 allowlist，也未新增 helper 内隐式 `t.Skip` / `return` 伪跳过；去掉 skip 后的 user-service package 已在显式 `TEST_MONGO_URI` 下整包实跑通过。
+      - "`requireMongoBackedRuntime` 不再把 Mongo 前置散落为文件级 skip；它把约束收回到统一 helper，允许 mixed runtime 包先跑非 Mongo 用例，再在真正触达 follow/history 语义时显式升级。"
+      - "本轮未扩 allowlist，也未新增 helper 内隐式 `t.Skip` / `return` 伪跳过；去掉 skip 后的 user-service package 已在显式 `TEST_MONGO_URI` 下整包实跑通过。"
   - timestamp: "2026-06-23T07:15:00+08:00"
     summary: |
       继续沿 `R-TST07` 清理 service 侧最后一条 grandfathered skip，本轮把
@@ -887,5 +887,5 @@ entries:
       - "make verify-test-directory-layout"
       - "make verify-test-specs"
     notes:
-      - `event_publish_contract__api_integration` canonical wrapper 当前仍被同文件内既有 `createConversation` 路径红测阻塞；本轮 focused 验证刻意直接 seed Mongo，会把主证据限定在 `RemoveAssistant/AssistantRemoved` 这条本轮实际改动路径。
-      - 本轮没有扩 allowlist，也没有把 `AssistantRemoved` 留在 adapter 私有常量里；service 侧 grandfathered skip 已从清单归零，后续 `R-TST07` 主战场转到 app/pageflip、app/patrol 与运行时旧命名。
+      - "`event_publish_contract__api_integration` canonical wrapper 当前仍被同文件内既有 `createConversation` 路径红测阻塞；本轮 focused 验证刻意直接 seed Mongo，会把主证据限定在 `RemoveAssistant/AssistantRemoved` 这条本轮实际改动路径。"
+      - "本轮没有扩 allowlist，也没有把 `AssistantRemoved` 留在 adapter 私有常量里；service 侧 grandfathered skip 已从清单归零，后续 `R-TST07` 主战场转到 app/pageflip、app/patrol 与运行时旧命名。"

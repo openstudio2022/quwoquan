@@ -207,8 +207,8 @@ func validateProfileTagRefs(tags []string) error {
 	return nil
 }
 
-func ProfileIdentityTagsFromUpdate(data map[string]any, current []string) ([]string, bool) {
-	return profileIdentityTagsFromUpdate(data, current)
+func ProfileIdentityTagsFromUpdate(command ProfileUpdateCommand, current []string) ([]string, bool) {
+	return profileIdentityTagsFromUpdate(command, current)
 }
 
 func ValidateProfileTagRefs(tags []string) error {

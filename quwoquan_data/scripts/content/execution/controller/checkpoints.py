@@ -429,6 +429,9 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
             StageStatus.DONE,
             "实体主页三件套已 finalize（Agent 正文 + 资产闭环）并通过采纳门",
         )
+    from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
+
+    prepare_reliable_author_jobs(ctx, "build_homepage")
     combined_issues = list(finalize_issues or []) + list(issues)
     hint = (
         f"[CHECKPOINT build_homepage] Agent 在底稿基础上轻改创作实体主页正文（不脚本拼接）：\n"
@@ -462,6 +465,9 @@ def _checkpoint_post_author(ctx: ExecutionContext) -> StageResult:
     ok, pending = _drafts_authored(ctx)
     if ok:
         return StageResult(ExecutionStage.POST_AUTHOR, CHECKPOINT, StageStatus.DONE, "文章/主页正文已由 Agent 创作，图片作品采用结构化证据包")
+    from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
+
+    prepare_reliable_author_jobs(ctx, "post_author")
     hint = (
         f"[CHECKPOINT post_author] Agent 逐篇创作文章/主页正文(generator=agent)：\n"
         f"  草稿目录: posts/<type>/<angle>/<title>/<seq>/4.draft/\n"

@@ -229,7 +229,17 @@ def main() -> int:
     }
 
     report["stackctl_verify"] = run(
-        [sys.executable, "quwoquan_ops/cli/stackctl.py", "verify", "--env", "gamma", "--kind", "all"],
+        [
+            sys.executable,
+            "quwoquan_ops/cli/stackctl.py",
+            "verify",
+            "--env",
+            "gamma",
+            "--kind",
+            "all",
+            "--profile",
+            "release",
+        ],
         timeout=180,
     )
     report["search_healthz"] = http_json(SEARCH_BASE + "/healthz")

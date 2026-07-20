@@ -4,21 +4,26 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/circle/membership/persona_circle_summary_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/search/embedded/embedded_member_search_bar_plain.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'profile_stats_page_widgets.dart';
@@ -48,7 +53,7 @@ extension on _ProfileStatsTab {
   String get label => switch (this) {
     _ProfileStatsTab.fans => UITextConstants.circleFans,
     _ProfileStatsTab.following => UITextConstants.follow,
-    _ProfileStatsTab.circles => UITextConstants.contactsTabCircles,
+    _ProfileStatsTab.circles => ChatText.contactsTabCircles,
   };
 
   String get searchHint => switch (this) {
@@ -227,7 +232,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     );
     try {
       final bundle = await ref
-          .read(userProfileRepositoryProvider)
+          .read(profileQueryProvider(AppUiSurfaces.profileStats))
           .getUserHomepageBundle(_userId);
       if (!mounted) {
         return;
@@ -517,7 +522,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     String? query,
     String? cursor,
   }) async {
-    final repo = ref.read(userProfileRepositoryProvider);
+    final relationshipQuery = ref.read(
+      personaRelationshipQueryProvider(AppUiSurfaces.profileStats),
+    );
     switch (tab) {
       case _ProfileStatsTab.circles:
         final page = await ref
@@ -525,29 +532,21 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
             .listPersonaCircles(
               PersonaCircleListQuery(
                 personaId: _userId,
+                query: query,
                 cursor: cursor,
                 limit: _pageSize,
               ),
             );
-        final normalizedQuery = query?.trim().toLowerCase() ?? '';
         final items = page.items
             .map(circleDtoFromPersonaCircleSummary)
-            .where(
-              (circle) =>
-                  normalizedQuery.isEmpty ||
-                  circle.name.toLowerCase().contains(normalizedQuery) ||
-                  (circle.description ?? '').toLowerCase().contains(
-                    normalizedQuery,
-                  ),
-            )
             .toList(growable: false);
         return CursorPage<Object>(
           items: items.cast<Object>(),
           nextCursor: page.nextCursor,
         );
       case _ProfileStatsTab.following:
-        final page = await repo.listFollowingPage(
-          _userId,
+        final page = await relationshipQuery.listFollowing(
+          subAccountId: _userId,
           query: query,
           cursor: cursor,
           limit: _pageSize,
@@ -558,8 +557,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           totalCount: page.totalCount,
         );
       case _ProfileStatsTab.fans:
-        final page = await repo.listFollowersPage(
-          _userId,
+        final page = await relationshipQuery.listFollowers(
+          subAccountId: _userId,
           query: query,
           cursor: cursor,
           limit: _pageSize,
@@ -719,7 +718,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         .read(pageLifecycleObservabilityProvider)
         .recordPageState(
           pageName: tab.analyticsPageName,
-          route: '/profile/stats',
+          route: AppRoutePaths.profileStats(),
           surface: 'profile_stats',
           phase: phase,
           source: source,
@@ -790,18 +789,14 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       return;
     }
     final currentFollowing = capability.viewerFollowsTarget;
-    ref
+    await ref
         .read(userRelationshipStateProvider.notifier)
-        .setFollowing(row.subAccountId, true);
-    ref
-        .read(discoveryStateProvider.notifier)
-        .setFollowState(row.subAccountId, true);
-    ref
-        .read(clientStateSyncOutboxProvider.notifier)
-        .enqueueFollow(
-          subAccountId: row.subAccountId,
+        .setFollowingWithSync(
+          row.subAccountId,
           currentFollowing: currentFollowing,
           shouldFollow: true,
+          sourceSurface: AppUiSurfaces.profileStats,
+          flushImmediately: false,
         );
   }
 
@@ -851,18 +846,14 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           'surfaceId': 'profile_stats',
         },
       );
-      ref
+      await ref
           .read(userRelationshipStateProvider.notifier)
-          .setFollowing(row.subAccountId, false);
-      ref
-          .read(discoveryStateProvider.notifier)
-          .setFollowState(row.subAccountId, false);
-      ref
-          .read(clientStateSyncOutboxProvider.notifier)
-          .enqueueFollow(
-            subAccountId: row.subAccountId,
+          .setFollowingWithSync(
+            row.subAccountId,
             currentFollowing: true,
             shouldFollow: false,
+            sourceSurface: AppUiSurfaces.profileStats,
+            flushImmediately: false,
           );
       if ((_bundle?.viewerContext.isOwner ?? false) &&
           _activeTab == _ProfileStatsTab.following) {
@@ -889,7 +880,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     }
     try {
       final created = await ref
-          .read(chatRepositoryProvider)
+          .read(chatConversationRepositoryProvider)
           .createConversation(
             type: 'direct',
             initialMemberIds: <String>[row.subAccountId],
@@ -953,7 +944,12 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         'surfaceId': 'profile_stats',
       },
     );
-    context.push(AppRoutePaths.circleDetail(id: circle.id));
+    context.push(
+      AppRoutePaths.circleDetail(id: circle.id),
+      extra: const CircleDetailPageRouteExtra(
+        referralSource: ReferralSource.authorProfile,
+      ),
+    );
   }
 
   @override

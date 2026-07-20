@@ -7,45 +7,100 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-display-journey-consistency
 scope:
-  summary: content action intent contract 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: Post 八类互动/反馈意图、更多面板、举报生命周期、账号态治理动作与推荐回流的商用闭环。
+  in_scope:
+  - like/favorite/share/comment/dislike/report/block user/block keywords 对象归属与端云链路。
+  - 举报原因选择、reporter 私有进度、运营 Report/ModerationCase 审核与结案通知。
+  - 不感兴趣即时移除、短时 undo_dislike 补偿和未来窗口精确过滤。
+  - 首页 Feed 与 Work Browser 两个宿主的行为、归因、登录 continuation 和错误恢复一致性。
+  out_of_scope:
+  - 打赏、会员、虚拟币等交易能力（R-LEGAL-001 未关闭前不展示）。
+  - 通用 App 意见反馈对象；本 Story 只负责 Post 反馈与治理。
+  - 推荐深度模型参数与线上收益晋级。
 gwt_acceptance:
   GWT1:
-    title: content action intent contract GWT
+    title: Post 反馈与治理动作端云闭环 GWT
     given:
-    - 前置条件明确。
+    - 用户从首页 Feed、Work Browser 或用户主页打开正式更多/举报入口。
+    - metadata 已声明 Report、Behavior、PersonaRelationship 与 UserSettings 对象操作。
     when:
-    - 用户或系统动作发生。
+    - 用户执行不感兴趣、撤销、拉黑作者、屏蔽关键词或选择原因后提交举报。
+    - 运营人员领取 Report、审核当前 PostModerationCase 并 resolved 或 dismissed。
     then:
-    - 可观察结果符合预期。
+    - 面板只展示具备真实结果的动作，不出现开发中 toast 或空回调。
+    - 不感兴趣立即移除/跳过且带完整 feed 归因；撤销只恢复当前 Post 的精确负反馈。
+    - 拉黑和屏蔽关键词在登录成功后续接原动作，关闭登录回到安全状态且不循环。
+    - 举报人收到结案通知，并只能在“我的举报”查看自己的公开生命周期字段。
+    - Portal 先消费当前 PostModerationCase 后再允许内容处置或驳回举报。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - App、content-service、user-service、notification-service 与 Portal 共享同一 metadata/ContractGraph。
+    - local_contract、api_integration 与 user_acceptance 证据均可定位并通过适用门禁。
+    edge_cases:
+    - 游客关闭登录不回到受限触发点，登录成功恢复原 post/reason/关键词。
+    - 举报目标删除、Case 尚未投影、重复 Idempotency-Key、未知 cursor 与越权 reporter 均 fail closed。
+    - 弱网缓存回退继续过滤 blockedKeywords，不重新展示已屏蔽内容。
+    - 最后一条沉浸内容负反馈不黑屏，撤销仍可恢复。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/report/service.yaml
+    - quwoquan_service/contracts/metadata/content/report/events.yaml
+    - quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+    - quwoquan_service/contracts/metadata/content/post_moderation_case/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_settings/service.yaml
+    - quwoquan_service/contracts/metadata/user/persona_relationship/service.yaml
+    performance_points:
+    - CreateReport P95 <= 800ms；ListMyReports P95 <= 400ms。
+    - 举报 72 小时结案率 >= 95%。
+    - 行为上报到精确负反馈过滤生效 P95 < 100ms。
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/gate/verify_report_feedback_four_environment.py
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_report_feedback_lifecycle_probe.py
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/content/more_action_popup__functional__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/report_query_contract__functional__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/generated_operation_client__contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/notification/app_message_navigation__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_continuation__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/services/blocked_keyword_snapshot_cache__performance__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/settings/my_reports/my_reports_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/settings/blocked_keywords/blocked_keywords_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/settings/post_feedback_settings_pages__visual__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/report/report_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/report_dismiss_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/moderation_case_contract__api_integration_test.go
+      - file: quwoquan_service/runtime/recommendation/engine__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_projection__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go
+      - file: quwoquan_service/services/user-service/cmd/acceptance-session/main__local_contract_test.go
+      - file: quwoquan_ops/tests/local_contract/report_feedback_environment_evidence__local_contract_test.py
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.content_action_intent_contract.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.content_action_intent_contract.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - 2026-07-20：代码与本地三层证据已登记；四环境 stackctl 与对象级旅程报告未全部取得前保持 partial，不以静态实现宣称商用完成。
+    - 2026-07-20 门禁已从“通用环境状态 + 文件存在”强化为对象级证据：beta/gamma 必须实际执行创建、幂等重放、reporter 隔离、运营驳回、通知回流及 dislike 撤销；prod 只允许真实鉴权的 read-only 私有列表探针；所有报告必须晚于当前代码。
+    - 2026-07-20 最新实跑：beta 通用 integration `.qwq_output/env/beta/runs/20260720T174029Z-verify-beta-local/report.json` 为 ok，但对象级探针 `.qwq_output/env/beta/runs/20260720T174907Z-report-feedback-beta/report-feedback-lifecycle.json` 在 `GET /content/users/me/reports` 返回 404，证明当前 beta fixture gateway 未接真实 Report 服务，不能计商用证据；gamma/prod release 仍为 GATE_BLOCK 且尚无合格对象级报告。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

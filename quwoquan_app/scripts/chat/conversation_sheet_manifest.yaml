@@ -11,6 +11,8 @@ allowed_modal_popup:
     kind: camera_discard_sheet
   - path: quwoquan_app/lib/components/media/image/editor/image_editor_page_completion.dart
     kind: image_editor_history_sheet
+  - path: quwoquan_app/lib/ui/assistant/widgets/assistant_history_sheet.dart
+    kind: assistant_history_sheet
   - path: quwoquan_app/lib/ui/share/widgets/forward_share_sheet.dart
     kind: forward_share_sheet
   - path: quwoquan_app/lib/ui/share/widgets/forward_confirm_sheet.dart
@@ -29,7 +31,11 @@ allowed_modal_popup:
     kind: rtc_participant_sheet
   - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
     kind: intersection_detail_sheet
+  - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_intersection_actions.dart
+    kind: intersection_detail_sheet
   - path: quwoquan_app/lib/ui/user/widgets/author_impact_evidence.dart
     kind: author_impact_evidence_sheet
   - path: quwoquan_app/lib/ui/user/pages/edit_profile_page_sections.dart
     kind: profile_update_proposal_review_sheet
+  - path: quwoquan_app/lib/ui/assistant/widgets/assistant_history_sheet.dart
+    kind: assistant_history_sheet

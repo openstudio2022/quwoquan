@@ -1,0 +1,56 @@
+service:
+  name: content-service
+  domain: content
+  owner: content-platform
+  commercial_defaults:
+    status: blocked
+    block_reason: Profile interaction read fact awaits gamma environment replay and page UAT evidence
+    gap_id: CONTENT_PROFILE_INTERACTION_READ_ENV_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+
+api_routes:
+  - method: POST
+    path: /content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts
+    operation: UpdateProfileInteractionState
+    actor: persona
+    application:
+      kind: command
+      facet: ProfileInteractionReadFactAppendFacet
+      method: appendReadFact
+      append_sink: ProfileInteractionReadFact
+      mutation_target: ProfileInteractionReadFact
+      invariant_target: ProfileInteractionReadFact
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_received_activity_owner
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.USER.interaction_owner_forbidden
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+      - CONTENT.SYSTEM.interaction_read_model_unavailable
+    privacy: { request_classification: PII, response_classification: PII, log_policy: metadata_only }
+    telemetry: { metric: content_profile_interaction_state_update, trace: true, attributes: [state, outcome] }
+    slo: { latency_p95_ms: 500, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../content/profile_interaction_contracts.dart
+      request_type: AppendContentProfileInteractionReadFactCommand
+      response_type: ContentProfileInteractionReadFactAck
+      request_encoder: encodeAppendContentProfileInteractionReadFactCommand
+      response_decoder: decodeContentProfileInteractionReadFactAck
+    description: |
+      当前 active owner persona 追加 received activity 的 seen/read 事实。
+      事实语义键 ownerPersonaId+activityId+state 唯一；命令不直接修改 projection，
+      仅由 durable outbox consumer 单调投影 seenAt/readAt。
+    request_entity: ProfileInteractionReadFact
+    writable_fields: [state]
+    response_entity: ProfileInteractionReadFactAck
+    response_body: ProfileInteractionReadFactAck
+    response_body_kind: object
+    security: { auth_mode: required, principal: persona, token_transport: bearer, anonymous_policy: deny, visibility: private }
+
+consumers:
+  - name: app
+    capabilities: [append_profile_interaction_read_fact]

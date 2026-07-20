@@ -11,6 +11,7 @@ class TagApiMetadata {
     '/internal/tag',
     '/tag/children',
     '/tag/dimensions',
+    '/tag/feedback',
     '/tag/graph',
     '/tag/inverted',
     '/tag/related',
@@ -30,6 +31,7 @@ class TagApiMetadata {
     'ListTagChildren': '/tag/children',
     'RelatedObjects': '/tag/related-objects',
     'RelatedTags': '/tag/related',
+    'ReportTagFeedback': '/tag/feedback',
     'ResolveTag': '/tag/resolve',
     'SearchByTags': '/tag/search-by-tags',
     'SearchTags': '/tag/search',
@@ -47,6 +49,7 @@ class TagApiMetadata {
     'ListTagChildren': 'GET',
     'RelatedObjects': 'GET',
     'RelatedTags': 'GET',
+    'ReportTagFeedback': 'POST',
     'ResolveTag': 'GET',
     'SearchByTags': 'POST',
     'SearchTags': 'GET',
@@ -60,19 +63,20 @@ class TagApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'ActivateTagTaxonomyRelease': 'required',
-    'InvertedObjects': 'required',
-    'ListDimensions': 'required',
-    'ListTagChildren': 'required',
-    'RelatedObjects': 'required',
-    'RelatedTags': 'required',
-    'ResolveTag': 'required',
-    'SearchByTags': 'required',
-    'SearchTags': 'required',
-    'SharedTags': 'required',
+    'InvertedObjects': 'optional',
+    'ListDimensions': 'optional',
+    'ListTagChildren': 'optional',
+    'RelatedObjects': 'optional',
+    'RelatedTags': 'optional',
+    'ReportTagFeedback': 'optional',
+    'ResolveTag': 'optional',
+    'SearchByTags': 'optional',
+    'SearchTags': 'optional',
+    'SharedTags': 'optional',
     'StageTagTaxonomyRelease': 'required',
-    'SuggestTags': 'required',
-    'TagCooccurrence': 'required',
-    'ValidateTagRefs': 'required',
+    'SuggestTags': 'optional',
+    'TagCooccurrence': 'optional',
+    'ValidateTagRefs': 'optional',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -89,6 +93,7 @@ class TagApiMetadata {
   static const String listTagChildrenOperation = 'ListTagChildren';
   static const String relatedObjectsOperation = 'RelatedObjects';
   static const String relatedTagsOperation = 'RelatedTags';
+  static const String reportTagFeedbackOperation = 'ReportTagFeedback';
   static const String resolveTagOperation = 'ResolveTag';
   static const String searchByTagsOperation = 'SearchByTags';
   static const String searchTagsOperation = 'SearchTags';
@@ -109,6 +114,7 @@ class TagApiMetadata {
   static const String listTagChildrenPath = '/tag/children';
   static const String relatedObjectsPath = '/tag/related-objects';
   static const String relatedTagsPath = '/tag/related';
+  static const String reportTagFeedbackPath = '/tag/feedback';
   static const String resolveTagPath = '/tag/resolve';
   static const String searchByTagsPath = '/tag/search-by-tags';
   static const String searchTagsPath = '/tag/search';

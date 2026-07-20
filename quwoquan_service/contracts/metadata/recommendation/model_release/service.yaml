@@ -1,82 +1,4 @@
 api_routes:
-- actor: account
-  application:
-    aggregate_owner: RecommendationModelRelease
-    mutation_target: RecommendationModelRelease
-    invariant_target: RecommendationModelRelease
-    facet: RecommendationModelReleaseCommandFacade
-    kind: command
-    method: stage
-  method: POST
-  operation: StageRecommendationModelRelease
-  path: /internal/recommendation/model-releases
-
-  reliability:
-    cancellation: supported
-    idempotency: required
-    max_attempts: 2
-    retry_mode: idempotent
-    timeout_ms: 5000
-  request_entity: StageRecommendationModelReleaseRequest
-  response_entity: RecommendationModelReleaseCommandResult
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-- actor: account
-  application:
-    aggregate_owner: RecommendationModelRelease
-    mutation_target: RecommendationModelRelease
-    invariant_target: RecommendationModelRelease
-    facet: RecommendationModelReleaseCommandFacade
-    kind: command
-    method: activate
-  method: POST
-  operation: ActivateRecommendationModelRelease
-  path: /internal/recommendation/model-releases/{releaseId}:activate
-
-  reliability:
-    cancellation: supported
-    idempotency: required
-    max_attempts: 2
-    retry_mode: idempotent
-    timeout_ms: 5000
-  request_entity: ActivateRecommendationModelReleaseRequest
-  response_entity: RecommendationModelReleaseCommandResult
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-- actor: account
-  application:
-    aggregate_owner: RecommendationModelRelease
-    mutation_target: RecommendationModelRelease
-    invariant_target: RecommendationModelRelease
-    facet: RecommendationModelReleaseCommandFacade
-    kind: command
-    method: rollback
-  method: POST
-  operation: RollbackRecommendationModelRelease
-  path: /internal/recommendation/model-releases/{releaseId}:rollback
-
-  reliability:
-    cancellation: supported
-    idempotency: required
-    max_attempts: 2
-    retry_mode: idempotent
-    timeout_ms: 5000
-  request_entity: RollbackRecommendationModelReleaseRequest
-  response_entity: RecommendationModelReleaseCommandResult
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
 - actor: none
   application:
     facet: RecommendationScoringQueryFacade
@@ -89,24 +11,42 @@ api_routes:
     principal: service
     scopes:
     - recommendation.model.score
+  commercial:
+    status: ready
   method: POST
   operation: ScoreRecommendationCandidates
   path: /internal/recommendation/model-releases:score
 
   reliability:
     cancellation: supported
-    idempotency: none
+    idempotency: optional
     max_attempts: 2
     retry_mode: idempotent
     timeout_ms: 800
   request_entity: ModelScoreRequest
   response_entity: ModelScoreResponse
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  error_codes:
+  - RECOMMENDATION.USER.unauthorized
+  - RECOMMENDATION.USER.forbidden
+  - RECOMMENDATION.USER.invalid_argument
+  - RECOMMENDATION.SYSTEM.scoring_failed
   security:
     anonymous_policy: deny
     auth_mode: required
     principal: service
     token_transport: bearer
     visibility: internal
+  telemetry:
+    metric: recommendation_model_score
+    trace: true
+    attributes: [scenario, outcome]
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
 - actor: none
   application:
     facet: RecommendationScoringQueryFacade
@@ -119,24 +59,42 @@ api_routes:
     principal: service
     scopes:
     - recommendation.model.score
+  commercial:
+    status: ready
   method: POST
   operation: BatchScoreRecommendationCandidates
   path: /internal/recommendation/model-releases:batch-score
 
   reliability:
     cancellation: supported
-    idempotency: none
+    idempotency: optional
     max_attempts: 2
     retry_mode: idempotent
     timeout_ms: 800
   request_entity: BatchModelScoreRequest
   response_entity: BatchModelScoreResponse
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  error_codes:
+  - RECOMMENDATION.USER.unauthorized
+  - RECOMMENDATION.USER.forbidden
+  - RECOMMENDATION.USER.invalid_argument
+  - RECOMMENDATION.SYSTEM.scoring_failed
   security:
     anonymous_policy: deny
     auth_mode: required
     principal: service
     token_transport: bearer
     visibility: internal
+  telemetry:
+    metric: recommendation_model_batch_score
+    trace: true
+    attributes: [scenario, outcome]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
 consumers:
 - capabilities:
   - score
@@ -152,11 +110,14 @@ consumers:
   name: search-service
 service:
   commercial_defaults:
-    block_reason: PostgreSQL Store/outbox、generated transport 和真实推理装配尚未闭环
-    gap_id: RECOMMENDATION_MODEL_RELEASE_WIRING
+    block_reason: 生命周期命令（Stage/Activate/Rollback）V1 deferred：模型晋升/回滚/灰度由
+      model_registry_cli + CI promotion gate + AB policy 承载，零 API 调用方；恢复公开命令前须先建立
+      operator 消费面与 PG packet。评分 Reader 两条路由已按拓扑门禁与双侧契约测试放行。
+    gap_id: RECOMMENDATION_MODEL_RELEASE_LIFECYCLE_DEFERRED
     status: blocked
     target_story: app-cloud-business-object-commercial-closure
-  description: RecommendationModelRelease 生命周期命令与按已激活发布评分的 named Reader packet。
+  description: RecommendationModelRelease 按已激活发布评分的 named Reader packet。生命周期命令 V1
+    deferred（见 aggregate.yaml deferred 注记）。
   domain: recommendation
   name: recommendation-service
   owner: ml-platform

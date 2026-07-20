@@ -1,731 +1,49 @@
-import 'dart:convert';
+/// Assistant 域 production Remote 适配器（B8 批次阶段 3a 拆分产物）。
+///
+/// 一个 Remote 类实现 8 个对象级窄 Facet（与 content 域 RemoteContentRepository
+/// 同构）；接口与共享类型见 `assistant_facets.dart`。alpha/test 替身位于
+/// `test/support/cloud_services/assistant_facets_mock.dart`，production 不可达。
+///
+/// B8 阶段 3b 错误单轨：读接口失败一律抛经 [CloudErrorMapper] 收口的
+/// `CloudException`，不再本地合成 fallback 结果；批量学习上报保留部分成功
+/// 语义但不静默单条失败；遥测类上报（页面上下文）保留结构化降级 ack。
+library;
 
-import 'package:crypto/crypto.dart';
+import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/cloud/services/assistant/mock/assistant_prototype_fixture.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show
-        AssistantInteractionReportBatchAck,
-        AssistantPolicyView,
-        AssistantEntryPersonalizationChipView,
-        AssistantEntryPersonalizationView,
-        AssistantCreationSuggestRequest,
-        AssistantCreationSuggestResponse,
-        AssistantReportPageContextRequestWire,
-        AssistantScorecardReportBatchAck,
-        AssistantSearchCitationView,
-        AssistantSearchResultView,
-        AssistantSearchXiaoquRequestWire,
-        AssistantSuggestedHomepageView,
-        AssistantSkillCatalogItemView,
-        AssistantUserMemoryView,
-        AssistantUserTaskView,
-        InteractionEvent,
-        PageContextAck,
-        SuggestedAction,
-        SuggestedActionListView,
-        Scorecard;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
-    show AssistantConversationWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
-    show AssistantStreamEventWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart'
-    show AssistantTurnEnvelopeWire;
-export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
-    show
-        SkillSubscriptionDestinationWire,
-        SkillSubscriptionSearchQueryPlanWire,
-        SkillSubscriptionTriggerWire,
-        SkillSubscriptionWire;
-export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
-    show ToolUseWire;
+export 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart'
+    show AssistantConsentStore;
+export 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 
-part 'assistant_creation_suggest.dart';
-
-const String kPersonalContentAccessSkillId = 'personal_content_access';
-
-/// Assistant 任务/记忆等列表接口单次拉取条数（与网关约定一致，非 [CloudApiDefaults.pageLimit]）。
-const int _kAssistantListPageDefaultLimit = 32;
-
-/// Assistant 技能目录单次拉取条数。
-const int _kAssistantSkillCatalogDefaultLimit = 64;
-
-/// Assistant 技能订阅列表单次拉取条数。
-const int _kAssistantSkillSubscriptionsDefaultLimit = 20;
-
-class AssistantSkillConsent {
-  const AssistantSkillConsent({
-    required this.skillId,
-    required this.grantedScope,
-    required this.granted,
-    required this.updatedAt,
-  });
-
-  final String skillId;
-  final String grantedScope;
-  final bool granted;
-  final DateTime updatedAt;
-
-  factory AssistantSkillConsent.fromJson(Map<String, dynamic> json) {
-    final revokedAt = (json['revokedAt'] ?? '').toString().trim();
-    return AssistantSkillConsent(
-      skillId: (json['skillId'] ?? '').toString().trim(),
-      grantedScope:
-          (json['grantedScope'] ?? kPersonalContentAccessSkillId)
-              .toString()
-              .trim(),
-      // 服务端必须显式确认 granted=true；字段缺失、false 或已有撤回时间均失败关闭。
-      granted: json['granted'] == true && revokedAt.isEmpty,
-      updatedAt:
-          DateTime.tryParse((json['grantedAt'] ?? '').toString()) ??
-          DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'skillId': skillId,
-    'grantedScope': grantedScope,
-    'granted': granted,
-    'grantedAt': updatedAt.toIso8601String(),
-  };
-}
-
-AssistantSearchResultView _buildFallbackSearchResult({
-  required String query,
-  required String searchIntensity,
-}) {
-  final trimmedQuery = query.trim();
-  final summary = trimmedQuery.isEmpty
-      ? '小趣搜会结合圈子讨论结果和已有公开内容，为你梳理当前最相关的线索。'
-      : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子讨论与内容方向。';
-  return AssistantSearchResultView(
-    queryEcho: trimmedQuery,
-    summary: summary,
-    searchIntensity: searchIntensity,
-    citations: const <AssistantSearchCitationView>[],
-  );
-}
-
-AssistantEntryPersonalizationView _buildFallbackEntryPersonalization(
-  AssistantOpenContext context,
-) {
-  final pageType = assistantPageTypeForSource(context.source);
-  final welcome = switch (pageType) {
-    'chat' => '我可以结合当前会话帮你整理话题、找资料或写回复。',
-    'search' => '我可以把站内结果、网页线索和你的上下文串起来。',
-    'create' => '我可以帮你找灵感、配文案或整理发布计划。',
-    'home' => '我可以结合当前主页、关系和交集帮你解释信息。',
-    _ => '有什么想让我帮忙的？',
-  };
-  return AssistantEntryPersonalizationView(
-    welcomeMessage: welcome,
-    suggestionLines: const <String>['说一句你想做的事，或选上面的推荐试试'],
-    chips: const <AssistantEntryPersonalizationChipView>[
-      AssistantEntryPersonalizationChipView(
-        chipId: 'find',
-        label: '帮我找',
-        actionType: 'command',
-        value: 'find',
-      ),
-      AssistantEntryPersonalizationChipView(
-        chipId: 'remember',
-        label: '帮我记',
-        actionType: 'command',
-        value: 'remember',
-      ),
-      AssistantEntryPersonalizationChipView(
-        chipId: 'share',
-        label: '帮我分享',
-        actionType: 'command',
-        value: 'share',
-      ),
-    ],
-    personalized: false,
-  );
-}
-
-Map<String, dynamic> assistantContextSnapshotFromOpenContext(
-  AssistantOpenContext context, {
-  String? operationId,
-}) {
-  final now = DateTime.now().toUtc().toIso8601String();
-  final pageType = assistantPageTypeForSource(context.source);
-  final objectType = context.objectType?.trim() ?? '';
-  final objectId = context.entityId?.trim() ?? '';
-  return <String, dynamic>{
-    'snapshotVersion': 'assistant_context_v1',
-    'capturedAt': now,
-    'routeId': AppUiSurfaces.personalAssistantDialog.routeId,
-    'surfaceId': AppUiSurfaces.personalAssistantDialog.id,
-    if (operationId != null && operationId.trim().isNotEmpty)
-      'operationId': operationId.trim(),
-    'pageType': pageType,
-    'sourceSurfaceId': context.source.name,
-    'experienceLevel': context.experienceLevel.name,
-    'visitTarget': context.visitTarget.targetKey,
-    if (objectType.isNotEmpty && objectId.isNotEmpty)
-      'pageObjects': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'objectTypeRef': objectType,
-          'objectId': objectId,
-          if ((context.hints['title'] ?? '').toString().trim().isNotEmpty)
-            'title': context.hints['title'].toString().trim(),
-          if ((context.hints['snippet'] ?? '').toString().trim().isNotEmpty)
-            'snippet': context.hints['snippet'].toString().trim(),
-        },
-      ],
-    if (context.intersectionRefs.isNotEmpty)
-      'intersectionRefs': context.intersectionRefs,
-    if ((context.tab ?? '').trim().isNotEmpty)
-      'matchedSegments': <String>[context.tab!.trim()],
-    if ((context.dimension ?? '').trim().isNotEmpty)
-      'matchedInterestTags': <String>[context.dimension!.trim()],
-    'consentMatrix': const <String, dynamic>{
-      'canReadCurrentPage': true,
-      'canReadConversation': false,
-      'canUseProfile': true,
-      'canUseRelationshipGraph': true,
-      'canUseTags': true,
-      'canDeliverProactively': false,
-      'consentSource': 'app_open_context',
-      'consentVersion': 'assistant_context_v1',
-    },
-  };
-}
-
-abstract class AssistantRepository
+class RemoteAssistantRepository
     implements
-        AssistantConversationRepository,
-        AssistantSkillSubscriptionRepository {
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  });
-
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  });
-
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  });
-
-  Future<List<AssistantSkillConsent>> listConsents();
-
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  });
-
-  Future<void> revokeSkillConsent({required String skillId});
-
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  });
-
-  Future<PageContextAck> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
-  });
-
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  });
-
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  });
-
-  /// GET /assistant/tasks
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
-    String? status,
-  });
-
-  /// GET /assistant/memories
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
-  });
-
-  /// GET /assistant/skills
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
-  });
-
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
-  });
-}
-
-class MockAssistantRepository implements AssistantRepository {
-  MockAssistantRepository({AssistantConsentStore? store})
-    : _store =
-          store ?? AssistantConsentStore(actorScope: 'alpha_mock_assistant');
-
-  final AssistantConsentStore _store;
-  final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
-
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async {
-    return AssistantPolicyView(
-      version: policyVersionHint.trim().isEmpty
-          ? 'assistant_policy_local_mock_v1'
-          : policyVersionHint.trim(),
-      values: <String, dynamic>{
-        'learningSyncEnabled': false,
-        'suggestedActionsEnabled': true,
-        'pageContextTtlSeconds': 300,
-        'searchFallbackMode': 'local_mock',
-        'defaultSearchIntensity': 'balanced',
-      },
-    );
-  }
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async {
-    return AssistantInteractionReportBatchAck(
-      accepted: true,
-      count: events.length,
-      resource: 'interaction_event_batch',
-      mode: 'local_mock',
-    );
-  }
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async {
-    return AssistantScorecardReportBatchAck(
-      accepted: true,
-      count: scorecards.length,
-      resource: 'scorecard_batch',
-      mode: 'local_mock',
-    );
-  }
-
-  @override
-  Future<List<AssistantSkillConsent>> listConsents() {
-    return _store.load();
-  }
-
-  @override
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  }) async {
-    final consent = AssistantSkillConsent(
-      skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime.now(),
-    );
-    await _store.upsert(consent);
-    return consent;
-  }
-
-  @override
-  Future<void> revokeSkillConsent({required String skillId}) {
-    return _store.revoke(skillId);
-  }
-
-  @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
-    required String query,
-    String searchIntensity = 'balanced',
-    Map<String, dynamic>? contextSnapshot,
-  }) async {
-    return _buildFallbackSearchResult(
-      query: query,
-      searchIntensity: searchIntensity,
-    );
-  }
-
-  @override
-  Future<PageContextAck> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
-  }) async {
-    return PageContextAck(
-      accepted: true,
-      contextKey: 'mock:${assistantPageTypeForSource(context.source)}',
-      expiresAt: DateTime.now()
-          .toUtc()
-          .add(const Duration(minutes: 5))
-          .toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  }) async {
-    return _buildFallbackEntryPersonalization(context);
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    final personalization = _buildFallbackEntryPersonalization(context);
-    return SuggestedActionListView(
-      items: personalization.chips
-          .map(
-            (chip) => SuggestedAction(
-              actionId: chip.chipId,
-              type: chip.actionType,
-              label: chip.label,
-              payload: <String, dynamic>{'value': chip.value ?? ''},
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
-    String? status,
-  }) async {
-    final raw = AssistantPrototypeFixture.instance.tasks;
-    Iterable<AssistantPrototypeTaskRow> rows = raw;
-    if (status != null && status.trim().isNotEmpty) {
-      rows = raw.where((row) => row.status == status.trim());
-    }
-    return rows
-        .map((row) {
-          final time = row.time ?? '';
-          final category = row.category ?? '';
-          final desc = <String>[
-            if (time.isNotEmpty) time,
-            if (category.isNotEmpty) category,
-          ].join(' · ');
-          return AssistantUserTaskView(
-            taskId: row.taskKey,
-            title: row.title,
-            description: desc.isEmpty ? null : desc,
-            status: row.status,
-          );
-        })
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
-  }) async {
-    return AssistantPrototypeFixture.instance.memories
-        .map(
-          (row) => AssistantUserMemoryView(
-            memoryId: row.memoryKey,
-            title: row.title,
-            snippet: row.kind,
-            sourceType: row.kind,
-          ),
-        )
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
-  }) async {
-    final p0Skills = <AssistantSkillCatalogItemView>[
-      const AssistantSkillCatalogItemView(
-        skillId: 'daily_assistant',
-        displayName: '每日助手',
-        description: '管理待办、日历、会议、作息和学习计划。',
-        category: 'life',
-        requiresConsent: false,
-        iconHint: 'checkmark',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'news_briefing',
-        displayName: '新闻简报',
-        description: '按关注话题定时生成新闻摘要。',
-        category: 'content',
-        requiresConsent: false,
-        iconHint: 'news',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'stock_sentinel',
-        displayName: '股票哨兵',
-        description: '跟踪关注股票的重大消息面和行情变化。',
-        category: 'finance',
-        requiresConsent: false,
-        iconHint: 'chart',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'travel_journey_manager',
-        displayName: '出行旅程管家',
-        description: '结合天气、路况和景点拥堵提醒行程风险。',
-        category: 'travel',
-        requiresConsent: false,
-        iconHint: 'airplane',
-      ),
-      const AssistantSkillCatalogItemView(
-        skillId: 'creation_assistant',
-        displayName: '创作助手',
-        description: '帮助整理草稿摘要、推荐标签和关联主页。',
-        category: 'content_creation',
-        requiresConsent: false,
-        iconHint: 'sparkles',
-      ),
-    ];
-    final prototypeSkills = AssistantPrototypeFixture.instance.skills.map(
-      (row) => AssistantSkillCatalogItemView(
-        skillId: row.skillId,
-        displayName: row.name,
-        description: row.description,
-        requiresConsent: false,
-      ),
-    );
-    return <AssistantSkillCatalogItemView>[
-      ...p0Skills,
-      ...prototypeSkills,
-    ].take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
-  }) => mockSuggestCreationAssistance(_subscriptions, request: request);
-
-  @override
-  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
-    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
-    String status = '',
-  }) async {
-    final filtered = _subscriptions
-        .where((item) {
-          if (status.trim().isEmpty) {
-            return item.status != 'archived';
-          }
-          return item.status == status.trim();
-        })
-        .toList(growable: false);
-    return filtered.take(limit).toList(growable: false);
-  }
-
-  @override
-  Future<SkillSubscriptionWire> createSkillSubscription({
-    required String skillId,
-    String domainId = 'assistant',
-    List<String> tagRefs = const <String>[],
-    required String rawText,
-    List<String> queries = const <String>[],
-    String cron = '0 8 * * *',
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    final subscription = SkillSubscriptionWire(
-      subscriptionId: 'sub_mock_${_subscriptions.length + 1}',
-      createdByUserId: 'mock-user',
-      skillId: skillId,
-      domainId: domainId,
-      tagRefs: tagRefs,
-      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire(
-        rawText: rawText,
-        queries: queries.isEmpty ? <String>[rawText] : queries,
-      ),
-      trigger: SkillSubscriptionTriggerWire(cron: cron),
-      destination: const SkillSubscriptionDestinationWire(
-        destinationType: 'user',
-        destinationId: 'mock-user',
-      ),
-      createdAt: now,
-      updatedAt: now,
-    );
-    _subscriptions.insert(0, subscription);
-    return subscription;
-  }
-
-  @override
-  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
-    required String subscriptionId,
-    required String status,
-  }) async {
-    final idx = _subscriptions.indexWhere(
-      (item) => item.subscriptionId == subscriptionId,
-    );
-    if (idx < 0) {
-      throw StateError('skill subscription not found');
-    }
-    final current = _subscriptions[idx];
-    final updated = SkillSubscriptionWire(
-      subscriptionId: current.subscriptionId,
-      owner: current.owner,
-      createdByUserId: current.createdByUserId,
-      skillId: current.skillId,
-      domainId: current.domainId,
-      tagRefs: current.tagRefs,
-      status: status,
-      searchQueryPlan: current.searchQueryPlan,
-      trigger: current.trigger,
-      destination: current.destination,
-      createdAt: current.createdAt,
-      updatedAt: DateTime.now().toUtc().toIso8601String(),
-    );
-    _subscriptions[idx] = updated;
-    return updated;
-  }
-
-  @override
-  Future<AssistantConversationWire> createAssistantConversation({
-    String summary = '',
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: 'acv_mock_personal_assistant',
-      userId: 'mock-user',
-      summary: summary,
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
-
-  @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
-  }) async {
-    final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: conversationId,
-      userId: 'mock-user',
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
-    required String text,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
-  }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: 'atn_mock_personal_assistant',
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId,
-      domainId: domainId,
-      input: <String, dynamic>{'text': text},
-      trigger: const <String, dynamic>{'type': 'user_message'},
-      traceId: 'trace_mock_personal_assistant',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
-    required String runId,
-  }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_mock_personal_assistant',
-      traceId: 'trace_mock_personal_assistant',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-    );
-  }
-
-  @override
-  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
-    required String runId,
-  }) async* {
-    final createdAt = DateTime.now().toUtc().toIso8601String();
-    final toolUse = ToolUseWire(
-      toolUseId: 'tu_mock_personal_assistant',
-      turnId: runId,
-      toolName: 'web_search',
-      input: const <String, dynamic>{'query': '找私助 mock stream'},
-      status: 'requested',
-      createdAt: createdAt,
-    );
-    final completedToolUse = ToolUseWire(
-      toolUseId: toolUse.toolUseId,
-      turnId: runId,
-      toolName: toolUse.toolName,
-      input: toolUse.input,
-      status: 'completed',
-      result: const <String, dynamic>{
-        'provider': 'mock',
-        'summary': '找私助 mock stream 已完成工具观察。',
-        'references': <Map<String, dynamic>>[],
-      },
-      createdAt: createdAt,
-      completedAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.turn.started',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 1,
-      eventType: 'turn_started',
-      payload: const <String, dynamic>{'status': 'running'},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.requested',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 2,
-      eventType: 'tool_use_requested',
-      payload: <String, dynamic>{'toolUse': toolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.completed',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 3,
-      eventType: 'tool_result_received',
-      payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
-      createdAt: createdAt,
-    );
-    yield AssistantStreamEventWire(
-      schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.answer.final',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
-      seq: 4,
-      eventType: 'final_answer',
-      payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
-      createdAt: createdAt,
-    );
-  }
-}
-
-class RemoteAssistantRepository implements AssistantRepository {
+        AssistantConversationRunFacet,
+        AssistantSkillSubscriptionFacet,
+        AssistantSkillConsentFacet,
+        AssistantLearningAppendFacet,
+        AssistantPersonalizationFacet,
+        AssistantPersonalDataFacet,
+        AssistantPreferenceFactFacet,
+        AssistantXiaoquSearchFacet,
+        AssistantCreationSuggestFacet {
   RemoteAssistantRepository({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
@@ -736,12 +54,21 @@ class RemoteAssistantRepository implements AssistantRepository {
   final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
 
+  static final CloudOperationContract _assistantStreamOperation =
+      appCloudOperationContracts[AppCloudOperationIds
+          .assistantAssistantRunStreamAssistantRunEvents]!;
+  static const CloudRetryPolicy _assistantStreamRetryPolicy =
+      CloudRetryPolicy();
+
   @override
   Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   }) async {
+    // 失败关闭：policy 拉取失败不再合成 learningSyncEnabled=true 的本地
+    // fallback；调用方必须按"学习同步关闭"处理。
+    const path = AssistantApiMetadata.getPolicyPath;
     try {
-      final uri = _assistantGetUri(AssistantApiMetadata.getPolicyPath, {
+      final uri = _assistantGetUri(path, {
         if (policyVersionHint.trim().isNotEmpty)
           'policyVersionHint': policyVersionHint.trim(),
       });
@@ -752,51 +79,54 @@ class RemoteAssistantRepository implements AssistantRepository {
           clientPageId: AssistantRequestPageIds.getPolicy,
         ),
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId: AssistantApiMetadata.getPolicyOperation,
-                ),
-              );
-        if (decoded.isNotEmpty) {
-          return AssistantPolicyView.fromJson(decoded);
-        }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
-    } catch (_) {
-      // Fall back to a safe default snapshot when assistant-service is unavailable.
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _personalAssistantDialogContext(
+                operationId: AssistantApiMetadata.getPolicyOperation,
+              ),
+            );
+      if (decoded.isEmpty) {
+        throw const FormatException(
+          'assistant policy snapshot response is empty',
+        );
+      }
+      return AssistantPolicyView.fromJson(decoded);
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
-    return AssistantPolicyView(
-      version: policyVersionHint.trim().isEmpty
-          ? 'assistant_policy_remote_fallback_v1'
-          : policyVersionHint.trim(),
-      values: <String, dynamic>{
-        'learningSyncEnabled': true,
-        'suggestedActionsEnabled': true,
-        'pageContextTtlSeconds': 300,
-        'searchFallbackMode': 'summary_with_citations',
-        'defaultSearchIntensity': 'balanced',
-      },
-    );
   }
 
   @override
   Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
     required List<InteractionEvent> events,
   }) async {
+    // 批量部分成功语义：单条失败记录后计入 rejected；全部尝试条目失败时
+    // 抛出最后一次结构化异常，部分成功返回 acceptedCount<count 的 ack 由
+    // 调用方重试。
+    const path = AssistantApiMetadata.reportInteractionEventPath;
     final accepted = <InteractionEvent>[];
+    var attempted = 0;
+    CloudException? lastFailure;
     for (final event in events) {
       final eventId = event.eventId.trim();
       final runId = event.runId.trim();
       if (eventId.isEmpty || runId.isEmpty) {
         continue;
       }
+      attempted += 1;
       try {
-        final uri = _assistantUri(
-          AssistantApiMetadata.reportInteractionEventPath,
-        );
+        final uri = _assistantUri(path);
         final response = await _httpClient.post(
           uri,
           headers: <String, String>{
@@ -810,10 +140,30 @@ class RemoteAssistantRepository implements AssistantRepository {
         );
         if (response.statusCode >= 200 && response.statusCode < 300) {
           accepted.add(event);
+        } else {
+          lastFailure = CloudErrorMapper.fromStatusCode(
+            response.statusCode,
+            body: response.body,
+            requestPath: path,
+          );
+          developer.log(
+            'interaction event rejected eventId=$eventId status=${response.statusCode}',
+            name: 'AssistantLearningAppend',
+            error: lastFailure,
+          );
         }
-      } catch (_) {
-        // Best effort: keep batch partial-success semantics.
+      } catch (error) {
+        lastFailure = CloudErrorMapper.fromException(error, requestPath: path);
+        developer.log(
+          'interaction event report failed eventId=$eventId',
+          name: 'AssistantLearningAppend',
+          error: error,
+        );
       }
+    }
+    final failure = lastFailure;
+    if (attempted > 0 && accepted.isEmpty && failure != null) {
+      throw failure;
     }
     return AssistantInteractionReportBatchAck.fromJson(<String, dynamic>{
       'accepted': accepted.length == events.length,
@@ -827,15 +177,20 @@ class RemoteAssistantRepository implements AssistantRepository {
   Future<AssistantScorecardReportBatchAck> reportScorecards({
     required List<Scorecard> scorecards,
   }) async {
+    // 与 reportInteractionEvents 同一批量部分成功语义。
+    const path = AssistantApiMetadata.reportScorecardPath;
     final accepted = <Scorecard>[];
+    var attempted = 0;
+    CloudException? lastFailure;
     for (final scorecard in scorecards) {
       final scoreId = scorecard.scoreId.trim();
       final eventId = scorecard.eventId.trim();
       if (scoreId.isEmpty || eventId.isEmpty) {
         continue;
       }
+      attempted += 1;
       try {
-        final uri = _assistantUri(AssistantApiMetadata.reportScorecardPath);
+        final uri = _assistantUri(path);
         final response = await _httpClient.post(
           uri,
           headers: <String, String>{
@@ -849,10 +204,30 @@ class RemoteAssistantRepository implements AssistantRepository {
         );
         if (response.statusCode >= 200 && response.statusCode < 300) {
           accepted.add(scorecard);
+        } else {
+          lastFailure = CloudErrorMapper.fromStatusCode(
+            response.statusCode,
+            body: response.body,
+            requestPath: path,
+          );
+          developer.log(
+            'scorecard rejected eventId=$eventId status=${response.statusCode}',
+            name: 'AssistantLearningAppend',
+            error: lastFailure,
+          );
         }
-      } catch (_) {
-        // Best effort: keep batch partial-success semantics.
+      } catch (error) {
+        lastFailure = CloudErrorMapper.fromException(error, requestPath: path);
+        developer.log(
+          'scorecard report failed eventId=$eventId',
+          name: 'AssistantLearningAppend',
+          error: error,
+        );
       }
+    }
+    final failure = lastFailure;
+    if (attempted > 0 && accepted.isEmpty && failure != null) {
+      throw failure;
     }
     return AssistantScorecardReportBatchAck.fromJson(<String, dynamic>{
       'accepted': accepted.length == scorecards.length,
@@ -1039,15 +414,18 @@ class RemoteAssistantRepository implements AssistantRepository {
     String searchIntensity = 'balanced',
     Map<String, dynamic>? contextSnapshot,
   }) async {
+    // 不再本地合成"假搜索摘要"；空 query、非 2xx、解码失败或空回显一律抛
+    // 结构化 CloudException，由消费页走错误态。
+    const path = AssistantApiMetadata.searchXiaoquResultsPath;
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty) {
-      return _buildFallbackSearchResult(
-        query: query,
-        searchIntensity: searchIntensity,
+      throw CloudErrorMapper.fromException(
+        ArgumentError.value(query, 'query', 'must not be empty'),
+        requestPath: path,
       );
     }
     try {
-      final uri = _assistantUri(AssistantApiMetadata.searchXiaoquResultsPath);
+      final uri = _assistantUri(path);
       final response = await _httpClient.post(
         uri,
         headers: <String, String>{
@@ -1069,29 +447,34 @@ class RemoteAssistantRepository implements AssistantRepository {
           ),
         ),
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _networkResultsContext(
-                  operationId:
-                      AssistantApiMetadata.searchXiaoquResultsOperation,
-                ),
-              );
-        final result = AssistantSearchResultView.fromJson(decoded);
-        if (result.queryEcho.isNotEmpty ||
-            result.summary?.trim().isNotEmpty == true) {
-          return result;
-        }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
-    } catch (_) {
-      // Fall back to local synthesis when assistant-service is unavailable.
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _networkResultsContext(
+                operationId: AssistantApiMetadata.searchXiaoquResultsOperation,
+              ),
+            );
+      final result = AssistantSearchResultView.fromJson(decoded);
+      if (result.queryEcho.isEmpty &&
+          (result.summary?.trim().isEmpty ?? true)) {
+        throw const FormatException(
+          'xiaoqu search result is missing queryEcho and summary',
+        );
+      }
+      return result;
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
-    return _buildFallbackSearchResult(
-      query: trimmedQuery,
-      searchIntensity: searchIntensity,
-    );
   }
 
   @override
@@ -1141,8 +524,23 @@ class RemoteAssistantRepository implements AssistantRepository {
               );
         return PageContextAck.fromJson(decoded);
       }
-    } catch (_) {
-      // 页面上下文上报是体验增强，失败时不阻断半屏入口。
+      developer.log(
+        'page context report rejected status=${response.statusCode}',
+        name: 'AssistantPersonalization',
+        error: CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: AssistantApiMetadata.reportPageContextPath,
+        ),
+      );
+    } catch (error) {
+      // 页面上下文上报是遥测类 best-effort：记录后返回 accepted=false 的
+      // 结构化降级 ack，不阻断半屏入口。
+      developer.log(
+        'page context report failed pageType=$pageType',
+        name: 'AssistantPersonalization',
+        error: error,
+      );
     }
     return PageContextAck(
       accepted: false,
@@ -1158,22 +556,22 @@ class RemoteAssistantRepository implements AssistantRepository {
   Future<AssistantEntryPersonalizationView> getEntryPersonalization({
     required AssistantOpenContext context,
   }) async {
+    // 失败不再伪造 personalized 数据；UI 层（half sheet）以自己的静态默认
+    // 欢迎区作为空态展示。
+    const path = AssistantApiMetadata.getEntryPersonalizationPath;
     try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.getEntryPersonalizationPath,
-        <String, String>{
-          'source': context.source.name,
-          'pageType': assistantPageTypeForSource(context.source),
-          if ((context.tab ?? '').trim().isNotEmpty) 'tab': context.tab!.trim(),
-          if ((context.dimension ?? '').trim().isNotEmpty)
-            'dimension': context.dimension!.trim(),
-          if ((context.entityId ?? '').trim().isNotEmpty)
-            'objectId': context.entityId!.trim(),
-          if ((context.objectType ?? '').trim().isNotEmpty)
-            'objectType': context.objectType!.trim(),
-          'experienceLevel': context.experienceLevel.name,
-        },
-      );
+      final uri = _assistantGetUri(path, <String, String>{
+        'source': context.source.name,
+        'pageType': assistantPageTypeForSource(context.source),
+        if ((context.tab ?? '').trim().isNotEmpty) 'tab': context.tab!.trim(),
+        if ((context.dimension ?? '').trim().isNotEmpty)
+          'dimension': context.dimension!.trim(),
+        if ((context.entityId ?? '').trim().isNotEmpty)
+          'objectId': context.entityId!.trim(),
+        if ((context.objectType ?? '').trim().isNotEmpty)
+          'objectType': context.objectType!.trim(),
+        'experienceLevel': context.experienceLevel.name,
+      });
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
@@ -1181,40 +579,41 @@ class RemoteAssistantRepository implements AssistantRepository {
           clientPageId: AssistantRequestPageIds.getEntryPersonalization,
         ),
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId:
-                      AssistantApiMetadata.getEntryPersonalizationOperation,
-                ),
-              );
-        final view = AssistantEntryPersonalizationView.fromJson(decoded);
-        if (view.welcomeMessage.trim().isNotEmpty) {
-          return view;
-        }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
-    } catch (_) {
-      // 个性化入口失败时保留本地 prompt 兜底。
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _personalAssistantDialogContext(
+                operationId:
+                    AssistantApiMetadata.getEntryPersonalizationOperation,
+              ),
+            );
+      return AssistantEntryPersonalizationView.fromJson(decoded);
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
-    return _buildFallbackEntryPersonalization(context);
   }
 
   @override
   Future<SuggestedActionListView> getSuggestedActions({
     required AssistantOpenContext context,
   }) async {
+    const path = AssistantApiMetadata.getSuggestedActionsPath;
     try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.getSuggestedActionsPath,
-        <String, String>{
-          'pageType': assistantPageTypeForSource(context.source),
-          if ((context.entityId ?? '').trim().isNotEmpty)
-            'objectId': context.entityId!.trim(),
-        },
-      );
+      final uri = _assistantGetUri(path, <String, String>{
+        'pageType': assistantPageTypeForSource(context.source),
+        if ((context.entityId ?? '').trim().isNotEmpty)
+          'objectId': context.entityId!.trim(),
+      });
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
@@ -1222,48 +621,40 @@ class RemoteAssistantRepository implements AssistantRepository {
           clientPageId: AssistantRequestPageIds.getSuggestedActions,
         ),
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = response.body.trim().isEmpty
-            ? <String, dynamic>{}
-            : CloudResponseDecoder.asObject(
-                jsonDecode(response.body),
-                context: _personalAssistantDialogContext(
-                  operationId:
-                      AssistantApiMetadata.getSuggestedActionsOperation,
-                ),
-              );
-        return SuggestedActionListView.fromJson(decoded);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
-    } catch (_) {
-      // 建议动作失败时半屏仍使用 entry personalization chips。
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _personalAssistantDialogContext(
+                operationId: AssistantApiMetadata.getSuggestedActionsOperation,
+              ),
+            );
+      return SuggestedActionListView.fromJson(decoded);
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
-    final personalization = _buildFallbackEntryPersonalization(context);
-    return SuggestedActionListView(
-      items: personalization.chips
-          .map(
-            (chip) => SuggestedAction(
-              actionId: chip.chipId,
-              type: chip.actionType,
-              label: chip.label,
-              payload: <String, dynamic>{'value': chip.value ?? ''},
-            ),
-          )
-          .toList(growable: false),
-    );
   }
 
   @override
   Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = _kAssistantListPageDefaultLimit,
+    int limit = kAssistantListPageDefaultLimit,
     String? status,
   }) async {
+    const path = AssistantApiMetadata.listAssistantTasksPath;
     try {
-      final uri =
-          _assistantGetUri(AssistantApiMetadata.listAssistantTasksPath, {
-            'limit': '$limit',
-            if (status != null && status.trim().isNotEmpty)
-              'status': status.trim(),
-          });
+      final uri = _assistantGetUri(path, {
+        'limit': '$limit',
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      });
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
@@ -1272,7 +663,11 @@ class RemoteAssistantRepository implements AssistantRepository {
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantUserTaskView>[];
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
       final decoded = response.body.trim().isEmpty
           ? <String, dynamic>{}
@@ -1288,57 +683,162 @@ class RemoteAssistantRepository implements AssistantRepository {
           .where((row) => row.taskId.isNotEmpty)
           .take(limit)
           .toList(growable: false);
-    } catch (_) {
-      return const <AssistantUserTaskView>[];
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
   }
 
   @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = _kAssistantListPageDefaultLimit,
+  Future<AssistantPreferenceFact> setAssistantPreference({
+    required AssistantPreferenceScope scope,
+    String conversationId = '',
+    required AssistantPreferenceKind kind,
+    required String value,
+    required AssistantPreferenceSourceType sourceType,
+  }) {
+    const path = AssistantApiMetadata.setAssistantPreferencePath;
+    return _postAssistantPreference(
+      path: path,
+      operationId: AssistantApiMetadata.setAssistantPreferenceOperation,
+      clientPageId: AssistantRequestPageIds.setAssistantPreference,
+      body: <String, dynamic>{
+        'scope': scope.wireName,
+        if (conversationId.trim().isNotEmpty)
+          'conversationId': conversationId.trim(),
+        'kind': kind.wireName,
+        'value': value.trim(),
+        'sourceType': sourceType.wireName,
+      },
+    );
+  }
+
+  @override
+  Future<List<AssistantPreferenceFact>> listAssistantPreferences({
+    AssistantPreferenceScope? scope,
+    String conversationId = '',
+    AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
   }) async {
+    const path = AssistantApiMetadata.listAssistantPreferencesPath;
     try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.listAssistantMemoriesPath,
-        {'limit': '$limit'},
-      );
+      final uri = _assistantGetUri(path, <String, String>{
+        if (scope != null) 'scope': scope.wireName,
+        if (conversationId.trim().isNotEmpty)
+          'conversationId': conversationId.trim(),
+        'status': status.wireName,
+      });
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
-          clientPageId: AssistantRequestPageIds.listAssistantMemories,
+          operationId: AssistantApiMetadata.listAssistantPreferencesOperation,
+          clientPageId: AssistantRequestPageIds.listAssistantPreferences,
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantUserMemoryView>[];
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
       final decoded = response.body.trim().isEmpty
           ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
-        ),
-      );
-      return rows
-          .map(AssistantUserMemoryView.fromJson)
-          .where((row) => row.memoryId.isNotEmpty)
-          .take(limit)
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _personalAssistantDialogContext(
+                operationId:
+                    AssistantApiMetadata.listAssistantPreferencesOperation,
+              ),
+            );
+      return AssistantPreferenceFactListView.fromJson(decoded).items
+          .where((fact) => fact.preferenceId.trim().isNotEmpty)
           .toList(growable: false);
-    } catch (_) {
-      return const <AssistantUserMemoryView>[];
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
+    }
+  }
+
+  @override
+  Future<AssistantPreferenceFact> revokeAssistantPreference({
+    required String preferenceId,
+  }) {
+    final path = AssistantApiMetadata.revokeAssistantPreferencePath(
+      preferenceId: preferenceId.trim(),
+    );
+    return _postAssistantPreference(
+      path: path,
+      operationId: AssistantApiMetadata.revokeAssistantPreferenceOperation,
+      clientPageId: AssistantRequestPageIds.revokeAssistantPreference,
+    );
+  }
+
+  @override
+  Future<AssistantPreferenceFact> restoreAssistantPreference({
+    required String preferenceId,
+  }) {
+    final path = AssistantApiMetadata.restoreAssistantPreferencePath(
+      preferenceId: preferenceId.trim(),
+    );
+    return _postAssistantPreference(
+      path: path,
+      operationId: AssistantApiMetadata.restoreAssistantPreferenceOperation,
+      clientPageId: AssistantRequestPageIds.restoreAssistantPreference,
+    );
+  }
+
+  Future<AssistantPreferenceFact> _postAssistantPreference({
+    required String path,
+    required String operationId,
+    required String clientPageId,
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      final response = await _httpClient.post(
+        _assistantUri(path),
+        headers: <String, String>{
+          ..._headersForPersonalAssistantDialog(
+            operationId: operationId,
+            clientPageId: clientPageId,
+          ),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body ?? const <String, dynamic>{}),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
+      }
+      final decoded = CloudResponseDecoder.asObject(
+        jsonDecode(response.body),
+        context: _personalAssistantDialogContext(operationId: operationId),
+      );
+      final fact = AssistantPreferenceFact.fromJson(decoded);
+      if (fact.preferenceId.trim().isEmpty) {
+        throw const FormatException(
+          'assistant preference response is missing preferenceId',
+        );
+      }
+      return fact;
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
   }
 
   @override
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = _kAssistantSkillCatalogDefaultLimit,
+    int limit = kAssistantSkillCatalogDefaultLimit,
   }) async {
+    const path = AssistantApiMetadata.listSkillsPath;
     try {
-      final uri = _assistantGetUri(AssistantApiMetadata.listSkillsPath, {
-        'limit': '$limit',
-      });
+      final uri = _assistantGetUri(path, {'limit': '$limit'});
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
@@ -1347,7 +847,11 @@ class RemoteAssistantRepository implements AssistantRepository {
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <AssistantSkillCatalogItemView>[];
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
       final decoded = response.body.trim().isEmpty
           ? <String, dynamic>{}
@@ -1363,29 +867,76 @@ class RemoteAssistantRepository implements AssistantRepository {
           .where((row) => row.skillId.isNotEmpty)
           .take(limit)
           .toList(growable: false);
-    } catch (_) {
-      return const <AssistantSkillCatalogItemView>[];
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
   }
 
   @override
   Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
     required AssistantCreationSuggestRequest request,
-  }) => remoteSuggestCreationAssistance(this, request: request);
+  }) async {
+    try {
+      final response = await _httpClient.post(
+        _assistantUri(AssistantApiMetadata.suggestCreationAssistancePath),
+        headers: <String, String>{
+          ..._headersForPersonalAssistantDialog(
+            operationId:
+                AssistantApiMetadata.suggestCreationAssistanceOperation,
+            clientPageId: AssistantRequestPageIds.suggestCreationAssistance,
+          ),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(request.toJson()),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const AssistantCreationSuggestResponse(
+          suggestedTagRefs: <String>[],
+          suggestedHomepages: <AssistantSuggestedHomepageView>[],
+          available: false,
+          unavailableReason: 'request_failed',
+        );
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : CloudResponseDecoder.asObject(
+              jsonDecode(response.body),
+              context: _personalAssistantDialogContext(
+                operationId:
+                    AssistantApiMetadata.suggestCreationAssistanceOperation,
+              ),
+            );
+      return AssistantCreationSuggestResponse.fromJson(decoded);
+    } catch (error) {
+      // available=false + unavailableReason 是契约内合法的结构化不可用
+      // 响应（创作助手为可选增强），记录后降级，不吞异常细节。
+      developer.log(
+        'creation assistance suggest failed',
+        name: 'AssistantCreationSuggest',
+        error: error,
+      );
+      return const AssistantCreationSuggestResponse(
+        suggestedTagRefs: <String>[],
+        suggestedHomepages: <AssistantSuggestedHomepageView>[],
+        available: false,
+        unavailableReason: 'request_failed',
+      );
+    }
+  }
 
   @override
   Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
-    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
+    int limit = kAssistantSkillSubscriptionsDefaultLimit,
     String status = '',
   }) async {
+    const path = AssistantApiMetadata.listSkillSubscriptionsPath;
     try {
-      final uri = _assistantGetUri(
-        AssistantApiMetadata.listSkillSubscriptionsPath,
-        {
-          'limit': '$limit',
-          if (status.trim().isNotEmpty) 'status': status.trim(),
-        },
-      );
+      final uri = _assistantGetUri(path, {
+        'limit': '$limit',
+        if (status.trim().isNotEmpty) 'status': status.trim(),
+      });
       final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
@@ -1394,7 +945,11 @@ class RemoteAssistantRepository implements AssistantRepository {
         ),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const <SkillSubscriptionWire>[];
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: path,
+        );
       }
       final decoded = response.body.trim().isEmpty
           ? <String, dynamic>{}
@@ -1410,8 +965,10 @@ class RemoteAssistantRepository implements AssistantRepository {
           .where((row) => row.subscriptionId.isNotEmpty)
           .take(limit)
           .toList(growable: false);
-    } catch (_) {
-      return const <SkillSubscriptionWire>[];
+    } on CloudException {
+      rethrow;
+    } catch (error) {
+      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
   }
 
@@ -1544,6 +1101,86 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 
   @override
+  Future<AssistantConversationListPage> listAssistantConversations({
+    int limit = kAssistantListPageDefaultLimit,
+    String cursor = '',
+  }) async {
+    final response = await _httpClient.get(
+      _assistantGetUri(
+        AssistantApiMetadata.listAssistantConversationsPath,
+        <String, String>{
+          'limit': '$limit',
+          if (cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
+        },
+      ),
+      headers: _headersForPersonalAssistantDialog(
+        operationId: AssistantApiMetadata.listAssistantConversationsOperation,
+        clientPageId: AssistantRequestPageIds.listAssistantConversations,
+      ),
+    );
+    return AssistantConversationListPage.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.listAssistantConversationsOperation,
+      ),
+    );
+  }
+
+  @override
+  Future<AssistantTurnListView> listConversationTurns({
+    required String conversationId,
+    int limit = kAssistantListPageDefaultLimit,
+    String cursor = '',
+  }) async {
+    final response = await _httpClient.get(
+      _assistantGetUri(
+        AssistantApiMetadata.listConversationTurnsPath(
+          conversationId: conversationId,
+        ),
+        <String, String>{
+          'limit': '$limit',
+          if (cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
+        },
+      ),
+      headers: _headersForPersonalAssistantDialog(
+        operationId: AssistantApiMetadata.listConversationTurnsOperation,
+        clientPageId: AssistantRequestPageIds.listConversationTurns,
+      ),
+    );
+    return AssistantTurnListView.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.listConversationTurnsOperation,
+      ),
+    );
+  }
+
+  @override
+  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+    required String runId,
+  }) async {
+    final uri = _assistantUri(
+      AssistantApiMetadata.cancelAssistantRunPath(runId: runId),
+    );
+    _debugAssistantRepository(
+      'POST $uri operation=${AssistantApiMetadata.cancelAssistantRunOperation}',
+    );
+    final response = await _httpClient.post(
+      uri,
+      headers: _headersForPersonalAssistantDialog(
+        operationId: AssistantApiMetadata.cancelAssistantRunOperation,
+        clientPageId: AssistantRequestPageIds.cancelAssistantRun,
+      ),
+    );
+    return AssistantTurnEnvelopeWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.cancelAssistantRunOperation,
+      ),
+    );
+  }
+
+  @override
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
     required String text,
@@ -1615,9 +1252,87 @@ class RemoteAssistantRepository implements AssistantRepository {
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
   }) async* {
-    final uri = _assistantUri(
-      AssistantApiMetadata.streamAssistantRunEventsPath(runId: runId),
+    final maxAttempts = _assistantStreamOperation.maxAttempts;
+    if (maxAttempts < 1 ||
+        _assistantStreamOperation.retryMode != 'idempotent') {
+      throw StateError(
+        'StreamAssistantRunEvents generated reliability contract is invalid',
+      );
+    }
+    var lastSeq = 0;
+    var lastEventId = '';
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      var terminalEventObserved = false;
+      try {
+        await for (final frame in _openAssistantRunEventStream(
+          runId: runId,
+          lastEventId: lastEventId,
+        )) {
+          final event = frame.event;
+          if (event.seq <= lastSeq) {
+            continue;
+          }
+          lastSeq = event.seq;
+          if (frame.lastEventId.isNotEmpty) {
+            lastEventId = frame.lastEventId;
+          }
+          terminalEventObserved =
+              terminalEventObserved || _isAssistantTerminalStreamEvent(event);
+          yield event;
+          if (terminalEventObserved) {
+            return;
+          }
+        }
+      } on CloudException catch (error) {
+        if (!_isAssistantStreamRetryable(error) || attempt == maxAttempts) {
+          rethrow;
+        }
+      } on FormatException {
+        rethrow;
+      } catch (error, stackTrace) {
+        _debugAssistantRepository(
+          'stream transport interrupted runId=$runId attempt=$attempt '
+          'lastSeq=$lastSeq errorType=${error.runtimeType}',
+        );
+        if (attempt == maxAttempts) {
+          Error.throwWithStackTrace(
+            CloudErrorMapper.fromException(
+              error,
+              requestPath: AssistantApiMetadata.streamAssistantRunEventsPath(
+                runId: runId,
+              ),
+            ),
+            stackTrace,
+          );
+        }
+      }
+      if (terminalEventObserved) {
+        return;
+      }
+      if (attempt == maxAttempts) {
+        throw CloudErrorMapper.fromStatusCode(
+          503,
+          requestPath: AssistantApiMetadata.streamAssistantRunEventsPath(
+            runId: runId,
+          ),
+        );
+      }
+      await Future<void>.delayed(
+        _assistantStreamRetryPolicy.delayFor(attempt: attempt - 1),
+      );
+    }
+  }
+
+  Stream<_AssistantSseFrame> _openAssistantRunEventStream({
+    required String runId,
+    required String lastEventId,
+  }) async* {
+    final path = AssistantApiMetadata.streamAssistantRunEventsPath(
+      runId: runId,
     );
+    final uri = _assistantGetUri(path, <String, String>{
+      if (lastEventId.isNotEmpty) 'resumeToken': lastEventId,
+    });
     _debugAssistantRepository(
       'GET $uri operation=${AssistantApiMetadata.streamAssistantRunEventsOperation} runId=$runId',
     );
@@ -1627,28 +1342,37 @@ class RemoteAssistantRepository implements AssistantRepository {
           operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
           clientPageId: AssistantRequestPageIds.streamAssistantRunEvents,
         ),
+        if (lastEventId.isNotEmpty) 'Last-Event-ID': lastEventId,
       });
     final response = await _httpClient.send(request);
     _debugAssistantRepository(
       'stream response status=${response.statusCode} runId=$runId',
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('Assistant stream failed: ${response.statusCode}');
+      // StreamedResponse 无同步 body；仅按状态码映射结构化异常。
+      throw CloudErrorMapper.fromStatusCode(
+        response.statusCode,
+        requestPath: AssistantApiMetadata.streamAssistantRunEventsPath(
+          runId: runId,
+        ),
+      );
     }
     final buffer = StringBuffer();
     await for (final piece in response.stream.transform(utf8.decoder)) {
       buffer.write(piece);
-      var current = buffer.toString();
+      var current = buffer.toString().replaceAll('\r\n', '\n');
       var splitIndex = current.indexOf('\n\n');
       while (splitIndex >= 0) {
         final frame = current.substring(0, splitIndex);
-        final event = _decodeAssistantStreamFrame(frame);
-        if (event != null) {
+        final decoded = _decodeAssistantStreamFrame(frame);
+        if (decoded != null) {
           _debugAssistantRepository(
-            'sse event type=${event.eventType} seq=${event.seq} runId=$runId '
-            'skill=${event.payload['skillId'] ?? ''} tool=${_assistantToolNameFromPayload(event.payload)}',
+            'sse event type=${decoded.event.eventType} '
+            'seq=${decoded.event.seq} runId=$runId '
+            'skill=${decoded.event.payload['skillId'] ?? ''} '
+            'tool=${_assistantToolNameFromPayload(decoded.event.payload)}',
           );
-          yield event;
+          yield decoded;
         }
         current = current.substring(splitIndex + 2);
         splitIndex = current.indexOf('\n\n');
@@ -1656,6 +1380,13 @@ class RemoteAssistantRepository implements AssistantRepository {
       buffer
         ..clear()
         ..write(current);
+    }
+    final trailing = buffer.toString().trim();
+    if (trailing.isNotEmpty) {
+      final decoded = _decodeAssistantStreamFrame(trailing);
+      if (decoded != null) {
+        yield decoded;
+      }
     }
   }
 
@@ -1668,7 +1399,11 @@ class RemoteAssistantRepository implements AssistantRepository {
     required String operationId,
   }) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('Assistant request failed: ${response.statusCode}');
+      throw CloudErrorMapper.fromStatusCode(
+        response.statusCode,
+        body: response.body,
+        requestPath: response.request?.url.path,
+      );
     }
     final decoded = response.body.trim().isEmpty
         ? <String, dynamic>{}
@@ -1680,12 +1415,22 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 }
 
-AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
+final class _AssistantSseFrame {
+  const _AssistantSseFrame({required this.event, required this.lastEventId});
+
+  final AssistantStreamEventWire event;
+  final String lastEventId;
+}
+
+_AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
   final lines = const LineSplitter().convert(frame);
   final dataLines = <String>[];
+  var lastEventId = '';
   for (final rawLine in lines) {
     final line = rawLine.trimRight();
-    if (line.startsWith('data:')) {
+    if (line.startsWith('id:')) {
+      lastEventId = line.substring(3).trim();
+    } else if (line.startsWith('data:')) {
       dataLines.add(line.substring(5).trimLeft());
     }
   }
@@ -1748,7 +1493,27 @@ AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
       'AssistantStreamEvent.payload must be an object',
     );
   }
-  return AssistantStreamEventWire.fromJson(envelope);
+  return _AssistantSseFrame(
+    event: AssistantStreamEventWire.fromJson(envelope),
+    lastEventId: lastEventId,
+  );
+}
+
+bool _isAssistantTerminalStreamEvent(AssistantStreamEventWire event) {
+  return switch (event.eventType) {
+    'turn_completed' || 'turn_failed' || 'turn_cancelled' => true,
+    _ => false,
+  };
+}
+
+bool _isAssistantStreamRetryable(CloudException error) {
+  return switch (error.type) {
+    CloudErrorType.timeout ||
+    CloudErrorType.network ||
+    CloudErrorType.rateLimited ||
+    CloudErrorType.server => true,
+    _ => false,
+  };
 }
 
 void _debugAssistantRepository(String message) {
@@ -1772,76 +1537,4 @@ String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
     return (raw['toolName'] ?? '').toString().trim();
   }
   return '';
-}
-
-class AssistantConsentStore {
-  AssistantConsentStore({required String actorScope})
-    : _actorScope = actorScope.trim().isEmpty
-          ? 'unauthenticated'
-          : actorScope.trim();
-
-  final String _actorScope;
-  static const int schema = 1;
-
-  String get _key {
-    final digest = sha256.convert(utf8.encode(_actorScope)).toString();
-    return 'assistant_skill_consents:${digest.substring(0, 24)}';
-  }
-
-  Future<List<AssistantSkillConsent>> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <AssistantSkillConsent>[];
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic> ||
-          decoded['schema'] != schema ||
-          decoded['items'] is! List) {
-        await prefs.remove(_key);
-        return const <AssistantSkillConsent>[];
-      }
-      return (decoded['items'] as List)
-          .whereType<Map>()
-          .map(
-            (item) =>
-                AssistantSkillConsent.fromJson(item.cast<String, dynamic>()),
-          )
-          .where((item) => item.skillId.isNotEmpty)
-          .toList(growable: false);
-    } catch (_) {
-      await prefs.remove(_key);
-      return const <AssistantSkillConsent>[];
-    }
-  }
-
-  Future<void> save(List<AssistantSkillConsent> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _key,
-      jsonEncode(<String, dynamic>{
-        'schema': schema,
-        'items': items.map((item) => item.toJson()).toList(growable: false),
-      }),
-    );
-  }
-
-  Future<void> upsert(AssistantSkillConsent next) async {
-    final current = await load();
-    final merged = <AssistantSkillConsent>[
-      for (final item in current)
-        if (item.skillId != next.skillId) item,
-      next,
-    ];
-    await save(merged);
-  }
-
-  Future<void> revoke(String skillId) async {
-    final current = await load();
-    final next = current
-        .where((item) => item.skillId != skillId)
-        .toList(growable: false);
-    await save(next);
-  }
 }

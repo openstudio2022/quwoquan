@@ -76,7 +76,8 @@ func (projector *MongoMemberCountProjector) apply(ctx context.Context, event mem
 		delta = 1
 	case "CircleMembershipLeft":
 		delta = -1
-	case "CircleMembershipRoleChanged":
+	case "CircleMembershipRoleChanged", "CircleMembershipRequested", "CircleMembershipRejected":
+		// 审批生命周期事件不影响 memberCount（pending/rejected 不计数）。
 	default:
 		return fmt.Errorf("unsupported CircleMembership event type %q", event.EventType)
 	}

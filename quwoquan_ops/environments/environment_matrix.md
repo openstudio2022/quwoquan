@@ -86,7 +86,7 @@ repo verify/package
 |---|---|---|
 | `pr_light` | `04` / `05` PR 默认 | 轻量收敛，不承担 `main` 后自动 promotion |
 | `manual_full` | 手动 | 手动完整 local-gamma 复验 |
-| `nightly_full` | `09` | 每晚完整 local-gamma + self-hosted 全量验证 |
+| `nightly_full` | `05` 手动或外部定时调用 | 完整 local-gamma + self-hosted 全量验证 |
 | `release_candidate` | 手动发布前 | 发布前高置信度回归 |
 | `mainline_auto_prod` | `07` | `main` 自动 promotion 的高信号阻断链 |
 
@@ -198,7 +198,7 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc>
 
 说明：
 
-- `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`；`gray-initial` 还会阻断执行 `stackctl verify --target prod-hosted --tier t4` 页面级 smoke，每个 rollout stage 留下机器可读证据。
+- `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`；`gray-initial` 还会阻断执行 `stackctl verify --target prod-hosted --profile release` 页面级 smoke，每个 rollout stage 留下机器可读证据。
 - prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的共享集群拓扑，不抽象成 `prod-gray` 第二环境。
 - 本轮已验证的 gray/full 结果：已迁移 canonical run evidence（`gray-initial` 与 `full` 均成功，`4/4 healthy`，doctor 无问题）。
 
@@ -214,7 +214,7 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc>
 | 范围 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
 | `local-gamma mirror` | `make gate-local-gamma` / `python3 quwoquan_ops/cli/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar/environment-smoke 旅程通过并生成 `.qwq_output/env/gamma/local/gamma-local/process/report.json` 或 `.qwq_output/env/gamma/runs/**` |
-| `prod-sim` | `python3 quwoquan_ops/cli/stackctl.py up --env prod-sim` → `python3 quwoquan_ops/cli/stackctl.py verify --target prod-sim --kind topology --tier t4` | 本地 `api-edge/product-ops-edge/media-edge/media-origin` 可探测，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流，产物归档到 `.qwq_output/env/prod/runs/**/environment-page-smoke/report.json` |
+| `prod-sim` | `python3 quwoquan_ops/cli/stackctl.py up --env prod-sim` → `python3 quwoquan_ops/cli/stackctl.py verify --target prod-sim --kind topology --profile release` | 本地 `api-edge/product-ops-edge/media-edge/media-origin` 可探测，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流，产物归档到 `.qwq_output/env/prod/runs/**/environment-page-smoke/report.json` |
 | `prod-hosted gray-initial` | `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted ... --step <initial>` | 部署后 `health/inspect/doctor` 与 hosted 页面 smoke 均为 blocking；通过前不得推进 `carry-on/full` |
 
 ## 5. 相关文件索引
@@ -230,17 +230,17 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc>
 
 | 变量 | 说明 | alpha/beta | gamma | prod |
 |------|------|------------|-------|------|
-| `REC_MODEL_SERVICE_URL` | rec-model-service 内网地址 | `http://rec-model-service:8000`（compose） | config.yaml 硬编码 | `${REC_MODEL_SERVICE_URL}` 注入 |
-| `CONFIG_ROOT` | 版本化配置根目录 | 镜像内默认 `/app`；本地 compose 可不显式注入 | `/etc/seed-box-config`（initContainer 组装） | `/etc/seed-box-config` |
-| `CONFIG_VERSION` | 配置版本 | 可空 | release-state / workflow input | workflow input |
-| `IMAGE_VERSION` | 镜像版本 | 可空 | release-state / workflow input | workflow input |
+| `REC_MODEL_SERVICE_URL` | rec-model-service 内网地址 | `http://rec-model-service:8000`（compose） | `http://rec-model-service:8000`（gamma-local compose） | `${REC_MODEL_SERVICE_URL}` 注入 |
+| `CONFIG_ROOT` | 配置根目录 | 镜像内默认 `/app`；本地 compose 可不显式注入 | 镜像内默认 `/app`；由 gamma-local package 挂载 | `/etc/seed-box-config` |
+| `CONFIG_VERSION` | 配置标识 | 可空 | gamma-local package 产物 | prod rollout 输入 |
+| `IMAGE_VERSION` | 镜像标识 | 可空 | gamma-local package 产物 | prod rollout 输入 |
 | `MONGODB_DATABASE` | 训练 / registry 数据库 | `quwoquan_content` | `quwoquan_content` | `quwoquan_content_training`（训练） |
-| `MODEL_ARTIFACT_ENDPOINT` | S3/MinIO/OSS endpoint | 本地 MinIO 或留空 | CI Secret | CI Secret |
+| `MODEL_ARTIFACT_ENDPOINT` | S3/MinIO/OSS endpoint | 本地 MinIO 或留空 | gamma-local MinIO 或留空 | CI Secret |
 | `MODEL_ARTIFACT_BUCKET` | 模型制品桶名 | `quwoquan-models` | `quwoquan-models` | `quwoquan-models` |
-| `MODEL_ARTIFACT_ACCESS_KEY` | OSS Access Key | 本地 MinIO key | CI Secret | Secret |
-| `MODEL_ARTIFACT_SECRET_KEY` | OSS Secret Key | 本地 MinIO secret | CI Secret | Secret |
+| `MODEL_ARTIFACT_ACCESS_KEY` | OSS Access Key | 本地 MinIO key | 本地 MinIO key | Secret |
+| `MODEL_ARTIFACT_SECRET_KEY` | OSS Secret Key | 本地 MinIO secret | 本地 MinIO secret | Secret |
 | `MODEL_CACHE_DIR` | 模型本地缓存目录 | `/app/cache` | `/app/cache` | `/app/cache` |
-| `MONGODB_URI` | 训练管线读取 events/samples | `mongodb://127.0.0.1:27017/?directConnection=true`（本地 dry-run / compose） | CI Secret `GAMMA_MONGODB_URI` | 生产 MongoDB |
+| `MONGODB_URI` | 训练管线读取 events/samples | `mongodb://127.0.0.1:27017/?directConnection=true`（本地 dry-run / compose） | gamma-local compose MongoDB | `PROD_TRAINING_MONGODB_URI` |
 
 ### 实验配置（experiments block in config.yaml）
 

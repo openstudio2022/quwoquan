@@ -44,7 +44,6 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
-      - file: quwoquan_service/runtime/recommendation/collaborative_recall_test.go
       recorded:
       - file: quwoquan_app/test/local_contract/ui/discovery/post/contract/discovery_feed_query_contract__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_feed_load_journey__user_acceptance_test.dart
@@ -55,18 +54,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking.gwt1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.discovery_content.feed_orchestration_recommendation.personalized_ranking.gwt1_api_integration
@@ -83,5 +85,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

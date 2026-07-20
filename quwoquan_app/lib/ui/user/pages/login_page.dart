@@ -9,8 +9,6 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/one_tap_login_hint_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -25,6 +23,11 @@ import 'package:quwoquan_app/core/di/login_dependencies.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show
+        accountSessionLifecycleCommandWriterProvider,
+        accountSessionLoginCommandWriterProvider,
+        authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -32,6 +35,7 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:simple_icons/simple_icons.dart';
 part 'login_page_top_bar.dart';
 part 'login_page_models.dart';

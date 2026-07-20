@@ -1,6 +1,6 @@
 read_model: ChatContactListRow
 description: |
-  ListContacts / SearchContacts 等 API 返回的联系人行（wire），用于发起群聊、选人。
+  ListContacts / ListGroupCandidates 等 API 返回的联系人行（wire），用于发起群聊、选人。
 
 client_projection:
   dart_class: ChatContactRowDto

@@ -16,7 +16,7 @@
 4. 发布前至少执行或引用等价证据：
 
 ```bash
-python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>
 python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
 python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```

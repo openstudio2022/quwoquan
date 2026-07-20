@@ -6,13 +6,73 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	assistanthttp "quwoquan_service/services/assistant-service/internal/adapters/http"
+	"quwoquan_service/services/assistant-service/internal/application"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
 )
 
 func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	resetIntegrationState(t)
-	service := newIntegrationAssistantService()
+	var searchRequest map[string]any
+	searchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("search-service method=%s, want POST", r.Method)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&searchRequest); err != nil {
+			t.Fatalf("decode search-service request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"hits": [],
+			"citations": [
+				{
+					"citationId": "citation-article",
+					"objectType": "article",
+					"objectId": "post-1",
+					"title": "四川露营路线",
+					"snippet": "露营攻略",
+					"sourceDomain": "content",
+					"score": 0.95
+				},
+				{
+					"citationId": "citation-entity",
+					"objectType": "entity",
+					"objectId": "homepage-1",
+					"title": "四川露营地",
+					"snippet": "地点主页",
+					"sourceDomain": "entity",
+					"score": 0.92
+				},
+				{
+					"citationId": "citation-web",
+					"objectType": "web",
+					"objectId": "web-1",
+					"title": "公开露营信息",
+					"url": "https://example.test/camping",
+					"sourceDomain": "web",
+					"score": 0.88
+				}
+			],
+			"provenance": {
+				"provider": "search-service",
+				"indexVersion": "integration",
+				"generatedAt": "2026-07-20T10:00:00Z"
+			}
+		}`))
+	}))
+	defer searchServer.Close()
+	searchReader, err := searchclient.New(
+		searchServer.URL,
+		&http.Client{Timeout: time.Second},
+	)
+	if err != nil {
+		t.Fatalf("new canonical search reader: %v", err)
+	}
+	service := newIntegrationAssistantService(
+		application.WithXiaoquSearchReader(searchReader),
+	)
 	handler := assistanthttp.NewHandler(service).Routes()
 
 	payload, err := json.Marshal(map[string]any{
@@ -32,6 +92,12 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := stringField(searchRequest, "query"); got != "四川露营攻略" {
+		t.Fatalf("search-service query=%q, want 四川露营攻略", got)
+	}
+	if got := stringField(searchRequest, "mode"); got != "result" {
+		t.Fatalf("search-service mode=%q, want result", got)
 	}
 
 	var result map[string]any
@@ -92,7 +158,7 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 			if stringField(citation, "url") == "" {
 				t.Fatalf("web citation missing url: %#v", citation)
 			}
-			if stringField(citation, "recallSource") != "web_supplement" {
+			if stringField(citation, "recallSource") != "search-service" {
 				t.Fatalf("web citation recallSource mismatch: %#v", citation)
 			}
 		} else {

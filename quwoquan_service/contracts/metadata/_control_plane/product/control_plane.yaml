@@ -6,6 +6,7 @@ dashboard:
     - moderation_summary
     - experiment_health
     - recommendation_guardrail
+    - rtc_media_qoe
     - sla_watch
 object_types:
   - object_type: l1l4_metric_snapshot
@@ -20,29 +21,61 @@ object_types:
         method: GET
         path: /control-plane/product/metrics/l1l4
         scopes: [ops.product.dashboard.read]
+      - operation: GetServiceRouteRED
+        method: GET
+        path: /control-plane/product/metrics/red-routes
+        scopes: [ops.product.dashboard.read]
+      - operation: GetGrowthOverview
+        method: GET
+        path: /control-plane/product/growth/overview
+        scopes: [ops.product.dashboard.read]
+      - operation: GetPageExperience
+        method: GET
+        path: /control-plane/product/experience/pages
+        scopes: [ops.product.dashboard.read]
 
-  - object_type: moderation_case
-    object_kind: workflow_case
-    label: 治理案例
-    source_entity: Report
-    view_model: ModerationCase
+  - object_type: rtc_media_qoe_summary
+    object_kind: dashboard
+    label: RTC 媒体 QoE 24 小时权威回读
+    source_entity: EventRecord
+    view_model: RtcMediaQoeSummarySlice
     risk_level: high
+    deployment_profile: latency_sensitive
+    operation_refs:
+      - operation_id: ops.event_record.GetRtcMediaQoeSummary
+    analytics_views:
+      - view_id: rtc_media_qoe_24h
+        widget_types: [metric_strip, hourly_timeseries, freshness_badge]
+        drilldown_route_id: product.dashboard
+
+  - object_type: product_control_plane_journal
+    object_kind: audit
+    label: 产品控制面工作流与审计投影
+    source_entity: ControlPlaneJournal
+    view_model: ProductControlPlaneJournal
+    risk_level: medium
     deployment_profile: audit_heavy
     operations:
-      - operation: GetModerationCase
+      - operation: ListProductWorkflows
         method: GET
-        path: /control-plane/product/moderation/cases/{caseId}
-        scopes: [ops.case.read]
-      - operation: StartModerationReview
-        method: POST
-        path: /control-plane/product/moderation/cases/{caseId}:startReview
-        scopes: [ops.case.write]
-      - operation: ApplyEnforcementAction
-        method: POST
-        path: /control-plane/product/moderation/cases/{caseId}:applyAction
-        scopes: [ops.case.write]
-        danger_level: high
-        approval_mode: dual
+        path: /control-plane/product/workflows
+        scopes: [ops.product.dashboard.read]
+      - operation: ListProductAudits
+        method: GET
+        path: /control-plane/product/audits
+        scopes: [ops.product.dashboard.read]
+      - operation: ListProductApprovals
+        method: GET
+        path: /control-plane/product/approvals
+        scopes: [ops.product.dashboard.read]
+      - operation: GetProductProjectionSummary
+        method: GET
+        path: /control-plane/product/projections/summary
+        scopes: [ops.product.dashboard.read]
+      - operation: GetProductTriageSummary
+        method: GET
+        path: /control-plane/product/triage/summary
+        scopes: [ops.product.dashboard.read]
 
   - object_type: report_queue
     object_kind: operational_queue
@@ -70,46 +103,83 @@ object_types:
         scopes: [ops.case.write]
         danger_level: high
         approval_mode: single
-
-  - object_type: recovery_case
-    object_kind: workflow_case
-    label: 账号恢复案例
-    source_entity: UserProfile
-    view_model: RecoveryCase
-    risk_level: critical
-    deployment_profile: audit_heavy
-    operations:
-      - operation: GetRecoveryCase
-        method: GET
-        path: /control-plane/product/recovery/cases/{caseId}
-        scopes: [ops.case.read]
-      - operation: SubmitRecoveryDecision
+      - operation: DismissReport
         method: POST
-        path: /control-plane/product/recovery/cases/{caseId}:submitDecision
-        scopes: [ops.case.approve]
-        danger_level: critical
-        approval_mode: dual
+        path: /content/reports/{reportId}:dismiss
+        scopes: [ops.case.write]
+      - operation: GetCurrentPostModerationCase
+        method: GET
+        path: /internal/content/posts/{postId}/moderation-case
+        scopes: [ops.case.read]
+      - operation: ReviewPostModerationCase
+        method: POST
+        path: /internal/content/posts/{postId}:review-moderation
+        scopes: [ops.case.write]
+      - operation: DecidePostModeration
+        method: POST
+        path: /internal/content/posts/{postId}:moderate
+        scopes: [ops.case.write]
+        danger_level: high
+        approval_mode: single
 
-  - object_type: appeal_case
-    object_kind: workflow_case
-    label: 申诉案例
-    source_entity: AppealCase
-    view_model: AppealCase
+  - object_type: homepage_candidate_queue
+    object_kind: operational_queue
+    label: 实体主页候选治理队列
+    source_entity: Homepage
+    view_model: HomepageCandidateQueue
     risk_level: high
     deployment_profile: audit_heavy
     operations:
-      - operation: ListAppealCases
+      - operation: ListHomepageCandidates
         method: GET
-        path: /control-plane/product/appeal/cases
+        path: /homepages/candidates
         scopes: [ops.case.read]
-      - operation: GetAppealCase
-        method: GET
-        path: /control-plane/product/appeal/cases/{caseId}
-        scopes: [ops.case.read]
-      - operation: SubmitAppealDecision
+      - operation: IntakeHomepageCandidate
         method: POST
-        path: /control-plane/product/appeal/cases/{caseId}:submitDecision
-        scopes: [ops.case.approve]
+        path: /homepages/candidates
+        scopes: [ops.case.write]
+      - operation: PublishHomepageCandidate
+        method: POST
+        path: /homepages/candidates/{homepageId}:publish
+        scopes: [ops.case.write]
+        danger_level: high
+        approval_mode: single
+
+  - object_type: homepage_claim_request_queue
+    object_kind: operational_queue
+    label: 实体主页认领审核队列
+    source_entity: HomepageClaimRequest
+    view_model: HomepageClaimRequestQueue
+    risk_level: high
+    deployment_profile: audit_heavy
+    operations:
+      - operation: ListHomepageClaimRequests
+        method: GET
+        path: /homepage-claim-requests
+        scopes: [ops.case.read]
+      - operation: ReviewHomepageClaimRequest
+        method: POST
+        path: /homepages/{homepageId}/claim-requests/{claimRequestId}:review
+        scopes: [ops.case.write]
+        danger_level: high
+        approval_mode: single
+
+  - object_type: homepage_status_report_queue
+    object_kind: operational_queue
+    label: 实体主页状态上报审核队列
+    source_entity: HomepageStatusReport
+    view_model: HomepageStatusReportQueue
+    risk_level: high
+    deployment_profile: audit_heavy
+    operations:
+      - operation: ListHomepageStatusReports
+        method: GET
+        path: /homepage-status-reports
+        scopes: [ops.case.read]
+      - operation: ReviewHomepageStatusReport
+        method: POST
+        path: /homepages/{homepageId}/status-reports/{reportId}:review
+        scopes: [ops.case.write]
         danger_level: high
         approval_mode: single
 
@@ -126,25 +196,36 @@ object_types:
         danger_level: high
         approval_mode: single
 
-  - object_type: recommendation_policy
+  # 全局精选池：premium-pool 写入经 outbox 事件广播，content-service 投影进
+  # rm_premium_pool 供 feed 消费；takedown 为高危处置，双 principal 双签后执行。
+  - object_type: premium_pool_entry
     object_kind: policy
-    label: 推荐策略
+    label: 全局精选池条目
     source_entity: VisitRecord
-    view_model: RecommendationPolicy
+    view_model: PremiumPoolEntry
     risk_level: high
     deployment_profile: latency_sensitive
     operations:
-      - operation: ListRecommendationPolicies
+      - operation: ListPremiumPoolEntries
         method: GET
-        path: /control-plane/product/recommendation/policies
+        path: /control-plane/product/recommendation/premium-pool
         scopes: [ops.reco.read]
-      - operation: SimulateRecommendationPolicy
+      - operation: UpsertPremiumPoolEntry
         method: POST
-        path: /control-plane/product/recommendation/policies/{policyId}:simulate
-        scopes: [ops.reco.write]
-      - operation: ActivateRecommendationPolicy
-        method: POST
-        path: /control-plane/product/recommendation/policies/{policyId}:activate
+        path: /control-plane/product/recommendation/premium-pool
         scopes: [ops.reco.write]
         danger_level: high
         approval_mode: single
+      - operation: RollbackPremiumPoolEntry
+        method: POST
+        path: /control-plane/product/recommendation/premium-pool/{contentId}:rollback
+        scopes: [ops.reco.write]
+        danger_level: high
+        approval_mode: single
+      - operation: TakedownPremiumPoolEntry
+        method: POST
+        path: /control-plane/product/recommendation/premium-pool/{contentId}:takedown
+        scopes: [ops.reco.write]
+        danger_level: critical
+        approval_mode: dual
+        idempotency: required

@@ -38,6 +38,16 @@ type CommitResult struct {
 	Replayed  bool
 }
 
+// NoopReceipt 是目标状态已满足的命名迁移的持久化回执：不递增 aggregate
+// version、不产生 outbox 事实，但后续同 key 重放必须返回本次结果。
+type NoopReceipt struct {
+	Aggregate        *reportmodel.Report
+	IdempotencyKey   string
+	CommandName      string
+	CommandDigest    string
+	ReceiptExpiresAt time.Time
+}
+
 // AggregateStore 是 Report command facet 唯一允许依赖的持久化端口。
 // FindReceipt 必须在状态迁移前检查，以保证重复命令不会因已完成的迁移而被误判为非法。
 type AggregateStore interface {
@@ -48,6 +58,7 @@ type AggregateStore interface {
 		commandName string,
 		commandDigest string,
 	) (CommitResult, bool, error)
+	RecordNoopReceipt(ctx context.Context, receipt NoopReceipt) (CommitResult, error)
 	Commit(ctx context.Context, commit Commit) (CommitResult, error)
 }
 

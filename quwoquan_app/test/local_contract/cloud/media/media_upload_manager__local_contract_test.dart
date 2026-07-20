@@ -7,8 +7,8 @@ import 'package:quwoquan_app/application/content/media/content_media_upload_coor
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../support/recording_content_media_facet.dart';
 
@@ -25,14 +25,8 @@ void main() {
       Uri? uploadedUri;
       List<int>? uploadedBytes;
       String? uploadedContentType;
-      final fileStorage = createFileStorageGateway();
       final manager = MediaUploadManager(
-        coordinator: ContentMediaUploadCoordinator(
-          media: media,
-          fileStorage: fileStorage,
-          uploadObject:
-              (_, _, {required contentType, required expectedSha256}) async {},
-        ),
+        coordinator: ContentMediaUploadCoordinator(media: media),
         sourceReader: const LocalContentMediaSourceReader(),
         uploadStream:
             (
@@ -41,6 +35,7 @@ void main() {
               required contentLength,
               required contentType,
               required expectedSha256,
+              Future<void>? abortTrigger,
             }) async {
               uploadedUri = uri;
               uploadedContentType = contentType;
@@ -94,14 +89,8 @@ void main() {
       File(filePath).writeAsBytesSync(<int>[1, 2, 3, 4]);
 
       final media = RecordingContentMediaFacet();
-      final fileStorage = createFileStorageGateway();
       final manager = MediaUploadManager(
-        coordinator: ContentMediaUploadCoordinator(
-          media: media,
-          fileStorage: fileStorage,
-          uploadObject:
-              (_, _, {required contentType, required expectedSha256}) async {},
-        ),
+        coordinator: ContentMediaUploadCoordinator(media: media),
         sourceReader: const LocalContentMediaSourceReader(),
         uploadStream:
             (
@@ -110,6 +99,7 @@ void main() {
               required contentLength,
               required contentType,
               required expectedSha256,
+              Future<void>? abortTrigger,
             }) async {
               throw StateError('object storage rejected upload');
             },
@@ -138,7 +128,7 @@ void main() {
       expect(media.completedSessions, isEmpty);
       expect(media.abortedSessions, <String>['session_1']);
       expect(result.status, UploadStatus.failed);
-      expect(result.error, 'upload_failed');
+      expect(result.error, RuntimeFailureCodes.cloudSystemUnavailable);
     });
   });
 }

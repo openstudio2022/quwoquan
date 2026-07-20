@@ -31,6 +31,15 @@ search_provider:
   provider: duckduckgo_html
   timeout_ms: 30000
 
+search_service:
+  base_url: "http://127.0.0.1:18095"
+
+entity_service:
+  base_url: "http://127.0.0.1:18084"
+
+content_service:
+  base_url: "http://127.0.0.1:18080"
+
 notification_service:
   base_url: "http://127.0.0.1:18088"
   timeout_ms: 5000

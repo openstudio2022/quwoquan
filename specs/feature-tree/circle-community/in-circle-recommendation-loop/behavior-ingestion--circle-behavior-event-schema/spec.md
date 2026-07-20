@@ -1,4 +1,4 @@
-# L4 特性：circle-behavior-event-schema
+# L3 特性：circle-behavior-event-schema
 
 ## 功能说明
 - 细化 circle-behavior-event-schema 特性的功能边界与端云协同行为。

@@ -1,0 +1,10 @@
+aggregate: NotificationDeliveryJob
+layer: app_side
+
+description: |
+  DeliveryJob 仍是服务端对象；App 只消费 AckIncomingCallPresentation 的
+  deliveryKey ACK，不读取 Job 或 provider 状态。本 packet 的 local_contract
+  由服务端 coordinator/HTTP identity 测试承担，不新增 App fixture 数据。
+
+dto_scenarios: []
+widget_scenarios: []

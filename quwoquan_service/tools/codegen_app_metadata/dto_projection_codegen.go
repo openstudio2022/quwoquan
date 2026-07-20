@@ -519,6 +519,7 @@ var postBaseDtoFields = map[string]bool{
 	"contentVertical":     true,
 	"recallPath":          true,
 	"supplySource":        true,
+	"sourceAttribution":   true,
 	"intersectionReasons": true,
 }
 
@@ -644,6 +645,7 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	// Helper functions used by fromMap (only if needed)
 	needsDateTime := false
 	needsStringList := false
+	needsStringKeyMap := false
 	needsProjectionDtoList := false
 	for _, f := range proj.Fields {
 		dt := normalizeDartType(f.DartType)
@@ -652,6 +654,9 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 		}
 		if dt == "List<String>" {
 			needsStringList = true
+		}
+		if dt == "Map<String, dynamic>" || f.MapFromStringKeyClass != "" {
+			needsStringKeyMap = true
 		}
 		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
 			needsProjectionDtoList = true
@@ -670,6 +675,18 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 		b.WriteString("List<String>? _parseStringList(dynamic v) {\n")
 		b.WriteString("  if (v == null) return null;\n")
 		b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
+		b.WriteString("  return null;\n")
+		b.WriteString("}\n")
+	}
+	if needsStringKeyMap {
+		b.WriteString("\nMap<String, dynamic>? _parseStringKeyMap(dynamic v) {\n")
+		b.WriteString("  if (v == null) return null;\n")
+		b.WriteString("  if (v is Map<String, dynamic>) return v;\n")
+		b.WriteString("  if (v is Map) {\n")
+		b.WriteString("    return Map<String, dynamic>.from(\n")
+		b.WriteString("      v.map((k, val) => MapEntry(k.toString(), val)),\n")
+		b.WriteString("    );\n")
+		b.WriteString("  }\n")
 		b.WriteString("  return null;\n")
 		b.WriteString("}\n")
 	}

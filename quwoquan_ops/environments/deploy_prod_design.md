@@ -42,7 +42,7 @@
 # quwoquan_ops/environments/gray_rollout_stages.yaml（已落地）
 total_replicas: 2    # 可从 deployment 读取或显式配置
 stages:
-  - name: initial
+  - name: gray-initial
     replicas: 1      # 或 percent: 50
     auto: true       # 全自动
   - name: full
@@ -134,7 +134,7 @@ stages:
    - `deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录 prod ECS，`podman compose -p quwoquan-<plane>-<instance>` 拉起本平面 governedWorkloads。
    - rollout 等待以 compose healthcheck 为真相源；失败按 `PREVIOUS_IMAGE_VERSION` 回滚本平面。
    - `gray-initial` 走灰度实例命名空间（`-gray`），`full` 走正式实例（`-prod`）。
-   - `gray-initial` 发布后必须执行 `stackctl verify --target prod-hosted --kind topology --tier t4`，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流；失败视为 post-deploy failure，不得推进 `carry-on/full`。
+   - `gray-initial` 发布后必须执行 `stackctl verify --target prod-hosted --kind topology --profile release`，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流；失败视为 post-deploy failure，不得推进 `carry-on/full`。
 3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/`。
 4. **slo-gate**：执行 `make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...`。
    - continue：job 成功，输出「本步通过，可进行下一步」。
@@ -168,7 +168,7 @@ stages:
 
 ```
 v*-rc* tag push / main merge
-  → required checks（03 → 05 → 04/ECS gamma）
+  → required checks（03 → 05 → 04）
   → 全部通过后触发 deploy-prod-auto workflow
   → Stage 1 初始灰度（全自动，1 pod = STEP 50）：
        deploy-prod-step(50) → wait_rollout → 拉取 SLO → slo-gate

@@ -1,0 +1,26 @@
+entity: TagFeedback
+layer: e2e
+
+description: 端云集成场景。app → gateway(/tag/feedback) → tag-service → MongoDB tag_feedback。
+
+execution:
+  environment: gamma_local
+  ci_strategy: advisory
+  trigger: pre-release
+  runners:
+    api_contract: gamma HTTP client
+
+scenarios:
+  - name: tag_feedback_roundtrip
+    test_type: api_contract
+    actors:
+      app: TagFeedback typed writer
+      gateway: /tag/feedback
+      service: tag-service ReportTagFeedback
+      storage: MongoDB tag_feedback
+    steps:
+      - 端侧对标签建议提交 ignore 反馈（稳定 Idempotency-Key）
+      - 断网重试复用同一 key
+    assertions:
+      - 事实只追加一次；重放返回首次结果
+      - recommendation 消费面可按 tagRef+recordedAt 读事实

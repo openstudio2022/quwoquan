@@ -41,6 +41,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt1_local_contract
@@ -48,6 +49,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt1_local_contract
@@ -79,12 +81,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt2_local_contract
@@ -113,12 +117,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.object_share_cards.gwt3_local_contract
@@ -129,5 +135,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

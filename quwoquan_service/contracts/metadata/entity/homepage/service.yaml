@@ -3,11 +3,6 @@ service:
   name: entity-service
   domain: entity
   owner: backend-team
-  commercial_defaults:
-    status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: ENTITY_HOMEPAGE_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
   description: 共享主页主档、搜索选择、认领与下线治理
 
 api_routes:
@@ -61,11 +56,56 @@ api_routes:
       request_encoder: encodeHomepageSearchQuery
       response_decoder: decodeHomepageSearchSlice
 
+  - method: GET
+    path: /homepages/candidates
+    operation: ListHomepageCandidates
+    actor: account
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: HomepageGovernanceQueryFacade
+      method: listCandidates
+      reader: HomepageSearchReader
+      slice: HomepageCandidateQueueSlice
+    authorization:
+      principal: account
+      ownership_policy: entity_governance_operator
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes: [ENTITY.USER.invalid_argument, ENTITY.USER.permission_denied, ENTITY.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_candidate_queue
+      trace: true
+      attributes: [homepage_type, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: Ops Portal 查询待发布候选主页治理队列
+    query_params: [query, homepageType, city, cursor, limit]
+    response_entity: HomepageSearchItemView
+    security:
+      auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: POST
     path: /homepages/candidates
 
     operation: IntakeHomepageCandidate
     actor: account
+    commercial:
+      status: ready
     application:
       kind: command
       facet: HomepageImportCommandFacade
@@ -73,15 +113,47 @@ api_routes:
       aggregate_owner: Homepage
       mutation_target: Homepage
       invariant_target: Homepage
-    description: 创建候选共享主页（introductionMarkdown/introductionAssets 承载数据工程 page.md 三段结构投影）
+    authorization:
+      principal: account
+      ownership_policy: entity_governance_operator
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ENTITY.USER.invalid_argument
+      - ENTITY.USER.invalid_homepage_type
+      - ENTITY.USER.permission_denied
+      - ENTITY.USER.idempotency_conflict
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_candidate_intake
+      trace: true
+      attributes: [homepage_type, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 创建候选共享主页（introductionMarkdown/introductionAssets 承载数据工程 page.md 三段结构投影）；治理动作，仅 platform-ops 消费
     request_entity: Homepage
     writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location, introductionMarkdown, introductionAssets]
     security:
       auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: POST
     path: /homepages/candidates/suggest
 
     operation: SuggestHomepageCandidate
+    commercial:
+      status: ready
     actor: persona
     application:
       kind: command
@@ -90,16 +162,53 @@ api_routes:
       aggregate_owner: Homepage
       mutation_target: Homepage
       invariant_target: Homepage
+    authorization:
+      principal: persona
+      ownership_policy: author_self
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ENTITY.USER.invalid_argument
+      - ENTITY.USER.invalid_homepage_type
+      - ENTITY.USER.idempotency_conflict
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_candidate_suggest
+      trace: true
+      attributes: [homepage_type, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
     description: 补充缺失主页
     request_entity: Homepage
     writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
+    client_contract:
+      dart_import: ../entity/homepage_commands.dart
+      request_type: SuggestHomepageCandidateCommand
+      response_type: HomepageDetailProjection
+      request_encoder: encodeSuggestHomepageCandidateCommand
+      response_decoder: decodeHomepageDetail
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: POST
     path: /homepages/candidates/{homepageId}:publish
 
     operation: PublishHomepageCandidate
     actor: account
+    commercial:
+      status: ready
     application:
       kind: command
       facet: HomepageLifecycleCommandFacade
@@ -107,9 +216,40 @@ api_routes:
       aggregate_owner: Homepage
       mutation_target: Homepage
       invariant_target: Homepage
-    description: 将候选共享主页发布为正式主页
+    authorization:
+      principal: account
+      ownership_policy: entity_governance_operator
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ENTITY.USER.homepage_not_found
+      - ENTITY.USER.invalid_argument
+      - ENTITY.USER.permission_denied
+      - ENTITY.USER.version_conflict
+      - ENTITY.USER.idempotency_conflict
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_candidate_publish
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 将候选共享主页发布为正式主页；治理动作，仅 platform-ops 消费
     security:
       auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /homepages/{homepageId}
 
@@ -208,38 +348,6 @@ api_routes:
       request_encoder: encodeHomepageByIdQuery
       response_decoder: decodeHomepageShell
 
-  - method: POST
-    path: /homepages/{homepageId}/follow
-
-    operation: FollowHomepage
-    actor: persona
-    application:
-      kind: command
-      facet: HomepageFollowCommandFacade
-      method: follow
-      aggregate_owner: Homepage
-      mutation_target: Homepage
-      invariant_target: Homepage
-    path_params: [homepageId]
-    response_entity: Homepage
-    security:
-      auth_mode: required
-  - method: DELETE
-    path: /homepages/{homepageId}/follow
-
-    operation: UnfollowHomepage
-    actor: persona
-    application:
-      kind: command
-      facet: HomepageFollowCommandFacade
-      method: unfollow
-      aggregate_owner: Homepage
-      mutation_target: Homepage
-      invariant_target: Homepage
-    path_params: [homepageId]
-    response_entity: Homepage
-    security:
-      auth_mode: required
   - method: GET
     path: /homepages/{homepageId}/introduction
 
@@ -489,6 +597,8 @@ api_routes:
     path: /homepages/{homepageId}/claimed-basics
 
     operation: UpdateClaimedHomepageBasics
+    commercial:
+      status: ready
     actor: persona
     application:
       kind: command
@@ -497,10 +607,48 @@ api_routes:
       aggregate_owner: Homepage
       mutation_target: Homepage
       invariant_target: Homepage
-    description: 更新已认领主页的基础资料
+    authorization:
+      principal: persona
+      ownership_policy: claimed_homepage_owner
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ENTITY.USER.homepage_not_found
+      - ENTITY.USER.invalid_argument
+      - ENTITY.USER.permission_denied
+      - ENTITY.USER.version_conflict
+      - ENTITY.USER.idempotency_conflict
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: entity_homepage_claimed_basics_update
+      trace: true
+      attributes: [homepage_id, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 更新已认领主页的基础资料；仅认领 owner persona 可执行，服务端内部 version CAS 保护
+    response_entity: Homepage
     writable_fields: [title, subtitle, categoryTags, coverUrl, address, city, location]
+    client_contract:
+      dart_import: ../entity/homepage_commands.dart
+      request_type: UpdateClaimedHomepageBasicsCommand
+      response_type: HomepageDetailProjection
+      request_encoder: encodeUpdateClaimedHomepageBasicsCommand
+      response_decoder: decodeHomepageDetail
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: POST
     path: /homepages:reload
 
@@ -536,7 +684,7 @@ api_routes:
       aggregate_owner: Homepage
       mutation_target: Homepage
       invariant_target: Homepage
-    description: 免停服重载 homepage_state 快照（数据工程 importer 直写运行库后由 ops 触发；同 ID 覆盖、新 ID 追加，不清空运行期关注/认领状态；来源 sync 的 offline 投影同步删除搜索可见性）
+    description: 免停服触发 homepages 权威集合与搜索投影对账（数据工程 importer 直写运行库后由 ops 触发；同 ID 覆盖、新 ID 追加，不清空运行期关注/认领状态；来源 sync 的 offline 投影同步删除搜索可见性）
     security:
       auth_mode: required
       principal: account
@@ -547,7 +695,7 @@ consumers:
   - name: app
     capabilities: [search, suggest, read_homepage, read_homepage_introduction, maintain]
   - name: platform-ops
-    capabilities: [publish_candidate, reload_state]
+    capabilities: [intake_candidate, publish_candidate, reload_state]
   - name: content-service
     capabilities: [read_homepage]
   - name: circle-service

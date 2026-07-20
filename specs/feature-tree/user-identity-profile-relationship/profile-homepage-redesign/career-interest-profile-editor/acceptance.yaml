@@ -12,6 +12,7 @@ scope:
     - /profile/career-interests 独立页面
     - Audience/用户/职业 与 Audience/用户/兴趣偏好 标签树
     - ListTagChildren / ResolveTag / ValidateTagRefs 查询校验链路
+    - ReportTagFeedback 标签添加/移除事实链路
     - PATCH /user/profile 保存 occupationTagRef 与有序 interestTagRefs
     - object_tag_index user 对象投影
   out_of_scope:
@@ -48,6 +49,7 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: career_interest_catalog
           cases:
             - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.catalog
@@ -65,6 +67,7 @@ gwt_acceptance:
       - interestTagRefs 去重保序保存
       - 超过 30 个兴趣被拒绝
       - Topic/兴趣 与非法职业/兴趣根被 USER.PROFILE.invalid_tag_ref 拒绝
+      - 标签添加/移除分别以 click/ignore 经 TagFeedbackCommandWriter 追加事实；失败不阻断编辑并进入结构化观测。
     done_when:
       - PATCH 仅更新触达的职业/兴趣字段，未触达字段不被误清空。
     edge_cases:
@@ -73,16 +76,20 @@ gwt_acceptance:
     contract_refs:
       - user-service.UpdateUserProfile
       - tag-service.ValidateTagRefs
+      - tag-service.ReportTagFeedback
     performance_points:
       - 保存 P95 <= 800ms
     tests:
       planned: []
       recorded:
         - file: quwoquan_service/services/user-service/tests/local_contract/internal/application/profile_edit_validation__local_contract_test.go
+        - file: quwoquan_service/services/tag-service/tests/api_integration/tag_feedback_contract__api_integration_test.go
+        - file: quwoquan_app/test/local_contract/ui/user/pages/career_interest_page__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: profile_edit_validation
           cases:
             - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.validation
@@ -117,12 +124,14 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: user_tag_index_projector
           cases:
             - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_index_projector
           envs: *id001
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: tag_service_shared_tags
           cases:
             - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.shared_tags
@@ -148,13 +157,16 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-        - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_career_interest_personalization__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/pages/user/profile_career_interests/profile_career_interests_page__user_acceptance_test.dart
       recorded:
+        - file: quwoquan_app/test/user_acceptance/pages/user/profile_career_interests/profile_career_interests_page__user_acceptance_test.dart
         - file: quwoquan_app/test/local_contract/ui/user/pages/career_interest_page__local_contract_test.dart
-    status: pending
+        - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
+    status: implemented
     test_evidence:
       primary:
         - layer: user_acceptance
+          execution_profile: release
           suite: profile_career_interest_personalization
           cases:
             - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.career_interest.journey
@@ -162,16 +174,32 @@ gwt_acceptance:
             - gamma_local
       supporting:
         - layer: local_contract
+          execution_profile: baseline
           suite: career_interest_page
           cases:
             - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.unsaved_exit_ios_alert
           envs:
             - local
+        - layer: api_integration
+          execution_profile: integration
+          suite: tag_catalog_profile_selection
+          cases:
+            - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_catalog
+          envs:
+            - gamma
+        - layer: api_integration
+          execution_profile: integration
+          suite: career_interest_tag_feedback
+          cases:
+            - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_feedback
+          envs:
+            - beta
+            - gamma
     notes:
-      - 本轮仅补未保存退出确认的 local_contract 回归；完整 gamma_local 用户旅程仍按 planned user_acceptance 补录。
+      - 2026-07-20 B7.5 已补页面 UAT 声明与 local_contract；gamma direct API 验证职业目录、TagFeedback 重放 count=1、taxonomy 单 active，完整真机交互仍由发布态 user_acceptance 承载。
 execution:
   local_gate:
     - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
     - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
     - make gate

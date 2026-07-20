@@ -226,6 +226,50 @@ errors:
       zh: "圈子不存在"
       en: "Circle not found"
 
+  - code: CIRCLE.USER.circle_archived
+    kind: USER
+    reason: circle_archived
+    http_status: 409
+    recovery_action: refresh
+    dart_const: circleArchived
+    go_const: ErrCircleArchived
+    user_message:
+      zh: "圈子已归档，无法修改"
+      en: "Circle is archived and cannot be modified"
+
+  - code: CIRCLE.USER.circle_version_conflict
+    kind: USER
+    reason: circle_version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: circleVersionConflict
+    go_const: ErrCircleVersionConflict
+    user_message:
+      zh: "圈子信息已被更新，请刷新后重试"
+      en: "Circle was updated concurrently, refresh and retry"
+
+  - code: CIRCLE.USER.circle_idempotency_conflict
+    kind: USER
+    reason: circle_idempotency_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: circleIdempotencyConflict
+    go_const: ErrCircleIdempotencyConflict
+    user_message:
+      zh: "重复请求与原命令不一致"
+      en: "Idempotency key was reused for another circle command"
+
+  - code: CIRCLE.SYSTEM.circle_storage_write_failed
+    kind: SYSTEM
+    reason: circle_storage_write_failed
+    http_status: 500
+    recovery_action: retry
+    dart_const: circleStorageWriteFailed
+    go_const: ErrCircleStorageWriteFailed
+    user_message:
+      zh: "圈子操作失败，请稍后重试"
+      en: "Circle operation failed, retry later"
+
   - code: CIRCLE.USER.join_approval_required
     kind: USER
     reason: forbidden
@@ -283,6 +327,15 @@ errors:
     dart_const: membershipRoleInvalid
     go_const: ErrMembershipRoleInvalid
     user_message: { zh: "成员角色无效", en: "Invalid circle membership role" }
+
+  - code: CIRCLE.USER.membership_state_conflict
+    kind: USER
+    reason: membership_state_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: membershipStateConflict
+    go_const: ErrMembershipStateConflict
+    user_message: { zh: "成员申请状态已变化，请刷新后重试", en: "Circle membership state changed, refresh and retry" }
 
   - code: CIRCLE.USER.membership_version_conflict
     kind: USER

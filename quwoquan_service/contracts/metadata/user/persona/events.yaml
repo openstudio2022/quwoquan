@@ -3,18 +3,24 @@ events:
   - name: PersonaCreated
     producer: user-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_entity: Persona
     payload_fields: [userId, subAccountId]
   - name: PersonaUpdated
     producer: user-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_entity: Persona
     payload_fields: [userId, subAccountId]
   - name: PersonaRetired
     producer: user-service
     consumers: [projection-workers]
-    channel: event_store
+    channel: transactional_outbox
+    payload_entity: Persona
+    payload_fields: [userId, subAccountId]
+  - name: PersonaActivated
+    producer: user-service
+    consumers: [projection-workers]
+    channel: transactional_outbox
     payload_entity: Persona
     payload_fields: [userId, subAccountId]

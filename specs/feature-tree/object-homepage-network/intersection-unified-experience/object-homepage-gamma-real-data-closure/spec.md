@@ -1,4 +1,4 @@
-# Object Homepage Gamma Real Data Closure
+# L3 特性：Object Homepage Gamma Real Data Closure
 
 ## Spec Entry
 

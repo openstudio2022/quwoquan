@@ -49,6 +49,7 @@ scene_routing:
         - "events.search."
         - "page_ctx:"
         - "content_analysis:"
+        - "content:publication-rate:"
         - "comment_summary:"
         - "suggested_actions:"
         - "blocked_set:"
@@ -56,6 +57,7 @@ scene_routing:
         - "login_fail:"
         - "counter:"
         - "reaction:"
+        - "privacy:"
     realtime:
       description: 实时推送 Pub/Sub、消息序号、在线状态、消息幂等去重
       requirements: 超低延迟、Pub/Sub 流量模式与 K/V 不同、必须独立部署
@@ -70,6 +72,25 @@ scene_routing:
 # ═══════════════════════════════════════════════════════════════════
 
 key_patterns:
+
+  - pattern: "privacy:closed_subject:<hmacSha256>"
+    redis_scene: general
+    ttl_seconds: null
+    type: string
+    description: |
+      UserAccountClosed 防复活栅栏的共享快速读副本。键只包含独立密钥计算的
+      HMAC-SHA256，不得包含 userId/personaId 原文；Mongo durable tombstone 是恢复
+      真相源。注销清理先提交 durable tombstone，再写该键，行为/搜索/关系/学习/
+      训练写入命中后 fail-closed。
+
+  - pattern: "privacy:open_subject:<hmacSha256>"
+    redis_scene: general
+    ttl_seconds: 300
+    type: string
+    description: |
+      在线写路径对 Mongo durable tombstone 未命中的短期负缓存。键仅包含同一
+      HMAC-SHA256；任何 UserAccountClosed 处理先写 closed_subject，再删除本键。
+      所有消费者必须先检查 closed_subject，因此本键不得绕过已提交的注销状态。
 
   # ─── rec 场景 ────────────────────────────────────────────────────
   - pattern: "rec:session_signals:{<userId>}:<sessionId>"
@@ -203,6 +224,25 @@ key_patterns:
     ttl_seconds: 86400
     type: hash
     description: 内容多模态分析缓存
+
+  - pattern: "content:publication-rate:persona:<personaHash>:<bucket>"
+    redis_scene: general
+    ttl_seconds: 70
+    type: string
+    description: |
+      发布频控 Persona 窗口计数（SubmitPostPublication 准入，
+      publication_policy.yaml 的 personaRateWindowSeconds=60 / maxPublications
+      策略常量经 codegen 消费；CONTENT.USER.rate_limited 的唯一实现载体）。
+      personaHash 为 personaId 摘要，不落明文；TTL = 窗口 + 10s 余量。
+
+  - pattern: "content:publication-rate:intent:<intentHash>:<bucket>"
+    redis_scene: general
+    ttl_seconds: 70
+    type: string
+    description: |
+      发布频控 intent 级裁决缓存（allowed/limited/pending 三态）。同一
+      publishIntentId 的重试复用首次裁决结果，保证幂等重放永不重复计数；
+      依赖错误 fail-closed（准入语义，不能把 pending 当 allow 绕过限流）。
 
   - pattern: "comment_summary:{postId}"
     redis_scene: general

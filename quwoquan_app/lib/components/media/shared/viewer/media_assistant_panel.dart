@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 
@@ -130,7 +131,7 @@ class MediaAssistantPanel extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    UITextConstants.assistantPromptFollowUp,
+                    AssistantText.assistantPromptFollowUp,
                     style: TextStyle(
                       fontSize: AppTypography.sm,
                       color: AppColorsFunctional.getColor(
@@ -525,7 +526,7 @@ class _MediaAssistantInput extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               decoration: BoxDecoration(color: AppColors.transparent),
-              placeholder: UITextConstants.assistantAskPlaceholder,
+              placeholder: AssistantText.assistantAskPlaceholder,
               placeholderStyle: TextStyle(
                 color: AppColorsFunctional.getColor(
                   isDark,

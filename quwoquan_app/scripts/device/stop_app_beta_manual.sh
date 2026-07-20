@@ -32,7 +32,7 @@ source "$ROOT_DIR/quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
 usage() {
   cat <<EOF
 Usage:
-  scripts/stop_app_beta_manual.sh [options]
+  quwoquan_app/scripts/device/stop_app_beta_manual.sh [options]
 
 Options:
   --clean-env       Remove runtime pid/env state after stopping.

@@ -14,9 +14,3 @@ collections:
     role: idempotency_receipt
     indexes:
       - { name: idx_media_original_access_receipt_key, keys: { idempotencyKey: 1 }, unique: true }
-  media_original_access_outbox:
-    entity: MediaOriginalAccessFact
-    role: append_only
-    indexes:
-      - { name: idx_media_original_access_outbox_event, keys: { eventId: 1 }, unique: true }
-      - { name: idx_media_original_access_outbox_replay, keys: { occurredAt: 1, eventId: 1 } }

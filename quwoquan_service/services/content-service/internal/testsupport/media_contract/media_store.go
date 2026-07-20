@@ -2,6 +2,7 @@ package mediacontract
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -20,7 +21,6 @@ type MediaStore struct {
 	assetReceipts          map[string]assetReceipt
 	originalAccessReceipts map[string]originalAccessReceipt
 	outbox                 []mediaports.OutboxEvent
-	originalAccessOutbox   []mediaports.MediaOriginalAccessEvent
 }
 
 type sessionReceipt struct {
@@ -72,7 +72,6 @@ func (s *MediaStore) AppendMediaOriginalAccess(
 		digest: request.CommandDigest,
 		fact:   request.Fact,
 	}
-	s.originalAccessOutbox = append(s.originalAccessOutbox, request.Event)
 	return mediaports.MediaOriginalAccessAppendResult{Fact: request.Fact}, nil
 }
 
@@ -280,6 +279,40 @@ func (s *MediaStore) CommitUploadSession(
 	s.outbox = append(s.outbox, cloneOutbox(commit.Events)...)
 	aggregate, err := mediamodel.RestoreUploadSession(snapshot)
 	return mediaports.UploadSessionCommitResult{Aggregate: aggregate}, err
+}
+
+func (s *MediaStore) RecordMediaAssetNoopReceipt(
+	_ context.Context,
+	noop mediaports.MediaAssetNoopReceipt,
+) (mediaports.MediaAssetCommitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	receipt, found, err := s.assetReceipt(
+		noop.IdempotencyKey,
+		noop.CommandName,
+		noop.CommandDigest,
+	)
+	if err != nil {
+		return mediaports.MediaAssetCommitResult{}, err
+	}
+	if found {
+		aggregate, restoreErr := mediamodel.RestoreMediaAsset(receipt.asset)
+		return mediaports.MediaAssetCommitResult{Aggregate: aggregate, Replayed: true}, restoreErr
+	}
+	if noop.Aggregate == nil {
+		return mediaports.MediaAssetCommitResult{}, errors.New(
+			"media asset no-op receipt requires aggregate",
+		)
+	}
+	snapshot := noop.Aggregate.Snapshot()
+	s.assetReceipts[noop.IdempotencyKey] = assetReceipt{
+		name:   noop.CommandName,
+		digest: noop.CommandDigest,
+		asset:  snapshot,
+		expiry: receiptExpiry(noop.ReceiptExpiresAt),
+	}
+	aggregate, err := mediamodel.RestoreMediaAsset(snapshot)
+	return mediaports.MediaAssetCommitResult{Aggregate: aggregate}, err
 }
 
 func (s *MediaStore) CommitMediaAsset(

@@ -441,6 +441,13 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 			s.metrics.ObserveInboxFiltered("stale")
 			continue
 		}
+		// V2 收口：Explain 证据不足被 hideDisplayStatement 清空的 reason 不计入
+		// 红点/维度计数——summary 数字必须与 List 可见条目同源，避免「有红点、
+		// 点进去空列表」的计数漂移。
+		if normalizedDisplayBinding(r.DisplayBinding) == DisplayBindingHidden {
+			s.metrics.ObserveInboxFiltered("display_incomplete")
+			continue
+		}
 		for _, point := range r.IntersectionPoints {
 			dim := point.Dimension
 			if dim == "" {
@@ -503,6 +510,13 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 		}
 		if !s.isFresh(r) {
 			s.metrics.ObserveInboxFiltered("stale")
+			continue
+		}
+		// V2 收口：展示语言不完备（hidden）的 reason 在云侧淘汰，不下发给 App
+		// 再靠端侧过滤——与 Feed（isSpotlightDisplayComplete）/ObjectIntersections
+		// （ValidateDisplayStatementWithContext）同一 fail-closed 合同。
+		if normalizedDisplayBinding(r.DisplayBinding) == DisplayBindingHidden {
+			s.metrics.ObserveInboxFiltered("display_incomplete")
 			continue
 		}
 		filtered = append(filtered, r)
@@ -667,7 +681,7 @@ func stableIntersectionListKey(r IntersectionReasonView) string {
 
 func matchesIntersectionListQuery(r IntersectionReasonView, query IntersectionListQuery, wm map[string]int64) bool {
 	dimension := strings.TrimSpace(query.Dimension)
-	if dimension != "" && r.Dimension != dimension {
+	if dimension != "" && !reasonHasDimension(r, dimension) {
 		return false
 	}
 	timeBucket := strings.TrimSpace(query.TimeBucket)
@@ -698,6 +712,25 @@ func reasonHasSourceRef(r IntersectionReasonView, sourceRef string) bool {
 	}
 	for _, point := range r.IntersectionPoints {
 		if point.SourceRef == sourceRef {
+			return true
+		}
+	}
+	return false
+}
+
+// reasonHasDimension 与 Summary 的维度计数同源：Summary 按可见 point 的维度分桶
+// （point.Dimension 缺省回落 reason.Dimension），List 的维度下钻必须用同一谓词，
+// 否则「地点 1」红点下钻到空列表（V2 计数-可见一致合同）。
+func reasonHasDimension(r IntersectionReasonView, dimension string) bool {
+	if r.Dimension == dimension {
+		return true
+	}
+	for _, point := range r.IntersectionPoints {
+		dim := point.Dimension
+		if dim == "" {
+			dim = r.Dimension
+		}
+		if dim == dimension {
 			return true
 		}
 	}

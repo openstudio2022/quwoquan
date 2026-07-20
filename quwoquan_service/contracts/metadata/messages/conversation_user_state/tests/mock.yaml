@@ -1,0 +1,19 @@
+aggregate: ConversationUserState
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/chat/
+
+scenarios:
+  - name: inbox_badge_decrement
+    description: 已读后 unreadCount / mentionUnreadCount 以服务端投影为准
+    assertions:
+      - unread_count_from_server_projection_after_mark_read
+      - mention_unread_count_from_server_projection
+      - no_client_side_second_source_increment
+
+  - name: settings_toggle_optimistic_rollback
+    description: mute/pin 乐观切换失败回滚并结构化上报
+    assertions:
+      - optimistic_state_reverts_on_failure
+      - failure_reported_as_runtime_exception

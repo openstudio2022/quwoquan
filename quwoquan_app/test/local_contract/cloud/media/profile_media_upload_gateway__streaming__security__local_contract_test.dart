@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 
 import '../../../support/recording_content_media_facet.dart';
@@ -28,7 +29,7 @@ void main() {
       final media = RecordingContentMediaFacet();
       final gateway = ContentProfileMediaUploadGateway(
         media,
-        rawClient: rawClient,
+        httpClient: CloudHttpClient(client: rawClient),
       );
 
       final result = await gateway.uploadImage(
@@ -56,7 +57,9 @@ void main() {
       final media = RecordingContentMediaFacet();
       final gateway = ContentProfileMediaUploadGateway(
         media,
-        rawClient: MockClient((_) async => http.Response('', 403)),
+        httpClient: CloudHttpClient(
+          client: MockClient((_) async => http.Response('', 403)),
+        ),
       );
 
       await expectLater(

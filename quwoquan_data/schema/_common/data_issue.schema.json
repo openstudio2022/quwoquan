@@ -27,10 +27,21 @@
         "DATA.MEDIA.COVER_CONFLICT",
         "DATA.AGENT.REVIEW_UNAVAILABLE",
         "DATA.AGENT.REVIEW_INVALID",
+        "DATA.AGENT.EXECUTION_FAILED",
+        "DATA.AGENT.CREDENTIAL_INVALID",
+        "DATA.AGENT.TIMEOUT",
+        "DATA.AGENT.RESULT_INVALID",
         "DATA.CONTENT.CLASSIFICATION_REJECTED",
+        "DATA.ENVIRONMENT.NOT_READY",
         "DATA.INFRA.NETWORK_UNREACHABLE",
         "DATA.CONTRACT.INVALID",
         "DATA.QUALITY.FAILED",
+        "DATA.QUEUE.EXECUTION_FAILED",
+        "DATA.QUEUE.GOVERNANCE_INVALID",
+        "DATA.QUEUE.STARTUP_FAILED",
+        "DATA.QUEUE.RESULT_ENVELOPE_INVALID",
+        "DATA.QUEUE.BUDGET_EXCEEDED",
+        "DATA.QUEUE.TIMEOUT",
         "DATA.INTERNAL.UNEXPECTED"
       ]
     },
@@ -54,6 +65,7 @@
         "replace_media",
         "rewind_download",
         "rewind_compose",
+        "retry_agent",
         "manual_review",
         "stop"
       ]

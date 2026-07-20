@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 class EditorSessionOpsStrip extends StatelessWidget {
   const EditorSessionOpsStrip({
@@ -64,10 +65,7 @@ class EditorSessionOpsStrip extends StatelessWidget {
 }
 
 class _CompareSplitGlyph extends StatelessWidget {
-  const _CompareSplitGlyph({
-    this.size = 24,
-    this.alpha = 1.0,
-  });
+  const _CompareSplitGlyph({this.size = 24, this.alpha = 1.0});
 
   final double size;
   final double alpha;

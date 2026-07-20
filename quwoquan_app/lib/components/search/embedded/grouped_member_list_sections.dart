@@ -1,16 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// 一组群成员（展示用分组头 + 成员列表）。
 class MemberListSectionData {
-  const MemberListSectionData({
-    required this.header,
-    required this.members,
-  });
+  const MemberListSectionData({required this.header, required this.members});
 
   final String header;
   final List<Map<String, dynamic>> members;
@@ -18,15 +15,12 @@ class MemberListSectionData {
 
 String memberDisplayName(Map<String, dynamic> m) =>
     (m['displayName'] as String?)?.trim().isNotEmpty == true
-        ? (m['displayName'] as String).trim()
-        : (m['name'] as String?)?.trim() ?? '';
+    ? (m['displayName'] as String).trim()
+    : (m['name'] as String?)?.trim() ?? '';
 
 /// 群成员 DTO 分组（群主一节 + 按展示名首字母分桶）。
 class MemberDtoListSectionData {
-  const MemberDtoListSectionData({
-    required this.header,
-    required this.members,
-  });
+  const MemberDtoListSectionData({required this.header, required this.members});
 
   final String header;
   final List<ChatConversationMemberDto> members;
@@ -53,9 +47,7 @@ List<MemberDtoListSectionData> buildGroupedMemberDtoSections(
   final keys = buckets.keys.toList()..sort(_compareBucketKeys);
   final out = <MemberDtoListSectionData>[];
   if (owners.isNotEmpty) {
-    out.add(
-      MemberDtoListSectionData(header: UITextConstants.owner, members: owners),
-    );
+    out.add(MemberDtoListSectionData(header: ChatText.owner, members: owners));
   }
   for (final k in keys) {
     final list = buckets[k];
@@ -72,9 +64,7 @@ List<MemberListSectionData> buildGroupedMemberSections(
 ) {
   final owners = members.where((m) => m['role'] == 'owner').toList();
   final rest = members.where((m) => m['role'] != 'owner').toList();
-  rest.sort(
-    (a, b) => memberDisplayName(a).compareTo(memberDisplayName(b)),
-  );
+  rest.sort((a, b) => memberDisplayName(a).compareTo(memberDisplayName(b)));
 
   final buckets = <String, List<Map<String, dynamic>>>{};
   for (final m in rest) {
@@ -85,9 +75,7 @@ List<MemberListSectionData> buildGroupedMemberSections(
   final keys = buckets.keys.toList()..sort(_compareBucketKeys);
   final out = <MemberListSectionData>[];
   if (owners.isNotEmpty) {
-    out.add(
-      MemberListSectionData(header: UITextConstants.owner, members: owners),
-    );
+    out.add(MemberListSectionData(header: ChatText.owner, members: owners));
   }
   for (final k in keys) {
     final list = buckets[k];

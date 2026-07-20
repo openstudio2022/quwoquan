@@ -4,12 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../typed_circle_query_test_double.dart';
 
 const Duration _kCirclesPageSettleTimeout = Duration(seconds: 1);
 
@@ -22,10 +23,34 @@ Future<void> _circlesPumpSettled(WidgetTester tester) async {
   }
 }
 
-Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
-  final repo = mock ?? MockCircleRepository();
+CircleDiscoveryFeedPageSlice _circlesPageFixture() {
+  return CircleDiscoveryFeedPageSlice(
+    circles: <CircleProjection>[
+      CircleProjection(
+        circleId: 'fixture-circle-campus',
+        name: '校园同行',
+        ownerId: 'owner-campus',
+        category: 'campus',
+        subCategory: '母校',
+        memberCount: 12,
+      ),
+    ],
+    items: const <CircleFeedPostProjection>[],
+  );
+}
+
+Widget _scopedApp({
+  CircleDiscoveryFeedQueryReader? discoveryFeedQuery,
+  double textScaleFactor = 1.0,
+}) {
   return ProviderScope(
-    overrides: [circleRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      resolvedOwnerUserIdProvider.overrideWithValue(''),
+      circlesListDiscoveryFeedQueryProvider.overrideWithValue(
+        discoveryFeedQuery ??
+            CircleDiscoveryFeedQueryTestDouble((_) => _circlesPageFixture()),
+      ),
+    ],
     child: MaterialApp.router(
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
@@ -71,9 +96,8 @@ void main() {
     });
 
     testWidgets('展示圈子搜索、小趣与实体主页入口', (tester) async {
-      final mock = MockCircleRepository();
       final cfg = CircleCategoryTabDefaults.remoteStyleFallback;
-      await tester.pumpWidget(_scopedApp(mock: mock));
+      await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await _circlesPumpSettled(tester);
 
@@ -98,8 +122,7 @@ void main() {
     });
 
     testWidgets('展示五个固定业务垂类并隐藏频道管理入口', (tester) async {
-      final mock = MockCircleRepository();
-      await tester.pumpWidget(_scopedApp(mock: mock));
+      await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await _circlesPumpSettled(tester);
 
@@ -153,25 +176,19 @@ void main() {
 
   group('CirclesPage — 错误态渲染', () {
     testWidgets('Repository 返回空列表时安全渲染', (tester) async {
-      await tester.pumpWidget(_scopedApp(mock: _EmptyCircleRepository()));
+      await tester.pumpWidget(
+        _scopedApp(
+          discoveryFeedQuery: CircleDiscoveryFeedQueryTestDouble(
+            (_) => CircleDiscoveryFeedPageSlice(
+              circles: const <CircleProjection>[],
+              items: const <CircleFeedPostProjection>[],
+            ),
+          ),
+        ),
+      );
       await tester.pump();
 
       expect(find.byType(CirclesHubPage), findsOneWidget);
     });
   });
-}
-
-class _EmptyCircleRepository extends MockCircleRepository {
-  @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-    String? subCategory,
-  }) async {
-    return [];
-  }
 }

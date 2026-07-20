@@ -25,17 +25,6 @@ class ReleaseKind(StrEnum):
     EMPTY_BASELINE = "empty_baseline"
 
 
-class ReleaseRunKind(StrEnum):
-    APPLY = "apply"
-    ROLLBACK = "rollback"
-    VERIFY = "verify"
-
-
-class ReleaseRunStatus(StrEnum):
-    COMPLETED = "completed"
-    DRY_RUN = "dry_run"
-
-
 class EvidenceStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
@@ -46,6 +35,7 @@ ROLLOUT_MILESTONES = (
     RolloutMilestone.M1,
     RolloutMilestone.M2,
     RolloutMilestone.M3,
+    RolloutMilestone.H10K,
     RolloutMilestone.LAUNCH,
 )
 FULL_SYNC_MILESTONES = (RolloutMilestone.BASELINE, *ROLLOUT_MILESTONES)
@@ -62,7 +52,5 @@ __all__ = [
     "EvidenceStatus",
     "ImportMode",
     "ReleaseKind",
-    "ReleaseRunKind",
-    "ReleaseRunStatus",
     "RolloutMilestone",
 ]

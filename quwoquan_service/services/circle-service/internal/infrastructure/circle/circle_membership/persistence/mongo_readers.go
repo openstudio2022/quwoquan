@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -70,25 +71,75 @@ func (readers *MongoReaders) ListCircleMemberships(ctx context.Context, circleID
 	}, limit, cursor)
 }
 
-func (readers *MongoReaders) ListPersonaMemberships(ctx context.Context, personaID string, limit int, cursor string) (membershipports.MembershipSlice, error) {
+func (readers *MongoReaders) ListPendingCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (membershipports.MembershipSlice, error) {
 	return readers.list(ctx, bson.M{
-		"personaId": strings.TrimSpace(personaID), "state": membershipmodel.CircleMembershipStateActive,
+		"circleId": strings.TrimSpace(circleID), "state": membershipmodel.CircleMembershipStatePending,
 	}, limit, cursor)
 }
 
-func (readers *MongoReaders) ReadCircleSummaries(ctx context.Context, circleIDs []string) ([]membershipports.CircleSummary, error) {
-	cleaned := make([]string, 0, len(circleIDs))
-	for _, circleID := range circleIDs {
-		if circleID = strings.TrimSpace(circleID); circleID != "" {
-			cleaned = append(cleaned, circleID)
+func (readers *MongoReaders) ListPersonaCircles(
+	ctx context.Context,
+	query membershipports.PersonaCircleQuery,
+) (membershipports.PersonaCircleSlice, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	personaID := strings.TrimSpace(query.PersonaID)
+	match := bson.D{
+		{Key: "personaId", Value: personaID},
+		{Key: "state", Value: membershipmodel.CircleMembershipStateActive},
+	}
+	if cursor := strings.TrimSpace(query.Cursor); cursor != "" {
+		match = append(match, bson.E{Key: "_id", Value: bson.M{"$gt": cursor}})
+	}
+	circleMatch := bson.D{{Key: "circle.status", Value: "active"}}
+	if strings.TrimSpace(query.ViewerPersonaID) != personaID {
+		circleMatch = append(
+			circleMatch,
+			bson.E{Key: "circle.visibility", Value: "public"},
+		)
+	}
+	if normalizedQuery := strings.TrimSpace(query.Query); normalizedQuery != "" {
+		pattern := bson.Regex{
+			Pattern: regexp.QuoteMeta(normalizedQuery),
+			Options: "i",
 		}
+		circleMatch = append(circleMatch, bson.E{
+			Key: "$or",
+			Value: bson.A{
+				bson.D{{Key: "circle.name", Value: pattern}},
+				bson.D{{Key: "circle.description", Value: pattern}},
+			},
+		})
 	}
-	if len(cleaned) == 0 {
-		return []membershipports.CircleSummary{}, nil
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
+		bson.D{{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: "circles"},
+			{Key: "localField", Value: "circleId"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "circle"},
+		}}},
+		bson.D{{Key: "$unwind", Value: "$circle"}},
+		bson.D{{Key: "$match", Value: circleMatch}},
+		bson.D{{Key: "$limit", Value: int64(limit + 1)}},
+		bson.D{{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 0},
+			{Key: "membershipId", Value: "$_id"},
+			{Key: "circle", Value: "$circle"},
+		}}},
 	}
-	rows, err := readers.circles.Find(ctx, bson.M{"_id": bson.M{"$in": cleaned}})
+	rows, err := readers.memberships.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, fmt.Errorf("read Circle summaries: %w", err)
+		return membershipports.PersonaCircleSlice{}, fmt.Errorf(
+			"list Persona Circles: %w",
+			err,
+		)
 	}
 	defer rows.Close(ctx)
 	type circleSummaryDocument struct {
@@ -118,16 +169,29 @@ func (readers *MongoReaders) ReadCircleSummaries(ctx context.Context, circleIDs 
 		CreatedAt                time.Time `bson:"createdAt"`
 		UpdatedAt                time.Time `bson:"updatedAt"`
 	}
-	byID := make(map[string]membershipports.CircleSummary, len(cleaned))
-	for rows.Next(ctx) {
-		var document circleSummaryDocument
-		if err := rows.Decode(&document); err != nil {
-			return nil, err
+	var documents []struct {
+		MembershipID string                `bson:"membershipId"`
+		Circle       circleSummaryDocument `bson:"circle"`
+	}
+	if err := rows.All(ctx, &documents); err != nil {
+		return membershipports.PersonaCircleSlice{}, fmt.Errorf(
+			"decode Persona Circles: %w",
+			err,
+		)
+	}
+	result := membershipports.PersonaCircleSlice{
+		Items: make([]membershipports.CircleSummary, 0, min(limit, len(documents))),
+	}
+	for index, row := range documents {
+		if index >= limit {
+			result.Cursor = documents[index-1].MembershipID
+			break
 		}
+		document := row.Circle
 		if document.Tags == nil {
 			document.Tags = []string{}
 		}
-		byID[document.ID] = membershipports.CircleSummary{
+		result.Items = append(result.Items, membershipports.CircleSummary{
 			ID: document.ID, Name: document.Name, Description: document.Description,
 			CoverURL: document.CoverURL, IconURL: document.IconURL, OwnerPersonaID: document.OwnerPersonaID,
 			OwnerDisplayNameSnapshot: document.OwnerDisplayNameSnapshot, Category: document.Category,
@@ -138,16 +202,7 @@ func (readers *MongoReaders) ReadCircleSummaries(ctx context.Context, circleIDs 
 			DefaultPublicGroupID: document.DefaultPublicGroupID, LinkedHomepageID: document.LinkedHomepageID,
 			LinkedHomepageType: document.LinkedHomepageType, LinkedHomepageTitle: document.LinkedHomepageTitle,
 			CreatedAt: document.CreatedAt.UTC(), UpdatedAt: document.UpdatedAt.UTC(),
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	result := make([]membershipports.CircleSummary, 0, len(byID))
-	for _, circleID := range cleaned {
-		if summary, exists := byID[circleID]; exists {
-			result = append(result, summary)
-		}
+		})
 	}
 	return result, nil
 }
@@ -187,5 +242,5 @@ func (readers *MongoReaders) list(ctx context.Context, filter bson.M, limit int,
 var (
 	_ membershipports.CirclePolicyReader  = (*MongoReaders)(nil)
 	_ membershipports.MembershipReader    = (*MongoReaders)(nil)
-	_ membershipports.CircleSummaryReader = (*MongoReaders)(nil)
+	_ membershipports.PersonaCircleReader = (*MongoReaders)(nil)
 )

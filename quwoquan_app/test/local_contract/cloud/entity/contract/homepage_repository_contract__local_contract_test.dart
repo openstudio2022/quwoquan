@@ -9,12 +9,11 @@ import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
 
 import '../../../../support/homepage_remote_test_support.dart';
 
@@ -113,7 +112,7 @@ void main() {
       final detail = await repo.getHomepageDetail(id);
       expect(detail.id, id);
       expect(detail.title, '西湖景区');
-      expect(detail.reviewSummary?.dimensionScores, isNotEmpty);
+      expect(detail.reviewSummary?.highlightTags, isNotEmpty);
 
       final shell = await repo.getHomepageShell(id);
       expect(shell.homepage.id, id);
@@ -121,7 +120,7 @@ void main() {
 
       final review = await repo.getHomepageReviewSummary(id);
       expect(review.ratingCount, greaterThan(0));
-      expect(review.dimensionScores, isNotEmpty);
+      expect(review.highlightTags, isNotEmpty);
 
       final groups = await repo.getHomepageRelatedGroups(id);
       expect(groups, isNotEmpty);
@@ -182,7 +181,7 @@ void main() {
 
     test('getHomepageRelatedGroups 缺省 groups 时返回空列表', () async {
       final r = MockHomepageRepository();
-      final created = await r.intakeHomepageCandidate(
+      final created = await r.suggestHomepageCandidate(
         draft: const HomepageSuggestionDraft(
           title: '仅测相关群空',
           homepageType: 'storefront',
@@ -191,18 +190,6 @@ void main() {
       );
       final emptyGroups = await r.getHomepageRelatedGroups(created.id);
       expect(emptyGroups, isEmpty);
-    });
-
-    test('followHomepage / unfollowHomepage 更新关注态与计数', () async {
-      const id = 'homepage_sight_west_lake';
-      final before = await repo.getHomepageDetail(id);
-      final followed = await repo.followHomepage(id);
-      expect(followed.viewerFollowsHomepage, isTrue);
-      expect(followed.followerCount, before.followerCount + 1);
-
-      final unfollowed = await repo.unfollowHomepage(id);
-      expect(unfollowed.viewerFollowsHomepage, isFalse);
-      expect(unfollowed.followerCount, before.followerCount);
     });
 
     test(
@@ -275,62 +262,29 @@ void main() {
     });
   });
 
-  group('RemoteHomepageRepository — review 请求体键', () {
-    test('reviewHomepageClaimRequest body 仅含 status 与可选 reviewNote', () async {
-      String? capturedBody;
-      final client = MockClient((request) async {
-        capturedBody = request.body;
-        return http.Response(
-          '{"_id":"c1","homepageId":"h1","requesterUserId":"u","claimTier":"basic","status":"approved"}',
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      });
-      final repo = buildRemoteHomepageRepositoryForTest(
-        httpClient: CloudHttpClient(client: client),
-        baseUrl: 'https://gw.test',
-      );
-      await repo.reviewHomepageClaimRequest(
-        homepageId: 'h1',
-        claimRequestId: 'c1',
-        status: 'approved',
-        reviewNote: 'ok',
-      );
-      expect(capturedBody, isNotNull);
-      final map = json.decode(capturedBody!) as Map<String, dynamic>;
-      expect(map.keys.toSet(), containsAll(<String>['status', 'reviewNote']));
-      expect(map['status'], 'approved');
-      expect(map['reviewNote'], 'ok');
-
-      final wire = ReviewHomepageClaimRequestWire.fromMap(map);
-      expect(wire.toWire(), equals(map));
-    });
-
-    test('reviewHomepageStatusReport body 无 reviewNote 时不含该键', () async {
-      String? capturedBody;
-      final client = MockClient((request) async {
-        capturedBody = request.body;
-        return http.Response(
-          '{"_id":"r1","homepageId":"h1","reason":"x","status":"dismissed"}',
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      });
-      final repo = buildRemoteHomepageRepositoryForTest(
-        httpClient: CloudHttpClient(client: client),
-        baseUrl: 'https://gw.test',
-      );
-      await repo.reviewHomepageStatusReport(
-        homepageId: 'h1',
-        reportId: 'r1',
-        status: 'dismissed',
-      );
-      final map = json.decode(capturedBody!) as Map<String, dynamic>;
-      expect(map.keys.toList(), equals(<String>['status']));
-      expect(
-        ReviewHomepageStatusReportWire(status: 'dismissed').toWire(),
-        equals(<String, dynamic>{'status': 'dismissed'}),
-      );
+  group('治理动作归属 Ops portal（B6 裁决）', () {
+    test('App HomepageQuery / HomepageCommandWriter 均不超过 10 方法', () {
+      // 治理动作（intake/publish/claim review/report review）归 platform-ops；
+      // 关注关系唯一归属 user.SubjectFollow 聚合。
+      const queryMethods = <String>[
+        'searchHomepages',
+        'getHomepageDetail',
+        'getHomepageShell',
+        'getObjectPageBundle',
+        'getHomepageReviewSummary',
+        'getEntityImpact',
+        'getHomepageRelatedGroups',
+      ];
+      const commandMethods = <String>[
+        'suggestHomepageCandidate',
+        'createHomepageClaimRequest',
+        'updateClaimedHomepageBasics',
+        'createHomepageStatusReport',
+      ];
+      expect(queryMethods, hasLength(7));
+      expect(commandMethods, hasLength(4));
+      expect(queryMethods.length, lessThanOrEqualTo(10));
+      expect(commandMethods.length, lessThanOrEqualTo(10));
     });
   });
 
@@ -456,43 +410,6 @@ void main() {
       expect(detail.id, 'h-min');
       expect(detail.homepageType, 'sight');
       expect(detail.title, 'Minimal');
-    });
-
-    test('followHomepage / unfollowHomepage 使用 metadata 路径并解析关注态', () async {
-      final methods = <String>[];
-      final paths = <String>[];
-      final client = MockClient((request) async {
-        methods.add(request.method);
-        paths.add(request.url.path);
-        return http.Response(
-          json.encode({
-            'homepageId': 'h-follow',
-            'homepageType': 'sight',
-            'title': 'Followable',
-            'viewerFollowsHomepage': request.method == 'POST',
-            'followerCount': request.method == 'POST' ? 12 : 11,
-          }),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      });
-      final repo = buildRemoteHomepageRepositoryForTest(
-        httpClient: CloudHttpClient(client: client),
-        baseUrl: 'https://gw.test',
-      );
-
-      final followed = await repo.followHomepage('h-follow');
-      final unfollowed = await repo.unfollowHomepage('h-follow');
-
-      expect(methods, <String>['POST', 'DELETE']);
-      expect(paths, <String>[
-        EntityApiMetadata.followHomepagePath(homepageId: 'h-follow'),
-        EntityApiMetadata.unfollowHomepagePath(homepageId: 'h-follow'),
-      ]);
-      expect(followed.viewerFollowsHomepage, isTrue);
-      expect(followed.followerCount, 12);
-      expect(unfollowed.viewerFollowsHomepage, isFalse);
-      expect(unfollowed.followerCount, 11);
     });
 
     test('getObjectPageBundle 解析 query 上下文和嵌套 projection', () async {

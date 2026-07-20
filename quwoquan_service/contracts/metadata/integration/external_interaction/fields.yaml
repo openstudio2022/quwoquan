@@ -19,7 +19,7 @@ enums:
   ExternalInteractionSensitivity:
     values: [public, private, secret]
   ExternalInteractionProvider:
-    values: [mock_sms, aliyun_sms, tencent_sms, apns, fcm, vendor_push, webhook]
+    values: [mock_sms, aliyun_sms, tencent_sms, apns_voip, fcm, alpha_fake, webhook]
 
 entities:
   ExternalInteractionRequest:
@@ -249,6 +249,74 @@ entities:
         ops_exposure: read
       - name: createdAt
         source: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ExternalInteractionRecoverRequest:
+    description: operator 恢复死信任务的强类型命令。
+    fields:
+      - name: taskId
+        source: taskId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+  ExternalInteractionRecoverAccepted:
+    description: 死信恢复受理结果。
+    fields:
+      - name: taskId
+        source: taskId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: recovered
+        source: recovered
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ExternalInteractionMetricsSnapshot:
+    description: 可靠任务队列深度、重试与死信的权威指标快照。
+    fields:
+      - name: pendingCount
+        source: pendingCount
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: retryWaitCount
+        source: retryWaitCount
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: deadLetterCount
+        source: deadLetterCount
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: snapshotAt
+        source: snapshotAt
         type: timestamp
         constraints: [NOT_NULL]
         classification: PUBLIC

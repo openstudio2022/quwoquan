@@ -4,7 +4,7 @@
 class HomepageStatusReportRecord {
   final String id;
   final String homepageId;
-  final String reporterUserId;
+  final String reporterPersonaId;
   final String reason;
   final String status;
   final String? description;
@@ -16,7 +16,7 @@ class HomepageStatusReportRecord {
   HomepageStatusReportRecord({
     this.id = '',
     this.homepageId = '',
-    this.reporterUserId = '',
+    this.reporterPersonaId = '',
     this.reason = '',
     this.status = '',
     this.description,
@@ -30,7 +30,7 @@ class HomepageStatusReportRecord {
     return HomepageStatusReportRecord(
       id: m['id']?.toString() ?? '',
       homepageId: m['homepageId']?.toString() ?? '',
-      reporterUserId: m['reporterUserId']?.toString() ?? '',
+      reporterPersonaId: m['reporterPersonaId']?.toString() ?? '',
       reason: m['reason']?.toString() ?? '',
       status: m['status']?.toString() ?? '',
       description: m['description']?.toString() ?? null,
@@ -45,7 +45,7 @@ class HomepageStatusReportRecord {
     return <String, dynamic>{
       'id': id,
       'homepageId': homepageId,
-      'reporterUserId': reporterUserId,
+      'reporterPersonaId': reporterPersonaId,
       'reason': reason,
       'status': status,
       'description': description,
@@ -59,7 +59,7 @@ class HomepageStatusReportRecord {
   HomepageStatusReportRecord copyWith({
     String? id,
     String? homepageId,
-    String? reporterUserId,
+    String? reporterPersonaId,
     String? reason,
     String? status,
     String? description,
@@ -71,7 +71,7 @@ class HomepageStatusReportRecord {
     return HomepageStatusReportRecord(
       id: id ?? this.id,
       homepageId: homepageId ?? this.homepageId,
-      reporterUserId: reporterUserId ?? this.reporterUserId,
+      reporterPersonaId: reporterPersonaId ?? this.reporterPersonaId,
       reason: reason ?? this.reason,
       status: status ?? this.status,
       description: description ?? this.description,

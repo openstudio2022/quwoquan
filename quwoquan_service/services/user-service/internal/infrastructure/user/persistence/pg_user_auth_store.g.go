@@ -22,11 +22,11 @@ type pgUserAuthStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const userAuthCols = `user_id, password_hash, otp_secret, refresh_token, refresh_token_expires_at, last_login_at, last_login_ip, login_fail_count, locked_until, created_at, updated_at`
+const userAuthCols = `user_id, password_hash, otp_secret, last_login_at, last_login_ip, login_fail_count, locked_until, created_at, updated_at`
 
 func scanUserAuth(row pgx.Row) (*model.UserAuth, error) {
 	e := &model.UserAuth{}
-	err := row.Scan(&e.UserID, &e.PasswordHash, &e.OTPSecret, &e.RefreshToken, &e.RefreshTokenExpiresAt, &e.LastLoginAt, &e.LastLoginIP, &e.LoginFailCount, &e.LockedUntil, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.UserID, &e.PasswordHash, &e.OTPSecret, &e.LastLoginAt, &e.LastLoginIP, &e.LoginFailCount, &e.LockedUntil, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -48,8 +48,8 @@ func (s *pgUserAuthStoreBase) Create(ctx context.Context, e *model.UserAuth) err
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO user_auth (user_id, password_hash, otp_secret, refresh_token, refresh_token_expires_at, last_login_at, last_login_ip, login_fail_count, locked_until, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		e.UserID, e.PasswordHash, e.OTPSecret, e.RefreshToken, e.RefreshTokenExpiresAt, e.LastLoginAt, e.LastLoginIP, e.LoginFailCount, e.LockedUntil, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO user_auth (user_id, password_hash, otp_secret, last_login_at, last_login_ip, login_fail_count, locked_until, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		e.UserID, e.PasswordHash, e.OTPSecret, e.LastLoginAt, e.LastLoginIP, e.LoginFailCount, e.LockedUntil, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -57,8 +57,8 @@ func (s *pgUserAuthStoreBase) Create(ctx context.Context, e *model.UserAuth) err
 func (s *pgUserAuthStoreBase) Update(ctx context.Context, e *model.UserAuth) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE user_auth SET password_hash=$2, otp_secret=$3, refresh_token=$4, refresh_token_expires_at=$5, last_login_at=$6, last_login_ip=$7, login_fail_count=$8, locked_until=$9, created_at=$10, updated_at=$11 WHERE user_id = $1`,
-		e.UserID, e.PasswordHash, e.OTPSecret, e.RefreshToken, e.RefreshTokenExpiresAt, e.LastLoginAt, e.LastLoginIP, e.LoginFailCount, e.LockedUntil, e.CreatedAt, e.UpdatedAt)
+		`UPDATE user_auth SET password_hash=$2, otp_secret=$3, last_login_at=$4, last_login_ip=$5, login_fail_count=$6, locked_until=$7, created_at=$8, updated_at=$9 WHERE user_id = $1`,
+		e.UserID, e.PasswordHash, e.OTPSecret, e.LastLoginAt, e.LastLoginIP, e.LoginFailCount, e.LockedUntil, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (s *pgUserAuthStoreBase) ListByUserID(ctx context.Context, fkID string) ([]
 	var result []model.UserAuth
 	for rows.Next() {
 		var e model.UserAuth
-		if err := rows.Scan(&e.UserID, &e.PasswordHash, &e.OTPSecret, &e.RefreshToken, &e.RefreshTokenExpiresAt, &e.LastLoginAt, &e.LastLoginIP, &e.LoginFailCount, &e.LockedUntil, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.UserID, &e.PasswordHash, &e.OTPSecret, &e.LastLoginAt, &e.LastLoginIP, &e.LoginFailCount, &e.LockedUntil, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

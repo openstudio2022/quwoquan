@@ -46,6 +46,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt1_local_contract
@@ -53,6 +54,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt1_local_contract
@@ -83,11 +85,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt2_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt2_local_contract
@@ -119,11 +123,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt3_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt3_local_contract
@@ -147,6 +153,7 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.contract1_local_contract
@@ -158,5 +165,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

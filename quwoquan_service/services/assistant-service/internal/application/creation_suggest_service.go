@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -46,41 +47,46 @@ func (s *AssistantService) SuggestCreationAssistance(ctx context.Context, userID
 		}, nil
 	}
 	tagHints := creationTagHints(input)
-	tagRefs := fallbackCreationTagRefs(tagHints)
-	homepages := fallbackCreationHomepages(input)
-	if s.creationGrounding != nil {
-		resolvedTags, err := s.creationGrounding.ResolveTagRefs(ctx, tagHints)
-		if err != nil {
-			return assistant.AssistantCreationSuggestResponse{}, rterr.NewUnavailable(rterr.ModuleAssistant, "创作辅助暂不可用", err.Error())
-		}
-		if len(resolvedTags) > 0 {
-			tagRefs = compactStrings(resolvedTags)
-		}
-		homepageIDs := []string{}
-		if input.PrimaryHomepageID != "" {
-			homepageIDs = append(homepageIDs, input.PrimaryHomepageID)
-		}
-		resolvedHomepages, err := s.creationGrounding.ResolveHomepages(ctx, homepageIDs)
-		if err != nil {
-			return assistant.AssistantCreationSuggestResponse{}, rterr.NewUnavailable(rterr.ModuleAssistant, "创作辅助暂不可用", err.Error())
-		}
-		if len(resolvedHomepages) > 0 {
-			homepages = normalizeSuggestedHomepages(resolvedHomepages)
-		}
+	if s.creationGrounding == nil {
+		return assistant.AssistantCreationSuggestResponse{}, rterr.NewUnavailable(
+			rterr.ModuleAssistant,
+			"创作辅助暂不可用",
+			"creation grounding is not configured",
+		)
 	}
+	tagRefs, err := s.creationGrounding.ResolveTagRefs(ctx, tagHints)
+	if err != nil {
+		return assistant.AssistantCreationSuggestResponse{}, rterr.NewUnavailable(rterr.ModuleAssistant, "创作辅助暂不可用", err.Error())
+	}
+	tagRefs = compactStrings(tagRefs)
+	homepageIDs := []string{}
+	if input.PrimaryHomepageID != "" {
+		homepageIDs = append(homepageIDs, input.PrimaryHomepageID)
+	}
+	homepages, err := s.creationGrounding.ResolveHomepages(ctx, homepageIDs)
+	if err != nil {
+		return assistant.AssistantCreationSuggestResponse{}, rterr.NewUnavailable(rterr.ModuleAssistant, "创作辅助暂不可用", err.Error())
+	}
+	homepages = normalizeSuggestedHomepages(homepages)
 	return assistant.AssistantCreationSuggestResponse{
 		SuggestedTagRefs:   tagRefs,
 		SuggestedHomepages: homepages,
-		SuggestedTitle:     suggestedCreationTitle(input),
+		SuggestedTitle:     suggestedCreationTitle(input, homepages),
 		SuggestedSummary:   suggestedCreationSummary(input),
 		Available:          true,
 	}, nil
 }
 
+// creationAssistantEnabled 判定创作辅助能力是否已被用户启用。
+// fail-closed：store 未装配或查询失败一律视为未启用并结构化告警，
+// 禁止"双 store 缺失即放行"或静默吞错误。
 func (s *AssistantService) creationAssistantEnabled(ctx context.Context, userID string) bool {
 	if s.subscriptions != nil {
 		items, err := s.subscriptions.ListSkillSubscriptions(ctx, userID, assistant.SkillSubscriptionStatusActive, 100)
-		if err == nil {
+		if err != nil {
+			slog.WarnContext(ctx, "assistant creation-suggest subscription lookup failed; treating as disabled",
+				slog.String("userId", userID), slog.String("error", err.Error()))
+		} else {
 			for _, item := range items {
 				if strings.TrimSpace(item.SkillID) == creationAssistantSkillID {
 					return true
@@ -90,7 +96,10 @@ func (s *AssistantService) creationAssistantEnabled(ctx context.Context, userID 
 	}
 	if s.consents != nil {
 		consents, err := s.consents.ListActiveConsents(ctx, userID)
-		if err == nil {
+		if err != nil {
+			slog.WarnContext(ctx, "assistant creation-suggest consent lookup failed; treating as disabled",
+				slog.String("userId", userID), slog.String("error", err.Error()))
+		} else {
 			for _, consent := range consents {
 				if strings.TrimSpace(consent.SkillID) == creationAssistantSkillID || strings.TrimSpace(consent.GrantedScope) == creationAssistantSkillID {
 					return true
@@ -98,7 +107,7 @@ func (s *AssistantService) creationAssistantEnabled(ctx context.Context, userID 
 			}
 		}
 	}
-	return s.subscriptions == nil && s.consents == nil
+	return false
 }
 
 func normalizeCreationSuggestInput(input assistant.AssistantCreationSuggestRequest) assistant.AssistantCreationSuggestRequest {
@@ -111,39 +120,11 @@ func normalizeCreationSuggestInput(input assistant.AssistantCreationSuggestReque
 }
 
 func creationTagHints(input assistant.AssistantCreationSuggestRequest) []string {
-	text := strings.ToLower(input.DraftTitle + " " + input.DraftSummary + " " + input.BodyDigest)
-	hints := []string{}
-	switch {
-	case strings.Contains(text, "九寨") || strings.Contains(text, "旅行") || strings.Contains(text, "徒步") || strings.Contains(text, "路线"):
-		hints = append(hints, "Topic/旅行", "Topic/旅行/路线")
-	case strings.Contains(text, "ai") || strings.Contains(text, "agent") || strings.Contains(text, "产品"):
-		hints = append(hints, "Topic/科技/AI", "Topic/产品")
-	case strings.Contains(text, "摄影") || strings.Contains(text, "照片") || strings.Contains(text, "影像"):
-		hints = append(hints, "Topic/摄影")
-	}
-	if input.PrimaryHomepageID != "" {
-		hints = append(hints, "Entity/"+input.PrimaryHomepageID)
-	}
-	return compactStrings(hints)
-}
-
-func fallbackCreationTagRefs(hints []string) []string {
-	if len(hints) == 0 {
-		return []string{}
-	}
-	return compactStrings(hints)
-}
-
-func fallbackCreationHomepages(input assistant.AssistantCreationSuggestRequest) []assistant.AssistantSuggestedHomepageView {
-	if input.PrimaryHomepageID == "" {
-		return []assistant.AssistantSuggestedHomepageView{}
-	}
-	return []assistant.AssistantSuggestedHomepageView{{
-		ID:                input.PrimaryHomepageID,
-		Type:              "homepage",
-		DisplayName:       input.PrimaryHomepageID,
-		Reason:            "已作为主关联主页",
-	}}
+	return compactStrings([]string{
+		input.DraftTitle,
+		input.DraftSummary,
+		input.BodyDigest,
+	})
 }
 
 func normalizeSuggestedHomepages(items []assistant.AssistantSuggestedHomepageView) []assistant.AssistantSuggestedHomepageView {
@@ -164,12 +145,15 @@ func normalizeSuggestedHomepages(items []assistant.AssistantSuggestedHomepageVie
 	return out
 }
 
-func suggestedCreationTitle(input assistant.AssistantCreationSuggestRequest) string {
+func suggestedCreationTitle(
+	input assistant.AssistantCreationSuggestRequest,
+	homepages []assistant.AssistantSuggestedHomepageView,
+) string {
 	if input.DraftTitle != "" {
 		return ""
 	}
-	if input.PrimaryHomepageID != "" {
-		return "我和" + input.PrimaryHomepageID + "有关的一次发现"
+	if len(homepages) > 0 {
+		return "我和" + homepages[0].DisplayName + "有关的一次发现"
 	}
 	return ""
 }

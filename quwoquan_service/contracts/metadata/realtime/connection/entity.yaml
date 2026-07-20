@@ -5,7 +5,8 @@ object_kind: runtime_session
 description: |
   realtime-gateway 连接运行时会话。
   Connection 仅在 WebSocket 连接期间存在，不作为持久化业务聚合。
-  在线状态通过 Redis Hash 维护（presence:user:{userId}），支持多节点查询。
+  可信连接身份由 accountId + personaId + deviceId 三元组构成；RTC 业务路由只使用
+  personaId，设备级在线状态通过 Redis Hash（presence:persona:{personaId}）维护。
   realtime-gateway 作为平台级基础设施，不属于任何业务域，独立部署。
 
 storage_backend: redis

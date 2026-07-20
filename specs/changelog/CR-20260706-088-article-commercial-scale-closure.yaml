@@ -44,5 +44,5 @@ rollout:
     target: 10k/day feasibility
     gate: only based on H1000 measured throughput, unitPassedCost, sourceReadyObjectCapacity, firstPassRate and downstream visibility
 risks:
-  - `R-CS09` 版权风险在本轮继续保留，story 冻结不等于法务风险关闭。
-  - 若 H1000 后触发 `R-CS02` 的 queueBackend/reliabletask/throughput 硬门，本轮必须诚实停在 evaluate 结论，不得继续承诺交付。
+  - "`R-CS09` 版权风险在本轮继续保留，story 冻结不等于法务风险关闭。"
+  - "若 H1000 后触发 `R-CS02` 的 queueBackend/reliabletask/throughput 硬门，本轮必须诚实停在 evaluate 结论，不得继续承诺交付。"

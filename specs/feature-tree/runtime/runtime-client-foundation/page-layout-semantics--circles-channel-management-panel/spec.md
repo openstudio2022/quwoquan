@@ -1,4 +1,4 @@
-# L4 契约：circles-channel-management-panel
+# L3 契约：circles-channel-management-panel
 
 ## 功能说明
 

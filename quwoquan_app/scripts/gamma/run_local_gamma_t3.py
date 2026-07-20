@@ -412,9 +412,9 @@ def seed_chat() -> Dict[str, Any]:
 def seed_entity(base_url: str) -> Dict[str, Any]:
     """Publish an entity homepage through the runtime API and return its id.
 
-    Homepage detail/bundle reads come from the homepage-state snapshot, so we
-    seed through the real candidate -> publish flow (drift-proof) instead of
-    writing private snapshot state directly. The published id resolves the
+    Homepage detail/bundle reads come from the authoritative homepages
+    collection, so we seed through the real candidate -> publish flow instead
+    of writing private aggregate state directly. The published id resolves the
     `{homepageId}` template in the manifest verifiedEndpoints.
 
     introductionMarkdown/introductionAssets 与数据工程 page.md 三段结构同构
@@ -585,6 +585,81 @@ def seed_content_social_graph(viewer_id: str) -> Dict[str, Any]:
     return payload
 
 
+def seed_content_object_cards(viewer_id: str) -> Dict[str, Any]:
+    """N2-2：应用混合对象卡（entity_homepage）验收种子（亲和/想去/实体档案/homepage 锚点）。"""
+    viewer_id = viewer_id.strip()
+    if not viewer_id:
+        return {"status": "failed", "error": "authenticated persona id is required"}
+    report_path = GAMMA_RUN_ROOT / "content_object_cards_seed_report.json"
+    cmd = [
+        "python3",
+        "quwoquan_service/services/seed-box/scripts/apply_content_object_cards_seed.py",
+        "--container",
+        "quwoquan_service-mongodb-1",
+        "--db",
+        "quwoquan_content",
+        "--report",
+        str(report_path),
+        "--viewer-id",
+        viewer_id,
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    payload: Dict[str, Any] = {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "output": result.stdout[-2000:],
+        "report": str(report_path.relative_to(ROOT)),
+    }
+    if report_path.exists():
+        try:
+            payload["applied"] = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            payload["applied"] = {"status": "unparseable"}
+    return payload
+
+
+def seed_content_moment_channel() -> Dict[str, Any]:
+    """应用 manifest supplementary fixture，保证推荐频道有新鲜可召回内容。"""
+    report_path = GAMMA_RUN_ROOT / "content_moment_channel_seed_report.json"
+    cmd = [
+        "python3",
+        "quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py",
+        "--container",
+        "quwoquan_service-mongodb-1",
+        "--redis-container",
+        "quwoquan_service-redis-1",
+        "--db",
+        "quwoquan_content",
+        "--report",
+        str(report_path),
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    payload: Dict[str, Any] = {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "output": result.stdout[-2000:],
+        "report": str(report_path.relative_to(ROOT)),
+    }
+    if report_path.exists():
+        try:
+            payload["applied"] = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            payload["applied"] = {"status": "unparseable"}
+    return payload
+
+
 def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """Create runtime-only comment fixtures through the public API.
 
@@ -673,16 +748,25 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
 
 def setup_runtime_fixtures(base_url: str, viewer_id: str) -> Dict[str, Any]:
     comment = setup_comment_thread(base_url)
+    moment_channel = seed_content_moment_channel()
     social_graph = seed_content_social_graph(viewer_id)
+    object_cards = seed_content_object_cards(viewer_id)
     status = "passed"
-    if comment.get("status") == "failed" or social_graph.get("status") == "failed":
+    if (
+        comment.get("status") == "failed"
+        or moment_channel.get("status") == "failed"
+        or social_graph.get("status") == "failed"
+        or object_cards.get("status") == "failed"
+    ):
         status = "failed"
     return {
         "status": status,
         "parentCommentId": comment.get("parentCommentId", ""),
         "replyCommentId": comment.get("replyCommentId", ""),
         "commentThread": comment,
+        "momentChannelSeed": moment_channel,
         "socialGraphSeed": social_graph,
+        "objectCardsSeed": object_cards,
     }
 
 
@@ -1104,6 +1188,31 @@ def assert_circle_members_page(payload: Any, _: Dict[str, Any]) -> None:
     expect_non_empty_string(first.get("role"), "circle_members_page.items[0].role")
 
 
+def assert_home_feed_object_cards(payload: Any, _: Dict[str, Any]) -> None:
+    """N2-2：gamma-local 开启 objectCards 后，首页 recommend feed envelope 必须
+    注入可点的 entity_homepage 卡（策略 everyN 锚点 + homepageId 可路由）。"""
+    page = expect_dict(payload, "home_feed")
+    items = expect_list(page.get("items"), "home_feed.items")
+    if not items:
+        raise AssertionError("home_feed.items must be non-empty before object cards can anchor")
+    cards = expect_list(page.get("objectCards"), "home_feed.objectCards")
+    if not cards:
+        raise AssertionError(
+            "home_feed.objectCards must be non-empty (policy overlay enabled + object cards seed applied)"
+        )
+    for index, raw in enumerate(cards):
+        card = expect_dict(raw, f"home_feed.objectCards[{index}]")
+        if card.get("objectKind") != "entity_homepage":
+            raise AssertionError(
+                f"objectCards[{index}].objectKind must be entity_homepage, got {card.get('objectKind')!r}"
+            )
+        expect_non_empty_string(card.get("objectId"), f"objectCards[{index}].objectId")
+        expect_non_empty_string(card.get("title"), f"objectCards[{index}].title")
+        anchor = card.get("anchorIndex")
+        if not isinstance(anchor, int) or anchor <= 0:
+            raise AssertionError(f"objectCards[{index}].anchorIndex must be positive, got {anchor!r}")
+
+
 def assert_circle_feed_page(payload: Any, _: Dict[str, Any]) -> None:
     page = expect_dict(payload, "circle_feed_page")
     items = expect_list(page.get("items"), "circle_feed_page.items")
@@ -1141,6 +1250,7 @@ STRICT_ASSERTIONS = {
     "circle_impact_summary": assert_circle_impact_summary,
     "circle_members_page": assert_circle_members_page,
     "circle_feed_page": assert_circle_feed_page,
+    "home_feed_object_cards": assert_home_feed_object_cards,
     "object_intersections_homepage": assert_object_intersections,
     "object_intersections_circle": assert_object_intersections,
 }
@@ -1304,6 +1414,15 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         {
             "name": "chat_api_contract",
             "path": "test/api_integration/cloud/chat/api_contract_runner.dart",
+            "defines": [
+                "--dart-define=API_CONTRACT_ENV=gamma",
+                f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
+                "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
+            ],
+        },
+        {
+            "name": "user_identity_api_contract",
+            "path": "test/api_integration/cloud/user/user_api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",

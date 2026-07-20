@@ -128,16 +128,27 @@ errors:
       zh: "已有参与者正在共享屏幕"
       en: "Another participant is already sharing screen"
 
-  - code: RTC.USER.recording_not_allowed
+  - code: RTC.USER.version_conflict
     kind: USER
-    reason: forbidden
-    http_status: 403
-    recovery_action: surface
-    dart_const: recordingNotAllowed
-    go_const: ErrRecordingNotAllowed
+    reason: version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: versionConflict
+    go_const: ErrVersionConflict
     user_message:
-      zh: "你没有录制权限"
-      en: "Recording not allowed"
+      zh: "通话状态已变更，请刷新后重试"
+      en: "Call state changed, refresh and retry"
+
+  - code: RTC.USER.idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: idempotencyConflict
+    go_const: ErrIdempotencyConflict
+    user_message:
+      zh: "请求重复且内容不一致，请重新发起"
+      en: "Duplicate request with different content"
 
   - code: RTC.USER.rate_limited
     kind: USER

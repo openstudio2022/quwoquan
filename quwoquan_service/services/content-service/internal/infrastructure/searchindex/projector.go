@@ -26,8 +26,10 @@ import (
 
 // PostReader reads posts back so a lifecycle event (which carries only an
 // aggregate id + a thin payload) can be reconciled against the full post.
+// Load 必须保留 found 与 error；把 Mongo/解码错误折叠成 not-found 会错误删除
+// 搜索文档并推进该 consumer checkpoint。
 type PostReader interface {
-	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
+	Load(ctx context.Context, id string) (*postmodel.Post, bool, error)
 	ListAll(ctx context.Context) ([]postmodel.Post, error)
 }
 
@@ -100,7 +102,10 @@ func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) err
 // the same eligibility the native source uses avoids a second discoverability
 // truth source.
 func (p *Projector) reconcile(ctx context.Context, postID, eventType string) error {
-	post, ok := p.reader.FindByID(ctx, postID)
+	post, ok, err := p.reader.Load(ctx, postID)
+	if err != nil {
+		return fmt.Errorf("load post %s for search reconciliation: %w", postID, err)
+	}
 	if !ok || post == nil {
 		// Post is gone from the store: ensure it is not left in the index.
 		return p.delete(ctx, postID, eventType)
@@ -128,12 +133,13 @@ func (p *Projector) delete(ctx context.Context, postID, eventType string) error 
 	return nil
 }
 
-// searchEligible mirrors the store's ListPublished filter (published + public):
-// only those posts are reachable through the native candidate source, so the ES
-// index must contain exactly the same set.
+// searchEligible mirrors the store's ListPublished filter
+// (published + public + moderation approved): only those posts are reachable
+// through the native candidate source, so the ES index must contain the same set.
 func searchEligible(post *postmodel.Post) bool {
 	if !strings.EqualFold(strings.TrimSpace(post.Status), "published") {
 		return false
 	}
-	return strings.EqualFold(strings.TrimSpace(post.Visibility), "public")
+	return strings.EqualFold(strings.TrimSpace(post.Visibility), "public") &&
+		strings.EqualFold(strings.TrimSpace(post.ModerationStatus), "approved")
 }

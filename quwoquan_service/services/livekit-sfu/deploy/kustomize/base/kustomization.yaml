@@ -5,3 +5,13 @@ resources:
   - service.yaml
   - hpa.yaml
   - pdb.yaml
+
+configMapGenerator:
+  - name: livekit-sfu-config
+    files:
+      - livekit.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: livekit-sfu

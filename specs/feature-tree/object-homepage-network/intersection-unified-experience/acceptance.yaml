@@ -43,16 +43,19 @@ sit_acceptance:
       - file: quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
       - file: quwoquan_app/test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_inbox_display_closure__local_contract_test.go
     status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.sit1.sit1_api_integration
@@ -61,6 +64,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit1.sit1_local_contract
@@ -83,6 +87,11 @@ sit_acceptance:
       --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，确认 gamma-local seeded
       summary/list/object 可由 RemoteIntersectionRepository 与 CloudHttpClient 真实读取。仍未单独证明
       remote visit→summary 清零，因此 status 维持 partial。'
+    - '[recorded] 2026-07-20 continue-dev：`IntersectionService.List/Summary` 在 hydrate
+      后统一淘汰 `DisplayBindingHidden`，避免 summary 非零但列表全为空；对应 Go local_contract
+      全绿。`python3 quwoquan_app/scripts/gamma/run_intersection_remote_smoke.py` 在 canonical
+      acceptance session 下 3/3 全绿，真实证明无 Bearer 结构化 401、summary→list→visit→summary
+      清零，以及 token 不进入 argv。R-IX08 已关闭。'
   SIT2:
     title: 对象页交集卡与 demo dock 移除 SIT
     story_refs:
@@ -108,21 +117,26 @@ sit_acceptance:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_alpha_golden__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/intersection_source_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit2.sit2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit2_gamma_real_data
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.sit2.object_homepage_gamma_real_data_closure
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit2.sit2_local_contract
@@ -151,7 +165,7 @@ sit_acceptance:
     - '[recorded] PARTIAL api_integration 2026-06-25：`docker-compose.gamma-local.yaml`
       与 `quwoquan_ops/environments/local-gamma/Caddyfile` 已静态包含 entity-service / circle-service；`docker
       compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml config` 通过，metadata verify
-      通过。`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all`
+      通过。`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release`
       仍在 api_integration gateway health 因 SSL UNEXPECTED_EOF_WHILE_READING gate_block，user_acceptance
       page smoke 因缺少 Patrol CLI 失败；真实 bundle/impact/related-groups/object-intersections populated
       验收由 `object-homepage-gamma-real-data-closure` 接管，R-IX05 继续打开。'
@@ -160,6 +174,12 @@ sit_acceptance:
       test test/ui/entity/pages/homepage_detail_page_widget_test.dart test/ui/circle/widgets/circle_shell_widget_test.dart
       test/components/object_page/object_intersection_card_test.dart test/components/object_page/object_intersection_section_test.dart`
       48/48 全绿；证明实体/圈子主页交集卡与 ObjectIntersection 共享组件未再受 DTO 漂移阻断。'
+    - '[recorded] 2026-07-20 continue-dev：alpha `AlphaIntersectionRepository` 复刻云侧
+      `host_plain` SVO 转换，repository local_contract 与
+      `object_intersection_alpha_golden__local_contract_test.dart` 全绿并重拍
+      `object_intersection_alpha_host_plain.png`，证明四主页对象交集卡保持可展示丰富态。Go
+      Explain 同轮禁止把 person display name 冒充圈子名；缺少可证容器名时按真实 anchor count
+      生成降级句，local_contract 已绿，新增真实 Mongo api_integration 用例锁定该语义。'
   SIT3:
     title: 首页与频道交集推荐重设计 SIT
     story_refs:
@@ -184,17 +204,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit3.sit3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit3_api_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.sit3.sit3_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit3.sit3_local_contract
@@ -214,6 +237,11 @@ sit_acceptance:
       --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，确认 summary/list/object/feed attribution
       已连接 gamma-local 真实 content-service。频道专属 populated `feed/intersections` 仍待 seed +
       channel 组合验收，因此 status 维持 partial。'
+    - '[recorded] 2026-07-20 continue-dev：gamma runtime setup 已纳入 metadata manifest 的
+      `content_recommendation_moment_channel.gamma_seed.json` 补充 seed；recommend 查询统一使用
+      `sort=recommend&channelId=recommend`。gamma-local 真实 feed 返回 5 items，携带
+      `rankingVersion=rec-v1`、`reasonVersion=reason-v1`，remote smoke 3/3 全绿；seed
+      编排与 token 隔离均有 Ops local_contract 锁定。'
   SIT4:
     title: 保鲜冷却与曝光转化漏斗 SIT
     story_refs:
@@ -241,17 +269,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.sit4.cross_service_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit4.sit4_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit4.sit4_local_contract
@@ -278,7 +309,7 @@ sit_acceptance:
     - '[recorded] 2026-07-06 continue-dev：`flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
       --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证
       `getMyIntersectionSummary -> markIntersectionsVisited -> getMyIntersectionSummary`
-      清零链路；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all`
+      清零链路；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release`
       16 checks 全绿，且只读抓取 `http://127.0.0.1:19220/metrics` 已观测到
       `intersection_feed_candidates_total` / `intersection_feed_filtered_total` /
       `intersection_cooldown_exposure_reported_total` / `intersection_inbox_visit_total`。`intersection_inbox_filtered_total`
@@ -310,10 +341,6 @@ sit_acceptance:
     - 读路径复用 viewer_object_intersections 预物化 + 缓存，请求期零同步打分；coWishlistedEntity 走预投影/采样，禁请求期全量求交。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/intersection/intersection_v3_actionable_instance_test.dart
-      - file: quwoquan_app/test/ui/intersection/companion_wishlist_slice_test.dart
-      - file: quwoquan_service/services/content-service/tests/api_integration/intersection/companion_wishlist_readpath__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/intersection/companion_slice__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
@@ -324,12 +351,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit5_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit5.sit5_local_contract
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit5_api_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.sit5.sit5_api_integration
@@ -337,6 +366,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: sit5_user_acceptance
         cases:
         - user_acceptance.object_homepage_network.intersection_unified_experience.sit5.sit5_user_acceptance
@@ -385,5 +415,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
-  full_gate:
-  - make gate-full
+  profile_gates:
+  - make gate-release ENV=gamma

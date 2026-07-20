@@ -11,8 +11,10 @@ business_rules:
   - owner membership 不得自行 leave，管理员变更不得移除最后一个 owner
   - role 变更必须由 Circle 治理策略授权
   - membership 不直接修改 Circle memberCount，只发布事件供投影收敛
+  - joinPolicy=approval 的圈子 Join 进入 pending；Approve/Reject 仅 owner/active admin，且只对 pending 态生效（否则 membership_state_conflict）
+  - Approve 达成 active 发布 CircleMembershipJoined；Reject 发布 CircleMembershipRejected，被拒 persona 可重新申请
 lifecycle:
-  states: [pending, active, left, removed]
+  states: [pending, active, rejected, left, removed]
   optimistic_concurrency: version
   idempotency: command_receipt
 ddd_layer_mapping:

@@ -2,10 +2,7 @@ package application
 
 import (
 	"context"
-	"errors"
-	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -15,22 +12,20 @@ import (
 )
 
 type MemberService struct {
-	transactions   TransactionRunner
-	conversations  ConversationStore
-	members        MemberStore
-	userStates     UserStateStore
-	cache          ConversationCache
-	publisher      EventPublisher
-	profiles       ProfileSnapshotResolver
-	relationships  RelationshipGate
-	socialContacts SocialContactResolver
-	circles        CircleListResolver
-	media          GroupAvatarAssetizer
-	syncPublisher  UserSyncPublisher
-	scheduler      GroupAvatarTaskScheduler
-	rosterMu       sync.Mutex
-	rosterTimers   map[string]*time.Timer
-	rosterDebounce time.Duration
+	transactions       TransactionRunner
+	conversations      ConversationStore
+	members            MemberStore
+	userStates         UserStateStore
+	membershipCommands AggregateCommandStore
+	cache              ConversationCache
+	publisher          EventPublisher
+	profiles           ProfileSnapshotResolver
+	relationships      RelationshipGate
+	socialContacts     SocialContactResolver
+	circles            CircleListResolver
+	media              GroupAvatarAssetizer
+	syncPublisher      UserSyncPublisher
+	scheduler          GroupAvatarTaskScheduler
 }
 
 type MemberServiceOption func(*MemberService)
@@ -75,21 +70,20 @@ func NewMemberService(
 	}
 	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	svc := &MemberService{
-		transactions:   storage.Transactions,
-		conversations:  storage.Conversations,
-		members:        storage.Members,
-		userStates:     storage.UserStates,
-		cache:          cache,
-		publisher:      publisher,
-		profiles:       profiles,
-		media:          media,
-		syncPublisher:  syncPublisher,
-		scheduler:      scheduler,
-		socialContacts: noopSocialContactResolver{},
-		circles:        noopCircleListResolver{},
-		relationships:  nil,
-		rosterTimers:   make(map[string]*time.Timer),
-		rosterDebounce: 80 * time.Millisecond,
+		transactions:       storage.Transactions,
+		conversations:      storage.Conversations,
+		members:            storage.Members,
+		userStates:         storage.UserStates,
+		membershipCommands: storage.MembershipCommands,
+		cache:              cache,
+		publisher:          publisher,
+		profiles:           profiles,
+		media:              media,
+		syncPublisher:      syncPublisher,
+		scheduler:          scheduler,
+		socialContacts:     noopSocialContactResolver{},
+		circles:            noopCircleListResolver{},
+		relationships:      nil,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -101,17 +95,29 @@ func NewMemberService(
 
 type ListMembersRequest struct {
 	ConversationId string
+	ViewerId       string
 	Cursor         string
 	Limit          int
 	Role           string
+	Query          string
 	Sort           string
 }
 
 func (s *MemberService) ListMembers(ctx context.Context, req ListMembersRequest) ([]model.ConversationMember, error) {
+	if viewerID := strings.TrimSpace(req.ViewerId); viewerID != "" {
+		if _, _, err := s.requireActiveConversationMember(
+			ctx,
+			req.ConversationId,
+			viewerID,
+		); err != nil {
+			return nil, err
+		}
+	}
 	return s.members.ListMembers(ctx, req.ConversationId, ListMembersQuery{
 		Limit:  req.Limit,
 		Cursor: req.Cursor,
 		Role:   req.Role,
+		Query:  req.Query,
 		Sort:   NormalizeMemberListSort(req.Sort),
 	})
 }
@@ -120,42 +126,91 @@ func (s *MemberService) GetMember(ctx context.Context, conversationId, userId st
 	return s.members.FindMember(ctx, conversationId, userId)
 }
 
-func (s *MemberService) scheduleRosterUpdatedPublish(conversationId string) {
-	if s.rosterDebounce <= 0 {
-		s.flushRosterUpdated(context.Background(), conversationId)
-		return
+// rosterUpdatedEvent 在命令事务内读回最新 roster revision，构造与 state
+// 同事务提交的 ConversationRosterUpdated 事件。
+func (s *MemberService) rosterUpdatedEvent(
+	ctx context.Context,
+	scopedKey string,
+	conversationID string,
+	actorID string,
+	aspects []string,
+) (AggregateOutboxEvent, error) {
+	conv, err := s.conversations.FindConversationByID(ctx, conversationID)
+	if err != nil {
+		return AggregateOutboxEvent{}, err
 	}
-	s.rosterMu.Lock()
-	defer s.rosterMu.Unlock()
-	if prev := s.rosterTimers[conversationId]; prev != nil {
-		prev.Stop()
-	}
-	cid := conversationId
-	s.rosterTimers[cid] = time.AfterFunc(s.rosterDebounce, func() {
-		s.flushRosterUpdated(context.Background(), cid)
-	})
+	return AggregateOutboxEvent{
+		EventID:        chatAggregateEventID(scopedKey, string(conversationevent.ConversationRosterUpdated)),
+		EventType:      string(conversationevent.ConversationRosterUpdated),
+		AggregateID:    conversationID,
+		ConversationID: conversationID,
+		ActorID:        actorID,
+		Payload: map[string]any{
+			"membersRosterRevision": conv.MembersRosterRevision,
+			"updatedAt":             conv.UpdatedAt,
+			"aspects":               aspects,
+		},
+	}, nil
 }
 
-func (s *MemberService) flushRosterUpdated(ctx context.Context, conversationId string) {
-	s.rosterMu.Lock()
-	delete(s.rosterTimers, conversationId)
-	s.rosterMu.Unlock()
-
-	conv, err := s.conversations.FindConversationByID(ctx, conversationId)
+// requireActiveConversationMember 是成员命令的共享授权门：
+// 会话必须存在且 active（dissolved 返回 conversation_dissolved），
+// 操作者必须是活跃成员（非成员统一 not_found，不泄漏会话存在性）。
+func (s *MemberService) requireActiveConversationMember(
+	ctx context.Context,
+	conversationID string,
+	operatorID string,
+) (*model.Conversation, *model.ConversationMember, error) {
+	if strings.TrimSpace(operatorID) == "" {
+		return nil, nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "unauthorized"),
+			"请先登录",
+			"membership command requires an authenticated operator",
+		)
+	}
+	conv, err := s.conversations.FindConversationByID(ctx, conversationID)
 	if err != nil {
-		if errors.Is(err, model.ErrConversationNotFound) {
-			return
+		return nil, nil, err
+	}
+	operator, err := s.members.FindMember(ctx, conversationID, operatorID)
+	if err != nil {
+		return nil, nil, chatConversationNotFoundForNonMember(
+			"operator is not a member of this conversation",
+		)
+	}
+	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+		return nil, nil, chatConversationDissolved("conversation is not active")
+	}
+	return conv, operator, nil
+}
+
+// validateAddedMembers 与建群 validateGroupInitialMembers 同源：
+// 每个新成员必须与操作者互关且无屏蔽关系；圈子绑定群由圈子加入语义治理，跳过互关。
+func (s *MemberService) validateAddedMembers(
+	ctx context.Context,
+	conv model.Conversation,
+	operatorID string,
+	memberIDs []string,
+) error {
+	if IsCircleBoundConversation(conv) {
+		return nil
+	}
+	if s.relationships == nil {
+		return chatBlocked("relationship gate unavailable; adding members is fail-closed")
+	}
+	for _, memberID := range memberIDs {
+		capability, err := s.relationships.GetCapability(ctx, operatorID, memberID)
+		if err != nil {
+			return err
 		}
-		slog.Error("flushRosterUpdated", "err", err, "conversationId", conversationId)
-		return
+		if capability.IsBlocked || capability.IsBlockedBy {
+			return chatGroupMemberBlocked("added member blocked by relationship gate")
+		}
+		if !capability.IsMutual {
+			return chatGroupMemberNotMutual("adding members requires mutual follow with each invitee")
+		}
 	}
-	if err := s.publisher.PublishDomainEvent(ctx, conversationevent.ConversationRosterUpdated, conversationId, "", map[string]any{
-		"membersRosterRevision": conv.MembersRosterRevision,
-		"updatedAt":             conv.UpdatedAt,
-		"aspects":               []string{"members"},
-	}); err != nil {
-		slog.Error("publish ConversationRosterUpdated", "err", err, "conversationId", conversationId)
-	}
+	return nil
 }
 
 type AddMembersRequest struct {
@@ -165,20 +220,13 @@ type AddMembersRequest struct {
 }
 
 func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) error {
-	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
+	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy)
 	if err != nil {
 		return err
 	}
-	if conv.Status != "active" {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"当前群聊不可操作",
-			"conversation is not active",
-		)
-	}
 	userIDs := dedupeUserIDs(req.UserIds)
 
-	currentCount, err := s.members.CountMembers(ctx, req.ConversationId)
+	currentCount, err := s.members.CountUserMembers(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
@@ -192,7 +240,10 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 
 	if currentCount+len(newUserIDs) > conv.MaxGroupSize {
-		return rterr.NewInvalidArgument(rterr.ModuleChat, "群成员数量超过上限", "group size exceeded")
+		return chatGroupFull("group size exceeded")
+	}
+	if err := s.validateAddedMembers(ctx, *conv, req.InvitedBy, newUserIDs); err != nil {
+		return err
 	}
 
 	profMap, _ := s.profiles.ResolveMany(ctx, newUserIDs)
@@ -229,8 +280,29 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 		})
 	}
 
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.InvitedBy)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("AddMembers", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "AddMembers", digest, nil,
+	); err != nil || found {
+		return err
+	}
+
 	if len(membersToCreate) == 0 {
-		return nil
+		// no-op：全部目标成员已在群，持久化回执且不产生事件。
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "AddMembers", digest, req.ConversationId, nil)
+		if receiptErr != nil {
+			return receiptErr
+		}
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
 	}
 
 	newCount := currentCount + len(membersToCreate)
@@ -248,6 +320,43 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
+		events := make([]AggregateOutboxEvent, 0, len(membersToCreate)+1)
+		for _, member := range membersToCreate {
+			events = append(events, AggregateOutboxEvent{
+				EventID: chatAggregateEventID(
+					scopedKey,
+					string(membershipevent.ConversationMemberAdded)+"\x00"+member.UserId,
+				),
+				EventType:      string(membershipevent.ConversationMemberAdded),
+				AggregateID:    member.ID,
+				ConversationID: req.ConversationId,
+				ActorID:        req.InvitedBy,
+				Payload: map[string]any{
+					"memberId":    member.ID,
+					"userId":      member.UserId,
+					"displayName": member.DisplayName,
+					"memberType":  member.MemberType,
+					"role":        member.Role,
+					"invitedBy":   member.InvitedBy,
+					"memberCount": newCount,
+					"joinedAt":    member.JoinedAt,
+				},
+			})
+		}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, req.InvitedBy, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		receipt, receiptErr := chatCommandReceipt(scopedKey, "AddMembers", digest, req.ConversationId, nil)
+		if receiptErr != nil {
+			return receiptErr
+		}
+		if commitErr := s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events); commitErr != nil {
+			return mapChatIdempotencyError(commitErr)
+		}
 		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
 			ConversationID: req.ConversationId,
 			ActorID:        req.InvitedBy,
@@ -257,25 +366,6 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-	go func(members []*model.ConversationMember, memberCount int) {
-		for _, member := range members {
-			if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberAdded, req.ConversationId, req.InvitedBy, map[string]any{
-				"memberId":    member.ID,
-				"userId":      member.UserId,
-				"displayName": member.DisplayName,
-				"memberType":  member.MemberType,
-				"role":        member.Role,
-				"invitedBy":   member.InvitedBy,
-				"memberCount": memberCount,
-				"joinedAt":    member.JoinedAt,
-			}); err != nil {
-				slog.Error("publish ConversationMemberAdded failed", "err", err, "conversationId", req.ConversationId, "userId", member.UserId)
-			}
-		}
-	}(membersToCreate, newCount)
-
-	s.scheduleRosterUpdatedPublish(req.ConversationId)
-
 	return nil
 }
 
@@ -286,13 +376,25 @@ type TransferOwnershipRequest struct {
 }
 
 func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwnershipRequest) error {
-	currentOwner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
-	if err != nil || currentOwner.Role != "owner" {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"仅群主可转让群主",
-			"only owner can transfer ownership",
-		)
+	_, currentOwner, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
+	if err != nil {
+		return err
+	}
+	if currentOwner.Role != "owner" {
+		return chatGroupGovernanceForbidden("only owner can transfer ownership")
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("TransferOwnership", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "TransferOwnership", digest, nil,
+	); err != nil || found {
+		return err
 	}
 	if strings.TrimSpace(req.NewOwnerId) == "" {
 		return rterr.NewInvalidArgument(rterr.ModuleChat, "新群主不能为空", "missing new owner id")
@@ -305,20 +407,56 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 			"new owner is not a member",
 		)
 	}
+	receipt, err := chatCommandReceipt(scopedKey, "TransferOwnership", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
 	if nextOwner.Role == "owner" {
-		return nil
+		// no-op：目标已是群主，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
 	}
-	if err := s.members.UpdateMemberRole(ctx, req.ConversationId, req.OperatorId, "member"); err != nil {
-		return err
-	}
-	if err := s.members.UpdateMemberRole(ctx, req.ConversationId, req.NewOwnerId, "owner"); err != nil {
-		return err
-	}
-	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.members.UpdateMemberRole(txCtx, req.ConversationId, req.OperatorId, "member"); err != nil {
+			return err
+		}
+		if err := s.members.UpdateMemberRole(txCtx, req.ConversationId, req.NewOwnerId, "owner"); err != nil {
+			return err
+		}
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
+			return err
+		}
+		events := []AggregateOutboxEvent{{
+			EventID: chatAggregateEventID(
+				scopedKey,
+				string(membershipevent.ConversationMemberRoleChanged)+"\x00"+req.NewOwnerId,
+			),
+			EventType:      string(membershipevent.ConversationMemberRoleChanged),
+			AggregateID:    nextOwner.ID,
+			ConversationID: req.ConversationId,
+			ActorID:        req.OperatorId,
+			Payload: map[string]any{
+				"memberId":  nextOwner.ID,
+				"userId":    req.NewOwnerId,
+				"role":      "owner",
+				"changedBy": req.OperatorId,
+			},
+		}}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, req.OperatorId, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events),
+		)
+	}); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-	s.scheduleRosterUpdatedPublish(req.ConversationId)
 	return nil
 }
 
@@ -329,13 +467,25 @@ type UpdateGroupAdminsRequest struct {
 }
 
 func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAdminsRequest) error {
-	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
-	if err != nil || operator.Role != "owner" {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"仅群主可设置管理员",
-			"only owner can update group admins",
-		)
+	_, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
+	if err != nil {
+		return err
+	}
+	if operator.Role != "owner" {
+		return chatGroupGovernanceForbidden("only owner can update group admins")
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.OperatorId)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("UpdateGroupAdmins", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "UpdateGroupAdmins", digest, nil,
+	); err != nil || found {
+		return err
 	}
 	adminIDs := dedupeUserIDs(req.AdminIds, req.OperatorId)
 	if len(adminIDs) > 3 {
@@ -352,6 +502,11 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 	for _, id := range adminIDs {
 		adminSet[id] = struct{}{}
 	}
+	type roleChange struct {
+		member model.ConversationMember
+		role   string
+	}
+	changes := make([]roleChange, 0, len(members))
 	for _, member := range members {
 		if member.MemberType != "user" || member.Role == "owner" {
 			continue
@@ -360,56 +515,279 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 		if _, ok := adminSet[member.UserId]; ok {
 			role = "admin"
 		}
-		if err := s.members.UpdateMemberRole(ctx, req.ConversationId, member.UserId, role); err != nil {
-			return err
+		if member.Role != role {
+			changes = append(changes, roleChange{member: member, role: role})
 		}
 	}
-	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
+	receipt, err := chatCommandReceipt(scopedKey, "UpdateGroupAdmins", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
+	if len(changes) == 0 {
+		// no-op：管理员集合已一致，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
+	}
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		events := make([]AggregateOutboxEvent, 0, len(changes)+1)
+		for _, change := range changes {
+			if err := s.members.UpdateMemberRole(txCtx, req.ConversationId, change.member.UserId, change.role); err != nil {
+				return err
+			}
+			events = append(events, AggregateOutboxEvent{
+				EventID: chatAggregateEventID(
+					scopedKey,
+					string(membershipevent.ConversationMemberRoleChanged)+"\x00"+change.member.UserId,
+				),
+				EventType:      string(membershipevent.ConversationMemberRoleChanged),
+				AggregateID:    change.member.ID,
+				ConversationID: req.ConversationId,
+				ActorID:        req.OperatorId,
+				Payload: map[string]any{
+					"memberId":  change.member.ID,
+					"userId":    change.member.UserId,
+					"role":      change.role,
+					"changedBy": req.OperatorId,
+				},
+			})
+		}
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
+			return err
+		}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, req.OperatorId, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events),
+		)
+	}); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-	s.scheduleRosterUpdatedPublish(req.ConversationId)
 	return nil
 }
 
-func (s *MemberService) RemoveMember(ctx context.Context, conversationId, userId string) error {
+type RemoveMemberRequest struct {
+	ConversationId string
+	UserId         string
+	OperatorId     string
+}
+
+func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberRequest) error {
+	operatorID := strings.TrimSpace(req.OperatorId)
+	_, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, operatorID)
+	if err != nil {
+		return err
+	}
+	targetID := strings.TrimSpace(req.UserId)
+	if targetID == operatorID {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"退出群聊请使用退群操作",
+			"self removal must use LeaveConversation",
+		)
+	}
+	if operator.Role != "owner" && operator.Role != "admin" {
+		return chatGroupGovernanceForbidden("only owner or admin can remove members")
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, operatorID)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("RemoveMember", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "RemoveMember", digest, nil,
+	); err != nil || found {
+		return err
+	}
+	receipt, err := chatCommandReceipt(scopedKey, "RemoveMember", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
+	member, err := s.members.FindMember(ctx, req.ConversationId, targetID)
+	if err != nil {
+		// no-op：成员已不在群，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
+	}
+	// 角色矩阵（对齐企业微信语义）：owner 可移出任何非 owner 成员；
+	// admin 只能移出普通成员，不可移出 owner 或其他 admin。
+	if member.Role == "owner" {
+		return chatGroupGovernanceForbidden("the group owner cannot be removed")
+	}
+	if operator.Role == "admin" && member.Role != "member" {
+		return chatGroupGovernanceForbidden("an admin can only remove regular members")
+	}
 	var newCount int
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
-		if err := s.members.DeleteMember(txCtx, conversationId, userId); err != nil {
+		if err := s.members.DeleteMember(txCtx, req.ConversationId, targetID); err != nil {
 			return err
 		}
-		count, err := s.members.CountMembers(txCtx, conversationId)
+		count, err := s.members.CountMembers(txCtx, req.ConversationId)
 		if err != nil {
 			return err
 		}
 		newCount = count
-		if err := s.members.BumpMembersRosterRevision(txCtx, conversationId, &newCount); err != nil {
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
+		events := []AggregateOutboxEvent{{
+			EventID: chatAggregateEventID(
+				scopedKey,
+				string(membershipevent.ConversationMemberRemoved)+"\x00"+targetID,
+			),
+			EventType:      string(membershipevent.ConversationMemberRemoved),
+			AggregateID:    member.ID,
+			ConversationID: req.ConversationId,
+			ActorID:        operatorID,
+			Payload: map[string]any{
+				"memberId":    member.ID,
+				"userId":      targetID,
+				"memberType":  member.MemberType,
+				"removedBy":   operatorID,
+				"memberCount": newCount,
+			},
+		}}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, operatorID, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		if commitErr := s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events); commitErr != nil {
+			return mapChatIdempotencyError(commitErr)
+		}
 		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
-			ConversationID: conversationId,
-			ActorID:        userId,
+			ConversationID: req.ConversationId,
+			ActorID:        operatorID,
 			Trigger:        "member.removed",
 		})
 	}); err != nil {
 		return err
 	}
 
-	_ = s.cache.InvalidateConversation(ctx, conversationId)
+	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
+	return nil
+}
 
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberRemoved, conversationId, userId, map[string]any{
-			"userId":      userId,
-			"memberType":  "user",
-			"removedBy":   userId,
-			"memberCount": newCount,
-		}); err != nil {
-			slog.Error("publish ConversationMemberRemoved failed", "err", err, "conversationId", conversationId, "userId", userId)
+type LeaveConversationRequest struct {
+	ConversationId string
+	UserId         string
+}
+
+// LeaveConversation 是成员自愿退出群聊（left 语义，区别于被移出 removed）。
+// 群主必须先 TransferOwnership；已不在群为 no-op 并重放原回执。
+func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversationRequest) error {
+	userID := strings.TrimSpace(req.UserId)
+	if userID == "" {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "unauthorized"),
+			"请先登录",
+			"leave conversation requires an authenticated user",
+		)
+	}
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return err
+	}
+	if conv.Type != "group" {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"仅群聊支持退出",
+			"only group conversations support leaving",
+		)
+	}
+	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+		return chatConversationDissolved("conversation is not active")
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, userID)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("LeaveConversation", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "LeaveConversation", digest, nil,
+	); err != nil || found {
+		return err
+	}
+	receipt, err := chatCommandReceipt(scopedKey, "LeaveConversation", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
+	member, err := s.members.FindMember(ctx, req.ConversationId, userID)
+	if err != nil {
+		// no-op：已不在群，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
+	}
+	if member.Role == "owner" {
+		return chatOwnerMustTransferBeforeLeave("owner must transfer ownership before leaving")
+	}
+	now := time.Now()
+	var newCount int
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.members.DeleteMember(txCtx, req.ConversationId, userID); err != nil {
+			return err
 		}
-	}()
+		count, err := s.members.CountMembers(txCtx, req.ConversationId)
+		if err != nil {
+			return err
+		}
+		newCount = count
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+			return err
+		}
+		events := []AggregateOutboxEvent{{
+			EventID: chatAggregateEventID(
+				scopedKey,
+				string(membershipevent.ConversationMemberLeft)+"\x00"+userID,
+			),
+			EventType:      string(membershipevent.ConversationMemberLeft),
+			AggregateID:    member.ID,
+			ConversationID: req.ConversationId,
+			ActorID:        userID,
+			Payload: map[string]any{
+				"memberId":    member.ID,
+				"userId":      userID,
+				"memberType":  member.MemberType,
+				"memberCount": newCount,
+				"leftAt":      now,
+			},
+		}}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, userID, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		if commitErr := s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events); commitErr != nil {
+			return mapChatIdempotencyError(commitErr)
+		}
+		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
+			ConversationID: req.ConversationId,
+			ActorID:        userID,
+			Trigger:        "member.left",
+		})
+	}); err != nil {
+		return err
+	}
 
-	s.scheduleRosterUpdatedPublish(conversationId)
-
+	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
 	return nil
 }
 
@@ -420,9 +798,32 @@ type InviteAssistantRequest struct {
 }
 
 func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistantRequest) error {
+	if _, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy); err != nil {
+		return err
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.InvitedBy)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("InviteAssistant", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "InviteAssistant", digest, nil,
+	); err != nil || found {
+		return err
+	}
+	receipt, err := chatCommandReceipt(scopedKey, "InviteAssistant", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
 	existing, _ := s.members.FindAssistantMember(ctx, req.ConversationId)
 	if existing != nil {
-		return errors.New("assistant already in conversation")
+		// no-op：助手已在会话，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
 	}
 
 	now := time.Now()
@@ -436,37 +837,52 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 		InvitedBy:        req.InvitedBy,
 		JoinedAt:         now,
 	}
-	if err := s.members.CreateMember(ctx, member); err != nil {
-		return err
-	}
-
-	newCount, err := s.members.CountMembers(ctx, req.ConversationId)
-	if err != nil {
-		return err
-	}
-	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.members.CreateMember(txCtx, member); err != nil {
+			return err
+		}
+		newCount, err := s.members.CountMembers(txCtx, req.ConversationId)
+		if err != nil {
+			return err
+		}
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+			return err
+		}
+		events := []AggregateOutboxEvent{{
+			EventID: chatAggregateEventID(
+				scopedKey,
+				string(membershipevent.ConversationMemberAdded)+"\x00assistant",
+			),
+			EventType:      string(membershipevent.ConversationMemberAdded),
+			AggregateID:    member.ID,
+			ConversationID: req.ConversationId,
+			ActorID:        req.InvitedBy,
+			Payload: map[string]any{
+				"memberId":         member.ID,
+				"userId":           member.UserId,
+				"memberType":       member.MemberType,
+				"role":             member.Role,
+				"assistantSkillId": member.AssistantSkillId,
+				"invitedBy":        member.InvitedBy,
+				"memberCount":      newCount,
+				"joinedAt":         member.JoinedAt,
+			},
+		}}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, req.InvitedBy, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events),
+		)
+	}); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberAdded, req.ConversationId, req.InvitedBy, map[string]any{
-			"memberId":         member.ID,
-			"userId":           member.UserId,
-			"memberType":       member.MemberType,
-			"role":             member.Role,
-			"assistantSkillId": member.AssistantSkillId,
-			"invitedBy":        member.InvitedBy,
-			"memberCount":      newCount,
-			"joinedAt":         member.JoinedAt,
-		}); err != nil {
-			slog.Error("publish ConversationMemberAdded failed", "err", err, "conversationId", req.ConversationId)
-		}
-	}()
-
-	s.scheduleRosterUpdatedPublish(req.ConversationId)
-
 	return nil
 }
 
@@ -476,519 +892,77 @@ type RemoveAssistantRequest struct {
 }
 
 func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistantRequest) error {
+	if _, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.RemovedBy); err != nil {
+		return err
+	}
+	scopedKey, err := scopedChatIdempotencyKey(ctx, req.RemovedBy)
+	if err != nil {
+		return err
+	}
+	digest, err := chatCommandDigest("RemoveAssistant", req)
+	if err != nil {
+		return err
+	}
+	if found, err := replayChatCommand(
+		ctx, s.membershipCommands, scopedKey, "RemoveAssistant", digest, nil,
+	); err != nil || found {
+		return err
+	}
+	receipt, err := chatCommandReceipt(scopedKey, "RemoveAssistant", digest, req.ConversationId, nil)
+	if err != nil {
+		return err
+	}
 	assistant, err := s.members.FindAssistantMember(ctx, req.ConversationId)
 	if err != nil {
-		return errors.New("no assistant in conversation")
+		// no-op：会话内无助手，持久化回执且不产生事件。
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(ctx, receipt, nil),
+		)
 	}
 
-	if err := s.members.DeleteMember(ctx, req.ConversationId, assistant.UserId); err != nil {
-		return err
-	}
-
-	newCount, err := s.members.CountMembers(ctx, req.ConversationId)
-	if err != nil {
-		return err
-	}
-	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.members.DeleteMember(txCtx, req.ConversationId, assistant.UserId); err != nil {
+			return err
+		}
+		newCount, err := s.members.CountMembers(txCtx, req.ConversationId)
+		if err != nil {
+			return err
+		}
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+			return err
+		}
+		events := []AggregateOutboxEvent{{
+			EventID: chatAggregateEventID(
+				scopedKey,
+				string(membershipevent.ConversationMemberRemoved)+"\x00assistant",
+			),
+			EventType:      string(membershipevent.ConversationMemberRemoved),
+			AggregateID:    assistant.ID,
+			ConversationID: req.ConversationId,
+			ActorID:        req.RemovedBy,
+			Payload: map[string]any{
+				"memberId":         assistant.ID,
+				"userId":           assistant.UserId,
+				"memberType":       assistant.MemberType,
+				"assistantSkillId": assistant.AssistantSkillId,
+				"removedBy":        req.RemovedBy,
+				"memberCount":      newCount,
+			},
+		}}
+		rosterEvent, rosterErr := s.rosterUpdatedEvent(
+			txCtx, scopedKey, req.ConversationId, req.RemovedBy, []string{"members"},
+		)
+		if rosterErr != nil {
+			return rosterErr
+		}
+		events = append(events, rosterEvent)
+		return mapChatIdempotencyError(
+			s.membershipCommands.CommitAggregateCommand(txCtx, receipt, events),
+		)
+	}); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-
-	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberRemoved, req.ConversationId, req.RemovedBy, map[string]any{
-			"memberId":         assistant.ID,
-			"userId":           assistant.UserId,
-			"memberType":       assistant.MemberType,
-			"assistantSkillId": assistant.AssistantSkillId,
-			"removedBy":        req.RemovedBy,
-			"memberCount":      newCount,
-		}); err != nil {
-			slog.Error("publish ConversationMemberRemoved failed", "err", err, "conversationId", req.ConversationId)
-		}
-	}()
-
-	s.scheduleRosterUpdatedPublish(req.ConversationId)
 	return nil
-}
-
-func (s *MemberService) ListContacts(
-	ctx context.Context,
-	userID string,
-	limit int,
-	_ string,
-) ([]map[string]any, error) {
-	hits, err := s.combinedContactHits(ctx, userID, "", limit)
-	if err != nil {
-		return nil, err
-	}
-	return contactHitsToMaps(hits), nil
-}
-
-func (s *MemberService) ListContactHomeCircles(
-	ctx context.Context,
-	userID string,
-	limit int,
-) ([]ContactHomeCircleHit, error) {
-	if s.circles == nil {
-		return nil, nil
-	}
-	if limit <= 0 {
-		limit = 50
-	}
-	return s.circles.ListCircles(ctx, userID, limit)
-}
-
-func (s *MemberService) ListGroupCandidates(
-	ctx context.Context,
-	userID string,
-	conversationID string,
-	limit int,
-) ([]map[string]any, error) {
-	limit = clampSearchLimit(limit, 100)
-	locked := map[string]struct{}{strings.TrimSpace(userID): {}}
-	if strings.TrimSpace(conversationID) != "" {
-		members, err := s.members.ListMembers(ctx, conversationID, ListMembersQuery{
-			Limit: 1000,
-			Sort:  MemberListSortJoinedAsc,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, member := range members {
-			if id := strings.TrimSpace(member.UserId); id != "" {
-				locked[id] = struct{}{}
-			}
-		}
-	}
-
-	hits, err := s.combinedContactHits(ctx, userID, "", limit*3)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]map[string]any, 0, limit)
-	seen := map[string]struct{}{}
-	for _, hit := range hits {
-		contactID := strings.TrimSpace(hit.ContactID)
-		if contactID == "" {
-			continue
-		}
-		if _, ok := locked[contactID]; ok {
-			continue
-		}
-		if _, ok := seen[contactID]; ok {
-			continue
-		}
-		relationState, blocked := s.resolveCandidateRelation(ctx, userID, contactID, hit.RelationState)
-		if blocked || relationState != "mutual" {
-			continue
-		}
-		seen[contactID] = struct{}{}
-		item := map[string]any{
-			"contactId":       contactID,
-			"userId":          contactID,
-			"displayName":     hit.DisplayName,
-			"avatarUrl":       hit.AvatarURL,
-			"bio":             hit.Bio,
-			"metFrom":         hit.MetFrom,
-			"lastInteraction": hit.LastInteraction,
-			"relationState":   relationState,
-			"source":          hit.Source,
-			"subtitle":        hit.Subtitle,
-			"highlightText":   hit.HighlightText,
-			"matchedField":    hit.MatchedField,
-			"isStarred":       hit.IsStarred,
-			"candidateSource": "server_group_candidates",
-		}
-		items = append(items, item)
-		if len(items) >= limit {
-			break
-		}
-	}
-	return items, nil
-}
-
-// resolveCandidateRelation backfills authoritative relationship state for
-// conversation-sourced candidates before the mutual-only filter runs.
-func (s *MemberService) resolveCandidateRelation(
-	ctx context.Context,
-	viewerID string,
-	contactID string,
-	fallback string,
-) (string, bool) {
-	if s.relationships == nil {
-		return normalizeRelationState(fallback), false
-	}
-	capability, err := s.relationships.GetCapability(ctx, viewerID, contactID)
-	if err != nil {
-		slog.Warn(
-			"relationship gate check failed for group candidates",
-			"err", err,
-			"viewerID", viewerID,
-			"contactID", contactID,
-		)
-		return normalizeRelationState(fallback), false
-	}
-	if capability.IsBlocked || capability.IsBlockedBy {
-		return "blocked", true
-	}
-	if capability.IsMutual {
-		return "mutual", false
-	}
-	return "not_mutual", false
-}
-
-func (s *MemberService) SearchContacts(
-	ctx context.Context,
-	userID string,
-	query string,
-	limit int,
-) ([]ContactSearchHit, error) {
-	return s.combinedContactHits(ctx, userID, query, limit)
-}
-
-func contactHitsToMaps(hits []ContactSearchHit) []map[string]any {
-	items := make([]map[string]any, 0, len(hits))
-	for _, hit := range hits {
-		items = append(items, map[string]any{
-			"contactId":        hit.ContactID,
-			"displayName":      hit.DisplayName,
-			"avatarUrl":        hit.AvatarURL,
-			"bio":              hit.Bio,
-			"metFrom":          hit.MetFrom,
-			"lastInteraction":  hit.LastInteraction,
-			"relationState":    hit.RelationState,
-			"conversationId":   hit.ConversationID,
-			"conversationType": hit.ConversationType,
-			"subtitle":         hit.Subtitle,
-			"highlightText":    hit.HighlightText,
-			"matchedField":     hit.MatchedField,
-			"source":           hit.Source,
-			"isStarred":        hit.IsStarred,
-		})
-	}
-	return items
-}
-
-func (s *MemberService) combinedContactHits(
-	ctx context.Context,
-	userID string,
-	query string,
-	limit int,
-) ([]ContactSearchHit, error) {
-	limit = clampSearchLimit(limit, 20)
-	normalizedQuery := normalizeSearchQuery(query)
-	results := make([]ContactSearchHit, 0, limit)
-	indexByID := make(map[string]int, limit)
-
-	conversationHits, err := s.conversationContactHits(ctx, userID, normalizedQuery, limit)
-	if err != nil {
-		return nil, err
-	}
-	for _, hit := range conversationHits {
-		if !matchesContactQuery(hit, normalizedQuery) {
-			continue
-		}
-		if !s.canExposeContact(ctx, userID, hit) {
-			continue
-		}
-		indexByID[hit.ContactID] = len(results)
-		results = append(results, hit)
-		if len(results) >= limit {
-			return results, nil
-		}
-	}
-
-	socialHits, err := s.socialContactHits(ctx, userID, normalizedQuery, limit)
-	if err != nil {
-		slog.Warn("social contact resolution failed", "err", err, "userID", userID)
-		socialHits = nil
-	}
-	for _, hit := range socialHits {
-		if !matchesContactQuery(hit, normalizedQuery) {
-			continue
-		}
-		if !s.canExposeContact(ctx, userID, hit) {
-			continue
-		}
-		if idx, ok := indexByID[hit.ContactID]; ok {
-			results[idx] = mergeContactSearchHit(results[idx], hit)
-			continue
-		}
-		indexByID[hit.ContactID] = len(results)
-		results = append(results, hit)
-		if len(results) >= limit {
-			break
-		}
-	}
-
-	if len(results) > limit {
-		results = results[:limit]
-	}
-	return results, nil
-}
-
-func (s *MemberService) canExposeContact(
-	ctx context.Context,
-	viewerID string,
-	hit ContactSearchHit,
-) bool {
-	if s.relationships == nil {
-		return true
-	}
-	contactID := strings.TrimSpace(hit.ContactID)
-	if contactID == "" {
-		return true
-	}
-	capability, err := s.relationships.GetCapability(ctx, viewerID, contactID)
-	if err != nil {
-		slog.Warn(
-			"relationship gate check failed for contacts",
-			"err",
-			err,
-			"viewerID",
-			viewerID,
-			"contactID",
-			contactID,
-		)
-		return true
-	}
-	return !capability.IsBlocked && !capability.IsBlockedBy
-}
-
-func (s *MemberService) socialContactHits(
-	ctx context.Context,
-	userID string,
-	query string,
-	limit int,
-) ([]ContactSearchHit, error) {
-	if s.socialContacts == nil {
-		return nil, nil
-	}
-	seeds, err := s.socialContacts.ListContacts(ctx, userID, limit)
-	if err != nil {
-		return nil, err
-	}
-	if len(seeds) == 0 {
-		return nil, nil
-	}
-	profiles, err := s.profiles.ResolveMany(ctx, socialSeedIDs(seeds))
-	if err != nil {
-		profiles = map[string]ProfileSnapshot{}
-	}
-	hits := make([]ContactSearchHit, 0, len(seeds))
-	for _, seed := range seeds {
-		hit := socialSeedToHit(seed, profiles[seed.UserID])
-		if query != "" && !matchesContactQuery(hit, query) {
-			continue
-		}
-		if query != "" {
-			hit.HighlightText = highlightContactHit(hit, query)
-		}
-		hits = append(hits, hit)
-		if len(hits) >= limit {
-			break
-		}
-	}
-	return hits, nil
-}
-
-func socialSeedIDs(seeds []SocialContactSeed) []string {
-	ids := make([]string, 0, len(seeds))
-	seen := make(map[string]struct{}, len(seeds))
-	for _, seed := range seeds {
-		id := strings.TrimSpace(seed.UserID)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-func socialSeedToHit(seed SocialContactSeed, profile ProfileSnapshot) ContactSearchHit {
-	displayName := strings.TrimSpace(seed.DisplayName)
-	avatarURL := strings.TrimSpace(seed.AvatarURL)
-	bio := strings.TrimSpace(seed.Bio)
-	if displayName == "" {
-		displayName = strings.TrimSpace(profile.DisplayName)
-	}
-	if avatarURL == "" {
-		avatarURL = strings.TrimSpace(profile.AvatarURL)
-	}
-	if bio == "" {
-		bio = strings.TrimSpace(profile.Bio)
-	}
-	relationState := normalizeRelationState(seed.RelationState)
-	source := normalizeContactSource(seed.Source)
-	if source == "" {
-		source = normalizeContactSource(seed.MetFrom)
-	}
-	if source == "" {
-		source = "contact_discovery"
-	}
-	subtitle := firstNonEmpty(bio, seed.MetFrom, seed.LastInteraction)
-	if subtitle == "" {
-		subtitle = displayName
-	}
-	return ContactSearchHit{
-		ContactID:       strings.TrimSpace(seed.UserID),
-		DisplayName:     displayName,
-		AvatarURL:       avatarURL,
-		Bio:             bio,
-		MetFrom:         strings.TrimSpace(seed.MetFrom),
-		LastInteraction: strings.TrimSpace(seed.LastInteraction),
-		RelationState:   relationState,
-		Source:          source,
-		Subtitle:        subtitle,
-		HighlightText:   displayName,
-		MatchedField:    "displayName",
-		IsStarred:       seed.IsStarred,
-	}
-}
-
-func mergeContactSearchHit(base, next ContactSearchHit) ContactSearchHit {
-	if base.ContactID != next.ContactID {
-		return base
-	}
-	if base.DisplayName == "" {
-		base.DisplayName = next.DisplayName
-	}
-	if base.AvatarURL == "" {
-		base.AvatarURL = next.AvatarURL
-	}
-	if base.Bio == "" {
-		base.Bio = next.Bio
-	}
-	if base.MetFrom == "" {
-		base.MetFrom = next.MetFrom
-	}
-	if base.LastInteraction == "" {
-		base.LastInteraction = next.LastInteraction
-	}
-	base.RelationState = mergeRelationState(base.RelationState, next.RelationState)
-	if base.Source == "" || contactSourcePriority(next.Source) < contactSourcePriority(base.Source) {
-		base.Source = next.Source
-	}
-	if base.Subtitle == "" {
-		base.Subtitle = next.Subtitle
-	}
-	if base.HighlightText == "" {
-		base.HighlightText = next.HighlightText
-	}
-	if base.MatchedField == "" {
-		base.MatchedField = next.MatchedField
-	}
-	base.IsStarred = base.IsStarred || next.IsStarred
-	return base
-}
-
-func matchesContactQuery(hit ContactSearchHit, query string) bool {
-	if query == "" {
-		return true
-	}
-	matched, _ := containsQuery(
-		[]string{
-			hit.DisplayName,
-			hit.ContactID,
-			hit.Bio,
-			hit.MetFrom,
-			hit.LastInteraction,
-			hit.Subtitle,
-			hit.Source,
-			hit.RelationState,
-		},
-		query,
-	)
-	return matched
-}
-
-func highlightContactHit(hit ContactSearchHit, query string) string {
-	if query == "" {
-		return hit.DisplayName
-	}
-	_, highlight := containsQuery(
-		[]string{
-			hit.DisplayName,
-			hit.Bio,
-			hit.MetFrom,
-			hit.LastInteraction,
-			hit.Subtitle,
-			hit.Source,
-			hit.RelationState,
-		},
-		query,
-	)
-	if highlight == "" {
-		highlight = hit.DisplayName
-	}
-	return highlight
-}
-
-func mergeRelationState(existing, next string) string {
-	existing = normalizeRelationState(existing)
-	next = normalizeRelationState(next)
-	if existing == "mutual" || next == "mutual" {
-		return "mutual"
-	}
-	if (existing == "following" && next == "followed_by") || (existing == "followed_by" && next == "following") {
-		return "mutual"
-	}
-	if existing == "following" || next == "following" {
-		return "following"
-	}
-	if existing == "followed_by" || next == "followed_by" {
-		return "followed_by"
-	}
-	return "not_following"
-}
-
-func normalizeRelationState(raw string) string {
-	switch strings.TrimSpace(raw) {
-	case "self", "mutual", "following", "followed_by", "not_following":
-		return strings.TrimSpace(raw)
-	default:
-		return "not_following"
-	}
-}
-
-func normalizeContactSource(raw string) string {
-	switch strings.TrimSpace(raw) {
-	case "mutual", "following", "conversation", "contact_discovery", "circle", "group":
-		return strings.TrimSpace(raw)
-	default:
-		return ""
-	}
-}
-
-func contactSourcePriority(source string) int {
-	switch normalizeContactSource(source) {
-	case "conversation":
-		return 0
-	case "mutual":
-		return 1
-	case "following":
-		return 2
-	case "contact_discovery":
-		return 3
-	case "circle":
-		return 4
-	case "group":
-		return 5
-	default:
-		return 6
-	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

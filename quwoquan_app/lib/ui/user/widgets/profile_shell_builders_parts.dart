@@ -39,12 +39,26 @@ extension _ProfileShellBuilders on _ProfileShellState {
     unawaited(requireLogin(ref, context, AuthGateReason.follow));
   }
 
-  /// 私信：创建或复用正式 1v1 会话后再进入聊天详情。
+  /// 私信：按关系能力位分流——可开正式会话直接进入聊天详情；
+  /// 陌生人（canGreet）先走打招呼破冰，对方回复后才升级为正式会话。
   Future<void> _gatedOpenMessage(
     BuildContext context,
     ProfileNotifier notifier,
   ) async {
     if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      final capability = ref
+          .read(profileNotifierProvider(widget.userId))
+          .capability;
+      if (capability != null && !capability.canOpenConversation) {
+        if (capability.hasPendingGreeting) {
+          AppToast.show(context, UITextConstants.profileGreetingPendingHint);
+          return;
+        }
+        if (capability.canGreet) {
+          await _composeAndSendGreeting(context, notifier);
+          return;
+        }
+      }
       try {
         final created = await notifier.openOrCreateDirectConversation();
         if (!context.mounted || created.conversationId.isEmpty) {
@@ -74,6 +88,119 @@ extension _ProfileShellBuilders on _ProfileShellState {
       AuthGateReason.sendMessage,
       dismissFallback: AppRoutePaths.home,
     );
+  }
+
+  String _resolvedDirectCallTargetId() {
+    final state = ref.read(profileNotifierProvider(widget.userId));
+    final capabilityTarget = state.displayCapability?.targetSubAccountId.trim();
+    if (capabilityTarget != null && capabilityTarget.isNotEmpty) {
+      return capabilityTarget;
+    }
+    final profileTarget = state.profile?.subAccountId.trim();
+    if (profileTarget != null && profileTarget.isNotEmpty) {
+      return profileTarget;
+    }
+    return widget.userId;
+  }
+
+  RtcCallEntryIntent _profileCallIntent(RtcCallEntryMediaType mediaType) {
+    final state = ref.read(profileNotifierProvider(widget.userId));
+    return RtcCallEntryIntent.direct(
+      mediaType: mediaType,
+      targetUserId: _resolvedDirectCallTargetId(),
+      capability: state.displayCapability,
+    );
+  }
+
+  Future<void> _gatedStartDirectCall(
+    BuildContext context,
+    RtcCallEntryMediaType mediaType,
+  ) async {
+    final intent = _profileCallIntent(mediaType);
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await ref
+          .read(rtcCallEntryPresenterProvider)
+          .start(
+            context: context,
+            ref: ref,
+            intent: intent,
+            sourceSurface: AppUiSurfaces.profileHome,
+          );
+      return;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          StartDirectCallContinuation(
+            targetUserId: _resolvedDirectCallTargetId(),
+            callType: mediaType.wireValue,
+          ),
+        );
+    await requireLogin(
+      ref,
+      context,
+      AuthGateReason.startCall,
+      dismissFallback: AppRoutePaths.userProfile(username: widget.userId),
+      dismissPolicy: LoginDismissPolicy.safeFallback,
+    );
+  }
+
+  /// 打招呼破冰：输入留言（可空）后发送 greeting；成功后能力位翻转为
+  /// pending（由 [ProfileNotifier.sendGreeting] 同步），未回复前不建会话。
+  Future<void> _composeAndSendGreeting(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) async {
+    final controller = TextEditingController();
+    final message = await showCupertinoDialog<String?>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.profileGreetComposerTitle),
+        content: Padding(
+          padding: EdgeInsets.only(top: AppSpacing.interGroupSm),
+          child: CupertinoTextField(
+            key: TestKeys.profileGreetingComposerField,
+            controller: controller,
+            placeholder: UITextConstants.profileGreetComposerPlaceholder,
+            maxLength: 100,
+            autofocus: true,
+          ),
+        ),
+        actions: <CupertinoDialogAction>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: const Text(UITextConstants.cancel),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text(UITextConstants.profileGreetSend),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (message == null || !context.mounted) {
+      return;
+    }
+    try {
+      await notifier.sendGreeting(requestMessage: message.trim());
+      if (!context.mounted) {
+        return;
+      }
+      AppToast.show(context, ChatText.chatGreetingSent);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
+    }
   }
 
   /// 登录后续接关注：登录成功（auth 翻转为已认证）且续接对象与本主页一致、当前未关注时，
@@ -109,6 +236,44 @@ extension _ProfileShellBuilders on _ProfileShellState {
         unawaited(_gatedOpenMessage(context, notifier));
       }
     }
+  }
+
+  void maybeResumeDirectCallContinuation(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) {
+    final pending = ref
+        .read(authContinuationProvider.notifier)
+        .take<StartDirectCallContinuation>();
+    if (pending == null) {
+      return;
+    }
+    if (pending.targetUserId != _resolvedDirectCallTargetId()) {
+      ref.read(authContinuationProvider.notifier).set(pending);
+      return;
+    }
+    unawaited(_resumeDirectCallAfterLogin(context, notifier, pending));
+  }
+
+  Future<void> _resumeDirectCallAfterLogin(
+    BuildContext context,
+    ProfileNotifier notifier,
+    StartDirectCallContinuation pending,
+  ) async {
+    await notifier.refreshRelationshipCapability();
+    if (!context.mounted) {
+      return;
+    }
+    await ref
+        .read(rtcCallEntryPresenterProvider)
+        .start(
+          context: context,
+          ref: ref,
+          intent: _profileCallIntent(
+            RtcCallEntryMediaType.fromWireValue(pending.callType),
+          ),
+          sourceSurface: AppUiSurfaces.profileHome,
+        );
   }
 
   Widget _buildSummarySection(
@@ -241,13 +406,22 @@ extension _ProfileShellBuilders on _ProfileShellState {
                       capability: displayCapability,
                       onEditProfile: () =>
                           context.push(AppRoutePaths.profileEdit),
-                      onShareProfile: () => AppToast.show(
-                        context,
-                        UITextConstants.shareComingSoon,
-                      ),
+                      onShareProfile: () => unawaited(_shareProfile(context)),
                       onFollow: () => _gatedToggleFollow(context, notifier),
                       onMessage: () =>
                           unawaited(_gatedOpenMessage(context, notifier)),
+                      onVoiceCall: () => unawaited(
+                        _gatedStartDirectCall(
+                          context,
+                          RtcCallEntryMediaType.audio,
+                        ),
+                      ),
+                      onVideoCall: () => unawaited(
+                        _gatedStartDirectCall(
+                          context,
+                          RtcCallEntryMediaType.video,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -522,7 +696,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
                               alignment: Alignment.centerLeft,
                               child: ProfileIosIconButton(
                                 icon: CupertinoIcons.back,
-                                onPressed: widget.onBack ?? () => context.pop(),
+                                onPressed: () => _leaveProfile(context),
                                 backgroundColor: actionBackground,
                                 foregroundColor: compactForeground,
                               ),
@@ -653,10 +827,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                       ProfileIosIconButton(
                                         icon: CupertinoIcons
                                             .arrowshape_turn_up_right,
-                                        onPressed: () => AppToast.show(
-                                          context,
-                                          UITextConstants.shareComingSoon,
-                                        ),
+                                        onPressed: () =>
+                                            unawaited(_shareProfile(context)),
                                         backgroundColor: actionBackground,
                                         foregroundColor: compactForeground,
                                       ),
@@ -763,209 +935,5 @@ extension _ProfileShellBuilders on _ProfileShellState {
       default:
         break;
     }
-  }
-
-  /// 首屏聚合失败错误态：结构化 [UiErrorSemantic] + 重试（重新 loadProfile）。
-  /// 仅在无可展示档案时渲染，保持壳层几何稳定、错误对用户可见。
-  Widget _buildFirstScreenError(BuildContext context, ProfileState state) {
-    return AppPageErrorState(
-      semantic: _profileBlockingErrorSemantic(context, state.rawError!),
-      onAction: (action) async {
-        if (action.type == UiErrorActionType.retry ||
-            action.type == UiErrorActionType.resubmit) {
-          await ref
-              .read(profileNotifierProvider(widget.userId).notifier)
-              .loadProfile();
-        }
-      },
-    );
-  }
-
-  Widget _buildInlineTabContent(BuildContext context, bool isDark) {
-    final content = switch (_activeTabId) {
-      'interaction' => ProfileInteractionTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-        secondaryTabBarKey: _interactionSecondaryTabKey,
-        onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-        onDirectionSelected: _selectInteractionDirection,
-      ),
-      // 足迹=浏览历史，隐私门控仅本人主页可见（ui_config modes: [mine]）；body 复用既有
-      // ProfileFootprintTab（myFootprintListProvider，scope 限 mine），不新建第二取数路径。
-      'footprint' => ProfileFootprintTab(
-        isDark: isDark,
-        onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-      ),
-      _ => ProfileWorksTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-        secondaryTabBarKey: _worksSecondaryTabKey,
-        onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-      ),
-    };
-    final body = KeyedSubtree(
-      key: ValueKey<String>('profile-tab-body-$_activeTabId'),
-      child: content,
-    );
-    final fallbackError = ref
-        .watch(profileNotifierProvider(widget.userId))
-        .rawError;
-    if (fallbackError == null) {
-      return body;
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AppTransientErrorNotice(
-          semantic: _profileCacheFallbackSemantic(context, fallbackError),
-        ),
-        body,
-      ],
-    );
-  }
-
-  UiErrorSemantic _profileBlockingErrorSemantic(
-    BuildContext context,
-    Object error,
-  ) {
-    final base = runtimeErrorSemantic(
-      context,
-      error: error,
-      category: UiErrorCategory.pageLoad,
-      scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: UITextConstants.homepageLoadFailedTitle,
-      message: UITextConstants.pageLoadFailedMessage,
-      secondaryMessage: base.secondaryMessage,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      sourceCode: base.sourceCode,
-      failureKind: base.failureKind,
-      copyKey: 'homepageLoadFailedTitle',
-      recoveryAction: base.recoveryAction,
-      presentation: base.presentation,
-      tone: base.tone,
-    );
-  }
-
-  UiErrorSemantic _profileCacheFallbackSemantic(
-    BuildContext context,
-    Object error,
-  ) {
-    final base = runtimeErrorSemantic(
-      context,
-      error: error,
-      category: UiErrorCategory.backgroundAction,
-      scope: UiErrorScope.section,
-      allowRetry: false,
-      presentation: UiErrorPresentation.transientNotice,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: UITextConstants.homepageLoadFailedTitle,
-      message: UITextConstants.profileCacheFallback,
-      secondaryMessage: base.secondaryMessage,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      sourceCode: base.sourceCode,
-      failureKind: base.failureKind,
-      copyKey: 'profileCacheFallback',
-      recoveryAction: base.recoveryAction,
-      presentation: base.presentation,
-      tone: UiErrorTone.caution,
-    );
-  }
-
-  Future<void> _showMoreOptions(BuildContext context) async {
-    final action = await showAppActionSheet<_ProfileMoreAction>(
-      context,
-      title: '更多操作',
-      sections: const [
-        AppActionSheetSection<_ProfileMoreAction>(
-          items: [
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.share,
-              label: UITextConstants.share,
-              icon: CupertinoIcons.arrowshape_turn_up_right,
-            ),
-          ],
-        ),
-        AppActionSheetSection<_ProfileMoreAction>(
-          items: [
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.block,
-              label: UITextConstants.profileBlockUser,
-              icon: CupertinoIcons.person_crop_circle_badge_xmark,
-            ),
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.report,
-              label: UITextConstants.report,
-              icon: CupertinoIcons.flag,
-              isDestructive: true,
-            ),
-          ],
-        ),
-      ],
-    );
-    if (!context.mounted || action == null) return;
-    switch (action) {
-      case _ProfileMoreAction.share:
-        AppToast.show(context, UITextConstants.shareComingSoon);
-      case _ProfileMoreAction.block:
-        _gatedBlockUser(context);
-      case _ProfileMoreAction.report:
-        _gatedReportUser(context);
-    }
-  }
-
-  /// 拉黑用户：登录门保障 + 二次确认，经 [blockRepositoryProvider] 走 Remote。
-  void _gatedBlockUser(BuildContext context) {
-    runWhenLoggedIn(ref, context, AuthGateReason.report, () async {
-      final confirmed = await showAppActionSheet<bool>(
-        context,
-        title: UITextConstants.profileBlockConfirmTitle,
-        message: UITextConstants.profileBlockConfirmMessage,
-        sections: const [
-          AppActionSheetSection<bool>(
-            items: [
-              AppActionSheetItem<bool>(
-                value: true,
-                label: UITextConstants.profileBlockUser,
-                icon: CupertinoIcons.person_crop_circle_badge_xmark,
-                isDestructive: true,
-              ),
-            ],
-          ),
-        ],
-      );
-      if (confirmed != true || !context.mounted) return;
-      try {
-        await ref.read(blockRepositoryProvider).blockUser(widget.userId);
-        if (context.mounted) {
-          AppToast.show(context, UITextConstants.profileBlockSuccess);
-        }
-      } catch (error) {
-        if (!context.mounted) {
-          return;
-        }
-        final resolved = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.global,
-        );
-        await AppActionErrorFeedback.show(context, semantic: resolved);
-      }
-    });
   }
 }

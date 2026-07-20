@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _fixtureCircleId = 'fixture_circle_photo';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('CircleRepository — 常规契约', () {
+  group('CircleRepository — 读投影契约', () {
     late CircleRepository repo;
 
     setUp(() {
@@ -45,44 +45,12 @@ void main() {
       expect(feed, isList);
     });
 
-    test('getCircleCategoryConfig 与 ui_category_tabs SSOT 对齐', () async {
-      final cfg = await repo.getCircleCategoryConfig();
-      expect(cfg.containsKey('campus'), isTrue);
-      expect(cfg['campus']!.label, isNotEmpty);
-      expect(cfg.length, greaterThanOrEqualTo(5));
-    });
-
     test('getCircleStats 返回统计数据', () async {
       final stats = await repo.getCircleStats(_fixtureCircleId);
       expect(stats.raw.containsKey('memberCount'), isTrue);
       expect(stats.raw.containsKey('weeklyActiveCount'), isTrue);
       expect(stats.raw.containsKey('totalMembers'), isFalse);
       expect(stats.raw.containsKey('weeklyActive'), isFalse);
-    });
-
-    test('createCircle 返回含 id 和 createdAt', () async {
-      final circle = await repo.createCircle(
-        CircleCreateWireDto.fromMap({
-          'name': '测试圈子',
-          'category': 'tech',
-          'visibility': 'public',
-        }),
-      );
-      expect(circle.id, isNotEmpty);
-      expect(circle.name, '测试圈子');
-    });
-
-    test('updateCircle 返回合并后的数据', () async {
-      final updated = await repo.updateCircle(
-        _fixtureCircleId,
-        CircleUpdateWireDto.fromMap({'name': '新名称'}),
-      );
-      expect(updated.id, _fixtureCircleId);
-      expect(updated.name, '新名称');
-    });
-
-    test('archiveCircle 不崩溃', () async {
-      await expectLater(repo.archiveCircle(_fixtureCircleId), completes);
     });
 
     test('getCircle viewerWire 可读', () async {
@@ -104,7 +72,9 @@ void main() {
       final sections = wire['sectionConfig'] as List<dynamic>;
       expect(sections, isNotEmpty);
       final types = sections.map((s) => (s as Map)['sectionType']).toSet();
-      expect(types, containsAll(['works', 'chat', 'storage', 'interaction']));
+      // 与 metadata ui_config circle_sections 闭集一致（works/members/chat/storage）。
+      expect(types, containsAll(['works', 'members', 'chat', 'storage']));
+      expect(types, isNot(contains('interaction')));
       expect(wire['storageUsedBytes'], isA<int>());
       expect(wire['storageQuotaBytes'], isA<int>());
       expect(
@@ -141,19 +111,46 @@ void main() {
     test('getCircle 不存在的 ID 抛出异常', () async {
       expect(() async => await repo.getCircle('nonexistent'), throwsException);
     });
+  });
 
-    test('createCircle 空 data 不崩溃', () async {
+  group('Circle 生命周期命令 typed 契约', () {
+    test('typed 命令拒绝空白标识与非法 sections', () {
+      expect(() => CreateCircleCommand(name: '  '), throwsArgumentError);
+      expect(() => UpdateCircleCommand(circleId: ''), throwsArgumentError);
       expect(
-        () async => await repo.createCircle(CircleCreateWireDto.fromMap({})),
-        returnsNormally,
+        () => UpdateCircleSectionsCommand(circleId: 'c1', sections: const []),
+        throwsArgumentError,
       );
     });
 
-    test('updateSections 空列表不崩溃', () async {
+    test('decodeCircleCommandResult 拒绝未知键与非法版本', () {
       expect(
-        () async => await repo.updateSections('test', []),
-        returnsNormally,
+        () => decodeCircleCommandResult(<String, Object?>{
+          'circleId': 'c1',
+          'version': 1,
+          'status': 'active',
+          'idempotentReplay': false,
+          'unexpected': true,
+        }),
+        throwsFormatException,
       );
+      expect(
+        () => decodeCircleCommandResult(<String, Object?>{
+          'circleId': 'c1',
+          'version': 0,
+          'status': 'active',
+          'idempotentReplay': false,
+        }),
+        throwsFormatException,
+      );
+      final decoded = decodeCircleCommandResult(<String, Object?>{
+        'circleId': 'c1',
+        'version': 3,
+        'status': 'archived',
+        'idempotentReplay': true,
+      });
+      expect(decoded.status, CircleLifecycleStatus.archived);
+      expect(decoded.idempotentReplay, isTrue);
     });
   });
 }

@@ -79,8 +79,9 @@ D0 以 [应用根设计](../../design.md) 为全局合同，并要求 metadata �
 - aggregate root 的公开写入再按意图分三类：一次创建/发布使用稳定 intent、唯一约束和
   receipt；审批、离开、删除、归档、角色设定等命名状态迁移/set 操作由服务端加载当前
   version 并对纯 CAS 竞态做有限重放；只有多人基于旧快照覆盖多个可编辑字段时才使用
-  `If-Match`。当前全仓校准后仅 `UpdateCircleGroup`、`UpdateCircleFile`、
-  `UpdateExperimentRollout` 与 `UpdateServiceConfig` 属于第三类，
+  `If-Match`。当前全仓校准后仅 `UpdateCircleGroup`、`UpdateCircleFile` 与
+  `UpdateExperimentRollout` 属于第三类（`UpdateServiceConfig` 已随配置 IaC 化退场：
+  配置只随版本化发布包变化，平台只保留只读快照与漂移核对），
   `operation_concurrency_calibration__contract__local_contract_test.go` 固定该显式清单。
 - 命名状态迁移/set 的目标状态若已满足，首次到达的 `Idempotency-Key` 仍须持久化 no-op
   receipt，但不得递增 aggregate version 或产生“状态已变更”的伪 outbox 事件；后续状态

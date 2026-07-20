@@ -58,33 +58,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /chat/contacts/search:
-        get:
-            operationId: SearchContacts
-            x-contract-operation-id: chat.conversation.SearchContacts
-            x-object-id: chat.conversation
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: ChatSearchQueryFacet
-                method: searchContacts
-                reader: ContactSearchReader
-                slice: ContactSearchResultSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ContactSearchItemView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /chat/conversations:
         get:
             operationId: ListConversations
@@ -122,6 +95,13 @@ paths:
                 facet: ConversationLifecycleCommandFacet
                 method: createConversation
                 aggregateOwner: Conversation
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -188,6 +168,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -225,6 +211,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -253,6 +245,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -262,6 +260,50 @@ paths:
             responses:
                 "204":
                     description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /chat/conversations/{conversationId}/announcement:
+        patch:
+            operationId: UpdateAnnouncement
+            x-contract-operation-id: chat.conversation.UpdateAnnouncement
+            x-object-id: chat.conversation
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: ConversationGovernanceCommandFacet
+                method: updateAnnouncement
+                aggregateOwner: Conversation
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAnnouncementRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Conversation'
                 default:
                     description: Runtime failure
                     content:
@@ -285,6 +327,12 @@ paths:
                 - name: conversationId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -320,6 +368,96 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /chat/conversations/{conversationId}/governance:
+        patch:
+            operationId: UpdateGroupGovernanceSettings
+            x-contract-operation-id: chat.conversation.UpdateGroupGovernanceSettings
+            x-object-id: chat.conversation
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: ConversationGovernanceCommandFacet
+                method: updateGroupGovernanceSettings
+                aggregateOwner: Conversation
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateGroupGovernanceSettingsRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Conversation'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /chat/conversations/{conversationId}/leave:
+        post:
+            operationId: LeaveConversation
+            x-contract-operation-id: chat.conversation_membership.LeaveConversation
+            x-object-id: chat.conversation_membership
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: ConversationMemberCommandFacet
+                method: leaveConversation
+                aggregateOwner: ConversationMembership
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LeaveConversationRequest'
             responses:
                 "204":
                     description: No Content
@@ -380,6 +518,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -417,6 +561,12 @@ paths:
                 - name: userId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             responses:
@@ -524,6 +674,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -561,6 +717,12 @@ paths:
                 - name: messageId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -635,6 +797,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -667,6 +835,12 @@ paths:
                 - name: conversationId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -738,33 +912,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Conversation'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /chat/conversations/search:
-        get:
-            operationId: SearchConversations
-            x-contract-operation-id: chat.conversation.SearchConversations
-            x-object-id: chat.conversation
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: ChatSearchQueryFacet
-                method: searchConversations
-                reader: ConversationSearchReader
-                slice: ConversationSearchResultSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ConversationSearchItemView'
                 default:
                     description: Runtime failure
                     content:
@@ -914,33 +1061,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /chat/messages/search:
-        get:
-            operationId: SearchMessages
-            x-contract-operation-id: chat.message.SearchMessages
-            x-object-id: chat.message
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: MessageSearchQueryFacet
-                method: searchMessages
-                reader: MessageSearchReader
-                slice: MessageSearchResultSlice
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/MessageSearchItemView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /chat/selectable-group-conversations:
         get:
             operationId: ListSelectableGroupConversations
@@ -1026,11 +1146,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContactHomeRow
             x-contract-placeholder: true
-        ContactSearchItemView:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ContactSearchItemView
-            x-contract-placeholder: true
         Conversation:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1041,11 +1156,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ConversationMember
             x-contract-placeholder: true
-        ConversationSearchItemView:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ConversationSearchItemView
-            x-contract-placeholder: true
         GroupHome:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1055,6 +1165,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: InviteAssistantRequest
+            x-contract-placeholder: true
+        LeaveConversationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: LeaveConversationRequest
             x-contract-placeholder: true
         MarkAsReadRequest:
             type: object
@@ -1076,11 +1191,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MessageReceipt
             x-contract-placeholder: true
-        MessageSearchItemView:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: MessageSearchItemView
-            x-contract-placeholder: true
         RecallMessageRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1101,6 +1211,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TransferOwnershipRequest
             x-contract-placeholder: true
+        UpdateAnnouncementRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpdateAnnouncementRequest
+            x-contract-placeholder: true
         UpdateConversationSettingsRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1115,4 +1230,9 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UpdateGroupAdminsRequest
+            x-contract-placeholder: true
+        UpdateGroupGovernanceSettingsRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpdateGroupGovernanceSettingsRequest
             x-contract-placeholder: true

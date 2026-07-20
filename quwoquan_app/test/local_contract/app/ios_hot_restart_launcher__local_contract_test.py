@@ -1,0 +1,155 @@
+import json
+import subprocess
+import sys
+import unittest
+from datetime import datetime
+from pathlib import Path
+
+
+APP_DIR = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(APP_DIR / "scripts/device"))
+
+from verify_flutter_run_defines import validate_flutter_run_defines
+from verify_ios_hot_restart import (
+    _count_native_launches_since,
+    cold_startup_terminal_observed,
+)
+
+
+PREFLIGHT = APP_DIR / "scripts/device/verify_flutter_run_defines.py"
+LAUNCHER = APP_DIR / "scripts/device/start_app_instance.sh"
+HOT_RESTART = APP_DIR / "scripts/device/verify_ios_hot_restart.py"
+
+
+def complete_defines(environment: str = "alpha") -> dict[str, str]:
+    return {
+        "APP_RUNTIME_ENV": environment,
+        "CLOUD_GATEWAY_BASE_URL": "https://api.example.test",
+        "APP_LEGAL_BASE_URL": "https://legal.example.test",
+        "MEDIA_AVATAR_CDN_BASE_URL": "https://avatar.example.test",
+        "MEDIA_IMAGE_CDN_BASE_URL": "https://image.example.test",
+        "MEDIA_VIDEO_CDN_BASE_URL": "https://video.example.test",
+        "MEDIA_UPLOAD_BASE_URL": "https://upload.example.test",
+    }
+
+
+class IosHotRestartLauncherContractTest(unittest.TestCase):
+    def test_complete_define_package_passes_before_flutter(self) -> None:
+        self.assertEqual(
+            validate_flutter_run_defines(
+                complete_defines("beta"),
+                expected_env="beta",
+                platform="ios",
+            ),
+            [],
+        )
+
+    def test_missing_define_package_fails_actionably(self) -> None:
+        issues = validate_flutter_run_defines(
+            {"APP_RUNTIME_ENV": "alpha"},
+            expected_env="alpha",
+            platform="ios",
+        )
+        self.assertIn("missing CLOUD_GATEWAY_BASE_URL", issues)
+        self.assertIn("missing MEDIA_UPLOAD_BASE_URL", issues)
+
+        result = subprocess.run(
+            [sys.executable, str(PREFLIGHT), "--env", "alpha", "--platform", "ios"],
+            cwd=APP_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("before flutter build/run", result.stderr)
+        self.assertIn("start_app_instance.sh", result.stderr)
+
+    def test_canonical_launcher_preflights_and_marks_compile_time_launch_mode(self) -> None:
+        source = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("verify_flutter_run_defines.py", source)
+        self.assertIn("--launch-mode canonical_launcher", source)
+        self.assertIn("--dart-define", source)
+        self.assertIn('export QWQ_APP_LAUNCH_MODE="canonical_launcher"', source)
+        self.assertIn('os.open("/dev/tty", os.O_RDWR)', source)
+        self.assertIn(
+            "QWQ_APP_INSTANCE_PRESERVE_TTY",
+            HOT_RESTART.read_text(encoding="utf-8"),
+        )
+
+    def test_hot_restart_smoke_uses_canonical_launcher_and_one_R_command(self) -> None:
+        source = HOT_RESTART.read_text(encoding="utf-8")
+        self.assertIn("start_app_instance.sh", source)
+        self.assertIn('os.write(master_fd, b"R")', source)
+        self.assertIn("extract_dart_startup_attempts", source)
+        self.assertIn("nativeDidFinishLaunchingCount", source)
+
+    def test_preflight_json_is_typed_and_contains_no_endpoint_values(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PREFLIGHT),
+                "--env",
+                "alpha",
+                "--platform",
+                "ios",
+                "--defines-json",
+                json.dumps(complete_defines()),
+            ],
+            cwd=APP_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "passed")
+        self.assertNotIn("api.example.test", result.stdout)
+
+    def test_flutter_style_dart_define_arguments_are_preflighted(self) -> None:
+        defines = complete_defines("gamma")
+        command = [
+            sys.executable,
+            str(PREFLIGHT),
+            "--env",
+            "gamma",
+            "--platform",
+            "ios",
+        ]
+        command.extend(
+            f"--dart-define={key}={value}"
+            for key, value in defines.items()
+        )
+        result = subprocess.run(
+            command,
+            cwd=APP_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(json.loads(result.stdout)["environment"], "gamma")
+
+    def test_hot_restart_probe_ignores_baseline_attempts(self) -> None:
+        raw = """
+2026-07-19 14:00:00.000 Df Runner[1] QWQStartup ios_did_finish_launching
+QWQStartup ios_dart_startup_attempt attemptId=old_attempt launchMode=canonical_launcher hotRestart=false configurationState=complete
+QWQStartup ios_startup_safe_terminal reportedElapsedMs=1200 receivedMs=1300 attemptId=old_attempt
+QWQStartup ios_dart_startup_attempt attemptId=new_attempt launchMode=canonical_launcher hotRestart=false configurationState=complete
+QWQStartup ios_startup_safe_terminal reportedElapsedMs=1400 receivedMs=1500 attemptId=new_attempt
+"""
+        self.assertTrue(cold_startup_terminal_observed(raw))
+        self.assertTrue(
+            cold_startup_terminal_observed(
+                raw,
+                excluded_attempt_ids={"old_attempt"},
+            )
+        )
+        self.assertEqual(
+            _count_native_launches_since(
+                raw,
+                datetime(2026, 7, 19, 13, 59, 59),
+            ),
+            1,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

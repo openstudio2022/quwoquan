@@ -36,6 +36,9 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       throw StateError('alpha media upload session not found');
     final assetId = 'alpha_media_asset_${command.sessionId}';
     final cdnUrl = Uri.parse('https://alpha-cdn.invalid/$assetId');
+    upload
+      ..assetId = assetId
+      ..status = ContentMediaUploadStatus.completed;
     _assets[assetId] = ContentMediaAssetSlice(
       assetId: assetId,
       version: 1,
@@ -86,12 +89,13 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       throw StateError('alpha media upload session not found');
     return ContentMediaUploadSessionSlice(
       sessionId: query.sessionId,
-      version: 1,
+      version: upload.status == ContentMediaUploadStatus.completed ? 2 : 1,
+      assetId: upload.assetId,
       objectKey: 'alpha/uploads/${query.sessionId}',
       mediaType: upload.command.mediaType,
       contentType: upload.command.contentType,
       fileSize: upload.command.fileSize,
-      status: ContentMediaUploadStatus.pending,
+      status: upload.status,
       createdAt: DateTime.utc(2030),
       updatedAt: DateTime.utc(2030),
       expiresAt: upload.expiresAt,
@@ -154,8 +158,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
 }
 
 final class _AlphaUpload {
-  const _AlphaUpload(this.command, this.expiresAt);
+  _AlphaUpload(this.command, this.expiresAt);
 
   final InitContentMediaUploadCommand command;
   final DateTime expiresAt;
+  String? assetId;
+  ContentMediaUploadStatus status = ContentMediaUploadStatus.pending;
 }

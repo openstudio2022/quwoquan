@@ -1,0 +1,221 @@
+{
+  "accessPolicy": "public",
+  "assetId": "media-canary-seek-125s",
+  "assetVersion": 1,
+  "frameIntervalMs": 5000,
+  "frames": [
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 0,
+      "width": 240,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 5000,
+      "width": 240,
+      "x": 240,
+      "y": 0
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 10000,
+      "width": 240,
+      "x": 480,
+      "y": 0
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 15000,
+      "width": 240,
+      "x": 720,
+      "y": 0
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 20000,
+      "width": 240,
+      "x": 960,
+      "y": 0
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 25000,
+      "width": 240,
+      "x": 0,
+      "y": 426
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 30000,
+      "width": 240,
+      "x": 240,
+      "y": 426
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 35000,
+      "width": 240,
+      "x": 480,
+      "y": 426
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 40000,
+      "width": 240,
+      "x": 720,
+      "y": 426
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 45000,
+      "width": 240,
+      "x": 960,
+      "y": 426
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 50000,
+      "width": 240,
+      "x": 0,
+      "y": 852
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 55000,
+      "width": 240,
+      "x": 240,
+      "y": 852
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 60000,
+      "width": 240,
+      "x": 480,
+      "y": 852
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 65000,
+      "width": 240,
+      "x": 720,
+      "y": 852
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 70000,
+      "width": 240,
+      "x": 960,
+      "y": 852
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 75000,
+      "width": 240,
+      "x": 0,
+      "y": 1278
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 80000,
+      "width": 240,
+      "x": 240,
+      "y": 1278
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 85000,
+      "width": 240,
+      "x": 480,
+      "y": 1278
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 90000,
+      "width": 240,
+      "x": 720,
+      "y": 1278
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 95000,
+      "width": 240,
+      "x": 960,
+      "y": 1278
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 100000,
+      "width": 240,
+      "x": 0,
+      "y": 1704
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 105000,
+      "width": 240,
+      "x": 240,
+      "y": 1704
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 110000,
+      "width": 240,
+      "x": 480,
+      "y": 1704
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 115000,
+      "width": 240,
+      "x": 720,
+      "y": 1704
+    },
+    {
+      "height": 426,
+      "spriteId": "sprite-main",
+      "timeMs": 120000,
+      "width": 240,
+      "x": 960,
+      "y": 1704
+    }
+  ],
+  "processorProfile": "media_canary_progressive_mp4",
+  "schema": "quwoquan.content.preview_track_manifest",
+  "sprites": [
+    {
+      "height": 2130,
+      "mimeType": "image/webp",
+      "publicSliceKey": "media/video/s/media-canary-seek-125s/v1/preview/sprite.webp",
+      "sha256": "sha256:03f692ad5e27a93c6aff74799b6ee8767166167085e1bc4629b89e8c7ea01f28",
+      "spriteId": "sprite-main",
+      "width": 1200
+    }
+  ],
+  "trackVersion": 1
+}

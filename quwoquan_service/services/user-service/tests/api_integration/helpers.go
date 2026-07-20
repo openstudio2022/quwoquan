@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,13 +27,38 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 	}
 	req := httptest.NewRequest(method, path, reader)
 	req.Header.Set("Content-Type", "application/json")
+	// 写命令统一携带稳定业务重放身份；显式传入的 header 优先。
+	if method != http.MethodGet && method != http.MethodHead {
+		req.Header.Set("Idempotency-Key",
+			fmt.Sprintf("user-it-%s-%d", t.Name(), helperRequestSequence.Add(1)))
+	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
+	}
+	// 存量集成场景用 X-Client-* 仅表达“希望以哪个测试主体签发凭证”；
+	// production middleware 会清除这些 header，handler 只消费 JWT 派生的
+	// operation.Context。显式 Authorization（含伪造 header 负例）始终优先。
+	if strings.TrimSpace(req.Header.Get("Authorization")) == "" {
+		accountID := strings.TrimSpace(req.Header.Get("X-Client-User-Id"))
+		personaID := strings.TrimSpace(
+			req.Header.Get("X-Client-Sub-Account-Id"),
+		)
+		if accountID != "" {
+			var signed map[string]string
+			if personaID != "" {
+				signed = authHeadersForPersona(accountID, personaID)
+			} else {
+				signed = authHeaders(accountID)
+			}
+			req.Header.Set("Authorization", signed["Authorization"])
+		}
 	}
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	return rec
 }
+
+var helperRequestSequence atomic.Int64
 
 // requestOtpCode 发送一次 OTP；测试仅从进程外 provider contract probe 读取投递内容，
 // API response 永远不暴露验证码。
@@ -106,8 +133,8 @@ func createTestPersona(t *testing.T, personaID, userID, displayName string, isPr
 	}
 	subAccountID := personaID + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', '', '', '', true, '{}', $4, false, $5, 0, NOW(), NOW())`,
+		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', '', '', true, '{}', $4, false, $5, NOW(), NOW())`,
 		userID, subAccountID, displayName, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("create test persona: %v", err)
@@ -117,22 +144,39 @@ func createTestPersona(t *testing.T, personaID, userID, displayName string, isPr
 func cleanAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
+	stopIntegrationRelayRunners()
+	defer func() {
+		if err := rebuildTestHandler(ctx); err != nil {
+			t.Fatalf("restart user-service integration runtime: %v", err)
+		}
+	}()
 	reltelemetry.Reset()
 	if chatContractRuntime != nil {
 		chatContractRuntime.Reset()
 	}
-	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings,
+	if _, err := pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings,
+		consent_records,
 		persona_relationships, persona_relationship_directions,
 		persona_relationship_command_receipts, persona_relationship_outbox,
 		personas_command_receipts, personas_outbox,
+		account_sessions, account_sessions_outbox, user_account_outbox,
 		profile_update_proposals, profile_update_proposals_command_receipts, profile_update_proposals_outbox,
-		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
-		contact_discovery_records, invite_records, profile_qr_tokens, otp_challenges CASCADE`)
+		greeting_requests, credential_bindings, credential_bindings_outbox,
+		user_devices, device_push_endpoints, user_settings_outbox, anonymous_device_bindings,
+		contact_discovery_records, profile_qr_tokens, authentication_challenges,
+		subject_follows, subject_follow_command_receipts, subject_follow_outbox CASCADE`); err != nil {
+		t.Fatalf("truncate user-service integration database: %v", err)
+	}
 	if mongoDB != nil {
 		_, _ = mongoDB.Collection("posts").DeleteMany(ctx, map[string]any{})
 		_, _ = mongoDB.Collection("comments").DeleteMany(ctx, map[string]any{})
 		_, _ = mongoDB.Collection("messages").DeleteMany(ctx, map[string]any{})
 		_, _ = mongoDB.Collection("notifications").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("rm_user_profile_view").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("following_subjects").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("followed_subject_visit_states").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("creator_runtime_profiles").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("object_tag_index").DeleteMany(ctx, map[string]any{})
 	}
 	if err := integrationRedis.FlushDBs(ctx, 0); err != nil {
 		t.Fatalf("flush user integration Redis: %v", err)
@@ -147,8 +191,8 @@ func createTestPersonaFull(t *testing.T, _ string, userID, subAccountID, display
 		isActive = isActiveOverride[0]
 	}
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', '', '', '', $4, true, '{}', $5, false, $6, 0, NOW(), NOW())`,
+		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', '', '', $4, true, '{}', $5, false, $6, NOW(), NOW())`,
 		userID, subAccountID, displayName, isolationLevel, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("createTestPersonaFull: %v", err)

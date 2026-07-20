@@ -1,24 +1,14 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
-import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
-import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 
-class _NoopLiveKitRoomService extends LiveKitRoomService {
-  @override
-  Future<void> dispose() async {}
-}
-
-class _MockAppDataSourceModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-}
+import '../../../../support/runtime_failure_fixtures.dart';
 
 class _NoopCallTimerNotifier extends CallTimerNotifier {
   @override
@@ -40,98 +30,85 @@ class _NoopCallTimerNotifier extends CallTimerNotifier {
   }
 }
 
+class _ErrorCallSessionNotifier extends CallSessionNotifier {
+  @override
+  CallSessionState build() {
+    return CallSessionState(
+      status: CallStatus.connecting,
+      failure: testRuntimeFailure(
+        code: 'RTC.SYSTEM.call_signaling_unavailable',
+      ),
+    );
+  }
+}
+
 void main() {
-  group('OutgoingCallPage — 渲染契约', () {
-    testWidgets('开发态显示 5 秒自动接通开关与手动调试按钮', (tester) async {
+  group('OutgoingCallPage', () {
+    testWidgets('production UI renders call stage without debug simulation', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
-            rtcRepositoryProvider.overrideWithValue(MockRtcRepository()),
-            liveKitRoomServiceProvider.overrideWithValue(
-              _NoopLiveKitRoomService(),
-            ),
             callTimerProvider.overrideWith(_NoopCallTimerNotifier.new),
           ],
-          child: const MaterialApp(
-            home: OutgoingCallPage(callId: 'call_001'),
-          ),
+          child: const MaterialApp(home: OutgoingCallPage(callId: 'call-001')),
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('5 秒自动接通'), findsOneWidget);
-      expect(find.text('手动接通'), findsOneWidget);
-      expect(find.text('拒接'), findsOneWidget);
-      expect(find.text('超时'), findsOneWidget);
+      expect(find.text(UITextConstants.callOutgoingCalling), findsOneWidget);
+      expect(
+        find.text(UITextConstants.callDebugAutoConnectInFiveSeconds),
+        findsNothing,
+      );
+      expect(find.text(UITextConstants.callDebugManualAnswer), findsNothing);
+      expect(find.text(UITextConstants.callDebugTimeout), findsNothing);
+      expect(find.text(UITextConstants.cancel), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 2));
     });
-  });
 
-  group('OutgoingCallPage — 交互契约', () {
-    testWidgets('关闭自动接通后仍可看到手动调试按钮', (tester) async {
+    testWidgets('missing participant data uses a safe semantic fallback', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
-            rtcRepositoryProvider.overrideWithValue(MockRtcRepository()),
-            liveKitRoomServiceProvider.overrideWithValue(
-              _NoopLiveKitRoomService(),
-            ),
             callTimerProvider.overrideWith(_NoopCallTimerNotifier.new),
           ],
           child: const MaterialApp(
-            home: OutgoingCallPage(callId: 'call_001'),
+            home: OutgoingCallPage(callId: 'call-missing'),
           ),
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
 
-      await tester.tap(find.byType(CupertinoSwitch).first);
-      await tester.pump();
-
-      expect(find.text('手动接通'), findsOneWidget);
+      expect(find.text(UITextConstants.user), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 2));
     });
-  });
 
-  group('OutgoingCallPage — 错误态渲染', () {
-    testWidgets('无参与者信息时仍安全显示调试区', (tester) async {
+    testWidgets('signaling failure renders a recoverable page error', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
-            rtcRepositoryProvider.overrideWithValue(MockRtcRepository()),
-            liveKitRoomServiceProvider.overrideWithValue(
-              _NoopLiveKitRoomService(),
-            ),
             callTimerProvider.overrideWith(_NoopCallTimerNotifier.new),
+            callSessionProvider.overrideWith(_ErrorCallSessionNotifier.new),
           ],
           child: const MaterialApp(
-            home: OutgoingCallPage(callId: 'call_missing'),
+            home: OutgoingCallPage(callId: 'call-failed'),
           ),
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('正在呼叫...'), findsOneWidget);
-      expect(find.text('5 秒自动接通'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 2));
+      expect(find.byType(AppPageErrorState), findsOneWidget);
     });
   });
 }

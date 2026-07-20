@@ -1,4 +1,4 @@
-# L4 特性：proposal-state-transition-control
+# L3 特性：proposal-state-transition-control
 
 ## 功能说明
 - 细化提案状态机、合法转移条件与失败重试策略。

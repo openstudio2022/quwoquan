@@ -1,20 +1,8 @@
 _comment: R03 文件行数预算（ratchet 只降不升）。由 verify_file_line_budget.py --write-baseline 生成。清理后请重跑收紧基线；新增超标即门禁 BLOCK。
 block_threshold: 1000
 allow:
-- path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
-  max_lines: 4884
-  reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
-- path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
-  max_lines: 2877
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart
-  max_lines: 2360
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/constants/ui_text_constants_values.dart
   max_lines: 2235
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/components/media/image/editor/panels/image_editor_operation_panel.dart
-  max_lines: 2051
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
   max_lines: 1925
@@ -22,57 +10,9 @@ allow:
 - path: quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
   max_lines: 1847
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/entity-service/internal/application/homepage_service.go
-  max_lines: 1844
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/widgets/article_editor_accessory_panels.dart
-  max_lines: 1761
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/components/input/customizable_chat_input_bar.dart
-  max_lines: 1717
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
   max_lines: 1684
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/widgets/article_editor.dart
-  max_lines: 1558
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/user-service/internal/application/auth_service.go
-  max_lines: 1458
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
-  max_lines: 1395
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/core/providers/app_providers.dart
-  max_lines: 1356
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/core/services/search_repository.dart
-  max_lines: 1339
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/models/create_editor_models.dart
-  max_lines: 1276
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/article_reader/content/article_reader_page_surfaces.dart
-  max_lines: 1237
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/assistant-service/internal/application/service.go
-  max_lines: 1225
-  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/components/media/picker/create_media_picker_page_state.dart
-  max_lines: 1197
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/components/pageflip/curl_mesh_builder.dart
-  max_lines: 1128
-  reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
 - path: quwoquan_app/lib/core/design_system/icons/app_custom_icons.dart
   max_lines: 1095
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/pages/create_page_state_helpers.dart
-  max_lines: 1092
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/pages/create_page_state.dart
-  max_lines: 1034
-  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/app/navigation/app_router.dart
-  max_lines: 1029
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)

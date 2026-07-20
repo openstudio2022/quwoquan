@@ -45,11 +45,15 @@
     verified duration、编码/尺寸与公开 canonical slice；App 不将上传端或原生播放器观测值回写为权威元数据
 11. **Storyboard 派生预览**：冻结可选的、版本绑定且受访问策略约束的预览轨；只为播放拖动预览服务，
     不形成端侧抽帧或通用视频编辑产品
+12. **分阶段商用播放**：P0 只承诺 progressive MP4/Range 的权威处理、首帧、暂停、单次 release seek、
+    有效播放与 QoE 闭环；P1-A storyboard 与 P1-B HLS/CMAF ABR 分别独立准入、独立灰度和独立回滚
+13. **时长边界**：产品视频时长上限为 1 小时；125 秒受控资产用于日常 seek 回归，3605 秒资产用于验证
+    超上限拒绝、接近上限拖动、末帧和中断恢复，不得把短 fixture 伪装为边界证据
 
 ### Out of Scope
 
 - 用户自定义上传群头像的产品能力
-- 媒体审核、通用视频剪辑、特效、美颜、直播或端侧远端临时抽帧
+- 媒体审核、通用视频剪辑、创作型转码策略、特效、美颜、直播或端侧远端临时抽帧
 - WebRTC 实时音视频流本身
 - 全量记录媒体数据清洗与搬迁
 - 所有内容媒体能力的一次性重构；本次只冻结统一基线和群头像主场景
@@ -65,7 +69,8 @@ processing -> ready | rejected
 ```
 
 `ready` 时一次性写入受信任结果：`verifiedDurationMs`、宽高、codec/container、canonical
-video/cover public slice 与可选 `previewTrack` manifest。Post 只能绑定 `ready` asset；
+video/cover public slice。P1-A 可追加版本绑定的 `previewTrack` manifest，P1-B 可追加
+canonical HLS/CMAF rendition set；两者均不得成为 P0 ready 的必要条件。Post 只能绑定 `ready` asset；
 `processing` 或 `rejected` asset 不得进入 Feed、详情或 WorkBrowser 投影。若旧人工
 `durationMs` 与探测值不一致，走受控修复/回填任务并产生数据质量事件，不能由 App 覆盖或静默
 双读。
@@ -73,6 +78,11 @@ video/cover public slice 与可选 `previewTrack` manifest。Post 只能绑定 `
 `previewTrack` 是可选派生物：manifest、帧索引、缓存 key 和 URL 都必须绑定
 asset/version/profile/access policy。track 缺失、能力不支持、网络慢、节流或内存不足时，
 播放控件只显示时间浮标，不影响正常播放，也不显示播放失败 CTA。
+
+P0 处理器必须实际探测并验证 duration、宽高、H.264/AAC、container、fast-start、GOP/keyframe
+间隔、封面和 SHA-256，再以 `{assetId, assetVersion, processorProfile}` 幂等地原子发布 ready。
+seed 或 handler 测试不得直接伪造 ready。处理失败进入 retry/quarantine/dead-letter，旧 ready
+版本保留至新版本完成且可回滚。
 
 ## 约束
 

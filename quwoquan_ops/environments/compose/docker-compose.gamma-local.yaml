@@ -196,11 +196,22 @@ services:
       CONTENT_OSS_ACCESS_KEY_SECRET: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
       CONTENT_CDN_DOMAIN: "${LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN:?LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN is required}"
       CONTENT_CDN_SIGN_KEY: "${LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY:?LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY is required}"
+      CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET: "${CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET:?CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET is required}"
       SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
       SEARCH_ES_ENABLED: "true"
       SEARCH_ES_ENDPOINTS: http://elasticsearch:9200
       REC_MODEL_SERVICE_ENABLED: "true"
       REC_MODEL_SERVICE_URL: http://recommendation-service:8000
+      # N2-2 per-env 推荐 policy：gamma-local overlay 开启 objectCards
+      # （30s 热更；overlay 与 metadata 的差异范围由 verify_gamma_policy_overlay.py 门禁）。
+      QWQ_REC_POLICY_PATH: /etc/qwq-rec-policy/policy.yaml
+      # N2-3 embedding 配置路径：外部 embedding API 凭据仅经环境注入（默认空 =
+      # 诚实关闭）；有凭据时设 CONTENT_EMBEDDING_ENABLED=true 开启写入管线，
+      # 向量召回读通道（vector_recall）按 S1 阶段门另行开启。
+      CONTENT_EMBEDDING_ENDPOINT: "${LOCAL_GAMMA_EMBEDDING_ENDPOINT:-}"
+      CONTENT_EMBEDDING_API_KEY: "${LOCAL_GAMMA_EMBEDDING_API_KEY:-}"
+      CONTENT_EMBEDDING_ENABLED: "${LOCAL_GAMMA_EMBEDDING_ENABLED:-false}"
+      CONTENT_EMBEDDING_VECTOR_RECALL_ENABLED: "${LOCAL_GAMMA_EMBEDDING_VECTOR_RECALL_ENABLED:-false}"
       CIRCLE_SERVICE_BASE_URL: http://circle-service:18082
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
@@ -226,6 +237,7 @@ services:
     volumes:
       - ${LOCAL_GAMMA_CONFIG_ROOT:?LOCAL_GAMMA_CONFIG_ROOT is required}:/etc/qwq-config:ro
       - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
+      - ../policies/recommendation/gamma-local.policy.yaml:/etc/qwq-rec-policy/policy.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -312,6 +324,7 @@ services:
       USER_SERVICE_ADDR: ":18082"
       OTP_CODE_REF_ACTIVE_KEY_VERSION: "${OTP_CODE_REF_ACTIVE_KEY_VERSION:?OTP_CODE_REF_ACTIVE_KEY_VERSION is required}"
       OTP_CODE_REF_KEYS_JSON: "${OTP_CODE_REF_KEYS_JSON:?OTP_CODE_REF_KEYS_JSON is required}"
+      QWQ_PUSH_TOKEN_ENCRYPTION_KEY: "${QWQ_PUSH_TOKEN_ENCRYPTION_KEY:?QWQ_PUSH_TOKEN_ENCRYPTION_KEY is required}"
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: quwoquan_user
@@ -364,10 +377,12 @@ services:
       MONGODB_DATABASE: quwoquan_assistant
       REDIS_GENERAL_ADDR: redis:6379
       REDIS_REC_ADDR: redis:6379
-      ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-deterministic}"
-      ALLOW_DETERMINISTIC_BETA: "${ALLOW_DETERMINISTIC_BETA:-1}"
-      ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
+      ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-}"
+      ALLOW_DETERMINISTIC_BETA: "${ALLOW_DETERMINISTIC_BETA:-}"
+      ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-}"
       ASSISTANT_NOTIFICATION_BASE_URL: "http://notification-service:18087"
+      ASSISTANT_SEARCH_PROVIDER: "${ASSISTANT_SEARCH_PROVIDER:-}"
+      PERSONAL_ASSISTANT_MIMO_API_KEY: "${PERSONAL_ASSISTANT_MIMO_API_KEY:-}"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -393,6 +408,7 @@ services:
       retries: 10
 
   product-ops-service:
+    profiles: ["commercial-observability"]
     image: "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-localhost/quwoquan_service_product-ops-service:latest}"
     build:
       context: ../../../quwoquan_service
@@ -412,6 +428,8 @@ services:
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       PRODUCT_OPS_REDIS_REC_ADDR: redis:6379
       PRODUCT_OPS_REDIS_GENERAL_ADDR: redis:6379
+      # 配置热更与 drift ACK 回报的平台控制面地址（config_sync 循环）。
+      PLATFORM_OPS_BASE_URL: "${LOCAL_GAMMA_PLATFORM_OPS_BASE_URL:-http://platform-ops-service:18088}"
       PRODUCT_OPS_SLS_REGION: "${PRODUCT_OPS_SLS_REGION:-}"
       PRODUCT_OPS_SLS_ENDPOINT: "${PRODUCT_OPS_SLS_ENDPOINT:-}"
       PRODUCT_OPS_SLS_PROJECT: "${PRODUCT_OPS_SLS_PROJECT:-}"
@@ -457,19 +475,24 @@ services:
         GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
     environment:
       SERVICE_NAME: platform-ops-service
-      APP_ENV: gamma
+      # 本地镜像不挂载商业 OIDC IdP；服务显式支持 gamma-integration 组合根。
+      APP_ENV: gamma-integration
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       PLATFORM_OPS_SERVICE_ADDR: ":18088"
       REPO_ROOT: /app
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      # ConfigLayer outbox dispatcher 的事件发布总线（events.ops.*）。
+      PLATFORM_OPS_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
       AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}:18088"
@@ -571,6 +594,15 @@ services:
       # R-S07-5：搜索信号发布到 Redis Stream，供 content-service 消费注入推荐特征。
       SEARCH_REDIS_GENERAL_MODE: standalone
       SEARCH_REDIS_GENERAL_ADDR: redis:6379
+      CONTENT_SERVICE_BASE_URL: http://content-service:18080
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -579,6 +611,8 @@ services:
       mongo-init:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      content-service:
         condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_SEARCH_PORT:-19280}:18095"
@@ -608,6 +642,7 @@ services:
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       ENTITY_MONGO_URI: mongodb://mongodb:27017
       ENTITY_MONGO_DATABASE: quwoquan_entity
+      ENTITY_REDIS_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -702,6 +737,9 @@ services:
       INTEGRATION_SERVICE_ADDR: ":18086"
       INTEGRATION_MONGO_URI: mongodb://mongodb:27017
       INTEGRATION_MONGO_DATABASE: quwoquan_integration
+      # gamma-local 不挂载 APNs/FCM 商业密钥；真实 provider 仅在 prod gray-initial/full
+      # 通过 prod-service-svc 的受限 credentialsPath 注入并 fail-fast。
+      INTEGRATION_PUSH_ENABLED: "false"
       INTEGRATION_LOCATION_BAIDU_AK: "${LOCAL_GAMMA_BAIDU_AK:-}"
       INTEGRATION_LOCATION_AMAP_KEY: "${LOCAL_GAMMA_AMAP_KEY:-}"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
@@ -748,9 +786,12 @@ services:
       NOTIFICATION_MONGO_DATABASE: quwoquan_notification
       NOTIFICATION_INTEGRATION_BASE_URL: "http://integration-service:18086"
       NOTIFICATION_INTEGRATION_TIMEOUT_MS: "1500"
+      NOTIFICATION_USER_BASE_URL: "http://user-service:18082"
+      NOTIFICATION_REALTIME_BASE_URL: "http://realtime-gateway:18090"
       NOTIFICATION_CLAIM_PER_SECOND: "100"
       NOTIFICATION_DISPATCH_PER_SECOND: "100"
       NOTIFICATION_RETRY_PER_SECOND: "20"
+      NOTIFICATION_REDIS_ADDR: "redis:6379"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -766,6 +807,8 @@ services:
         condition: service_completed_successfully
       integration-service:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087"
     volumes:
@@ -778,7 +821,7 @@ services:
       retries: 10
 
   gamma-proxy:
-    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine}"
+    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17}"
     depends_on:
       content-service:
         condition: service_healthy
@@ -790,6 +833,7 @@ services:
         condition: service_healthy
       product-ops-service:
         condition: service_healthy
+        required: false
       tag-service:
         condition: service_healthy
       search-service:
@@ -807,17 +851,17 @@ services:
       LOCAL_GAMMA_HTTP_PORT: "${LOCAL_GAMMA_HTTP_PORT:-19000}"
       LOCAL_GAMMA_PRODUCT_OPS_PORT: "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
       LOCAL_GAMMA_MEDIA_EDGE_PORT: "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-      LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT: "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}"
     ports:
       - "${LOCAL_GAMMA_HTTP_PORT:-19000}:${LOCAL_GAMMA_HTTP_PORT:-19000}"
       - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
       - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-      - "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
       - ${LOCAL_GAMMA_CADDYFILE:-../local-gamma/Caddyfile}:/etc/caddy/Caddyfile:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
       - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../../../.qwq_output/env/gamma/release/legal-static/current/public}:/srv/legal:ro
+      # 运维运营 Portal 静态站点（vite build 产物；prod 渲染时替换为 runtime/portal）。
+      - ${LOCAL_GAMMA_PORTAL_ROOT:-../../../.qwq_output/env/repo/local/ops-portal/process/dist}:/srv/portal:ro
       - ${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data
       - ${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config
     healthcheck:
@@ -831,11 +875,15 @@ services:
   # 默认主栈不启动；`docker compose --profile edge-media up` 在主栈之上叠加实时/媒体面。
   livekit-sfu:
     profiles: ["edge-media"]
-    image: "${LOCAL_GAMMA_LIVEKIT_IMAGE:-docker.io/livekit/livekit-server:v1.7.2}"
-    command: ["--dev", "--bind", "0.0.0.0"]
+    image: "${LOCAL_GAMMA_LIVEKIT_IMAGE:-docker.io/livekit/livekit-server:v1.7.2@sha256:27d72fa264baa4db4e635b3b6df12d185b4a95fee5f2ddce03e06d150d599e0e}"
+    command: ["--dev", "--bind", "0.0.0.0", "--config", "/etc/livekit/livekit.yaml"]
+    volumes:
+      - ../../../quwoquan_service/services/livekit-sfu/deploy/kustomize/base/livekit.yaml:/etc/livekit/livekit.yaml:ro
     ports:
-      - "${LOCAL_GAMMA_LIVEKIT_HTTP_PORT:-19280}:7880"
-      - "${LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT:-19281}:7881"
+      - "${LOCAL_GAMMA_LIVEKIT_HTTP_PORT:-19140}:7880"
+      - "${LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT:-19150}:7881"
+      - "${LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT:-19160}:7882/udp"
+      - "${LOCAL_GAMMA_LIVEKIT_METRICS_PORT:-19170}:6789"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7880/ >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -845,14 +893,7 @@ services:
 
   rtc-service:
     profiles: ["edge-media"]
-    image: "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-localhost/quwoquan_service_rtc-service:latest}"
-    build:
-      context: ../../../quwoquan_service
-      dockerfile: services/rtc-service/deploy/Dockerfile
-      args:
-        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
-        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
-        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+    image: "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:?fixed rtc-service source image reference is required}"
     environment:
       SERVICE_NAME: rtc-service
       APP_ENV: gamma
@@ -864,7 +905,9 @@ services:
       MONGO_URI: mongodb://mongodb:27017
       MONGO_DATABASE: quwoquan_rtc
       REDIS_ADDR: redis:6379
-      LIVEKIT_URL: ws://livekit-sfu:7880
+      # 下发给 App 的客户端可达地址必须来自 topology publicBases.rtc；
+      # livekit-sfu:7880 仅是服务内 DNS，禁止泄漏到设备。
+      LIVEKIT_URL: "${LOCAL_GAMMA_LIVEKIT_PUBLIC_URL:-wss://gamma-rtc.quwoquan-env.test:19000}"
       LIVEKIT_API_KEY: "${LOCAL_GAMMA_LIVEKIT_API_KEY:-devkey}"
       LIVEKIT_API_SECRET: "${LOCAL_GAMMA_LIVEKIT_API_SECRET:-secret}"
     depends_on:
@@ -877,7 +920,7 @@ services:
       livekit-sfu:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_RTC_PORT:-19260}:18083"
+      - "${LOCAL_GAMMA_RTC_PORT:-19350}:18083"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18083/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -887,7 +930,7 @@ services:
 
   coturn:
     profiles: ["edge-media"]
-    image: "${LOCAL_GAMMA_COTURN_IMAGE:-docker.io/coturn/coturn:4.6-alpine}"
+    image: "${LOCAL_GAMMA_COTURN_IMAGE:-docker.io/coturn/coturn:4.6-alpine@sha256:e2bca2f79a4269d7240de5872ab60a9305013ad37296d2acf14f9510874346be}"
     # 本地用端口映射替代 prod 的 hostNetwork；UDP 在部分本机/虚拟化下能力受限，仅供信令/中继联调。
     command:
       - "-n"
@@ -897,21 +940,37 @@ services:
       - "--lt-cred-mech"
       - "--user=quwoquan:${LOCAL_GAMMA_TURN_SECRET:-devsecret}"
     ports:
-      - "${LOCAL_GAMMA_TURN_TCP_PORT:-19478}:3478/tcp"
-      - "${LOCAL_GAMMA_TURN_UDP_PORT:-19478}:3478/udp"
+      - "${LOCAL_GAMMA_TURN_TCP_PORT:-19180}:3478/tcp"
+      - "${LOCAL_GAMMA_TURN_UDP_PORT:-19180}:3478/udp"
 
   realtime-gateway:
-    # 实现未就绪：仅有 K8s 骨架 + 占位镜像，无源码/Dockerfile。
-    # 占位定义保证 gamma-local 与 prod 服务集“名册一致”；实现就绪后补 build/healthcheck，
-    # 并把 profile 从 edge-media-pending 改为 edge-media、纳入主验证链。
-    profiles: ["edge-media-pending"]
-    image: "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:-realtime-gateway/realtime-gateway:latest}"
+    profiles: ["edge-media"]
+    image: "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:?fixed realtime-gateway source image reference is required}"
     environment:
       SERVICE_NAME: realtime-gateway
       APP_ENV: gamma
-      REDIS_ADDR: redis:6379
+      REALTIME_GATEWAY_ADDR: ":18090"
+      REALTIME_REDIS_MODE: standalone
+      REALTIME_REDIS_ADDR: redis:6379
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_REALTIME_PORT:-19290}:8080"
+      - "${LOCAL_GAMMA_REALTIME_PORT:-19340}:18090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18090/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10
 
 volumes:
   local-gamma-postgres:

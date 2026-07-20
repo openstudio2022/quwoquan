@@ -1,58 +1,122 @@
 part of 'image_editor_page.dart';
 
 extension _ImageEditorPageCompletion on _ImageEditorPageState {
-  void _onDone({String action = 'backToPicker'}) async {
-    if (_hasProBaseAdjustments ||
-        _hasProHslAdjustments ||
-        _hasBwLevelsAdjustments ||
-        _hasLocalAdjustments) {
-      final adjustedPath = await _applyProAdjustmentsToCurrentImage();
-      if (adjustedPath == null) {
-        await _showEditorActionFailure(title: '编辑未保存');
-        return;
-      }
-      _paths[_currentIndex] = adjustedPath;
-      _clearFilterPreviewCache();
-      // 避免重复叠加导出
-      _proBaseValues.updateAll((key, value) => 0);
-      _proBaseSnapshotValues.updateAll((key, value) => 0);
-      _proHslValues = createDefaultHslValues();
-      _proHslSnapshotValues = createDefaultHslValues();
-      _hslSessionBaselineValues = createDefaultHslValues();
-      _resetHslSessionHistory();
-      _bwWhiteLevel = 0;
-      _bwBlackLevel = 0;
-      _bwSnapshotWhiteLevel = 0;
-      _bwSnapshotBlackLevel = 0;
-      _bwSessionBaselineWhiteLevel = 0;
-      _bwSessionBaselineBlackLevel = 0;
-      _bwSessionStack.clear();
-      _bwSessionCursor = -1;
-      _localAnchors.clear();
-      _localSnapshotAnchors = <LocalAnchor>[];
-      _selectedLocalAnchorId = null;
-      _localSessionStack.clear();
-      _localSessionCursor = -1;
+  bool get _hasCommittedEdits {
+    if (_stepStack.length > 0) return true;
+    for (var i = 0; i < _paths.length && i < _initialPaths.length; i++) {
+      if (_paths[i] != _initialPaths[i]) return true;
     }
-    _selectedFilterPresetId = null;
-    _filterTemplateIndex = -1;
-    _filterIntensity = 100;
-    final Object? result;
-    if (_isMultiImage || action == 'continueToCreate') {
-      result = imageEditorMultiImageDonePopPayload(
-        currentIndex: _currentIndex,
-        path: _currentPath,
-        paths: List<String>.from(_paths),
-        action: action,
+    return _paths.length != _initialPaths.length;
+  }
+
+  /// 顶栏返回：有修改时确认放弃；无修改直接退出。放弃后返回 null（宿主不更新）。
+  Future<void> _handleBack() async {
+    if (!_hasCommittedEdits) {
+      _exitWithoutResult();
+      return;
+    }
+    final discard = await showAppActionSheet<bool>(
+      context,
+      title: UITextConstants.imageEditorDiscardTitle,
+      message: UITextConstants.imageEditorDiscardMessage,
+      sections: [
+        AppActionSheetSection<bool>(
+          items: [
+            AppActionSheetItem<bool>(
+              label: UITextConstants.imageEditorDiscardConfirm,
+              value: true,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
+    );
+    if (discard != true || !mounted) return;
+    _exitWithoutResult();
+  }
+
+  void _exitWithoutResult() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+      return;
+    }
+    context.pop<Object>();
+  }
+
+  /// 顶栏完成 / 底部「下一步」：先做交付转码，再提交编辑结果。
+  Future<void> _onDone({String action = 'backToPicker'}) async {
+    if (_submittingDone) return;
+    _submittingDone = true;
+    try {
+      final deliveryPaths = await _transcodeEditedPathsForDelivery(
+        List<String>.of(_paths),
       );
-    } else {
-      result = _currentPath;
+      if (!mounted) return;
+      _paths = deliveryPaths;
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'submit',
+        surface: _ImageEditorPageState._kSurfaceId,
+        itemCount: _stepStack.length,
+      );
+      final Object? result;
+      if (_isMultiImage || action == 'continueToCreate') {
+        result = imageEditorMultiImageDonePopPayload(
+          currentIndex: _currentIndex,
+          path: _currentPath,
+          paths: List<String>.from(_paths),
+          action: action,
+        );
+      } else {
+        result = _currentPath;
+      }
+      if (widget.onDone != null) {
+        widget.onDone!(result);
+      } else {
+        context.pop<Object>(result);
+      }
+    } finally {
+      _submittingDone = false;
     }
-    if (!mounted) return;
-    if (widget.onDone != null) {
-      widget.onDone!(result);
-    } else {
-      context.pop<Object>(result);
+  }
+
+  /// 编辑管线内部为 PNG 无损中间态；提交时把编辑器烘焙产物转码为交付
+  /// JPEG（q92），把上传体积压回商用量级。未经编辑的原始路径原样返回。
+  Future<List<String>> _transcodeEditedPathsForDelivery(
+    List<String> paths,
+  ) async {
+    final results = List<String>.of(paths);
+    for (var i = 0; i < results.length; i++) {
+      final path = results[i];
+      if (!ImageEditorExportEngine.isEditorBakedArtifactPath(path)) {
+        continue;
+      }
+      final delivered = _deliveryJpegCache[path] ?? await _transcodeOne(path);
+      if (delivered != null) {
+        _deliveryJpegCache[path] = delivered;
+        results[i] = delivered;
+      }
+    }
+    return results;
+  }
+
+  Future<String?> _transcodeOne(String path) async {
+    try {
+      final bytes = await _loadImageBytes(path);
+      if (bytes.isEmpty) return null;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      final jpeg = await ImageEditorExportEngine.encodeDeliveryJpeg(image);
+      image.dispose();
+      if (jpeg == null) return null;
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+        '${tempDir.path}/delivery_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.writeAsBytes(jpeg);
+      return file.path;
+    } catch (_) {
+      // 转码失败回退原 PNG，不阻塞提交。
+      return null;
     }
   }
 
@@ -69,6 +133,7 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
       isDark,
       ColorType.foregroundSecondary,
     );
+    final steps = _stepStack.committed;
     showAppBottomModal<void>(
       context: context,
       builder: (context) {
@@ -107,48 +172,30 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: _steps.length,
+                  itemCount: steps.length,
                   itemBuilder: (context, index) {
-                    final step = _steps[index];
+                    final step = steps[index];
                     return ListTile(
                       title: Text(
-                        imageEditorStepTypeLabel(step.type, step.params),
+                        step.label,
                         style: TextStyle(color: fg),
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.square(
-                              AppSpacing.minInteractiveSize,
-                            ),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _redoStepAt(index);
-                            },
-                            child: Icon(
-                              CupertinoIcons.refresh,
-                              color: fgSecondary,
-                              size: AppSpacing.iconSmall,
-                            ),
+                      trailing: CupertinoButton(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                        ),
+                        minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _revertToBeforeStep(index);
+                        },
+                        child: Text(
+                          UITextConstants.imageEditorHistoryRevert,
+                          style: TextStyle(
+                            color: fgSecondary,
+                            fontSize: AppTypography.sm,
                           ),
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.square(
-                              AppSpacing.minInteractiveSize,
-                            ),
-                            onPressed: () {
-                              _removeStepAt(index);
-                              Navigator.of(context).pop();
-                            },
-                            child: Icon(
-                              CupertinoIcons.trash,
-                              color: fgSecondary,
-                              size: AppSpacing.iconSmall,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     );
                   },

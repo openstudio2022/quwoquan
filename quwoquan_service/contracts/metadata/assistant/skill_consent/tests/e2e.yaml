@@ -1,0 +1,24 @@
+aggregate: SkillConsent
+layer: e2e
+
+description: |
+  端云集成场景。授权 → 敏感能力可用 → 撤权 → 立即拒绝。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: consent_grant_use_revoke_journey
+    description: 管理页授权 personal_content_access → 助手使用个人数据回答 → 撤权后再次执行被拒
+    test_type: ui_journey
+    patrol_flow: test/user_acceptance/pages/assistant/assistant_settings_page__user_acceptance_test.dart
+    actors:
+      app: lib/ui/assistant/pages/assistant_management_page.dart
+      service: assistant-service /assistant/skills/{skillId}/consent + agent loop consent gate
+      storage: PostgreSQL skill_consents
+    assertions:
+      - 授权/撤权在 PG 版本化事实闭环并发布事件
+      - 撤权后敏感技能执行点立即返回 skill_consent_required
+      - 切号后 consent 状态按 actor 隔离

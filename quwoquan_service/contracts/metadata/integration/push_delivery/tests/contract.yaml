@@ -1,0 +1,44 @@
+aggregate: PushDelivery
+
+scenarios:
+  - name: push_delivery_payload_is_strongly_typed
+    operation: SubmitExternalInteractionRequest
+    go_func: TestPushDeliverySubmitRejectsInvalidTypedPayload
+    evidence: local_contract
+    assertions:
+      - payload 只允许 action/endpointRef/deliveryKey/callId/targetPersonaId/callType/callerName/sourceLabel/trustRelation/expiresAt/occurredAt
+      - action 只允许 ring/cancel，二者共用 deliveryKey；cancel 的 occurredAt 形成终端乱序抑制依据
+      - APNs 与 FCM 原生信封必须携带由 CallRinging 可信事件注入的 targetPersonaId
+      - endpointRef 只接受 user-service 生成的 64 位小写 hex SHA-256 不透明引用
+      - callType 只允许 audio/video
+      - trustRelation 只允许 known/possibly_unknown
+      - payload expiresAt 必须是 RFC3339 且与外层请求过期时间一致
+
+  - name: endpoint_kind_routes_exactly_once
+    operation: SubmitExternalInteractionRequest
+    go_func: TestPushDispatchProviderRoutesExactlyByEndpointKind
+    evidence: local_contract
+    assertions:
+      - apns_voip 只调用 APNs sender
+      - fcm 只调用 FCM sender
+      - 不支持的 endpointKind fail closed
+      - 任一 sender 失败不跨 provider fallback
+
+  - name: provider_protocol_and_secret_isolation
+    operation: SubmitExternalInteractionRequest
+    go_func: TestAPNsVoIPAndFCMProtocols
+    evidence: local_contract
+    assertions:
+      - APNs 使用 TLS HTTP/2 与 ES256 provider token
+      - FCM 使用 TLS HTTP/2 与 RS256 OAuth service-account assertion
+      - endpoint token 和 provider private key 不进入 outbox/attempt ledger/error/log
+      - provider key 只从 secret file 读取
+
+  - name: permanent_endpoint_is_invalidated
+    operation: SubmitExternalInteractionRequest
+    go_func: TestPushPermanentProviderErrorInvalidatesEndpointWithoutFallback
+    evidence: local_contract
+    assertions:
+      - APNs BadDeviceToken/Unregistered 与 FCM UNREGISTERED 标记为永久 endpoint 错误
+      - 永久 endpoint 错误调用 user-service POST invalidate
+      - 429/5xx/timeout 使用 recovery.action=retry、disruptionLevel=operation，且不 invalidate

@@ -31,6 +31,161 @@ class SubmitCommentContinuation extends AuthContinuation {
   final List<ContentCommentMention> mentions;
 }
 
+/// 举报动作的原始表面；登录成功后只允许该表面消费，避免首页与沉浸浏览器抢占。
+enum ContentReportContinuationSurface { homeFeed, workBrowser }
+
+/// 续接「举报帖子」。
+class SubmitContentReportContinuation extends AuthContinuation {
+  const SubmitContentReportContinuation({
+    required this.postId,
+    required this.surface,
+    required this.reason,
+  });
+
+  final String postId;
+  final ContentReportContinuationSurface surface;
+  final ContentReportReason reason;
+}
+
+/// 续接「举报评论」；由原 CommentThread surface 按 postId 消费。
+class SubmitCommentReportContinuation extends AuthContinuation {
+  const SubmitCommentReportContinuation({
+    required this.postId,
+    required this.commentId,
+    required this.reason,
+  });
+
+  final String postId;
+  final String commentId;
+  final ContentReportReason reason;
+}
+
+enum ContentModerationContinuationSurface { homeFeed, workBrowser }
+
+enum ContentModerationContinuationAction { blockAuthor, blockKeyword }
+
+/// 更多面板账号态治理动作；登录后由原表面按 postId 恢复。
+class ContentModerationContinuation extends AuthContinuation {
+  const ContentModerationContinuation({
+    required this.postId,
+    required this.surface,
+    required this.action,
+    this.authorId,
+    this.keyword,
+  });
+
+  final String postId;
+  final ContentModerationContinuationSurface surface;
+  final ContentModerationContinuationAction action;
+  final String? authorId;
+  final String? keyword;
+}
+
+/// 续接「请求当前图片的原图访问授权」。
+class RequestOriginalImageAccessContinuation extends AuthContinuation {
+  const RequestOriginalImageAccessContinuation({
+    required this.postId,
+    required this.mediaId,
+    required this.imageIndex,
+  });
+
+  final String postId;
+  final String mediaId;
+  final int imageIndex;
+}
+
+/// 站内分享的目标流程。
+enum ContentShareContinuationTarget {
+  recentRecipient,
+  circlePlacement,
+  groupChat,
+  directMessage,
+}
+
+/// 续接「把内容分享到站内目标」。
+///
+/// 最近联系人只保存稳定 recipient id；登录后由仍在前台的分享面板重新读取真实
+/// 会话并匹配，避免把会话 DTO 或 Widget 闭包塞进全局续接槽位。
+class ShareContentContinuation extends AuthContinuation {
+  const ShareContentContinuation({
+    required this.postId,
+    required this.target,
+    this.recipientId,
+  });
+
+  final String postId;
+  final ContentShareContinuationTarget target;
+  final String? recipientId;
+}
+
+/// 创作页重新鉴权后可恢复的原动作。
+enum CreateActionContinuationKind { publish, pickImages, pickVideo }
+
+class ResumeCreateActionContinuation extends AuthContinuation {
+  const ResumeCreateActionContinuation({
+    required this.action,
+    this.closeWhenEmptyOnCancel = false,
+  });
+
+  final CreateActionContinuationKind action;
+  final bool closeWhenEmptyOnCancel;
+}
+
+/// 需要登录后恢复的实体主页写动作。
+enum HomepageWriteContinuationAction {
+  claim,
+  maintenance,
+  statusReport,
+  suggest,
+}
+
+/// 登录后让原实体主页表面恢复到前台，并在需要时续提已填写表单。
+///
+/// 表单数据仍由页面状态持有；这里只保存稳定目标身份，避免把动态载荷或闭包放入全局槽位。
+class HomepageWriteContinuation extends AuthContinuation {
+  const HomepageWriteContinuation({
+    required this.action,
+    this.homepageId = '',
+    this.submitAfterLogin = false,
+  });
+
+  final HomepageWriteContinuationAction action;
+  final String homepageId;
+  final bool submitAfterLogin;
+}
+
+/// 续接「关注实体主页」。
+class FollowHomepageContinuation extends AuthContinuation {
+  const FollowHomepageContinuation({required this.homepageId});
+
+  final String homepageId;
+}
+
+/// 续接「把可到访实体主页标记为想去」。
+class WishlistHomepageContinuation extends AuthContinuation {
+  const WishlistHomepageContinuation({required this.homepageId});
+
+  final String homepageId;
+}
+
+/// 续接「打开实体主页评价编辑器」。
+class OpenHomepageReviewComposerContinuation extends AuthContinuation {
+  const OpenHomepageReviewComposerContinuation({required this.homepageId});
+
+  final String homepageId;
+}
+
+/// 续接「打开实体主页已认领主体的正式私信会话」。
+class OpenHomepageOwnerConversationContinuation extends AuthContinuation {
+  const OpenHomepageOwnerConversationContinuation({
+    required this.homepageId,
+    required this.ownerSubAccountId,
+  });
+
+  final String homepageId;
+  final String ownerSubAccountId;
+}
+
 /// 续接「关注用户主页」。
 class FollowProfileContinuation extends AuthContinuation {
   const FollowProfileContinuation({required this.subAccountId});

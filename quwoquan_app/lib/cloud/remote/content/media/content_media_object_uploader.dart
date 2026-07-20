@@ -12,28 +12,7 @@ final class RemoteContentMediaObjectUploader {
   final http.Client _client;
   final bool _ownsClient;
 
-  ContentMediaObjectUpload get upload => call;
   ContentMediaStreamObjectUpload get uploadStream => stream;
-
-  Future<void> call(
-    Uri uploadUri,
-    List<int> bytes, {
-    required String contentType,
-    required String expectedSha256,
-  }) async {
-    final uploadHeaders = ContentAddressedUploadHeaders(
-      contentType: contentType,
-      expectedSha256: expectedSha256,
-    );
-    final response = await _client.put(
-      uploadUri,
-      headers: uploadHeaders.toHttpHeaders(),
-      body: bytes,
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('media object upload failed: ${response.statusCode}');
-    }
-  }
 
   Future<void> stream(
     Uri uploadUri,
@@ -41,21 +20,40 @@ final class RemoteContentMediaObjectUploader {
     required int contentLength,
     required String contentType,
     required String expectedSha256,
+    Future<void>? abortTrigger,
   }) async {
     final uploadHeaders = ContentAddressedUploadHeaders(
       contentType: contentType,
       expectedSha256: expectedSha256,
     );
-    final request = http.StreamedRequest('PUT', uploadUri)
-      ..headers.addAll(uploadHeaders.toHttpHeaders())
-      ..contentLength = contentLength;
-    final responseFuture = _client.send(request);
-    await request.sink.addStream(bytes);
-    await request.sink.close();
-    final response = await responseFuture;
-    await response.stream.drain<void>();
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('media object upload failed: ${response.statusCode}');
+    final request =
+        http.AbortableStreamedRequest(
+            'PUT',
+            uploadUri,
+            abortTrigger: abortTrigger,
+          )
+          ..headers.addAll(uploadHeaders.toHttpHeaders())
+          ..contentLength = contentLength;
+    try {
+      final responseFuture = _client.send(request);
+      await request.sink.addStream(bytes);
+      await request.sink.close();
+      final response = await responseFuture;
+      await response.stream.drain<void>();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ContentMediaObjectUploadException(
+          retryable: _isRetryableStatus(response.statusCode),
+          statusCode: response.statusCode,
+        );
+      }
+    } on ContentMediaUploadCancelledException {
+      rethrow;
+    } on ContentMediaObjectUploadException {
+      rethrow;
+    } on http.RequestAbortedException {
+      throw const ContentMediaUploadCancelledException();
+    } catch (error) {
+      throw ContentMediaObjectUploadException(retryable: true, cause: error);
     }
   }
 
@@ -63,3 +61,9 @@ final class RemoteContentMediaObjectUploader {
     if (_ownsClient) _client.close();
   }
 }
+
+bool _isRetryableStatus(int statusCode) =>
+    statusCode == 408 ||
+    statusCode == 425 ||
+    statusCode == 429 ||
+    statusCode >= 500;

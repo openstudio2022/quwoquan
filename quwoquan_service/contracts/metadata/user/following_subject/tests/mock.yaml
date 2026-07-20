@@ -1,0 +1,20 @@
+aggregate: FollowingSubject
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  执行：flutter test test/local_contract/cloud/user/
+
+scenarios:
+  - name: item_view_parse
+    description: FollowingSubjectItemViewDto 15 字段解析
+    assertions:
+      - subject_type_in_user_circle_homepage
+      - unread_flags_present
+
+  - name: seed_set_three_subject_types
+    description: alpha fixture following_subject_core 覆盖三类主体
+    data_source: ../test_fixtures/scenarios/user_scenarios.json -> seedSets.following_subject_core
+    assertions:
+      - contains_user_circle_homepage
+      - target_route_id_resolvable

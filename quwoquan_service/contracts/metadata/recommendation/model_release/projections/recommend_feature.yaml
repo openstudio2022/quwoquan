@@ -20,8 +20,8 @@ source_entities:
 source_events:
   - UserProfileUpdated
   - PostCreated
-  - ContentReactionActivated
-  - ContentReactionRemoved
+  - ContentReactionSet
+  - ContentReactionCleared
   - BehaviorBatchReported
   - CircleMembershipJoined
   - PersonaFollowStateChanged
@@ -70,6 +70,11 @@ fields:
       $set 回写本宽表供推荐引擎 FeatureStore 直接加载，驱动 policy.yaml segmentTargeting
       (preset 覆盖 / weightDeltas) 与实验 eligibleSegments 定向；同一计算还经 UserInterestRecomputed
       事件投影到 user 域 rm_user_profile_view.segments(供小艺主动)。两处均为该计算的 CQRS 投影，非第二真相源。
+  - name: behaviorProjectionLastId
+    type: string
+    description: |
+      行为投影最后成功应用的 rm_behavior_events ObjectID 十六进制水位。
+      与同次 $inc 原子写入，供 relay checkpoint 重放和多副本并发幂等收敛。
   - { name: segmentsUpdatedAt, type: timestamp, description: segments 最近回写时间 }
   - { name: updatedAt, type: timestamp }
 

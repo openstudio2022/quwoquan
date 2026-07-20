@@ -1,0 +1,27 @@
+entity: AssistantConversation
+
+scenarios:
+  - name: conversation_create_persisted_and_idempotent
+    operation: CreateAssistantConversation
+    go_func: TestAssistantConversationCreatePersistedAndIdempotent
+    evidence: api_integration
+    assertions:
+      - assistant_conversations、command receipts 在同一 Mongo 事务提交
+      - 相同 clientRequestId 重放返回首个 conversationId，不产生第二个会话
+      - 服务重启后 GET /assistant/conversations/{id} 仍可读
+
+  - name: conversation_owner_isolation
+    operation: GetAssistantConversation
+    go_func: TestAssistantConversationOwnerIsolation
+    evidence: api_integration
+    assertions:
+      - 非 owner 读取返回 not_found（防枚举）
+      - 未认证请求返回 401 结构化错误
+
+  - name: conversation_storage_fail_closed
+    operation: CreateAssistantConversation
+    go_func: TestAssistantConversationStoreFailClosed
+    evidence: local_contract
+    assertions:
+      - store 不可用时返回 ASSISTANT.SYSTEM.conversation_storage_unavailable
+      - 不允许回退进程内 map 或合成成功

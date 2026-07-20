@@ -14,6 +14,7 @@ _CONTENT_MILESTONES = {
     RolloutMilestone.M1,
     RolloutMilestone.M2,
     RolloutMilestone.M3,
+    RolloutMilestone.H10K,
     RolloutMilestone.LAUNCH,
 }
 
@@ -51,9 +52,9 @@ class ReleaseAttestation:
         if any(count < 0 for count in self.counts):
             raise ReleaseAttestationError("release counts must be non-negative")
         if self.release_kind is ReleaseKind.CONTENT:
-            if not self.execution_ids or not self.entity_count:
+            if not self.execution_ids or not (self.entity_count or self.post_count):
                 raise ReleaseAttestationError(
-                    "content release requires executions and canonical entities"
+                    "content release requires executions and canonical entities or posts"
                 )
             if self.rollout_milestone not in _CONTENT_MILESTONES:
                 raise ReleaseAttestationError("content release milestone is invalid")

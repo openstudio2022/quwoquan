@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
+	userevent "quwoquan_service/services/user-service/internal/domain/user/event"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
@@ -20,10 +22,39 @@ const (
 // ContactDiscoveryService handles contact matching with privacy guarantees.
 type ContactDiscoveryService struct {
 	discoveries userrepo.ContactDiscoveryStore
+	events      UserEventPublisher
 }
 
-func NewContactDiscoveryService(discoveries userrepo.ContactDiscoveryStore) *ContactDiscoveryService {
-	return &ContactDiscoveryService{discoveries: discoveries}
+func NewContactDiscoveryService(
+	discoveries userrepo.ContactDiscoveryStore,
+	events UserEventPublisher,
+) *ContactDiscoveryService {
+	return &ContactDiscoveryService{
+		discoveries: discoveries,
+		events:      requireUserEventPublisher(events),
+	}
+}
+
+// RunExpiredCleanup 周期性物理删除过期记录（含 hashed_phones），兑现
+// metadata 声明的 72h TTL 隐私承诺。删除幂等，多实例并发安全。
+func (s *ContactDiscoveryService) RunExpiredCleanup(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if deleted, err := s.discoveries.DeleteExpired(ctx); err != nil && ctx.Err() == nil {
+			slog.ErrorContext(ctx, "contact discovery expired cleanup failed", "err", err)
+		} else if deleted > 0 {
+			slog.InfoContext(ctx, "contact discovery expired records purged", "count", deleted)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // Initiate creates a discovery record and synchronously matches hashed phones.
@@ -51,8 +82,14 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 	if err := s.discoveries.Create(ctx, record); err != nil {
 		return nil, err
 	}
+	_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryInitiated, ownerID, ownerID, map[string]any{
+		"id":             record.ID,
+		"ownerAccountId": ownerID,
+		"createdAt":      time.Now().UTC().Format(time.RFC3339),
+	})
 
-	// Synchronous match (for simplicity; in production this would be async)
+	// 同步匹配：批量哈希求交是一次索引查询（≤5000 哈希），P95 远低于
+	// InitiateContactDiscovery 的 800ms SLO，无需异步作业。
 	matches, err := s.discoveries.FindPhoneMatches(ctx, hashedPhones)
 	if err != nil {
 		// Best-effort: complete with empty result rather than fail
@@ -65,6 +102,12 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 	record.Status = "completed"
 	record.MatchedSubAccountIds = matched
 	record.MatchCount = int64(len(matched))
+	_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryCompleted, ownerID, ownerID, map[string]any{
+		"id":             record.ID,
+		"ownerAccountId": ownerID,
+		"matchCount":     record.MatchCount,
+		"completedAt":    time.Now().UTC().Format(time.RFC3339),
+	})
 
 	return record, nil
 }

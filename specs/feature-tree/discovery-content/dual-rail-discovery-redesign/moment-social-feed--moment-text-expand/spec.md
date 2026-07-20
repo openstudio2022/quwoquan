@@ -1,4 +1,4 @@
-# L4 契约/任务：moment-text-expand
+# L3 契约/任务：moment-text-expand
 
 ## 功能说明
 微趣帖子文字超过 5 行时截断，末尾显示"展开"按钮；点击就地展开全文（无跳转）。展开状态为 Widget 本地状态（bool），不需要 Provider。

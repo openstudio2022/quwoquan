@@ -51,6 +51,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: recommendation_alerts_contract
         cases:
         - local_contract.recommendation_platform.evaluation_and_flywheel.recommendation_commercial_alerting.contract
@@ -58,6 +59,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: recommendation_commercial_alerting_api
         cases:
         - api_integration.recommendation_platform.evaluation_and_flywheel.recommendation_commercial_alerting.metrics
@@ -70,5 +72,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

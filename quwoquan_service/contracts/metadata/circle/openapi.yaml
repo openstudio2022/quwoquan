@@ -42,6 +42,13 @@ paths:
                 facet: CircleLifecycleCommandFacet
                 method: createCircle
                 aggregateOwner: Circle
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -49,8 +56,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/Circle'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -109,6 +120,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -116,8 +133,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UpdateCircleRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -142,9 +163,19 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -184,6 +215,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /circles/{circleId}/files:
         get:
             operationId: ListCircleFiles
@@ -1169,6 +1203,137 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /circles/{circleId}/memberships/{personaId}:approve:
+        post:
+            operationId: ApproveCircleMember
+            x-contract-operation-id: circle.circle_membership.ApproveCircleMember
+            x-object-id: circle.circle_membership
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: CircleMembershipCommandFacet
+                method: approveCircleMember
+                aggregateOwner: CircleMembership
+            parameters:
+                - name: circleId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ApproveCircleMemberRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleMembershipCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /circles/{circleId}/memberships/{personaId}:reject:
+        post:
+            operationId: RejectCircleMember
+            x-contract-operation-id: circle.circle_membership.RejectCircleMember
+            x-object-id: circle.circle_membership
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: CircleMembershipCommandFacet
+                method: rejectCircleMember
+                aggregateOwner: CircleMembership
+            parameters:
+                - name: circleId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RejectCircleMemberRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleMembershipCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /circles/{circleId}/memberships/pending:
+        get:
+            operationId: ListPendingCircleMemberships
+            x-contract-operation-id: circle.circle_membership.ListPendingCircleMemberships
+            x-object-id: circle.circle_membership
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: CircleMembershipQueryFacet
+                method: listPendingCircleMemberships
+                reader: CircleMembershipReader
+                slice: CircleMembershipPageSlice
+            parameters:
+                - name: circleId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleMembershipSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /circles/{circleId}/memberships/self:
         get:
             operationId: GetMyCircleMembership
@@ -1441,6 +1606,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1448,8 +1619,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CircleSectionConfig'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1489,6 +1664,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /circles/behaviors:
         post:
             operationId: ReportCircleBehavior
@@ -1516,6 +1694,34 @@ paths:
             responses:
                 "204":
                     description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /circles/discovery-feed:
+        get:
+            operationId: ListCircleDiscoveryFeed
+            x-contract-operation-id: circle.circle.ListCircleDiscoveryFeed
+            x-object-id: circle.circle
+            x-actor: none
+            x-application:
+                kind: query
+                facet: CircleDiscoveryFeedQueryFacet
+                method: listCircleDiscoveryFeed
+                reader: CircleDiscoveryFeedReader
+                slice: CircleDiscoveryFeedPageSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CircleDiscoveryFeedView'
                 default:
                     description: Runtime failure
                     content:
@@ -1583,6 +1789,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
 components:
     securitySchemes:
         bearerAuth:
@@ -1598,10 +1807,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ApproveCircleGroupMemberRequest
             x-contract-placeholder: true
+        ApproveCircleMemberRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ApproveCircleMemberRequest
+            x-contract-placeholder: true
         Circle:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: Circle
+            x-contract-placeholder: true
+        CircleCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleCommandResult
+            x-contract-placeholder: true
+        CircleDiscoveryFeedView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleDiscoveryFeedView
             x-contract-placeholder: true
         CircleFileCommandResult:
             type: object
@@ -1707,6 +1931,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RejectCircleGroupMemberRequest
+            x-contract-placeholder: true
+        RejectCircleMemberRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RejectCircleMemberRequest
             x-contract-placeholder: true
         ReportCircleBehaviorRequest:
             type: object

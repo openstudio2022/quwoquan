@@ -34,6 +34,7 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
   @Nullable protected final SurfaceProducer surfaceProducer;
   @Nullable private DisposeHandler disposeHandler;
   @NonNull protected ExoPlayer exoPlayer;
+  @NonNull protected ExoPlayerEventListener exoPlayerEventListener;
   // TODO: Migrate to stable API, see https://github.com/flutter/flutter/issues/147039.
   @UnstableApi @Nullable protected DefaultTrackSelector trackSelector;
 
@@ -65,7 +66,8 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
       @NonNull MediaItem mediaItem,
       @NonNull VideoPlayerOptions options,
       @Nullable SurfaceProducer surfaceProducer,
-      @NonNull ExoPlayerProvider exoPlayerProvider) {
+      @NonNull ExoPlayerProvider exoPlayerProvider,
+      @NonNull String rendererMode) {
     this.videoPlayerEvents = events;
     this.surfaceProducer = surfaceProducer;
     exoPlayer = exoPlayerProvider.get();
@@ -76,9 +78,16 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
     }
 
     exoPlayer.setMediaItem(mediaItem);
-    exoPlayer.prepare();
-    exoPlayer.addListener(createExoPlayerEventListener(exoPlayer, surfaceProducer));
+    exoPlayerEventListener = createExoPlayerEventListener(exoPlayer, surfaceProducer);
+    exoPlayer.addListener(exoPlayerEventListener);
+    exoPlayer.addAnalyticsListener(exoPlayerEventListener);
     setAudioAttributes(exoPlayer, options.mixWithOthers);
+    videoPlayerEvents.onPlaybackDiagnostics(
+        rendererMode,
+        ExoPlayerFactory.DECODER_QUEUE_MODE_SYNCHRONOUS,
+        ExoPlayerFactory.DECODER_FALLBACK_ENABLED);
+    exoPlayerEventListener.markPrepareStarted();
+    exoPlayer.prepare();
   }
 
   public void setDisposeHandler(@Nullable DisposeHandler handler) {
@@ -137,6 +146,7 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
 
   @Override
   public void seekTo(long position) {
+    exoPlayerEventListener.markSeekRequested(position);
     exoPlayer.seekTo(position);
   }
 

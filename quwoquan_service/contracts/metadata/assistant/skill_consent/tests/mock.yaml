@@ -1,0 +1,23 @@
+aggregate: SkillConsent
+layer: app_side
+
+description: |
+  端侧独立测试场景。consent 由服务端版本化事实唯一决定；端侧按 actor 隔离、失败关闭。
+
+facet_scenarios:
+  - name: consent_actor_scoped_isolation
+    description: 本地 consent 快照按 account/persona actorScope 分区
+    assertions:
+      - 切号后不读到他人 consent 状态
+
+  - name: consent_fail_closed_decode
+    description: granted=false 或 revokedAt 非空一律视为未授权
+    assertions:
+      - 远端 grant/revoke 失败不本地合成成功
+      - 失败抛 CloudException 并映射 consent 错误码
+
+  - name: management_page_consent_switch_real
+    description: 助手管理页 consent 开关接真实 provider（无本地假开关）
+    assertions:
+      - 开关状态来源 personalContentAccessProvider
+      - 失败展示结构化错误态且可重试

@@ -1,0 +1,42 @@
+object: CircleMembership
+operations:
+  - JoinCircle
+  - LeaveCircle
+  - UpdateCircleMembershipRole
+  - ApproveCircleMember
+  - RejectCircleMember
+  - GetMyCircleMembership
+  - ListCircleMemberships
+  - ListPendingCircleMemberships
+  - ListPersonaCircles
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/model/behavior.go
+    - quwoquan_service/services/circle-service/internal/application/circle/circle_membership/circle_membership_facades.go
+  store:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_membership/persistence/mongo_aggregate_store.go
+  outbox:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_membership/persistence/mongo_aggregate_store.go
+  reader:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_membership/persistence/mongo_readers.go
+  transport:
+    - quwoquan_service/services/circle-service/internal/adapters/http/circle_membership_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/circle/membership_contracts.dart
+    - quwoquan_app/lib/cloud/remote/circle/membership/membership_remote.dart
+  page:
+    - quwoquan_app/lib/ui/circle/widgets/circle_shell.dart
+    - quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
+    - quwoquan_app/lib/ui/circle/pages/circle_membership_approval_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/model/behavior__local_contract_test.go
+    - quwoquan_service/services/circle-service/internal/application/circle/circle_membership/outbox_relay__local_contract_test.go
+    - quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/circle/pages/circle_membership_approval_page__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
+    - quwoquan_app/test/api_integration/cloud/circle/circle_api_contract_runner.dart
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/circle/circle_navigation_journey__user_acceptance_test.dart
+environments: []

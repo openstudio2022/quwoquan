@@ -158,10 +158,10 @@
           "title": "杭州一日游契约视频",
           "summary": "杭州一日游契约视频。",
           "body": "杭州一日游契约视频。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "coverUrl": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+          "thumbnailUrl": "media/video/s/media-canary-seek-125s/v1/cover.webp",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "circleIds": [
@@ -172,8 +172,8 @@
           ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
-          "width": 1280,
-          "height": 720,
+          "width": 540,
+          "height": 960,
           "likeCount": 131,
           "commentCount": 1,
           "favoriteCount": 43,
@@ -185,14 +185,14 @@
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
           "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "coverObjectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+          "thumbnailObjectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
+            "media/video/s/media-canary-seek-125s/v1/cover.webp",
             "media/image/s/archived-image/post/fixture_video_001/image-2.png"
           ],
           "tagRefs": [
@@ -201,8 +201,13 @@
             "videoCoverPost"
           ],
           "locationName": "杭州",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-          "durationMs": 45000
+          "videoUrl": "media/video/s/media-canary-seek-125s/v1/source.mp4",
+          "durationMs": 125000,
+          "mediaAssetId": "media-canary-seek-125s",
+          "mediaAssetVersion": 1,
+          "previewTrackManifestUrl": "media/video/s/media-canary-seek-125s/v1/preview/manifest.json",
+          "previewTrackVersion": 1,
+          "contentVertical": "travel_photography"
         },
         {
           "postId": "fixture_article_001",

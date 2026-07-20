@@ -21,25 +21,29 @@ import (
 	"quwoquan_service/internal/platform/testinfra"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
+	preferencefact "quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
+	preferencepersistence "quwoquan_service/services/assistant-service/internal/infrastructure/assistant/preference_fact/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/projection"
 )
 
 var (
-	integrationMongoDB           *mongo.Database
-	integrationMongoClient       *mongo.Client
-	integrationMongoContainer    *mongomod.MongoDBContainer
-	integrationPostgresPool      *pgxpool.Pool
-	integrationPostgresContainer testcontainers.Container
-	integrationRedisServer       *testinfra.RealRedis
-	integrationRedisRouter       *rtredis.Router
-	integrationRedisClient       rtredis.Client
-	integrationEventStore        *persistence.MongoEventStore
-	integrationConsentStore      *persistence.PgConsentStore
-	integrationProfileStore      *projection.LearningProfileStore
-	integrationSubscriptionStore *persistence.MongoSkillSubscriptionStore
+	integrationMongoDB              *mongo.Database
+	integrationMongoClient          *mongo.Client
+	integrationMongoContainer       *mongomod.MongoDBContainer
+	integrationPostgresPool         *pgxpool.Pool
+	integrationPostgresContainer    testcontainers.Container
+	integrationRedisServer          *testinfra.RealRedis
+	integrationRedisRouter          *rtredis.Router
+	integrationRedisClient          rtredis.Client
+	integrationEventStore           *persistence.MongoEventStore
+	integrationConsentStore         *persistence.PgConsentStore
+	integrationProfileStore         *projection.LearningProfileStore
+	integrationSubscriptionStore    *persistence.MongoSkillSubscriptionStore
+	integrationConversationRunStore *persistence.MongoConversationRunStore
+	integrationPreferenceStore      *preferencepersistence.MongoStore
 )
 
 func TestMain(m *testing.M) {
@@ -187,12 +191,24 @@ func initializeIntegrationStores(ctx context.Context) {
 	if err := integrationConsentStore.EnsureSchema(ctx); err != nil {
 		panic("assistant-service api_integration run Postgres migrations: " + err.Error())
 	}
+	integrationConversationRunStore = persistence.NewMongoConversationRunStore(integrationMongoDB)
+	if err := integrationConversationRunStore.EnsureIndexes(ctx); err != nil {
+		panic("assistant-service api_integration ensure conversation/run indexes: " + err.Error())
+	}
+	integrationPreferenceStore = preferencepersistence.NewMongoStore(integrationMongoDB)
+	if err := integrationPreferenceStore.EnsureIndexes(ctx); err != nil {
+		panic("assistant-service api_integration ensure preference indexes: " + err.Error())
+	}
 }
 
 func newIntegrationAssistantService(opts ...application.AssistantServiceOption) *application.AssistantService {
 	baseOptions := []application.AssistantServiceOption{
 		application.WithLearningProfileStore(integrationProfileStore),
 		application.WithSkillSubscriptionStore(integrationSubscriptionStore),
+		application.WithConversationRunStore(integrationConversationRunStore),
+		application.WithPreferenceSnapshotReader(
+			preferencefact.NewQueryFacade(integrationPreferenceStore),
+		),
 		application.WithEventPublisher(
 			messaging.NewRedisEventPublisher(integrationRedisClient, "assistant-service-api-integration", nil),
 		),
@@ -212,10 +228,11 @@ func resetIntegrationState(t *testing.T) {
 	defer cancel()
 
 	for _, collection := range []string{
-		"interaction_events",
-		"scorecards",
+		"assistant_interaction_events",
+		"assistant_scorecard_facts",
 		"rm_assistant_learning_profile",
 		"skill_subscriptions",
+		"assistant_preference_facts",
 	} {
 		if _, err := integrationMongoDB.Collection(collection).DeleteMany(ctx, bson.M{}); err != nil {
 			t.Fatalf("reset MongoDB collection %s: %v", collection, err)
@@ -233,10 +250,11 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
 
-	assertMongoIndex(t, "interaction_events", "idx_ie_user_created")
-	assertMongoIndex(t, "scorecards", "idx_score_user_created")
+	assertMongoIndex(t, "assistant_interaction_events", "idx_ie_user_created")
+	assertMongoIndex(t, "assistant_scorecard_facts", "idx_score_user_created")
 	assertMongoIndex(t, "rm_assistant_learning_profile", "idx_alp_user")
 	assertMongoIndex(t, "skill_subscriptions", "idx_skill_subscriptions_status_updated")
+	assertMongoIndex(t, "assistant_preference_facts", "uq_assistant_preference_identity")
 
 	var migrationApplied bool
 	if err := integrationPostgresPool.QueryRow(

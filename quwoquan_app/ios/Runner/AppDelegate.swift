@@ -1,17 +1,159 @@
 import AVFoundation
+import CoreFoundation
 import CoreTelephony
 import CoreGraphics
 import CoreLocation
+import Foundation
 import Flutter
+import MetricKit
+import PushKit
 import UIKit
+
+/// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
+/// 原生异常消息与堆栈绝不能写入 UserDefaults 或运行时日志管道。
+private let nativeCrashMarkerKindKey = "qwq.runtime.previous_native_crash_kind"
+private var previousNativeCrashHandler: (@convention(c) (NSException) -> Void)?
+
+private func persistNativeCrashMarker(_ exception: NSException) {
+  let rawKind = exception.name.rawValue
+  let normalized = rawKind
+    .replacingOccurrences(
+      of: "[^A-Za-z0-9_.-]",
+      with: "_",
+      options: .regularExpression
+    )
+  let kind = String(normalized.prefix(80))
+  UserDefaults.standard.set(
+    kind.isEmpty ? "UnknownNativeError" : kind,
+    forKey: nativeCrashMarkerKindKey
+  )
+  // 仅尽力持久化，平台仍必须完全掌控终止流程。
+  CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+  previousNativeCrashHandler?(exception)
+}
+
+private enum NativeCrashMarkerStore {
+  private static var installed = false
+
+  static func install() {
+    guard !installed else { return }
+    installed = true
+    previousNativeCrashHandler = NSGetUncaughtExceptionHandler()
+    NSSetUncaughtExceptionHandler(persistNativeCrashMarker)
+  }
+
+  static func consume() -> [String: String]? {
+    guard let kind = UserDefaults.standard.string(forKey: nativeCrashMarkerKindKey),
+          !kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      return nil
+    }
+    UserDefaults.standard.removeObject(forKey: nativeCrashMarkerKindKey)
+    return ["kind": kind]
+  }
+}
+
+@available(iOS 14.0, *)
+private final class NativeHangMetricStore: NSObject, MXMetricManagerSubscriber {
+  static let shared = NativeHangMetricStore()
+
+  private static let occurredAtKey = "qwq.runtime.previous_native_hang_occurred_at"
+  private static let durationMsKey = "qwq.runtime.previous_native_hang_duration_ms"
+  private var installed = false
+
+  func install() {
+    guard !installed else { return }
+    installed = true
+    MXMetricManager.shared.add(self)
+  }
+
+  func didReceive(_ payloads: [MXMetricPayload]) {
+    // 聚合 responsiveness histogram 不等同单次 hang；单次事实只消费 diagnostics。
+  }
+
+  func didReceive(_ payloads: [MXDiagnosticPayload]) {
+    var latestOccurredAt: Date?
+    var longestDurationMs: Int64 = 0
+    for payload in payloads {
+      guard let diagnostics = payload.hangDiagnostics,
+            !diagnostics.isEmpty
+      else {
+        continue
+      }
+      if let currentLatest = latestOccurredAt {
+        if payload.timeStampEnd > currentLatest {
+          latestOccurredAt = payload.timeStampEnd
+        }
+      } else {
+        latestOccurredAt = payload.timeStampEnd
+      }
+      for diagnostic in diagnostics {
+        let durationMs = diagnostic.hangDuration
+          .converted(to: UnitDuration.milliseconds)
+          .value
+        longestDurationMs = max(
+          longestDurationMs,
+          Int64(max(0, durationMs).rounded())
+        )
+      }
+    }
+    guard let latestOccurredAt else { return }
+    UserDefaults.standard.set(
+      Int64(latestOccurredAt.timeIntervalSince1970 * 1000),
+      forKey: Self.occurredAtKey
+    )
+    if longestDurationMs > 0 {
+      UserDefaults.standard.set(
+        longestDurationMs,
+        forKey: Self.durationMsKey
+      )
+    }
+  }
+
+  func read() -> [String: Any]? {
+    let occurredAtEpochMs = UserDefaults.standard.object(
+      forKey: Self.occurredAtKey
+    ) as? NSNumber
+    guard let occurredAtEpochMs, occurredAtEpochMs.int64Value > 0 else {
+      return nil
+    }
+    let durationMs = UserDefaults.standard.object(
+      forKey: Self.durationMsKey
+    ) as? NSNumber
+    var marker: [String: Any] = [
+      "source": "ios_metric_kit",
+      "occurredAtEpochMs": occurredAtEpochMs.int64Value,
+    ]
+    if let durationMs, durationMs.int64Value > 0 {
+      marker["durationMs"] = durationMs.int64Value
+    }
+    return marker
+  }
+
+  func acknowledge(occurredAtEpochMs: Int64) -> Bool {
+    let stored = UserDefaults.standard.object(
+      forKey: Self.occurredAtKey
+    ) as? NSNumber
+    guard let stored else {
+      return true
+    }
+    guard stored.int64Value == occurredAtEpochMs else {
+      // 新诊断已覆盖旧标记时不得由旧 ACK 删除。
+      return false
+    }
+    UserDefaults.standard.removeObject(forKey: Self.occurredAtKey)
+    UserDefaults.standard.removeObject(forKey: Self.durationMsKey)
+    return true
+  }
+}
 
 /// 首帧前只落固定 schema 到本地，不做网络 IO，也不记录账号、异常文本或堆栈。
 ///
 /// Flutter 成功装配后会从同一 UserDefaults 迁入可靠启动 journal；下一次成功启动会补传
 /// 本次 native watchdog 的终态。
 private final class StartupNativeTelemetryJournal {
-  private static let eventsKey = "startup_telemetry_native_journal_v1"
-  private static let attemptKey = "startup_telemetry_native_attempt_v1"
+  private static let eventsKey = "startup_telemetry_native_journal"
+  private static let attemptKey = "startup_telemetry_native_attempt"
   private static let maxEvents = 32
 
   private let defaults: UserDefaults
@@ -101,6 +243,7 @@ private final class StartupNativeTelemetryJournal {
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
   private let commercialAuthPlugin = CommercialAuthPlugin()
   private let aliyunOneTapPlugin = AliyunOneTapPlugin()
+  let incomingCallPushCoordinator = IncomingCallPushCoordinator()
   private let cellularNetworkInfo = CTTelephonyNetworkInfo()
   private let startupTelemetryJournal = StartupNativeTelemetryJournal()
   private var flutterFirstFrameWatchdog: DispatchWorkItem?
@@ -113,6 +256,10 @@ private final class StartupNativeTelemetryJournal {
   private var appInForeground = false
   private var nativeRecoveryShown = false
   private var nativeRecoveryDeadlineReached = false
+  private var dartStartupAttemptStarted = false
+  private var currentDartAttemptId = ""
+  private var currentLaunchMode = "unknown"
+  private var currentDartAttemptStartedUptime: TimeInterval = 0
   private var firstFrameForegroundRemaining = AppDelegate.flutterFirstFrameDeadline
   private var foregroundStartedUptime: TimeInterval = 0
   private weak var startupRecoveryView: UIView?
@@ -121,8 +268,13 @@ private final class StartupNativeTelemetryJournal {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    NativeCrashMarkerStore.install()
+    if #available(iOS 14.0, *) {
+      NativeHangMetricStore.shared.install()
+    }
     NSLog("QWQStartup ios_did_finish_launching")
     let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    configureIncomingCallInfrastructure()
     if let registrar = self.registrar(forPlugin: "QuwoquanNativeMethodChannels") {
       registerMethodChannels(binaryMessenger: registrar.messenger())
     }
@@ -133,6 +285,7 @@ private final class StartupNativeTelemetryJournal {
       outcome: "observed"
     )
     appInForeground = true
+    currentDartAttemptStartedUptime = processStartUptime
     // 预算从进程最早可得的 monotonic 时钟开始，不能在 becomeActive 时重新给完整 6 秒。
     foregroundStartedUptime = processStartUptime
     armFlutterFirstFrameWatchdog()
@@ -209,6 +362,41 @@ private final class StartupNativeTelemetryJournal {
       result(self?.readCellularGeneration() ?? "unknown")
     }
 
+    let nativeCrashMarkerChannel = FlutterMethodChannel(
+      name: "quwoquan/runtime/native_crash_marker",
+      binaryMessenger: binaryMessenger
+    )
+    nativeCrashMarkerChannel.setMethodCallHandler { call, result in
+      if call.method == "consumePreviousCrash" {
+        result(NativeCrashMarkerStore.consume())
+        return
+      }
+      if call.method == "readPreviousAnr" {
+        if #available(iOS 14.0, *) {
+          result(NativeHangMetricStore.shared.read())
+        } else {
+          result(nil)
+        }
+        return
+      }
+      if call.method == "acknowledgePreviousAnr" {
+        guard #available(iOS 14.0, *),
+              let arguments = call.arguments as? [String: Any],
+              let occurredAtEpochMs = arguments["occurredAtEpochMs"] as? NSNumber
+        else {
+          result(false)
+          return
+        }
+        result(
+          NativeHangMetricStore.shared.acknowledge(
+            occurredAtEpochMs: occurredAtEpochMs.int64Value
+          )
+        )
+        return
+      }
+      result(FlutterMethodNotImplemented)
+    }
+
     let deferredPluginsChannel = FlutterMethodChannel(
       name: "quwoquan/startup/deferred_plugins",
       binaryMessenger: binaryMessenger
@@ -264,7 +452,7 @@ private final class StartupNativeTelemetryJournal {
           self.confirmFlutterFirstFrame(source: "dart_channel")
         }
         if event.contains("\"eventName\":\"startup_safe_terminal\"") {
-          self.confirmStartupSafeTerminal()
+          self.confirmStartupSafeTerminal(reportedElapsedMs: self.startupEventElapsedMs(event))
         }
         result(nil)
         return
@@ -304,9 +492,40 @@ private final class StartupNativeTelemetryJournal {
     else {
       return
     }
+    if eventName == "startup_attempt_started" {
+      currentDartAttemptId = safeStartupIdentifier(event["attemptId"] as? String)
+      currentLaunchMode = safeStartupEnum(event["launchMode"] as? String)
+      let hotRestart = dartStartupAttemptStarted
+      dartStartupAttemptStarted = true
+      currentDartAttemptStartedUptime = hotRestart
+        ? ProcessInfo.processInfo.systemUptime
+        : processStartUptime
+      let configurationState = safeStartupEnum(
+        event["configurationState"] as? String
+      )
+      let missingDefineKeys = safeDefineKeyList(event["missingDefineKeys"] as? String)
+      NSLog(
+        "QWQStartup ios_dart_startup_attempt attemptId=%@ launchMode=%@ hotRestart=%@ configurationState=%@%@",
+        currentDartAttemptId,
+        currentLaunchMode,
+        hotRestart ? "true" : "false",
+        configurationState,
+        missingDefineKeys.isEmpty ? "" : " missingDefineKeys=\(missingDefineKeys)"
+      )
+      return
+    }
     if eventName == "startup_bootstrap_failure" {
       // bootstrap 根已经显示 Flutter recovery；只输出固定 terminal 标识，
       // 不转写失败详情、异常内容或用户态上下文。
+      let failureCode = safeStartupFailureCode(event["failureCode"] as? String)
+      let missingDefineKeys = safeDefineKeyList(event["missingDefineKeys"] as? String)
+      NSLog(
+        "QWQStartup ios_startup_bootstrap_failure attemptId=%@ launchMode=%@%@%@",
+        currentDartAttemptId,
+        currentLaunchMode,
+        failureCode.isEmpty ? "" : " failureCode=\(failureCode)",
+        missingDefineKeys.isEmpty ? "" : " missingDefineKeys=\(missingDefineKeys)"
+      )
       NSLog("QWQStartup startup_probe phase=safe_recovery_shown")
       return
     }
@@ -358,7 +577,11 @@ private final class StartupNativeTelemetryJournal {
         overlayRemovedMs
       )
     case "safe_recovery_shown":
-      NSLog("QWQStartup startup_probe phase=safe_recovery_shown")
+      let failureCode = safeStartupFailureCode(event["failureCode"] as? String)
+      NSLog(
+        "QWQStartup startup_probe phase=safe_recovery_shown%@",
+        failureCode.isEmpty ? "" : " failureCode=\(failureCode)"
+      )
     default:
       return
     }
@@ -386,6 +609,50 @@ private final class StartupNativeTelemetryJournal {
     default:
       return ""
     }
+  }
+
+  private func safeStartupIdentifier(_ value: String?) -> String {
+    guard let value, !value.isEmpty, value.count <= 128 else { return "unknown" }
+    let allowed = CharacterSet.alphanumerics.union(
+      CharacterSet(charactersIn: "_-")
+    )
+    guard value.rangeOfCharacter(from: allowed.inverted) == nil else {
+      return "unknown"
+    }
+    return value
+  }
+
+  private func safeStartupEnum(_ value: String?) -> String {
+    guard let value, !value.isEmpty, value.count <= 64 else { return "unknown" }
+    let allowed = CharacterSet.alphanumerics.union(
+      CharacterSet(charactersIn: "_-")
+    )
+    guard value.rangeOfCharacter(from: allowed.inverted) == nil else {
+      return "unknown"
+    }
+    return value
+  }
+
+  private func safeDefineKeyList(_ value: String?) -> String {
+    guard let value, !value.isEmpty, value.count <= 512 else { return "" }
+    let allowed = CharacterSet.alphanumerics.union(
+      CharacterSet(charactersIn: "_,")
+    )
+    guard value.rangeOfCharacter(from: allowed.inverted) == nil else {
+      return ""
+    }
+    return value
+  }
+
+  private func safeStartupFailureCode(_ value: String?) -> String {
+    guard let value, !value.isEmpty, value.count <= 128 else { return "" }
+    let allowed = CharacterSet.alphanumerics.union(
+      CharacterSet(charactersIn: "._-")
+    )
+    guard value.rangeOfCharacter(from: allowed.inverted) == nil else {
+      return ""
+    }
+    return value
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
@@ -424,25 +691,75 @@ private final class StartupNativeTelemetryJournal {
   }
 
   private func confirmFlutterFirstFrame(source: String) {
-    guard !flutterFirstFrameConfirmed else { return }
     // renderer 首帧是 native watchdog 的物理事实；Dart channel 仅作幂等补充。
     // 迟到首帧仍须记账并注册延迟插件；recovery 撤销由 safe_terminal 负责。
-    flutterFirstFrameConfirmed = true
-    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
-    NSLog("QWQStartup ios_flutter_first_frame elapsedMs=%d source=%@", elapsedMs, source)
-    registerGeneratedPluginsAfterFirstFrame()
+    let firstNativeFrame = !flutterFirstFrameConfirmed
+    if firstNativeFrame {
+      flutterFirstFrameConfirmed = true
+    }
+    let elapsedMs = Int(
+      (ProcessInfo.processInfo.systemUptime - currentDartAttemptStartedUptime) * 1000
+    )
+    NSLog(
+      "QWQStartup ios_flutter_first_frame elapsedMs=%d source=%@ attemptId=%@ nativeAttemptId=%@ launchMode=%@",
+      elapsedMs,
+      source,
+      currentDartAttemptId.isEmpty
+        ? startupTelemetryJournal.currentAttemptId
+        : currentDartAttemptId,
+      startupTelemetryJournal.currentAttemptId,
+      currentLaunchMode
+    )
+    if firstNativeFrame {
+      registerGeneratedPluginsAfterFirstFrame()
+    }
   }
 
-  private func confirmStartupSafeTerminal() {
-    guard !startupSafeTerminalConfirmed else { return }
+  private func startupEventElapsedMs(_ event: String) -> Int? {
+    guard let data = event.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let elapsedMs = object["elapsedMs"] as? NSNumber
+    else {
+      return nil
+    }
+    return elapsedMs.intValue
+  }
+
+  private func confirmStartupSafeTerminal(reportedElapsedMs: Int?) {
     // MethodChannel 可能比 watchdog 主线程任务晚几毫秒。只要 Flutter 已到
     // routerShell / recovery 安全面，就必须取消看门狗并撤销竞态恢复层。
-    startupSafeTerminalConfirmed = true
-    cancelFlutterFirstFrameWatchdog()
-    cancelNativeRecoveryTerminalReconciliation()
-    dismissNativeStartupRecoveryForSafeTerminalRace()
-    let elapsedMs = Int((ProcessInfo.processInfo.systemUptime - processStartUptime) * 1000)
-    NSLog("QWQStartup ios_startup_safe_terminal elapsedMs=%d", elapsedMs)
+    let firstNativeSafeTerminal = !startupSafeTerminalConfirmed
+    if firstNativeSafeTerminal {
+      startupSafeTerminalConfirmed = true
+      cancelFlutterFirstFrameWatchdog()
+      cancelNativeRecoveryTerminalReconciliation()
+      dismissNativeStartupRecoveryForSafeTerminalRace()
+    }
+    let receivedElapsedMs = Int(
+      (ProcessInfo.processInfo.systemUptime - currentDartAttemptStartedUptime) * 1000
+    )
+    let reportedMs = max(0, reportedElapsedMs ?? receivedElapsedMs)
+    let exceedsDeadline =
+      reportedMs > Int(Self.flutterFirstFrameDeadline * 1000)
+      || receivedElapsedMs > Int(Self.flutterFirstFrameDeadline * 1000)
+    NSLog(
+      "QWQStartup ios_startup_safe_terminal reportedElapsedMs=%d receivedMs=%d attemptId=%@ nativeAttemptId=%@ launchMode=%@",
+      reportedMs,
+      receivedElapsedMs,
+      currentDartAttemptId.isEmpty
+        ? startupTelemetryJournal.currentAttemptId
+        : currentDartAttemptId,
+      startupTelemetryJournal.currentAttemptId,
+      currentLaunchMode
+    )
+    if exceedsDeadline {
+      NSLog(
+        "QWQStartup ios_startup_safe_terminal_slow reportedElapsedMs=%d receivedMs=%d attemptId=%@",
+        reportedMs,
+        receivedElapsedMs,
+        currentDartAttemptId
+      )
+    }
   }
 
   private func dismissNativeStartupRecoveryForSafeTerminalRace() {
@@ -572,9 +889,10 @@ private final class StartupNativeTelemetryJournal {
       ? "ios_native_first_frame_timeout"
       : "ios_startup_safe_terminal_timeout"
     NSLog(
-      "QWQStartup %@ elapsedMs=%d",
+      "QWQStartup %@ elapsedMs=%d attemptId=%@",
       timeoutLog,
-      elapsedMs
+      elapsedMs,
+      startupTelemetryJournal.currentAttemptId
     )
     startupTelemetryJournal.record(
       phase: "recovery",

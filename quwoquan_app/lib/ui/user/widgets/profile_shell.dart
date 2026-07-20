@@ -5,19 +5,29 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -93,6 +103,19 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       ..removeListener(_saveActiveShareScrollOffset)
       ..dispose();
     super.dispose();
+  }
+
+  void _leaveProfile(BuildContext context) {
+    final onBack = widget.onBack;
+    if (onBack != null) {
+      onBack();
+      return;
+    }
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(AppRoutePaths.home);
   }
 
   void _saveActiveShareScrollOffset() {
@@ -365,6 +388,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       if (justLoggedIn) {
         maybeResumeFollowContinuation(notifier);
         maybeResumeDirectMessageContinuation(context, notifier);
+        maybeResumeDirectCallContinuation(context, notifier);
       }
     });
     final userData = ref.watch(userDataProvider);
@@ -476,26 +500,3 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 }
 
 enum _ProfileMoreAction { share, block, report }
-
-/// 用户举报原因（与 content/report 后端 reason code 对齐）。
-enum _ProfileReportReason {
-  spam(ContentReportReason.spam, UITextConstants.profileReportReasonSpam),
-  misinformation(
-    ContentReportReason.other,
-    UITextConstants.profileReportReasonMisinformation,
-  ),
-  harassment(
-    ContentReportReason.harassment,
-    UITextConstants.profileReportReasonHarassment,
-  ),
-  pornography(
-    ContentReportReason.adult,
-    UITextConstants.profileReportReasonPornography,
-  ),
-  other(ContentReportReason.other, UITextConstants.profileReportReasonOther);
-
-  const _ProfileReportReason(this.reason, this.label);
-
-  final ContentReportReason reason;
-  final String label;
-}

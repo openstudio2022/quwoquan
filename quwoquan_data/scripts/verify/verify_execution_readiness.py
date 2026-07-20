@@ -13,6 +13,9 @@ from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
 from core.schema import assert_valid
 from content.execution.workspace import load_execution_manifest
+from content.execution.identity import parse_execution_id
+from content.execution.production_contracts import validate_token_ledger_entry
+from core.control_types import ContentType
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
 
@@ -78,6 +81,86 @@ def _execution_model_readiness(root: Path, execution_id: str, issues: list[str])
         issues.append("execution model readiness does not separate author and reviewer families")
         return {}
     return payload
+
+
+def _token_ledger_issues(
+    root: Path,
+    execution_id: str,
+    *,
+    model_readiness: dict,
+) -> list[str]:
+    path = root / "_shared" / "token_ledger.json"
+    if not path.is_file():
+        return [f"{path}: authoritative token ledger is missing"]
+    try:
+        payload = read_json(path)
+    except (OSError, ValueError, TypeError) as exc:
+        return [f"{path}: token ledger is invalid ({exc})"]
+    issues: list[str] = []
+    if payload.get("executionId") != execution_id:
+        issues.append("token ledger executionId drift")
+    if payload.get("measurementMode") not in {
+        "cursor_sdk_result_usage",
+        "object_queue_authoritative",
+        "mixed_authoritative",
+    }:
+        issues.append("token ledger is not authoritative")
+    entries = payload.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return [*issues, "token ledger has no entries"]
+    expected_models = {
+        str(binding.get("model") or "")
+        for binding in (
+            model_readiness.get("author"),
+            model_readiness.get("reviewer"),
+        )
+        if isinstance(binding, dict)
+    }
+    pricing_revisions: set[str] = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            issues.append(f"token ledger entry {index} is not an object")
+            continue
+        try:
+            assert_valid(
+                entry,
+                "content",
+                "token_ledger",
+                label=f"{path.as_posix()}#entries/{index}",
+            )
+        except (ValueError, TypeError) as exc:
+            issues.append(f"token ledger entry {index} schema invalid ({exc})")
+            continue
+        issues.extend(
+            f"token ledger entry {index}: {issue}"
+            for issue in validate_token_ledger_entry(entry)
+        )
+        model = str(entry.get("model") or "")
+        if model not in expected_models:
+            issues.append(f"token ledger entry {index} model drift")
+        revision = str(entry.get("pricingRevision") or "")
+        if not revision:
+            issues.append(f"token ledger entry {index} pricingRevision is missing")
+        else:
+            pricing_revisions.add(revision)
+        if entry.get("costKnown") is not True or entry.get("costUsd") is None:
+            issues.append(f"token ledger entry {index} cost is unknown")
+        if entry.get("budgetExceeded") is True:
+            issues.append(f"token ledger entry {index} exceeded budget")
+    if len(pricing_revisions) > 1:
+        issues.append("token ledger pricingRevision drift")
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        return [*issues, "token ledger summary is missing"]
+    if int(summary.get("unknownCostEntryCount") or 0) != 0:
+        issues.append("token ledger summary contains unknown cost entries")
+    if int(summary.get("budgetExceededCount") or 0) != 0:
+        issues.append("token ledger summary contains budget overflow")
+    if not isinstance(summary.get("costUsd"), (int, float)):
+        issues.append("token ledger summary costUsd is unknown")
+    if not isinstance(summary.get("unitPassedCostUsd"), (int, float)):
+        issues.append("token ledger summary unitPassedCostUsd is unknown")
+    return issues
 
 
 def _reviewed_object_issues(
@@ -195,8 +278,19 @@ def _reviewed_object_issues(
     return issues
 
 
-def execution_readiness_issues(execution_id: str, *, require_reviewed: bool) -> list[str]:
+def execution_readiness_issues(
+    execution_id: str,
+    *,
+    require_reviewed: bool,
+    min_pass_rate: float = 1.0,
+    mode: str = "commercial",
+    fail_on_no_go: bool = True,
+) -> list[str]:
     issues = content_execution_layout_issues()
+    if not 0 <= min_pass_rate <= 1:
+        return [*issues, "minPassRate must be between 0 and 1"]
+    if mode not in {"calibration", "commercial"}:
+        return [*issues, f"readiness mode is invalid: {mode}"]
     if not is_execution_id(execution_id):
         return [*issues, f"invalid executionId: {execution_id}"]
     root = DATA_EXECUTIONS_ROOT / execution_id
@@ -212,31 +306,60 @@ def execution_readiness_issues(execution_id: str, *, require_reviewed: bool) -> 
 
     issues.extend(_terminal_execution_issues(root, execution_id))
     model_readiness = _execution_model_readiness(root, execution_id, issues)
-    media_report = homepage_media_completeness_report(execution_id)
-    if not bool(media_report.get("passed")):
-        for row in media_report.get("issues") or []:
-            if not isinstance(row, dict):
-                continue
-            issues.append(
-                "homepage media completeness: {code} {ref}: {message}".format(
-                    code=str(row.get("code") or "DATA.MEDIA.DOWNLOAD_INCOMPLETE"),
-                    ref=str(row.get("ref") or ""),
-                    message=str(row.get("message") or "media closure failed"),
+    issues.extend(
+        _token_ledger_issues(
+            root,
+            execution_id,
+            model_readiness=model_readiness,
+        )
+    )
+    if parse_execution_id(execution_id).content_type is ContentType.HOMEPAGE:
+        media_report = homepage_media_completeness_report(execution_id)
+        if not bool(media_report.get("passed")):
+            for row in media_report.get("issues") or []:
+                if not isinstance(row, dict):
+                    continue
+                issues.append(
+                    "homepage media completeness: {code} {ref}: {message}".format(
+                        code=str(row.get("code") or "DATA.MEDIA.DOWNLOAD_INCOMPLETE"),
+                        ref=str(row.get("ref") or ""),
+                        message=str(row.get("message") or "media closure failed"),
+                    )
                 )
-            )
     objects = [path.parent for path in root.rglob("1.download")]
     if not objects:
         issues.append("reviewed execution has no content objects")
         return issues
-    for object_root in objects:
-        issues.extend(
-            _reviewed_object_issues(
-                root,
-                object_root,
-                execution_id,
-                model_readiness=model_readiness,
-            )
+    object_issue_groups = [
+        _reviewed_object_issues(
+            root,
+            object_root,
+            execution_id,
+            model_readiness=model_readiness,
         )
+        for object_root in objects
+    ]
+    selected_count = len(objects)
+    selection_path = root / "_shared" / "target_selection.json"
+    if selection_path.is_file():
+        try:
+            selection = read_json(selection_path)
+            selected_count = max(
+                selected_count,
+                int(selection.get("selectedCount") or 0),
+            )
+        except (OSError, ValueError, TypeError):
+            issues.append("target selection is unreadable")
+    passed_count = sum(1 for group in object_issue_groups if not group)
+    pass_rate = passed_count / selected_count if selected_count else 0.0
+    if pass_rate < min_pass_rate:
+        issues.append(
+            f"reviewed object pass rate below contract: "
+            f"required={min_pass_rate:.6f} actual={pass_rate:.6f}"
+        )
+    if fail_on_no_go:
+        for group in object_issue_groups:
+            issues.extend(group)
     return issues
 
 
@@ -246,11 +369,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execution-id", required=True)
     parser.add_argument("--require-reviewed", action="store_true")
+    parser.add_argument("--min-pass-rate", type=float, default=1.0)
+    parser.add_argument(
+        "--mode",
+        choices=("calibration", "commercial"),
+        default="commercial",
+    )
+    parser.add_argument("--fail-on-no-go", action="store_true")
     args = parser.parse_args(argv)
-    issues = execution_readiness_issues(args.execution_id, require_reviewed=bool(args.require_reviewed))
+    issues = execution_readiness_issues(
+        args.execution_id,
+        require_reviewed=bool(args.require_reviewed),
+        min_pass_rate=float(args.min_pass_rate),
+        mode=str(args.mode),
+        fail_on_no_go=bool(args.fail_on_no_go),
+    )
     report = {
         "executionId": args.execution_id,
         "requireReviewed": bool(args.require_reviewed),
+        "minPassRate": float(args.min_pass_rate),
+        "mode": str(args.mode),
+        "failOnNoGo": bool(args.fail_on_no_go),
         "passed": not issues,
         "issues": issues,
     }

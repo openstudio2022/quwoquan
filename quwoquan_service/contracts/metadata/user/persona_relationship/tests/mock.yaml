@@ -1,0 +1,32 @@
+aggregate: PersonaRelationship
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  执行：flutter test test/local_contract/cloud/user/
+
+scenarios:
+  - name: follow_command_result_parse
+    description: FollowCommandResult 强类型解析（relationState / idempotentReplay）
+    assertions:
+      - required_fields_non_empty
+      - relation_state_enum_valid
+
+  - name: relationship_view_wire_parse
+    description: RelationshipViewWireDto 解析；派生布尔由 view model 从 relationState 计算
+    assertions:
+      - is_blocked_flags_parsed
+      - derived_is_following_matches_relation_state
+
+  - name: capability_wire_parse
+    description: RelationshipCapabilityWireDto 16 字段解析驱动主页按钮矩阵
+    assertions:
+      - can_open_conversation_parsed
+      - blocked_pair_disables_all_actions
+
+  - name: error_code_mapping
+    description: 关系域错误码端侧映射
+    cases:
+      - http_status: 403
+        code: USER.RELATIONSHIP.follow_blocked
+        expected_dart_const: relationshipFollowBlocked

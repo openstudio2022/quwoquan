@@ -495,6 +495,7 @@ Map<String, String> _queryKeyParts(String key) {
 
 String contentFeedQueryKey({
   required String category,
+  String? channelId,
   String? identity,
   String? type,
   String? subCategory,
@@ -505,6 +506,7 @@ String contentFeedQueryKey({
   final parts = <String>[
     'surface=discoveryFeed',
     'category=${category.trim()}',
+    'channelId=${(channelId ?? '').trim()}',
     'identity=${(identity ?? '').trim()}',
     'type=${(type ?? '').trim()}',
     'subCategory=${(subCategory ?? '').trim()}',

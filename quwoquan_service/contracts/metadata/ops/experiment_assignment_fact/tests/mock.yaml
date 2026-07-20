@@ -1,0 +1,9 @@
+entity: ExperimentAssignmentFact
+layer: app_side
+
+description: |
+  V1 App consumer deferred：App 端零 AB 消费需求（系统分桶在服务端 policy 轨道），
+  无 App mock fixture 场景。若未来引入 UI 级 AB 实验，先恢复 app consumer 声明并补
+  typed Facet + alpha mock + user_acceptance，再回填本文件场景。
+
+scenarios: []

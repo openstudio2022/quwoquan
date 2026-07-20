@@ -74,6 +74,7 @@ ASSISTANT_SEED_REFS="${ASSISTANT_SEED_REFS:-assistant_p0_core}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 SKIP_APP=0
+START_ASSISTANT=1
 KILL_EXISTING=1
 RESTART_STACK=1
 CLEAN_ENV=0
@@ -100,7 +101,7 @@ CONTAINER_HOST_ALIAS=""
 usage() {
   cat <<EOF
 Usage:
-  scripts/start_app_beta_manual.sh [options]
+  quwoquan_app/scripts/device/start_app_beta_manual.sh [options]
 
 Default:
   Restart the local beta cloud stack, then start the Flutter app.
@@ -119,6 +120,7 @@ Options:
   --media-mode <symlink|copy> Media root preparation mode (default: ${MEDIA_PREP_MODE}).
   --full-matrix              Equivalent to --seed-verify full --media-mode copy.
   --skip-app                 Start/check beta cloud stack only; do not start Flutter.
+  --skip-assistant           Skip assistant-service for content-only validation.
   --restart                  Stop a managed previous stack before starting (default on).
   --clean-env                Remove runtime pid/env state before starting.
   --kill-existing            Reclaim beta ports by killing listeners (default on).
@@ -177,6 +179,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-app)
       SKIP_APP=1
+      shift
+      ;;
+    --skip-assistant)
+      START_ASSISTANT=0
       shift
       ;;
     --kill-existing)
@@ -413,11 +419,23 @@ print(f"ASSISTANT_BETA_MODEL_SOURCE_PROVIDER={shlex.quote(provider)}")
 PY
 }
 
-eval "$(resolve_assistant_model_env)"
-
-if [[ "${ASSISTANT_MODEL_PROVIDER}" != "deterministic" && "${ASSISTANT_MODEL_PROVIDER}" != "fake" && -z "${ASSISTANT_BETA_RESOLVED_MODEL_API_KEY:-}" ]]; then
-  echo "GATE_BLOCK: no assistant beta model key resolved from environment." >&2
-  exit 2
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  eval "$(resolve_assistant_model_env)"
+  if [[ "${ASSISTANT_MODEL_PROVIDER}" == "deterministic" || "${ASSISTANT_MODEL_PROVIDER}" == "fake" ]]; then
+    echo "GATE_BLOCK: beta assistant-service requires a real model provider; use --skip-assistant only for content-only validation." >&2
+    exit 2
+  fi
+  if [[ -z "${ASSISTANT_BETA_RESOLVED_MODEL_API_KEY:-}" ]]; then
+    echo "GATE_BLOCK: no assistant beta model key resolved from environment." >&2
+    exit 2
+  fi
+else
+  ASSISTANT_MODEL_PROVIDER=""
+  ASSISTANT_MODEL_BASE_URL=""
+  ASSISTANT_MODEL_MODEL=""
+  ASSISTANT_MODEL_API_KEY_ENV=""
+  ASSISTANT_BETA_RESOLVED_MODEL_API_KEY=""
+  ASSISTANT_BETA_MODEL_REF="disabled"
 fi
 
 BETA_MANUAL_KILL_EXISTING="$KILL_EXISTING"
@@ -504,7 +522,9 @@ esac
 
 python3 "$ROOT_DIR/quwoquan_app/scripts/env/verify_app_seed_manifests.py"
 bash "$ROOT_DIR/quwoquan_app/scripts/env/build_app_env_package.sh" --env beta >/dev/null
-bash "$ROOT_DIR/quwoquan_service/scripts/runtime/build_service_env_package.sh" --service assistant-service --env beta >/dev/null
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  bash "$ROOT_DIR/quwoquan_service/scripts/runtime/build_service_env_package.sh" --service assistant-service --env beta >/dev/null
+fi
 python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env beta --kind legal-static >/dev/null
 if [[ ! -f "$BETA_LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
   echo "GATE_BLOCK: beta legal-static package is missing user-agreement at $BETA_LEGAL_STATIC_ROOT" >&2
@@ -527,6 +547,7 @@ fi
 beta_manual_record_metadata "stack" "$BETA_MANUAL_STACK_NAME"
 beta_manual_record_metadata "controller_pid" "$$"
 beta_manual_record_metadata "owner_id" "$BETA_MANUAL_OWNER_ID"
+beta_manual_record_metadata "assistant_enabled" "$START_ASSISTANT"
 beta_manual_record_metadata "assistant_port" "$ASSISTANT_PORT"
 beta_manual_record_metadata "chat_port" "$CHAT_PORT"
 beta_manual_record_metadata "entity_port" "$ENTITY_PORT"
@@ -753,7 +774,9 @@ trap 'cleanup; exit 130' INT TERM
 trap 'cleanup; exit 129' HUP
 trap 'cleanup; exit 148' TSTP
 
-beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
+fi
 beta_manual_ensure_port_available "$CHAT_PORT" "chat-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
 beta_manual_ensure_port_available "$CONTENT_PORT" "gateway-upstream"
@@ -762,7 +785,11 @@ beta_manual_ensure_port_available "$MEDIA_PROCESSOR_PORT" "media-edge-upstream"
 beta_manual_ensure_port_available "$MEDIA_ORIGIN_PORT" "media-origin"
 
 echo "[app-beta-manual] logs: $LOG_DIR"
-echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT_MODEL_BASE_URL})"
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT_MODEL_BASE_URL})"
+else
+  echo "[app-beta-manual] assistant-service disabled for content-only validation"
+fi
 echo "[app-beta-manual] verify mode: $VERIFY_MODE"
 echo "[app-beta-manual] media mode: $MEDIA_PREP_MODE"
 if [[ "$VERIFY_MODE" == "full" ]]; then
@@ -831,36 +858,37 @@ if [[ "$DEVICE_KIND" == android_* && -n "$FLUTTER_DEVICE_ID" && -x "$(command -v
   ADB_REVERSE_ENABLED=1
 fi
 beta_manual_ensure_chat_backing_services || {
-  echo "chat backing services must be ready before assistant-service starts" >&2
+  echo "chat backing services must be ready before beta services start" >&2
   exit 1
 }
-echo "[app-beta-manual] starting assistant-service beta on :$ASSISTANT_PORT"
-beta_manual_start_process \
-  "assistant-service" \
-  "$ASSISTANT_LOG" \
-  "$ASSISTANT_SERVICE_DIR" \
-  env \
-    APP_ENV=beta \
-    ASSISTANT_SERVICE_ADDR=":${ASSISTANT_PORT}" \
-    POSTGRES_DSN="$BETA_POSTGRES_DSN" \
-    MONGODB_URI="$CHAT_MONGO_URI" \
-    MONGODB_DATABASE="quwoquan_assistant" \
-    REDIS_GENERAL_ADDR="$CHAT_REDIS_ADDR" \
-    REDIS_REC_ADDR="$CHAT_REDIS_ADDR" \
-    ASSISTANT_SCENARIO_SEED_REFS="$ASSISTANT_SEED_REFS" \
-    ASSISTANT_MODEL_PROVIDER="$ASSISTANT_MODEL_PROVIDER" \
-    ASSISTANT_MODEL_BASE_URL="$ASSISTANT_MODEL_BASE_URL" \
-    ASSISTANT_MODEL_MODEL="$ASSISTANT_MODEL_MODEL" \
-    ASSISTANT_MODEL_API_KEY_ENV="$ASSISTANT_MODEL_API_KEY_ENV" \
-    ASSISTANT_BETA_RESOLVED_MODEL_API_KEY="$ASSISTANT_BETA_RESOLVED_MODEL_API_KEY" \
-    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}" \
-    go run ./cmd/api
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  echo "[app-beta-manual] starting assistant-service beta on :$ASSISTANT_PORT"
+  beta_manual_start_process \
+    "assistant-service" \
+    "$ASSISTANT_LOG" \
+    "$ASSISTANT_SERVICE_DIR" \
+    env \
+      APP_ENV=beta \
+      ASSISTANT_SERVICE_ADDR=":${ASSISTANT_PORT}" \
+      POSTGRES_DSN="$BETA_POSTGRES_DSN" \
+      MONGODB_URI="$CHAT_MONGO_URI" \
+      MONGODB_DATABASE="quwoquan_assistant" \
+      REDIS_GENERAL_ADDR="$CHAT_REDIS_ADDR" \
+      REDIS_REC_ADDR="$CHAT_REDIS_ADDR" \
+      ASSISTANT_SCENARIO_SEED_REFS="$ASSISTANT_SEED_REFS" \
+      ASSISTANT_MODEL_PROVIDER="$ASSISTANT_MODEL_PROVIDER" \
+      ASSISTANT_MODEL_BASE_URL="$ASSISTANT_MODEL_BASE_URL" \
+      ASSISTANT_MODEL_MODEL="$ASSISTANT_MODEL_MODEL" \
+      ASSISTANT_MODEL_API_KEY_ENV="$ASSISTANT_MODEL_API_KEY_ENV" \
+      ASSISTANT_BETA_RESOLVED_MODEL_API_KEY="$ASSISTANT_BETA_RESOLVED_MODEL_API_KEY" \
+      go run ./cmd/api
 
-beta_manual_wait_http_ok "http://127.0.0.1:${ASSISTANT_PORT}/healthz" "assistant-service" 60 || {
-  echo "assistant log: $ASSISTANT_LOG" >&2
-  echo "gateway log: $GATEWAY_LOG" >&2
-  exit 1
-}
+  beta_manual_wait_http_ok "http://127.0.0.1:${ASSISTANT_PORT}/healthz" "assistant-service" 60 || {
+    echo "assistant log: $ASSISTANT_LOG" >&2
+    echo "gateway log: $GATEWAY_LOG" >&2
+    exit 1
+  }
+fi
 
 echo "[app-beta-manual] seeding local chat fixture db refs: $CHAT_SEED_REFS"
 IFS=',' read -r -a CHAT_SEED_REF_ARRAY <<< "$CHAT_SEED_REFS"
@@ -921,6 +949,7 @@ beta_manual_start_process \
     ENTITY_SERVICE_ADDR="127.0.0.1:${ENTITY_PORT}" \
     ENTITY_MONGO_URI="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true" \
     ENTITY_MONGO_DATABASE=quwoquan_entity \
+    ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
     go run ./cmd/api
 
 beta_manual_wait_http_ok "http://127.0.0.1:${ENTITY_PORT}/healthz" "entity-service" 60 || {
@@ -947,7 +976,9 @@ beta_manual_start_process \
     --video-cdn-base-url "$MEDIA_VIDEO_CDN_BASE_URL"
 
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/healthz" "gateway" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+if [[ "$START_ASSISTANT" == "1" ]]; then
+  beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+fi
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/config/app" "app config fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/content/feed" "content fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/chat/inbox" "chat inbox route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
@@ -1004,7 +1035,7 @@ beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/notifications/unread-coun
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/content/feed/intersections?limit=4&channel=recommend" "feed intersections fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
-python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "http://127.0.0.1:${MEDIA_ORIGIN_PORT}" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
+python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "http://127.0.0.1:${MEDIA_ORIGIN_PORT}" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" "$START_ASSISTANT" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -1027,8 +1058,37 @@ from pathlib import Path
     flutter_device_id,
     seed_verify_mode,
     media_prep_mode,
-) = sys.argv[1:18]
+    assistant_enabled,
+) = sys.argv[1:19]
 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+checked_routes = [
+    "/healthz",
+    "/config/app",
+    "/content/feed",
+    "/chat/inbox",
+    "/chat/contacts",
+    "/chat/conversations",
+    "/user/sync",
+    "/circles",
+    "/circles/fixture_circle_photo/feed",
+    "/user/profile",
+    "/me",
+    "/user/personas/active",
+    "/user/settings/appearance",
+    "/content/profile-subjects/fixture_user_current/posts",
+    "/users/fixture_user_current/works",
+    "/users/fixture_user_current/circles",
+    "/user/sub-accounts/fixture_user_current/relationship/capability",
+    "/homepages/search",
+    "/integration/locations/pois",
+    "/app-messages",
+    "/app-messages/unread-count",
+    "/notifications/unread-count",
+    "/content/feed/intersections?limit=4&channel=recommend",
+    "/rtc/calls",
+]
+if assistant_enabled == "1":
+    checked_routes.insert(1, "/assistant/skill-subscriptions")
 report = {
     "status": "ready",
     "mode": "manual-beta",
@@ -1048,36 +1108,15 @@ report = {
     "mediaPrepMode": media_prep_mode,
     "adbReverseEnabled": adb_reverse == "1",
     "restartedFromPrevious": restarted_from_previous == "1",
-    "assistantServiceUrl": f"http://127.0.0.1:{assistant_port}",
+    "assistantEnabled": assistant_enabled == "1",
+    "assistantServiceUrl": (
+        f"http://127.0.0.1:{assistant_port}"
+        if assistant_enabled == "1"
+        else None
+    ),
     "chatServiceUrl": f"http://127.0.0.1:{chat_port}",
     "manifest": str(Path(manifest_path)),
-    "checkedRoutes": [
-        "/healthz",
-        "/assistant/skill-subscriptions",
-        "/config/app",
-        "/content/feed",
-        "/chat/inbox",
-        "/chat/contacts",
-        "/chat/conversations",
-        "/user/sync",
-        "/circles",
-        "/circles/fixture_circle_photo/feed",
-        "/user/profile",
-        "/me",
-        "/user/personas/active",
-        "/user/settings/appearance",
-        "/content/profile-subjects/fixture_user_current/posts",
-        "/users/fixture_user_current/works",
-        "/users/fixture_user_current/circles",
-        "/user/sub-accounts/fixture_user_current/relationship/capability",
-        "/homepages/search",
-        "/integration/locations/pois",
-        "/app-messages",
-        "/app-messages/unread-count",
-        "/notifications/unread-count",
-        "/content/feed/intersections?limit=4&channel=recommend",
-        "/rtc/calls",
-    ],
+    "checkedRoutes": checked_routes,
     "checkedMediaUrls": [
         f"{avatar_cdn.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
         f"{avatar_cdn.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
@@ -1099,7 +1138,11 @@ echo "[app-beta-manual] APP_RUNTIME_ENV=beta APP_DATA_SOURCE=remote CLOUD_GATEWA
 
 if [[ "$SKIP_APP" == "1" ]]; then
   echo "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C."
-  beta_manual_wait_until_stopped assistant-service chat-service gateway media-static
+  if [[ "$START_ASSISTANT" == "1" ]]; then
+    beta_manual_wait_until_stopped assistant-service chat-service gateway media-static
+  else
+    beta_manual_wait_until_stopped chat-service gateway media-static
+  fi
   exit 0
 fi
 

@@ -56,11 +56,9 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
       _errorSemantic = null;
     });
     try {
-      final wizard = ref.read(
-        startGroupMemberWizardProvider(widget.wizardId),
-      );
+      final wizard = ref.read(startGroupMemberWizardProvider(widget.wizardId));
       final members = await loadGroupContactMembers(
-        ref.read(chatRepositoryProvider),
+        ref.read(chatGroupSelectionRepositoryProvider),
         widget.group,
         wizard.lockedMemberIds,
       );
@@ -149,9 +147,8 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final rowBackground = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
+    final rowBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final rowDividerColor =
         SettingsSemanticConstants.conversationSheetDividerColor(
           isDark,
@@ -176,7 +173,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
       return id.isNotEmpty && !wizardState.isLocked(id);
     });
     final selectedCount = wizardState.selectedMembers.length;
-    final title = UITextConstants.startGroupChatGroupMemberTitle(
+    final title = ChatText.startGroupChatGroupMemberTitle(
       widget.group.title,
       widget.group.friendCount,
     );
@@ -249,12 +246,10 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                         enabled: hasSelectableMembers,
                       ),
                       Text(
-                        UITextConstants.selectAll,
+                        ChatText.selectAll,
                         style: TextStyle(
                           fontSize: AppTypography.lg,
-                          color: hasSelectableMembers
-                              ? fgPrimary
-                              : fgSecondary,
+                          color: hasSelectableMembers ? fgPrimary : fgSecondary,
                         ),
                       ),
                     ],
@@ -268,7 +263,8 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                     vertical:
                         SettingsSemanticConstants.actionButtonPaddingVertical,
                   ),
-                  color: SettingsSemanticConstants.actionButtonPrimaryBackground,
+                  color:
+                      SettingsSemanticConstants.actionButtonPrimaryBackground,
                   disabledColor:
                       SettingsSemanticConstants.actionButtonDisabledBackground(
                         isDark,
@@ -284,7 +280,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                     SettingsSemanticConstants.actionButtonHeightMedium,
                   ),
                   child: Text(
-                    '${UITextConstants.selectAction}（$selectedCount）',
+                    '${ChatText.selectAction}（$selectedCount）',
                     style: TextStyle(
                       fontSize: AppTypography.lg,
                       fontWeight: FontWeight.w500,
@@ -330,7 +326,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     if (filtered.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.startGroupChatNoMatchedMembers,
+          ChatText.startGroupChatNoMatchedMembers,
           style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
         ),
       );

@@ -6,6 +6,7 @@ abstract interface class ContentCommentQuery {
     required String postId,
     String? cursor,
     int limit = 20,
+    ContentCommentSort sort = ContentCommentSort.hot,
   });
 
   Future<ContentCommentReplyPageSlice> listReplies({

@@ -1,0 +1,25 @@
+aggregate: Message
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: send_offline_kill_restart_delivers_once
+    steps:
+      - user A goes offline and sends a text message
+      - app process is killed and restarted
+      - network is restored
+    assertions:
+      - message_auto_resent_without_user_action
+      - exactly_one_message_visible_to_user_b
+      - client_msg_id_replay_returns_same_seq
+
+  - name: recall_propagates_to_receiver
+    steps:
+      - user A sends message
+      - user A recalls within window
+      - user B syncs conversation
+    assertions:
+      - receiver_sees_recalled_placeholder
+      - inbox_preview_updated

@@ -72,7 +72,7 @@ func TestLoggedRoundTripper_OutboundSuccessAndHeaderInjection(t *testing.T) {
 		t.Fatalf("trace headers should be injected for outbound call")
 	}
 
-	standardLogs, err := parseDelimitedLogs(standard.String())
+	standardLogs, err := parseRuntimeLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse standard logs failed: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestLoggedRoundTripper_OutboundFailureToExceptionSink(t *testing.T) {
 		t.Fatalf("expected transport error")
 	}
 
-	standardLogs, parseErr := parseDelimitedLogs(standard.String())
+	standardLogs, parseErr := parseRuntimeLogs(standard.String())
 	if parseErr != nil {
 		t.Fatalf("parse standard logs failed: %v", parseErr)
 	}
@@ -122,14 +122,14 @@ func TestLoggedRoundTripper_OutboundFailureToExceptionSink(t *testing.T) {
 		t.Fatalf("expected process+io logs in standard sink")
 	}
 
-	errorLogs, parseErr := parseDelimitedLogs(errorBuf.String())
+	errorLogs, parseErr := parseRuntimeLogs(errorBuf.String())
 	if parseErr != nil {
 		t.Fatalf("parse error logs failed: %v", parseErr)
 	}
 	if len(errorLogs) == 0 {
 		t.Fatalf("expected exception log in error sink")
 	}
-	if errorLogs[0]["err"] == "" {
-		t.Fatalf("exception log should contain err")
+	if errorLogs[0]["errorCode"] == "" {
+		t.Fatalf("exception log should contain errorCode")
 	}
 }

@@ -28,7 +28,7 @@ type PlanStep struct {
 type ReactPlanner struct{}
 
 func (ReactPlanner) Plan(input PlanInput) []PlanStep {
-	if input.Budget.MaxToolCalls <= 0 {
+	if input.Budget.MaxToolCalls <= 0 || len(input.ToolPolicy) == 0 {
 		return []PlanStep{{StepID: "answer", Action: "answer"}}
 	}
 	if nextAction, _ := input.StructuredDelta["nextAction"].(string); strings.TrimSpace(nextAction) == "call_tool" {
@@ -41,15 +41,15 @@ func (ReactPlanner) Plan(input PlanInput) []PlanStep {
 			return []PlanStep{step, {StepID: "answer", Action: "answer"}}
 		}
 	}
-	if len(input.ToolPolicy) == 0 {
-		return []PlanStep{{StepID: "answer", Action: "answer"}}
-	}
-	toolName := "mock_search"
+	toolName := ""
 	for _, candidate := range input.ToolPolicy {
 		if strings.TrimSpace(candidate) != "" {
 			toolName = strings.TrimSpace(candidate)
 			break
 		}
+	}
+	if toolName == "" {
+		return []PlanStep{{StepID: "answer", Action: "answer"}}
 	}
 	return []PlanStep{{
 		StepID:   "tool:1",

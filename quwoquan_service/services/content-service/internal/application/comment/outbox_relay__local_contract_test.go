@@ -33,6 +33,8 @@ func TestCommentOutboxRelayRetriesWithoutAdvancingFailedCheckpoint(t *testing.T)
 		store,
 		store,
 		testsupport.NewReactionStore(),
+		store,
+		store,
 	))
 	if _, err := service.CreateComment(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-relay-create"),

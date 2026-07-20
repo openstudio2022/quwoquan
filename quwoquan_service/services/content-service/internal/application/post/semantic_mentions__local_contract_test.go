@@ -29,7 +29,13 @@ func TestApplySemanticMentionGovernanceEventReprojectsActiveRefs(t *testing.T) {
 			"candidateId": "candidate_entity_1",
 		}},
 	}})
-	service := NewPostService(BindDataPorts(store))
+	service := NewPostService(
+		BindDataPorts(store),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 
 	published, err := service.ApplySemanticMentionGovernanceEvent(context.Background(), postsemantic.GovernanceEvent{
 		CandidateID: "candidate_entity_1",

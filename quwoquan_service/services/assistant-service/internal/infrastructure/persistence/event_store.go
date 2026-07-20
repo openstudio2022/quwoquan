@@ -17,10 +17,12 @@ type MongoEventStore struct {
 	scorecards        *mongo.Collection
 }
 
+// 集合名契约来自 assistant_interaction_event/assistant_scorecard_fact 的
+// storage.yaml；eventId/scoreId 即 `_id`，dedupe 由主键唯一性承载。
 func NewMongoEventStore(db *mongo.Database) *MongoEventStore {
 	return &MongoEventStore{
-		interactionEvents: db.Collection("interaction_events"),
-		scorecards:        db.Collection("scorecards"),
+		interactionEvents: db.Collection("assistant_interaction_events"),
+		scorecards:        db.Collection("assistant_scorecard_facts"),
 	}
 }
 

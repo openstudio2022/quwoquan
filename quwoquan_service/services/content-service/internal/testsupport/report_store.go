@@ -97,6 +97,52 @@ func (s *ReportStore) FindReceipt(
 	}, true, nil
 }
 
+// RecordNoopReceipt 持久化"目标状态已满足"的命名迁移回执（与 PGReportStore 语义
+// 对齐）：并发首插以先者为准并回放先者结果，不改变聚合状态、不追加 outbox。
+func (s *ReportStore) RecordNoopReceipt(
+	_ context.Context,
+	noop reportports.NoopReceipt,
+) (reportports.CommitResult, error) {
+	if noop.Aggregate == nil ||
+		noop.IdempotencyKey == "" ||
+		noop.CommandName == "" ||
+		noop.CommandDigest == "" {
+		return reportports.CommitResult{},
+			contentgenerated.AppErrorFromVersionConflict(
+				"report no-op receipt is incomplete",
+			)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if receipt, found := s.receipts[noop.IdempotencyKey]; found &&
+		receipt.expiresAt.After(time.Now().UTC()) {
+		if receipt.commandName != noop.CommandName ||
+			receipt.commandDigest != noop.CommandDigest {
+			return reportports.CommitResult{},
+				contentgenerated.AppErrorFromIdempotencyConflict(
+					"test report receipt digest mismatch",
+				)
+		}
+		replayed, err := reportmodel.Restore(receipt.snapshot)
+		if err != nil {
+			return reportports.CommitResult{}, err
+		}
+		return reportports.CommitResult{Aggregate: replayed, Replayed: true}, nil
+	}
+	expiresAt := noop.ReceiptExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	snapshot := noop.Aggregate.Snapshot()
+	s.receipts[noop.IdempotencyKey] = reportReceipt{
+		commandName:   noop.CommandName,
+		commandDigest: noop.CommandDigest,
+		snapshot:      snapshot,
+		expiresAt:     expiresAt,
+	}
+	return reportports.CommitResult{Aggregate: noop.Aggregate, Replayed: false}, nil
+}
+
 func (s *ReportStore) Commit(
 	_ context.Context,
 	commit reportports.Commit,
@@ -228,6 +274,51 @@ func (s *ReportStore) List(
 		})
 	}
 	return reportapp.ReportQueueSlice{Items: items, Total: len(items)}, nil
+}
+
+func (s *ReportStore) ListByReporter(
+	_ context.Context,
+	reporterID string,
+	cursor *reportapp.MyReportCursor,
+	limit int,
+) ([]reportapp.MyReportItemSlice, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	snapshots := make([]reportmodel.Snapshot, 0, len(s.reports))
+	for _, snapshot := range s.reports {
+		if snapshot.ReporterID == strings.TrimSpace(reporterID) {
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+	sort.Slice(snapshots, func(i, j int) bool {
+		if snapshots[i].CreatedAt.Equal(snapshots[j].CreatedAt) {
+			return snapshots[i].ID > snapshots[j].ID
+		}
+		return snapshots[i].CreatedAt.After(snapshots[j].CreatedAt)
+	})
+	items := make([]reportapp.MyReportItemSlice, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		if cursor != nil &&
+			(snapshot.CreatedAt.After(cursor.CreatedAt) ||
+				(snapshot.CreatedAt.Equal(cursor.CreatedAt) && snapshot.ID >= cursor.ID)) {
+			continue
+		}
+		items = append(items, reportapp.MyReportItemSlice{
+			ID:          snapshot.ID,
+			TargetType:  snapshot.TargetType,
+			TargetID:    snapshot.TargetID,
+			Reason:      snapshot.Reason,
+			Description: snapshot.Description,
+			Status:      snapshot.Status,
+			CreatedAt:   snapshot.CreatedAt,
+			UpdatedAt:   snapshot.UpdatedAt,
+			ResolvedAt:  snapshot.ResolvedAt,
+		})
+		if limit > 0 && len(items) >= limit {
+			break
+		}
+	}
+	return items, nil
 }
 
 func (s *ReportStore) OutboxEvents() []reportports.OutboxEvent {

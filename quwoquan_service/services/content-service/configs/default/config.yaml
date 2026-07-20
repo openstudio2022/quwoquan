@@ -21,6 +21,20 @@ mongo:
 postgres:
   report_dsn: ""
 
+# 评论创建时的 IP 属地快照。beta/gamma/prod 只允许加载镜像内固定版本的
+# ip2region IPv4/IPv6 离线库；原始 IP 不落 Comment、不写日志。
+ip_location:
+  provider: "ip2region"
+  ipv4_database_path: "/etc/quwoquan/geoip/ip2region_v4.xdb"
+  ipv6_database_path: "/etc/quwoquan/geoip/ip2region_v6.xdb"
+  data_version: "2026-07-09"
+
+comment_rate_limit:
+  burst_window_seconds: 30
+  burst_max: 5
+  daily_window_seconds: 86400
+  daily_max: 200
+
 # Redis scenes (defaults)
 redis:
   rec:
@@ -88,6 +102,14 @@ oss:
   presign_ttl_minutes: 15
   cdn_ttl_minutes: 60
   use_ssl: false
+
+# alpha/beta/gamma/prod 共享的强制 media outbox consumer。环境 overlay 只注入
+# 拓扑和密钥，不另行定义第二套 Worker。
+media_processing:
+  interval_ms: 2000
+  ffmpeg_path: "ffmpeg"
+  ffprobe_path: "ffprobe"
+  job_timeout_ms: 900000
 
 # Unified search index — WRITE side (content.search_index_worker).
 # content-service is the indexing producer for the shared ES/OpenSearch index that

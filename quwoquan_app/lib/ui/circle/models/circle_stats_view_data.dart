@@ -26,6 +26,8 @@ extension CircleStatsWireProjection on CircleStatsWireDto {
         fb?.weeklyActiveCount ?? 0,
       ),
       likes: _readStatsInt(s, 'likeCount', 0),
+      storageUsedBytes: _readStatsInt(s, 'storageUsedBytes', 0),
+      storageQuotaBytes: _readStatsInt(s, 'storageQuotaBytes', 0),
     );
   }
 }
@@ -38,6 +40,8 @@ class CircleStatsViewData {
     required this.discussions,
     required this.weeklyActive,
     required this.likes,
+    this.storageUsedBytes = 0,
+    this.storageQuotaBytes = 0,
   });
 
   static const empty = CircleStatsViewData(
@@ -53,6 +57,10 @@ class CircleStatsViewData {
   final int discussions;
   final int weeklyActive;
   final int likes;
+
+  /// 圈子文件板块容量（stats wire `storageUsedBytes/storageQuotaBytes`）。
+  final int storageUsedBytes;
+  final int storageQuotaBytes;
 
   factory CircleStatsViewData.fromStatsWire(
     CircleStatsWireDto wire, {
@@ -79,6 +87,8 @@ class CircleStatsViewData {
       discussions: discussions,
       weeklyActive: circle.weeklyActiveCount,
       likes: likes,
+      storageUsedBytes: storageUsedBytes,
+      storageQuotaBytes: storageQuotaBytes,
     );
   }
 }

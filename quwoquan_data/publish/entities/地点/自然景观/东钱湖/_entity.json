@@ -1,0 +1,57 @@
+{
+  "label": "东钱湖",
+  "domain": "地点",
+  "type": "自然景观",
+  "executionId": "20260719--travel-homepage-coverage--cn-zhejiang--canary-001",
+  "entityRef": "/entity/地点/自然景观/东钱湖",
+  "summary": "东钱湖，亦称东湖、万金湖，是浙江省宁波市境内的一个湖泊。",
+  "sourceRefs": [
+    "sources/东钱湖__wikipedia__99643c13/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E4%B8%9C%E9%92%B1%E6%B9%96"
+  ],
+  "primarySource": {
+    "entityName": "东钱湖",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E4%B8%9C%E9%92%B1%E6%B9%96",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E4%B8%9C%E9%92%B1%E6%B9%96",
+    "title": "东钱湖",
+    "fetchedAt": "2026-07-19T10:31:01Z",
+    "snapshotHash": "sha256:bd0a7b4c14e7b2a011fcbb5f3c4b11de40fb1a0be2cfa08f34ae9896560115ff",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation"
+  },
+  "textSourceRefs": [
+    "sources/东钱湖__wikipedia__99643c13/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/东钱湖__wikipedia__99643c13/source.md"
+  ],
+  "tagRefs": [
+    "Entity/地点/自然景观/水体",
+    "Topic/地理/行政区/中国/浙江省/宁波市/鄞州区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/宁波市/鄞州区",
+  "aliases": [
+    "东钱湖旅游度假区"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileVersion": "1.0.0",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

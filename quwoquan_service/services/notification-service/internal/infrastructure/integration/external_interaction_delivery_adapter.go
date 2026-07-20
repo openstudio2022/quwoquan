@@ -16,22 +16,16 @@ import (
 	"strings"
 	"time"
 
+	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
 	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/notification-service/internal/application"
+	notification "quwoquan_service/services/notification-service/internal/domain/notification"
 )
 
-const (
-	externalRequestsPath         = "/integrations/external-requests"
-	integrationResponseBodyLimit = 1 << 20
-
-	integrationProviderTimeoutCode  = "INTEGRATION.MIDDLEWARE.provider_timeout"
-	integrationProviderRejectedCode = "INTEGRATION.MIDDLEWARE.provider_rejected"
-	integrationUnsupportedCode      = "INTEGRATION.USER.unsupported_operation"
-	integrationInternalCode         = "INTEGRATION.SYSTEM.internal_error"
-)
+const integrationResponseBodyLimit = 1 << 20
 
 type ExternalInteractionDeliveryConfig struct {
 	BaseURL     string
@@ -113,7 +107,7 @@ func NewExternalInteractionDeliveryAdapter(
 		return nil, fmt.Errorf("notification integration observed HTTP client is required")
 	}
 	return &ExternalInteractionDeliveryAdapter{
-		endpoint:    baseURL + externalRequestsPath,
+		endpoint:    baseURL + serviceclients.IntegrationExternalRequestsPath,
 		credentials: cfg.Credentials,
 		environment: environment,
 		timeout:     cfg.Timeout,
@@ -128,7 +122,7 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 ) (int64, error) {
 	if a == nil || a.client == nil {
 		return 0, &DeliveryError{
-			Code:           integrationInternalCode,
+			Code:           serviceclients.IntegrationInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("notification integration delivery adapter is not initialized"),
 		}
@@ -136,14 +130,14 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 	if strings.TrimSpace(notification.NotificationID) == "" ||
 		strings.TrimSpace(recipientID) == "" {
 		return 0, &DeliveryError{
-			Code:           integrationInternalCode,
+			Code:           serviceclients.IntegrationInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("delivery job id and recipientId are required"),
 		}
 	}
 	if notification.EventType != application.NotificationPushRequestedEvent {
 		return 0, &DeliveryError{
-			Code:           integrationUnsupportedCode,
+			Code:           serviceclients.IntegrationUnsupportedOperationCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause: fmt.Errorf(
 				"notification event type %s is not an external push request",
@@ -173,10 +167,112 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 		ExpiresAt:      time.Now().UTC().Add(5 * time.Minute).Format(time.RFC3339),
 		Payload:        payload,
 	}
+	accepted, err := a.submit(ctx, bodyPayload)
+	if err != nil {
+		return 0, err
+	}
+	return acceptedSequence(accepted.RequestID), nil
+}
+
+func (a *ExternalInteractionDeliveryAdapter) SubmitIncomingCall(
+	ctx context.Context,
+	job notification.IncomingCallDeliveryJob,
+) (string, error) {
+	return a.submitIncomingCallPush(ctx, job, "ring")
+}
+
+func (a *ExternalInteractionDeliveryAdapter) SubmitIncomingCallCancellation(
+	ctx context.Context,
+	job notification.IncomingCallDeliveryJob,
+) (string, error) {
+	return a.submitIncomingCallPush(ctx, job, "cancel")
+}
+
+func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
+	ctx context.Context,
+	job notification.IncomingCallDeliveryJob,
+	action string,
+) (string, error) {
+	if a == nil || a.client == nil {
+		return "", &DeliveryError{
+			Code:           serviceclients.IntegrationInternalErrorCode,
+			RecoveryAction: failures.RecoveryActionSurface,
+			Cause:          errors.New("notification integration delivery adapter is not initialized"),
+		}
+	}
+	if strings.TrimSpace(job.ID) == "" ||
+		strings.TrimSpace(job.DestinationRef) == "" ||
+		strings.TrimSpace(job.DeliveryKey) == "" ||
+		strings.TrimSpace(job.CallID) == "" ||
+		strings.TrimSpace(job.TargetPersonaID) == "" ||
+		job.ExpiresAt.IsZero() {
+		return "", &DeliveryError{
+			Code:           serviceclients.IntegrationInternalErrorCode,
+			RecoveryAction: failures.RecoveryActionSurface,
+			Cause:          errors.New("incoming call delivery job is incomplete"),
+		}
+	}
+	occurredAt := job.CreatedAt.UTC()
+	callbackEvent := "IncomingCallPushDeliveryResult"
+	if action == "cancel" {
+		if job.CancellationOccurredAt == nil ||
+			strings.TrimSpace(job.CancellationEventID) == "" {
+			return "", &DeliveryError{
+				Code:           serviceclients.IntegrationInternalErrorCode,
+				RecoveryAction: failures.RecoveryActionSurface,
+				Cause:          errors.New("incoming call cancellation job is incomplete"),
+			}
+		}
+		occurredAt = job.CancellationOccurredAt.UTC()
+		callbackEvent = "IncomingCallCancellationPushDeliveryResult"
+	}
+	requestID := incomingCallExternalRequestID(
+		job.DeliveryKey,
+		job.DestinationRef,
+		action,
+	)
+	payload := map[string]string{
+		"action":          action,
+		"endpointRef":     job.DestinationRef,
+		"deliveryKey":     job.DeliveryKey,
+		"callId":          job.CallID,
+		"targetPersonaId": job.TargetPersonaID,
+		"callType":        job.CallType,
+		"callerName":      job.CallerName,
+		"sourceLabel":     job.SourceLabel,
+		"trustRelation":   job.TrustRelation,
+		"expiresAt":       job.ExpiresAt.UTC().Format(time.RFC3339),
+		"occurredAt":      occurredAt.Format(time.RFC3339),
+	}
+	bodyPayload := externalInteractionRequest{
+		RequestID:      requestID,
+		Operation:      reliabletask.ExternalInteractionOperationPush,
+		Tenant:         "quwoquan",
+		Environment:    a.environment,
+		IdempotencyKey: requestID,
+		CallbackEvent:  callbackEvent,
+		PayloadRef:     "incoming-call-delivery-job:" + job.ID,
+		PayloadDigest:  incomingCallDigest(job, action, occurredAt),
+		Sensitivity:    "private",
+		ExpiresAt:      job.ExpiresAt.UTC().Format(time.RFC3339),
+		Payload:        payload,
+	}
+	accepted, err := a.submit(ctx, bodyPayload)
+	if err != nil {
+		return "", err
+	}
+	return accepted.RequestID, nil
+}
+
+func (a *ExternalInteractionDeliveryAdapter) submit(
+	ctx context.Context,
+	bodyPayload externalInteractionRequest,
+) (reliabletask.ExternalInteractionAccepted, error) {
+	requestID := bodyPayload.RequestID
 	body, err := json.Marshal(bodyPayload)
 	if err != nil {
-		return 0, &DeliveryError{
-			Code:           integrationInternalCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			RequestID:      requestID,
 			Cause:          err,
@@ -186,8 +282,8 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 	defer cancel()
 	authorization, err := a.credentials.AuthorizationHeader(requestCtx)
 	if err != nil {
-		return 0, &DeliveryError{
-			Code:           integrationInternalCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
 			Cause:          fmt.Errorf("issue integration service credential: %w", err),
@@ -200,8 +296,8 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return 0, &DeliveryError{
-			Code:           integrationInternalCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			RequestID:      requestID,
 			Cause:          err,
@@ -214,11 +310,11 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 
 	response, err := a.client.Do(request)
 	if err != nil {
-		code := integrationProviderRejectedCode
+		code := serviceclients.IntegrationProviderRejectedCode
 		if isTimeout(err) {
-			code = integrationProviderTimeoutCode
+			code = serviceclients.IntegrationProviderTimeoutCode
 		}
-		return 0, &DeliveryError{
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
 			Code:           code,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
@@ -228,8 +324,8 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 	defer response.Body.Close()
 	raw, readErr := io.ReadAll(io.LimitReader(response.Body, integrationResponseBodyLimit))
 	if readErr != nil {
-		return 0, &DeliveryError{
-			Code:           integrationProviderRejectedCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationProviderRejectedCode,
 			StatusCode:     response.StatusCode,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
@@ -237,12 +333,13 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 		}
 	}
 	if response.StatusCode != http.StatusAccepted {
-		return 0, decodeRemoteFailure(response.StatusCode, raw, requestID)
+		return reliabletask.ExternalInteractionAccepted{},
+			decodeRemoteFailure(response.StatusCode, raw, requestID)
 	}
 	var accepted reliabletask.ExternalInteractionAccepted
 	if err := json.Unmarshal(raw, &accepted); err != nil {
-		return 0, &DeliveryError{
-			Code:           integrationProviderRejectedCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationProviderRejectedCode,
 			StatusCode:     response.StatusCode,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
@@ -252,15 +349,15 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 	if strings.TrimSpace(accepted.RequestID) == "" ||
 		accepted.RequestID != requestID ||
 		accepted.Status != reliabletask.ExternalInteractionStatusAccepted {
-		return 0, &DeliveryError{
-			Code:           integrationProviderRejectedCode,
+		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
+			Code:           serviceclients.IntegrationProviderRejectedCode,
 			StatusCode:     response.StatusCode,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
 			Cause:          errors.New("integration response is missing a valid accepted request"),
 		}
 	}
-	return acceptedSequence(accepted.RequestID), nil
+	return accepted, nil
 }
 
 type externalInteractionRequest struct {
@@ -282,7 +379,7 @@ func decodeRemoteFailure(status int, raw []byte, fallbackRequestID string) error
 	decodeErr := json.Unmarshal(raw, &response)
 	code := strings.TrimSpace(response.Code)
 	if code == "" {
-		code = integrationProviderRejectedCode
+		code = serviceclients.IntegrationProviderRejectedCode
 	}
 	return &DeliveryError{
 		Code:           code,
@@ -317,6 +414,53 @@ func notificationDigest(
 		AggregateID:    notification.AggregateID,
 		RecipientID:    recipientID,
 		Payload:        notification.Payload,
+	})
+	sum := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func incomingCallExternalRequestID(
+	deliveryKey string,
+	endpointRef string,
+	action string,
+) string {
+	sum := sha256.Sum256([]byte(
+		strings.TrimSpace(deliveryKey) + "\x00" +
+			strings.TrimSpace(endpointRef) + "\x00" +
+			strings.TrimSpace(action),
+	))
+	return "incoming-call-" + hex.EncodeToString(sum[:16])
+}
+
+func incomingCallDigest(
+	job notification.IncomingCallDeliveryJob,
+	action string,
+	occurredAt time.Time,
+) string {
+	payload, _ := json.Marshal(struct {
+		Action          string `json:"action"`
+		EndpointRef     string `json:"endpointRef"`
+		DeliveryKey     string `json:"deliveryKey"`
+		CallID          string `json:"callId"`
+		TargetPersonaID string `json:"targetPersonaId"`
+		CallType        string `json:"callType"`
+		CallerName      string `json:"callerName"`
+		SourceLabel     string `json:"sourceLabel"`
+		TrustRelation   string `json:"trustRelation"`
+		ExpiresAt       string `json:"expiresAt"`
+		OccurredAt      string `json:"occurredAt"`
+	}{
+		Action:          action,
+		EndpointRef:     job.DestinationRef,
+		DeliveryKey:     job.DeliveryKey,
+		CallID:          job.CallID,
+		TargetPersonaID: job.TargetPersonaID,
+		CallType:        job.CallType,
+		CallerName:      job.CallerName,
+		SourceLabel:     job.SourceLabel,
+		TrustRelation:   job.TrustRelation,
+		ExpiresAt:       job.ExpiresAt.UTC().Format(time.RFC3339),
+		OccurredAt:      occurredAt.UTC().Format(time.RFC3339),
 	})
 	sum := sha256.Sum256(payload)
 	return "sha256:" + hex.EncodeToString(sum[:])

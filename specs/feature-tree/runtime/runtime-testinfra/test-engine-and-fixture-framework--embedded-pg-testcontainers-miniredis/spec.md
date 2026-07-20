@@ -1,4 +1,4 @@
-# L4 对象任务：embedded-pg-testcontainers-miniredis
+# L3 对象任务：embedded-pg-testcontainers-miniredis
 
 ## 功能说明
 - **pg_suite.go**：使用 embedded-postgres 启动内存 PostgreSQL，执行 migration DDL，提供 truncate 清理，支持并发测试隔离。

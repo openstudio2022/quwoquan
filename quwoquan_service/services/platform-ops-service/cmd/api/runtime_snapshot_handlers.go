@@ -33,14 +33,14 @@ func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *h
 	body["id"] = instanceID
 	body["instanceId"] = instanceID
 	body["updatedAt"] = nowRFC3339()
-	if stringifyDocumentValue(body["desiredHash"]) == "" {
-		desiredHash, err := s.lookupConfigPackageDesiredHash(controlplane.ConfigResolutionScope{
+	if stringifyDocumentValue(body["desiredHash"]) == "" && s.configLayer != nil {
+		// desiredHash 缺省时以发布包快照的有效配置 hash 为唯一真相源回填。
+		resolved, err := s.configLayer.Resolve(r.Context(), controlplane.ConfigResolutionScope{
 			Environment: stringifyDocumentValue(body["environment"]),
-			Cluster:     stringifyDocumentValue(body["cluster"]),
 			Service:     stringifyDocumentValue(body["service"]),
-		}, "")
-		if err == nil && desiredHash != "" {
-			body["desiredHash"] = desiredHash
+		})
+		if err == nil && resolved.DesiredHash != "" {
+			body["desiredHash"] = resolved.DesiredHash
 		}
 	}
 	body["inSync"] = body["desiredHash"] == body["effectiveHash"]

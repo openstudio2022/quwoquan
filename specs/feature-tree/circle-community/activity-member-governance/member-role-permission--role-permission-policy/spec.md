@@ -1,4 +1,4 @@
-# L4 特性：role-permission-policy
+# L3 特性：role-permission-policy
 
 ## 功能说明
 - 细化 role-permission-policy 特性的功能边界与端云协同行为。

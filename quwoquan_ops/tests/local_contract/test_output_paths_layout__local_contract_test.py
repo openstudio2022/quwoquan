@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import output_paths
 from quwoquan_ops.cli import legal_static
 from quwoquan_ops.gate.verify_output_layout import output_layout_issues
+from quwoquan_ops.gate.verify_root_layout import source_cache_issues
 from quwoquan_ops.gate import verify_output_path_source_contract as source_contract
 
 
@@ -158,7 +159,7 @@ def test_layout_gate_rejects_reusable_truth_inside_valid_output_categories(
     assert sum("reusable source truth is forbidden" in issue for issue in issues) == 3
 
 
-def test_layout_gate_treats_python_environment_as_opaque_disposable_cache(
+def test_layout_gate_rejects_interpreter_cache_under_disposable_output(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / ".qwq_output"
@@ -169,7 +170,9 @@ def test_layout_gate_treats_python_environment_as_opaque_disposable_cache(
         ),
     )
 
-    assert output_layout_issues(root) == []
+    issues = output_layout_issues(root)
+
+    assert any("interpreter caches belong in the external tool cache" in issue for issue in issues)
 
 
 def test_source_gate_rejects_retired_cache_and_output_owned_truth(
@@ -189,3 +192,19 @@ def test_source_gate_rejects_retired_cache_and_output_owned_truth(
 
     assert len(issues) == 2
     assert all("retired output/state path" in issue for issue in issues)
+
+
+def test_root_layout_rejects_source_interpreter_and_pytest_caches(tmp_path: Path) -> None:
+    bytecode_dir = tmp_path / "quwoquan_data" / "scripts" / "core" / "__pycache__"
+    bytecode_dir.mkdir(parents=True)
+    (bytecode_dir / "paths.cpython-313.pyc").write_bytes(b"bytecode")
+    pytest_cache = tmp_path / "quwoquan_ops" / ".pytest_cache"
+    pytest_cache.mkdir(parents=True)
+    stray_bytecode = tmp_path / "quwoquan_app" / "scripts" / "app.pyo"
+    stray_bytecode.parent.mkdir(parents=True)
+    stray_bytecode.write_bytes(b"bytecode")
+
+    issues = source_cache_issues(tmp_path)
+
+    assert sum("source cache is forbidden" in issue for issue in issues) == 2
+    assert sum("Python bytecode is forbidden" in issue for issue in issues) == 1

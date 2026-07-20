@@ -1,4 +1,3 @@
-// Chat 域 Repository 聚合导出：契约 ChatRepository；Remote 在 remote/；Mock 在 mock/chat_repository_mock.dart。
+// Chat 域 production 导出：契约与 Remote。Mock 只能由 alpha/test 组合根显式导入。
 export 'chat_repository_api.dart';
-export 'mock/chat_repository_mock.dart';
 export 'remote/chat_repository_remote.dart';

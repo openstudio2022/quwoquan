@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -15,6 +15,8 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+const _fixtureConversationId = 'fixture_conv_direct';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +37,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _MutualRelationshipCapability(),
@@ -44,11 +48,13 @@ void main() {
             _NoopRealtimeConnectionNotifier.new,
           ),
           activePersonaContextProvider.overrideWith(
-            (ref) async => ActivePersonaContextViewData.fallback(
+            (ref) async => const ActivePersonaContextViewData(
               subAccountId: 'persona_chat_uat',
               ownerUserId: 'user_chat_uat',
+              subjectType: 'subAccount',
               displayName: '会话验收用户',
               avatarUrl: '',
+              personaContextVersion: '1',
             ),
           ),
           authSessionControllerProvider.overrideWith(
@@ -59,7 +65,7 @@ void main() {
           navigatorObservers: <NavigatorObserver>[chatRouteObserver],
           home: _AuthWarmup(
             child: ChatConversationPage(
-              conversationId: 'conv_001',
+              conversationId: _fixtureConversationId,
               onBack: () => backInvoked = true,
             ),
           ),
@@ -81,7 +87,7 @@ void main() {
     await tester.tap(find.byKey(TestKeys.chatInputSendButton));
     await tester.pump(const Duration(milliseconds: 350));
 
-    expect(writer.lastCommand?.conversationId, 'conv_001');
+    expect(writer.lastCommand?.conversationId, _fixtureConversationId);
     expect(writer.lastCommand?.type, 'text');
     expect(writer.lastCommand?.content, '真实会话页发送验收');
     final container = ProviderScope.containerOf(
@@ -89,7 +95,7 @@ void main() {
     );
     expect(
       container
-          .read(chatMessageProvider('conv_001'))
+          .read(chatMessageProvider(_fixtureConversationId))
           .messages
           .any((message) => message.content == '真实会话页发送验收'),
       isTrue,
@@ -111,7 +117,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _BlockedRelationshipCapability(),
@@ -127,7 +135,7 @@ void main() {
           navigatorObservers: <NavigatorObserver>[chatRouteObserver],
           home: const _AuthWarmup(
             child: ChatConversationPage(
-              conversationId: 'conv_001',
+              conversationId: _fixtureConversationId,
               onBack: _noop,
             ),
           ),

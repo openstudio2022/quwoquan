@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.d
 
 void main() {
   test('rtcWsKnownWireTypes 覆盖全部建模事件', () {
-    expect(rtcWsKnownWireTypes.length, equals(11));
+    expect(rtcWsKnownWireTypes.length, equals(9));
     expect(rtcWsKnownWireTypes, contains(rtcWsTypeCallRinging));
     expect(rtcWsKnownWireTypes, contains(rtcWsTypeCallEnded));
   });
@@ -17,8 +17,6 @@ void main() {
       rtcWsTypeCallEnded: RtcCallEndedWsPayload,
       rtcWsTypeParticipantJoined: RtcParticipantJoinedWsPayload,
       rtcWsTypeParticipantLeft: RtcParticipantLeftWsPayload,
-      rtcWsTypeCallRecordingStarted: RtcCallRecordingStartedWsPayload,
-      rtcWsTypeCallRecordingStopped: RtcCallRecordingStoppedWsPayload,
       rtcWsTypeScreenShareStarted: RtcScreenShareStartedWsPayload,
       rtcWsTypeScreenShareStopped: RtcScreenShareStoppedWsPayload,
     };

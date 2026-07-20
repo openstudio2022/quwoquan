@@ -24,7 +24,7 @@ func (l *IOAccessLogger) Write(entry IOAccessLog) error {
 		return fmt.Errorf("invalid errorCode format: %s", entry.ErrorCode)
 	}
 
-	payload := formatDelimitedLog("access", compactIOAccessLog(entry))
+	payload := formatRuntimeLog("access", compactIOAccessLog(entry))
 	_, err := l.writer.Write([]byte(payload + "\n"))
 	return err
 }

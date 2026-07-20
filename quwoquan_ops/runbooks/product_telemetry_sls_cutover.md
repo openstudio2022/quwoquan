@@ -19,7 +19,7 @@
 
 ## beta/gamma 验证
 
-通过 `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier t3` 汇总协议测试；有真机后运行 T4。真实 SLS 验收必须证明：
+通过 `python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile integration` 汇总协议测试；有真机后以 `--profile release` 收集商用证据。真实 SLS 验收必须证明：
 
 - 同一规范化请求体重放后，`_batchKey` 对应记录数不增加。
 - raw 公共字段与强类型扩展一致，startup diagnostic 不含身份或产品页面字段。
@@ -34,12 +34,12 @@
 上游环境的全门。
 
 1. **alpha（local_contract）**：不读取 `PRODUCT_OPS_SLS_*` 或任何阿里云 Secret。执行
-   `python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --tier t3`；确认 metadata/codegen、
+   `python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --profile integration`；确认 metadata/codegen、
    App outbox/session、fake-SLS 幂等/超时协议和“没有真实 SLS writer”断言均绿。当前 fixture 基线红时，
    先修 fixture，不能跳 beta。
 2. **beta（真实 api_integration）**：在能访问 VPC endpoint 的受控 runner 创建 beta 专属 Project/三 Logstore/
    Scheduled SQL/RAM/告警，部署 Secret 仅注入 product-ops。验证 runner 使用独立只读 `TEST_SLS_*` Secret；
-   它仅查询资源和结果，不能写 Logstore。运行 `stackctl` beta T3 后执行统一 telemetry probe：重复 batch、
+   它仅查询资源和结果，不能写 Logstore。运行 `stackctl verify --env beta --kind all --profile integration` 后执行统一 telemetry probe：重复 batch、
    raw/diagnostic 隔离、TTL/索引/RAM、小时聚合去重/脱敏与 Portal 30 次 P95。
 3. **gamma（真机 user_acceptance）**：`gamma` 只有 `gamma-local` target。先启动 mirror，再在同一 VPC 或获批
    私网连通 runner 注入 gamma 专属 Secret；执行真机冷启动、页面访问、后台恢复、断网补传、异常和推荐反馈旅程。

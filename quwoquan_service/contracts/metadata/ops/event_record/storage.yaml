@@ -37,13 +37,41 @@ logstores:
 idempotency:
   request_header: Idempotency-Key
   digest: canonical_json_sha256
-  batch_key: sha256_first_128_bits
+  batch_key: sha256_hex_256_bits
   redis_state_ttl_hours: 72
   raw_deduplication_fields: [_batchKey, _batchIndex]
+  duplicate_ack_requires_complete_batch: true
+  proof_is_not_batch_identity: true
+
+wire_projection:
+  query_metadata:
+    source_field: sourceKind
+    allowed_values: [raw_records, hourly_rollup]
+    freshness_field: freshness
+    generated_through_field: generatedThrough
+    lag_seconds_field: lagSeconds
+  backend_identity:
+    response_exposure: forbidden
+    internal_metric_only: true
+
+local_adapters:
+  canonical_backend: aliyun_sls
+  alpha:
+    backend: memory
+    storage_scope: test_process
+    fallback: forbidden
+  integration:
+    backend: postgres_telemetry_local
+    database: quwoquan_telemetry_local
+    schemas: [telemetry_local_beta, telemetry_local_gamma]
+    roles: [telemetry_writer, telemetry_reader, telemetry_rollup, telemetry_migrator]
+    random_schema_per_test: true
+    destructive_cleanup: drop_schema_cascade
+    fallback: forbidden
 
 query_facade:
   portal_direct_cloud_access: false
-  summary_source: sls_aggregate
-  drilldown_source: sls_raw
+  summary_source: hourly_rollup
+  drilldown_source: raw_records
   raw_window_days: 3
   drilldown_max_items: 100

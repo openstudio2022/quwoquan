@@ -4,11 +4,7 @@ tables:
   authentication_challenges:
     entity: AuthenticationChallenge
     role: authoritative
-  authentication_challenges_command_receipts:
-    entity: AuthenticationChallenge
-    role: authoritative
-    description: 与 aggregate state 和 outbox 在同一 postgres transaction 提交的幂等回执。
-  authentication_challenges_outbox:
-    entity: AuthenticationChallenge
-    role: append_only
-    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+    description: >-
+      challenge 行自身承载幂等：创建按 idempotency key 去重，一次性消费以
+      consumed_at + 结果指纹记录，同一凭据重复成功验证返回同一结果；
+      失败计数与锁定为原子单行更新。不设独立 receipt/outbox 表。

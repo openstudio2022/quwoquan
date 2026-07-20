@@ -41,6 +41,16 @@ entities:
         ops_exposure: read
         description: 用户已读到的 seq
 
+      - name: inboxProjectedSeq
+        source: inboxProjectedSeq
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: ChatInbox 投影已原子消费到的会话消息 seq，用于重放幂等与已读计数重算
+
       - name: unreadCount
         source: unreadCount
         type: int

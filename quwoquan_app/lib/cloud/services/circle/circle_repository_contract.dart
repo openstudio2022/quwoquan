@@ -5,6 +5,10 @@ import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 
 const int kHomeCircleDiscoveryFeedDefaultLimit = 200;
 
+/// Circle 聚合的读投影仓库。
+/// 生命周期/板块命令唯一入口是 pure contracts 的
+/// `CircleLifecycleCommandWriter` / `CircleConfigurationCommandWriter`
+/// （generated client 装配），仓库不再承载写方法。
 abstract interface class CircleReadRepository {
   Future<List<CircleDto>> listCircles({
     String? category,
@@ -32,23 +36,6 @@ abstract interface class CircleReadRepository {
   Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = kHomeCircleDiscoveryFeedDefaultLimit,
   });
-
-  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig();
-
-  List<CircleDto> publishFlowRecommendedCircles();
-}
-
-abstract interface class CircleWriteRepository {
-  Future<CircleDto> createCircle(CircleCreateWireDto data);
-
-  Future<CircleDto> updateCircle(String circleId, CircleUpdateWireDto data);
-
-  Future<void> archiveCircle(String circleId);
-
-  Future<void> updateSections(
-    String circleId,
-    List<CircleSectionConfigDto> sections,
-  );
 }
 
 abstract interface class CircleFeedRepository {
@@ -63,7 +50,4 @@ abstract interface class CircleFeedRepository {
 }
 
 abstract class CircleRepository
-    implements
-        CircleReadRepository,
-        CircleWriteRepository,
-        CircleFeedRepository {}
+    implements CircleReadRepository, CircleFeedRepository {}

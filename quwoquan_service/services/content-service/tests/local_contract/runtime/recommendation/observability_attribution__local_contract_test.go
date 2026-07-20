@@ -18,6 +18,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		"ranking_version":    "rank-local",
 		"reason_version":     "reason-local",
 		"intersection_class": "none",
+		"experiment_bucket":  "premium",
 	}
 	servedBefore := counterValue(t, "recommendation_feed_served_by_attribution_total", servedLabels)
 	recommendation.RecordServedItemsByAttribution([]recommendation.FeedItem{{
@@ -25,7 +26,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		ContentVertical: "travel_photography",
 		SupplySource:    "data_engineering",
 		RecallPath:      "collab_i2i",
-	}}, "travel", "rank-local", "reason-local")
+	}}, "travel", "rank-local", "reason-local", "premium")
 	if got := counterValue(t, "recommendation_feed_served_by_attribution_total", servedLabels) - servedBefore; got != 1 {
 		t.Fatalf("served attribution metric delta = %v, want 1", got)
 	}
@@ -40,6 +41,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		"ranking_version":    "rank-local",
 		"reason_version":     "reason-local",
 		"intersection_class": "fact",
+		"experiment_bucket":  "premium",
 	}
 	behaviorBefore := counterValue(t, "recommendation_behavior_by_attribution_total", behaviorLabels)
 	recommendation.RecordBehaviorIngest(recommendation.BehaviorSignal{
@@ -52,9 +54,27 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		RankingVersion:    "rank-local",
 		ReasonVersion:     "reason-local",
 		IntersectionClass: "fact",
+		ExperimentBucket:  "premium",
 	})
 	if got := counterValue(t, "recommendation_behavior_by_attribution_total", behaviorLabels) - behaviorBefore; got != 1 {
 		t.Fatalf("behavior attribution metric delta = %v, want 1", got)
+	}
+
+	// N1-3：experiment_bucket 缺失时收敛为 unknown（bounded 语义，无高基数）。
+	unknownLabels := map[string]string{
+		"state":             "click",
+		"action":            "click",
+		"channel":           "travel",
+		"experiment_bucket": "unknown",
+	}
+	unknownBefore := counterValue(t, "recommendation_behavior_by_attribution_total", unknownLabels)
+	recommendation.RecordBehaviorIngest(recommendation.BehaviorSignal{
+		Action:    "click",
+		State:     "click",
+		ChannelID: "travel",
+	})
+	if got := counterValue(t, "recommendation_behavior_by_attribution_total", unknownLabels) - unknownBefore; got != 1 {
+		t.Fatalf("unknown experiment_bucket fallback delta = %v, want 1", got)
 	}
 }
 

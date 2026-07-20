@@ -58,6 +58,12 @@ func (s *MongoBehaviorEventStore) ensureIndexes() {
 		{
 			Keys: bson.D{{Key: "feedRequestId", Value: 1}, {Key: "channelId", Value: 1}, {Key: "recallPath", Value: 1}, {Key: "createdAt", Value: -1}},
 		},
+		{
+			Keys: bson.D{{Key: "userId", Value: 1}, {Key: "clientEventId", Value: 1}},
+			Options: options.Index().
+				SetName("uq_behavior_events_user_client_event").
+				SetUnique(true),
+		},
 	}
 
 	for _, idx := range indexes {
@@ -77,8 +83,13 @@ func (s *MongoBehaviorEventStore) InsertBatch(ctx context.Context, events []RawB
 		docs[i] = events[i]
 	}
 
-	_, err := s.coll.InsertMany(ctx, docs)
+	// unordered + 吞重复键：userId+clientEventId 唯一索引承担幂等（端侧重报、
+	// N0-3 权威信号 outbox 重放都会命中），其余文档不受重复文档影响继续写入。
+	_, err := s.coll.InsertMany(ctx, docs, options.InsertMany().SetOrdered(false))
 	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil
+		}
 		s.logger.Error("behavior_event_store: insert failed",
 			slog.String("error", err.Error()),
 			slog.Int("count", len(events)),
@@ -198,4 +209,31 @@ func (s *MongoWishlistEventStore) UpsertWishlistEvent(ctx context.Context, event
 		return err
 	}
 	return nil
+}
+
+// IsWishlisted 返回当前用户对指定 canonical object 的有效显式意图。
+func (s *MongoWishlistEventStore) IsWishlisted(
+	ctx context.Context,
+	userID string,
+	objectID string,
+	objectKind string,
+) (bool, error) {
+	count, err := s.coll.CountDocuments(ctx, bson.M{
+		"userId":     userID,
+		"entityId":   objectID,
+		"objectType": objectKind,
+		"status":     "active",
+	})
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("wishlist_event_store: state read failed",
+				slog.String("error", err.Error()),
+				slog.String("userId", userID),
+				slog.String("entityId", objectID),
+				slog.String("objectType", objectKind),
+			)
+		}
+		return false, err
+	}
+	return count > 0, nil
 }

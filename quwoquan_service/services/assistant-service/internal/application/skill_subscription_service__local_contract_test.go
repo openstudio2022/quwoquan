@@ -16,6 +16,7 @@ func TestSkillSubscriptionLifecycle(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
 	)
 	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
@@ -63,6 +64,7 @@ func TestUpsertSkillSubscriptionIsIdempotent(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(store),
 	)
 	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
@@ -112,6 +114,7 @@ func TestTickSkillSubscriptionCronCreatesProactiveTurnAndAppMessage(t *testing.T
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
 		WithNotificationAppMessageCommandWriter(notifications),
 	)
@@ -166,6 +169,7 @@ func TestTickSkillSubscriptionCronDeliversToConversationDestination(t *testing.T
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
 		WithNotificationAppMessageCommandWriter(notifications),
 		WithChatGroundingClient(chat),
@@ -219,6 +223,7 @@ func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
 		WithNotificationAppMessageCommandWriter(notifications),
 	)

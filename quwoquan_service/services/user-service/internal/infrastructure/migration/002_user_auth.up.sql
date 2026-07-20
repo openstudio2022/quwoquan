@@ -4,8 +4,6 @@ CREATE TABLE IF NOT EXISTS user_auth (
     user_id                  VARCHAR(96) PRIMARY KEY,
     password_hash            VARCHAR(256) NOT NULL,
     otp_secret               VARCHAR(128),
-    refresh_token            VARCHAR(512),
-    refresh_token_expires_at TIMESTAMPTZ,
     last_login_at            TIMESTAMPTZ,
     last_login_ip            VARCHAR(45),
     login_fail_count         INTEGER NOT NULL DEFAULT 0,

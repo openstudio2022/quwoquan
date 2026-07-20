@@ -1,0 +1,9 @@
+schema: quwoquan.cursor_model_pricing
+revision: cursor-public-2026-07-19
+currency: USD
+models:
+  - modelId: composer-2.5
+    inputUsdPerMillion: 0.50
+    outputUsdPerMillion: 2.50
+    cacheReadUsdPerMillion: 0.20
+    cacheWriteUsdPerMillion: null

@@ -1,0 +1,20 @@
+aggregate: CircleMembership
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: join_leave_roundtrip
+    steps:
+      - persona joins circle from detail page
+      - persona leaves circle
+    assertions:
+      - membership_state_reflects_in_detail
+      - member_count_projection_converges
+
+  - name: role_update_by_owner
+    steps:
+      - owner promotes member to admin
+    assertions:
+      - roster_shows_admin_role

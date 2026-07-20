@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -165,6 +166,7 @@ func TestAuthorImpactEvidenceDrilldownIsContentAnchoredAndPrivacySafe(t *testing
 		"userId": %q,
 		"events": [{
 			"clientEventId": "evt-evidence-001",
+			"occurredAt": %q,
 			"contentId": %q,
 			"contentType": "image",
 			"action": "share",
@@ -172,7 +174,7 @@ func TestAuthorImpactEvidenceDrilldownIsContentAnchoredAndPrivacySafe(t *testing
 			"intersectionDimension": "identity",
 			"intersectionTagRefs": ["Audience/学生"]
 		}]
-	}`, actorID, postID, authorID)
+	}`, actorID, time.Now().UTC().Format(time.RFC3339Nano), postID, authorID)
 	reportBehaviorRaw(t, payload)
 
 	impactID := firstAuthorImpactID(t, authorID)
@@ -268,8 +270,10 @@ func TestAuthorImpactEvidencePaginationTerminates(t *testing.T) {
 	postID := postIDFrom(t, created)
 
 	for i := 0; i < 3; i++ {
-		payload := fmt.Sprintf(`{"userId":%q,"events":[{"clientEventId":%q,"contentId":%q,"contentType":"image","action":"share","authorId":%q,"intersectionDimension":"identity","intersectionTagRefs":["Audience/学生"]}]}`,
-			fmt.Sprintf("viewer_page_%03d", i), fmt.Sprintf("evt-page-%03d", i), postID, authorID)
+		payload := fmt.Sprintf(`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"contentId":%q,"contentType":"image","action":"share","authorId":%q,"intersectionDimension":"identity","intersectionTagRefs":["Audience/学生"]}]}`,
+			fmt.Sprintf("viewer_page_%03d", i), fmt.Sprintf("evt-page-%03d", i),
+			time.Now().UTC().Add(-time.Duration(i)*time.Minute).Format(time.RFC3339Nano),
+			postID, authorID)
 		reportBehaviorRaw(t, payload)
 	}
 

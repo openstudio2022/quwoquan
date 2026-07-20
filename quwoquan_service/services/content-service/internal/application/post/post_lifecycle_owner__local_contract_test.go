@@ -12,7 +12,13 @@ import (
 func TestPostLifecycleCommandsRequireAuthorPersona(t *testing.T) {
 	t.Parallel()
 
-	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)))
+	service := NewPostService(
+		BindDataPorts(testsupport.NewPostStore(nil)),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	receipt, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "post-owner-publish"),
 		SubmitPostPublicationCommand{

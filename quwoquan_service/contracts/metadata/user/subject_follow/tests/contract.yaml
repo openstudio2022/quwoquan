@@ -1,0 +1,43 @@
+aggregate: SubjectFollow
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 PostgreSQL）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  postgres: embedded-postgres
+
+spy_targets: [event_publisher]
+
+scenarios:
+  - name: follow_subject_creates_aggregate_and_event
+    command: FollowSubject (homepage)
+    assertions:
+      - db_subject_follow_row_state_following
+      - event_SubjectFollowStateChanged_published_once
+      - state_receipt_outbox_same_transaction
+
+  - name: duplicate_follow_idempotent_replay
+    command: FollowSubject x2 (same persona + subject)
+    assertions:
+      - unique_row_exactly_1
+      - second_call_idempotent_replay_true
+      - version_not_advanced_on_replay
+
+  - name: unfollow_advances_version
+    command: FollowSubject -> UnfollowSubject
+    assertions:
+      - state_unfollowed_version_monotonic
+      - event_state_unfollowed_published
+
+  - name: persona_subject_type_rejected
+    command: FollowSubject (subjectType=persona)
+    assertions:
+      - error_USER.SUBJECT_FOLLOW.invalid_subject_type
+      - no_row_created
+
+  - name: bola_actor_scoped
+    command: FollowSubject with foreign persona context
+    assertions:
+      - aggregate_bound_to_authenticated_persona_only

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import '../../../../../support/cloud_services/content/content_mock_data.dart';
 
 /// L1a 契约测试：FeedItemDto — 覆盖 mock.yaml dto_scenarios
 ///
@@ -44,9 +44,12 @@ void main() {
       expect(dto.type, equals('video'));
       expect(dto.authorId, equals('a1'));
       expect(dto.displayName, equals('楹语小筑'));
-      expect(dto.coverUrl, contains('media/image/s/archived-image/'));
+      expect(
+        dto.coverUrl,
+        equals('media/video/s/media-canary-seek-125s/v1/cover.webp'),
+      );
       expect(dto.body, contains('东京'));
-      expect(dto.durationMs, equals(45000));
+      expect(dto.durationMs, equals(125000));
       expect(dto.likeCount, equals(12500));
       expect(dto.commentCount, equals(892));
     });

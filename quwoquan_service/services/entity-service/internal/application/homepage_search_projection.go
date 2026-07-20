@@ -7,11 +7,8 @@ import (
 	rtsearch "quwoquan_service/runtime/search"
 )
 
-// ProjectorEvent is the entity-domain search-index lifecycle event. entity-service
-// has no Mongo change-stream / outbox event bus, so the homepage service emits this
-// directly after a mutation that changes the searchable surface. The full homepage
-// snapshot is carried in the event (write-time reconcile is synchronous and in
-// process), so the projector never needs to read state back.
+// ProjectorEvent 是 commit 后的同进程 best-effort 搜索投影事件；Homepage 事实源是
+// 同事务写入的 homepage_outbox，本事件只缩短可见延迟，不能替代 outbox 重放。
 type ProjectorEvent struct {
 	Type       string
 	HomepageID string
@@ -90,25 +87,27 @@ func ProjectHomepageToSearchDocument(homepage Homepage) rtsearch.Document {
 	return doc
 }
 
-// ListHomepagesForIndex returns cloned snapshots of every homepage for cold-start
-// backfill. Eligibility filtering (published) is applied by the backfill caller so
-// the reader stays a plain enumeration.
-func (s *HomepageService) ListHomepagesForIndex(_ context.Context) []Homepage {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]Homepage, 0, len(s.homepages))
-	for _, homepage := range s.homepages {
-		out = append(out, cloneHomepage(homepage))
+// ListHomepagesForIndex 直接 cursor 扫描权威 homepages 集合。
+func (s *HomepageService) ListHomepagesForIndex(ctx context.Context) []Homepage {
+	out := []Homepage{}
+	cursor := ""
+	for {
+		items, next, err := s.queries.Scan(ctx, cursor, 500)
+		if err != nil {
+			return out
+		}
+		out = append(out, items...)
+		if next == "" {
+			return out
+		}
+		cursor = next
 	}
-	return out
 }
 
-// emitSearchIndex forwards a lifecycle event to the optional search-index
-// projector. It must be called outside s.mu so a (bounded) ES round trip never
-// holds the homepage write lock; the projector itself swallows ES failures.
-func (s *HomepageService) emitSearchIndex(ctx context.Context, event ProjectorEvent) {
-	if s.searchProjector == nil {
-		return
-	}
-	_ = s.searchProjector.Project(ctx, event)
+func (s *HomepageService) ScanHomepagesForIndex(
+	ctx context.Context,
+	cursor string,
+	limit int,
+) ([]Homepage, string, error) {
+	return s.queries.Scan(ctx, cursor, limit)
 }

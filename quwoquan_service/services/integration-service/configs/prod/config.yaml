@@ -20,6 +20,10 @@ integration:
       enabled: true
     push:
       enabled: true
+      mode: "real"
+      timeout_ms: 5000
+      apns:
+        environment: "production"
 
 redis:
   rec:

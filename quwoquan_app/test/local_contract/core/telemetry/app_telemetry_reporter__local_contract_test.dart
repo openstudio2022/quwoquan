@@ -41,6 +41,7 @@ void main() {
         deviceManufacturer: 'Apple',
         deviceModel: 'iPhone17,1',
         appVersion: '1.2.3+45',
+        devicePlatform: 'ios',
       ),
       connectivityLoader: () async => const <ConnectivityResult>[
         ConnectivityResult.wifi,
@@ -79,7 +80,7 @@ void main() {
     }
   });
 
-  test('生成严格九字段公共信封并以规范化 body 摘要作为幂等键', () async {
+  test('生成严格公共信封并以规范化 body 摘要作为幂等键', () async {
     expect(
       await reporter.record(AppTelemetryPayload.pageOpen()),
       AppTelemetryRecordResult.accepted,
@@ -89,9 +90,13 @@ void main() {
     final body = jsonDecode(transport.body!) as Map<String, Object?>;
     final event =
         (body['events']! as List<Object?>).single as Map<String, Object?>;
-    expect(event.keys.toSet(), AppTelemetryCatalog.commonFields.toSet());
+    expect(event.keys.toSet(), <String>{
+      ...AppTelemetryCatalog.commonFields,
+      ...AppTelemetryCatalog.contextExtensions,
+    });
     expect(event['pageName'], 'home');
     expect(event['networkClass'], 'wifi');
+    expect(event['devicePlatform'], 'ios');
     expect(
       AppTelemetrySessionStore.parseSessionId(
         event['sessionId']! as String,
@@ -166,8 +171,21 @@ void main() {
       readyMs: 420,
       rebufferCount: 1,
       rebufferMs: 240,
+      effectivePlaybackMs: 12000,
       seekCount: 2,
+      seekFailureCount: 0,
+      seekCommandMaxMs: 80,
+      seekSettleMaxMs: 120,
+      seekEvidenceSource: 'native_settled',
+      devicePlatform: 'android',
       playbackMode: 'autoplay',
+      ttffMs: 380,
+      droppedFrames: 2,
+      processedVideoFrames: 300,
+      audioUnderrunCount: 0,
+      rendererMode: 'platform_view',
+      decoderQueueMode: 'synchronous',
+      decoderFallbackEnabled: true,
       declaredDurationMs: 15000,
       observedDurationMs: 14900,
       durationMismatch: false,
@@ -177,6 +195,36 @@ void main() {
     expect(AppTelemetryCatalog.validate(payload), isNull);
     expect(payload.extensions.containsKey('postId'), isFalse);
     expect(payload.extensions.containsKey('feedRequestId'), isFalse);
+    expect(payload.extensions['effectivePlaybackMs'], 12000);
+    expect(payload.extensions['devicePlatform'], 'android');
+    expect(await reporter.record(payload), AppTelemetryRecordResult.accepted);
+  });
+
+  test('RTC 媒体 QoE 以强类型字段承载建连与重连事实', () async {
+    final payload = AppTelemetryPayload.rtcMediaQoe(
+      callType: 'video',
+      result: 'connection_lost',
+      connectTimeMs: 1860,
+      mediaConnected: true,
+      reconnectCount: 2,
+      disconnectReason: 'transport_closed',
+      networkQuality: 'poor',
+      participantCount: 3,
+      failReasonCode: 'RTC.SYSTEM.livekit_unavailable',
+    );
+
+    expect(AppTelemetryCatalog.validate(payload), isNull);
+    expect(payload.extensions, <String, Object?>{
+      'callType': 'video',
+      'result': 'connection_lost',
+      'connectTimeMs': 1860,
+      'mediaConnected': true,
+      'reconnectCount': 2,
+      'disconnectReason': 'transport_closed',
+      'networkQuality': 'poor',
+      'participantCount': 3,
+      'failReasonCode': 'RTC.SYSTEM.livekit_unavailable',
+    });
     expect(await reporter.record(payload), AppTelemetryRecordResult.accepted);
   });
 }

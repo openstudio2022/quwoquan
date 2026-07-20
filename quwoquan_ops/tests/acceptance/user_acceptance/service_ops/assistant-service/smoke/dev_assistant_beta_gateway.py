@@ -416,7 +416,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             return ("assistant-service", self.assistant_upstream_host, self.assistant_upstream_port)
         if path.startswith("/chat"):
             return ("chat-service", self.chat_upstream_host, self.chat_upstream_port)
-        if path.startswith("/homepages"):
+        if path.startswith("/homepages") and self.entity_upstream_port > 0:
             return ("entity-service", self.entity_upstream_host, self.entity_upstream_port)
         return None
 

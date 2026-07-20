@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -59,10 +60,7 @@ void main() {
       find.text(UITextConstants.createActionAddContactShort),
       findsOneWidget,
     );
-    expect(
-      find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
       find.text(UITextConstants.createActionCreateCircleShort),
       findsOneWidget,

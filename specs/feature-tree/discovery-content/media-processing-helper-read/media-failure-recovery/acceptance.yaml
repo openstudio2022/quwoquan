@@ -7,45 +7,64 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: media-processing-helper-read
 scope:
-  summary: media failure recovery 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 媒体处理基础设施重试、内容性拒绝、checkpoint 重放与端侧发布排队语义。
+  in_scope:
+  - worker checkpoint、幂等重放、rejected 终态、media_not_ready 与 reauthenticate 恢复动作。
+  out_of_scope:
+  - 用户主动删除资产的产品入口。
 gwt_acceptance:
   GWT1:
-    title: media failure recovery GWT
+    title: 媒体处理故障不丢事实且不会误发布
     given:
-    - 前置条件明确。
+    - outbox 中存在尚未完成的媒体创建事实。
     when:
-    - 用户或系统动作发生。
+    - checkpoint 持久化、对象存储或媒体内容发生故障。
     then:
-    - 可观察结果符合预期。
+    - 基础设施故障保留可重放事实，内容性故障进入 rejected，发布请求按 metadata 恢复动作处理。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - checkpoint 保存失败后重放同一事实只产生一个有效 ready 结果。
+    - 非媒体字节进入 rejected 且没有公开主 slice。
+    - media_not_ready 自动排队，未授权永久阻断并要求重新认证。
+    edge_cases:
+    - 已终态资产收到重复事实。
+    - 服务重启后本地 checkpoint 已丢失但持久 checkpoint 可恢复。
+    - Retry-After 与 recovery.afterSeconds 优先于指数退避。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/media_asset/errors.yaml
+    - quwoquan_service/contracts/metadata/content/post/errors.yaml
+    performance_points:
+    - 发布队列自动退避 2 至 60 秒，服务端 Retry-After 最大按 3600 秒执行。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_checkpoint__data_consistency__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
+      - layer: api_integration
+        execution_profile: integration
+        suite: media_processing_checkpoint
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_failure_recovery.contract
-        envs: &id001
-        - local
+        - api_integration.content.media.checkpoint_replay
+        - api_integration.content.media.invalid_media_rejected
+        envs: [beta, gamma]
+        test_object: workflow
+        quality_facet: reliability
       - layer: local_contract
-        suite: gwt1_local_contract
+        execution_profile: baseline
+        suite: post_publication_intent_queue
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.media_failure_recovery.gwt1_local_contract
-        envs: *id001
+        - local_contract.content.post.media_not_ready_queued
+        - local_contract.content.post.unauthorized_blocked
+        envs: [local]
+        test_object: application_service
+        quality_facet: reliability
       supporting: []
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

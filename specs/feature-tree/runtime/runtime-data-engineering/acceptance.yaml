@@ -39,12 +39,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_data_engineering.sit1.contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.runtime.runtime_data_engineering.sit1.cross_service_integration
@@ -53,6 +55,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.runtime.runtime_data_engineering.sit1.sit1_local_contract
@@ -63,5 +66,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

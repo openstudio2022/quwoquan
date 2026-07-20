@@ -1,0 +1,13 @@
+entity: TagFeedback
+
+scenarios:
+  - name: tag_feedback_append_dedupe
+    operation: ReportTagFeedback
+    go_func: TestTagFeedbackAppendDedupe
+    evidence: api_integration
+    assertions:
+      - typed append 落 tag_feedback 集合
+      - 同 actor 同 Idempotency-Key 重放只落一条（唯一索引 actorId+idempotencyKey）
+      - 同 key 不同 payload 返回 TAG.USER.feedback_idempotency_conflict
+      - action 不在 click/ignore/correct 返回 TAG.USER.feedback_invalid_action
+      - 未知 tagRef 返回 TAG.USER.tag_not_found

@@ -8,21 +8,27 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/entity-service/internal/application"
+	reviewapp "quwoquan_service/services/entity-service/internal/application/homepage_review"
 	entitygenerated "quwoquan_service/services/entity-service/internal/generated"
 )
 
-const (
-	homepagesPrefix = "/homepages/"
-	defaultUserID   = "mock-user"
-)
+const homepagesPrefix = "/homepages/"
 
 type Handler struct {
 	service *application.HomepageService
+	reviews *reviewapp.Facade
 }
 
 func NewHandler(service *application.HomepageService) *Handler {
 	return &Handler{service: service}
+}
+
+// WithReviewFacade 装配 HomepageReview 对象 facade（composition root 调用）。
+func (h *Handler) WithReviewFacade(facade *reviewapp.Facade) *Handler {
+	h.reviews = facade
+	return h
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -33,13 +39,15 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/homepages/search", h.handleSearchHomepages)
 	mux.HandleFunc("/homepages/candidates", h.handleCandidates)
 	mux.HandleFunc("/homepages/candidates/suggest", h.handleSuggestCandidate)
+	mux.HandleFunc("/homepage-claim-requests", h.handleClaimRequestQueue)
+	mux.HandleFunc("/homepage-status-reports", h.handleStatusReportQueue)
 	mux.HandleFunc("/homepages:reload", h.handleReloadState)
+	mux.HandleFunc("/homepage-reviews/", h.handleReviewByID)
 	mux.HandleFunc(homepagesPrefix, h.handleHomepageRoute)
 	return mux
 }
 
-// handleReloadState 免停服重载：homepage importer 直写运行库后由 ops 触发，
-// 将存储快照合并进内存主档（metadata operation: ReloadHomepageState）。
+// handleReloadState 触发 homepages 权威集合与搜索投影对账；不读取旧快照。
 func (h *Handler) handleReloadState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeRuntimeNotFound(w, r)
@@ -59,22 +67,49 @@ func (h *Handler) handleSearchHomepages(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	query := r.URL.Query()
-	items := h.service.SearchHomepages(
+	result, err := h.service.SearchHomepages(
 		r.Context(),
 		query.Get("query"),
 		query.Get("homepageType"),
 		query.Get("city"),
 		query.Get("status"),
+		query.Get("cursor"),
 		parsePositiveInt(query.Get("limit"), 20),
 	)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items":      items,
-		"nextCursor": nil,
+		"items":      result.Items,
+		"nextCursor": result.NextCursor,
 	})
 }
 
 func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost || r.URL.Path != "/homepages/candidates" {
+	if r.URL.Path != "/homepages/candidates" {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	if r.Method == http.MethodGet {
+		query := r.URL.Query()
+		result, err := h.service.SearchHomepages(
+			r.Context(),
+			query.Get("query"),
+			query.Get("homepageType"),
+			query.Get("city"),
+			"candidate",
+			query.Get("cursor"),
+			parsePositiveInt(query.Get("limit"), 20),
+		)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if r.Method != http.MethodPost {
 		writeRuntimeNotFound(w, r)
 		return
 	}
@@ -89,6 +124,54 @@ func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, homepage)
+}
+
+func (h *Handler) handleClaimRequestQueue(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	query := r.URL.Query()
+	status := query.Get("status")
+	if strings.TrimSpace(status) == "" {
+		status = "pending_review"
+	}
+	result, err := h.service.ListHomepageClaimRequests(
+		r.Context(),
+		query.Get("homepageId"),
+		status,
+		query.Get("cursor"),
+		parsePositiveInt(query.Get("limit"), 20),
+	)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) handleStatusReportQueue(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	query := r.URL.Query()
+	status := query.Get("status")
+	if strings.TrimSpace(status) == "" {
+		status = "pending_review"
+	}
+	result, err := h.service.ListHomepageStatusReports(
+		r.Context(),
+		query.Get("homepageId"),
+		status,
+		query.Get("cursor"),
+		parsePositiveInt(query.Get("limit"), 20),
+	)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleSuggestCandidate(w http.ResponseWriter, r *http.Request) {
@@ -150,29 +233,6 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch segments[1] {
-	case "follow":
-		if len(segments) != 2 {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		var (
-			homepage *application.Homepage
-			err      error
-		)
-		switch r.Method {
-		case http.MethodPost:
-			homepage, err = h.service.FollowHomepage(r.Context(), homepageID, resolveViewerID(r))
-		case http.MethodDelete:
-			homepage, err = h.service.UnfollowHomepage(r.Context(), homepageID, resolveViewerID(r))
-		default:
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, homepage)
 	case "shell":
 		if r.Method != http.MethodGet || len(segments) != 2 {
 			writeRuntimeNotFound(w, r)
@@ -249,6 +309,8 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, bundle)
+	case "reviews":
+		h.handleHomepageReviews(w, r, homepageID, segments)
 	case "claim-requests":
 		h.handleClaimRequests(w, r, homepageID, segments)
 	case "claimed-basics":
@@ -290,11 +352,17 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// resolveViewerID 从可信 operation.Context 取 viewer persona（匿名读允许为空）；
+// 禁止读取客户端可伪造的 identity header。
 func resolveViewerID(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+	invocation, ok := operation.FromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(invocation.Actor.PersonaID)
 }
 
 func (h *Handler) handleClaimRequests(
@@ -304,14 +372,18 @@ func (h *Handler) handleClaimRequests(
 	segments []string,
 ) {
 	if len(segments) == 2 && r.Method == http.MethodPost {
+		actorID, err := requiredPersonaActor(r)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
 		var input application.ClaimRequestInput
 		if err := decodeJSON(r, &input); err != nil {
 			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
-		if strings.TrimSpace(input.RequesterUserID) == "" {
-			input.RequesterUserID = defaultUserID
-		}
+		// requester 身份只来自可信 operation.Context，不接收 body 身份。
+		input.RequesterPersonaID = actorID
 		request, err := h.service.CreateHomepageClaimRequest(r.Context(), homepageID, input)
 		if err != nil {
 			writeError(w, r, err)
@@ -345,14 +417,18 @@ func (h *Handler) handleStatusReports(
 	segments []string,
 ) {
 	if len(segments) == 2 && r.Method == http.MethodPost {
+		actorID, err := requiredPersonaActor(r)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
 		var input application.StatusReportInput
 		if err := decodeJSON(r, &input); err != nil {
 			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
-		if strings.TrimSpace(input.ReporterUserID) == "" {
-			input.ReporterUserID = defaultUserID
-		}
+		// reporter 身份只来自可信 operation.Context，不接收 body 身份。
+		input.ReporterPersonaID = actorID
 		report, err := h.service.CreateHomepageStatusReport(r.Context(), homepageID, input)
 		if err != nil {
 			writeError(w, r, err)

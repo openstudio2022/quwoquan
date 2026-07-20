@@ -29,7 +29,12 @@ try:
 except ImportError:
     np = None
 
+from privacy_guard import reject_closed_documents
 from time_utils import utc_now
+from training_sample_policy import (
+    DEFAULT_MAX_FEATURE_LAG_SECONDS,
+    filter_point_in_time_rows,
+)
 
 EMBEDDING_DIM = 64
 LEARNING_RATE = 0.001
@@ -39,7 +44,7 @@ USER_FEATURE_KEYS = [
 ]
 ITEM_FEATURE_KEYS = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
-    "bodyLength", "tagCount", "qualityScore", "publishHour",
+    "tagCount", "qualityScore", "publishHour",
 ]
 CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
@@ -65,7 +70,6 @@ def _build_item_vector(sample: dict) -> list[float]:
     for k in ITEM_FEATURE_KEYS:
         vec.append(float(item.get(k, 0) or 0))
     vec.append(float(CONTENT_TYPE_MAP.get(item.get("contentType", ""), -1)))
-    vec.append(1.0 if item.get("hasCover") else 0.0)
     return vec
 
 
@@ -173,6 +177,12 @@ def main():
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--embed-dim", type=int, default=EMBEDDING_DIM)
     p.add_argument("--production", action="store_true")
+    p.add_argument(
+        "--max-feature-lag-seconds",
+        type=float,
+        default=DEFAULT_MAX_FEATURE_LAG_SECONDS,
+        help="与排序模型相同的 PIT 样本准入阈值",
+    )
     args = p.parse_args()
 
     if np is None:
@@ -184,6 +194,13 @@ def main():
     samples_coll = db["rec_training_samples"]
 
     rows = list(samples_coll.find({"scenario": args.scenario}).sort("ts", 1))
+    input_sample_count = len(rows)
+    rows, _closed_subjects = reject_closed_documents(db, rows)
+    privacy_dropped_samples = input_sample_count - len(rows)
+    rows, dropped_lag_rows = filter_point_in_time_rows(
+        rows,
+        args.max_feature_lag_seconds,
+    )
     if len(rows) < 100:
         print(f"Only {len(rows)} samples; need at least 100", file=sys.stderr)
         return 1
@@ -240,6 +257,11 @@ def main():
         "test_size": len(y_test),
         "embed_dim": args.embed_dim,
         "epochs": args.epochs,
+        "pit_input_samples": input_sample_count,
+        "pit_accepted_samples": len(rows),
+        "pit_dropped_samples": dropped_lag_rows,
+        "pit_max_feature_lag_seconds": args.max_feature_lag_seconds,
+        "privacy_dropped_samples": privacy_dropped_samples,
     }
 
     out_dir = Path(args.out_dir)
@@ -257,6 +279,13 @@ def main():
         artifact_uri = artifact_store.upload(str(model_path), args.scenario, version)
     except Exception as e:
         print(f"[train_embedding] artifact upload skipped: {e}", file=sys.stderr)
+    if args.production and not artifact_uri:
+        print(
+            f"[train_embedding] production registry write requires artifact upload "
+            f"for scenario={args.scenario}",
+            file=sys.stderr,
+        )
+        return 1
 
     mr.write_registry(
         db,

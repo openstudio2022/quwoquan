@@ -42,6 +42,7 @@
         "m1",
         "m2",
         "m3",
+        "h10k",
         "launch"
       ]
     },
@@ -111,13 +112,23 @@
               "m1",
               "m2",
               "m3",
+              "h10k",
               "launch"
             ]
-          },
-          "entityCount": {
-            "minimum": 1
           }
-        }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "entityCount": { "minimum": 1 }
+            }
+          },
+          {
+            "properties": {
+              "postCount": { "minimum": 1 }
+            }
+          }
+        ]
       }
     },
     {

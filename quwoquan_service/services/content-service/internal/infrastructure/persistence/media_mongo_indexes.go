@@ -72,11 +72,6 @@ func (s *MongoMediaStore) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("create media original access fact indexes: %w", err)
 	}
-	if _, err := s.originalAccessOutbox.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_media_original_access_outbox_replay"),
-	}); err != nil {
-		return fmt.Errorf("create media original access outbox indexes: %w", err)
-	}
 	return nil
 }
 

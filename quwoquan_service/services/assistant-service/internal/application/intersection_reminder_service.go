@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func (s *AssistantService) TickIntersectionReminders(ctx context.Context, input 
 		if reason.ReasonID == "" || !reason.IsFact || reason.PrimaryText == "" {
 			continue
 		}
-		if !s.claimIntersectionReminder(reason.ReasonID) {
+		if !s.claimIntersectionReminder(ctx, reason.ReasonID) {
 			continue
 		}
 		message, err := s.publishNotificationAppMessage(ctx, NotificationAppMessageCommand{
@@ -158,13 +159,18 @@ func intersectionReminderSummary(reason IntersectionReminderReason) string {
 	return "你和" + name + "有了新的交集：" + reason.PrimaryText
 }
 
-func (s *AssistantService) claimIntersectionReminder(reasonID string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// claimIntersectionReminder 以 Redis SetNX + TTL 领取交集提醒租约
+// （key 契约见 skill_subscription/storage.yaml）。语义同 claimSubscriptionTick。
+func (s *AssistantService) claimIntersectionReminder(ctx context.Context, reasonID string) bool {
 	key := strings.TrimSpace(reasonID)
-	if key == "" || s.intersectionClaims[key] {
+	if key == "" || s.cache == nil {
 		return false
 	}
-	s.intersectionClaims[key] = true
-	return true
+	acquired, err := s.cache.SetNX(ctx, "assistant:intersection:lease:"+key, "1", 5*time.Minute)
+	if err != nil {
+		slog.WarnContext(ctx, "assistant intersection reminder lease acquisition failed; skipping delivery",
+			slog.String("reasonId", reasonID), slog.String("error", err.Error()))
+		return false
+	}
+	return acquired
 }

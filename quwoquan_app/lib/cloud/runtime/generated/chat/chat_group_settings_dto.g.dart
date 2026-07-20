@@ -2,28 +2,19 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ChatGroupSettingsDto {
-  final bool qrCodeJoinEnabled;
-  final bool joinRequiresApproval;
   final bool nameEditableByAdminOnly;
-  final bool privacyShieldAdminOnly;
   final String conversationType;
   final String circleId;
 
   ChatGroupSettingsDto({
-    this.qrCodeJoinEnabled = true,
-    this.joinRequiresApproval = false,
     this.nameEditableByAdminOnly = false,
-    this.privacyShieldAdminOnly = false,
     this.conversationType = 'group',
     this.circleId = '',
   });
 
   factory ChatGroupSettingsDto.fromMap(Map<String, dynamic> m) {
     return ChatGroupSettingsDto(
-      qrCodeJoinEnabled: m['qrCodeJoinEnabled'] as bool? ?? true,
-      joinRequiresApproval: m['joinRequiresApproval'] as bool? ?? false,
       nameEditableByAdminOnly: m['nameEditableByAdminOnly'] as bool? ?? false,
-      privacyShieldAdminOnly: m['privacyShieldAdminOnly'] as bool? ?? false,
       conversationType: m['conversationType']?.toString() ?? 'group',
       circleId: m['circleId']?.toString() ?? '',
     );
@@ -31,10 +22,7 @@ class ChatGroupSettingsDto {
 
   factory ChatGroupSettingsDto.fromReadModelMap(Map<String, dynamic> source) {
     return ChatGroupSettingsDto.fromMap(<String, dynamic>{
-      'qrCodeJoinEnabled': source['qrCodeJoinEnabled'],
-      'joinRequiresApproval': source['joinRequiresApproval'],
       'nameEditableByAdminOnly': source['nameEditableByAdminOnly'],
-      'privacyShieldAdminOnly': source['privacyShieldAdminOnly'],
       'conversationType': source['type'],
       'circleId': source['circleId'],
     });
@@ -42,28 +30,19 @@ class ChatGroupSettingsDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'qrCodeJoinEnabled': qrCodeJoinEnabled,
-      'joinRequiresApproval': joinRequiresApproval,
       'nameEditableByAdminOnly': nameEditableByAdminOnly,
-      'privacyShieldAdminOnly': privacyShieldAdminOnly,
       'conversationType': conversationType,
       'circleId': circleId,
     };
   }
 
   ChatGroupSettingsDto copyWith({
-    bool? qrCodeJoinEnabled,
-    bool? joinRequiresApproval,
     bool? nameEditableByAdminOnly,
-    bool? privacyShieldAdminOnly,
     String? conversationType,
     String? circleId,
   }) {
     return ChatGroupSettingsDto(
-      qrCodeJoinEnabled: qrCodeJoinEnabled ?? this.qrCodeJoinEnabled,
-      joinRequiresApproval: joinRequiresApproval ?? this.joinRequiresApproval,
       nameEditableByAdminOnly: nameEditableByAdminOnly ?? this.nameEditableByAdminOnly,
-      privacyShieldAdminOnly: privacyShieldAdminOnly ?? this.privacyShieldAdminOnly,
       conversationType: conversationType ?? this.conversationType,
       circleId: circleId ?? this.circleId,
     );

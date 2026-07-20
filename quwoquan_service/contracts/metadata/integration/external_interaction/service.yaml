@@ -10,7 +10,7 @@ service:
     block_reason: canonical operation awaits object-centered commercial migration
     gap_id: INTEGRATION_EXTERNAL_INTERACTION_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
-  description: 外部可靠交互请求收口，统一短信、推送、一键登录与 webhook 的异步提交、回调和死信查询。
+  description: 外部可靠交互请求收口。短信、推送、一键登录与 webhook 统一经 SubmitExternalInteractionRequest 提交（payload.operation 区分类型），不设按类型的第二套提交/回调路由。
 
 api_routes:
   - method: POST
@@ -41,6 +41,7 @@ api_routes:
       - INTEGRATION.USER.invalid_external_request
       - INTEGRATION.USER.unsupported_operation
       - INTEGRATION.USER.payload_not_allowed
+      - INTEGRATION.USER.push_delivery_invalid_request
       - INTEGRATION.SYSTEM.internal_error
     privacy:
       request_classification: SECRET
@@ -75,9 +76,39 @@ api_routes:
       method: getRequest
       reader: ExternalInteractionRequestReader
       slice: ExternalInteractionRequestSlice
+    authorization:
+      principal: service
+      scopes: [integration.external_interaction.read]
+      ownership_policy: caller_service_owns_callback_and_idempotency_scope
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - INTEGRATION.USER.invalid_external_request
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_request_read
+      trace: true
+      attributes: [outcome, operation]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 查询外部交互请求当前状态与归一化结果。
     path_params: [requestId]
     response_entity: ExternalInteractionRequest
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: GET
     path: /integrations/external-requests/{requestId}/attempts
@@ -90,9 +121,40 @@ api_routes:
       method: listAttempts
       reader: ExternalInteractionAttemptReader
       slice: ExternalInteractionAttemptListSlice
+    authorization:
+      principal: operator
+      scopes: [ops.integration.read]
+      permissions: [integration.external_interaction.audit]
+      ownership_policy: operator_delivery_plane
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - INTEGRATION.USER.invalid_external_request
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_attempt_list
+      trace: true
+      attributes: [outcome, result_count]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 查询 provider attempt ledger，用于审计、SLO 与人工补偿定位。
     path_params: [requestId]
     response_entity: ExternalInteractionAttempt
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: GET
     path: /integrations/external-requests/dead-letters
@@ -105,82 +167,165 @@ api_routes:
       method: listDeadLetters
       reader: ExternalInteractionDeadLetterReader
       slice: ExternalInteractionDeadLetterListSlice
+    authorization:
+      principal: operator
+      scopes: [ops.integration.read]
+      permissions: [integration.external_interaction.audit]
+      ownership_policy: operator_delivery_plane
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - INTEGRATION.USER.invalid_external_request
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_dead_letter_list
+      trace: true
+      attributes: [outcome, operation, result_count]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 查询超过重试上限或不可恢复失败的外部交互死信。
     query_params: [operation, status, limit]
     response_entity: ExternalInteractionDeadLetter
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: POST
-    path: /integrations/push-deliveries
+    path: /integrations/external-requests/dead-letters:recover
 
-    operation: SubmitPushDelivery
+    operation: RecoverExternalInteractionDeadLetter
     actor: none
     application:
       kind: command
       facet: ExternalInteractionCommandFacade
-      method: submitPushDelivery
+      method: recoverDeadTask
       aggregate_owner: ExternalInteraction
       mutation_target: ExternalInteraction
       invariant_target: ExternalInteraction
-    description: 内部接口，提交 APNs/FCM/厂商推送异步发送请求。
-    request_entity: PushDeliveryRequest
-    response_entity: PushDeliveryAccepted
+    authorization:
+      principal: operator
+      scopes: [ops.integration.write]
+      permissions: [integration.external_interaction.recover]
+      ownership_policy: operator_delivery_plane
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - INTEGRATION.USER.invalid_external_request
+      - INTEGRATION.SYSTEM.dead_letter_created
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_dead_letter_recover
+      trace: true
+      attributes: [outcome, operation]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 将死信任务恢复为可重试状态并重置退避。
+    request_entity: ExternalInteractionRecoverRequest
+    response_entity: ExternalInteractionRecoverAccepted
     success_status: 202
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
-  - method: POST
-    path: /integrations/push-deliveries:callback
+  - method: GET
+    path: /integrations/external-requests/metrics:snapshot
 
-    operation: PushDeliveryProviderCallback
+    operation: GetExternalInteractionMetricsSnapshot
     actor: none
     application:
-      kind: command
-      facet: ExternalInteractionCommandFacade
-      method: recordPushDeliveryProviderCallback
-      aggregate_owner: ExternalInteraction
-      mutation_target: ExternalInteraction
-      invariant_target: ExternalInteraction
-    description: 推送供应商回执回调。
-    request_entity: PushDeliveryCallback
-    response_entity: PushDeliveryCallbackAccepted
-    success_status: 202
-
-  - method: POST
-    path: /integrations/sms-otp:send
-
-    operation: SendSmsOtp
-    actor: persona_or_device
-    application:
-      kind: command
-      facet: ExternalInteractionCommandFacade
-      method: sendSmsOtp
-      aggregate_owner: ExternalInteraction
-      mutation_target: ExternalInteraction
-      invariant_target: ExternalInteraction
-    description: 内部接口，提交验证码短信发送请求；外部公开入口应使用 /integrations/external-requests。
-    request_entity: SmsOtpSendPayload
-    response_entity: SmsOtpAccepted
-    success_status: 202
-
-  - method: POST
-    path: /integrations/sms-otp:callback
-
-    operation: SmsOtpProviderCallback
-    actor: none
-    application:
-      kind: command
-      facet: ExternalInteractionCommandFacade
-      method: recordSmsOtpProviderCallback
-      aggregate_owner: ExternalInteraction
-      mutation_target: ExternalInteraction
-      invariant_target: ExternalInteraction
-    description: 供应商短信回执回调，必须验签并归一化为 ExternalInteractionResult。
-    request_entity: SmsOtpProviderCallback
-    response_entity: SmsOtpCallbackAccepted
-    success_status: 202
+      kind: query
+      facet: ExternalInteractionQueryFacade
+      method: metricsSnapshot
+      reader: ExternalInteractionMetricsReader
+      slice: ExternalInteractionMetricsSnapshot
+    authorization:
+      principal: operator
+      scopes: [ops.integration.read]
+      permissions: [integration.external_interaction.audit]
+      ownership_policy: operator_delivery_plane
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - INTEGRATION.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_external_interaction_metrics_read
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 读取可靠任务队列深度、重试与死信的权威指标快照。
+    response_entity: ExternalInteractionMetricsSnapshot
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
 consumers:
   - name: user-service
-    capabilities: [sms_otp_send, sms_otp_delivery_callback, one_tap_phone_resolve]
+    capabilities: [sms_otp_send_via_submit, sms_otp_delivery_callback, one_tap_phone_resolve]
   - name: notification-service
-    capabilities: [push_delivery_send, push_delivery_callback, webhook_deliver]
+    capabilities: [push_delivery_send_via_submit, push_delivery_callback, webhook_deliver]
   - name: platform-ops
     capabilities: [provider_attempt_audit, dead_letter_compensation]
+
+contract_test:
+  service_side:
+    real_engines:
+      mongodb: testcontainers (mongo:7 replica set)
+    mock_targets: [external-provider-endpoint]
+    scenarios:
+      - name: submit_typed_request_and_idempotent_replay
+        command: SubmitExternalInteractionRequest
+        assertions:
+          - 缺 operation/idempotencyKey/expiresAt 的请求返回 INTEGRATION.USER.invalid_external_request
+          - 不在 ExternalInteractionOperation 枚举内的 operation 返回 INTEGRATION.USER.unsupported_operation
+          - push_delivery.send 只接受 PushDeliveryPayload 九个字段且枚举/过期时间严格校验
+          - 同一 idempotencyKey 重放返回同一 requestId 受理结果
+      - name: request_state_and_attempt_ledger
+        assertions:
+          - GetExternalInteractionRequest 返回归一化状态
+          - ListExternalInteractionAttempts 返回 append-only attempt ledger
+      - name: dead_letter_recover_roundtrip
+        command: RecoverExternalInteractionDeadLetter
+        assertions:
+          - 死信任务恢复后离开 dead_letter 列表并可再次尝试
+          - 恢复不存在的任务返回结构化错误
+      - name: removed_typed_delivery_routes_unavailable
+        assertions:
+          - POST /integrations/push-deliveries 返回 404
+          - POST /integrations/sms-otp:send 返回 404

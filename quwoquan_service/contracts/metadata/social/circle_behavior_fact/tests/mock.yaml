@@ -1,0 +1,18 @@
+entity: CircleBehaviorFact
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/circle/
+
+scenarios:
+  - name: behavior_fact_typed_writer_abi
+    description: AppendCircleBehaviorFactCommand typed ABI 与 alpha writer 同型
+    assertions:
+      - unknown_event_type_rejected
+      - decoder_rejects_unknown_keys
+
+  - name: error_code_mapping
+    cases:
+      - http_status: 409
+        code: CIRCLE.USER.behavior_fact_idempotency_conflict
+        expected_dart_const: behaviorFactIdempotencyConflict

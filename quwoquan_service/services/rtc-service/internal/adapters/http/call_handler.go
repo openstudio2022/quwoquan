@@ -6,17 +6,19 @@ import (
 	"net/http"
 	"strconv"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/services/rtc-service/internal/application/commandmeta"
+
 	"quwoquan_service/services/rtc-service/internal/application"
 )
 
 type CallHandler struct {
-	orchestrator  *application.CallOrchestrator
-	signalHandler http.Handler
+	orchestrator *application.CallOrchestrator
 }
 
-func NewCallHandler(orch *application.CallOrchestrator, sh http.Handler) *CallHandler {
-	return &CallHandler{orchestrator: orch, signalHandler: sh}
+func NewCallHandler(orch *application.CallOrchestrator) *CallHandler {
+	return &CallHandler{orchestrator: orch}
 }
 
 func (h *CallHandler) Routes() http.Handler {
@@ -24,14 +26,14 @@ func (h *CallHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", h.handleHealthz)
 	mux.HandleFunc("GET /livez", h.handleHealthz)
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
-	if h.signalHandler != nil {
-		mux.Handle("/rtc/signal", h.signalHandler)
-	}
 
 	for _, r := range generatedRouteTable {
 		route := r
 		pattern := route.Method + " " + route.Template
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+			if key := req.Header.Get("Idempotency-Key"); key != "" {
+				req = req.WithContext(commandmeta.WithIdempotencyKey(req.Context(), key))
+			}
 			h.dispatchOperation(route.Operation, w, req)
 		})
 	}
@@ -56,6 +58,8 @@ func (h *CallHandler) dispatchOperation(operation string, w http.ResponseWriter,
 		h.handleLeaveCall(w, r)
 	case "InviteToCall":
 		h.handleInviteToCall(w, r)
+	case "ReportMediaConnected":
+		h.handleReportMediaConnected(w, r)
 	case "GetCall":
 		h.handleGetCall(w, r)
 	case "ListCalls":
@@ -64,10 +68,6 @@ func (h *CallHandler) dispatchOperation(operation string, w http.ResponseWriter,
 		h.handleToggleMute(w, r)
 	case "ToggleCamera":
 		h.handleToggleCamera(w, r)
-	case "StartRecording":
-		h.handleStartRecording(w, r)
-	case "StopRecording":
-		h.handleStopRecording(w, r)
 	case "StartScreenShare":
 		h.handleStartScreenShare(w, r)
 	case "StopScreenShare":
@@ -151,17 +151,27 @@ func (h *CallHandler) handleHangupCall(w http.ResponseWriter, r *http.Request) {
 
 func (h *CallHandler) handleJoinCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
-	session, token, err := h.orchestrator.JoinCall(r.Context(), callID, resolveUserID(r))
+	result, err := h.orchestrator.JoinCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"session": session, "token": token})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *CallHandler) handleLeaveCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.LeaveCall(r.Context(), callID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, session)
+}
+
+func (h *CallHandler) handleReportMediaConnected(w http.ResponseWriter, r *http.Request) {
+	callID := r.PathValue("callId")
+	session, err := h.orchestrator.ReportMediaConnected(r.Context(), callID, resolveUserID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -190,7 +200,11 @@ func (h *CallHandler) handleInviteToCall(w http.ResponseWriter, r *http.Request)
 
 func (h *CallHandler) handleGetCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
-	session, err := h.orchestrator.GetCall(r.Context(), callID)
+	session, err := h.orchestrator.GetCall(
+		r.Context(),
+		callID,
+		resolveUserID(r),
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -207,17 +221,12 @@ func (h *CallHandler) handleListCalls(w http.ResponseWriter, r *http.Request) {
 		MissedOnly: r.URL.Query().Get("missed") == "true",
 	}
 
-	calls, err := h.orchestrator.ListCalls(r.Context(), userID, limit, cursor, filter)
+	page, err := h.orchestrator.ListCalls(r.Context(), userID, limit, cursor, filter)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-
-	nextCursor := ""
-	if len(calls) > 0 {
-		nextCursor = calls[len(calls)-1].ID
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": calls, "cursor": nextCursor})
+	writeJSON(w, http.StatusOK, page)
 }
 
 // ── Media Controls ───────────────────────────────────────────────────────────
@@ -252,28 +261,6 @@ func (h *CallHandler) handleToggleCamera(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, session)
 }
 
-// ── Recording ────────────────────────────────────────────────────────────────
-
-func (h *CallHandler) handleStartRecording(w http.ResponseWriter, r *http.Request) {
-	callID := r.PathValue("callId")
-	session, err := h.orchestrator.StartRecording(r.Context(), callID, resolveUserID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, session)
-}
-
-func (h *CallHandler) handleStopRecording(w http.ResponseWriter, r *http.Request) {
-	callID := r.PathValue("callId")
-	session, err := h.orchestrator.StopRecording(r.Context(), callID, resolveUserID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, session)
-}
-
 // ── Screen Share ─────────────────────────────────────────────────────────────
 
 func (h *CallHandler) handleStartScreenShare(w http.ResponseWriter, r *http.Request) {
@@ -298,8 +285,13 @@ func (h *CallHandler) handleStopScreenShare(w http.ResponseWriter, r *http.Reque
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// resolveUserID 只信任 auth middleware 从验签 token 重建的 Principal，
+// 不读取客户端上送的身份 header。
 func resolveUserID(r *http.Request) string {
-	return r.Header.Get("X-Client-User-Id")
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		return principal.Actor.PersonaID
+	}
+	return ""
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

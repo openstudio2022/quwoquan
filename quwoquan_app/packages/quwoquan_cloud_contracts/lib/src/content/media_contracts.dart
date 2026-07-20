@@ -137,6 +137,7 @@ final class ContentMediaUploadSessionSlice {
   const ContentMediaUploadSessionSlice({
     required this.sessionId,
     required this.version,
+    required this.assetId,
     required this.objectKey,
     required this.mediaType,
     required this.contentType,
@@ -149,6 +150,7 @@ final class ContentMediaUploadSessionSlice {
 
   final String sessionId;
   final int version;
+  final String? assetId;
   final String objectKey;
   final ContentMediaType mediaType;
   final String contentType;
@@ -302,6 +304,7 @@ ContentMediaUploadSessionSlice decodeContentMediaUploadSessionSlice(
   return ContentMediaUploadSessionSlice(
     sessionId: _string(map, 'sessionId'),
     version: _positiveInteger(map, 'version'),
+    assetId: _optionalString(map, 'assetId'),
     objectKey: _string(map, 'objectKey'),
     mediaType: _mediaType(map, 'mediaType'),
     contentType: _string(map, 'contentType'),
@@ -429,17 +432,6 @@ Uri? _optionalUri(Map<String, Object?> map, String key) {
     throw FormatException('$key must be an absolute URL');
   }
   return uri;
-}
-
-List<String> _stringList(Map<String, Object?> map, String key) {
-  final value = map[key];
-  if (value is! List || value.any((item) => item is! String)) {
-    throw FormatException('$key must be a string array');
-  }
-  return value
-      .cast<String>()
-      .map((item) => _requiredText(item, key))
-      .toList(growable: false);
 }
 
 ContentMediaType _mediaType(Map<String, Object?> map, String key) =>

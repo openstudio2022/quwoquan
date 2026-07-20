@@ -34,11 +34,18 @@ except ImportError:
     roc_auc_score = None
 
 from diversity_metrics import compute_diversity_metrics
+from privacy_guard import reject_closed_documents
 from time_utils import utc_now
+from training_sample_policy import (
+    DEFAULT_MAX_FEATURE_LAG_SECONDS,
+    filter_point_in_time_rows,
+)
 
 ITEM_NUMERIC_FEATURES = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
-    "bodyLength", "tagCount", "qualityScore", "publishHour", "aspectRatio",
+    # N3-3 特征偏斜收口：bodyLength/aspectRatio/hasCover 已退役（在线召回投影
+    # 不携带、serving 恒 0，训练学到的分裂在线全失效；S1 召回投影补齐后再启用）。
+    "tagCount", "qualityScore", "publishHour",
 ]
 RECALL_PATH_MAP = {"tag_recall": 0, "hot_recall": 1, "social_friend": 2, "social_circle": 3, "explore_recall": 4}
 USER_NUMERIC_FEATURES = [
@@ -48,6 +55,29 @@ CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
 ]
 CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
+# W7 交集特征（registry v5）：与 models/content_feed.py 在线抽取保持同构。
+INTERSECTION_USER_NUMERIC = [
+    "sharedFolloweesCount", "sharedCircleCount", "coCommentedCount",
+    "coVisitedEntityCount", "followeeInObjectActive", "followeeViewingActive",
+    "affinityIntersectionScore",
+]
+INTERSECTION_CLASS_MAP = {"fact": 2, "affinity": 1}
+
+
+def _append_intersection_features(features: list, item: dict, user: dict) -> None:
+    """Append intersection features (user 7 + item 4 = 11 dims)."""
+    for f in INTERSECTION_USER_NUMERIC:
+        features.append(float(user.get(f, 0) or 0))
+    features.append(float(item.get("intersectionFactStrength", 0) or 0))
+    features.append(float(item.get("intersectionFreshness", 0) or 0))
+    candidate_affinity = float(item.get("affinityIntersectionScore", 0) or 0)
+    if not str(item.get("intersectionConfidenceLabel", "") or "").strip():
+        candidate_affinity = 0.0
+    features.append(candidate_affinity)
+    features.append(
+        float(INTERSECTION_CLASS_MAP.get(str(item.get("intersectionClass", "") or ""), 0))
+    )
+
 
 # Multi-objective targets and their fusion weights
 OBJECTIVES = {
@@ -74,7 +104,7 @@ def _extract_features(sample: dict) -> list[float]:
         features.append(float(ctx.get(f, 0) or 0))
 
     features.append(float(CONTENT_TYPE_MAP.get(item.get("contentType", ""), -1)))
-    features.append(1.0 if item.get("hasCover") else 0.0)
+    # hasCover 已退役（N3-3）：在线不可得，双侧同步移除保持特征向量同构。
     features.append(float(RECALL_PATH_MAP.get(item.get("recallPath", ""), -1)))
 
     tag_affinities = user.get("tagAffinities", {})
@@ -116,6 +146,8 @@ def _extract_features(sample: dict) -> list[float]:
     content_type = item.get("contentType", "")
     features.append(float(type_ener.get(content_type, 0)))
 
+    _append_intersection_features(features, item, user)
+
     return features
 
 
@@ -123,11 +155,17 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
     p.add_argument("--out-dir", default=os.environ.get("MODEL_OUT_DIR", "/tmp/rec_models"))
     p.add_argument("--production", action="store_true")
     p.add_argument("--num-boost-round", type=int, default=100)
     p.add_argument("--min-samples", type=int, default=100, help="Minimum samples required to train")
+    p.add_argument(
+        "--max-feature-lag-seconds",
+        type=float,
+        default=DEFAULT_MAX_FEATURE_LAG_SECONDS,
+        help="PIT 泄漏防护：featureLagSeconds 超过该阈值（或缺失）的样本剔除（N3-3）",
+    )
     args = p.parse_args()
 
     if np is None or lgb is None:
@@ -139,6 +177,22 @@ def main():
     samples_coll = db["rec_training_samples"]
 
     rows = list(samples_coll.find({"scenario": args.scenario}).sort("ts", 1))
+    input_sample_count = len(rows)
+    rows, _closed_subjects = reject_closed_documents(db, rows)
+    privacy_dropped_samples = input_sample_count - len(rows)
+    # N3-3 PIT 泄漏防护（featureLagSeconds=曝光时刻-在线快照时刻）：
+    # 负值表示快照来自曝光之后（时间旅行），超阈值表示快照与曝光间隔异常；
+    # 两者及缺 lag 的旧样本都按保守策略剔除。
+    rows, dropped_lag_rows = filter_point_in_time_rows(
+        rows,
+        args.max_feature_lag_seconds,
+    )
+    if dropped_lag_rows:
+        print(
+            f"[pit] dropped {dropped_lag_rows} samples with missing/excessive "
+            f"featureLagSeconds (> {args.max_feature_lag_seconds}s)",
+            file=sys.stderr,
+        )
     if len(rows) < args.min_samples:
         print(f"Only {len(rows)} samples; need at least {args.min_samples}", file=sys.stderr)
         return 1
@@ -242,6 +296,11 @@ def main():
 
     all_metrics["fused_auc"] = round(fused_auc, 4)
     all_metrics["fusion_weights"] = {k: v["weight"] for k, v in OBJECTIVES.items()}
+    all_metrics["pit_input_samples"] = input_sample_count
+    all_metrics["pit_accepted_samples"] = len(rows)
+    all_metrics["pit_dropped_samples"] = dropped_lag_rows
+    all_metrics["pit_max_feature_lag_seconds"] = args.max_feature_lag_seconds
+    all_metrics["privacy_dropped_samples"] = privacy_dropped_samples
     all_metrics.update(compute_diversity_metrics(test_rows, list(fused_scores), top_k=20))
 
     # Save fusion config
@@ -258,15 +317,27 @@ def main():
     print(f"All metrics: {json.dumps(all_metrics, indent=2)}", file=sys.stderr)
 
     import model_registry as mr
+    # N0-5：子模型 .txt 必须与 fusion config 一起上传——serving 侧按 config 的
+    # model_files 拉子模型；只传 config 会导致远端拉不到子模型恒回退。
     artifact_uri = ""
+    sub_model_uris: dict[str, str] = {}
     try:
         import artifact_store
+        for obj_name in models:
+            sub_path = out_dir / f"{args.scenario}_{obj_name}_{version}.txt"
+            sub_model_uris[obj_name] = artifact_store.upload(
+                str(sub_path), args.scenario, version
+            )
+        # 子模型全部上传成功后，把 uri 写进 fusion config 再上传（config 是
+        # serving 的入口 artifact，必须包含子模型的远端地址）。
+        fusion_config["model_artifact_uris"] = sub_model_uris
+        config_path.write_text(json.dumps(fusion_config, indent=2))
         artifact_uri = artifact_store.upload(str(config_path), args.scenario, version)
     except Exception as e:
         print(f"[train_multiobjective] artifact upload skipped: {e}", file=sys.stderr)
-    if args.production and not artifact_uri:
+    if args.production and (not artifact_uri or len(sub_model_uris) != len(models)):
         print(
-            f"[train_multiobjective] production registry write requires artifact upload for scenario={args.scenario}",
+            f"[train_multiobjective] production registry write requires fusion config + all sub-model artifacts uploaded for scenario={args.scenario}",
             file=sys.stderr,
         )
         return 1

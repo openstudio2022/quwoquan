@@ -26,6 +26,7 @@ func TestTickIntersectionRemindersCreatesStructuredAppMessageForFactReason(t *te
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithNotificationAppMessageCommandWriter(notifications),
 		WithIntersectionInboxReader(&fakeIntersectionInboxReader{reasons: []IntersectionReminderReason{{
 			ReasonID:    "reason_1",
@@ -70,6 +71,7 @@ func TestTickIntersectionRemindersSkipsAffinityOnlyReason(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithNotificationAppMessageCommandWriter(newRecordingNotificationCommandWriter()),
 		WithIntersectionInboxReader(&fakeIntersectionInboxReader{reasons: []IntersectionReminderReason{{
 			ReasonID:    "reason_affinity",
@@ -95,6 +97,7 @@ func TestTickIntersectionRemindersUsesConfiguredPolicyLimit(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		WithNotificationAppMessageCommandWriter(newRecordingNotificationCommandWriter()),
 		WithIntersectionInboxReader(reader),
 		WithIntersectionReminderPolicy(IntersectionReminderPolicy{

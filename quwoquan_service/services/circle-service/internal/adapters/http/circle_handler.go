@@ -2,7 +2,7 @@ package http
 
 import (
 	"encoding/json"
-	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,6 +22,7 @@ import (
 // CircleHandler adapts circle application services to HTTP.
 type CircleHandler struct {
 	circleService           *application.CircleService
+	circleCommands          *application.CircleCommandFacade
 	fileCommands            *fileapp.CommandFacade
 	fileQueries             *fileapp.QueryFacade
 	behaviorFacts           *behaviorfactapp.Writer
@@ -36,6 +37,7 @@ type CircleHandler struct {
 
 func NewCircleHandler(
 	cs *application.CircleService,
+	circleCommands *application.CircleCommandFacade,
 	fileCommands *fileapp.CommandFacade,
 	fileQueries *fileapp.QueryFacade,
 	behaviorFacts *behaviorfactapp.Writer,
@@ -47,11 +49,12 @@ func NewCircleHandler(
 	membershipQueries *membershipapp.QueryFacade,
 	placements *placementapp.CommandFacade,
 ) *CircleHandler {
-	if cs == nil || fileCommands == nil || fileQueries == nil || behaviorFacts == nil || groupCommands == nil || groupQueries == nil || groupMembershipCommands == nil || groupMembershipQueries == nil || membershipCommands == nil || membershipQueries == nil || placements == nil {
+	if cs == nil || circleCommands == nil || fileCommands == nil || fileQueries == nil || behaviorFacts == nil || groupCommands == nil || groupQueries == nil || groupMembershipCommands == nil || groupMembershipQueries == nil || membershipCommands == nil || membershipQueries == nil || placements == nil {
 		panic("CircleHandler requires all object facades")
 	}
 	return &CircleHandler{
-		circleService: cs, fileCommands: fileCommands, fileQueries: fileQueries, behaviorFacts: behaviorFacts,
+		circleService: cs, circleCommands: circleCommands,
+		fileCommands: fileCommands, fileQueries: fileQueries, behaviorFacts: behaviorFacts,
 		groupCommands: groupCommands, groupQueries: groupQueries,
 		groupMembershipCommands: groupMembershipCommands, groupMembershipQueries: groupMembershipQueries,
 		membershipCommands: membershipCommands, membershipQueries: membershipQueries,
@@ -65,6 +68,7 @@ func (h *CircleHandler) Routes() http.Handler {
 
 	// Circles CRUD
 	mux.HandleFunc("/circles", h.handleCircles)
+	mux.HandleFunc("GET /circles/discovery-feed", h.handleCircleDiscoveryFeed)
 	mux.HandleFunc("GET /circles/search", h.handleSearchCircles)
 	mux.HandleFunc("/circles/behaviors", h.handleBehaviors)
 	mux.HandleFunc("/circles/", h.handleCircleSubRoutes)
@@ -94,9 +98,10 @@ func (h *CircleHandler) handleCircles(w http.ResponseWriter, r *http.Request) {
 
 func (h *CircleHandler) handleListCircles(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 20
+	limit, err := parsePageLimit(q.Get("limit"))
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "分页参数无效", err.Error()))
+		return
 	}
 	resp := h.circleService.ListCircles(r.Context(), application.ListCirclesRequest{
 		Category:     q.Get("category"),
@@ -111,9 +116,10 @@ func (h *CircleHandler) handleListCircles(w http.ResponseWriter, r *http.Request
 
 func (h *CircleHandler) handleSearchCircles(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 20
+	limit, err := parsePageLimit(q.Get("limit"))
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "分页参数无效", err.Error()))
+		return
 	}
 	resp := h.circleService.SearchCircles(r.Context(), application.SearchCirclesRequest{
 		Query:       q.Get("query"),
@@ -125,20 +131,37 @@ func (h *CircleHandler) handleSearchCircles(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {
-	var req application.CreateCircleRequest
-	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+func (h *CircleHandler) handleCircleDiscoveryFeed(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, err := parsePageLimit(q.Get("limit"))
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "分页参数无效", err.Error()))
 		return
 	}
-	req.OwnerID = resolveUserID(r)
-
-	circle, err := h.circleService.CreateCircle(r.Context(), req)
+	result, err := h.circleService.ListCircleDiscoveryFeed(r.Context(), application.CircleDiscoveryFeedQuery{
+		Category: q.Get("category"), SubCategory: q.Get("subCategory"),
+		Scope: application.CircleDiscoveryFeedScope(q.Get("scope")),
+		Sort:  q.Get("sort"), Cursor: q.Get("cursor"), Limit: limit,
+	})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"data": circle})
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {
+	var command application.CreateCircleCommand
+	if err := readStrictJSON(r, &command); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+		return
+	}
+	result, err := h.circleCommands.Create(r.Context(), command)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
 }
 
 // --- /circles/{circleId}/... ---
@@ -201,79 +224,54 @@ func (h *CircleHandler) handleGetCircle(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *CircleHandler) handleUpdateCircle(w http.ResponseWriter, r *http.Request, circleID string) {
-	var data map[string]any
-	if err := readJSON(r, &data); err != nil {
+	var command application.UpdateCircleCommand
+	if err := readStrictJSON(r, &command); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
-	circle, err := h.circleService.UpdateCircle(r.Context(), circleID, data)
+	command.CircleID = circleID
+	result, err := h.circleCommands.Update(r.Context(), command)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": circle})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *CircleHandler) handleArchiveCircle(w http.ResponseWriter, r *http.Request, circleID string) {
-	if err := h.circleService.ArchiveCircle(r.Context(), circleID); err != nil {
+	result, err := h.circleCommands.Archive(r.Context(), circleID)
+	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- Feed ---
 
+// 展示位（pin/feature）唯一写入口是 CirclePostPlacement 命令
+// （/circles/{circleId}/post-placements/{placementId}/pin|feature），
+// feed 路由只保留只读投影。
 func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
-	if len(rest) == 0 {
-		if r.Method != http.MethodGet {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
-			return
-		}
-		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
-		if limit <= 0 {
-			limit = 20
-		}
-		items, cursor := h.circleService.GetCircleFeed(r.Context(), circleID, limit, q.Get("cursor"), q.Get("sort"))
-		writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
+	if len(rest) != 0 || r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET /circles/{circleId}/feed"))
 		return
 	}
-
-	// /circles/{circleId}/feed/{postId}/pin or /feature
-	if len(rest) >= 2 {
-		postID := rest[0]
-		action := rest[1]
-		if r.Method != http.MethodPatch {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
-			return
-		}
-		var body struct {
-			Pinned   *bool `json:"pinned"`
-			Featured *bool `json:"featured"`
-		}
-		if err := readJSON(r, &body); err != nil {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
-			return
-		}
-		var err error
-		switch action {
-		case "pin":
-			pinned := body.Pinned != nil && *body.Pinned
-			err = h.circleService.PinPost(r.Context(), circleID, postID, pinned)
-		case "feature":
-			featured := body.Featured != nil && *body.Featured
-			err = h.circleService.FeaturePost(r.Context(), circleID, postID, featured)
-		default:
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效操作", "unknown feed action"))
-			return
-		}
-		if err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+	q := r.URL.Query()
+	limit, err := parsePageLimit(q.Get("limit"))
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "分页参数无效", err.Error()))
+		return
 	}
+	result, err := h.circleService.GetCircleFeed(
+		r.Context(), circleID, limit, q.Get("cursor"), q.Get("sort"),
+		q.Get("identity"), q.Get("type"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- Stats ---
@@ -288,7 +286,20 @@ func (h *CircleHandler) handleGetStats(w http.ResponseWriter, r *http.Request, c
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": stats})
+	writeJSON(w, http.StatusOK, map[string]any{"data": statsWirePayload(stats)})
+}
+
+// statsWirePayload 保持既有 wire 键集合（documented keys 见
+// projections/circle_stats_wire.yaml）。
+func statsWirePayload(stats application.CircleStatsWire) map[string]any {
+	return map[string]any{
+		"totalMembers":      stats.TotalMembers,
+		"weeklyActive":      stats.WeeklyActive,
+		"totalPosts":        stats.TotalPosts,
+		"totalDiscussions":  stats.TotalDiscussions,
+		"storageUsedBytes":  stats.StorageUsedBytes,
+		"storageQuotaBytes": stats.StorageQuotaBytes,
+	}
 }
 
 func (h *CircleHandler) handleGetImpact(w http.ResponseWriter, r *http.Request, circleID string) {
@@ -314,15 +325,18 @@ func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Requ
 	var body struct {
 		Sections []model.CircleSectionConfig `json:"sections"`
 	}
-	if err := readJSON(r, &body); err != nil {
+	if err := readStrictJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
-	if err := h.circleService.UpdateSections(r.Context(), circleID, body.Sections); err != nil {
+	result, err := h.circleCommands.UpdateSections(r.Context(), application.UpdateCircleSectionsCommand{
+		CircleID: circleID, Sections: body.Sections,
+	})
+	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- Behaviors ---
@@ -351,25 +365,26 @@ func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) 
 
 // --- Helpers ---
 
-func resolveUserID(r *http.Request) string {
-	if uid := r.Header.Get("X-Client-User-Id"); uid != "" {
-		return uid
+func parsePageLimit(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 20, nil
 	}
-	return "anonymous"
-}
-
-func readJSON(r *http.Request, v any) error {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	limit, err := strconv.Atoi(raw)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return json.Unmarshal(body, v)
+	if limit <= 0 {
+		return 20, nil
+	}
+	return limit, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Default().Warn("circle response encode failed", "error", err)
+	}
 }
 
 func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {

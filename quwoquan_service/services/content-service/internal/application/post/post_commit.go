@@ -23,6 +23,7 @@ func (s *PostService) commitPostCommand(
 	eventType string,
 	eventPayload any,
 	occurredAt time.Time,
+	commitOptions ...func(*postports.Commit),
 ) (*postmodel.Post, error) {
 	idempotencyKey := commandmeta.IdempotencyKey(ctx)
 	if idempotencyKey == "" {
@@ -54,7 +55,7 @@ func (s *PostService) commitPostCommand(
 			OccurredAt:       occurredAt,
 		})
 	}
-	result, err := s.store.ports.Aggregate.Commit(ctx, postports.Commit{
+	commit := postports.Commit{
 		Post:             post,
 		ExpectedVersion:  expectedVersion,
 		IdempotencyKey:   idempotencyKey,
@@ -62,7 +63,11 @@ func (s *PostService) commitPostCommand(
 		CommandDigest:    hex.EncodeToString(commandHash[:]),
 		ReceiptExpiresAt: occurredAt.Add(24 * time.Hour),
 		Events:           events,
-	})
+	}
+	for _, option := range commitOptions {
+		option(&commit)
+	}
+	result, err := s.store.ports.Aggregate.Commit(ctx, commit)
 	if err != nil {
 		return nil, err
 	}

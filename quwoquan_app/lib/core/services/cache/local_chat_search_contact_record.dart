@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 
 class LocalChatSearchContactRecord {
   const LocalChatSearchContactRecord({

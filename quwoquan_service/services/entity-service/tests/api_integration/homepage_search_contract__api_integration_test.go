@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
-	"quwoquan_service/services/entity-service/internal/application"
+	"quwoquan_service/services/entity-service/internal/testsupport"
 )
 
 func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 

@@ -20,6 +20,7 @@ type MediaAssetBindingSlice struct {
 	AssetID                      string
 	OwnerID                      string
 	Ready                        bool
+	ProcessingStatus             string
 	MediaType                    string
 	ContentType                  string
 	Version                      int64

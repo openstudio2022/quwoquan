@@ -21,9 +21,11 @@ const (
 )
 
 var (
-	_ application.SearchRequestObserver     = (*Recorder)(nil)
-	_ application.SearchLoadObserver        = (*Recorder)(nil)
-	_ application.RelatedTermsCacheObserver = (*Recorder)(nil)
+	_ application.SearchRequestObserver      = (*Recorder)(nil)
+	_ application.SearchLoadObserver         = (*Recorder)(nil)
+	_ application.RecentSearchObserver       = (*Recorder)(nil)
+	_ application.RelatedTermsCacheObserver  = (*Recorder)(nil)
+	_ application.IntersectionAttachObserver = (*Recorder)(nil)
 )
 
 // Recorder 通过 Prometheus collectors 实现应用层观测端口。
@@ -115,6 +117,36 @@ var (
 		Name:      "related_terms_cache_total",
 		Help:      "Related-terms hot-query cache outcomes (hit|miss).",
 	}, []string{"result"})
+
+	recentDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "recent",
+		Name:      "duration_seconds",
+		Help:      "Recent-search operation latency in seconds.",
+		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
+	}, []string{"operation", "status"})
+
+	recentRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "recent",
+		Name:      "requests_total",
+		Help:      "Recent-search requests by operation and bounded outcome.",
+	}, []string{"operation", "status"})
+
+	intersectionAttachDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "intersection_attach",
+		Name:      "duration_seconds",
+		Help:      "Top-hit intersection attachment latency in seconds.",
+		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5},
+	}, []string{"status"})
+
+	intersectionAttachHits = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "intersection_attach",
+		Name:      "hits_total",
+		Help:      "Search hits requested or enriched by the intersection attachment stage.",
+	}, []string{"result"})
 )
 
 // ObserveSearch records latency + request + zero-result/degrade/term-heat SLIs
@@ -164,6 +196,29 @@ func (*Recorder) ObserveRelatedTermsCache(hit bool) {
 		result = "hit"
 	}
 	relatedTermsCache.WithLabelValues(result).Inc()
+}
+
+// ObserveRecentSearch records one RecentSearchState operation. The handler only
+// emits list|upsert|delete|clear and ok|unauthorized|invalid|error.
+func (*Recorder) ObserveRecentSearch(o application.RecentSearchObservation) {
+	operation := normLabel(o.Operation)
+	status := normLabel(o.Status)
+	recentDuration.WithLabelValues(operation, status).Observe(o.Seconds)
+	recentRequests.WithLabelValues(operation, status).Inc()
+}
+
+func (*Recorder) ObserveIntersectionAttach(
+	observation application.IntersectionAttachObservation,
+) {
+	intersectionAttachDuration.
+		WithLabelValues(normLabel(observation.Status)).
+		Observe(observation.Seconds)
+	intersectionAttachHits.
+		WithLabelValues("requested").
+		Add(float64(observation.RequestedHits))
+	intersectionAttachHits.
+		WithLabelValues("attached").
+		Add(float64(observation.AttachedHits))
 }
 
 func normMode(mode string) string {

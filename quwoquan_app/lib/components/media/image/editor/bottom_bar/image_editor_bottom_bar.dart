@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
+import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_constants.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart';
 import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 class ImageEditorBottomBar extends StatelessWidget {
   const ImageEditorBottomBar({
@@ -26,43 +28,6 @@ class ImageEditorBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const toolEntries = [
-      (
-        icon: Icons.circle_outlined,
-        semanticIconKey: kEditorIconFilterRings,
-        labelKey: UITextConstants.imageEditorFilter,
-      ),
-      (
-        icon: Icons.crop,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorCrop,
-      ),
-      (
-        icon: Icons.rotate_right,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorRotate,
-      ),
-      (
-        icon: Icons.auto_fix_high,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorProTools,
-      ),
-      (
-        icon: Icons.crop_free,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorFrame,
-      ),
-      (
-        icon: Icons.text_fields,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorText,
-      ),
-      (
-        icon: Icons.grid_on,
-        semanticIconKey: null,
-        labelKey: UITextConstants.imageEditorMosaic,
-      ),
-    ];
     final barHeight = AppSpacing.bottomNavHeight - AppSpacing.xs;
     final nextButtonHeight = AppSpacing.minInteractiveSize;
     final borderColor = AppColorsFunctional.getColor(
@@ -82,7 +47,7 @@ class ImageEditorBottomBar extends StatelessWidget {
         border: Border(top: BorderSide(color: borderColor)),
       ),
       child: LayoutBuilder(
-        builder: (context, constraints) {
+        builder: (context, _) {
           final sidePadding = AppSpacing.containerSm;
           final gap = AppSpacing.interGroupSm;
           final itemWidth = AppSpacing.buttonHeight * 1.32;
@@ -93,10 +58,10 @@ class ImageEditorBottomBar extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                  itemCount: toolEntries.length,
+                  itemCount: kImageEditorToolEntries.length,
                   separatorBuilder: (context, index) => SizedBox(width: gap),
                   itemBuilder: (context, index) {
-                    final entry = toolEntries[index];
+                    final entry = kImageEditorToolEntries[index];
                     return SizedBox(
                       width: itemWidth,
                       height: barHeight,
@@ -104,9 +69,9 @@ class ImageEditorBottomBar extends StatelessWidget {
                         child: ImageEditorToolEntryChip(
                           icon: entry.icon,
                           semanticIconKey: entry.semanticIconKey,
-                          label: entry.labelKey,
-                          isSelected: selectedToolIndex == index,
-                          onTap: () => onToolSelected(index),
+                          label: entry.label,
+                          isSelected: selectedToolIndex == entry.index,
+                          onTap: () => onToolSelected(entry.index),
                         ),
                       ),
                     );

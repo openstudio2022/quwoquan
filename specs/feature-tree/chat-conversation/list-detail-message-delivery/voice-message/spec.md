@@ -1,4 +1,4 @@
-# 语音消息（Voice Message）
+# L3 特性：语音消息（Voice Message）
 
 > **层级**：L3_subfeature（隶属 L2 `list-detail-message-delivery`，L1 `chat-conversation`）
 > **状态**：specified

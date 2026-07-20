@@ -1,4 +1,5 @@
 import 'package:yaml/yaml.dart';
+import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 
 import 'qwq_markdown_ast.dart';
 
@@ -38,7 +39,7 @@ class QwqMarkdownParser {
         diagnostics.add(
           QwqMarkdownDiagnostic(
             code: 'html_not_allowed',
-            message: 'QWQ Rich Markdown v1 不允许任意 HTML',
+            message: CreatePageText.markdownHtmlNotAllowed,
             line: lineNumber,
             isBlocking: true,
           ),
@@ -262,7 +263,7 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       diagnostics: const <QwqMarkdownDiagnostic>[
         QwqMarkdownDiagnostic(
           code: 'front_matter_unclosed',
-          message: 'front matter 缺少结束 ---',
+          message: CreatePageText.markdownFrontMatterUnclosed,
           line: 1,
           isBlocking: true,
         ),
@@ -287,7 +288,7 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       bodyStartLine: bodyStartLine,
       diagnostics: const <QwqMarkdownDiagnostic>[],
     );
-  } catch (error) {
+  } catch (_) {
     return _FrontMatterSplit(
       frontMatter: const QwqMarkdownFrontMatter(),
       body: body,
@@ -295,7 +296,7 @@ _FrontMatterSplit _splitFrontMatter(String source) {
       diagnostics: <QwqMarkdownDiagnostic>[
         QwqMarkdownDiagnostic(
           code: 'front_matter_invalid',
-          message: 'front matter 解析失败: $error',
+          message: CreatePageText.markdownFrontMatterInvalid,
           line: 1,
           isBlocking: true,
         ),
@@ -355,7 +356,7 @@ _ParsedDirective _parseDirective(
       diagnostics: <QwqMarkdownDiagnostic>[
         QwqMarkdownDiagnostic(
           code: 'directive_invalid',
-          message: '富布局指令格式不合法',
+          message: CreatePageText.markdownDirectiveInvalid,
           line: openerLine,
           isBlocking: true,
         ),
@@ -380,7 +381,7 @@ _ParsedDirective _parseDirective(
     if (!closed)
       QwqMarkdownDiagnostic(
         code: 'directive_unclosed',
-        message: '$name 指令缺少结束 :::',
+        message: CreatePageText.markdownDirectiveUnclosed(name),
         line: openerLine,
         isBlocking: true,
       ),
@@ -511,7 +512,7 @@ _ParsedDirective _parseDirective(
           ...diagnostics,
           QwqMarkdownDiagnostic(
             code: 'directive_not_allowed',
-            message: '未知富布局指令 $name',
+            message: CreatePageText.markdownDirectiveNotAllowed(name),
             line: openerLine,
             isBlocking: true,
           ),

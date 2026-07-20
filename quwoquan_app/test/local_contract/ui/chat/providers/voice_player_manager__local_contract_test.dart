@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
 
 void main() {
@@ -29,7 +29,7 @@ void main() {
 
       final state = container.read(voicePlayerManagerProvider);
       expect(state.failedMessageId, 'msg_1');
-      expect(state.error, UITextConstants.chatVoicePlayUnavailable);
+      expect(state.error, ChatText.chatVoicePlayUnavailable);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_playback_failed'),
@@ -80,7 +80,7 @@ void main() {
 
       final state = container.read(voicePlayerManagerProvider);
       expect(state.failedMessageId, 'msg_1');
-      expect(state.error, UITextConstants.chatVoicePlayUnavailable);
+      expect(state.error, ChatText.chatVoicePlayUnavailable);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_playback_failed'),

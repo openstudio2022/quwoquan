@@ -4,10 +4,16 @@ service:
   http:
     addr: ":18095"
 
+contentService:
+  baseUrl: "http://content-service:18080"
+
 es:
   enabled: true
   endpoints: []
   index: "quwoquan_objects"
+  # gamma-local 的 ES 为 amd64 模拟（R-S06-S-1），单查询可超 1s；默认 800ms 会把
+  # 全部检索打成 503。放宽到 5s 作为硬超时上限，P95 仍由 search_slo.yaml 守。
+  requestTimeoutMs: 5000
   shards: 1
   replicas: 1
 

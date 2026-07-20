@@ -40,29 +40,6 @@ class SearchRequest {
       subCategory: _normalize(subCategory),
     );
   }
-
-  Map<String, dynamic> toMap() {
-    final normalizedRequest = normalized();
-    return <String, dynamic>{
-      SearchToolFieldNames.query: normalizedRequest.query,
-      SearchToolFieldNames.mode: normalizedRequest.mode.wireValue,
-      SearchToolFieldNames.objectTypes: normalizedRequest.objectTypes
-          .map((item) => item.wireValue)
-          .toList(growable: false),
-      SearchToolFieldNames.limit: normalizedRequest.limit,
-      if (normalizedRequest.conversationType != null)
-        SearchToolFieldNames.conversationType:
-            normalizedRequest.conversationType,
-      if (normalizedRequest.contentTypes.isNotEmpty)
-        SearchToolFieldNames.contentTypes: normalizedRequest.contentTypes
-            .map((item) => item.wireValue)
-            .toList(growable: false),
-      if (normalizedRequest.categoryId != null)
-        SearchToolFieldNames.categoryId: normalizedRequest.categoryId,
-      if (normalizedRequest.subCategory != null)
-        SearchToolFieldNames.subCategory: normalizedRequest.subCategory,
-    };
-  }
 }
 
 class SearchDegradeSignal {
@@ -75,20 +52,12 @@ class SearchDegradeSignal {
   final String code;
   final String message;
   final SearchObjectType? objectType;
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'code': code,
-      'message': message,
-      if (objectType != null) 'objectType': objectType!.wireValue,
-    };
-  }
 }
 
 /// 统一检索命中项。枚举与默认值对齐 `_shared/search_contract.yaml`（`search_contract.g.dart`）；
 /// 分区元数据见 `search_registry.g.dart`。
 ///
-/// `payload` 为 [SearchHitPayload]（sealed）；帖子/圈子等已收口为具名 codegen 视图，其余为 [SearchHitPayloadWireMap]。
+/// `payload` 为 [SearchHitPayload]（sealed）；生产 adapter 必须映射为具名视图。
 class SearchHit {
   const SearchHit({
     required this.objectType,
@@ -98,7 +67,9 @@ class SearchHit {
     this.snippet,
     required this.resolvedFrom,
     this.matchedField,
-    this.payload = const SearchHitPayloadWireMap(),
+    this.payload = const SearchHitPayloadEmpty(),
+    this.connectionState = 'unconnected',
+    this.intersectionReason,
     this.rankReasons = const <String>[],
     this.rankPosition,
     this.coverWidth,
@@ -113,6 +84,8 @@ class SearchHit {
   final SearchResolvedFrom resolvedFrom;
   final String? matchedField;
   final SearchHitPayload payload;
+  final String connectionState;
+  final IntersectionReason? intersectionReason;
 
   /// 云侧排序透明化（`_shared/search_contract.yaml` hit_fields.rankReasons）：
   /// 命中已展开为人类可读的排序理由标签。本地扇出（mock/local）为空列表。
@@ -126,23 +99,6 @@ class SearchHit {
   /// 本地扇出为 null（R-003）。
   final double? coverWidth;
   final double? coverHeight;
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'objectType': objectType.wireValue,
-      'objectId': objectId,
-      'title': title,
-      if (subtitle != null) 'subtitle': subtitle,
-      if (snippet != null) 'snippet': snippet,
-      'resolvedFrom': resolvedFrom.wireValue,
-      if (matchedField != null) 'matchedField': matchedField,
-      'payload': payload.toWireMap(),
-      if (rankReasons.isNotEmpty) 'rankReasons': rankReasons,
-      if (rankPosition != null) 'rankPosition': rankPosition,
-      if (coverWidth != null) 'coverWidth': coverWidth,
-      if (coverHeight != null) 'coverHeight': coverHeight,
-    };
-  }
 }
 
 class SearchSection {
@@ -161,21 +117,6 @@ class SearchSection {
   final List<SearchHit> hits;
   final SearchResolvedFrom resolvedFrom;
   final List<SearchDegradeSignal> degradeSignals;
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'id': id,
-      'title': title,
-      'objectTypes': objectTypes
-          .map((item) => item.wireValue)
-          .toList(growable: false),
-      'resolvedFrom': resolvedFrom.wireValue,
-      'hits': hits.map((item) => item.toMap()).toList(growable: false),
-      'degradeSignals': degradeSignals
-          .map((item) => item.toMap())
-          .toList(growable: false),
-    };
-  }
 }
 
 class SearchResponse {
@@ -184,6 +125,7 @@ class SearchResponse {
     required this.sections,
     this.degradeSignals = const <SearchDegradeSignal>[],
     this.relatedTerms = const <String>[],
+    this.searchRequestId,
   });
 
   final SearchRequest request;
@@ -194,18 +136,10 @@ class SearchResponse {
   /// 结果页「相关搜索」优先消费它，本地扇出（mock/local）为空（R-003）。
   final List<String> relatedTerms;
 
+  /// 云侧单次搜索请求 ID（响应 envelope `requestId`），
+  /// 是搜索反馈（impression/click）归因锚点；本地扇出为 null 时不上报反馈。
+  final String? searchRequestId;
+
   List<SearchHit> get hits =>
       sections.expand((section) => section.hits).toList(growable: false);
-
-  Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'request': request.toMap(),
-      'sections': sections.map((item) => item.toMap()).toList(growable: false),
-      'hits': hits.map((item) => item.toMap()).toList(growable: false),
-      'degradeSignals': degradeSignals
-          .map((item) => item.toMap())
-          .toList(growable: false),
-      if (relatedTerms.isNotEmpty) 'relatedTerms': relatedTerms,
-    };
-  }
 }

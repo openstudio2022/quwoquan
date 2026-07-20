@@ -4,7 +4,8 @@
 Platform / JSON decode boundaries may still use `Object?` or `Map<String, dynamic>`.
 Excludes: entry/services/ios_video_editing_service.dart (MethodChannel payloads).
 
-Run from repo root: python3 scripts/verify_ui_content_no_dynamic_parameters.py
+Run from repo root:
+  python3 quwoquan_app/scripts/content/verify_ui_content_no_dynamic_parameters.py
 """
 from __future__ import annotations
 

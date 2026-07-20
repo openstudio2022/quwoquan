@@ -1,17 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/widgets/add_contact_entry_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_qr_card.dart';
 
@@ -28,16 +36,97 @@ class AddContactPage extends ConsumerStatefulWidget {
 
 class _AddContactPageState extends ConsumerState<AddContactPage> {
   late Future<ProfileQrCardData> _qrFuture;
+  late Future<ContactDiscoveryResultView?> _latestDiscoveryFuture;
 
   @override
   void initState() {
     super.initState();
-    _qrFuture = ref.read(userProfileRepositoryProvider).getProfileQrCard();
+    _qrFuture = ref
+        .read(profileEditQueryProvider(AppUiSurfaces.addContact))
+        .getProfileQrCard();
+    _latestDiscoveryFuture = ref
+        .read(contactDiscoveryRepositoryProvider)
+        .getLatest();
+  }
+
+  void _reloadLatestDiscovery() {
+    setState(() {
+      _latestDiscoveryFuture = ref
+          .read(contactDiscoveryRepositoryProvider)
+          .getLatest();
+    });
+  }
+
+  Future<void> _dismissLatest(ContactDiscoveryResultView result) async {
+    try {
+      await ref.read(contactDiscoveryRepositoryProvider).dismiss(result.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestDiscoveryFuture = Future<ContactDiscoveryResultView?>.value(
+          null,
+        );
+      });
+      AppToast.show(
+        context,
+        UITextConstants.addContactRecentDiscoveryDismissed,
+      );
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'contact_discovery',
+              action: 'dismiss_latest',
+              pageName: 'AddContactPage',
+              targetType: 'contact_discovery',
+              targetKey: result.id,
+            ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _dismissLatest(result);
+          }
+        },
+      );
+    }
+  }
+
+  void _openEntry(String action, String location) {
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'contact_discovery',
+            action: action,
+            pageName: 'AddContactPage',
+          ),
+    );
+    context.push(location);
+  }
+
+  void _openSearch() {
+    _openEntry('open_contact_search', AppRoutePaths.addContactSearch());
   }
 
   void _reloadQr() {
     setState(() {
-      _qrFuture = ref.read(userProfileRepositoryProvider).getProfileQrCard();
+      _qrFuture = ref
+          .read(profileEditQueryProvider(AppUiSurfaces.addContact))
+          .getProfileQrCard();
     });
   }
 
@@ -68,12 +157,18 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
         child: ListView(
           padding: EdgeInsets.all(AppSpacing.containerMd),
           children: <Widget>[
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => context.push(AppRoutePaths.addContactSearch()),
-              child: AbsorbPointer(
-                child: AppSearchField(
-                  placeholder: UITextConstants.addContactSearchHubPlaceholder,
+            Semantics(
+              key: const ValueKey<String>('add-contact-search-entry'),
+              button: true,
+              label: UITextConstants.addContactSearchHubPlaceholder,
+              onTap: _openSearch,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _openSearch,
+                child: AbsorbPointer(
+                  child: AppSearchField(
+                    placeholder: UITextConstants.addContactSearchHubPlaceholder,
+                  ),
                 ),
               ),
             ),
@@ -86,23 +181,132 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
                     title: UITextConstants.editProfileQrScanAction,
                     subtitle: UITextConstants.addContactScanEntrySubtitle,
                     showDivider: caps.contacts,
-                    onTap: () => context.push(AppRoutePaths.addContactScan),
+                    onTap: () => _openEntry(
+                      'open_contact_scan',
+                      AppRoutePaths.addContactScan,
+                    ),
                   ),
                   if (caps.contacts)
                     AddContactEntryCard(
                       icon: CupertinoIcons.person_2_fill,
                       title: UITextConstants.addContactPhoneEntryTitle,
                       subtitle: UITextConstants.addContactPhoneEntrySubtitle,
-                      onTap: () => context.push(AppRoutePaths.addContactPhone),
+                      onTap: () => _openEntry(
+                        'open_phone_contacts',
+                        AppRoutePaths.addContactPhone,
+                      ),
                     ),
                 ],
               ),
+            ),
+            SizedBox(height: AppSpacing.containerLg),
+            _LatestContactDiscoveryCard(
+              future: _latestDiscoveryFuture,
+              onDismiss: (result) => unawaited(_dismissLatest(result)),
+              onRetry: _reloadLatestDiscovery,
             ),
             SizedBox(height: AppSpacing.containerLg),
             _InlineMyQrCard(future: _qrFuture, onRetry: _reloadQr),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LatestContactDiscoveryCard extends StatelessWidget {
+  const _LatestContactDiscoveryCard({
+    required this.future,
+    required this.onDismiss,
+    required this.onRetry,
+  });
+
+  final Future<ContactDiscoveryResultView?> future;
+  final ValueChanged<ContactDiscoveryResultView> onDismiss;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ContactDiscoveryResultView?>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _InlineQrStateCard(
+            icon: CupertinoIcons.exclamationmark_circle,
+            title: UITextConstants.pageLoadFailedTitle,
+            body: UITextConstants.pageLoadFailedMessage,
+            actionLabel: UITextConstants.retry,
+            onAction: onRetry,
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _InlineQrStateCard(
+            icon: CupertinoIcons.person_2,
+            title: UITextConstants.addContactRecentDiscoveryTitle,
+            body: UITextConstants.loading,
+          );
+        }
+        final result = snapshot.data;
+        if (result == null ||
+            result.id.isEmpty ||
+            result.status == 'dismissed' ||
+            result.status == 'expired') {
+          return const SizedBox.shrink();
+        }
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.iosSystemBackground(context),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.containerMd),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  CupertinoIcons.person_2_fill,
+                  color: AppColors.iosAccent(context),
+                  size: AppSpacing.iconMedium,
+                ),
+                SizedBox(width: AppSpacing.interGroupSm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        UITextConstants.addContactRecentDiscoveryTitle,
+                        style: TextStyle(
+                          color: AppColors.iosLabel(context),
+                          fontSize: AppTypography.iosBody,
+                          fontWeight: AppTypography.semiBold,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                      Text(
+                        UITextConstants.phoneContactsMatchedCount(
+                          result.matchCount,
+                        ),
+                        style: TextStyle(
+                          color: AppColors.iosSecondaryLabel(context),
+                          fontSize: AppTypography.iosFootnote,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                CupertinoButton(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                  ),
+                  onPressed: () => onDismiss(result),
+                  child: const Text(
+                    UITextConstants.addContactRecentDiscoveryDismiss,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

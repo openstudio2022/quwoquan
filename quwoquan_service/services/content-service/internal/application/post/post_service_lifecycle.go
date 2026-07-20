@@ -4,6 +4,7 @@ import (
 	"context"
 	rterr "quwoquan_service/runtime/errors"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	"quwoquan_service/services/content-service/internal/generated"
 	"strings"
 	"time"
@@ -230,6 +231,17 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		"PostDeleted",
 		eventPayload,
 		now,
+		func(commit *postports.Commit) {
+			// 墓碑与聚合 state/receipt/outbox 同事务追加（content.DeletedPostTombstone；
+			// _id=postId dedupe，保留期 TTL 由存储索引承载）。
+			commit.Tombstone = &postports.PostDeletionTombstone{
+				PostID:    post.ID,
+				AuthorID:  post.AuthorId,
+				Reason:    "author_delete",
+				DeletedAt: now,
+				ExpireAt:  now.Add(deletedPostTombstoneRetention),
+			}
+		},
 	)
 	if err != nil {
 		return rterr.NewAppError(
@@ -238,8 +250,10 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			err.Error(),
 		)
 	}
-	s.mu.Lock()
-	s.tombstones[post.ID] = now
-	s.mu.Unlock()
+	_ = post
 	return nil
 }
+
+// deletedPostTombstoneRetention 是删除保留期（410 语义窗口）。到期后 TTL 清理，
+// 读取回落 post_not_found（404）。
+const deletedPostTombstoneRetention = 30 * 24 * time.Hour

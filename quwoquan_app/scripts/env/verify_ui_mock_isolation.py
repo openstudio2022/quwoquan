@@ -6,7 +6,7 @@
 豁免：specs/gates/ui_mock_isolation_allowlist.yaml（过渡期，只缩不扩）
 
 用法（仓库根）:
-  python3 scripts/verify_ui_mock_isolation.py
+  python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 """
 
 from __future__ import annotations
@@ -68,10 +68,13 @@ def main() -> int:
     allowed = load_allowed()
     errors: list[str] = []
 
+    # lib/cloud 纳入扫描（B2）：production adapter/provider 同样禁止 import
+    # …/mock/ 本体；mock 承接只允许 test/support 与 runners/alpha。
     roots = [
         APP_LIB / "ui",
         APP_LIB / "app",
         APP_LIB / "core",
+        APP_LIB / "cloud",
     ]
     for base in roots:
         for path in scan_dart_files(base):

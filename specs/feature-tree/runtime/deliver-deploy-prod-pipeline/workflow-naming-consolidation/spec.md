@@ -2,7 +2,8 @@
 
 ## 功能说明
 
-统一主干治理后的 GitHub Actions Workflow 命名规范：01～08 顺序唯一、名称可在 Actions UI 直接表达职责，并校验 PR rule / post-main / manual 三类职责边界。
+统一主干治理后的 GitHub Actions Workflow 命名规范：主交付链 01～07 顺序唯一，专项证据
+workflow 使用无序号描述名，并校验 PR rule / post-main / manual 三类职责边界。
 
 ## 范围
 
@@ -12,7 +13,8 @@
 
 ## 适用范围与约束
 
-- **适用**：deliver-deploy-prod-pipeline 下所有 workflow；与 `workflow_consolidation_plan.md` 对齐
+- **适用**：deliver-deploy-prod-pipeline 下所有 workflow；以
+  `quwoquan_ops/environments/ci_cd_end_to_end_design.md` 为唯一命名清单
 - **约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链
 - **不适用**：非 workflow 命名、与主干治理无关的业务设计
 
@@ -27,7 +29,7 @@
 
 ## 验收标准概要
 
-- A1：主工作流名称唯一且符合 01～08 序号
-- A2：`workflow_consolidation_plan.md` 含最新命名规范与 02/03 去重结论，并明确 `04/05` 的 local-gamma / self-hosted 分工（旧 08 Deploy Gamma ECS 已退役，远端复验下沉到 prod gray-initial）
+- A1：主交付 workflow 名称唯一且符合 01～07 序号；专项 workflow 不占用主链序号
+- A2：`ci_cd_end_to_end_design.md` 含最新命名规范与 02/03 去重结论，并明确 `04/05` 的 local-gamma / self-hosted 分工
 - A3：不存在 `merge-dev1.0-to-main.yml`、`05 wrapper` 等已删除的重复入口
 - A4：`ci_cd_end_to_end_design.md`、`deliver_to_production_runbook.md`、`branch_strategy.md` 与规范一致

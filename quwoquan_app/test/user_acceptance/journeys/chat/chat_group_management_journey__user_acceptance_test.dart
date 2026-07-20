@@ -6,19 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_announcement_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import '../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
-const _testConvId = 'conv_002';
+const _testConvId = 'fixture_conv_group';
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
-  chatRepositoryProvider.overrideWithValue(repo),
+  chatRepositoryCompositionProvider.overrideWithValue(repo),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
@@ -32,30 +36,48 @@ Widget _scopedApp({ChatRepository? mock}) {
         initialLocation: '/chat/$_testConvId/settings',
         routes: [
           GoRoute(
-            path: '/chat/:id/settings',
-            builder: (_, state) => ChatSettingsPage(
-              conversationId: state.pathParameters['id'] ?? _testConvId,
-            ),
+            path: '/chat/:id',
+            builder: (_, _) => const Scaffold(body: SizedBox.shrink()),
             routes: [
               GoRoute(
-                path: 'manage',
-                builder: (_, state) => GroupManagePage(
+                path: 'settings',
+                builder: (_, state) => ChatSettingsPage(
                   conversationId: state.pathParameters['id'] ?? _testConvId,
                 ),
                 routes: [
                   GoRoute(
-                    path: 'transfer-ownership',
-                    builder: (_, state) => TransferOwnershipPage(
+                    path: 'manage',
+                    builder: (_, state) => GroupManagePage(
                       conversationId: state.pathParameters['id'] ?? _testConvId,
                     ),
-                  ),
-                  GoRoute(
-                    path: 'admins',
-                    builder: (_, state) => GroupAdminsPage(
-                      conversationId: state.pathParameters['id'] ?? _testConvId,
-                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'transfer-ownership',
+                        builder: (_, state) => TransferOwnershipPage(
+                          conversationId:
+                              state.pathParameters['id'] ?? _testConvId,
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'admins',
+                        builder: (_, state) => GroupAdminsPage(
+                          conversationId:
+                              state.pathParameters['id'] ?? _testConvId,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'announcement',
+                builder: (_, state) => ChatAnnouncementPage(
+                  conversationId: state.pathParameters['id'] ?? _testConvId,
+                ),
+              ),
+              GoRoute(
+                path: 'add-members',
+                builder: (_, _) => const Scaffold(body: SizedBox()),
               ),
             ],
           ),
@@ -63,10 +85,6 @@ Widget _scopedApp({ChatRepository? mock}) {
             path: '/user/:id',
             builder: (_, state) =>
                 Scaffold(body: Text('User ${state.pathParameters['id']}')),
-          ),
-          GoRoute(
-            path: '/chat/:id/add-members',
-            builder: (_, state) => const Scaffold(body: SizedBox()),
           ),
         ],
       ),
@@ -92,7 +110,7 @@ void main() {
       tester,
     ) async {
       _suppressImageErrors();
-      // 用 ProviderContainer 验证 conv_002 加载后当前用户为 owner
+      // 用 canonical fixture 验证当前用户为 owner。
       final container = ProviderContainer(
         overrides: _chatTestOverrides(MockChatRepository()),
       );
@@ -104,7 +122,7 @@ void main() {
       await notifier.load();
 
       final state = container.read(conversationMembersProvider(_testConvId));
-      expect(state.isOwner, isTrue, reason: 'conv_002 的当前用户（user_001）应为群主');
+      expect(state.isOwner, isTrue, reason: 'fixture_conv_group 的当前用户应为群主');
       expect(state.isAdminOrOwner, isTrue);
 
       // widget 层：渲染 ChatSettingsPage，验证页面存在（UI 分离测试见 widget test）
@@ -129,12 +147,67 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(ChatSettingsPage), findsOneWidget);
-      expect(find.text(UITextConstants.groupManagement), findsNothing);
+      expect(find.text(ChatText.groupManagement), findsNothing);
+    });
+
+    testWidgets('J-A4: 群主从设置页发布公告并返回权威新值', (tester) async {
+      _suppressImageErrors();
+      final repository = _OwnerRoleMockRepo();
+      await tester.pumpWidget(_scopedApp(mock: repository));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.text(ChatText.groupAnnouncement));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatAnnouncementPage), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ChatAnnouncementPage)),
+      );
+      expect(
+        container.read(conversationMembersProvider(_testConvId)).isOwner,
+        isTrue,
+      );
+      expect(container.read(groupHomeProvider(_testConvId)).hasValue, isTrue);
+      expect(
+        find.byKey(const ValueKey('chat_announcement_editor')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_announcement_editor')),
+        '旅程公告：周日集合',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('chat_announcement_publish_button')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(
+        find.widgetWithText(
+          CupertinoDialogAction,
+          ChatText.groupAnnouncementPublish,
+        ),
+      );
+      for (
+        var attempt = 0;
+        attempt < 20 && find.byType(ChatSettingsPage).evaluate().isEmpty;
+        attempt += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.pump(const Duration(seconds: 1));
+
+      final updatedGroup = await repository.getGroupHome(_testConvId);
+      expect(updatedGroup.announcement, '旅程公告：周日集合');
+      expect(find.byType(ChatSettingsPage), findsOneWidget);
+      expect(find.text('旅程公告：周日集合'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
     });
   });
 
   group('旅程 B — 群管理页元素验证', () {
-    testWidgets('J-B1: GroupManagePage 含二维码进群开关', (tester) async {
+    testWidgets('J-B1: GroupManagePage 仅展示真实群名治理开关', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
@@ -165,23 +238,33 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.qrCodeJoin), findsOneWidget);
+      expect(find.text(ChatText.nameEditableByAdminOnly), findsOneWidget);
+      expect(find.byType(CupertinoSwitch), findsOneWidget);
+      expect(find.text('二维码进群'), findsNothing);
+      expect(find.text('进群需要群主/群管理员确认'), findsNothing);
     });
 
-    testWidgets('J-B2: GroupManagePage 含入群审核开关', (tester) async {
+    testWidgets('J-B2: ChatSettingsPage 不展示未落地隐私盾开关', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
-          child: MaterialApp(
-            home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
-          ),
-        ),
-      );
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
+      await tester.scrollUntilVisible(
+        find.text(ChatText.exitGroupChat),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pump();
 
-      expect(find.text(UITextConstants.joinRequiresApproval), findsOneWidget);
+      expect(find.text('隐私屏障(禁截屏、禁转发)'), findsNothing);
+      expect(find.byType(CupertinoSwitch), findsNWidgets(2));
     });
 
     testWidgets('J-B3: 群主可见群主管理权转让和群管理员入口', (tester) async {
@@ -197,8 +280,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.transferOwnership), findsOneWidget);
-      expect(find.text(UITextConstants.groupAdmins), findsOneWidget);
+      expect(find.text(ChatText.transferOwnership), findsOneWidget);
+      expect(find.text(ChatText.groupAdmins), findsOneWidget);
     });
 
     testWidgets('J-B4: 群主可见解散群聊按钮', (tester) async {
@@ -214,7 +297,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.dissolveGroupChat), findsOneWidget);
+      expect(find.text(ChatText.dissolveGroupChat), findsOneWidget);
     });
   });
 
@@ -234,7 +317,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.selectNewOwner), findsOneWidget);
+      expect(find.text(ChatText.selectNewOwner), findsOneWidget);
     });
 
     testWidgets('J-C2: 转让页成员列表不含群主自身', (tester) async {
@@ -252,8 +335,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // conv_002 群主 displayName='我'，不应出现在候选列表
-      expect(find.text('我'), findsNothing);
+      expect(
+        find.text(chatDisplayNameFor(chatCurrentUserProfileId())),
+        findsNothing,
+      );
     });
 
     testWidgets('J-C3: 搜索框可见且可输入过滤', (tester) async {
@@ -274,9 +359,9 @@ void main() {
       final searchField = find.byType(CupertinoSearchTextField);
       expect(searchField, findsOneWidget);
 
-      await tester.enterText(searchField, '李明');
+      await tester.enterText(searchField, '契约同伴一');
       await tester.pump();
-      expect(find.text('李明'), findsWidgets);
+      expect(find.text('契约同伴一'), findsWidgets);
     });
 
     testWidgets('J-C4: 点击成员弹出确认弹窗', (tester) async {
@@ -346,13 +431,14 @@ void main() {
         isTrue,
       );
 
-      // 执行转让：user_002 变为新群主
-      await notifier.transferOwnership('user_002');
+      await notifier.transferOwnership('fixture_user_weekend_1');
 
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(state.currentUserRole, equals('member'));
       expect(
-        state.members.firstWhere((m) => m.userId == 'user_002').role,
+        state.members
+            .firstWhere((m) => m.userId == 'fixture_user_weekend_1')
+            .role,
         equals('owner'),
       );
     });
@@ -372,7 +458,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.selectGroupMembers), findsOneWidget);
+      expect(find.text(ChatText.selectGroupMembers), findsOneWidget);
     });
 
     testWidgets('J-D2: GroupAdminsPage 列表不含群主', (tester) async {
@@ -388,8 +474,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // conv_002 群主 displayName='我'，不应出现在可选列表
-      expect(find.text('我'), findsNothing);
+      expect(
+        find.text(chatDisplayNameFor(chatCurrentUserProfileId())),
+        findsNothing,
+      );
     });
 
     testWidgets('J-D4: 初始管理员显示管理员标签', (tester) async {
@@ -405,15 +493,15 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // conv_002 中 user_002（李明）是初始管理员
-      expect(find.text(UITextConstants.admin), findsWidgets);
+      // canonical fixture 中 fixture_user_weekend_1 是初始管理员。
+      expect(find.text(ChatText.admin), findsWidgets);
     });
 
     testWidgets('J-D6: 超过 3 人弹出限制提示', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(_AdminLimitMockRepo()),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -422,25 +510,21 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // 点选已有 1 个管理员，再选 3 个非管理员成员（共 4 个 → 触发限制）
-      const candidateNames = <String>['张华', '王芳', '赵磊'];
-      // 先选前三个（如已经有一个 admin 选中，总共 4 个会触发提示）
-      for (final name in candidateNames) {
-        final candidate = find.text(name);
-        if (candidate.evaluate().isEmpty) {
-          continue;
-        }
-        await tester.tap(candidate.first);
+      for (final name in const <String>['候选一', '候选二', '候选三']) {
+        final candidate = find.ancestor(
+          of: find.text(name),
+          matching: find.byType(CupertinoButton),
+        );
+        expect(candidate, findsOneWidget);
+        await tester.tap(candidate);
         await tester.pump();
-        // 若弹出限制对话框，关掉继续
-        if (find.byType(CupertinoAlertDialog).evaluate().isNotEmpty) {
-          await tester.tap(find.text(UITextConstants.confirm));
-          await tester.pumpAndSettle();
-          break;
-        }
       }
+      await tester.pumpAndSettle();
 
-      // 应至少出现过一次限制弹窗（此处验证弹窗文本）
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.text(ChatText.maxAdminsReached), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.pumpAndSettle();
       expect(find.byType(CupertinoAlertDialog), findsNothing);
     });
 
@@ -478,21 +562,26 @@ void main() {
       );
       await notifier.load();
 
-      // 将 user_003（张华）设为管理员，取消 user_002
-      await notifier.updateGroupAdmins(['user_003']);
+      await notifier.updateGroupAdmins(['fixture_user_weekend_2']);
 
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(
-        state.members.firstWhere((m) => m.userId == 'user_003').role,
+        state.members
+            .firstWhere((m) => m.userId == 'fixture_user_weekend_2')
+            .role,
         equals('admin'),
       );
       expect(
-        state.members.firstWhere((m) => m.userId == 'user_002').role,
+        state.members
+            .firstWhere((m) => m.userId == 'fixture_user_weekend_1')
+            .role,
         equals('member'),
       );
       // 群主角色不变
       expect(
-        state.members.firstWhere((m) => m.userId == 'user_001').role,
+        state.members
+            .firstWhere((m) => m.userId == chatCurrentUserProfileId())
+            .role,
         equals('owner'),
       );
     });
@@ -547,7 +636,7 @@ void main() {
       );
 
       try {
-        await failNotifier.transferOwnership('user_002');
+        await failNotifier.transferOwnership('fixture_user_weekend_1');
       } catch (_) {}
 
       final stateAfter = failContainer.read(
@@ -650,7 +739,7 @@ class _MemberRoleMockRepo extends MockChatRepository {
   }) async {
     return [
       ChatConversationMemberDto(
-        userId: 'user_001',
+        userId: chatCurrentUserProfileId(),
         displayName: '我',
         avatarUrl: '',
         role: 'member',
@@ -667,6 +756,74 @@ class _MemberRoleMockRepo extends MockChatRepository {
         joinedAt: null,
         isCurrentUser: false,
       ),
+    ];
+  }
+}
+
+class _OwnerRoleMockRepo extends MockChatRepository {
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    return <ChatConversationMemberDto>[
+      ChatConversationMemberDto(
+        userId: chatCurrentUserProfileId(),
+        displayName: '当前群主',
+        avatarUrl: '',
+        role: 'owner',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      ChatConversationMemberDto(
+        userId: 'user_002',
+        displayName: '普通成员',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+    ];
+  }
+}
+
+class _AdminLimitMockRepo extends MockChatRepository {
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    ChatConversationMemberDto member(
+      String userId,
+      String displayName,
+      String role, {
+      bool isCurrentUser = false,
+    }) {
+      return ChatConversationMemberDto(
+        userId: userId,
+        displayName: displayName,
+        avatarUrl: '',
+        role: role,
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: isCurrentUser,
+      );
+    }
+
+    return <ChatConversationMemberDto>[
+      member(chatCurrentUserProfileId(), '当前群主', 'owner', isCurrentUser: true),
+      member('initial_admin', '已有管理员', 'admin'),
+      member('candidate_1', '候选一', 'member'),
+      member('candidate_2', '候选二', 'member'),
+      member('candidate_3', '候选三', 'member'),
     ];
   }
 }

@@ -1,19 +1,20 @@
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
-import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
-import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
+import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/ui/assistant/assistant_conversation_model_history_text.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 
+/// 云端会话历史快照：conversationId 供续聊绑定，transcript 按时间正序。
 class AssistantHistorySnapshot {
   const AssistantHistorySnapshot({
-    required this.sessionId,
+    required this.conversationId,
     required this.topicTitle,
     required this.transcript,
   });
 
-  final String sessionId;
+  final String conversationId;
   final String topicTitle;
   final List<AssistantTranscriptTimelineRow> transcript;
 }
@@ -21,111 +22,95 @@ class AssistantHistorySnapshot {
 abstract class AssistantHistoryLoader {
   const AssistantHistoryLoader();
 
-  Future<AssistantHistorySnapshot?> load({required String subAccountId});
+  /// 恢复最近一个会话的 transcript；[conversationId] 非空时恢复指定会话。
+  Future<AssistantHistorySnapshot?> load({
+    required String subAccountId,
+    String conversationId = '',
+  });
 }
 
-class LocalAssistantHistoryLoader implements AssistantHistoryLoader {
-  const LocalAssistantHistoryLoader();
+/// 云端历史恢复（R-ASSIST-001 收口）：消费 ListAssistantConversations /
+/// ListConversationTurns 查询面，替代已删除的本地 AssistantSessionStore 双模型。
+class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
+  const CloudAssistantHistoryLoader(this._facet);
+
+  final AssistantConversationRunFacet _facet;
 
   @override
   Future<AssistantHistorySnapshot?> load({
     required String subAccountId,
+    String conversationId = '',
   }) async {
-    if (_shouldSkipLocalLoad()) {
-      return null;
+    var targetConversationId = conversationId.trim();
+    var topicTitle = '';
+    if (targetConversationId.isEmpty) {
+      final conversations = await _facet.listAssistantConversations(limit: 1);
+      if (conversations.items.isEmpty) {
+        return null;
+      }
+      final latest = conversations.items.first;
+      targetConversationId = latest.conversationId;
+      topicTitle = latest.summary;
     }
-    final sessionManager = AssistantSessionManager();
-    await sessionManager.load();
-    final sessionId = _selectSessionId(sessionManager);
-    if (sessionId.isEmpty) {
-      return null;
-    }
-    final detail = _sessionDetailFor(sessionManager, sessionId);
-    if (detail == null || detail.messages.isEmpty) {
-      return null;
-    }
-    final result = await loadTranscriptRowsFromSessionDetail(
-      detail: detail,
-      pageSize: detail.messages.length,
-      subAccountId: subAccountId,
-      normalizeAssistantContentForModel:
-          assistantHistoryTextForModelFromMessageMap,
+    final turnsView = await _facet.listConversationTurns(
+      conversationId: targetConversationId,
     );
-    final transcript = <AssistantTranscriptTimelineRow>[
-      ...result.hiddenRows,
-      ...result.visibleRows,
-    ];
-    if (transcript.isEmpty) {
-      return null;
+    if (turnsView.items.isEmpty) {
+      return AssistantHistorySnapshot(
+        conversationId: targetConversationId,
+        topicTitle: topicTitle,
+        transcript: const <AssistantTranscriptTimelineRow>[],
+      );
+    }
+    // 服务端 createdAt desc；transcript 按时间正序渲染。
+    final ordered = turnsView.items.reversed;
+    final transcript = <AssistantTranscriptTimelineRow>[];
+    for (final turn in ordered) {
+      final question = turn.inputText.trim();
+      if (question.isNotEmpty) {
+        transcript.add(
+          UserTranscriptTimelineRow(
+            id: 'history_user_${turn.turnId}',
+            conversationId: AppConceptConstants.assistantConversationId,
+            type: 'text',
+            content: question,
+            senderId: 'current_user',
+            senderName: AssistantText.assistantCurrentUserSenderName,
+            timestamp: turn.createdAt,
+            status: '',
+            isRead: true,
+          ),
+        );
+      }
+      final answer = (turn.answerText ?? '').trim();
+      if (answer.isNotEmpty) {
+        transcript.add(
+          AssistantAnswerTranscriptRow(
+            id: 'history_assistant_${turn.turnId}',
+            conversationId: AppConceptConstants.assistantConversationId,
+            content: answer,
+            senderId: AppConceptConstants.assistantSenderId,
+            senderName: AppConceptConstants.assistantLabel,
+            timestamp: turn.completedAt ?? turn.createdAt,
+            anchor: AssistantAnswerAnchor(
+              runId: turn.turnId,
+              sourceQuery: question,
+              domainId: turn.domainId ?? 'assistant',
+            ),
+          ),
+        );
+      }
     }
     return AssistantHistorySnapshot(
-      sessionId: sessionId,
-      topicTitle: detail.topicTitle,
+      conversationId: targetConversationId,
+      topicTitle: topicTitle,
       transcript: transcript,
     );
-  }
-
-  String _selectSessionId(AssistantSessionManager sessionManager) {
-    final activeSessionId = sessionManager
-        .ensureAssistantActiveSession()
-        .trim();
-    final activeMessages = sessionManager.sessions[activeSessionId];
-    if (activeSessionId.isNotEmpty &&
-        activeMessages != null &&
-        activeMessages.isNotEmpty) {
-      return activeSessionId;
-    }
-    for (final descriptor in sessionManager.listSessionDescriptors()) {
-      final messages = sessionManager.sessions[descriptor.sessionId];
-      if (messages != null && messages.isNotEmpty) {
-        return descriptor.sessionId;
-      }
-    }
-    for (final entry in sessionManager.sessions.entries) {
-      if (entry.value.isNotEmpty) {
-        return entry.key;
-      }
-    }
-    return '';
-  }
-
-  AssistantSessionWireDetail? _sessionDetailFor(
-    AssistantSessionManager sessionManager,
-    String sessionId,
-  ) {
-    final messages = sessionManager.sessions[sessionId];
-    if (messages == null || messages.isEmpty) {
-      return null;
-    }
-    return AssistantSessionWireDetail(
-      sessionId: sessionId,
-      summary: sessionManager.summarizeRecent(sessionId),
-      topicTitle: sessionManager.topicTitleOf(sessionId),
-      messages: messages
-          .map(AssistantSessionWireMessage.fromJson)
-          .toList(growable: false),
-      sessionPreferenceFacts: sessionManager
-          .sessionPreferenceFactsOf(sessionId)
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      longTermPreferenceFacts: sessionManager
-          .longTermPreferenceFactsOf(sessionId)
-          .map((item) => item.toJson())
-          .toList(growable: false),
-    );
-  }
-
-  bool _shouldSkipLocalLoad() {
-    try {
-      final bindingType = WidgetsBinding.instance.runtimeType.toString();
-      return bindingType.contains('Test') ||
-          bindingType.contains('Integration');
-    } catch (_) {
-      return true;
-    }
   }
 }
 
 final assistantHistoryLoaderProvider = Provider<AssistantHistoryLoader>(
-  (ref) => const LocalAssistantHistoryLoader(),
+  (ref) => CloudAssistantHistoryLoader(
+    ref.watch(assistantConversationRunFacetProvider),
+  ),
 );

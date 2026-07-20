@@ -13,7 +13,7 @@
 - lib/ui/chat/pages/chat_display_fallbacks.dart
 
 用法（仓库根）:
-  python3 scripts/verify_page_matrix_scan_complete.py
+  python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
 """
 
 from __future__ import annotations

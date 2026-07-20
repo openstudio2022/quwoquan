@@ -395,7 +395,7 @@ make codegen-app
 3. 内容媒体全面接入统一资产模型
 4. 更细粒度的多云/多 CDN 策略
 
-## KD-9：内容 VOD 权威描述符与 storyboard
+## KD-9：内容 VOD 权威描述符、P0 seek 与独立增强能力
 
 ### 处理所有权与发布门
 
@@ -407,16 +407,35 @@ make codegen-app
 处理成功的唯一权威输出是 generated `VideoPlaybackDescriptor` 所需的数据：
 
 - `assetId`、`assetVersion`、processing status、访问策略；
-- `verifiedDurationMs`、宽高、codec/container；
+- `verifiedDurationMs`、宽高、codec/container、audio track、GOP/keyframe interval 和完整性 hash；
 - canonical video/cover `publicSliceKey`；
-- 可选、版本绑定的 `previewTrack` manifest 与 track version。
+- P1-A 可选、版本绑定的 `previewTrack` manifest 与 track version；
+- P1-B 可选、canonical 的 HLS/CMAF master playlist 与 rendition set。
 
 Post publish、Feed、Post detail 与 WorkBrowser 只投影 `ready` asset 的 descriptor。上传端宣称的
 时长、客户端 `VideoPlayerController` 时长和临时 URL 都不能作为权威字段；native duration
 只供 session seek 边界和一次性数据质量比对。无 verified/native duration 时，App 禁用可拖动
 时间轴，不伪造 `0:00` 或播放失败。
 
-### storyboard 交付与缓存
+产品时长上限固定为 1 小时。受控 media-canary profile 同时维护 125 秒交互回归资产和 3605 秒
+边界资产：前者验证 0:10→1:15→2:00 的高频拖动，后者验证超上限拒绝及接近上限的
+0:10→30:00→55:00→59:30 拖动。两条资产都必须由真实 probe 写回 descriptor，禁止 fixture
+直接写 `ready + durationMs`。
+
+### P0 progressive MP4/Range
+
+P0 处理链固定为：
+
+```text
+source -> probe/validate -> progressive MP4 + cover -> atomic ready -> post/work projection
+```
+
+P0 必须验证 fast-start、H.264/AAC、`Accept-Ranges`、随机与 suffix Range、`416`、正确
+`Content-Range/Content-Length`、GOP/keyframe 间隔和 SHA-256。处理回调以
+`{assetId, assetVersion, processorProfile}` 幂等；失败进入 retry/quarantine/dead-letter，
+旧 ready 版本保留到新版本完成并可回滚。
+
+### P1-A storyboard 交付与缓存
 
 storyboard 是处理阶段产出的受控派生资源，不是 UI 现场抽帧：
 
@@ -427,21 +446,68 @@ storyboard 是处理阶段产出的受控派生资源，不是 UI 现场抽帧�
    变化立即取消；
 5. 缺轨或请求失败仅降级为时间浮标，不得影响视频播放状态或显示重试 CTA。
 
+### P1-B HLS/CMAF ABR
+
+ABR 与 storyboard 不互相依赖。P1-B 只有在 metadata 冻结 master playlist、rendition set、
+codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 后
+才可启用；Android/iOS/Web 分别提供真实 rendition change 与失败回退证据。底层插件可能支持
+HLS 不构成 App 已具备 ABR 的证据。
+
+### Android 广覆盖兼容策略
+
+Android renderer、MediaCodec queue 和 decoder fallback 只允许在 platform adapter 内按可探测
+能力决策，不维护品牌、型号或厂商 allowlist。默认路径必须在最低支持 API、低内存、低算力和
+软件 decoder 上安全；标准能力可用时提升性能，能力缺失或原生失败时回到结构化降级。
+
+验证矩阵至少包含最低支持 API 物理机、低内存/低算力物理机、较新中端机，以及 emulator
+诊断样本。emulator 的 goldfish Codec2 日志只用于定位，不能替代物理机准入；任一路径均须
+证明首帧、release seek settle、surface 单次释放、掉帧和音频 underrun，不允许 UI 根据设备
+型号建立体验分叉。
+
 ### QoE、推荐信号与回滚
 
 QoE 是 Ops 产品遥测，单独使用强类型 `video_playback_qoe` 事件，记录 ready、真实 TTFF（仅平台可
-取得时）、rebuffer、seek、时长偏差和受限播放模式。事件不得带 postId、feedRequestId、tag、
-ranking 归因或播放器异常栈，且不得进入 recommendation hot path。
+取得时）、rebuffer、seek、时长偏差和受限播放模式。Android 原生证据可额外记录
+`droppedFrames`、`processedVideoFrames`、`audioUnderrunCount`、`rendererMode`、
+`decoderQueueMode` 与 `decoderFallbackEnabled`；没有原生能力时这些字段必须为 null，不能以
+零值伪称无掉帧或无 underrun。事件不得带 postId、feedRequestId、tag、ranking 归因或播放器异常栈，
+且不得进入 recommendation hot path。
 
 推荐只接收 metadata 定义的 `effective_play`：服务端按真实累计播放、连续会话与 seek 排除校验后，
 每播放会话/内容最多一次进入 `BehaviorSignal` 和兴趣更新。`play_progress` 不再将“跳至末尾”的
 位置比误记为完整消费。
 
-首期不新增端侧 `AppRemoteConfig` 播放门槛：有效播放阈值由服务端 policy 作为唯一准入权威。回滚
-顺序是关闭 storyboard → 关闭新 controls → 回滚 image/config；已发布内容的 video/cover
-canonical slice 和播放主链路必须持续可用。
+有效播放阈值由服务端 policy 作为唯一准入权威。`sharedTimeline`、`preview` 与
+`adaptiveStreaming` 使用独立 kill switch；回滚顺序是关闭 ABR → 关闭 storyboard → 关闭新
+controls，并复测 P0 progressive MP4/Range。已发布内容的 video/cover canonical slice 和播放
+主链路必须持续可用；禁止恢复 UI 直控 controller 或 wire 双读。
 
 SLS raw QoE 保留 3 天、去身份 hourly 聚合保留 90 天。看板和告警按低基数 playback mode 聚合
 P50/P95 ready、TTFF、rebuffer incidents per ready 与 duration mismatch rate；告警必须包含
 最小样本量和连续窗口抑制。任何 beta/gamma/prod 真机 readback 缺失时，商用矩阵继续为
 `GATE_BLOCK`。
+
+## KD-10：发布证据采用可重放验证，不接受自报布尔值
+
+T4 报告只是证据索引，不是证据本身。`gate-runtime-media-full` 必须从报告引用的归档文件重新
+计算以下结论：
+
+1. Range health report 中存在本次 canonical video 的 `206 + video/*` 检查；
+2. 同一次 Patrol report 至少含物理 Android 与物理 iOS 成功 run，Android run 的原始日志包含
+   首帧与 seek rendered-frame settle；
+3. Android Perfetto trace 非空，指标摘要中的 `sourceTraceSha256` 与 trace 实际 hash 相同，
+   且主线程秒级 stall、buffer ownership error、frame jank 超阈值均为零；
+4. SLS QoE readback 明确来自 `aliyun_sls`，包含 Android Wi-Fi 与蜂窝两个低基数 bucket，
+   样本量达到告警门槛，并逐项满足 TTFF、seek settle、seek failure、dropped frame、
+   audio underrun、rebuffer 和 terminal failure SLO；
+5. matrix 恰好覆盖 alpha/beta/gamma 与 prod 三 rollout stage；所有报告绑定同一 commit 和
+   media identity，prod 三阶段额外绑定同一 production config hash。
+
+为计算 `rebufferMs / effectivePlaybackMs`，`video_playback_qoe` 在 controller 生命周期汇总时
+必须先结算当前有效播放区间，再上报 `effectivePlaybackMs`。公共遥测上下文同时上报低基数
+`devicePlatform`，SLS hourly rollup 以 `devicePlatform + networkClass` 分桶；不得按品牌或
+具体型号建立策略或告警分支。
+
+`gray-initial`、`carry-on`、`full` 复用同一 release canary preflight。stage 只决定放量状态和
+证据键，不允许 `carry-on/full` 绕过 Range、真机、Perfetto 或 SLS readback。任何外部资源缺失
+都应得到确定的 `GATE_BLOCK`，不得生成 placeholder、dry-run 或手写“passed”报告。

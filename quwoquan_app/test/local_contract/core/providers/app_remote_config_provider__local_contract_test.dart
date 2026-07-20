@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 class _ConfigRepo extends MockContentRepository {
   _ConfigRepo(this.config);

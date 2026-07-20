@@ -83,6 +83,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		redis,
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithChatGroundingClient(chatclient.NewClient(chatHTTP.Client(), chatHTTP.URL)),
 	)
 	consumer := messaging.NewAssistantMentionedConsumer(redis, service, "e2e-worker", nil)

@@ -146,7 +146,6 @@ class _HomepageReviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final averageRating = summary?.averageRating ?? fallbackAverageRating ?? 0;
     final ratingCount = summary?.ratingCount ?? fallbackRatingCount;
-    final dimensionScores = summary?.dimensionScores ?? const [];
     final highlightTags = summary?.highlightTags ?? const [];
 
     return ProfileIosSectionCard(
@@ -154,7 +153,9 @@ class _HomepageReviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            '${averageRating.toStringAsFixed(1)} 分',
+            UITextConstants.homepageRatingScore(
+              averageRating.toStringAsFixed(1),
+            ),
             style: TextStyle(
               fontSize: AppTypography.iosLargeTitle,
               fontWeight: AppTypography.bold,
@@ -163,54 +164,12 @@ class _HomepageReviewCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
           Text(
-            '$ratingCount 条评分',
+            UITextConstants.homepageRatingCount(ratingCount),
             style: TextStyle(
               fontSize: AppTypography.iosFootnote,
               color: AppColors.iosSecondaryLabel(context),
             ),
           ),
-          if (dimensionScores.isNotEmpty) ...<Widget>[
-            SizedBox(height: AppSpacing.containerSm),
-            for (
-              var index = 0;
-              index < dimensionScores.length;
-              index += 1
-            ) ...<Widget>[
-              if (index > 0)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    vertical: AppSpacing.intraGroupXs,
-                  ),
-                  child: Divider(
-                    height: AppSpacing.one,
-                    color: AppColors.iosSeparator(
-                      context,
-                    ).withValues(alpha: 0.12),
-                  ),
-                ),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      dimensionScores[index].label,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosBody,
-                        color: AppColors.iosLabel(context),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    dimensionScores[index].score.toStringAsFixed(1),
-                    style: TextStyle(
-                      fontSize: AppTypography.iosBody,
-                      fontWeight: AppTypography.medium,
-                      color: AppColors.iosLabel(context),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
           if (highlightTags.isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.containerSm),
             Wrap(

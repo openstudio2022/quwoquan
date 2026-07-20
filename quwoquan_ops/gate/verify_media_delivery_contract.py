@@ -107,12 +107,10 @@ SKIP_PATHS = {
     / "alpha_fixture_bundle.g.dart",
     ROOT
     / "quwoquan_app"
-    / "lib"
-    / "cloud"
-    / "services"
+    / "test"
+    / "support"
+    / "cloud_services"
     / "content"
-    / "mock"
-    / "generated"
     / "home_showcase_core_fixture.g.dart",
 }
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -307,18 +305,10 @@ def _validate_dart_media_literals(
 
 
 def _fixture_media_scan_paths() -> list[Path]:
-    paths = sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
-    paths.append(
-        ROOT
-        / "quwoquan_app"
-        / "lib"
-        / "cloud"
-        / "services"
-        / "content"
-        / "mock"
-        / "content_mock_data.dart"
-    )
-    return paths
+    # Alpha fixture 已物理迁到 metadata → quwoquan_cloud_mock 生成 bundle；
+    # production lib 中的旧 content_mock_data.dart 已退役，不能把已删除文件
+    # 继续当作门禁输入或迫使 Mock 回流生产源码树。
+    return sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
 
 
 def _validate_fixture_media_fields(issues: list[str]) -> None:
@@ -480,7 +470,10 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         / "player"
         / "video_player_widget.dart"
     )
+    player_api = player.with_name("video_player_widget_api.dart")
     text = player.read_text(encoding="utf-8")
+    if player_api.is_file():
+        text += "\n" + player_api.read_text(encoding="utf-8")
     if "final String videoUrl;" in text or "videoUrlCandidates" in text:
         issues.append("VideoPlayerWidget 仍接收 raw videoUrl/videoUrlCandidates")
     if "resolveContentVideoUrlCandidates" in text:

@@ -237,7 +237,7 @@
   - 原因: 需新建 `search-service → content-service` 跨服务事件传输（Redis 发布端 + content-service 订阅 + `RecommendFeatureProjector` 消费 + `feature_registry` 注册搜索特征 + `recpolicy` 因子 + `RuleScorer`）；半成品落地会形成无消费者的死特征（违反 R24/R26 零技术债红线）。本项已按独立平台增量闭环。
   - 影响: 已由搜索查询/term-heat 信号经 Redis Stream 发布到 content-service，投影进推荐特征宽表，并被 FeatureStore 与 RuleScorer 真实消费；推荐 Feed 可消费搜索会话信号，搜索结果页排序仍沿用 R-S07 term-heat 闭环。
   - 涉及文件: `quwoquan_service/services/search-service/**`（Redis 发布）、`quwoquan_service/services/content-service/internal/infrastructure/recommendation/**`、`quwoquan_service/services/rec-model-service/scripts/feature_registry.yaml`、`quwoquan_service/runtime/recpolicy/**`、`quwoquan_service/runtime/redis/**`。
-  - 证据: `make verify-metadata`、`make verify-ml-features`、`python3 scripts/verify/verify_redis_keyspace.py`；`go test`/`go vet` 覆盖 search-service、content-service 推荐投影、`runtime/recommendation`、`runtime/recpolicy`、`runtime/redis`；Redis routes 与 `rec_policy_baseline.gen.go` 已重新生成。
+  - 证据: `make verify-metadata`、`make verify-ml-features`、`python3 quwoquan_service/scripts/codegen/gen_redis_router_config.py --check`；`go test`/`go vet` 覆盖 search-service、content-service 推荐投影、`runtime/recommendation`、`runtime/recpolicy`、`runtime/redis`；Redis routes 与 `rec_policy_baseline.gen.go` 已重新生成。
   - 真实 T3 证据（2026-06-16 local-gamma 复验，补齐双服务端到端）: 先清理 `db0` 手工 XADD orphan（误判根因），再带 `X-User-Id: fixture_user_current` 冒烟 `POST :19280/v1/search`（成都火锅/九寨沟/鼓浪屿）。**发布**：`db1` stream `events.search.recommendation_signals` XLEN 2→5（+3，每次 result 检索一条）；**消费**：consumer group `content-service` `pending=0, entries-read=5, lag=0`；**投影**：`quwoquan_content.rm_recommend_feature`（userId=fixture_user_current）`userFeatures.searchTermAffinity` 含本轮全部查询词（九寨沟=1.27、成都火锅=1、鼓浪屿=1 等），`searchTermUpdatedAt=2026-06-16T06:27:47.885Z` 与冒烟同刻。证据落盘 `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_signal_t3_report.json`。误判纠正：上一轮查 `db0`（只有 orphan）且冒烟未带 `X-User-Id` 导致 `recommend_feature.go` 对空 userId `return nil` skip —— 系**验证方法缺陷，非代码缺陷**。
   - 剩余风险（长稳项）: 真实多分片 OpenSearch + Redis cluster-mode 下的延迟/可靠性差异未压测；`RuleScorer` 实际把 `searchTermAffinity` 计入推荐 Feed 排序的线上 A/B 收益未度量（纳入 WP-F 推荐信号长稳，见 `search-storage-topology-and-elasticity` GWT2 planned）。
   - 状态: 已解决（2026-06-16；T1/T2 + 真实双服务 T3 端到端闭环已证；线上排序收益与真集群差异作长稳项）
@@ -258,6 +258,7 @@
   - 本轮交付（方法学 + 目标值，已落盘）: ①冻结高并发负载模型 `search_slo.yaml#load_model`（suggest/result/feedback/indexing 四类，baseline/peak/spike 的 RPS/并发/分位数/错误率/降级率/freshness/Redis lag 目标）；②容量校准方法学 + 按数据规模的 ES 拓扑推荐（shard 10–50GB 避免 oversharding、单节点 replicas=0/生产≥1+≥2 data node、≥半内存留 page cache、refresh 30s、bulk 校准、query cost guard）写入 `search-storage-topology-and-elasticity/spec.md#容量校准`；③local 证据：单节点 1shard/1replica 永久 yellow（replica unassigned）属模拟工件。
   - local-gamma 验证入口（2026-06-17 补齐）: `python3 quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py` 聚合 stackctl gamma verify、ES health/index/shards/threadpool、小型 warm/cold/mixed/feedback 并发压测、单节点 repeatability、故障/回滚证据存在性，报告 `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_r_s06_s1_local_gamma_report.json`。该报告固定声明 `r_s06_s1_closed_by_local_gamma=false`，只证明 local-gamma 方法学与单节点稳定性，不替代真集群 measured。
   - 未闭合（真实缺口，需真集群）: measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格与 refresh/bulk/circuit 实测阈值必须在真集群/prod-sim 原生 ES/OpenSearch 回填；本环境无真集群，属发布前阻断。压测/profiling 证据见 `QWQ_OUTPUT_ROOT/env/repo/runs/search-load/search_load_analysis.md` 与 `QWQ_OUTPUT_ROOT/env/repo/runs/search-load/search_e2e_hotpath_profile.md`（local 单节点 ES 为唯一瓶颈，result/suggest 高并发 NO-GO）。
+  - 2026-07-20 B7.5 复核证据: `stackctl package --env gamma --include-services` 已通过（`.qwq_output/env/gamma/runs/20260719T184806Z-package-gamma-local`）；`content-release` 启动的 amd64 ES 在 Colima 512MB heap 下超过 15 分钟仍出现 timer/GC starvation，随后虽形成 cluster UUID，但 HTTP health 长时间不可响应。本轮未以该模拟性能翻商业 SLA，继续保持本项待办。
   - 可重复性多副本兜底（并入本项）: 跨副本 `_score` 漂移需 ES `preference`（viewer/session/query 稳定派生路由）兜底；需通过 Searcher 透传查询参数实现，local 单节点无副本无法验证，随真集群里程碑实现验收。local 单节点重复查询已 0 跳变（`QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/search_repeatability_golden_diff.json`），稳定排序/AB 粘性已由单测闭环。
   - 纳入规划: WP-E 索引长稳（搜索商用规划复审；见 `specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md`「后续 /dev 工作包登记」与 `search-storage-topology-and-elasticity` GWT2 planned）。
   - 状态: 待办（负载模型/容量方法学/ES 拓扑推荐已冻结、local-gamma 单节点稳定性与重复查询 0 跳变已证；剩余真集群 measured RPS/P95/P99/饱和点/shard·replica·refresh·bulk 实测阈值严格依赖真 ES/OpenSearch 集群或 prod-sim，归属 WP-E 索引长稳·发布前阻断，非本地可采集）
@@ -278,13 +279,13 @@
   - 原因: 历史上 `search-service` 等七个服务以嵌套 `go.mod/go.sum` 切断根编译图，根门禁无法证明全部服务可构建，容器还依赖 local replace 与多套锁文件。
   - 影响: 依赖版本、漏洞修复与编译证据可能跨 module 漂移；新环境或 CI 可能因锁文件缺失失败。
   - 处置: 2026-07-12 删除全部服务嵌套 module；服务仍保留独立二进制和部署单元，但统一由 `quwoquan_service/go.mod` 管理依赖并从根 package path 构建。scaffold 与 Dockerfile 同步禁止嵌套 module 回归。
-  - 门禁: `python3 quwoquan_service/scripts/verify/verify_go_single_module.py` 已接入 service gate；`verify_search_service_module.sh --with-tests` 改为验证根 module、搜索服务生产编译和完整测试。
-  - 验证证据: `go mod verify`、`make build`、`go test ./internal/metadata/... ./runtime/operation/... -count=1`、`bash scripts/search/verify_search_service_module.sh --with-tests` 均 exit 0。
+  - 门禁: `python3 quwoquan_service/scripts/verify/verify_go_single_module.py` 已接入 service gate；根 module 生产编译和搜索服务测试由 service gate 统一承接，专用重复包装器已于 2026-07-19 退役。
+  - 验证证据: `go mod verify`、`make build`、`go test ./internal/metadata/... ./runtime/operation/... ./services/search-service/... -count=1` 均 exit 0。
   - 状态: 已解决（2026-07-12；唯一根依赖图、全部生产包构建和 search-service 根 module 测试已绿）
 
 ## 灵魂交集统一（端云，intersection-unification）
 
-> 真相源 spec：`specs/feature-tree/object-homepage-network/intersection-unified-experience/`。WP-0/WP-1/WP-2 + WP-3（UCB 探索 + MMR 多样性）+ WP-4（交集特征回流 + ranking-signal-fusion 单点注入）已在主线完成（见各自单测/契约/verify 证据）。以下为我（代理）在授权下登记的、需独立或平台级会话推进的剩余事项，均附正确设计，杜绝在读路径或主线塞入错误耦合。
+> 真相源 spec：`specs/feature-tree/object-homepage-network/intersection-unified-experience/`。WP-0/WP-1/WP-2 + WP-3（UCB 探索 + MMR 多样性）+ WP-4（交集特征回流 + ranking-signal-fusion 单点注入）已在主线完成（见各自单测/契约/verify 证据）。以下为我（代理）在授权下登记的、需独立或平台级会话推进的剩余事项，均附正确设计，杜绝在读路径或主线塞入错误耦合。2026-07-20 M10 专项排查新增 R-IX08/R-IX09/R-IX10（用户确认后登记），整改工作包见 `docs/intersection-commercial-maturity-plan.md` WP-IX-0～5。
 
 - [ ] R-IX01 AffinityReasons 概率分通道改由模型分驱动（异步物化，禁止读路径同步 RPC）
   - 区域: Service / Data
@@ -303,7 +304,7 @@
   - 正确设计: 新增按 viewer 预计算的关系交集投影（或扩展 `rm_viewer_object_intersection` 存逐 object 的关系事实），由社交图谱 + 共访/共评事件增量维护；读路径零计算消费；精排可在候选侧读取该 per-candidate 关系强度。
   - 影响: 未做前 P1 关系类 kind 仅在 ObjectReasons（单对象主页）可得，feed/list 的关系级 per-candidate 融合用 viewer 级揭示偏好近似（已交付，安全但非逐候选关系事实）。
   - 涉及文件: `quwoquan_service/contracts/metadata/recommendation/model_release/projections/`、`services/content-service/internal/infrastructure/recommendation/`、`runtime/recommendation/scorer.go`。
-  - 状态: 待办（viewer 级聚合近似已交付[feed/list 安全]、P1 关系 kind 在 ObjectReasons 可得；剩余 per-candidate 关系交集投影需按社交图谱 + 共访/共评事件增量预计算，归属关系投影/数据工程预计算轨，非本会话单点可闭）
+  - 状态: 待办（viewer 级聚合近似已交付[feed/list 排序安全]、P1 关系 kind 在 ObjectReasons 可得；2026-07-20 联系人商用收口明确禁止把该 viewer 级近似用于搜索/确认/打招呼页面的事实文案，只消费服务端显式 `summaryIntersections`，无证据时不展示；剩余 per-candidate 关系交集投影需按社交图谱 + 共访/共评事件增量预计算，归属关系投影/数据工程预计算轨）
 - [ ] R-IX03 深度排序模型平台轨（MMoE/PLE/ESMM 多任务、双塔 ANN 在线服务、Thompson/IPS 反事实闭环）
   - 区域: Service / Data
   - 域: `recommendation`
@@ -342,7 +343,8 @@
   - 复核（2026-07-05 continue-dev）: `python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope service` 已 **8/8 healthy**（`.qwq_output/env/gamma/runs/20260705T114515Z-health-gamma-local/summary.md`），说明当前交集链路所依赖的 service scope 不再受历史 hosts/media 探测噪声阻断；同轮修复实体主页 `HomepageContentPreview` 误读不存在 `id` 字段的问题，统一改读 `postId` 后，`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart test/ui/circle/widgets/circle_shell_widget_test.dart test/components/object_page/object_intersection_card_test.dart test/components/object_page/object_intersection_section_test.dart` 48/48 绿。另，`.qwq_output/env/gamma/runs/20260705T052227Z-verify-gamma-local` 中 `contract-seeded-mock-tests` 失败已定位为 `contract_seeded_mock_repository_test.dart` 默认分页上限断言偏差（非交集远端阻断），修正后 `flutter test test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart --no-pub --dart-define=CONTRACT_FIXTURE_PROFILE=full` 14/14 绿；全量 `stackctl verify --tier all` 本轮未重跑，仍保留 page-smoke/UAT 未闭合事实。
   - 复核（2026-07-05 continue-dev，page-smoke 解阻断）: `quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py` 已补齐本地 target 设备侧地址重写（`.quwoquan-env.test` → `.localhost`）、`APP_CURRENT_USER_ID` 显式透传、iOS simulator `root.crt` 注入，以及 `test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart` 中视频探针从历史 mock `v1` 改为真实 gamma fixture `fixture_video_001`。证据：① `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` **passed**（`QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json`，`environment_basic_viability_smoke` 8s 绿）；② `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` **16 checks 全绿**（`.qwq_output/env/gamma/runs/20260705T133026Z-verify-gamma-local`）。剩余未闭合已收敛为两类：A. `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all` 仍因 `app_gamma_seed_manifest.json` 中 assistant/creator_pool/integration/notification/rtc 的 `verifiedEndpoints` 被记为 `not_ready` 而 `gate_block`，manifest 尚未只聚焦当前交集四主页闭环；B. 人工 probe 显示 `/v1/homepages/homepage_26/related-groups`、`/review-summary`、`/v1/circles/fixture_circle_photo/impact|members` 已 populated，但 `/v1/circles/fixture_circle_photo/feed` 与 `/v1/content/intersections/object?objectType=homepage|circle&objectId=...` 对当前 runtime id 仍空，四主页 populated real-data 与 prod-hosted gray 真实远端仍不能诚实宣称关闭。
   - 复核（2026-07-06 continue-dev）: 本轮继续把 R-IX05 压缩到“gamma-local 已绿、prod-hosted 未闭”这一层：① `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` **passed**（`QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/t3_report.json`），homepage/circle bundle/detail/impact/object-intersection Story strict 全绿；② 展示层 W3 已收紧为“无 `primaryText` 不渲染、前台不再补写主句”，旧 `EvidenceGroup` 支路已删除，相关 Flutter 测试全绿；③ `flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` **2/2 全绿**，真实补证 `getMyIntersectionSummary -> markIntersectionsVisited -> getMyIntersectionSummary` 远端清零链路；④ `flutter test test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart` 全绿；⑤ 修复 `my_intersection_inbox_page.dart` 缺失 `resolvedIntersectionReasonKind` import 后，`python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json` 再次 **passed**，随后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` **16 checks 全绿**（`.qwq_output/env/gamma/runs/20260705T235459Z-verify-gamma-local`）；⑥ 只读拉取 `http://127.0.0.1:19220/metrics` 已观测到 `intersection_feed_candidates_total`、`intersection_feed_filtered_total`、`intersection_cooldown_exposure_reported_total`、`intersection_inbox_visit_total`。当前主阻断收敛为 prod-hosted：`python3 quwoquan_ops/cli/stackctl.py health --target prod-hosted --scope edge` 仍 **0/2 healthy**（`.qwq_output/env/prod/runs/20260705T235900Z-health-prod-hosted`，api/product-ops `/healthz` 均报 `SSL record layer failure`），因此真实 prod-hosted gray smoke 仍未闭环。
-  - 状态: 进行中（字段漂移/客户端编译断点/Pin·Feature 持久化/PostCount 跨服务回写/WeeklyActive 窗口回写/Impact Explain 归一已解决并验证绿；2026-07-06 已把 gamma-local 侧进一步压实为 Story strict 绿、visit->summary 远端清零链路绿、entity/circle user_acceptance 绿、page-smoke 绿、全量 `stackctl verify --env gamma --kind all --tier all` 16 checks 绿。剩余主阻断已收敛为 prod-hosted gray：edge health 0/2 healthy（SSL record layer failure），故真实远端 smoke 与 R-IX05 关闭仍未完成）
+  - 复核（2026-07-20 圈子商用化排查）: gamma-local 直连探针复核——`GET /circles` populated（fixture 圈完整主档）、`GET /circles/fixture_circle_photo/feed` populated、`GET /circles/fixture_circle_photo/stats` populated（members/posts/weeklyActive/storage）；但 `fixture_circle_tech_01` 的 feed 为空（`{"cursor":"","items":[]}`，该圈 postCount=8 与 feed 空不一致，疑 placement seed 缺口）；`/circles/{id}/impact` 与 `/content/intersections/object?objectType=circle` 匿名 401（viewer 鉴权属预期，需登录态种子补 UAT 证据）。圈子面剩余收口项已拆分登记为 R-CIRCLE-001/002/003（hub N+1、圈子级审批、rec 消费），规格落点 `docs/functional_module_commercial_maturity_matrix.md` M8-H。
+  - 状态: 进行中（字段漂移/客户端编译断点/Pin·Feature 持久化/PostCount 跨服务回写/WeeklyActive 窗口回写/Impact Explain 归一已解决并验证绿；2026-07-06 已把 gamma-local 侧进一步压实为 Story strict 绿、visit->summary 远端清零链路绿、entity/circle user_acceptance 绿、page-smoke 绿、全量 `stackctl verify --env gamma --kind all --tier all` 16 checks 绿。剩余主阻断已收敛为 prod-hosted gray：edge health 0/2 healthy（SSL record layer failure），故真实远端 smoke 与 R-IX05 关闭仍未完成；2026-07-20 增补 fixture_circle_tech_01 feed 空数据证据并拆出 R-CIRCLE-001/002/003）
 - [x] R-IX06 搜索六场景端侧收口 + 术语退场关注者（WP-7，客户端，部分由 R-S06/R-S07 覆盖）
   - 区域: App
   - 域: `search` / `user`
@@ -367,6 +369,35 @@
   - 本轮 gate 实测（2026-06-16 三 scope 复跑）: **三 scope gate 全绿** —— `bash quwoquan_ops/gate/gate_repo.sh --scope service` → `[gate] OK`（`/tmp/gate_service_next.log`）；`--scope data` → `[gate] OK`（`agent-tools` 输出末行 `[gate] OK`），本轮修复 `quwoquan_data/tests/local_contract/release/test_directory_evidence_gate__local_contract_test.py` 两个 happy-path fixture（`test_gate_entity_homepage_writes_review_sidecars`、`test_gate_passes_clean_object`）补齐实体主页 `2.quality/quality_analysis.json` + 百科底稿 + asset `sourceRef/sourceAssetRef/termsUrl`，与本轮收紧的 `build/homepage.py` 实体主页证据校验（quality sidecar + 图片权利链）对齐，`directory evidence gate tests passed (18)`；`--scope app` → `[gate] OK` / `APP_GATE_EXIT=0`（`/tmp/gate_app_next.log`）。**此前 R-IX07 把全量 `make gate` 阻断归因到仓库级术语门禁的描述已失效**：`python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py` → `OK`、`python3 quwoquan_app/scripts/runtime/verify_concept_naming.py` → `[concept-naming] OK`，两处此前红灯均已转绿（上一轮 allowlist + 改词收口）。**全量 `make gate` 已绿**：`make gate`（部署/拓扑验证器 + global increment + agent context + 三 scope + portal 构建）→ `[gate] OK` / `FULL_GATE_EXIT=0`（`/tmp/gate_full_next.log`，4945 行；日志内两处 `download Gate FAILED`/`task run FAILED` 系负路径测试 `test_handle_download_blocks_unsafe_images_before_persist` 等的预期断言输出，非真实门禁失败）。
   - 涉及文件: `specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml`、`specs/feature-tree/global-search-experience/.../acceptance.yaml`、各域 T3/T4 测试、`quwoquan_data/tests/local_contract/release/test_directory_evidence_gate__local_contract_test.py`、`quwoquan_data/scripts/build/homepage.py`、`quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml`、`quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml`。
   - 状态: 已解决（2026-06-19；四环境 `stackctl verify --kind all` + `--tier t1/t2/t3` 全绿，端侧 T4 旅程 widget 测试 22 测绿，T4 真机巡检接线 dry-run 四环境绿；observability/SLO/告警/三 scope `make gate` 此前已绿）。唯一非本地可执行项：T4 真机 patrol 巡检需 self-hosted Mac runner + 连接设备 + patrol CLI，归设备矩阵 CI 执行（非业务缺口，开发机环境前置缺失，不在本地伪装执行）。
+- [x] R-IX08 交集 viewer 凭证链路：构造级 dart-define 回退残留 + smoke 基建与带鉴权栈不兼容（2026-07-20 已解决）
+  - 区域: App
+  - 域: `content` / `user`
+  - 事项（2026-07-20 真实栈复核修正）: ①production provider 装配**已接登录态**——`intersectionRepositoryProvider` 消费 `cloudHttpClientProvider`（AuthSession Bearer token + 401 刷新）与 `currentUserIdProvider`（activeSubAccountId 优先），初判「生产形态不可用」不成立；②残留问题一：`RemoteIntersectionRepository` 构造函数保留 `String.fromEnvironment('APP_CURRENT_USER_ID')` 防御回退（`intersection_repository.dart` L656-659），未登录态会以编译期身份发头，掩盖鉴权缺失而非 fail-fast；③残留问题二：`intersection_remote_smoke__api_integration_test.dart` 裸构造 `CloudHttpClient()`（Stub token provider，无 Bearer），在强制 verified-principal 的 content-service 栈上恒 401（`GATEWAY.USER.unauthorized`，2026-07-20 实测）——历史 2/2 绿依赖当时栈的 header 回退，smoke 基建与现行鉴权配置不兼容，无法再作为端云证据。
+  - 影响: 生产链路凭证正确；但 smoke/api_integration 证据通道断裂（无法复跑留档），且构造回退违反 fail-fast 语义。
+  - 涉及文件: `quwoquan_app/lib/cloud/services/content/intersection_repository.dart`、`quwoquan_app/test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart`、`quwoquan_ops/cli/lib/local_environment_auth.py`（canonical acceptance token 签发通道，2026-07-20 已验证可直连签发并通过鉴权）。
+  - 纳入规划: `docs/intersection-commercial-maturity-plan.md` WP-IX-0（smoke 改造为消费 acceptance token 签发通道）+ WP-IX-1（删除构造级 dart-define 回退，未登录 fail-fast）。
+  - 验收: smoke 经 canonical token 通道在带鉴权栈全绿并留档；构造回退删除后无 Bearer 请求结构化 401；production provider 继续从登录态 AuthSession 注入 Bearer 与 active persona。真实 beta/gamma App 登录旅程属于 R-IX05/WP-IX-0 的环境与真机证据，不再混入本代码风险的关闭条件。
+  - 状态: 已解决（2026-07-20：`RemoteIntersectionRepository` 已删除构造级 `String.fromEnvironment('APP_CURRENT_USER_ID')` 回退；`run_intersection_remote_smoke.py` 经 canonical `open_local_acceptance_session` 签发 JWT，并只通过测试子进程环境传递，token 不进入 argv/dart-define/报告；安全契约测试锁定该不变量。gamma-local 实跑 `intersection_remote_smoke__api_integration_test.dart` 3/3 全绿：无 token 结构化 401、summary/list/object/visit 与清零链路全通、recommend feed attribution 非空；证据 `.qwq_output/env/gamma/local/gamma-local/process/intersection-remote-smoke-20260720.log`。推荐 feed 首轮空集同时定位并修复为 canonical moment supplementary fixture 未纳入 T3 runtime setup，未新增风险项）
+- [ ] R-IX09 交集 kind 注册表名实不符：27 个 active kind 中 18 个无数据源产出实现
+  - 区域: Service / Data
+  - 域: `recommendation` / `content`
+  - 事项: `intersection_kind_registry.yaml` 登记 27 个 `status=active` kind，但 `intersection_source.go` 产出侧仅实现 9 个（sharedFollowees/sharedCircle/coCommented/coVisitedEntity/coWishlistedEntity/followeeVisited/sharedTagSample/followeeViewing/followeeDiscussedThis）；其余 18 个（identity 全族 8 个、commonFollower、commonContact、sharedDiscussion、coMemberCircle、coSharedContent、coLiked、sharedEntityAttention、followeeInObject、alumniHere、colleagueHere）只存在于 codegen 查表与 Explain 文案分支，云侧永远不产出。
+  - 原因: registry 的 `status=active` 语义未与「产出实现存在」绑定；identity 族缺身份标签数据源，coLiked 缺预投影（§21.7 本就要求）。
+  - 影响: 对应页面区块恒空（同校/同司等交集永不出现）；契约可信度受损；按 registry 铺的 fixture/测试对这些 kind 形成假绿；「六个母表达」中「共同校友」整个失效。
+  - 涉及文件: `quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml`、`quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`、`quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py`。
+  - 纳入规划: `docs/intersection-commercial-maturity-plan.md` WP-IX-1（契约名实收口：每个 kind 三选一——补产出/降 deferred/登记既有产出位置；门禁扩展「active 必须声明产出实现位置」校验）。
+  - 验收: registry 每个 active kind 可指出产出实现文件:行；`verify_intersection_kind_registry.py` 扩展校验绿；无名实分离残留。
+  - 状态: 待办（2026-07-20 M10 专项排查登记，用户已确认）
+- [ ] R-IX10 交集北极星与漏斗后两级观测缺位（关系形成不可归因、无大盘、无 kill-switch）
+  - 区域: Service / Ops / App
+  - 域: `recommendation` / `user` / `content`
+  - 事项: ①北极星「connection-formed-via-intersection / 可行动交集完成数」在全部 dashboards/alerts/recording rules/Go 指标中零落地；②`GreetingRequestReplied` 事件 payload 无 intersectionId/sourceRef 归因字段，greet/companion 无行动完成行为事件，漏斗「行动完成→关系形成→回流」两级断链；③follow/join_circle/add_contact 转化在 Prometheus 侧只汇入不分动作类型的 `recommendation_behavior_by_attribution_total{state="interaction"}`（无 dimension/sourceRef label）；④`intersection_expand` 无云侧计数；⑤11 个大盘中交集内容仅 1 个 CTR panel，无漏斗专属大盘；⑥SLO rollback_layers 依赖的 feature flag 不存在（`IntersectionConfig` 无 enabled 布尔位，只能参数调零等效关闭）；⑦护栏反指标（骚扰率/拒绝率/举报率）未落地。
+  - 原因: 观测建设止步于「解释链」SLI（曝光/保鲜/冷却/清零），「行动与关系」侧的事件、归因、聚合、大盘、灰度开关未随 v3 商用主轴同步建设。
+  - 影响: acceptance SIT5 声明的「北极星为可行动交集完成/关系形成、护栏反指标与漏斗可观测」无法兑现；商用后无法度量价值、无法定位漏斗断点、无法按声明的三层回滚执行。
+  - 涉及文件: `quwoquan_service/contracts/metadata/user/greeting_request/events.yaml`、`quwoquan_service/contracts/metadata/content/post/behaviors.yaml`、`quwoquan_service/runtime/recpolicy/policy.go`、`quwoquan_service/runtime/recommendation/observability.go`、`quwoquan_ops/observability/monitoring/dashboards/`、`quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml`。
+  - 纳入规划: `docs/intersection-commercial-maturity-plan.md` WP-IX-4（北极星观测与灰度），事件归因前置在 WP-IX-1。
+  - 验收: 北极星分子分母在线可算并按 dimension/sourceRef/页面切分；漏斗六级专属大盘全链可回放；kill-switch 关开关生效有契约测试与回滚演练记录；护栏反指标告警阈值与 SLO 对齐。
+  - 状态: 待办（2026-07-20 M10 专项排查登记，用户已确认）
 
 ## 交集定义与应用 Phase 0（intersection-definition-and-application）
 
@@ -503,7 +534,7 @@
     5. **share 路径持久化读模型（2026-07-12，验收 #2 部分闭环）**：`type=share` 已从 `ProfileInteractionActivities` 请求期全量扫描迁移到独立 `ShareInteractionOccurrence` Mongo read model，使用 `(targetSubAccountId, occurredAt DESC, interactionId DESC)` / `(actorSubAccountId, occurredAt DESC, interactionId DESC)` 索引与 keyset cursor；seen/read 在同一 store 幂等持久化，服务重建后历史不丢。
     6. share 证据：`go test ./services/content-service/...` 全绿；`profile_share_interaction__local_contract_test.go` 覆盖同时间戳 21 条跨页无重复遗漏；`profile_share_interaction__api_integration_test.go` 覆盖 Mongo 重建后读取与 read 状态。
   - 状态: 部分收口（2026-07-12；验收 #1/#3/#4 已闭，#2 的 share 路径已闭；点赞/评论/浏览等非 share 互动仍沿用旧投影并保留剩余高互动读放大风险）
-- [ ] R-ID10 交集 5 展示位统一渲染/交互/图标标准化收敛（两套并行链路收敛到统一组件）
+- [x] R-ID10 交集 5 展示位统一渲染/交互/图标标准化收敛（两套并行链路收敛到统一组件）
   - 区域: App
   - 域: `content` / `recommendation`
   - 事项: 仓内存在两套并行交集渲染链路——统一链路（首页 feed / 我的主页 / 打动卡 / 圈子打动卡，消费 `primarySpans` + `IntersectionTargetNavigator` + `IntersectionVisualCluster`）与自绘旧链路（记录卡 `IntersectionReasonChip` + 对象页 `ObjectIntersectionCard`/`EvidenceGroup` 自绘行 + 硬编码图标 switch）。自绘链路未消费 `primarySpans`、行/片段不可下钻、归因丢字段、图标绕过 resolver。
@@ -544,11 +575,19 @@
         - `MockIntersectionRepository.getObjectIntersections` 删除硬编码 `_objectEvidenceGroups` / `_EvidenceSeed` / `_connectionSummaryFor` / `_objectKindForObjectType`（按 objectType 合成事实的第二真相源），改为只读 `intersection_core.objectIntersections[objectId]`；无 seed 命中返回空（不造假、无 objectType 回退）。mock 与 remote 同走 `IntersectionReason.fromMap`。
         - `build_alpha_lite_fixture_bundle.py`：content LITE_REFS 增 `intersection_core`，并裁剪为 `objectIntersections`-only（inbox/channelReasons 仍走端侧行内 canonical 回退，零改 inbox 行为，避免 inbox 测试级联）。`build_gamma_curated_fixture_bundle.py`：新增 `CURATED_OBJECT_INTERSECTION_DROP_IDS` 裁掉三个 alpha 测试对象，gamma 仅保留 `fixture_*` 真实首页对象交集（已校验 gamma-curated 0 命中测试 id）。
         - 重写 `intersection_object_evidence_test.dart`：断言真实 fixture 链路（`intersectionId`/`actionTargetId` 取自 seed、`primaryText` + object span 蓝字可点、`join(primarySpans.text)==primaryText`、关系分层 label、count single-source、`把你们连在一起` 连接句、推荐排在事实后、未 seed 对象〔含合法 user 类型〕返回空证明无 objectType 回退）。`flutter test` 8 绿；object_page/intersection 目录 111 绿；profile shell/tab 41 绿。
-  - 状态: 收口（2026-06-23；N1–N10 全部已闭并验证，证据见上）。N3 第二真相源（mock 硬编码 `_objectEvidenceGroups`）已删除，对象页交集唯一经 fixture `IntersectionReason` 真实下发，自带 `primarySpans`（句内对象名蓝字 target + 头像簇）。**渲染/导航已统一**：我的主页「我的交集」与三对象页（用户 B / 圈子 C / 实体 D）**共用同一个** `ObjectIntersectionSection` → `ObjectIntersectionCard`/`EvidenceGroup` + `IntersectionTargetNavigator` + `IntersectionIconResolver` codegen（profile/circle/entity shell builders 同源），整行/名字/数字可下钻、归因 `tag_click` 1.8 权重不变——主页与对象页无渲染分叉，instruction #4「统一到与主页同一 ObjectIntersectionSection」已满足。**残留（独立 UI 视觉升级项，非主页/对象页分叉）**：当前共用的 `ObjectIntersectionCard` 以 `EvidenceGroup`（point 证据组行）呈现，尚未升级为直接渲染 `reason.primarySpans` 的 `IntersectionStatementRow`（句内蓝字+头像，目前仅 `我的交集` inbox/impact 时间线在用）。因主页与对象页同源，此升级须在 `ObjectIntersectionSection` 层**跨面统一**进行（一改全改，避免新分叉），seed 已下发 `primarySpans` 为该升级铺好数据；属可独立排期的全局视觉对齐增量，不构成主页对标缺口。
+  - 状态: 已解决（2026-07-20；N1–N10 与最后视觉升级项全部闭环）。
+    `ObjectIntersectionCard` 已删除 `EvidenceGroup` point 自绘链，直接把
+    `reason.primaryText/primarySpans/sampleVisuals/iconKey/objectVisual/actionHints/
+    lifecycleState` 映射为统一 `IntersectionStatementRow`；对象页、主页、圈子与实体页
+    因共用 `ObjectIntersectionSection` 一次升级，未产生新分叉。名字/数字 span、头像簇、
+    行与行动 hint 均沿统一 navigator + `tag_click` 归因下钻。证据：
+    `object_intersection_card__local_contract_test.dart` 12 绿，覆盖 primaryText 单真相、
+    span 点击、navigate/login action、deferred/connect fail-closed，以及 320px 紧凑宽度
+    深浅色 sampleVisuals 头像簇无溢出；全仓 `EvidenceGroup` 生产引用为零。
 
 ## 评论系统重做（Comment System Redesign）
 
-> 当前真相源：`contracts/metadata/content/comment/**` 与 `comment-thread/spec.md` V3。2026-07-14 已完成零兼容替换：Comment / ContentReaction 独立对象 Facade、Mongo aggregate+outbox、pinned-first 唯一顺序、App typed Facet、production Remote-only；旧 PostService 评论方法、Memory store、`CommentDto`、动态 Map、三档排序与 count-delta operation 均已删除。R-CMT01 下的 2026-06-20 内容仅保留为失败→修复历史，不再描述当前架构。
+> 当前真相源：`contracts/metadata/content/comment/**` 与 `comment-thread/spec.md` V4。2026-07-14 的零兼容替换继续有效；2026-07-20 V4 在同一对象主线上增加 `hot|latest`、四态治理、频控、PostDeleted 级联、IP 属地、作者赞过、关系/拉黑事实与通知矩阵，不恢复旧 PostService、Memory store、`CommentDto`、动态 Map、旧三档排序或 count-delta。R-CMT01 下的 2026-06-20 内容仅保留为失败→修复历史，不再描述当前架构。
 
 - [x] R-CMT01 评论存储为进程内 map + 全局锁，缺 MongoDB/Redis 生产持久化落地
   - 区域: Service
@@ -635,7 +674,8 @@
   - 复核（2026-06-21 真实 e2e10 scale-readiness）: 真实批次 `executionReadiness.queueBackend=""`、`maxConcurrency=0`、`measuredThroughput=null`，百/千级 `decision=no_go`，blocker 含「measured throughput evidence missing」「workflow status must be succeeded」。即吞吐/分发证据只能由真实跑完、烧 token 的放量批次产出，仍受外部 cursor-sdk 多 worker + spend limit + Cursor API 速率配额约束（用户决策项，非会话内可独立闭合）。
   - 复核（2026-06-23 e2e5）: 并发**调度原语已具备**——object-queue 单篇隔离 job（lease/heartbeat/leaseExpiry/notBefore 退避，`queue_runtime_snapshot`）、`task queue work --concurrency N` 本地 worker pool、download lane 实测 5 workers 并发拉 27 source bundles。但本批 `queuePolicy.backend=local_file`，`scale-readiness` 明确 blocker：「daily target >=10000 requires queueBackend=reliabletask」「measured throughput evidence missing; cannot project daily capacity」。即放量级吞吐需切 `reliabletask`（Mongo/Redis）后端 + 真实跑完计时，且 authoring 步受 cursor_sdk 阻断（见 R-CS03），端到端成稿吞吐本轮仍无法实测。
   - 复核（2026-07-10 P5 ReliableTask fleet）: Data→runtime 强类型 adapter 已复用 MongoStore+RedisReadyIndex，幂等键严格为 `entity+carrier+sourceRevision`，并修复失败消息过早 ACK 导致 `retry_wait` 丢失的问题（pending + XAUTOCLAIM）。真实 Mongo 7 + Redis 7 的 100 task 控制面 E2E 100/100 终态、瞬态失败自动恢复率 100%、duplicate publish=0；该实测只证明控制面调度，不是内容 accepted throughput。报告已将指标明确命名为 `controlPlaneTaskThroughputPerHour`，商业 `acceptedContentThroughputPerHour=0`，因此真实日产容量门仍未关闭。
-  - 状态: 待办（真实放量门槛，需外部资源授权 + reliabletask 后端 + 解除 cursor_sdk authoring 阻断）
+  - 复核（2026-07-20 生产 worker 与真实对象事务 E2E）: 已补齐 `qwq-data task reliabletask-fleet` 唯一入口、`content-service/cmd/data-content-worker` composition root、Go→Python typed process boundary、AgentResultEnvelope/对象事务结果回写、canonical filesystem verifier 与 execution metrics 对 accepted throughput 的单一消费。实跑 gamma-local Mongo 7 + Redis 7，通过生产 CLI 完成 1 个真实 rights-bound image publish object transaction：`total=1`、`commercialAcceptedCount=1`、`duplicatePublishCount=0`、`missingObjectCount=0`、`acceptedContentThroughputStatus=MEASURED`；重复可执行证据为 `TestQWQDataCLIUsesProductionReliableTaskFleet`，归档报告 `.qwq_output/env/repo/runs/20260720T060000Z-reliabletask-commercial-e2e/commercial_fleet_report.json`。该结果只证明生产链路与首个非零 accepted 样本，单样本瞬时 `577.19/h` 不得外推 H10K/H100K；H200→H1000→H10K 的 24h soak、队列滞后和真实 Cursor author 池仍未验证。
+  - 状态: 进行中（生产分发/真实 worker/对象事务/accepted 计量链已接通；商业关闭仍需四车道 H10K 实跑达到各车道 416.67 accepted/h，并完成 24h soak、权威成本和下游证据）
 - [ ] R-CS03 作品线真实 token/成本/firstPassRate 未实测
   - 区域: Data
   - 域: `content-supply`（produce author / TokenLedger）
@@ -711,10 +751,17 @@
 - [ ] R-CS08 视频商用全矩阵外部依赖未齐备
   - 区域: App / Service / Data / Ops
   - 域: `runtime-media` / `content`
-  - 原因: 本轮只收口“视频封面发布展示工程闭环”，但 runtime-media 商用全矩阵仍依赖真实 beta/gamma 网关、self-hosted Android/iOS runner、ECS/pre 环境、对象存储与视频转码/封面生成链路的非 dry-run 通过报告；这些外部运行条件尚未齐备。
-  - 影响: 即使 App/Service/Data 的视频 `videoUrl + thumbnailUrl/coverUrl + coverStrategy + coverFrameTimeMs + duration/size` 合同已在 local_contract/scoped tests 闭合，也不能宣称“一流成熟商用视频能力”或“视频商用端到端全矩阵完成”；相关 GWT 的 gamma api_integration/user_acceptance 证据必须保持 pending 或 GATE_BLOCK。
+  - 原因: 125 秒、59:55 边界与 60:05 拒绝 media-canary、共享时间轴、release-only seek、storyboard、权威时长投影和本地合同已闭合；但商用全矩阵仍依赖真实 beta/gamma 网关、self-hosted Android/iOS runner、原生首帧/seek-settled 事件、SLS QoE readback、对象存储/VOD worker 与生产三阶段非 dry-run 报告。当前 gamma SLS 密钥未配置，prod-hosted media health 也未形成通过证据。
+  - 影响: 本地 App/Service/Data/Ops 门禁通过只能证明工程合同，不足以证明真机 platform-view 叠层、原生 seek settle SLO、真实 Range/CDN、弱网恢复或生产回滚；相关 GWT 与商用准入必须保持 pending / GATE_BLOCK。
   - 涉及文件: `specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md`、`specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/acceptance.yaml`、`specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey/acceptance.yaml`、`quwoquan_ops/cli/stackctl.py`
-  - 状态: 待办（2026-06-22 用户确认登记；需四环境非 dry-run passed 报告、真实移动 runner、ECS/pre 与对象存储/转码链路证据齐备后方可关闭）
+  - 状态: 部分完成（2026-07-19：本地 media-canary、端云投影、共享时间轴、有效播放防 seek 污染与证据矩阵 validator 已补齐，`make gate-runtime-media` 通过；alpha-local 媒体健康 19/19，证据为 `.qwq_output/env/alpha/runs/20260718T175200Z-health-alpha-local`。同日已补 native prepare-to-first-frame、seek 后 rendered-frame settle、dropped-frame/audio-underrun 与 renderer/queue/fallback 强类型事件，并以 App/Plugin/Android/Go/Ops local_contract 验证；事件通过 opaque token 关联且不含品牌/型号。T4 full evidence 现仅接受物理 Android Patrol 原始日志中的 native first-frame/seek-settled，并重新读取归档 report、截图、录屏、QoE 与日志；拒绝 emulator、controller Future 和环境变量伪称。media-canary validate 也重新 probe 实际字节并绑定 descriptor hash。外部可达性检查仍为 beta-local 0/29、gamma-local 0/29、prod-hosted media 0/1，真实移动 runner、Perfetto、SLS、对象存储/VOD 与生产回滚证据未齐，因此四环境非 dry-run 商用矩阵仍保持 GATE_BLOCK）
+- [ ] R-CS11 视频灰度发布阶段不可达
+  - 区域: Ops
+  - 域: `runtime-media`（`prod-hosted` rollout）
+  - 原因: 代码路径已于 2026-07-19 修复：`stackctl deploy --stage gray-initial|carry-on|full` 显式可达，未指定时按 `step` 映射；主发布 workflow 也新增独立 `prod_carry_on` job。当前仍缺同一 release/config hash 的三阶段非 dry-run 生产报告、SLO readback 与回滚演练。
+  - 影响: 本地合同已能阻止跳过 `carry-on`，但在真实三阶段证据归档前，视频 shared timeline、preview 与 ABR 仍不得宣称完成 prod 商用准入。
+  - 涉及文件: `quwoquan_ops/cli/stackctl.py`、`quwoquan_ops/environments/environment_topology_manifest.yaml`、`specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md`
+  - 状态: 部分完成（2026-07-19：三阶段入口、workflow 与 `test_prod_rollout_stage__local_contract_test.py` 已通过；仍需同一 release/config hash 的 `gray-initial`、`carry-on`、`full` 非 dry-run 报告、SLO readback 与回滚演练后方可关闭）
 - [ ] R-CS09 普通网页/UGC 底稿轻改商用的版权风险（full light-edit 裁定）
   - 区域: Data
   - 域: `content-supply`（produce author / 来源权利分层）
@@ -792,8 +839,8 @@
     2. beta：在 VPC 可达的受控 runner 部署独立 beta SLS Project/RAM/Secret，创建 3/3/90 天 Logstore 和 Scheduled SQL；先清除 `avatarBaseUrl` 种子阻断，再执行 `stackctl verify --env beta --kind all --tier t3` 及 `TEST_SLS_*` 实测：重放不重复、字段/保留期/聚合无敏感字段、Portal 查询 SLO。
     3. gamma：在同一 VPC 或获批私网连通的 runner 注入 gamma Secret；先修复 entity/comment/content 种子门，再执行 `stackctl verify --env gamma --kind all --tier t3`。开发机的 `gamma_local` 不可直连 VPC endpoint 时只能跑协议替身，不能伪称真实 SLS 验收。
     4. T4：准备至少一台 Android 或 iOS 真机，执行启动、页面访问、后台恢复、断网补传、可控异常、推荐反馈与 Portal 观测旅程；随后才进入 prod 5% rollout。
-  - 已有证据: 严格 metadata/codegen、App Reporter local_contract、Go SLS fake 协议、Portal 单测/build 已通过；`product-ops` gamma API 契约及 `/content/behaviors` 定向链路已通过。以上均不等同于真实 SLS 或真机验收。
-  - 状态: 进行中（2026-07-18 用户确认登记）
+  - 已有证据: 严格 metadata/codegen、App Reporter local_contract、Go SLS fake 协议、Portal 单测/build 已通过；`product-ops` gamma API 契约及 `/content/behaviors` 定向链路已通过。2026-07-20 B7.5 再次实跑 full gamma，`stackctl up --env gamma` 明确因缺少 `~/.config/quwoquan/product_telemetry_sls/gamma.env` GATE_BLOCK（`.qwq_output/env/gamma/runs/20260719T184946Z-up-gamma`）；这证明发布门正常阻断无凭据环境，不等同于真实 SLS 或真机验收。
+  - 状态: 进行中（2026-07-18 用户确认登记；2026-07-20 B7.5 复核仍缺 gamma 正式 Secret）
 
 ## 测试治理与目录迁移（Three-layer Test Migration）
 
@@ -1043,32 +1090,32 @@
   - 验收: `stackctl deploy --target prod-hosted` gray-initial→SLO gate→full；ship `--confirm-prod-apply` 实导 54 实体；prod environment run 归档 release/import/rollout/SLO；prod edge `/v1/homepages/{id}/introduction` 抽检（武侯祠/黄龙）返回真实投影。
   - 状态: 已解决（2026-07-07 完成 prod 实导全流程：ship `--confirm-prod-apply` 实导 projected=55/created=53/updated=2；媒体 304 objects（977MB）tar-over-ssh 同步；gray-initial stage=5 SLO gate decision=continue（30 样本 errorRate=0、P95=136ms）；期间编排 post-deploy health 因 topology IP publicBases 与 SNI-matched Caddy 的既有形态缺口 0/4 触发自动回滚，已按真相源修复——`render_prod_plane_stack.py` 从 `environment_topology_manifest.yaml` 解析公网 IP 注入 Caddy api 站点别名 + `default_sni`，修复后 `stackctl health prod-hosted` 4/4；full stage=100 decision=continue 无回滚；prod edge 武侯祠 homepage_30 / 黄龙 homepage_52 introduction IP+域名双口径 200、coverUrl 200；gray 栈按共享集群语义退场。历史证据已迁移到 `.qwq_output/env/prod/runs/data-release/prod_homepage54_20260707-7a0db44d1487/runs/legacy-migration-encyclopedia-autonomous-publish-v3-20260711-01d5d7178e1f/legacy_evidence/`，原 applied/rollback refs 保留。）
 
-- [ ] R-HSE02 entity-service homepage_state 导入后需重启才对读路径可见
+- [x] R-HSE02 entity-service homepage_state 导入后需重启才对读路径可见
   - 区域: Service / Ops
   - 域: `entity`（homepage introduction 读路径）
   - 原因: entity-service 将 homepage_state 作为启动时一次性加载的聚合，importer 写入 Mongo 后运行中进程不重读；prod gray 演练与 gamma-local 实导均复现（重启容器后 introduction API 立即可见）。
   - 影响: 每次 homepage 数据发布必须人工/编排追加 rolling restart，遗忘即持续返回旧数据，形成发布断点。
   - 涉及文件: `quwoquan_service/services/entity-service/`、`quwoquan_data/scripts/ship/handler.py`
   - 验收: entity-service 支持 homepage_state 热重载（变更流/按 releaseId 触发重读），或 ship→import 编排自动追加受控 rolling restart 并把动作写入 import report/runbook。
-  - 状态: 待办（2026-07-07 登记；过渡操作=导入后手动重启，动作已记入 prod_gray_drill 与 prod 实导证据 `prod_homepage54_20260707/release_rollout.json`——本次 prod 实导中 gray/full 两阶段均通过容器 recreate 满足重启语义并留痕）
+  - 状态: 已解决（2026-07-20；旧全局 `homepage_state` 已从运行时与装配删除，`homepage-import` 直接按对象 CAS+receipt+outbox 写入 `homepages` 权威集合，在线读路径每次查询同一集合，不再依赖进程启动水合或 rolling restart。Beta/Gamma seed manifest 已统一声明 `mongodb:quwoquan_entity.homepages` 与 `homepage-import` 通道；真实 Mongo 证据：`TestHomepageMongoImporterUpsertsBySourceIdentity`、`TestReloadHomepageStateReconcilesAuthoritativeCollectionWithoutSnapshot`、`TestDataSyncOfflineIsVisibleWithoutReload` 全绿，`verify_entity_homepage_object_mainline.py` 阻断旧快照回归。）
 
-- [ ] R-HSE03 process_domain_mapping.yaml 与 prod-hosted 实际运行面口径差异
+- [x] R-HSE03 process_domain_mapping.yaml 与 prod-hosted 实际运行面口径差异
   - 区域: Ops
   - 域: `platform-ops-governance`（部署拓扑真相源）
   - 原因: `quwoquan_ops/environments/process_domain_mapping.yaml` 声明 prod 环境 entity 域归属 `quwoquan_service` 聚合进程，但 prod-hosted rootless compose 实际按 onebox split-services 运行独立 `entity-service`（`quwoquan_ops/environments/prod_plane_access_isolation.yaml` 已按现实登记 governed compose services）。两份真相源口径不一致。
   - 影响: 「同一环境 domain 唯一归属 + integration/prod 映射一致」军规存在漂移风险；后续扩服务/迁移域时易按错口径配置路由与告警。
   - 涉及文件: `quwoquan_ops/environments/process_domain_mapping.yaml`、`quwoquan_ops/environments/prod_plane_access_isolation.yaml`、`quwoquan_ops/environments/workload_topology_inventory.yaml`
   - 验收: 对齐两份清单口径（以实际运行面为准修 mapping，或写明 split-services 过渡语义），并补跨清单一致性校验进 gate。
-  - 状态: 待办（2026-07-07 登记）
+  - 状态: 已解决（2026-07-20；`process_domain_mapping.prod` 继续作为 domain→workload 唯一归属，prod-hosted rootless split-services 只作为该 workload 的运行投影。`prod_plane_access_isolation.yaml#rootlessProjectionBindings` 已逐项回指 `ownerWorkload`，split domain 必须同时命中 `workload_topology_inventory.split_candidates`；`verify_prod_plane_access_isolation.py` 新增一一对应、唯一归属与投影别名门禁。`verify_prod_plane_access_isolation.py`、`verify_workload_topology_inventory.py`、`verify_deployment_domain_mapping.sh`、`verify_strangler_contract_invariants.py` 全绿。）
 
-- [ ] R-HSE04 共享部署拓扑 YAML 多会话并发写损坏事故
+- [x] R-HSE04 共享部署拓扑 YAML 多会话并发写损坏事故
   - 区域: Ops
   - 域: `platform-ops-governance`（拓扑清单完整性）
   - 原因: 本轮执行期间 `quwoquan_ops/environments/` 拓扑清单曾被并发会话/工具写坏（无写锁、无原子写），已恢复；2026-07-07 复核四份拓扑 YAML（environment_topology_manifest / process_domain_mapping / workload_topology_inventory / prod_plane_access_isolation）均可正常解析。
   - 影响: 拓扑清单是环境渲染、部署与门禁的唯一真相源，损坏会放大为 stackctl render/deploy 全链失败或错误发布。
   - 涉及文件: `quwoquan_ops/environments/*.yaml`、`quwoquan_ops/cli/lib/environment_topology.py`
   - 验收: 拓扑 YAML 写路径统一临时文件+原子 rename，加载处保留 schema 校验硬失败；gate 增加拓扑清单可解析性快检。
-  - 状态: 待办（2026-07-07 登记）
+  - 状态: 已解决（2026-07-20；四份拓扑 YAML 均为仓库只读真相源，仓内不存在运行时回写路径；所有消费方以 YAML parse/schema 失败硬阻断。`gate_repo.sh` 已串联 `verify_prod_plane_access_isolation.py`、`verify_workload_topology_inventory.py` 与 deployment mapping/Strangler 校验，损坏或跨清单漂移无法进入打包发布。本轮四项解析与交叉不变量复验全绿。）
 
 - [x] R-HSE05 单机 Cursor bridge 实测安全并发上限为 2 worker
   - 区域: Data
@@ -1086,7 +1133,7 @@
   - 影响: 双省金丝雀未绿前不得启动 M1/M2/M3，也不得把 creator fixture、历史批次或静态 API fixture 当成目标主页 release 证据。
   - 涉及文件: `specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage/acceptance.yaml`、`quwoquan_data/verticals/travel/coverage/中国/浙江省/`、`quwoquan_data/verticals/travel/coverage/中国/四川省/`。
   - 验收: 浙江普陀山、东钱湖与四川海螺沟金丝雀 execution 顺序通过来源、逐图权利、Agent 正文、独立 review、object transaction、aggregate release、Beta/Gamma 导入、API 与动态 App UAT；随后按同一 CLI 推进 M1/M2/M3，并生成 60 个冷启动 posts 与四环境 promotion evidence。
-  - 状态: 进行中（2026-07-18 当前复验：仓外 Cursor key file 权限与启动探针通过；Data `verify all`、门禁范围内 1354 项 local_contract 与 20 项 user_acceptance 全绿，全仓 `make gate` 真实退出 0。发布链已收口为 release-first：entity/post/creator/tag 使用 immutable object snapshots，精确 CAS 媒体闭包冻结到 `payload/media/objects/**`，环境 importer/media sync 不再回读 mutable canonical publish；article/image/video 均有同一 object transaction，video 使用独立 poster CAS 与 `posterAssetId` 强闭包。已通过 active-runtime preflight 破坏性删除旧三实体 canonical、旧 tasks/releases 及 Beta/Gamma data-release 证据，不迁移旧金丝雀；新建 `20260718--travel-homepage-coverage--cn-zhejiang-sichuan--baseline-003`，其 empty desired-state、release lifecycle 与 payload integrity 全绿，canonical publish 当前为 0 entities / 0 posts。最新 Data api_integration 为 31 passed / 1 GATE_BLOCK，唯一阻塞是 Gamma S3 endpoint TLS connection reset；Alpha health 11/11，Beta health 15/17，Gamma health 0/23，prod-sim health 0/12。`stackctl doctor` 已把 Beta/Gamma 的根因结构化为仓外 `~/.config/quwoquan/product_telemetry_sls/<env>.env` 缺失，并在前置条件失败时禁止建议盲目重启；Gamma 因此不能形成真实环境闭环。尚未生成 2899 entities、60 posts、M3/launch release、四环境 promotion 或动态 App UAT，因此不得启动 M1/M2/M3，也不得关闭本项。）
+  - 状态: 进行中（2026-07-19：GWT1 本地目录、输入、凭证准入已完成；`task preflight --json`、`verify all` 与完整 `make gate` 均通过。发布树仍为 0 entities / 0 posts，空基线未产生可复用 release。最新 `stackctl content-readiness` 仅 Alpha ready；Beta 缺受限 SLS 配置且核心进程未启动，Gamma 缺受限 SLS 配置且服务/存储未启动，prod-sim 仍有法务主体占位信息和未启动的边缘/媒体进程。没有上述四环境闭包，不能创建金丝雀 execution，更不能启动 M1/M2/M3 或关闭本项。）
 
 - [ ] R-HSE07 gamma T3 交集语义环境闭环尚未复验
   - 区域: Data / Service / App
@@ -1106,7 +1153,27 @@
   - 影响: 严格服务端下链路不可用；若服务端信任客户端身份，则存在跨用户订阅和数据泄露风险。
   - 涉及文件: `quwoquan_app/lib/cloud/services/realtime/**`、`quwoquan_app/lib/cloud/rtc/rtc_signaling_client.dart`、realtime/rtc metadata 与服务端入口。
   - 验收: metadata 生成 ticket operation/auth policy；客户端只提交 ticket，服务端从可信身份派生 actor/topics 并返回 ack；越权负例、过期、重放、断线恢复和三层测试全绿。
-  - 状态: 进行中（2026-07-15 复核；App realtime 已删除 production Mock delegate/catalog 与运行时 mode 切换，固定为 Remote-only composition，但这只消除错误装配，不等于可信实时鉴权。`rtc-service` 与 `realtime-gateway` 仍不接入三朵云 prod root，尚不存在短期 ticket、participant/BOLA、ticket 过期/重放负测或 Gamma 新证据，不能关闭）
+  - 状态: 进行中（2026-07-20 B10 复核，CR-20260719-121：服务端一次性 ticket GETDEL、auth_ack、可信身份 per-user 订阅、lease+fencing 与路由隔离已闭合；App 已删除 rtc_signaling_client，WebSocket 先以 Bearer 换短期 ticket且 URL 只带 ticket，production Remote-only；伪造/重放/匿名负例、断线恢复 local_contract、服务 API integration 与 `go test -race` 全绿，不能代表 production Remote 的假 UAT 已删除。最新 Gamma 全服务 package `20260720T161422Z-package-gamma-local` 通过；release verify `20260720T161256Z-verify-gamma-local` 仍因缺失 `product_telemetry_sls/gamma.env` fail-closed，prod 正式凭据仍受 R-AUTH-001 约束；取得 Gamma/Prod 运行制品后方可关闭）
+
+- [ ] R-RTC01 离线来电 Push 真机与商用运行证据未闭合
+  - 区域: App / Service / Ops
+  - 域: `rtc` / `notification` / `integration` / platform capability
+  - 事项: DeviceRegistration、durable CallRinging delivery、APNs/FCM provider、展示 ACK、PushKit/FCM 平台回调与跨通道去重已实现；尚缺受控 APNs/FCM 凭据下的后台/锁屏/被终止真机接听、取消竞态与到达 P95 制品。Web 按 capability 明确只支持前台 realtime 站内来电。
+  - 原因: 仓库可控实现与 local/API/native compile 证据已闭合，但 Gamma full workload 被缺失 `product_telemetry_sls/gamma.env` fail-closed，且当前没有真实 APNs/FCM provider receipt 与设备 readback，不能用模拟 payload 代替。
+  - 影响: App 不在线时用户会漏接 1v1/群通话，来电到达 P95、漏接率和跨平台降级不可计算；RTC 即使在线通话全绿也不能商用准出。
+  - 涉及文件: `quwoquan_service/contracts/metadata/{rtc,notification,integration,user,realtime}/**`、`quwoquan_service/services/{rtc-service,realtime-gateway,notification-service,integration-service,user-service}/**`、`quwoquan_app/{ios,android,lib/core/platform,lib/ui/rtc}/**`、`specs/feature-tree/chat-conversation/realtime-call/**`。
+  - 验收: metadata-first 冻结 DevicePushEndpoint/provider attempt/receipt、设备 presence、750ms 展示 ACK 与 CallRinging 过期去重；iOS/Android provider→平台回调→来电 UI→Answer/Reject 全链在 Gamma 真实设备通过；Web 前台降级 local_contract 通过；Prod `gray_initial` 完成到达 P95、重复/延迟/cancelled call 负例、告警与回滚演练。
+  - 状态: 进行中（2026-07-20：DeviceRegistration 真实 Postgres packet、RTC outbox→NotificationDeliveryJob→integration provider 的 Redis/Mongo API integration、幂等 receipt/DLQ/取消、App secure endpoint queue/generated Remote、iOS/Android 原生桥与编译、Web 明确降级均通过；伪 `user_acceptance` 已删除。仅在真实凭据、设备 readback、Gamma/Prod 到达 P95 与取消竞态制品完成后关闭）
+
+- [ ] R-RTC02 RTC 媒体 QoE Gamma/Prod 真实 series 与演练未闭合
+  - 区域: App / Service / Ops
+  - 域: `rtc` / `ops.event_record` / observability
+  - 事项: 有效媒体接通率、接听/加入到媒体可用 P95、非预期媒体中断率的 emitter/rollup/dashboard/alert 已同源；尚缺 Gamma/Prod 真实 series、弱网/重连/异常中断演练和发布 readback。
+  - 原因: 仓库可控状态机与观测门禁已闭合，但 Gamma full workload 未启动，当前只能证明计算和告警合同，不能证明真实 LiveKit 媒体样本。
+  - 影响: 黑屏、无声、建连慢、弱网重连失败或异常断话无法被值班和灰度门发现；发布只能依赖主观真机体验，不能安全放量或自动回滚。
+  - 涉及文件: `quwoquan_service/contracts/metadata/ops/event_record/{event_catalog,rollups}.yaml`、`quwoquan_app/lib/ui/rtc/**`、LiveKit platform adapter、`quwoquan_ops/observability/monitoring/{alerts,dashboards}/**`、`specs/feature-tree/chat-conversation/realtime-call/**`。
+  - 验收: metadata 冻结分母/终态/有界维度；App/LiveKit adapter 幂等上报；SLS 与本地 rollup 同源计算三项黄金指标；仅在真实 series 可查询后补 dashboard/alert；Gamma/Prod 完成强网/弱网/重连/异常中断的触发→通知→恢复→回滚演练，且 Prometheus label 不含 callId/userId。
+  - 状态: 进行中（2026-07-20 用户确认登记；同日已落地幂等 `RtcMediaQoeTracker` emitter、`rtc_qoe` mergeable hourly rollup、三条 SLS 黄金指标告警、LiveKit 6789 scrape 与媒体面 Prometheus 告警；异常恢复复核进一步修正“接听前已连 SFU 后取消”必须归 abandoned、接通率分子/分母共同排除 abandoned、`connection_lost` wire 对齐，并把不存在的 `livekit_node_dropped_packets` 替换为官方 `livekit_packet_loss_percent_bucket` P95。Dart QoE 5 例、Ops contract 与 `promtool` 143 条规则通过。剩余为 Gamma/Prod 真实 series、可执行 dashboard readback、弱网/重连/异常中断触发→通知→恢复→回滚演练；R-OBJ-002 不重复）
 
 - [ ] R-CLOUD02 Assistant consent 失败开放且未按 actor 隔离
   - 区域: App / Service
@@ -1115,7 +1182,7 @@
   - 影响: 网络故障、账号切换或撤权后可能错误继续使用敏感能力，审计事实与用户选择不一致。
   - 涉及文件: `quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart`、Assistant consent metadata、服务端 consent store。
   - 验收: consent 由服务端版本化事实唯一决定；端侧按 actor 隔离、失败关闭且不伪成功；grant/revoke/read、切号、离线、过期与审计测试全绿。
-  - 状态: 进行中（2026-07-15 复核；Assistant consent HTTP 入口继续要求经 JWT 验签写入的 account principal，伪造 `X-Client-User-Id` local contract 返回 401；尚未补齐端侧 actor 分区、版本化 consent 唯一真相、撤权即时拒绝和 Gamma 负测，不能关闭）
+  - 状态: 进行中（2026-07-15 复核；Assistant consent HTTP 入口继续要求经 JWT 验签写入的 account principal，伪造 `X-Client-User-Id` local contract 返回 401。2026-07-19 B8 收口（CR-20260719-122）：服务端 consent 改版本化事实流水（grant/revoke 追加、consentId 含 grantedAt 时间戳），执行点双 gate（CreateTurn 入口 + agent loop 工具执行前）fail-closed，store 不可用/查询失败一律拒绝敏感能力，撤权即时拒绝有 local_contract + 真实 PG api_integration 证据；creationAssistantEnabled 由失败开放改失败关闭；端侧 AssistantConsentStore 按 actorScope 分区、远端失败不再本地合成成功（假 fallback 全删，CloudException 单轨）。剩余不能关闭项：Gamma 环境负测证据）
 
 - [x] R-CLOUD03 Behavior / Ops 离线队列可跨 actor 重放
   - 区域: App / Service / Ops
@@ -1143,6 +1210,8 @@
   - 涉及文件: `quwoquan_app/lib/cloud/**`、`quwoquan_app/packages/quwoquan_cloud_contracts/**`、App composition roots。
   - 验收: pure contracts、独立 mock package/alpha runner 和 production Remote root 物理隔离；prod kernel/AOT/SBOM 无 Mock/fixture/Noop 可达；空 Remote/fallback 为零。
   - 状态: 进行中（2026-07-16 复核；Realtime 已从 production 删除 `MockRealtimeConnectionDelegate`/`MockRealtimeEventCatalog` 和 mode 热切换，production provider 固定 Remote-only，alpha runner 从生成的 immutable bundle 注入 fixture，测试替身只在 `test/support`。本轮确认 Invite 旧 Repository/Mock/Remote/provider 无任何业务消费者后整条删除，不保留 alias，Mock 单调门从 25 收紧到 24。Report、Location、ProfileUpdateProposal 与部分 Content typed packet 仍保持已完成，但 App production 尚有 24 个 `Mock*`、48 个 abstract Repository、56 个 repository 命名文件、93 个 `lib/cloud/services/**` Dart 文件及 fixture runtime loader，prod kernel/AOT/SBOM 零可达尚未证明，不能关闭）
+  - 复核（2026-07-20，W3 chat）: chat 已删除 production `MockChatRepository` / `ChatMockData`、对应 barrel export 与 allowlist；`quwoquan_cloud_mock` 以 generated `AlphaFixtureBundle` 驱动单一 `AlphaChatStateEngine`，alpha runner 与测试复用同一个 App DTO 薄适配器，production composition 保持 `RemoteChatRepository`。`verify-app-mock-isolation`、chat parity/roster、cloud package boundaries、chat repository contract 与 widget contract 均通过；全仓 Mock inventory 已降至 15，但其他域 Mock/fixture 与 prod kernel/AOT/SBOM 零可达仍未闭合，本项继续进行中。
+  - B10 进展（2026-07-20）: rtc 已删除 production `MockRtcRepository`、`rtc_mock_data.dart`、运行时 DataSourceMode 分支与两条 allowlist 豁免；15 个 operation 经 pure contracts + generated client 拆为 5 个对象 Facet，production 只装配 Remote，alpha 由 `quwoquan_cloud_mock/src/rtc` 从 immutable bundle 注入。Mock 隔离、Cloud 包边界、generated manifest 与 runtime single path 均通过；全局事项仍因其他域存量保持进行中。
 
 - [ ] R-CLOUD06 存在性 UAT 与 Remote adapter 覆盖不足
   - 区域: App / Service / Ops
@@ -1151,7 +1220,9 @@
   - 影响: 当前测试通过不能证明真实页面、generated client、错误恢复和四环境端到端可用。
   - 涉及文件: `quwoquan_app/test/{api_integration,user_acceptance}/**`、`specs/03_TESTING_STRATEGY.md`、coverage/no-fake gate。
   - 验收: 逐 operation 的 local contract + Dart Remote gamma API integration + 行为型页面 UAT 闭合；路径存在、动态 skip、自 seed 和 Memory adapter 不计通过。
-  - 状态: 进行中（2026-07-16 复核；ChatConversationPage 已用真实 widget/Provider 行为验证发送、权限拒绝与 realtime fixture，并删除文件存在性 UAT、Mock realtime 假 UAT及 `ChatDetailPage` 兼容别名；coverage/acceptance/no-fake 门通过。Chat 的 5 项真实 Mongo/Redis API integration 通过。最新 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 报告 `.qwq_output/env/gamma/runs/20260716T030836Z-verify-gamma-local/report.json`：Gamma package、拓扑、T2 media、T4 page smoke/media surface 通过，但 T3 `.qwq_output/env/gamma/runs/20260716T030856Z-local-gamma-t3-gamma-local/t3_report.json` 失败。固定 Comment Idempotency-Key 已改为同一 run 稳定、跨 run 隔离，runtime parent/reply/reaction/media bind setup 均通过；剩余 endpoint 仅 7 passed，另有 4 contract_blocked、5 个 metadata blocked operation 被旧 Gamma 服务 200 错误接受，以及 Assistant/creator-pool/Location/Notification/RTC 共 7 个 `not_ready`。Entity 源码已接 generated default-deny，本地三条 blocked route 403、未知 route 404；但 `.qwq_output/env/gamma/runs/20260716T031439Z-up-gamma-local/report.json` 因缺真实 `WECHAT_OAUTH_APP_ID` fail-closed，当前 User/Entity 新镜像未装入 Gamma，不能用旧容器证明修复。这证明真实 Dart Remote Gamma、设备与十 Journey 仍未闭合，不能关闭）
+  - 状态: 进行中（2026-07-16 复核；ChatConversationPage 已用真实 widget/Provider 行为验证发送、权限拒绝与 realtime fixture，并删除文件存在性 UAT、Mock realtime 假 UAT及 `ChatDetailPage` 兼容别名；coverage/acceptance/no-fake 门通过。Chat 的 5 项真实 Mongo/Redis API integration 通过。最新 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 报告 `.qwq_output/env/gamma/runs/20260716T030836Z-verify-gamma-local/report.json`：Gamma package、拓扑、T2 media、T4 page smoke/media surface 通过，但 T3 `.qwq_output/env/gamma/runs/20260716T030856Z-local-gamma-t3-gamma-local/t3_report.json` 失败。固定 Comment Idempotency-Key 已改为同一 run 稳定、跨 run 隔离，runtime parent/reply/reaction/media bind setup 均通过；剩余 endpoint 仅 7 passed，另有 4 contract_blocked、5 个 metadata blocked operation 被旧 Gamma 服务 200 错误接受，以及 Assistant/creator-pool/Location/Notification/RTC 共 7 个 `not_ready`。Entity 源码已接 generated default-deny，本地三条 blocked route 403、未知 route 404；但 `.qwq_output/env/gamma/runs/20260716T031439Z-up-gamma-local/report.json` 因缺真实 `WECHAT_OAUTH_APP_ID` fail-closed，当前 User/Entity 新镜像未装入 Gamma，不能用旧容器证明修复。这证明真实 Dart Remote Gamma、设备与十 Journey 仍未闭合，不能关闭。2026-07-19 B8：assistant 域 5 个页面 UAT（对话/half sheet/设置/历史/反馈）已从路径存在性伪验收改为真实页面 pump + 四类 case（load_success/empty_permission_error/primary_cta/trace_context）20 例全绿，错误负例断言结构化 CloudException 枚举同源；assistant 服务端新增 conversation/run 持久化与 learning facts 的真实 Mongo/PG/Redis HTTP api_integration）
+  - B8 页面深化（2026-07-20）: 对话页新增结构化错误卡/原请求重试与真实 phase，production half sheet 恢复真实呼出并透传首条问题，技能中心和管理页新增任务/记忆四态且移除所有假开关/演示订阅；assistant UI local_contract 38 例、cloud local_contract 8 例、页面 UAT 20 例及 assistant-service 全包通过。全局事项仍受其他域与 Gamma Remote 证据约束，继续进行中。
+  - B10 进展（2026-07-20）: rtc 的 Facet/Provider、来电协调、媒体重连、PiP、screen-share、离线 push 与 QoE 已由 local_contract/widget contract 覆盖，RTC 全量真实 Mongo/Redis api_integration 与 Chat CallEnded→system_call_log 集成测试通过；原两条以 Provider override/Fake LiveKit 冒充 production Remote 的 UAT 已删除，不计商用证据。Gamma production Remote 真机来电→接听→媒体→挂断/重连旅程仍被受控 SLS、APNs/FCM 与 LiveKit 真实凭据及设备 readback 阻断，故本项继续进行中。
 
 - [x] R-CLOUD07 服务目录跟踪本机构建二进制
   - 区域: Service / Supply Chain
@@ -1171,14 +1242,14 @@
   - 验收: 四向集合严格相等且由同一 module mapping 生成/验证；package contract 与 gamma/prod 路由探针通过。
   - 状态: 已解决（2026-07-13；类型化 service asset profile 与 `verify_service_layout.py` 已验证 process/module/build/service specs 四向闭包；服务资产布局与脚手架 local contract 4/4 通过）
 
-- [ ] R-CLOUD09 realtime-gateway 缺少源码与构建 provenance
+- [x] R-CLOUD09 realtime-gateway 缺少源码与构建 provenance
   - 区域: Service / Ops
   - 域: `gateway-orchestrator-foundation/realtime-gateway`
   - 原因: workload 已登记并使用镜像，但仓内未证明源码根、Docker build context、固定 digest 或外部来源。
   - 影响: 无法审计、复现、修复或回滚 realtime 生产工作负载。
   - 涉及文件: `quwoquan_service/services/realtime-gateway/**`、`quwoquan_ops/environments/workload_topology_inventory.yaml`。
   - 验收: 补齐第一方源码/build/contract tests/镜像流水线，或登记受控外部 source/digest/SBOM/provenance；禁止 `latest`。
-  - 状态: 进行中（2026-07-15 复核；端侧 Remote-only 改造未产生服务端 provenance；仍无可关闭本项的第一方源码、固定 digest、SBOM 或 provenance 新证据，`realtime-gateway` 继续不接入 prod root）
+  - 状态: 已解决（2026-07-20：第一方源码/Dockerfile/合同测试已落地；`generate_service_supply_chain.py` 为 realtime-gateway/rtc-service 生成 git revision、Dockerfile/source-tree SHA-256 与 SPDX-2.3 SBOM，Gamma package `.qwq_output/env/gamma/runs/20260720T134702Z-package-gamma-local` 已生成并校验；gamma/prod edge compose 禁止 `latest`，source image 使用固定 release ref，prod rootless loader 同时核验本地/远端 content digest。`test_service_supply_chain_provenance__supply_chain__local_contract_test.py`、`test_prod_image_content_digest__supply_chain__local_contract_test.py` 与 prod edge runtime stack API integration 全绿。Gamma full cold-start 属运行证据 R-CLOUD01/R-RTC01/R-RTC02，不再阻塞本项 provenance 关闭）
 
 - [x] R-CLOUD10 topology 将业务 domain 与外部 capability 混用
   - 区域: Service / Ops
@@ -1188,3 +1259,668 @@
   - 涉及文件: `quwoquan_ops/environments/**`、ContractGraph source/build 引用、service layout verifier。
   - 验收: 引入类型化 asset profile 和 source-build-workload 闭包；LiveKit/TURN 使用 capability 字段，legal-static 使用 static-artifact profile。
   - 状态: 已解决（2026-07-13；`service_asset_profiles.json` 区分 source/package/external/static profile，source-build-workload 双向闭包门已通过；LiveKit/TURN 与 legal-static 不再冒充业务 domain）
+
+## 运维运营平台商用上线补齐（2026-07-19 用户确认执行）
+
+- [ ] R-OPS-PORTAL-AUTH Portal 无 OIDC/RBAC，actor 可由客户端 header 伪造
+  - 区域: Portal / Service / Ops
+  - 原因: Portal 请求未统一携带 Bearer，服务端仍存在 `X-Actor` 信任路径。
+  - 影响: 生产控制面可能越权读取或执行危险操作。
+  - 验收: OIDC+PKCE/JWKS、scope 菜单过滤、principal 派生 actor、401/403 结构化态和三层负测通过。
+  - 状态: 部分完成（2026-07-19 收口批次：platform-ops 生产 composition 改为 `EnforceGeneratedOperationAuthorization` + `requireControlPlanePrincipal`，控制面路径不再匿名可达（`TestControlPlanePrincipalGate`）；Alertmanager ingest 走独立机器 token fail-closed；Portal 生产构建经 `build_portal_release.py` 注入 OIDC issuer/client（`PROD_OPS_OIDC_*` vars）；仍需生产 IdP 就绪、scope 菜单过滤 UAT 与控制面对象 ContractGraph 全量登记）
+- [ ] R-OPS-DUAL-SIGN mutation 与审批/审计非原子，单人自批可执行
+  - 区域: Service / Portal / Ops
+  - 原因: 当前 dual mode 未强制两个不同 principal、payload digest 和同事务 outbox。
+  - 影响: 发布、配置和治理危险动作不可审计、不可追责。
+  - 验收: 双签状态机、职责分离、事务回滚、幂等键与 audit receipt 全绿。
+  - 状态: 部分完成（2026-07-19 收口批次：无生产者的推荐策略对象整体退场，双签样板迁移到真实 premium-pool takedown（同 payload digest、两个不同 principal，`TestPremiumPoolControlPlaneEndpoints`/`TestControlPlaneWorkflowEndpoints`）；platform release apply/rollback 保持双签；统一事务 outbox 与 production api_integration 仍待收口）
+- [ ] R-OPS-SLO-READBACK 发布 SLO 使用调用方数字而非真实监控读回
+  - 区域: CI/CD / Ops
+  - 原因: release gate 接收 workflow 输入/默认常数，未从 Prometheus 自动查询灰度 endpoint。
+  - 影响: 灰度可能在真实错误率或 P95 超标时继续放量。
+  - 验收: 固定 thresholds metadata、最小样本、窗口、Prometheus readback、自动回滚 receipt。
+  - 状态: 部分完成（2026-07-19：`stackctl deploy` 已强制非 dry-run 使用 `PROMETHEUS_URL` 读取 error rate/P95/Redis error rate，阈值、窗口和最小样本来自 `slo_thresholds.yaml`；本地高错误率演练已返回 rollback=20；仍需 prod-hosted 非 dry-run 三阶段报告证明）
+- [ ] R-OPS-OBS-STACK 生产无 Prometheus/Alertmanager 部署与通知路由
+  - 区域: Ops / Service
+  - 原因: alerts 仅有规则文件，scrape、receiver、OTLP endpoint 未形成生产 composition。
+  - 影响: 服务 RED、遥测 freshness、发布和数据链路故障无值班闭环。
+  - 验收: rootless service plane、scrape/route/receiver、触发→通知→ack→恢复演练通过。
+  - 状态: 部分完成（2026-07-19 收口批次：scrape 目标补齐 service plane 全部 compose 服务与 search/rtc 独立进程（realtime-gateway 实现未就绪暂不登记）；Alertmanager 每个 receiver 双路投递——外部值班 webhook + platform-ops `alerts/ingest` 回流（token 认证），值班可在 Portal 观测页 ack 并落审计（firing→ack→resolved 状态机 `TestPlatformAlertIngestAckLoopEmitsAudit`）；2026-07-20 FP4/FP5 收口：观测栈 compose 补齐基础设施 exporter 家族（node-exporter 主机 / podman-exporter rootless 容器 / mongodb / postgres / redis exporter）+ 对应 scrape jobs + `quwoquan_l4_infrastructure` 整体负荷与毛刺双阈值告警（CPU 85%/95%、内存、磁盘、网络错误、容器内存、数据面连接数与 exporter down）；修复 4 组死告警（AB validity 改用真实 `recommendation_feed_ab_experiment_validity_total`、coverage 改用离线 replay 单源 gauge、EventStore 发布失败改用 `mq_publish_total{status="error"}`、exposure_gini 删除在线死告警改离线报表评估）；content_contract recording rules 修复 operation id 漂移并补 ListMyReports 规则，`verify_content_object_alert_coverage` 全绿（60 operation / 46 ready）；promtool 122 规则全部通过。仍需生产主机触发→通知→ack→恢复真实演练与 exporter 家族部署证据）
+- [ ] R-OPS-DATA-SOURCE 治理/推荐/L1-L4/运营页仍依赖 seed 或硬编码
+  - 区域: Portal / Service / Recommendation
+  - 原因: 真实事件投影和 Prometheus/行为查询尚未替代测试 snapshot。
+  - 影响: Portal 显示“成功”不能证明商用数据闭环。
+  - 验收: PV/会话 UV/漏斗/页面强度/QoE 和治理推荐干预均由真实投影读取并对账。
+  - 状态: 部分完成（2026-07-19 收口批次：Portal 从 19 页收敛到 12 页真实数据最小集——删除 Settings/Segments/ScenarioOps×3/Experiments/PlatformGate/PlatformGovernance/PlatformRunbook/PlatformDependency 骨架页与全部空壳按钮；治理页改读 content-service 真实举报队列并可复核/结案；推荐页以 premium-pool 真实写链路为核心；观测页删除 index 合成 SLO 曲线；审计页改为跨双控制面真实审计检索；platform-ops 11 个无生产者 namespace 路由退场，topology 改由 process_domain_mapping/plane mapping/config ACK 真实派生；2026-07-20 FP4/FP6/FP7 收口：每接口 RED 下钻（`GetServiceRouteRED`，Prometheus service+route 维度 QPS/平均/P99/成功率，L1L4 页表格化，证据 `TestServiceRouteREDDrilldown`）；运营总览接 `user_activity_daily` 增长聚合（sessionId actor 段派生 actorHash 去重的 DAU/PV 序列、WAU/MAU 窗口 union、D1/D7 留存 cohort 交集、Mongo 持久化 + 30 分钟幂等聚合循环，证据 `TestGrowthAggregationAndOverview`）；页面矩阵热力图（`GetPageExperience` 按 pageName 聚合打开/逐页 TTI/停留/运行错误，行=metadata 登记页面全集、无数据显示 0 防 fake，证据 `TestPageExperienceHeatmap`）；仍需真实生产投影对账 UAT）
+- [ ] R-OPS-DR-CAPACITY 无注册备份恢复演练、RPO/RTO 与容量成本水位
+  - 区域: Ops / Data
+  - 原因: backup 脚本存在但没有生产 cron、异地副本、恢复证据和预算告警。
+  - 影响: 数据损坏、容量耗尽或成本失控时无法证明可恢复。
+  - 验收: pg/mongo/SLS 资源恢复 runbook、RPO/RTO、容量/成本告警及四环境演练报告。
+  - 状态: 进行中（2026-07-19；M6）
+- [x] R-OPS-ACCEPTANCE-PHANTOM acceptance 引用不存在的 planned 测试路径
+  - 区域: Service / App / Ops
+  - 原因: SIT2、行为和 session 测试声明与磁盘文件不一致。
+  - 影响: 验收诚信和 gate 追踪链断裂。
+  - 验收: 每个 acceptance test path 在磁盘有真实测试且 recorded/evidence 同步。
+  - 状态: 已解决（2026-07-20；`verify_test_specs.py` 新增 planned 文件存在性硬门，
+    recorded 文件继续要求 canonical 且真实存在，recorded command/缺失运行报告保持阻断；
+    同时删除对消失 acceptance 的静默容错。全仓摘除 76 条不存在的 planned 文件引用，
+    未生成空测试或 wrapper，未完成行为继续由 pending/partial、done_when 与
+    `test_evidence.cases` 表达。证据：
+    `quwoquan_ops/tests/local_contract/test_acceptance_evidence_refs__contract__local_contract_test.py`
+    3 项通过，`verify_test_specs.py` 与 `verify_test_coverage_map.py` 全绿，清理清单见
+    `.qwq_output/env/repo/runs/tests/acceptance-planned-refs/report.json`）
+- [x] R-OPS-STARTUP-IDEMPOTENCY 启动 proof 跨批复用导致第二批丢失
+  - 区域: App / Service
+  - 原因: 服务端从长期 proof 派生 batch key，而非从每批 canonical body digest 派生。
+  - 影响: 重复 ACK 后删除本地记录，事实未写入。
+  - 验收: 同 proof 异批、重放、部分 ACK 和真机断网补传测试通过。
+  - 状态: 已解决（2026-07-20；`TelemetryService.ReportStartupDiagnostics` 已将 proof 限定为匿名入口防滥用/限流信息，批次身份由完整 canonical records 的 SHA-256 `startup:` digest 唯一生成；pending/accepted ledger、真实存储确认与重复批 ACK 语义闭合。验证：`go test ./services/product-ops-service/cmd/api -run 'Startup|ReportStartup' -count=1`）
+- [x] R-OPS-RUNTIMELOG-DELIVERY RuntimeLogger WARN/ERROR 饥饿、无 DLQ/退避
+  - 区域: App / Service
+  - 原因: 先取 INFO 再过滤、422 卡队头、关键优先级未消费。
+  - 影响: 生产异常不可见且队列可能永久阻塞。
+  - 验收: 优先出队、TTL/DLQ/退避、网络恢复、422 过期和投递指标全绿。
+  - 状态: 已解决（2026-07-20；App `RuntimeLogBuffer` 扩展为可靠投递端口：ERROR/WARN 优先、低级别优先容量淘汰、72h TTL、指数退避 + 确定性 jitter、有界 DLQ、永久 4xx/422 解队头、临时网络/401/429/5xx 自动唤醒重试；`SecureRuntimeLogBuffer` 在 KeyStore/Keychain 中持久化 attempt/nextAttemptAt/DLQ，网络恢复可主动 `flush`。验证：`runtime_logger__local_contract_test.dart` 覆盖优先级、容量、422、transient retry、TTL、重启恢复；Dart analyzer 与 runtime diagnostics 测试全绿）
+- [x] R-CONTENT-REPORT-RETURN 举报结案通知与举报人进度回流断链
+  - 区域: App / Service / Ops / Portal
+  - 域: `discovery-content/content-display-journey-consistency`
+  - 原因: ReportResolved/ReportDismissed 曾只有 metadata 声明，notification-service 无 durable 消费；App 无 reporter 私有查询和进度页。
+  - 影响: 用户提交后不知道是否受理或结案，运营处置与用户旅程断开。
+  - 涉及文件: `quwoquan_service/contracts/metadata/content/report/**`、`quwoquan_service/services/{content-service,notification-service}/**`、`quwoquan_app/lib/ui/settings/pages/my_reports_page.dart`、`quwoquan_ops/portal/src/domains/product/GovernancePage.tsx`
+  - 状态: 已解决（2026-07-20；ListMyReports reporter 隔离 + Report durable stream → AppMessage + 通知深链；content report/moderation api_integration、notification Redis+Mongo api_integration、App UAT 与 Portal test/build 通过）
+
+- [x] R-CONTENT-MORE-FAKE Post 更多面板存在开发中假入口与重操作轻文案
+  - 区域: App
+  - 域: `discovery-content/content-display-journey-consistency`
+  - 原因: 打赏、私信、字体设置、功能反馈无正式对象或 API，却以可点击入口展示；拉黑被写成“不喜欢该作者/消失吧”。
+  - 影响: 用户点击无结果、误解重操作后果，且打赏绕过 R-LEGAL-001。
+  - 涉及文件: `quwoquan_app/lib/components/settings_conversation/more_actions_popup/**`
+  - 状态: 已解决（2026-07-20；无对象能力全部撤出，config 强类型化、文案单轨、死代码删除；`more_action_popup__functional__local_contract_test.dart` 通过）
+
+- [x] R-CONTENT-BLOCKED-KEYWORD 屏蔽词自动提取失效且无管理入口
+  - 区域: App / Service
+  - 域: `user-identity-profile-relationship/UserSettings`
+  - 原因: 双反斜杠正则无法正确识别中文，页面自动取首 token 后静默写入，用户无法查看或删除。
+  - 影响: 用户以为内容已过滤但偏好可能为空或错误，弱网缓存还可能重新展示已屏蔽内容。
+  - 涉及文件: `quwoquan_app/lib/core/utils/content_keyword_suggester.dart`、`quwoquan_app/lib/ui/settings/pages/blocked_keywords_page.dart`、`quwoquan_app/lib/cloud/services/content/content_repository_remote.dart`
+  - 状态: 已解决（2026-07-20；中文/话题候选红测转绿、用户确认、typed UserSettings 管理页、Feed header 与缓存回退同源过滤；App local_contract/UAT 通过）
+
+- [x] R-OPS-BEHAVIOR-CONSISTENCY Behavior gzip/幂等/发生时间/outbox 未闭合
+  - 区域: App / Service / Recommendation
+  - 原因: gzip 请求未解压、clientEventId 可空、无端侧 occurredAt、失败仍可能 204。
+  - 影响: 推荐反馈重复或丢失，交集归因和运营指标失真。
+  - 验收: gzip、离线补传、唯一索引、事务 outbox、错误状态码和一次生效端云测试通过。
+  - 状态: 已解决（2026-07-20；HTTP 边界 `readBehaviorRequestBody` 支持 gzip 且按解压后 128KiB 限制；`clientEventId`/`occurredAt` 必填并限制 72h replay/5min future；Mongo `userId+clientEventId` 唯一索引承担幂等；like/comment/report 只接受对象命令事务 outbox 权威事实，通用端点拒绝双计；失败返回结构化非 2xx，成功才 204。验证：content HTTP gzip local_contract、behavior application 全测与 `go test ./services/content-service/tests/api_integration -run Behavior -count=1`）
+- [ ] R-OPS-LOG-COLLECTOR 服务结构化日志没有统一 collector 上云
+  - 区域: Service / Ops
+  - 原因: 只有 product-ops 直写旁路，缺少 stdout→collector→SLS 的重试/spool链。
+  - 影响: 其他服务异常无法进入统一查询与告警。
+  - 验收: collector 配置、去高基数 route、重试/spool、warn/error 采样和服务矩阵证据通过。
+  - 状态: 部分完成（2026-07-20 FP3 收口：全部 14 个 Go 服务装配 `RuntimeLogExportWriter`，stdout/stderr 镜像经 `NewHTTPRuntimeLogFieldExporter` 批量推送 product-ops 内部通道 `/ops/internal/runtime-logs:ingest`（`X-Runtime-Log-Ingest-Token` 机器凭据 fail-closed、app sourceType 拒绝、幂等摘要），product-ops 自身继续直写 SLS；render 注入 `RUNTIME_LOG_INGEST_URL/TOKEN`；证据 `TestInternalRuntimeLogIngestTokenGate`。同批落地"按用户查日志"（correlation.actorHash 服务端注入 + drilldown `actorHash` 敏感权限查询）与日志文本检索（`messageContains` SLS 短语匹配），证据 `TestRuntimeLogActorAndTextQueries`；容量治理声明落 `runtime_observability.yaml#capacity`（3 天滚动 / 512GB 基准弹性至 50TB）。遗留：推送失败仅 stdout 兜底（无本地 spool 重试），生产服务矩阵证据待部署演练）
+- [ ] R-OPS-GH-PROTECTION GitHub 分支/环境/runner/Action 安全保护不足
+  - 区域: CI/CD
+  - 原因: required checks/reviewer、最小 token、Action pin 和 runner 物理隔离未闭合。
+  - 影响: 未验证代码或 PR 代码可能触达生产密钥与执行面。
+  - 验收: branch protection、production reviewer、CODEOWNERS、SHA pin、runner 隔离和 secret scan。
+  - 状态: 进行中（2026-07-19；M2/M3）
+- [ ] R-OPS-BUILD-DEPLOY-DIGEST 构建与部署不是同一不可变制品
+  - 区域: CI/CD / Supply Chain
+  - 原因: `latest`、artifact 重生 fallback、无 OCI digest/SBOM/signature/provenance。
+  - 影响: 无法证明灰度和回滚运行的是已审计构建。
+  - 验收: Build Once、ReleaseManifest、same digest 机器门、缺 artifact 立即失败。
+  - 状态: 进行中（2026-07-19；M3）
+- [ ] R-OPS-GRAY-ROLLBACK-EXEC 灰度无真实流量、release-state 分脑且无生产锁
+  - 区域: CI/CD / Ops
+  - 原因: replicas/port 不形成 traffic target，SLO 只比较输入，rollback 只写本地 YAML。
+  - 影响: 并发发布和错误放量可能造成不可逆生产事故。
+  - 验收: traffic target、驻留/样本策略、CAS ledger、全局 lock、Prometheus readback 和真实回滚。
+  - 状态: 部分完成（2026-07-19 收口批次：release-state 三方写读路径统一为 `env/prod/local/prod-hosted/process/release-state/`（stackctl `_release_state_dir`、gray_rollout 脚本、platform-ops `readReleaseState` 同源），PlatformRolloutPage 可见真实 rollout 进度；`gray_rollout_stages.yaml` 删除无消费者的 traffic_target/min_dwell/min_samples/approval 字段并在 verify 脚本阻断回潮（样本/阈值唯一来源 `slo_thresholds.yaml`，审批由 GitHub environment 承担）；灰度实例定位如实改写为"同机独立端口发布验证实例"；`observeReleaseSLO` 改查 Prometheus 并如实标注 source=prometheus/manual/unavailable，不再伪造默认值；2026-07-20 FP2 收口：灰度路由策略引擎落地——IaC 真相源 `gray_routing_policy.yaml`（appVersions/userIds/provinces/carriers 四维 OR 匹配，GB/T 2260 省级码与运营商枚举），`render_prod_plane_stack.py` 把启用策略编译为 prod 栈 Caddy named matcher + gray upstream 转发（gray 栈不注入防转发环），端侧 `X-Client-App-Version`/`X-Client-User-Id`/`X-Client-Region-Code`/`X-Client-Carrier` 维度头缺失=不匹配（不猜测）；platform-ops 只读策略端点 + PlatformRolloutPage 展示；证据 `test_gray_routing_policy__local_contract_test.py`（4 用例）+ `verify_gray_routing_policy.py` 已接 gate；仍需真实流量分流演练、CAS receipt 与生产回滚演练证据）
+- [ ] R-OPS-PROD-COLDSTART prod 渲染配置路径/证书/Secret 漂移
+  - 区域: Ops / CI/CD
+  - 原因: stack.env 与服务读取路径不一致、Secret 不完整、Caddy 仍使用 local_certs。
+  - 影响: 同 digest 冷启动和 ops/media HTTPS 探针无法证明。
+  - 验收: clean hosted host 同 digest 冷启动、完整域名证书、CSP/HSTS 和 SPA fallback。
+  - 状态: 进行中（2026-07-19；M3）
+- [ ] R-OPS-BACKEND-CONTRADICTION 文档声明 ACK 与真实 SSH-hosted 执行面冲突
+  - 区域: Ops / Architecture
+  - 原因: deployment design、cloud_provider 和实际 stackctl 执行面不一致。
+  - 影响: 回滚、凭据隔离和故障处置 runbook 不可执行。
+  - 验收: SSH-hosted rootless podman 作为当前唯一执行面，ACK 明确为后续演进，不再有空平面声明。
+  - 状态: 进行中（2026-07-19；M0/M3）
+- [ ] R-OPS-CONFIG-PLANE-PROD 配置中心（platform-ops-service）生产链路收口
+  - 区域: Ops / Service / Portal
+  - 原因: platform-ops-service 此前无 prod 部署位，config_sync 缺 URL 静默跳过，"配置发布→拉取→ACK→drift"闭环只在 beta 本地成立。
+  - 影响: 生产配置热更、drift 检测与 Portal 配置中心页在 prod 均为断链。
+  - 验收: prod service plane 拉起 platform-ops-service，config ACK 上报覆盖全部 governed services，Portal drift 页真实收敛。
+  - 状态: 部分完成（2026-07-19 收口批次：platform-ops-service 登记 prod 部署位（process/module/workload/plane 四映射 + `rootlessGovernedComposeServices` + render 注入 POSTGRES/Redis/Prometheus/ALERT_INGEST_TOKEN）；product-ops config_sync 在 prod 缺 `PLATFORM_OPS_BASE_URL` 时 fail-fast，gamma compose 与 prod 渲染均已注入该地址；Portal 生产部署链路落地（`build_portal_release.py` 不可变 release + 渲染面 `runtime/portal` + ops 域名 Caddy SPA 站点 + workflow 构建步骤）；2026-07-20 FP1 IaC 收口：`ConfigLayer` Postgres 聚合 + `UpdateServiceConfig`/`ListConfigLayers` 写路径与 pgoutbox/Redis 依赖整体退场，对象重建为 `ops/ConfigSnapshot` external_reference（发布包只读快照四 query：键目录 / resolve / snapshot / domains），resolve 数据源改为发布包配置树（config-root 或仓库双模式），`config_schema.yaml` 全部 `ui_editable: false`；四类配置域（云侧服务 / 端侧 App / 数据工程 catalog / 平台自身）随渲染落 config-root 供生产只读查看；release 配置双版本保留（当前灰度 + 上一版本）由 `prune_config_releases.py --check` 门禁阻断（已接 gate_repo.sh）；PlatformConfigPage 重构为 IaC 只读快照页；证据 `TestConfigSnapshotHTTPBoundary`/`TestConfigWriteRoutesRetired*`/`TestConfigSnapshotResolveUsesReleasePackageOverrides`。遗留：config_sync 接入方目前仅 product-ops/circle-service，content/chat/user 等 compose 服务与聚合 seed-box 尚未接入 `RunConfigSyncLoop`，drift 页对它们仍是盲区；控制面对象 operation 的 ContractGraph 全量登记随 app-cloud-business-object-commercial-closure 收口）
+
+## 业务对象商用闭环推广（2026-07-19 用户批准 12 批计划登记）
+
+> 唯一执行规划：`specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/object-batch-rollout-plan.md`（B0–B11）。以下为推广勘察确认、跨批次存在的长期风险；各批局部缺口不单独登记，由对应批次节承载。
+
+- [ ] R-OBJ-001 对象级 metric 告警与 dashboard 断链
+  - 区域: Ops / Service
+  - 域: `runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure`
+  - 原因: 各对象 `service.yaml` 已声明 telemetry metric 与 SLO（如 `content_post_publication_submit`、`user_profile_proposal_command`），但 `quwoquan_ops/observability/monitoring/` 的告警与 dashboard 只按服务级通用指标（`http_server_requests_total by service`）聚合，没有任何对象级 metric 被消费；与 R-OPS-OBS-STACK（生产无 Prometheus 部署）叠加后，metadata 中的 SLO 声明整体不可观测。
+  - 影响: 对象 operation 翻 `commercial.status: ready` 后其错误率/延迟劣化无法被值班发现；91 对象推广会把该断链复制 88 次。
+  - 涉及文件: `quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml`、`quwoquan_ops/observability/monitoring/dashboards/**`、各对象 `service.yaml` telemetry 段。
+  - 验收: B0 落地 verify 脚本（commercial ready 的 operation 其 metric 必须有告警/dashboard 消费，违规 GATE_BLOCK）并为三标本核心 metric 补 Prometheus 规则；后续批次逐对象随 S7 收口。
+  - 进展: 2026-07-19 B2 落地 content 域首份对象级告警组 `quwoquan_l2_content_objects`（发布/点赞/行为上报/媒体上传/举报错误率 + 详情/feed 读 P95，SLI 口径对齐各 operation telemetry+slo），并新增 `quwoquan_service/scripts/verify/verify_content_object_alert_coverage.py` 门禁（6 条核心主链缺告警即 GATE_BLOCK）挂入 `gate_repo.sh` run_service；其他域告警覆盖与通用（metric↔告警消费）verify 脚本仍随各批/B0 基建收口。2026-07-19 B8 落地 assistant 域告警组 `quwoquan_l2_assistant_objects`（run 可用性 99.9%/延迟 P95 1500ms 对齐 assistant_run service.yaml SLO、consent fail-closed 503、订阅 cron 停摆）。2026-07-19 B4 落地 circle 域告警组 `quwoquan_l2_circle`（circle-service 写路径错误率 >1% critical、命令 P95 700ms/读 P95 600ms 对照 metadata slo）。2026-07-19 B5 落地 chat 域告警组 `quwoquan_l2_chat_objects`（SendMessage 错误率 >2% critical + P95 800ms、ListInbox P95 500ms、ListMessages 错误率，对照 chat metadata SLO）。2026-07-20 B1 在既有 `quwoquan_l2_auth_login`（社交 provider 错误率、挑战/登录 P95）基础上补身份账号对象组：`AuthOtpFailureRateHigh`（OTP 发送/手机号登录 5xx >1% critical，覆盖 authentication_challenge 一次性消费链）、`UserSettingsWriteFailureRateHigh`（PATCH /user/settings/* 5xx >2%，409 CAS 冲突不计入）、`PersonaCommandFailureRateHigh`（persona 生命周期命令 5xx >2%）。2026-07-20 B6.2 落地 entity 域读/命令错误率与 P95、homepage-import 与 projection/outbox 健康面板（`quwoquan_entity_homepage` + `l2_entity_objects.json`），新增 `verify_entity_object_alert_coverage.py` 从 ContractGraph 校验 ready operation 的 telemetry/SLO 与告警/仪表盘真实 PromQL 覆盖并串入 `gate_repo.sh`。
+  - 状态: 部分收口（2026-07-19 content/assistant/circle/chat 域完成；2026-07-20 user 身份账号/entity 域完成；其余域待各批）
+
+- [ ] R-OBJ-002 端侧行为埋点多域缺失（漏斗与推荐归因断链）
+  - 区域: App
+  - 域: `runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure`
+  - 原因: 评论 UI（`lib/ui/content/comments/`）、资料提案 UI、chat 全域（10 页）、rtc 全域（5 页）、assistant 全域（5 页）、circle 页面均无曝光/停留/互动埋点；Post 创作入口仅 1 处 `reportBehaviors`；违反 R20/R21。
+  - 影响: 首页→内容→互动→社交的漏斗分析起点缺失，推荐 HotPath 缺互动信号，运营指标不可算。
+  - 涉及文件: `lib/ui/content/comments/**`、`lib/ui/user/widgets/profile_update_proposal_review_sheet.dart`、`lib/ui/chat/**`、`lib/ui/rtc/**`、`lib/ui/assistant/**`、`lib/ui/circle/**`、`lib/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart`。
+  - 验收: 各推广批次 S4/S7 按域补齐（B0 评论/提案、B4 圈子、B5 chat、B8 assistant、B10 rtc），事件先进 metadata telemetry catalog 再 codegen；页面矩阵 P4 列同步。
+  - 进展: 2026-07-19 B11 消息页通知维度接入曝光/点击埋点（`JourneyEventTracker` journey=notification_inbox，`product_action` 目录事件）；2026-07-19 B5 确认 chat 全部页面的曝光/停留由路由级 `page_open`/`page_return` 自动埋点承载（`page_access_log_util` + AppPages），消息发送接入 `operation_result`（operationId=SendMessage，success/failure+durationMs+failReasonCode），语音收发沿用 `voice_message_observability`，11 处静默异常接 `runtime_exception` 上报；chat 页内互动专项事件（如会话内菜单动作细分）仍待 telemetry catalog 扩展。2026-07-19 B3 关系域接入关注/取关（journey=relationship）、打招呼发起（journey=greeting）、关注频道点击含未读信号（journey=following_channel）三组 `product_action` 埋点。2026-07-19 B3.5 补齐拉黑解除、打招呼回复/忽略/撤回、通讯录搜索/匹配/扫码/添加、添加联系人入口与分身管理停留动作埋点；新增页面同时进入 route 级 page_open/page_return。2026-07-19 B6 entity 域接入评价发表/编辑/删除（journey=entity_homepage）`product_action` 埋点；entity 7 页 `app_pages.yaml` collectPageAccess 全覆盖复核确认。2026-07-19 B2 举报三 surface（沉浸浏览/首页 feed/用户主页，journey=content_report）接入 `product_action` 成败漏斗（failReasonCode+durationMs）；媒体上传协调器接入 `operation_result`+`performance_sample`（operationId=content.media_upload_session.UploadMedia，发布/评论附件/圈子存储/聊天五构造点注入）。2026-07-19 B8 assistant 5 页接入曝光埋点（对话/技能中心/管理页经 `writeAppPageAccessOpen` 现行 pageAccess 通道，webview 补 RouteSettings name 经 observer 获 open+return 停留，half sheet 复用 metadata surface + 通用 AppLog pageAccess 管道；学习回路 submitFeedback → ReportInteractionEvent typed 上报接通），无需为单一弹层新增第二套专属事件。2026-07-19 B4 circle 域接入对象级行为信号：join/leave 命令成功接 `ReportCircleBehavior`（join_circle/leave_circle 事实，BehaviorEventType 补 leave_circle），详情页 impression/dwell fire-and-forget 上报（游客态守卫）；hub/stats/edit/detail 页面级曝光/停留确认由 AppPages collectPageAccess observer 通道覆盖。
+  - B10 进展（2026-07-20）: rtc 5 页均由 generated AppPages `collectPageAccess` 自动承载 `page_open/page_return`；`rtc_call_outcome` 记录结果/时长/参与人数，`realtime_connect_result` 记录 WebSocket/LongPoll 建连结果；metadata catalog 与 local_contract 同源。RTC 域页面曝光、停留和核心通话结果已闭合；全局事项仍因其他域剩余缺口保持待办。
+  - 页面商用成熟度专项进展（2026-07-20，CR-20260719-124）: chat 会话长按菜单的 forward/select/copy/recall 接入 `JourneyEventTracker(journey=chat_conversation)`；无 DeleteMessage 云契约的假删除入口已移除；handled exception 统一携 RuntimeFailure code/kind/reason 进入 runtime log。范围内页面继续复用 route 级曝光/停留与既有内容深度/互动事件，不新增第二套埋点。
+  - 联系人商用收口进展（2026-07-20）: 联系首页筛选切换与联系人打开接入 `JourneyEventTracker(journey=relationship, action=view_contact_filter/open_contact)`；新增 `l2_relationship_commercial.json` 对齐四条关系域告警，并明确黄金指标由 SLS `product_action` 计算、Prometheus 仅表示服务健康。chat 联系页互动专项缺口已关闭，事项仍因其它域缺口保持待办。
+  - 状态: 待办（2026-07-19 登记；分批承载）
+
+- [ ] R-OBJ-003 通知链两端断：业务事件不产通知、推送到不了设备
+  - 区域: App / Service
+  - 域: `notification` / `integration`
+  - 原因: notification-service 中段闭环（AppMessage+outbox 同事务、delivery worker、经 integration 外发均有 reliability 证据），但上游只有 assistant-service 接入，chat/content/circle 业务事件不产生通知；下游 integration 无真实 push provider（APNs/FCM），App 无 push token 注册，也没有通知中心页面（`lib/ui/notification/` 不存在）。
+  - 影响: 评论/点赞/关注/圈子申请等核心互动无法触达用户，留存与召回运营手段缺失。
+  - 涉及文件: `quwoquan_service/services/notification-service/**`、`quwoquan_service/services/integration-service/**`、`quwoquan_service/contracts/metadata/integration/push_delivery/**`、`quwoquan_app/lib/cloud/services/notification/**`。
+  - 验收: B11 补业务事件→notification 生产者与通知中心页面；push provider 与 token 注册按 B11 决策项执行（实现 or 显式降级站内信并在 metadata 标注）。
+  - 进展: 2026-07-19 B11 收口**站内信上游与消费面**：七源业务事件（评论/回复、点赞、引用发布、关注、打招呼、圈子成员加入、圈内群申请/审批）经 durable Redis Stream → notification-service 消费 adapter → AppMessage inbox 全链打通（`interaction_notification_stream__api_integration_test.go` 真实 Redis+Mongo 证据）；消息页`通知`维度真实渲染/跳转/已读/未读徽标（D3 复用消息页，不建独立通知中心页）。**push 外送按用户决策 D1 显式降级站内信**：`push_delivery`/`notification_delivery_job` metadata block_reason 已标注 deferred，APNs/FCM provider、App push token 注册与签名回执仍未实现。
+  - 联系人商用收口复验（2026-07-20）: 关注、打招呼站内信回流与消息页入口继续有效；本轮未伪造 APNs/FCM 凭据或设备回执，外部 push 仍按既有 deferred 决策保持未关闭。
+  - 状态: 部分收口（2026-07-19 站内信闭环完成；push 外送 deferred，待真实凭据后单独收口）
+
+- [x] R-OBJ-004 AB 实验分桶双轨：运行时哈希分桶与 Experiment 控制面对象未统一
+  - 区域: Service / Ops
+  - 域: `recommendation` / `search` / `ops`
+  - 事项: 仓内存在两套并行实验分桶机制——运行时轨道（`runtime/recommendation/policy` 的
+    `ExpScoringWeights`/`ExpModelVsRule`/`ExpModelVersion` 与 search 侧等价物，按 userId 哈希 +
+    静态 policy preset 分桶，feed/评分/搜索线上实际生效）与控制面轨道（ops `Experiment` 聚合 +
+    `ExperimentAssignmentFact` PostgreSQL 事实 + policyVersion CAS，具备审计与统计但无线上
+    业务消费者）。两轨道的分桶身份、版本语义与统计口径互不相通，AB 结论无法对齐审计事实。
+  - 原因: 推荐/搜索的实验需求早于控制面对象落地，policy 轨道以代码内 preset 快速迭代；
+    控制面对象按商用范式建成后未回接运行时。
+  - 影响: 运营在 Portal 看到的 assignment 统计与线上真实分桶无关；实验回滚/灰度审计链断裂；
+    同一用户可能在两轨道得到不同桶。
+  - 涉及文件: `quwoquan_service/runtime/recommendation/policy/**`、
+    `quwoquan_service/services/product-ops-service/internal/**/experiment/**`、
+    `quwoquan_service/contracts/metadata/ops/experiment*/**`。
+  - 验收: 统一到单一分桶真相源（推荐方向：运行时轨道消费 Experiment 聚合的 policyVersion 与
+    variants，分桶结果落 ExperimentAssignmentFact），或显式冻结其一并在 metadata 注记；
+    统一前 B9 已将 app consumer 声明 deferred、guard 保持 default-deny。
+  - 状态: 已解决（2026-07-21）。商用分桶统一为
+    `runtime/experiments.AssignBucket`，推荐与搜索只消费该 resolver，实际曝光/查询事实记录
+    服务端权威 bucket；尚未具备 durable runtime binding 的 Product Ops
+    `Experiment`/`ExperimentAssignmentFact` 已在 metadata 标记
+    `OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN`、generated commercial guard 保持
+    default-deny，Portal 实验入口已移除，避免离线 assignment 统计冒充线上事实。
+    验证证据：`python3 quwoquan_service/scripts/recommendation/verify_experiment_single_track.py`、
+    `go test ./runtime/experiments ./runtime/recpolicy`、
+    `go test ./services/search-service/internal/application` 全绿；门禁已接入
+    `verify_recommendation_service_contract.sh`。
+
+- [x] R-OBJ-005 搜索灵感页把 Remote 空态/失败伪装为合成热门内容
+  - 区域: App
+  - 域: `search`
+  - 事项: `quwoquan_app/lib/ui/search/providers/search_coordinator_execution.dart` 在
+    inspiration Remote 请求失败或返回空集合时，回退 `_guessKeywordBatches`、
+    `_defaultHotCircles()`、`_defaultHotLocations()` 的客户端硬编码词条、圈子人数与地点卡。
+  - 原因: B7 搜索与标签批次完成 typed 接口和反馈链后，旧搜索灵感原型回退未随 Remote-only
+    收口删除，页面把「数据为空/服务失败」错误地呈现为成功数据。
+  - 影响: 用户看到无法追溯、不可运营配置且可能已失真的热门搜索/圈子/地点；失败率和空结果率
+    被 UI 合成成功掩盖，运营漏斗与推荐归因失真，并违反 production Remote 禁止 fixture/fake
+    fallback 的硬约束。
+  - 涉及文件: `quwoquan_app/lib/ui/search/providers/search_coordinator_execution.dart`、
+    `quwoquan_app/lib/ui/search/pages/global_search_page*.dart`。
+  - 验收: 删除全部客户端合成灵感数据；Remote 空集合展示正式空态，RuntimeFailure 展示可恢复
+    错误态；热门词/圈子/地点若为产品能力，先在 metadata 定义 typed Slice/运营配置，再经
+    Remote 与 local_contract/api_integration/user_acceptance 三层证据接入。
+  - 状态: 已解决（2026-07-19 B12；`search_coordinator_execution.dart` 删除全部
+    `_guessKeywordBatches`/`_defaultHotCircles`/`_defaultHotLocations` 与空集合顶替，
+    失败记录 observability 后返回空集合；`verify-app-mock-isolation` 与搜索定向测试为验收证据）
+
+- [ ] R-OBJ-006 身份/资料聚合接口、旧请求头模式与手写路由尚未对象化收口
+  - 区域: App / Service
+  - 域: `user` / `entity`
+  - 原因: `AuthRepository` 18 方法、`UserRepository` 12 方法、`HomepageRepository`
+    11 方法、`UserProfileRepository` 33 方法（2026-07-20 用户主页排查补充：Remote 808 行
+    + Mock 832 行，12+ 消费文件，Mock 仍在 production 目录 `lib/cloud/services/user/mock/`）
+    仍超 R02；App 仍有约 79 处 `forPage`；user-service 78 条业务路由全部
+    手写，尚未切 generated dispatch。
+  - 影响: metadata path/operation 与 transport 可能漂移，身份高频链路的鉴权、超时、
+    错误映射和对象依赖无法按 Facet 独立演进。
+  - 涉及文件: `quwoquan_app/lib/cloud/services/user/**`、
+    `quwoquan_app/lib/cloud/services/entity/**`、
+    `quwoquan_service/services/user-service/internal/adapters/http/**`。
+  - 验收: Auth/User/Homepage 拆为单接口 ≤10 方法的对象 Facet，生产组合根 Remote-only；
+    `forPage` 清零；user-service 复用 generated dispatch，手写业务 path 清零；三层测试与
+    四环境 Remote 证据回填 readiness。
+  - 状态: 待办（2026-07-19 B12 计划经用户 `/continue-dev` 批准登记；本轮已先将
+    UserRepository/UserProfile 生产装配改 Remote-only、UserRepository Mock 物理拆分，
+    其余按身份与资料专项轮原子执行）
+
+- [ ] R-OBJ-007 content 创作/阅读主链存在 12 个超千行红线文件
+  - 区域: App
+  - 域: `content` / `discovery`
+  - 原因: `article_read_only_book_deck.dart` 4884 行、`works_immersive_viewer.dart`
+    3195 行、`create_editor_provider.dart` 2360 行等 12 个文件超过 R03 1000 行红线，
+    并混有 26 处 `@Deprecated` 与编辑器占位能力。
+  - 影响: 创作、沉浸消费和 pageflip 是高频核心旅程，状态机与渲染职责耦合导致回归面不可控，
+    阻碍商用性能、可访问性和跨平台演进。
+  - 涉及文件: `quwoquan_app/lib/ui/content/**`、
+    `quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart`。
+  - 验收: 按领域职责拆到每文件 <1000 行并删除 deprecated/占位路径；pageflip 拆分严格遵守
+    BACK 主线和单 geometry 真相源；创作草稿、发布恢复、沉浸浏览与 pageflip visual 证据全绿。
+  - 进展（2026-07-20 create editor 子轨）: `create_editor_provider.dart` 已按职责拆为 5 个
+    provider 文件，全部低于 1000 行；26 个 `@Deprecated` 与其余无生产调用的
+    body/assets/block 编辑兼容方法、`article_document_models_projection.dart` 反向构造分支
+    和死 helper 已删除。生产调用与测试已迁移到 nodes API；草稿 Markdown 恢复、发布投影、
+    编辑/预览、分页布局共 129 个 local_contract 用例通过，相关 `flutter analyze` 通过。
+    专项 R03 维护性测试通过；全仓 `verify_file_line_budget.py` 仍被本子轨之外的 6 个新超标
+    文件阻断。
+  - 状态: 进行中（2026-07-20 create editor deprecated/旧投影子轨已解决；R-OBJ-007 仍保留，
+    待 `article_read_only_book_deck.dart` 等其余超千行目标按各自专项收口）
+
+- [ ] R-ASSIST-001 小趣会话生命周期端云断链（无查询面、本地双模型、无取消）
+  - 区域: App / Service
+  - 域: `assistant`
+  - 原因: 云端 AssistantConversation 聚合无 List conversations/turns 查询面；端侧云端对话
+    完成后不写回本地 `AssistantSessionStore`（appendMessage/save 零调用方），技能中心「最近
+    会话」读没人写的 store；run 无 cancel 命令，生成中只能等待或整条重发。
+  - 影响: 多会话、历史列表、重启恢复在架构上不可能实现；对标 ChatGPT/豆包的会话管理底线
+    缺失，M11 不可商用。
+  - 涉及文件: `quwoquan_service/contracts/metadata/assistant/assistant_conversation/**`、
+    `quwoquan_service/services/assistant-service/internal/application/conversation_service.go`、
+    `quwoquan_app/lib/assistant/session/**`、`quwoquan_app/lib/ui/assistant/**`。
+  - 验收: ListAssistantConversations/ListConversationTurns/CancelAssistantRun 经
+    metadata→codegen→端云实现；本地会话双模型删除；历史抽屉/续聊/停止生成三层测试绿。
+  - 进展（2026-07-20 CR-20260720-129）: 三个 operation metadata→commercial validate→
+    codegen(Go/Dart) 全通过；服务端 keyset 分页 Store + CancelRun CAS + cancel registry +
+    SSE cancelled 事件/重放落地，`go test ./services/assistant-service/...` 全包绿（含真实
+    Mongo api_integration 生命周期用例）；端侧删除本地会话双模型 10 文件，历史恢复改
+    CloudAssistantHistoryLoader，对话页历史抽屉/停止生成/重新生成接线，assistant 端侧
+    local_contract+user_acceptance 65/65 绿。剩余: gamma 环境证据、
+    `verify_ui_mock_isolation`/页面矩阵/语义/conversation-sheet 门禁已绿。
+  - 状态: 进行中（代码与本地三层证据已闭环；待 gamma api_integration 与 Patrol 证据后关闭）
+
+- [ ] R-ASSIST-002 assistant 工具面假实现与硬编码 grounding
+  - 区域: Service
+  - 域: `assistant`
+  - 原因: `tool/registry.go` 中 `search` 默认走 SliceBackend 合成文档、`web_fetch`/
+    `memory_search` 为 fake 实现（`mem_fake_1`）；`CreationSuggestGrounding` 未装配，
+    标签建议走「九寨/旅行/摄影」关键词 switch；`assistant_run/storage.yaml` 声明 1536 维
+    `contextEmbedding` 向量索引但全服务零 embedding 实现。
+  - 影响: 回答引用可能来自合成文档，违背 grounding 可信承诺；契约与实现漂移（单轨原则）。
+  - 涉及文件: `quwoquan_service/services/assistant-service/internal/application/tool/registry.go`、
+    `internal/application/creation_suggest_service.go`、
+    `contracts/metadata/assistant/assistant_run/storage.yaml`。
+  - 验收: search 接真 search-service 或从工具目录移除；fake 工具删除；CreationSuggest
+    装配真实 tag/entity grounding；向量契约落实现或从 storage.yaml 删除。
+  - 状态: 进行中（2026-07-20 小趣商用化规划经用户确认登记；本轮按阶段 2 实施）
+
+- [ ] R-ASSIST-003 assistant 模型日志泄露敏感内容与业务告警缺口
+  - 区域: Service / Ops
+  - 域: `assistant`
+  - 原因: `cmd/api/assistant_model_provider.go` 将模型请求/响应（含用户 prompt 全文）
+    整段 log.Printf 到 stdout，与 metadata `log_policy: metadata_only`（SENSITIVE）冲突；
+    `commercial_slo_observability.md` 声明的 4 条业务级告警（首响 p95、grounding 成功率、
+    consumer DLQ、wrong-destination）未落 `quwoquan_alerts.yaml`；`app_telemetry_catalog`
+    中 assistant 专属事件为 0。
+  - 影响: 生产日志合规风险；商用 SLO 无告警承载，运营黄金指标不可观测。
+  - 涉及文件: `quwoquan_service/services/assistant-service/cmd/api/assistant_model_provider.go`、
+    `quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml`、
+    `quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml`。
+  - 验收: 模型日志按 metadata_only 脱敏（默认只留长度/哈希/耗时，debug 开关显式豁免）；
+    4 条业务告警落地并对齐 spec 指标名；telemetry catalog 登记 assistant 事件并端侧接线。
+  - 状态: 进行中（2026-07-20 小趣商用化规划经用户确认登记；本轮按阶段 2/5 实施）
+
+- [ ] R-ASSIST-004 assistant run 非 token 级流式与 SSE 断线整条重发
+  - 区域: App / Service
+  - 域: `assistant`
+  - 原因: 模型调用为分阶段阻塞 JSON（无 `stream:true`），`answer_delta` 是服务端把
+    FinalText 人工切片 + 220ms 定时器模拟的伪流式；端侧 SSE 断线只能错误态整条重发，
+    未消费既有 resumeToken/seq 重放能力。
+  - 影响: 长回答首字延迟高、逐字体验为模拟；弱网下长回答不可恢复，低于业界流式底线。
+  - 涉及文件: `quwoquan_service/services/assistant-service/cmd/api/assistant_model_provider.go`、
+    `internal/application/agent_loop.go`、
+    `quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart`。
+  - 验收: model provider final 阶段支持 OpenAI 兼容 SSE 流式并回退非流式；端侧断线按
+    seq/resumeToken 续传；首 token 延迟打点可观测。
+  - 状态: 待办（2026-07-20 小趣商用化规划经用户确认登记；模型网关 stream 能力验证后实施）
+
+## 用户主页商用化收口（2026-07-20 用户批准规划登记）
+
+- [x] R-UPROF-001 拉黑后内容可见性缺服务端强制，feed 过滤依赖客户端 header
+  - 区域: App / Service
+  - 域: `user` / `content`
+  - 原因: feed 的 block 过滤依赖客户端传 `X-Blocked-User-Ids`/`blockedUserIds`
+    （`content_handler_helpers.go` `resolveBlockedUserIDs`），恶意客户端可绕过；
+    content-service `persona_follow_projection` 消费 PersonaBlocked 事件但只清
+    follow、不记录 blocked 对，且只服务推荐特征；`ListUserPosts`（他人主页作品列表）
+    无 viewer×author block 拦截，被拉黑者仍可直接调 API 拉取拉黑者作品。
+  - 影响: 拉黑的隐私承诺（被拉黑者不应看到我的内容）在 API 层不成立；对象生命周期
+    （block）与关联对象（内容可见性）不同步。
+  - 涉及文件: `quwoquan_service/services/content-service/internal/infrastructure/recommendation/persona_relationship_projection.go`、
+    `quwoquan_service/services/content-service/internal/adapters/http/content_handler.go`、
+    `quwoquan_service/services/content-service/internal/application/feed/feed_service.go`
+  - 验收: 投影记录 blocked 对并提供 IsBlockedBetween 查询；`ListUserPosts` 服务端
+    拦截 author→viewer block；feed 主链服务端过滤替换客户端 header 信任；
+    api_integration 负例（block 后他人主页作品/feed 不可见）+ App local_contract 对应断言。
+  - 状态: 已解决（2026-07-20）。`PersonaBlocked/PersonaUnblocked` 已投影方向性
+    `blocked` 事实并提供双向 `IsBlockedBetween/ListBlockedPersonaIDs` 具名 Reader；
+    source/target 两向 block 查询均有复合索引，consumer group 与 Mongo 索引在 composition
+    root 同步 fail-fast 后才启动服务。`GetPost` 对 blocked viewer 返回 404，
+    `ListUserPosts` 返回空页；feed 仅消费服务端投影且忽略伪造
+    `X-Blocked-User-Ids`；一级评论、回复预览、回复页、收到的评论及被拉黑 Post owner
+    的整页评论均服务端过滤并在投影读取失败时 fail-closed。App 主页拉黑成功后使
+    `profileNotifierProvider` 缓存失效并离开受限主页，不保留旧内容。
+    证据：`persona_relationship_projection__stream_replay__local_contract_test.go`、
+    `feed_block_visibility__local_contract_test.go`、
+    `post_query_facet__local_contract_test.go(TestGetPostEnforcesBlockServerSide/
+    TestListUserPostsEnforcesBlockServerSide)`、
+    `comment_block_visibility__local_contract_test.go`、
+    `persona_relationship_projection__stream_consume__api_integration_test.go`、
+    `post_feed_contract__api_integration_test.go(TestGetFeedFiltersBlockedUser)`、
+    `post_user_list_contract__api_integration_test.go(TestListUserPostsBlockedViewerReceivesEmptyPage)`、
+    `post_comment_contract__api_integration_test.go(TestCommentListEnforcesServerProjectedBlockFacts)`、
+    `profile_shell_widget__local_contract_test.dart(拉黑成功后失效主页缓存并离开受限主页)`
+    定向全绿。
+
+- [ ] R-UPROF-002 账号注销跨域级联已收口，账号封禁状态流仍缺生产者与级联
+  - 区域: App / Service / Ops
+  - 域: `user` / `content` / `chat` / `circle` / `notification` / `search`
+  - 原因: CloseAccount 已形成 metadata → user-service 事务 → durable outbox →
+    Content/Chat/Circle/Notification/Search 消费者的单轨闭环；但 `UserSuspended`
+    仍只有 events.yaml 声明，缺受信运营命令、可恢复状态机、事件生产者与跨域可见性投影。
+  - 影响: 自助注销合规主链已经成立；剩余风险是运营封禁不能可靠隔离既有内容、关系和会话，
+    也没有解封后的恢复语义与申诉审计。
+  - 涉及文件: `quwoquan_service/contracts/metadata/user/user_profile/{service,fields,aggregate,events}.yaml`、
+    `quwoquan_service/services/user-service/**`
+  - 验收: 注销部分要求 metadata 定义 operation 与级联事件、user-service 发布、
+    content/chat/circle/notification/search 幂等消费并清理或匿名化；封禁部分必须先冻结
+    Suspend/Restore 受信命令、审计/申诉与 active↔suspended 状态机，再由各域以可逆投影
+    隔离/恢复可见性，禁止复用不可逆 UserAccountClosed 清理器。
+  - 本轮收口（2026-07-20 M12 商用化阶段 0，user-service + App 端已闭环）:
+    1. metadata-first：`user_profile/service.yaml` 新增 `CloseAccount`（POST `/owner/account/close`，
+       actor=account、idempotency required、commercial ready、client_contract typed）；
+       `fields.yaml` 增 `CloseAccountRequestWire/CloseAccountResultWire`；`aggregate.yaml`
+       lifecycle 修正为 `[anonymous, active, suspended, closed]` 并补 CloseAccount 业务规则；
+       `events.yaml` 增 `UserAccountClosed`（consumers: content/chat/circle/notification/search/recommendation）；
+       `ui_surfaces.yaml` settingsAccountSecurity 绑定 CloseAccount；`verify-metadata` 全绿。
+    2. user-service：新 packet `application/account/user_account/CloseAccountFacade`（幂等收敛：
+       closed 终态 + 凭证全失效 + 分身全退役同一 PG 事务，session 全撤经 AccountSession 端口，
+       UserAccountClosed 经 UserEventPublisher，重放不重发事件）+
+       `infrastructure/account/user_account/persistence/CloseStore`；handler
+       `POST /owner/account/close` + generated operation security 强制鉴权；
+       登录检查 `accountState == "closed"` → `USER.AUTH.account_deleted` 错误（旧 `"deleted"`
+       状态值统一为 closed）；searchindex projector 消费 UserAccountClosed 删除索引。
+    3. App：contracts 包 `user_account_contracts.dart`（CloseAccountCommand/Result +
+       AccountLifecycleCommandWriter port）+ `RemoteAccountLifecycleCommandWriter`
+       generated-client adapter + `accountLifecycleCommandWriterProvider`（Remote-only）；
+       设置→账号安全页新增「注销账号」destructive 入口 + 完整删除范围/时限/不可恢复
+       确认对话；成功后 hardLogout 回安全态。page_object_contract 同步 close_account 生命周期。
+    4. 下游级联：Content 删除 Post/Comment/Reaction/媒体私有数据、搜索文档、
+       recommendation 特征并保留匿名审计；Chat 清理私有消息状态并匿名化留存；
+       Circle 转移或归档 ownerless 聚合；Notification 清理用户通知；Search 删除私有
+       搜索状态。五域消费者均采用 eventId+digest 幂等 inbox、有限重试与有 TTL 的 DLQ。
+    5. 测试：user-service CloseAccount 三个 API 集成场景全绿；Content、Chat、Circle、
+       Notification、Search 的 UserAccountClosed 定向 local_contract 与 api_integration
+       于 2026-07-20 全绿，覆盖正常消费、重放、冲突、失败恢复与隐私清理。对应证据已写入
+       `settings-and-device-token/account-lifecycle--self-service-account-closure/acceptance.yaml`。
+  - 状态: 进行中（2026-07-20；**注销实现与本地/API 证据已闭环**；gamma/prod 设备证据
+    由 R-UPROF-004 统一收口，Apple token revoke 由 R-AUTH-001 正式凭据链收口。
+    本项只剩 UserSuspended/Restore 的 metadata-first 运营状态机、跨域可逆隔离和申诉审计，
+    未完成前不得将“封禁”宣称为商用能力）
+
+- [x] R-UPROF-003 关系计数同步 increment + 全量 COUNT reconcile 规模风险
+  - 区域: Service
+  - 域: `user`
+  - 原因: `persona_relationship_service.go` 的 follower/following 计数为命令内同步
+    increment，并在每次命令后全量 COUNT reconcile 自愈；无事件驱动读模型。
+  - 影响: 高关注量用户（万级粉丝）每次 follow/unfollow 触发全表 COUNT，命令延迟与
+    DB 压力随规模线性放大。
+  - 涉及文件: `quwoquan_service/services/user-service/internal/application/relationship/persona_relationship/persona_relationship_service.go`
+  - 验收: 计数改事件驱动投影（outbox 已存在），reconcile 降级为定期后台任务；
+    压测证明 10 万粉丝档位命令 P95 不退化。
+  - 状态: 已解决（2026-07-20）
+    - Follow/Unfollow/Block 命令 Facade 已删除 `UserProfileStore` 计数依赖与
+      `CountFollowers/CountFollowing` 端口；命令事务只提交 canonical pair、receipt 与 outbox。
+    - `counter_projector.go` 按 outbox `eventId` 幂等更新 owner follower/following，
+      block 事件显式携带 source/target 两个清边事实；同 pair claim 按 aggregate version 顺序。
+    - `counter_reconciler.go` 以 bounded owner batch 周期修复，不进入命令延迟；投影 lag
+      Prometheus P95 与 5s 告警已落地。
+    - 验证: `go test ./services/user-service/internal/domain/relationship/persona_relationship/... ./services/user-service/internal/application/relationship/persona_relationship ./services/user-service/internal/infrastructure/relationship/persona_relationship/...`；
+      `go test ./services/user-service/tests/api_integration -run '^(TestFollow|TestUnfollow|TestBlock|TestUnblock|TestListBlocked|TestManagedMigrationsAreIdempotent|TestCloseAccount)' -count=1`；
+      `TestFollow_CommandP95DoesNotScaleWithHundredThousandFollowers` 以真实 PostgreSQL
+      预制 100,000 条 following direction，20 次 Follow 的实测 P95=38.944459ms，
+      显著低于 500ms 门槛；`TestFollow_ReconcilesDriftedCounters` 同次执行全绿。
+
+- [ ] R-UPROF-004 gamma 设备矩阵无用户主页旅程
+  - 区域: App / Ops
+  - 域: `user` / 测试治理
+  - 原因: `quwoquan_ops/environments/gamma_validation_suites.json` patrol 套件仅覆盖
+    discovery/content/chat/ops/entity/environment，`quwoquan_app/test/user_acceptance/patrol/`
+    无 user/profile 旅程目录；主页 UAT 证据只在宿主机 journey 测试。
+  - 影响: 用户主页（我的主页/他人主页/关注/拉黑/编辑资料）从未在 gamma 设备矩阵上验证，
+    四环境商用证据链断在设备层。
+  - 涉及文件: `quwoquan_ops/environments/gamma_validation_suites.json`、
+    `quwoquan_app/test/user_acceptance/patrol/**`
+  - 验收: patrol 增加 profile 旅程（我的主页浏览、他人主页关注/取关、编辑资料保存）并
+    进 gamma 设备矩阵流水线，run 证据归档。
+  - 状态: 进行中（2026-07-20：已新增
+    `test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart` 并接入
+    `gamma_validation_suites.json` daily device matrix；我的主页 bundle/编辑入口、
+    他人主页关注→取关均改为确定性断言，不再条件跳过；定向 `flutter analyze` 通过，
+    相关 SIT1/SIT4 已诚实降为 `pending_evidence`。剩余：真实 gamma-local 设备运行、
+    深浅色/compact/regular/VoiceOver 证据与 run report 归档）
+
+- [x] R-UPROF-005 关系/招呼命令 actor 归属未校验（合法凭证可伪造他人 persona）
+  - 区域: Service
+  - 域: `user`
+  - 原因: `resolveActorSubAccountID` 对 body `actorSubAccountId` 与 token persona
+    不一致时直接信任客户端输入，未校验该 persona 归属已认证账号，也未拒绝已退役
+    persona；follow/unfollow/greeting 等命令存在用合法凭证伪造他人 actor 的越权面。
+  - 影响: 越权以他人身份建立/解除关系、发打招呼，破坏关系数据归属与隐私承诺。
+  - 涉及文件: `quwoquan_service/services/user-service/internal/adapters/http/user_handler.go`
+  - 验收: 显式 actor 与 token principal 不一致时必须证明归属且未退役，否则 403；
+    api_integration 越权负例覆盖伪造他人 persona、同账号第二分身合法、退役分身拒绝。
+  - 状态: 已解决（2026-07-20 M12 商用化阶段 0：`resolveActorSubAccountID` 增
+    `verifyActorPersonaOwnership`（归属 + 非 retired 校验，metadata ownership_policy
+    actor_self 语义）；证据 `follow_contract__api_integration_test.go` 新增
+    `TestFollow_ForgedActorPersonaRejected`（403 + 零关系写入 + 计数不变）、
+    `TestFollow_ExplicitActorOwnedPersonaAllowed`（同账号第二分身 200 且按该分身记账）、
+    `TestFollow_RetiredExplicitActorRejected`（403），与基线 Follow_Success/Idempotent
+    共 5 绿）
+
+- [x] R-UPROF-006 M12 孤儿页：/profile/footprint 与 /profile/comments 无入口
+  - 区域: App
+  - 域: `user` / `content`
+  - 原因: `MyFootprintPage`（`/profile/footprint`）与 `ProfileCommentsPage`
+    （`/profile/comments`）在路由表注册但全 lib 无任何 push 入口；能力已分别由
+    我的主页内嵌足迹 tab 与互动 tab 承载。profile_comments 帖子摘要卡还直接展示
+    裸 postId（占位实现）且 loadMore 空 catch。
+  - 影响: 「功能存在但旅程不可达」死代码；页面矩阵/页面契约登记与真实可达性漂移。
+  - 涉及文件: `quwoquan_app/lib/ui/user/pages/my_footprint_page.dart`、
+    `quwoquan_app/lib/ui/user/pages/profile_comments_page.dart`、
+    `quwoquan_app/lib/app/navigation/**`、
+    `quwoquan_service/contracts/metadata/_shared/{app_routes,app_pages,page_object_contract}.yaml`
+  - 验收: 裁决删除（能力归内嵌 tab，同步清路由/矩阵/契约登记）或补正式入口 + 摘要
+    回填 + 埋点；同步修复足迹 tab 硬编码中文相对时间。
+  - 状态: 已解决（2026-07-20：裁决保留私有足迹独立页，并由主页足迹 Tab 的
+    `profile-footprint-view-all` 正式入口承载筛选后的查看全部；删除低成熟度
+    `ProfileCommentsPage`、provider、路由、页面/surface/page-object 契约与测试，评论能力
+    继续由主页互动 Tab 单轨承载。证据：`profile_footprint_tab.dart`、
+    `my_footprint_page__local_contract_test.dart`、`basic_viability__user_acceptance_test.dart`；
+    metadata 与 App 路由中 `profileComments` 零残留）
+
+- [x] R-UPROF-007 UserLifeItem/UserWork 投影对象与 API 现实脱节
+  - 区域: Service
+  - 域: `user`
+  - 原因: `user/user_life_item/service.yaml` 与 `user_work/service.yaml` 注释声称
+    「经 user_profile canonical query Slice 读取」，但 user_profile/service.yaml 并不存在
+    ListUserLifeItems/ListUserWorks 任何 route；对象有定义、无 operation、页面无直接消费。
+  - 影响: 对象图与 API 契约漂移；主页「消费资产外化」（对标小红书收藏/赞过分区）缺
+    投影支撑。
+  - 涉及文件: `quwoquan_service/contracts/metadata/user/user_life_item/**`、
+    `quwoquan_service/contracts/metadata/user/user_work/**`
+  - 验收: 补真实 query route + 读模型 + 页面消费，或从 business_object_map 裁掉对象；
+    二选一后 `verify-metadata` 与对象图单轨一致。
+  - 状态: 已解决（2026-07-20：裁决从 metadata 对象图删除无 operation、无消费者的
+    `user_life_item` / `user_work`，`business_object_map.yaml` 与 ContractGraph 零残留；
+    主页作品由 content 域作者作品 Reader、足迹由 `ContentFootprintEntry` 单轨承载。
+    `profile-homepage-redesign` spec/design/acceptance 已同步，不保留“独立后端空壳”
+    口径；未来若重启书影音/味蕾/爱物，必须作为 metadata-first 新增量重新立项）
+
+## 启动欢迎页品牌化（2026-07-20 用户授权决策登记）
+
+- [x] R-WELCOME-001 品牌展示字体授权与首帧同构已收口
+  - 区域: App
+  - 域: `welcome` / 设计系统
+  - 原因: 原登记把已由仓库固定和授权的 Noto Sans SC 误判为开发态降级，形成没有必要的
+    “待品牌字体”风险。图一字形语言与 Noto Sans SC 兼容，无需引入未知授权字体。
+  - 影响: 已消除；Noto Sans SC 现在是正式品牌展示字体，Flutter、golden 与原生启动位图
+    使用同一字体。后续如主动改版须作为新品牌变更重新走授权与同构验收，不属于当前遗留。
+  - 涉及文件: `quwoquan_app/lib/core/design_system/typography/app_typography.dart`
+    （`welcomeBrandFontFamily` 单点）、`quwoquan_app/tool/generate_native_launch_welcome_final_test.dart`、
+    `quwoquan_app/pubspec.yaml` 字体注册。
+  - 验收: `bundled_fonts_manifest.yaml` 中 OFL-1.1、pinned commit、SHA-256 通过；
+    `welcomeBrandFontFamily` 固定为 Noto Sans SC；原生位图生成器与
+    `welcome_motion_golden` / `startup_native_launch_screen` 契约测试全绿。
+  - 状态: 已解决（2026-07-20；`make fetch-app-bundled-fonts` 与
+    `make verify-app-bundled-fonts` 通过，Noto Sans SC SHA-256
+    `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`；
+    生成器 1/1、welcome golden 11/11、native handoff 12/12、welcome screen 31/31、
+    app startup welcome 10/10 全绿；CR-20260720-125）
+
+## 圈子主页商用化排查（2026-07-20 用户授权登记，规格落点 M8-H）
+
+- [ ] R-CIRCLE-001 circle hub 频道页 N+1 客户端聚合与端侧过滤（性能/流量风险）
+  - 区域: App / Service
+  - 域: `circle`
+  - 原因: `RemoteCircleRepository.listHomeCircleDiscoveryFeed` 先 `listCircles(limit: 500)`
+    再逐圈 `getCircleFeed` 凑 200 条（`circle_repository_remote.dart`），hub 页垂类/子类/
+    我的过滤全部端侧内存执行，默认垂类 `campus` 硬编码（`home_circles_hub_page.dart`）。
+  - 影响: hub 首屏在真实数据规模下产生数百次串行请求，首屏超时且流量放大；违反 R09
+    （读侧绕过 generated client）与 R04（`circle_hub_feed_post_entry.raw` Map 穿透）。
+  - 涉及文件: `quwoquan_app/lib/cloud/services/circle/circle_repository_remote.dart`、
+    `quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart`、
+    `quwoquan_service/contracts/metadata/social/circle/service.yaml`
+  - 验收: metadata 新增 circle discovery feed 聚合 operation（服务端垂类过滤+游标分页）；
+    hub 首屏单次聚合请求 P95 ≤ 800ms；读侧迁 generated client 并消灭 raw Map；
+    api_integration 覆盖聚合 feed 契约。
+  - 状态: 待办（2026-07-20 登记；M8-H Phase 2）
+
+- [ ] R-CIRCLE-002 圈子级入圈审批命令缺失，joinPolicy=approval 旅程断裂
+  - 区域: App / Service
+  - 域: `circle`
+  - 原因: `CircleMembership` 生命周期含 `pending` 且 `joinPolicy` 支持 `approval`，但
+    metadata 只在 `CircleGroupMembership` 上有 Approve/Reject 命令，圈子级审批命令、
+    审批错误码、owner/admin 审批页全部缺失；申请者停留 pending 无反馈无通知。
+  - 影响: 审批制圈子的加入旅程对象状态无页面/操作承载（GATE_BLOCK 类别缺口），
+    治理能力与豆瓣/Reddit 等标杆存在代差，审批制圈子商用不可用。
+  - 涉及文件: `quwoquan_service/contracts/metadata/social/circle_membership/service.yaml`、
+    `quwoquan_service/services/circle-service/internal/**`、圈子审批管理页（P0 新建）
+  - 验收: metadata 补 `ApproveCircleMembership/RejectCircleMembership` 命令+事件+错误码
+    → codegen → Go 实现 → owner/admin 审批页（登记页面矩阵）→ 申请者 pending 反馈与
+    通知回流；三层测试（local_contract/api_integration/user_acceptance）齐备。
+  - 进展（2026-07-20 当轮落地）: 主链已闭环——metadata `ApproveCircleMember/RejectCircleMember/
+    ListPendingCircleMemberships` operation + `CIRCLE.USER.membership_state_conflict` 错误码 +
+    `CircleMembershipRequested/Rejected` 事件 + lifecycle 加 `rejected` 态（`_shared/types.yaml`）；
+    Go 域行为（Join(approval)→pending、Approve→active 发 Joined、Reject→rejected 可再申请，
+    修复了原「approval 圈子 Join 直接报错、审批策略云侧不生效」的断裂）+ facade/reader/handler +
+    memberCount 投影跳过审批事件；notification 投影补 Requested→圈主 / Rejected→申请人 双向通知；
+    Dart 契约（`DecideCircleMembershipCommand`/`PendingCircleMembershipListQuery`/rejected 枚举）+
+    generated client（contract handoff accept + codegen-app）+ Remote/Mock facet + 审批队列页
+    `circle_membership_approval_page.dart`（页面矩阵/page_object_contract/gap inventory 已登记，
+    圈子主页更多菜单 owner/admin + joinPolicy=approval 入口）。证据：
+    `behavior__local_contract_test.go::TestCircleMembershipApprovalStateMachine` 绿；
+    `circle_membership__api_integration_test.go::TestCircleMembershipApprovalLifecycle`
+    （真实 Mongo replica set + Redis testcontainers：pending 建档不计数、403 权限、
+    approve/reject/再申请、outbox 事件形态、memberCount 收敛）绿；
+    `circle_membership_approval_page__local_contract_test.dart` 5 用例绿；
+    `go test ./services/circle-service/...` 全绿。
+  - 状态: 进行中（主链闭环；剩余：申请人「已通过」推送通知（现仅 App 内状态可见）、
+    审批旅程 user_acceptance、gamma seed 增补 approval 圈 fixture 与端到端验证）
+
+- [ ] R-CIRCLE-003 recommendation-service 零 circle 事件消费，圈子推荐闭环缺失
+  - 区域: Service
+  - 域: `circle` / `recommendation`
+  - 原因: `social/circle/events.yaml` 声明 CircleCreated/Updated/Archived consumer 含
+    recommendation-engine，`consumers` 亦登记能力，但 `services/recommendation-service`
+    中 grep 不到任何 circle 引用（0 文件），事件契约声明与实现脱节。
+  - 影响: 圈子候选无法进入推荐召回/特征，hub「圈子推荐」模块无真实推荐支撑，
+    `CircleBehaviorFact`（impression/dwell/join/leave）信号进 HotPath 后无圈子侧消费闭环。
+  - 涉及文件: `quwoquan_service/services/recommendation-service/**`、
+    `quwoquan_service/contracts/metadata/social/circle/events.yaml`
+  - 验收: recommendation-service 落地 circle 事件消费（召回候选投影 + behavior 特征），
+    api_integration 证明 CircleCreated → 推荐候选可见；hub 推荐模块消费真实召回。
+  - 状态: 待办（2026-07-20 登记；M8-H Phase 3）
+
+## 消息与群聊（Chat / Group Conversation）
+
+- [x] R-CHAT-001 chat 成员操作云侧无授权校验（任何登录用户可移出任意群成员）
+  - 区域: Service / App
+  - 域: `chat`
+  - 原因: metadata 已声明 `AddMembers=conversation_member`、`RemoveMember=conversation_owner_or_admin`
+    的 ownership_policy，但 `MemberService` 未执行任何操作者校验；handler 还把 RemoveMember
+    的 operator 缺省为被移除人，App 退群复用 `removeMember(self)` 与契约互相矛盾。
+  - 影响: 安全级阻断——伪造请求可踢任意群成员/向任意群加人；授权修复若不与退群语义
+    同批切换会打断既有退群路径。
+  - 涉及文件: `quwoquan_service/services/chat-service/internal/application/member_service.go`、
+    `internal/adapters/http/chat_handler.go`、`quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart`
+  - 状态: 已解决（2026-07-20；群聊商用化阶段 0。云侧补 `requireActiveConversationMember`
+    共享授权门 + RemoveMember 角色矩阵（owner 可移任何非 owner、admin 仅可移普通成员、
+    禁 self-remove）+ AddMembers 互关/拉黑 gate（与建群同源，圈子绑定群跳过）；新增
+    `LeaveConversation` operation/事件/错误码并原子切换 App 退群。证据：
+    `group_governance_authorization__security__api_integration_test.go` 授权负例全绿、
+    `chat_settings_page_widget__local_contract_test.dart` 群治理入口契约 4 例、
+    chat-service 全量测试 `ok`）
+
+- [x] R-CHAT-002 群治理开关与群公告为假实现（读无权威来源、写被静默丢弃）
+  - 区域: Service / App / Metadata
+  - 域: `chat`
+  - 原因: `chat_group_settings_client` 投影 4 个开关无 Conversation 权威字段、无写命令，
+    端侧写到 `UpdateConversationSettings`（仅 mute/pin）被静默丢弃；GroupHome
+    `announcement` 服务端硬编码空串。
+  - 影响: 用户操作产生成功假象；「仅管理员改名」等治理规则实际不生效。
+  - 涉及文件: `quwoquan_service/contracts/metadata/messages/conversation/**`、
+    `services/chat-service/internal/application/conversation_service.go`、
+    `quwoquan_app/lib/ui/chat/pages/{group_manage_page,chat_settings_page,chat_announcement_page}.dart`
+  - 状态: 已解决（2026-07-20；`nameEditableByAdminOnly` 权威字段 + `UpdateGroupGovernanceSettings`
+    命令 + UpdateConversationTitle 动态授权消费；公告 `announcement` 权威字段 +
+    `UpdateAnnouncement` + `system_announcement` 消息触达 + 新建公告页；
+    `qrCodeJoinEnabled`/`joinRequiresApproval`/隐私盾假开关下线。证据：
+    `group_announcement_governance__contract__api_integration_test.go` 读写对称回归、
+    公告页 widget 4 例、cloud_mock 群治理 parity 6 例）
+
+- [ ] R-CHAT-003 JoinRequest 对象链缺失（扫码进群 / 进群审批 / 隐私盾不可用）
+  - 区域: App / Service / Metadata
+  - 域: `chat`
+  - 原因: 扫码进群、进群审批、隐私盾此前只有投影开关字段，无 Join/Approve 命令、
+    无审批页、无二维码页、无对象生命周期；2026-07-20 假开关已下线，能力整体缺位。
+  - 影响: 群增长入口受限（仅成员邀请一条路径）；对标 Telegram join request /
+    企业微信邀请确认存在能力代差。
+  - 涉及文件: `quwoquan_service/contracts/metadata/messages/**`（新对象）、
+    `quwoquan_app/lib/ui/chat/**`（审批待办页、二维码页 P0 新建）
+  - 验收: JoinRequest 聚合（申请/审批/驳回命令+事件+错误码）→ codegen → 云侧实现 →
+    审批待办页 + 群二维码页（登记页面矩阵与 surfaces）→ 三层测试；开关随对象链恢复。
+  - 状态: 待办（2026-07-20 登记；群聊商用化规划 P1 末独立工作包）
+
+- [ ] R-CHAT-004 群聊四环境端到端证据未闭环（metadata blocked 未解除）
+  - 区域: Ops / Service / App
+  - 域: `chat`
+  - 原因: chat 全部 operation `commercial_defaults.status: blocked`
+    （gap: CHAT_OBJECT_PACKET_WIRING）；本轮已补 alpha contract + 本地真实 Mongo
+    api_integration 证据，但 gamma-local Patrol 群管理 journey 与 prod gray canary
+    未执行；大群（>512 成员）扇出分页修复后缺真实容量压测；@群成员提及 story
+    （mention-highlight-and-picker）仍 pending。
+  - 影响: 群聊不能宣称商用可用；扇出修复的容量上限未经实测。
+  - 涉及文件: `quwoquan_service/contracts/metadata/messages/*/service.yaml`、
+    `quwoquan_ops/environments/**`
+  - 验收: `stackctl verify --env gamma --kind all` 含群管理 journey 通过 → prod gray
+    canary → 解除 blocked；大群扇出压测报告；提及 story 按其 acceptance 收口。
+  - 状态: 待办（2026-07-20 登记；群聊商用化规划阶段 4 出口条件）

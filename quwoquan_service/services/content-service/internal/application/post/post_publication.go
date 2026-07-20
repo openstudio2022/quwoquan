@@ -15,6 +15,7 @@ import (
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
@@ -73,7 +74,6 @@ func (s *PostService) SubmitPostPublication(
 	if existing, found := s.store.FindByID(ctx, postID); found {
 		return publicationReceipt(existing, command.AuthorID, command.LocalDraftID)
 	}
-
 	post := command.Content
 	// MongoDB persists timestamps with millisecond precision. Normalize before
 	// the first response so a concurrent replay returns a byte-stable receipt.
@@ -99,11 +99,8 @@ func (s *PostService) SubmitPostPublication(
 	post.VideoUrl = ""
 	post.CoverUrl = ""
 	post.ThumbnailUrl = ""
-	post.Status = "published"
-	post.ModerationStatus = "approved"
 	post.CreatedAt = now
 	post.UpdatedAt = now
-	post.PublishedAt = now
 	post.LastActiveAt = now
 
 	if _, supported := contentgenerated.AllowedContentTypes[post.ContentType]; !supported {
@@ -123,6 +120,9 @@ func (s *PostService) SubmitPostPublication(
 	}
 	s.syncArticleMarkdownSnapshot(&post)
 	normalizeVideoCoverContract(&post)
+	if err := validatePostPublicationLimits(&post); err != nil {
+		return PostPublicationReceipt{}, err
+	}
 	if err := s.prepareMediaAssetsForPublication(
 		ctx,
 		&post,
@@ -135,9 +135,46 @@ func (s *PostService) SubmitPostPublication(
 		return PostPublicationReceipt{}, err
 	}
 	post.ContentDigest = postContentDigest(&post)
+	admissionDecision, err := s.admitPostPublication(ctx, command, &post, now)
+	if err != nil {
+		return PostPublicationReceipt{}, err
+	}
+	eventType := postevent.PostPublished
+	switch admissionDecision {
+	case postports.PublicationSafetyAllow:
+		post.Status = "published"
+		post.ModerationStatus = "approved"
+		post.PublishedAt = now
+	case postports.PublicationSafetyReview:
+		post.Status = "pending_review"
+		post.ModerationStatus = "pending"
+		eventType = postevent.PostSubmittedForReview
+	default:
+		return PostPublicationReceipt{}, contentgenerated.AppErrorFromRequiredDependencyUnavailable(
+			"Post publication admission produced no terminal submission state",
+		)
+	}
+
+	// 引用发布的 PostPublished payload 自包含源帖作者，"被引用"通知由
+	// notification consumer 消费该字段，不设第二个 PostQuoted 事实。
+	sourcePostAuthorID := ""
+	if sourcePostID := strings.TrimSpace(post.SourcePostId); sourcePostID != "" {
+		sourcePost, sourceFound := s.store.FindByID(ctx, sourcePostID)
+		if !sourceFound {
+			return PostPublicationReceipt{}, contentgenerated.AppErrorFromPostNotFound(
+				"quoted source post does not exist",
+			)
+		}
+		sourcePostAuthorID = strings.TrimSpace(sourcePost.AuthorId)
+	}
 
 	publicationKey := "post-publication:" + postID
 	ctx = commandmeta.WithIdempotencyKey(ctx, publicationKey)
+	publishedPayload := projectionPayloadForPost(&post)
+	if sourcePostAuthorID != "" && eventType == postevent.PostPublished {
+		publishedPayload["sourcePostId"] = strings.TrimSpace(post.SourcePostId)
+		publishedPayload["sourcePostAuthorId"] = sourcePostAuthorID
+	}
 	committed, commitErr := s.commitPostCommand(
 		ctx,
 		&post,
@@ -146,8 +183,8 @@ func (s *PostService) SubmitPostPublication(
 		struct {
 			PostID string `json:"postId"`
 		}{PostID: postID},
-		postevent.PostPublished,
-		projectionPayloadForPost(&post),
+		eventType,
+		publishedPayload,
 		now,
 	)
 	if commitErr == nil {
@@ -217,6 +254,16 @@ func publicationReceipt(
 		PostID:           post.ID,
 		State:            post.Status,
 		CommittedVersion: post.Version,
-		AcceptedAt:       post.PublishedAt,
+		AcceptedAt:       publicationAcceptedAt(post),
 	}, nil
+}
+
+func publicationAcceptedAt(post *postmodel.Post) time.Time {
+	if post == nil {
+		return time.Time{}
+	}
+	if !post.PublishedAt.IsZero() {
+		return post.PublishedAt
+	}
+	return post.CreatedAt
 }

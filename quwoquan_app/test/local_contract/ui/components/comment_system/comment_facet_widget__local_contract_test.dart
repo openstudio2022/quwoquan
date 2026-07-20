@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsFlag;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,6 +170,59 @@ void main() {
     expect(comments.lastPinCommand?.postId, 'post-pin');
     expect(comments.lastPinCommand?.commentId, 'comment-pin');
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('热门最新与评论动作具备 44pt 语义，窄屏大字体 badge 不溢出', (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final comments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'comment-accessibility',
+          postId: 'post-accessibility',
+          authorDisplayNameSnapshot: '一位拥有很长昵称的评论作者',
+          content: '窄屏和动态字体下仍然完整显示的评论正文',
+          isPinned: true,
+          isAuthor: true,
+          authorLiked: true,
+          authorIpLocation: '新疆维吾尔自治区',
+          viewerRelation: ContentCommentViewerRelation.friend,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _app(
+        comments,
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: const CommentThreadView(postId: 'post-accessibility'),
+        ),
+        authenticated: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final hot = find.bySemanticsLabel(UITextConstants.commentSortHot).first;
+    final latest = find
+        .bySemanticsLabel(UITextConstants.commentSortLatest)
+        .first;
+    expect(tester.getSize(hot).height, greaterThanOrEqualTo(44));
+    expect(tester.getSize(latest).height, greaterThanOrEqualTo(44));
+    expect(tester.getSemantics(hot).hasFlag(SemanticsFlag.isSelected), isTrue);
+    expect(
+      find.bySemanticsLabel(UITextConstants.commentMoreActions),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.commentPinnedBadge), findsOneWidget);
+    expect(find.text(UITextConstants.commentAuthorLikedBadge), findsOneWidget);
+    expect(
+      find.text(UITextConstants.commentRelationFriendBadge),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 }
 

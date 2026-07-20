@@ -1,0 +1,48 @@
+entity: EventRecord
+
+scenarios:
+  - name: event_batch_idempotent_state_machine
+    operation: ReportEventBatch
+    go_func: TestVisitEventContract
+    evidence: api_integration
+    assertions:
+      - Idempotency-Key 必须等于 canonical JSON sha256 batchKey，否则 400
+      - Redis ledger accepted→duplicate ack；pending 经 HasEventBatch 确认后收敛
+      - actor 由 verifiedTelemetryActorHash 派生，拒绝 caller 提供的用户标识
+      - 事件字段经 event_catalog 强校验，未登记 eventType/字段拒绝
+
+  - name: runtime_log_batch_catalog_guard
+    operation: ReportRuntimeLogBatch
+    go_func: TestVisitEventContract
+    evidence: local_contract
+    assertions:
+      - 只接受 runtime_observability 目录声明的 signal/sourceType/脱敏属性
+      - 批大小与体积超限拒绝（batch ≤50 条、≤128KB）
+
+  - name: startup_batch_anonymous_boundary
+    operation: ReportStartupEventBatch
+    go_func: TestVisitEventContract
+    evidence: local_contract
+    assertions:
+      - 唯一匿名入口只接收固定阶段与脱敏字段；产品/身份字段拒绝
+      - 禁字段（sessionId/userId/callStack/_batchKey/_batchIndex）不进入 startup logstore
+
+  - name: query_facade_masks_and_windows
+    operation: GetEventDrilldown
+    go_func: TestVisitEventContract
+    evidence: local_contract
+    assertions:
+      - 时间范围必填、最多 100 条、3 天窗口
+      - sessionId 默认掩码；correlation 默认隐藏
+      - 真实 SLS/gamma 证据未取得前 commercial 保持 blocked（R-TELEMETRY-001）
+
+  - name: rtc_media_qoe_24h_summary
+    operation: GetRtcMediaQoeSummary
+    go_func: TestSLSEventLogStoreGetRtcMediaQoeSummary
+    evidence: local_contract
+    assertions:
+      - 查询 rtc_media_qoe raw，禁止从 generic summary 推导 P95
+      - result=abandoned 不进入有效样本分母
+      - mediaConnectedRate 分母为有效样本，connectionLostRate 分母为已接通样本
+      - 无有效样本时 rate、P95、水位与 lag 返回 null
+      - Postgres integration composition 使用同一过滤、percentile_cont 与分母语义

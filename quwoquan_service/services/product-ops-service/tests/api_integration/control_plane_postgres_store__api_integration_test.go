@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
+	"quwoquan_service/internal/platform/pgoutbox"
 	"quwoquan_service/runtime/controlplane"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/application/product_ops/experiment"
@@ -206,7 +208,7 @@ SELECT COUNT(*) FROM product_ops_outbox WHERE aggregate_id IN ($1,$2)`, experime
 		t.Fatalf("atomic persistence mismatch: facts=%d outbox=%d", factCount, outboxCount)
 	}
 	publisher := &captureOutboxPublisher{}
-	dispatcher, err := experimentpersistence.NewOutboxDispatcher(controlPlanePGPool, publisher)
+	dispatcher, err := pgoutbox.NewDispatcher(controlPlanePGPool, publisher, "product_ops_outbox")
 	if err != nil {
 		t.Fatalf("create outbox dispatcher: %v", err)
 	}
@@ -246,9 +248,10 @@ INSERT INTO product_ops_outbox(
 	if err != nil {
 		t.Fatalf("seed pending outbox: %v", err)
 	}
-	dispatcher, err := experimentpersistence.NewOutboxDispatcher(
+	dispatcher, err := pgoutbox.NewDispatcher(
 		controlPlanePGPool,
 		failingOutboxPublisher{},
+		"product_ops_outbox",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -274,6 +277,146 @@ FROM product_ops_outbox WHERE event_id=$1`, eventID).
 			"failed outbox state retry=%d error=%q owner=%q lease=%v dispatched=%v scheduled=%v",
 			retryCount, lastError, leaseOwner, leasedUntil, dispatchedAt, retryScheduled,
 		)
+	}
+}
+
+func TestApprovedControlPlaneMutationIsAtomicIdempotentAndDispatchable(t *testing.T) {
+	if controlPlanePGPool == nil {
+		t.Fatal("real PostgreSQL pool was not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	store, err := controlplanepersistence.NewPostgresStore(controlPlanePGPool, "product-ops")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnsureSchema(ctx); err != nil {
+		t.Fatal(err)
+	}
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	objectID := "premium-" + suffix
+	digest := fmt.Sprintf("%064d", time.Now().UnixNano())
+	for _, actor := range []string{"operator-1", "operator-2"} {
+		if err := store.AppendApproval(controlplane.ApprovalDecision{
+			ObjectType: "premium_pool_entry", ObjectID: objectID,
+			Actor: actor, Decision: "takedown", PayloadDigest: digest,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eventID := "premium-takedown-" + suffix
+	mutation := controlplane.ApprovedMutation{
+		Namespace:        "premium_pool_entries",
+		ObjectType:       "premium_pool_entry",
+		ObjectID:         objectID,
+		Intent:           "takedown",
+		ApprovalDecision: "takedown",
+		PayloadDigest:    digest,
+		IdempotencyKey:   "idem-" + suffix,
+		Document: controlplane.Document{
+			"id": objectID, "status": "takedown_ejected",
+		},
+		Workflow: controlplane.WorkflowState{
+			ObjectType: "premium_pool_entry", ObjectID: objectID,
+			WorkflowID: "premium-takedown-" + suffix, State: "takedown_ejected",
+		},
+		Audit: controlplane.AuditEvent{
+			AuditID: "audit-" + suffix, ObjectType: "premium_pool_entry",
+			ObjectID: objectID, Action: "premium_pool.takedown",
+		},
+		OutboxEvents: []controlplane.MutationOutboxEvent{{
+			EventID: eventID, EventType: "PremiumPoolEntryTakedownEjected",
+			AggregateType: "PremiumPoolEntry", AggregateID: objectID,
+			Payload: map[string]any{"id": objectID, "status": "takedown_ejected"},
+		}},
+	}
+	receipt, err := store.CommitApprovedMutation(mutation)
+	if err != nil || receipt.Replayed {
+		t.Fatalf("commit receipt=%+v err=%v", receipt, err)
+	}
+	replayed, err := store.CommitApprovedMutation(mutation)
+	if err != nil || !replayed.Replayed || replayed.CommittedAt != receipt.CommittedAt {
+		t.Fatalf("replay receipt=%+v err=%v", replayed, err)
+	}
+	drifted := mutation
+	drifted.PayloadDigest = strings.Repeat("f", 64)
+	if _, err := store.CommitApprovedMutation(drifted); !errors.Is(err, controlplane.ErrMutationIdempotencyConflict) {
+		t.Fatalf("idempotency drift error=%v", err)
+	}
+
+	var receiptCount, auditCount, outboxCount int
+	if err := controlPlanePGPool.QueryRow(ctx, `
+SELECT COUNT(*) FROM control_plane_mutation_receipts
+WHERE scope='product-ops' AND object_type='premium_pool_entry' AND object_id=$1`, objectID).Scan(&receiptCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := controlPlanePGPool.QueryRow(ctx, `
+SELECT COUNT(*) FROM control_plane_audits
+WHERE scope='product-ops' AND object_type='premium_pool_entry' AND object_id=$1`, objectID).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := controlPlanePGPool.QueryRow(ctx, `
+SELECT COUNT(*) FROM product_control_plane_outbox WHERE event_id=$1`, eventID).Scan(&outboxCount); err != nil {
+		t.Fatal(err)
+	}
+	if receiptCount != 1 || auditCount != 1 || outboxCount != 1 {
+		t.Fatalf("atomic counts receipt=%d audit=%d outbox=%d", receiptCount, auditCount, outboxCount)
+	}
+
+	publisher := &captureOutboxPublisher{}
+	dispatcher, err := pgoutbox.NewDispatcher(controlPlanePGPool, publisher, "product_control_plane_outbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dispatcher.DispatchOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var dispatched bool
+	if err := controlPlanePGPool.QueryRow(ctx, `
+SELECT dispatched_at IS NOT NULL FROM product_control_plane_outbox WHERE event_id=$1`, eventID).Scan(&dispatched); err != nil {
+		t.Fatal(err)
+	}
+	if !dispatched {
+		t.Fatal("approved mutation outbox event was not dispatched")
+	}
+
+	failedObjectID := "premium-failed-" + suffix
+	failedDigest := strings.Repeat("e", 64)
+	for _, actor := range []string{"operator-1", "operator-2"} {
+		if err := store.AppendApproval(controlplane.ApprovalDecision{
+			ObjectType: "premium_pool_entry", ObjectID: failedObjectID,
+			Actor: actor, Decision: "takedown", PayloadDigest: failedDigest,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failedMutation := mutation
+	failedMutation.ObjectID = failedObjectID
+	failedMutation.PayloadDigest = failedDigest
+	failedMutation.IdempotencyKey = "failed-" + suffix
+	failedMutation.Document = controlplane.Document{"id": failedObjectID}
+	failedMutation.Workflow.ObjectID = failedObjectID
+	failedMutation.Audit = controlplane.AuditEvent{
+		AuditID: "failed-audit-" + suffix, ObjectType: "premium_pool_entry",
+		ObjectID: failedObjectID, Action: "premium_pool.takedown", At: "not-rfc3339",
+	}
+	failedMutation.OutboxEvents = []controlplane.MutationOutboxEvent{{
+		EventID: "failed-outbox-" + suffix, EventType: "PremiumPoolEntryTakedownEjected",
+		AggregateType: "PremiumPoolEntry", AggregateID: failedObjectID,
+		Payload: map[string]any{"id": failedObjectID},
+	}}
+	if _, err := store.CommitApprovedMutation(failedMutation); err == nil {
+		t.Fatal("invalid audit timestamp must roll back the approved mutation")
+	}
+	if _, found, err := store.GetMutationReceipt(
+		"premium_pool_entry",
+		failedObjectID,
+		failedMutation.IdempotencyKey,
+	); err != nil || found {
+		t.Fatalf("failed mutation receipt found=%v err=%v", found, err)
+	}
+	if _, found, err := store.GetDocument("premium_pool_entries", failedObjectID); err != nil || found {
+		t.Fatalf("failed mutation document found=%v err=%v", found, err)
 	}
 }
 

@@ -1,4 +1,4 @@
-"""Resolve or rebuild the disposable data-agent Python cache."""
+"""Resolve or rebuild the disposable data-agent Python tool cache."""
 from __future__ import annotations
 
 import json
@@ -21,20 +21,41 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = SCRIPTS_ROOT.parent
 REPO_ROOT = DATA_ROOT.parent
 REQUIREMENTS_PATH = DATA_ROOT / "requirements.txt"
-OUTPUT_ROOT = Path(
-    os.environ.get("QWQ_OUTPUT_ROOT") or REPO_ROOT / ".qwq_output"
-).expanduser().resolve()
-DATA_VENV_CACHE_DIR = (
-    OUTPUT_ROOT
-    / "env"
-    / "repo"
-    / "local"
+DEFAULT_PYTHON_CACHE_ROOT = (
+    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    / "quwoquan"
     / "python-envs"
-    / "cache"
-    / "quwoquan-data"
 )
 
-AGENT_RUNTIME_MODULES = ("cursor_sdk", "PIL", "cv2", "numpy", "yaml", "pytesseract", "imagehash")
+
+def resolve_python_cache_root(value: str | None = None) -> Path:
+    """Return the external tool-cache root and reject disposable-output paths."""
+    candidate = Path(
+        value
+        or os.environ.get("QWQ_PYTHON_CACHE_ROOT")
+        or DEFAULT_PYTHON_CACHE_ROOT
+    ).expanduser().resolve()
+    output_root = (REPO_ROOT / ".qwq_output").resolve()
+    try:
+        candidate.relative_to(output_root)
+    except ValueError:
+        return candidate
+    raise ValueError("QWQ_PYTHON_CACHE_ROOT must not be inside .qwq_output")
+
+
+PYTHON_CACHE_ROOT = resolve_python_cache_root()
+DATA_VENV_CACHE_DIR = PYTHON_CACHE_ROOT / "quwoquan-data"
+
+AGENT_RUNTIME_MODULES = (
+    "cursor_sdk",
+    "PIL",
+    "cv2",
+    "numpy",
+    "yaml",
+    "pytesseract",
+    "imagehash",
+    "imageio_ffmpeg",
+)
 AGENT_RUNTIME_BINARIES = ("tesseract",)
 BOOTSTRAP_ENV = "QWQ_DATA_CLI_BOOTSTRAPPED"
 NETWORK_SKIP_ENV = "QWQ_ENV_SKIP_NETWORK_CHECK"
@@ -168,6 +189,8 @@ def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     args = list(argv[1:])
     if len(args) >= 2 and args[:2] == ["task", "execute"]:
         return True
+    if len(args) >= 2 and args[:2] == ["governance", "media-canary"]:
+        return True
     return False
 
 
@@ -191,6 +214,7 @@ def maybe_reexec_for_agent_command(argv: list[str]) -> None:
         raise SystemExit(2)
     env = os.environ.copy()
     env[BOOTSTRAP_ENV] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     os.execvpe(str(python), [str(python), *argv], env)
 
 
@@ -200,7 +224,7 @@ def prepare_data_runtime_cache(
     requirements: Path | None = None,
     cache_dir: Path | None = None,
 ) -> dict:
-    """Rebuild an optional venv cache solely from repository-owned requirements."""
+    """Rebuild an optional tool cache solely from repository-owned requirements."""
     target_cache_dir = cache_dir or DATA_VENV_CACHE_DIR
     venv_python = python or _venv_python(target_cache_dir)
     requirements_path = requirements or REQUIREMENTS_PATH
@@ -219,7 +243,7 @@ def prepare_data_runtime_cache(
     return {
         "python": str(venv_python),
         "requirements": str(requirements_path),
-        "disposableCache": str(target_cache_dir),
+        "toolCache": str(target_cache_dir),
         "sourceTruth": str(requirements_path),
         "cachePersistenceRequired": False,
         "installReturnCode": proc.returncode,

@@ -6,14 +6,17 @@ import (
 )
 
 // handleListSelectableGroupConversations 处理 GET /chat/selectable-group-conversations。
-// 「从群聊中选择联系人」群列表（图四），返回含互关联系人的群 + friendMemberCount。
+// 「从群聊/圈子中选择联系人」来源列表（图四），返回含互关联系人的群 +
+// friendMemberCount，并由 source 在服务端区分私建群与圈子绑定群。
 func (h *ChatHandler) handleListSelectableGroupConversations(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 50)
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	source := strings.TrimSpace(r.URL.Query().Get("source"))
 	rows, err := h.memberService.ListSelectableGroupConversations(
 		r.Context(),
 		resolveUserID(r),
 		query,
+		source,
 		limit,
 	)
 	if err != nil {

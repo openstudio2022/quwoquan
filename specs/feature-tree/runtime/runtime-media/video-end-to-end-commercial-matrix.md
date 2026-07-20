@@ -14,10 +14,10 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 | 环境 | 运行 target | 必须验证（视频） | 准出要求 |
 | --- | --- | --- | --- |
-| `alpha` | `alpha-local` | publicSliceKey、typed resolver、播放器失败/恢复契约、本地 CA preflight、fixture Range/MIME | 工程与功能准出，不作为商用矩阵最终证明 |
-| `beta` | `beta-local` | InitUpload → PUT → Complete → ready → publish → Feed/详情播放；Android/iOS 真机或模拟器 | 至少一端非 dry-run passed；发布前覆盖 Android 与 iOS |
-| `gamma` | `gamma-local` | `APP_DATA_SOURCE=remote`、真实 gateway/media authority、上传后 publicSliceKey 投影、Feed/详情播放器 ready | 结构化非 dry-run 报告 passed |
-| `prod` | `prod-hosted` 的 `gray-initial` | 已发布 release playback canary、真实 public CDN、Feed/详情播放、失败恢复与回滚观测 | canary 失败阻断 `carry-on`/`full` rollout |
+| `alpha` | `alpha-local` | 125 秒与接近/超过 1 小时受控资产的 probe、publicSliceKey、typed resolver、P0 timeline/session、失败注入、CA、完整 Range 合同 | 工程与功能准出，不作为商用矩阵最终证明 |
+| `beta` | `beta-local` | InitUpload → PUT → Complete → processing/probe → ready → publish → Feed/详情 P0 seek；Android/iOS | 两端非 dry-run passed；P1-A/P1-B 仅在各自启用时追加证据 |
+| `gamma` | `gamma-local` | `APP_DATA_SOURCE=remote`、真实 gateway/media authority、processing callback、投影、P0 seek、SLS QoE/effective-play readback | 结构化非 dry-run 报告 passed |
+| `prod` | `prod-hosted` 的 `gray-initial → carry-on → full` | 已发布 release playback canary、真实 public CDN、P0 seek、SLO readback、失败恢复与回滚演练 | 同 release/config hash 逐阶段通过；任一阶段失败停止后续 rollout |
 
 `prod-sim` 仅是 `prod` 语义下的本地演练 target，不能替代 `prod-hosted` 生产证据；`gray-initial`、`carry-on`、`full` 是 prod rollout stage，不是额外环境。远端 gamma 已退役，不再使用 `cloud-gamma-pre` 或 `cloud-gamma-prod-smoke` 作为验收对象。
 
@@ -25,19 +25,21 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 下列步骤须在 **beta / gamma-local / prod-hosted gray-initial** 中至少各跑通一次；alpha 覆盖同构的本地契约与 CA preflight（可按环境裁剪观测深度，不得裁剪「真实远端 + 真实 UI」）：
 
-1. **上传事务**：InitUpload → 客户端 PUT → CompleteUpload → **Poll/Get** 直至资产就绪（含转码任务语义若启用）。
+1. **上传事务**：InitUpload → 客户端 PUT → CompleteUpload → processing/probe → **Poll/Get** 直至资产就绪；禁止 seed 或 handler 直接伪造 ready。
 2. **封面合同**：默认首帧或用户手工选帧必须落为远端可访问的 `thumbnailUrl` / 同源 `coverUrl`；报告需记录 `coverStrategy`、`coverFrameTimeMs`（若手工选帧）和封面资源锚点。
 3. **发帖**：CreateDraft / PublishPost（或等价 API）仅携带稳定 `mediaAssetId` 与展示元数据；服务端绑定后投影 `publicSliceKey`、视频首帧或手工封面，禁止持久化 upload URL、CAS key 或瞬时签名 URL。
 4. **分发**：Feed / 会话卡片等入口可见预览；未播放态必须展示 `thumbnailUrl` 或同源 `coverUrl`，不得展示无关 seed 图、作者头像、地点图或把 `videoUrl` 当图片 URL；**viewport / 静音策略**与详情页一致且不误导（参见既有播放器与 Feed UX 契约）。
-5. **播放**：详情页完整播放；弱网下至少记录一次 **缓冲/失败/恢复** 的可观测证据（可与 `t4-release-rehearsal.md` 中 VOD 项对齐）。
+5. **P0 播放与 seek**：125 秒素材执行 0:10→1:15→2:00；接近一小时合法素材执行 0:10→30:00→55:00→59:30；每次只在 release 提交一次 native seek，并由原生 settle 事件证明落点。弱网下至少记录一次 **缓冲/失败/恢复**。
 6. **多端**：同一帖子在第二设备或第二账号可见一致引用（至少在 gamma-local 与 prod-hosted gray-initial 中覆盖）。
+7. **有效播放与 QoE**：scrub、buffering、后台、离屏与 position jump 不得虚增 effective_play；TTFF、seek settle/failure、rebuffer、duration mismatch、`droppedFrames / processedVideoFrames` 与 audio underrun 进入低基数 Ops QoE 并可 readback。renderer/queue/fallback 只记录通用配置，不记录品牌或型号；无原生能力的平台字段保持 null。
+8. **独立增强**：P1-A 只验证 versioned storyboard/access-policy/cache/fallback；P1-B 只验证 HLS/CMAF rendition change/fallback。二者关闭或失败时 P0 仍须通过。
 
 ## 证据与报告口径
 
 - **禁止**：`pending`、`pending_device_lab`、`placeholder`、`dry-run` 报告作为商用矩阵 passed 依据。
-- **必须**：每条报告含环境（网关 base、media base、`commitSha` / `githubRunId`）、设备维度、`postId`/`videoRef` 锚点、服务端摘录（任务状态或 API 摘录，按最小侵入原则）、UI 摘录（截图或结构化断言导出）。
+- **必须**：矩阵恰好覆盖 `alpha-local/local`、`beta-local/local`、`gamma-local/local` 与 `prod-hosted/{gray-initial,carry-on,full}` 六条报告，不得缺少或重复 target/stage；所有报告绑定同一 `commitSha` 与 `probeHash + assetId + assetVersion` 媒体身份，每条报告都有本环境真实 `postId`，prod 三阶段还必须绑定同一 production `configHash + postId`。每条报告含环境（网关 base、media base）、设备维度、真实证据文件路径、服务端摘录和 UI 截图/录屏。Android P0 报告还必须从物理机 Patrol 原始日志解析 `nativeFirstFrame=true` 与 `nativeSeekSettled=true`，同一 Patrol report 同时含物理 iOS 成功 run，并记录 `nativePlaybackRawLogPath`、Perfetto trace/同 hash summary 与结构化 SLS QoE readback；full gate 必须重新解析这些归档并重算阈值。报告同时要求 `nativeEvidenceFromPhysicalAndroidDevice=true`、`seekEvidenceSource=native_settled`。emulator、页面 ready、controller 命令完成、仅存在的空文件或环境变量均不构成替代证据。
 - **统一 schema**：优先复用群头像 E2E 报告的顶层字段约定（`schema`、`scenario`、`status`、`environment`、`serviceEvidence`、`uiEvidence`、`steps`）；视频场景下扩展 `media`/`post` 块，而非另起互不兼容格式；禁止数字/后缀协议版本身份。
-- **`make gate-runtime-media-full`**：会校验 runtime-media 文档包、既定自动化门禁，以及 `RUNTIME_MEDIA_T4_EVIDENCE` 的非 dry-run 视频 T4 schema（target/stage、commit/config、publicSliceKey、Range/MIME、播放器 ready 与截图/报告）；**不**等价于本节全矩阵完成。
+- **`make gate-runtime-media-full`**：必须校验上述四 target、同 commit/config、非 dry-run、真实文件、probe/asset/post 锚点、完整 Range、原生首帧/seek settle、播放器状态和 prod 三 rollout stage；单份 ready 报告不得通过。只有 P0 矩阵通过时可称 P0 商用，P1-A/P1-B 仍按独立证据包声明。
 
 ## 本轮视频封面工程闭环边界
 

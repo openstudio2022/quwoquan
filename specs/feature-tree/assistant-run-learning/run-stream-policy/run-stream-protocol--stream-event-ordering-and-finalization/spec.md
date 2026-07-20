@@ -1,4 +1,4 @@
-# L4 特性：stream-event-ordering-and-finalization
+# L3 特性：stream-event-ordering-and-finalization
 
 ## 功能定位
 

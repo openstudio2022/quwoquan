@@ -167,7 +167,46 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: active/deleted；删除为软删并保留审计事实。
+    description: |
+      active/hidden/deleted/tombstoned。deleted 为作者软删（终态）；hidden 为 operator
+      治理隐藏（可经 RestoreComment 恢复）；tombstoned 为宿主 Post 删除后的级联终态。
+      前台列表只返回 active；作者在「我的评论」可见 hidden 状态标记。
+
+  - name: hotScore
+    source: hotScore
+    type: int
+    constraints: [NOT_NULL, DEFAULT_0]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: |
+      热评排序投影分：(likeCount - dislikeCount) + 2 * replyCount。由 hotScore relay 消费
+      ContentReactionSet/Cleared 与 CommentCreated/CommentDeleted(reply) 事实增量维护，
+      可从权威数据全量重算；仅用于服务端 sort=hot keyset 排序，客户端不消费。
+
+  - name: authorIpLocation
+    source: authorIpLocation
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: |
+      评论创建时由服务端从受信代理头解析的省级 IP 属地快照（如「浙江」）；解析不出落空串
+      且前端不展示，绝不臆造。读路径只透传快照，不二次解析。合规依据：互联网用户账号信息
+      管理规定 IP 属地展示要求。
+
+  - name: hiddenAt
+    source: hiddenAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: operator 治理隐藏时间；RestoreComment 恢复后清空。审计事实见 CommentModerated outbox。
 
   - name: isPinned
     source: isPinned
@@ -224,4 +263,6 @@ value_objects:
       - { name: displayName, type: string, constraints: [NULLABLE] }
 
 enums:
-  CommentStatus: [active, deleted]
+  CommentStatus: [active, hidden, deleted, tombstoned]
+  CommentSort: [hot, latest]
+  CommentViewerRelation: [none, following, friend]

@@ -4,7 +4,7 @@ service:
   owner: platform-ops-team
   commercial_defaults:
     status: blocked
-    block_reason: ConfigLayer object packet is not yet commercially complete
+    block_reason: ConfigSnapshot object packet is not yet commercially complete
     gap_id: PLATFORM_OPS_OBJECT_MIGRATION
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
@@ -23,23 +23,7 @@ api_routes:
     telemetry: { metric: ops_platform_config_catalog, trace: true, attributes: [operation, outcome] }
     slo: { latency_p95_ms: 500, availability_percent: 99.9 }
     commercial: { status: ready }
-    application: { kind: query, facet: ConfigLayerQueryFacade, method: listConfigKeys, reader: ConfigKeyCatalogReader, slice: ConfigKeyCatalogSlice }
-  - method: GET
-    path: /control-plane/platform/configs/layers
-
-    operation: ListConfigLayers
-    actor: account
-    security:
-      auth_mode: required
-    response_entity: ConfigLayerSlice
-    authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
-    reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
-    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.SYSTEM.config_storage_read_failed]
-    privacy: { request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: redacted }
-    telemetry: { metric: ops_platform_config_layers, trace: true, attributes: [operation, outcome] }
-    slo: { latency_p95_ms: 600, availability_percent: 99.9 }
-    commercial: { status: ready }
-    application: { kind: query, facet: ConfigLayerQueryFacade, method: listLayers, reader: ConfigLayerReader, slice: ConfigLayerSlice }
+    application: { kind: query, facet: ConfigSnapshotQueryFacade, method: listConfigKeys, reader: ConfigKeyCatalogReader, slice: ConfigKeyCatalogSlice }
   - method: GET
     path: /control-plane/platform/configs/resolve
 
@@ -50,44 +34,54 @@ api_routes:
     response_entity: EffectiveConfigSlice
     authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
     reliability: { timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
-    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.SYSTEM.config_storage_read_failed]
+    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.USER.config_invalid, OPS.SYSTEM.config_storage_read_failed]
     privacy: { request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: redacted }
-    telemetry: { metric: ops_platform_config_resolve, trace: true, attributes: [operation, environment, cluster, service, outcome] }
+    telemetry: { metric: ops_platform_config_resolve, trace: true, attributes: [operation, environment, service, outcome] }
     slo: { latency_p95_ms: 700, availability_percent: 99.9 }
     commercial: { status: ready }
-    application: { kind: query, facet: ConfigLayerQueryFacade, method: resolveEffectiveConfig, reader: EffectiveConfigReader, slice: EffectiveConfigSlice }
-  - method: POST
-    path: /control-plane/platform/configs/{configKey}:update
+    application: { kind: query, facet: ConfigSnapshotQueryFacade, method: resolveEffectiveConfig, reader: ConfigSnapshotReader, slice: EffectiveConfigSlice }
+  - method: GET
+    path: /control-plane/platform/configs/snapshot
 
-    operation: UpdateServiceConfig
+    operation: GetConfigSnapshot
     actor: account
     security:
       auth_mode: required
-    headers: [If-Match, Idempotency-Key]
-    concurrency: { version_precondition: if_match }
-    request_entity: SetConfigLayerValueRequest
-    request_body_kind: object
-    response_entity: SetConfigLayerValueResult
-    authorization: { principal: operator, scopes: [ops.platform.config.write], ownership_policy: operator_scope }
-    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
-    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.USER.config_invalid, OPS.USER.config_layer_not_found, OPS.USER.config_version_conflict, OPS.USER.config_idempotency_conflict, OPS.SYSTEM.config_storage_read_failed, OPS.SYSTEM.config_storage_write_failed]
-    privacy: { request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: redacted }
-    telemetry: { metric: ops_platform_config_set, trace: true, attributes: [operation, config_key, scope_level, outcome] }
+    response_entity: ConfigSnapshotView
+    authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.USER.config_invalid, OPS.USER.config_snapshot_not_found, OPS.SYSTEM.config_storage_read_failed]
+    privacy: { request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: redacted }
+    telemetry: { metric: ops_platform_config_snapshot, trace: true, attributes: [operation, environment, service, outcome] }
     slo: { latency_p95_ms: 800, availability_percent: 99.9 }
     commercial: { status: ready }
-    application: { kind: command, facet: ConfigLayerCommandFacade, method: setValue, aggregate_owner: ConfigLayer, mutation_target: ConfigLayer, invariant_target: ConfigLayer }
+    application: { kind: query, facet: ConfigSnapshotQueryFacade, method: getSnapshot, reader: ConfigSnapshotReader, slice: ConfigSnapshotView }
+  - method: GET
+    path: /control-plane/platform/configs/domains
+
+    operation: ListConfigDomains
+    actor: account
+    security:
+      auth_mode: required
+    response_entity: ConfigDomainSlice
+    authorization: { principal: operator, scopes: [ops.platform.config.read], ownership_policy: operator_scope }
+    reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.SYSTEM.config_storage_read_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted }
+    telemetry: { metric: ops_platform_config_domains, trace: true, attributes: [operation, outcome] }
+    slo: { latency_p95_ms: 500, availability_percent: 99.9 }
+    commercial: { status: ready }
+    application: { kind: query, facet: ConfigSnapshotQueryFacade, method: listDomains, reader: ConfigSnapshotReader, slice: ConfigDomainSlice }
 consumers:
   - name: platform-ops
-    capabilities: [list_config_keys, list_config_layers, resolve_effective_config, update_config_layer]
+    capabilities: [list_config_keys, resolve_effective_config, get_config_snapshot, list_config_domains]
 contract_test:
   coverage_requirements:
-    - typed value kind and metadata key type must match
-    - create/update requires If-Match and idempotency receipt
-    - aggregate, receipt and ConfigLayerValueSet outbox commit atomically
-    - resolve precedence is global then environment then cluster then service
+    - resolve 的有效值来自 codegen 键目录 default 与发布包 sys.* 覆盖，无任何在线写路径
+    - snapshot 携带来源文件、sha256 与 release 版本；双版本保留（当前灰度与上一版本）
+    - 未知 service/environment 返回 config_snapshot_not_found 或 config_invalid
   current_evidence:
     local_contract:
-      - services/platform-ops-service/internal/domain/platform_ops/config_layer/model/config_layer__local_contract_test.go
       - services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
     api_integration:
       - services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go

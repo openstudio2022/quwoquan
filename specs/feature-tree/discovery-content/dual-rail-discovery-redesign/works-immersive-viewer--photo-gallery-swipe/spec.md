@@ -1,4 +1,4 @@
-# L4 契约/任务：photo-gallery-swipe（Work Browser V1.0）
+# L3 契约/任务：photo-gallery-swipe（Work Browser V1.0）
 
 > 2026-06-11 更新：底部蓝色线性进度条方案废弃，改为点状指示器；导航状态信息位于内容下方、标题上方。
 

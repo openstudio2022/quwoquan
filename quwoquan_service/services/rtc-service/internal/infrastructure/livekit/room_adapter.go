@@ -101,37 +101,6 @@ func (a *LiveKitRoomAdapter) RemoveParticipant(ctx context.Context, roomName str
 	return err
 }
 
-func (a *LiveKitRoomAdapter) StartRoomCompositeEgress(ctx context.Context, roomName string, outputBucket string) (string, error) {
-	body := map[string]any{
-		"room_name": roomName,
-		"file": map[string]any{
-			"file_type": "MP4",
-			"filepath":  fmt.Sprintf("recordings/%s/{room_name}-{time}.mp4", roomName),
-			"s3": map[string]any{
-				"bucket": outputBucket,
-			},
-		},
-		"audio_only": false,
-	}
-	respBody, err := a.twirpCall(ctx, "/twirp/livekit.Egress/StartRoomCompositeEgress", body)
-	if err != nil {
-		return "", err
-	}
-	var result struct {
-		EgressID string `json:"egress_id"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("parse egress response: %w", err)
-	}
-	return result.EgressID, nil
-}
-
-func (a *LiveKitRoomAdapter) StopEgress(ctx context.Context, egressID string) error {
-	body := map[string]any{"egress_id": egressID}
-	_, err := a.twirpCall(ctx, "/twirp/livekit.Egress/StopEgress", body)
-	return err
-}
-
 func (a *LiveKitRoomAdapter) twirpCall(ctx context.Context, path string, body map[string]any) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {

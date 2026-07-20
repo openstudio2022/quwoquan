@@ -9,6 +9,7 @@ def execution_completion_issues(
     state: ExecutionStateTransition,
 ) -> list[str]:
     from content.execution.agent.agent_checkpoint import _checkpoint_is_done
+    from content.execution.agent.history import last_managed_agent_run, save_managed_agent_run
     from content.execution.agent.auto_research import _download_auto_research_lanes
 
     issues: list[str] = []
@@ -17,35 +18,35 @@ def execution_completion_issues(
     failed_objects = state.failed_objects or []
     if failed_objects:
         issues.append(f"execution has failedObjects={len(failed_objects)}")
-    last_agent = state.last_agent_run or {}
-    if isinstance(last_agent, dict) and last_agent:
-        if bool(last_agent.get("recovered")):
-            last_agent = {}
-    if isinstance(last_agent, dict) and last_agent:
-        run_stage = str(last_agent.get("stage") or "").strip()
-        snapshot_failed = bool(int(last_agent.get("jobCount") or 0)) and (
-            int(last_agent.get("startedCount") or 0) <= 0
-            or int(last_agent.get("finishedCount") or 0)
-            < int(last_agent.get("jobCount") or 0)
-            or int(last_agent.get("infrastructureFailures") or 0) > 0
+    last_agent = last_managed_agent_run(state)
+    if last_agent is not None and last_agent.recovered:
+        last_agent = None
+    if last_agent is not None:
+        run_stage = last_agent.stage.value
+        snapshot_failed = bool(last_agent.job_count) and (
+            last_agent.started_count <= 0
+            or last_agent.finished_count < last_agent.job_count
+            or last_agent.infrastructure_failures > 0
         )
         if snapshot_failed and run_stage:
             ok_now, _ = _checkpoint_is_done(ctx, run_stage)
             if ok_now:
-                recovered_run = dict(last_agent)
-                recovered_run["recovered"] = True
-                recovered_run["recoveredAt"] = store.now_iso()
-                recovered_run["recoveryReason"] = (
-                    f"completion gate: {run_stage} checkpoint re-verified; "
-                    "stale infrastructure failure snapshot"
+                save_managed_agent_run(
+                    state,
+                    last_agent.with_recovery(
+                        recovered_at=store.now_iso(),
+                        recovery_reason=(
+                            f"completion gate: {run_stage} checkpoint re-verified; "
+                            "stale infrastructure failure snapshot"
+                        ),
+                    ),
                 )
-                state.last_agent_run = recovered_run
-                last_agent = {}
-        if isinstance(last_agent, dict) and last_agent:
-            job_count = int(last_agent.get("jobCount") or 0)
-            started = int(last_agent.get("startedCount") or 0)
-            finished = int(last_agent.get("finishedCount") or 0)
-            infra = int(last_agent.get("infrastructureFailures") or 0)
+                last_agent = None
+        if last_agent is not None:
+            job_count = last_agent.job_count
+            started = last_agent.started_count
+            finished = last_agent.finished_count
+            infra = last_agent.infrastructure_failures
             if infra:
                 issues.append(f"lastAgentRun.infrastructureFailures={infra}")
             if job_count and started <= 0:

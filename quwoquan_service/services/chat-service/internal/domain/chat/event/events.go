@@ -6,5 +6,5 @@ const (
 	ConversationCreated       = "ConversationCreated"
 	ConversationRosterUpdated = "ConversationRosterUpdated"
 	ConversationAvatarUpdated = "ConversationAvatarUpdated"
-	ConversationArchived      = "ConversationArchived"
+	ConversationDissolved     = "ConversationDissolved"
 )

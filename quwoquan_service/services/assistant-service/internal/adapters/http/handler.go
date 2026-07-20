@@ -2,26 +2,54 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/application"
+	preferencefact "quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
 type Handler struct {
-	service *application.AssistantService
+	service            *application.AssistantService
+	preferenceCommands *preferencefact.CommandFacade
+	preferenceQueries  *preferencefact.QueryFacade
 }
 
-func NewHandler(service *application.AssistantService) *Handler {
-	return &Handler{service: service}
+type HandlerOption func(*Handler)
+
+func WithPreferenceFacades(
+	commands *preferencefact.CommandFacade,
+	queries *preferencefact.QueryFacade,
+) HandlerOption {
+	return func(handler *Handler) {
+		handler.preferenceCommands = commands
+		handler.preferenceQueries = queries
+	}
+}
+
+func NewHandler(
+	service *application.AssistantService,
+	options ...HandlerOption,
+) *Handler {
+	handler := &Handler{
+		service:            service,
+		preferenceCommands: preferencefact.NewCommandFacade(nil, nil),
+		preferenceQueries:  preferencefact.NewQueryFacade(nil),
+	}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -31,27 +59,36 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
 	mux.HandleFunc("GET /assistant/policy", h.handleGetPolicy)
 	mux.HandleFunc("POST /assistant/page-context", h.handleReportPageContext)
+	mux.HandleFunc("GET /assistant/personalization", h.handleGetEntryPersonalization)
 	mux.HandleFunc("GET /assistant/suggested-actions", h.handleGetSuggestedActions)
 	mux.HandleFunc("POST /assistant/learning/events", h.handleReportInteractionEvent)
-	mux.HandleFunc("POST /assistant/learning/scorecards", h.handleReportScorecard)
+	// scorecard 为服务内部 append（run 完成自评），path 与 metadata internal 声明对齐。
+	mux.HandleFunc("POST /internal/assistant/learning/scorecards", h.handleReportScorecard)
 	mux.HandleFunc("POST /assistant/search/xiaoqu", h.handleSearchXiaoqu)
 	mux.HandleFunc("GET /assistant/tasks", h.handleListTasks)
-	mux.HandleFunc("GET /assistant/memories", h.handleListMemories)
+	mux.HandleFunc("POST /assistant/preferences", h.handleSetPreference)
+	mux.HandleFunc("GET /assistant/preferences", h.handleListPreferences)
+	mux.HandleFunc("POST /assistant/preferences/{preferenceId}/revoke", h.handleRevokePreference)
+	mux.HandleFunc("POST /assistant/preferences/{preferenceId}/restore", h.handleRestorePreference)
 	mux.HandleFunc("GET /assistant/ops/learning-summary", h.handleGetLearningOpsSummary)
 	mux.HandleFunc("GET /assistant/skills", h.handleListSkills)
 	mux.HandleFunc("POST /assistant/skills/creation-suggest", h.handleSuggestCreationAssistance)
 	mux.HandleFunc("GET /assistant/skill-subscriptions", h.handleListSkillSubscriptions)
 	mux.HandleFunc("POST /assistant/skill-subscriptions", h.handleCreateSkillSubscription)
-	mux.HandleFunc("POST /assistant/skill-subscriptions/cron/tick", h.handleTickSkillSubscriptionCron)
+	// tick 为内部调度 lease 领取入口，path 与 metadata internal 声明对齐。
+	mux.HandleFunc("POST /internal/assistant/skill-subscriptions:tick", h.handleTickSkillSubscriptionCron)
 	mux.HandleFunc("POST /assistant/intersections/reminders/tick", h.handleTickIntersectionReminders)
 	mux.HandleFunc("GET /assistant/skill-subscriptions/{subscriptionId}", h.handleGetSkillSubscription)
 	mux.HandleFunc("PATCH /assistant/skill-subscriptions/{subscriptionId}/status", h.handleUpdateSkillSubscriptionStatus)
 	mux.HandleFunc("GET /assistant/consents", h.handleListConsents)
 	mux.HandleFunc("/assistant/skills/", h.handleSkillConsentRoutes)
 	mux.HandleFunc("POST /assistant/conversations", h.handleCreateConversation)
+	mux.HandleFunc("GET /assistant/conversations", h.handleListConversations)
 	mux.HandleFunc("GET /assistant/conversations/{conversationId}", h.handleGetConversation)
 	mux.HandleFunc("POST /assistant/conversations/{conversationId}/runs", h.handleStartRun)
+	mux.HandleFunc("GET /assistant/conversations/{conversationId}/turns", h.handleListConversationTurns)
 	mux.HandleFunc("GET /assistant/runs/{runId}", h.handleGetRun)
+	mux.HandleFunc("POST /assistant/runs/{runId}/cancel", h.handleCancelRun)
 	mux.HandleFunc("GET /assistant/runs/{runId}/events", h.handleStreamRunEvents)
 	return mux
 }
@@ -81,6 +118,15 @@ func (h *Handler) handleReportPageContext(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, ack)
+}
+
+func (h *Handler) handleGetEntryPersonalization(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.GetEntryPersonalization(r.Context(), resolveUserID(r), strings.TrimSpace(r.URL.Query().Get("pageType")))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *Handler) handleGetSuggestedActions(w http.ResponseWriter, r *http.Request) {
@@ -160,14 +206,84 @@ func (h *Handler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
-func (h *Handler) handleListMemories(w http.ResponseWriter, r *http.Request) {
-	limit := parseLimit(r, 32)
-	view, err := h.service.ListAssistantMemories(r.Context(), resolveUserID(r), limit)
+type setAssistantPreferenceRequest struct {
+	Scope          string `json:"scope"`
+	ConversationID string `json:"conversationId"`
+	Kind           string `json:"kind"`
+	Value          string `json:"value"`
+	SourceType     string `json:"sourceType"`
+}
+
+func (h *Handler) handleSetPreference(w http.ResponseWriter, r *http.Request) {
+	var input setAssistantPreferenceRequest
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(
+			w,
+			r,
+			preferencefact.InvalidArgumentError(err.Error()),
+		)
+		return
+	}
+	fact, err := h.preferenceCommands.SetPreference(
+		r.Context(),
+		preferencefact.SetPreferenceCommand{
+			UserID:         resolveUserID(r),
+			Scope:          input.Scope,
+			ConversationID: input.ConversationID,
+			Kind:           input.Kind,
+			Value:          input.Value,
+			SourceType:     input.SourceType,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, fact)
+}
+
+func (h *Handler) handleListPreferences(w http.ResponseWriter, r *http.Request) {
+	view, err := h.preferenceQueries.ListPreferences(
+		r.Context(),
+		preferencefact.ListPreferencesQuery{
+			UserID:         resolveUserID(r),
+			Scope:          strings.TrimSpace(r.URL.Query().Get("scope")),
+			ConversationID: strings.TrimSpace(r.URL.Query().Get("conversationId")),
+			Status:         strings.TrimSpace(r.URL.Query().Get("status")),
+			Limit:          100,
+		},
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleRevokePreference(w http.ResponseWriter, r *http.Request) {
+	fact, err := h.preferenceCommands.RevokePreference(
+		r.Context(),
+		resolveUserID(r),
+		r.PathValue("preferenceId"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, fact)
+}
+
+func (h *Handler) handleRestorePreference(w http.ResponseWriter, r *http.Request) {
+	fact, err := h.preferenceCommands.RestorePreference(
+		r.Context(),
+		resolveUserID(r),
+		r.PathValue("preferenceId"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, fact)
 }
 
 func (h *Handler) handleGetLearningOpsSummary(w http.ResponseWriter, r *http.Request) {
@@ -350,13 +466,35 @@ func requireVerifiedAccount(r *http.Request) (string, error) {
 	).WithRecovery("surface", 0)
 }
 
+// requireIdentifiedUser 供 conversation/run 读写路径使用：身份来自 JWT principal
+// 或 auth middleware 白名单化后的可信 identity header，二者皆空时拒绝，
+// 不再回退 anonymous（metadata 声明 auth_mode: required + actor persona）。
+func requireIdentifiedUser(r *http.Request) (string, error) {
+	if claims, ok := rtauth.PrincipalFromContext(r.Context()); ok && strings.TrimSpace(claims.Subject) != "" {
+		return strings.TrimSpace(claims.Subject), nil
+	}
+	if uid := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); uid != "" {
+		return uid, nil
+	}
+	return "", rterr.NewAppError(
+		rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "unauthorized"),
+		"请先登录",
+		"assistant conversation/run requires an identified persona",
+	).WithRecovery("surface", 0)
+}
+
 func (h *Handler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
 	var input assistant.CreateConversationInput
 	if err := readJSON(r, &input); err != nil && err != io.EOF {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
-	conversation, err := h.service.CreateConversation(r.Context(), resolveUserID(r), input)
+	conversation, err := h.service.CreateConversation(r.Context(), userID, input)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -365,7 +503,12 @@ func (h *Handler) handleCreateConversation(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) handleGetConversation(w http.ResponseWriter, r *http.Request) {
-	conversation, err := h.service.GetConversation(r.Context(), resolveUserID(r), r.PathValue("conversationId"))
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	conversation, err := h.service.GetConversation(r.Context(), userID, r.PathValue("conversationId"))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -374,12 +517,17 @@ func (h *Handler) handleGetConversation(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) handleStartRun(w http.ResponseWriter, r *http.Request) {
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
 	var input assistant.CreateTurnInput
 	if err := readJSON(r, &input); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
-	turn, err := h.service.CreateTurn(r.Context(), resolveUserID(r), r.PathValue("conversationId"), input)
+	turn, err := h.service.CreateTurn(r.Context(), userID, r.PathValue("conversationId"), input)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -389,7 +537,12 @@ func (h *Handler) handleStartRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetRun(w http.ResponseWriter, r *http.Request) {
-	run, err := h.service.GetTurn(r.Context(), resolveUserID(r), r.PathValue("runId"))
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	run, err := h.service.GetTurn(r.Context(), userID, r.PathValue("runId"))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -397,9 +550,84 @@ func (h *Handler) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
+func (h *Handler) handleListConversations(w http.ResponseWriter, r *http.Request) {
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	view, err := h.service.ListConversations(
+		r.Context(),
+		userID,
+		parseLimit(r, 20),
+		r.URL.Query().Get("cursor"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleListConversationTurns(w http.ResponseWriter, r *http.Request) {
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	view, err := h.service.ListConversationTurns(
+		r.Context(),
+		userID,
+		r.PathValue("conversationId"),
+		parseLimit(r, 20),
+		r.URL.Query().Get("cursor"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleCancelRun(w http.ResponseWriter, r *http.Request) {
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	run, err := h.service.CancelRun(r.Context(), userID, r.PathValue("runId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	log.Printf("assistant http cancel_run runId=%s status=%s", run.TurnID, run.Status)
+	writeJSON(w, http.StatusOK, run)
+}
+
 func (h *Handler) handleStreamRunEvents(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("runId")
-	log.Printf("assistant http stream_run_events_requested runId=%s requestId=%s traceId=%s", runID, resolveRequestID(r), resolveTraceID(r))
+	userID, err := requireIdentifiedUser(r)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	afterSeq, err := runResumeAfterSeq(r, runID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	turn, err := h.service.GetTurn(r.Context(), userID, runID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	log.Printf(
+		"assistant http stream_run_events_requested runId=%s afterSeq=%d requestId=%s traceId=%s",
+		runID,
+		afterSeq,
+		resolveRequestID(r),
+		resolveTraceID(r),
+	)
 	flusher, _ := w.(http.Flusher)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -407,16 +635,49 @@ func (h *Handler) handleStreamRunEvents(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	emitted := 0
-	err := h.service.StreamTurn(r.Context(), resolveUserID(r), runID, func(envelope streaming.Envelope) error {
+	err = h.service.StreamTurnAfterSeq(r.Context(), userID, runID, afterSeq, func(envelope streaming.Envelope) error {
 		emitted++
 		writeStreamingSSEEnvelope(w, envelope, flusher)
 		return nil
 	})
 	if err != nil {
 		log.Printf("assistant http stream_run_events_failed runId=%s emitted=%d err=%v", runID, emitted, err)
+		// SSE 头已写出，无法改状态码；以结构化终止事件把错误码交给客户端。
+		errorCode := "ASSISTANT.SYSTEM.stream_unavailable"
+		var appErr *rterr.AppError
+		if errors.As(err, &appErr) {
+			errorCode = appErr.Code.String()
+		}
+		writeStreamingSSEEnvelope(w, streaming.Envelope{
+			EventID:   runID + ":error",
+			StreamID:  runID,
+			EventType: "turn_failed",
+			Seq:       afterSeq + uint64(emitted) + 1,
+			TraceID:   turn.TraceID,
+			Payload: map[string]any{
+				"conversationId": turn.ConversationID,
+				"turnId":         runID,
+				"code":           errorCode,
+			},
+		}, flusher)
 		return
 	}
 	log.Printf("assistant http stream_run_events_ready runId=%s events=%d", runID, emitted)
+}
+
+func runResumeAfterSeq(r *http.Request, runID string) (uint64, error) {
+	token := strings.TrimSpace(r.Header.Get("Last-Event-ID"))
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("resumeToken"))
+	}
+	if token == "" {
+		return 0, nil
+	}
+	streamID, seq, err := streaming.ParseResumeToken(token)
+	if err != nil || streamID != strings.TrimSpace(runID) {
+		return 0, application.AssistantRunInvalidArgument("invalid assistant stream resume token")
+	}
+	return seq, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -450,11 +711,31 @@ func writeStreamingSSEEnvelope(w http.ResponseWriter, envelope streaming.Envelop
 	if event.Event != "" {
 		_, _ = fmt.Fprintf(w, "event: %s\n", event.Event)
 	}
-	payload, _ := json.Marshal(event.Data)
+	normalized := envelope.Normalized()
+	data := map[string]any{
+		"schema":         "assistant_stream_event",
+		"eventId":        normalized.EventID,
+		"conversationId": streamPayloadString(normalized.Payload, "conversationId"),
+		"turnId":         streamPayloadString(normalized.Payload, "turnId"),
+		"seq":            normalized.Seq,
+		"eventType":      normalized.EventType,
+		"traceId":        normalized.TraceID,
+		"payload":        normalized.Payload,
+		"createdAt":      normalized.CreatedAt.Format(time.RFC3339Nano),
+	}
+	if normalized.RuntimeFailure != nil {
+		data["runtimeFailure"] = normalized.RuntimeFailure
+	}
+	payload, _ := json.Marshal(data)
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
 	if flusher != nil {
 		flusher.Flush()
 	}
+}
+
+func streamPayloadString(payload map[string]any, key string) string {
+	value, _ := payload[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func mustStreamingEnvelope(event string, seq uint64, data any) streaming.Envelope {

@@ -1,8 +1,116 @@
 # 推荐系统商用成熟度规划
 
-> 版本：2026-06-25
+> 版本：2026-07-20（推荐商用三期 N0-N3 闭环修复完成）
 > 范围：非深排商用成熟度 P0 已进入实现；深排平台仍为 out of scope。
 > 承接：`/Users/zhaoyuxi/.cursor/plans/推荐系统全链路自检与规划_90b5be26.plan.md` 与 `specs/changelog/CR-20260616-041-recommendation-baseline-readiness.yaml`。
+
+## -1. 2026-07-20 推荐商用三期（N0-N3）闭环修复状态附记
+
+三期以四路深度排查结论（场景与反馈链 / 特征双链路 / 可观测与持续改进 /
+四环境可测试性）为输入，修复了「行为→特征→训练→晋升」闭环的 7 个生产
+装配断裂与观测虚标，收口至真实商用条件：
+
+- **N0 生产装配止血**：① CascadeScorer 生产装配修复（`newProductionScorer`
+  单一装配点 + 装配契约测试防再犯；`model_fallback_rate` 改真实降级计数
+  `rec_pipeline_model_fallback_total`）。② 行为→特征投影改持久轨 relay
+  （`BehaviorProjectionRelay` 游标扫 `rm_behavior_events`，断点续传 +
+  at-least-once，替换无订阅者的 BehaviorBatchReported Pub/Sub；api_integration
+  改为生产同构装配验证）。③ like/comment/report 服务端权威信号注入
+  （三域 outbox → `AuthoritativeSignalSink` → HotPath + 持久轨 + learning；
+  批量端点拒收三 action 防双计；trackComment 端侧死方法删除）。
+  ④ SessionCache 失效 key 改用 feedSessionId（此前 trace sessionId 错配永不
+  命中）；首页 impressed 接真实视口门控（`_QualifiedImpressionGate` 50%+1s，
+  预构建卡片不再被误记曝光/拉黑）。⑤ CI 训练链库统一（五脚本 --db env-first +
+  workflow 显式传参）；replay 冻结集物化完整样本快照（`rec_replay_samples`，
+  join --clean 不再摧毁）；多目标子模型 artifact 全量上传 + serving 按
+  `model_artifact_uris` 拉取。
+- **N1 观测真实化**：① offline_* 六项 SLI 转 objective_only（证据通道
+  CI eval_report artifact + promote gate，禁止无数据虚标 measured）；
+  smembers_fallback 改守护 tripwire 语义；4 条死告警（RecScoreDistribution/
+  ContentCoverage/PolicyTakedownEjection 删除 + ModelFallback 表达式改真实
+  降级计数）；rollback_layers 收敛为 9 个有实现机制的层（每层登记 mechanism）。
+  ② 新能力指标补齐：objectCards 装配/provider 失败、edge materializer
+  runs+last_success gauge、embedding 成功/预算耗尽、gate 拦截、shadow 覆盖率、
+  per-source 召回失败、Redis 降级、policy reload+版本 gauge。③ AB 闭环接线：
+  `ABAdmissionRunner` 每小时聚合 rec_learning_events 喂
+  `EvaluateAndRecordABAdmission`（ab_experiment_validity 有真实数据）；
+  `cmd/abreport` CLI 产出晋升评审报告；归因指标补 experiment_bucket 维度
+  （served 传 scoringBucket、行为侧服务端按同一 policy hash 重算）；
+  dashboard 增七态漏斗 + AB 分桶面板。
+- **N2 四环境证据**：① `recommendation_api_integration.yml` 每日 CI 跑
+  content-service api_integration（premium 事件链/behavior 契约有执行点 +
+  关键测试 PASS 断言）。② objectCards 开启入口：gamma-local policy overlay
+  （compose 挂载 + `QWQ_REC_POLICY_PATH`，overlay 与 metadata 差异范围由
+  `verify_gamma_policy_overlay.py` 门禁）+ 对象卡 gamma seed
+  （fixture + apply 脚本 + T3 接线）+ T3 strict 检查 `home_feed_object_cards`；
+  顺带修复 entity_card_provider 的 wishlist 查询 schema 漂移（entityId/status/
+  updatedAt）。③ 三环境 config.yaml experiments 死段删除（policy.yaml 单真相源）；
+  gamma embedding env-first 配置路径。④ alpha/test mock 保真（channelId 路由、
+  premium fail-closed、travel 垂类过滤、objectCards 首刷注入与 Remote 同构 +
+  4 项契约测试）；objectCards Widget 混排测试；onboarding 兴趣采集
+  （career_interest_page 已接 trackOnboardingInterest + tracker 契约测试）。
+  ⑤ prod gray readback 纳入推荐业务指标（空 feed 率/负反馈率 critical 阻断放量、
+  CTR 样本不足诚实跳过；指标名与真实 emitter 对齐防死查询）；
+  home_recommendation_journey patrol 挂 release_candidate/nightly_full profile。
+- **N3 特征质量与性能**：① feed 装配批量 `$in` 读（`FindPublishedFeedPosts`
+  消除 N+1）。② `FilterCandidates` pipeline 化（全部 SISMEMBER 单 RTT，
+  双路径语义一致契约测试）。③ bodyLength/aspectRatio/hasCover 从特征 registry
+  退役（在线恒 0 偏斜）+ publishHour 服务端派生下发（训练-在线同源）+
+  featureLagSeconds 训练侧 PIT 过滤（--max-feature-lag-seconds）+ comment 计数
+  保鲜投影到 rm_discovery_feed + served 记账改最终下发集
+  （DeferDeliveryAccounting + RecordDelivery，装配层丢弃的候选不再被拉黑）。
+
+已知遗留（会话性，非长期风险）：App 全量 flutter 回归受用户并行的 12 域
+Mock/Remote 迁移滚动中间态阻塞（推荐面测试均在各自编译窗口内验证绿）；
+gamma-local 端到端 objectCards 演示需环境启动后按 T3 strict 检查验收。
+
+## 0. 2026-07-19 推荐商用二期（W1-W13）状态附记
+
+按 2026-07-19 全链路复核（24 断点 B1-B24）与 Stage Gates 冷启动哲学（S0 常开 /
+S1 触发 / S2 评估）完成的开发切片：
+
+- **M0 主链路语义修复（P0 阻断消除）**：① B1/B16 首页频道语义收口——
+  `home_channels.feed_query` 全量切换 channel 语义（不再发 identity/type），
+  `GetFeed` 新增 `channelId`，`resolveFeedRoute` 按频道路由（following→FeedFollow
+  + `GateFollowFeedSource` fail-closed；travel→travel_photography 垂类；premium→
+  premium_stream），推荐频道禁止落入 PostReader 时间流。② B3 精品流读路径闭环——
+  沉浸流精品源改 premium 频道单路（不再三路时间流客户端合并），api_integration
+  端到端（events.ops 真实 Redis pub/sub → rm_premium_pool → recallPath=premium_pool
+  → takedown 即时回空）。③ B6/B7 归因补全——沉浸流 impression/dwell/skip 携带
+  position；intersection_expand 端侧执行链闭环（tracker + 交集卡展开回调接线）。
+- **M1 混合推荐阶段一（B4）**：feed envelope 新增 `objectCards`（FeedObjectCardDto
+  契约一次定义三类对象卡）；S0 只开启实体主页卡（`MongoEntityCardProvider`：
+  entityInstanceAffinities + wishlist 意图 + entities 档案 + entityMentions 反查
+  homepageId 保证卡必可点）；policy `objectCards` 段驱动注入（everyN/maxCards/
+  allowedKinds，enabled=false 零成本回滚）；App 端 `_weaveObjectCards` 编织渲染
+  + objectKind 归因埋点。
+- **M2 排序与特征闭环**：① B8 交集特征三方接通——serving/train/train_multiobjective
+  统一 `_append_intersection_features`（user 7 + item 4 = 11 维，affinity 仅在
+  confidenceLabel 存在时计入，与 Go 融合同语义），sample_joiner user 侧从
+  kindCounts 派生（与 Go deriveIntersectionFeatures 同构），verify_feature_consistency
+  升级为交集特征三方强校验；② B9 PIT 泄漏显性化——样本落 featureSnapshotAt/
+  featureLagSeconds + joiner 输出 lag p50/p95 泄漏度量；③ B5 embedding 写入管线
+  S0 建成（PostPublished→posts.embedding，独立 outbox checkpoint + 每日成本护栏
+  + 幂等指纹 + 回填任务），向量召回读通道 `vector_recall_enabled` flag-off 待 S1；
+  ④ B10/B11 轻量融合与 LTR 阶段策略——policy `recallFusion`（源配额 + 源间 boost，
+  不做 RRF），`rec_model_vs_rule` 桶改 rule 100%/model 0%（S0 shadow-only），
+  engine shadow 采样放宽到 rule 桶常开留档，爬坡条件（abAdmission 样本量门槛 +
+  promote_gate/online_guardrail 证据）写入 policy 注释锁定。
+- **M2+ 图谱自动物化（B22 S0）**：`rm_object_relation_edges` 边表 + 三类内容侧
+  自动边（semantic_co_mention/tag_overlap/geo_proximity）周期全量重算（6h）+
+  TTL 退场（14d）+ 统一读接口 `ObjectRelationEdgeReader`；行为共现边
+  `behavior_co_engagement` 仅 schema（S1 触发物化，开启不重构）。
+- **M3 冷启动（B12）**：`onboarding_interest` 行为契约（behaviors.yaml 2.5 强正
+  权重 + 云侧 SignalWeights + contentId 豁免 + App tracker）；onboarding 页面 UI
+  待 App 侧 Mock 迁移重构落定后接入（页面矩阵同步登记）。
+- **M4 证据与评估（B18/B20）**：dual-channel 引擎 acceptance 回填 20 个 recorded
+  测试（既有 8 个 canonical 化 + 本轮 12 个新增）；固定 replay dataset 机制
+  （`replay_dataset.py` freeze/list + evaluate.py `--replay-dataset` + CI 周调度
+  冻结与复评接线）。
+- **未随本轮关闭（外部依赖/并行阻塞）**：真实在线 AB 完整留档（需 gamma/beta
+  真实流量窗口）；App 全量 UAT（被并行进行中的 Mock 迁移重构阻塞）；
+  entity-service 侧 ObjectRelationEdge 读投影切换（跨服务事件同步，随 W10-S1）；
+  B23 两省内容放量 NO-GO 与 B24 prod edge SSL 维持外部依赖。
 
 ## 1. 结论
 

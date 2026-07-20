@@ -1,0 +1,19 @@
+aggregate: NotificationDeliveryJob
+layer: e2e
+
+description: |
+  M2 覆盖 iOS/Android Incoming Call 协调与 ExternalInteraction 可靠受理；
+  Web Push 明确移出 M2，真实 provider delivered 仍由后续凭据化 release gate 收口。
+
+scenarios:
+  - name: rtc_incoming_call_single_delivery_path
+    steps:
+      - rtc-service emits durable CallRinging
+      - notification-service resolves endpoint refs and PresenceView
+      - online device receives realtime and either ACKs within 750ms or falls through to push
+      - offline device immediately queues push through ExternalInteraction
+    assertions:
+      - no_unconditional_double_delivery
+      - accepted_push_is_sent_unconfirmed
+      - answered_or_ended_cancels_remaining_presentations
+      - web_push_is_not_part_of_m2

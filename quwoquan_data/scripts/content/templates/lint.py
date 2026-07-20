@@ -58,7 +58,7 @@ def lint_templates(registry: TemplateRegistry) -> list[str]:
                 if actual_rel != expected_rel:
                     errors.append(
                         f"{label}: blueprint path not isomorphic to tag system; "
-                        f"expected blueprints/{expected_rel}, found blueprints/{actual_rel}"
+                        f"expected templates/{expected_rel}, found templates/{actual_rel}"
                     )
         if not isinstance(blueprint.get("imagePlan"), list) or not blueprint.get("imagePlan"):
             errors.append(f"{label}: imagePlan must be a non-empty list")

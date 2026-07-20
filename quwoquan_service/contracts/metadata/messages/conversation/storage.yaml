@@ -16,6 +16,26 @@ collections:
         type: text
         fields: [title]
 
+  conversations_command_receipts:
+    entity: Conversation
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
+
+  conversations_outbox:
+    entity: Conversation
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+
+  chat_aggregate_outbox_sequences:
+    entity: Conversation
+    role: authoritative
+    description: chat 域三个非 Message 聚合 outbox 的共享全序分配器（_id 为 outbox 集合名），与事件写入同事务推进。
+
+  chat_projection_checkpoints:
+    entity: Conversation
+    role: projection
+    description: chat 域 relay/projector 各 consumer 独立保存的可重放水位。
+
   message_receipts:
     entity: MessageReceipt
     indexes:

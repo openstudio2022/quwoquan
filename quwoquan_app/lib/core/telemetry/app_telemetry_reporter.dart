@@ -96,6 +96,7 @@ final class AppTelemetryReporter implements AppTelemetryRecorder {
       'deviceModel': staticContext.deviceModel,
       'appVersion': staticContext.appVersion,
       'networkClass': _contextProvider.networkClass,
+      'devicePlatform': staticContext.devicePlatform,
       ...payload.extensions,
     };
     final ttl = payload.logType == 'error'

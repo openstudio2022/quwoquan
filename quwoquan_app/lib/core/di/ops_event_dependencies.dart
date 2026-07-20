@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_coordinator.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
@@ -17,6 +18,7 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_transport.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 
 final actorQueueStorageProvider = Provider<ActorQueueStorage>((ref) {
   return ActorQueueStorage();
@@ -71,6 +73,7 @@ final appTelemetryReporterProvider = Provider<AppTelemetryRecorder>((ref) {
     initialPartition: _partitionFor(initialAuth),
     initialActorKey: _actorKeyFor(initialAuth),
   );
+  AppPageExperienceTracker.instance.attachReporter(coordinator);
   final networkSubscription = contextProvider.networkChanges.listen((value) {
     if (value != 'none') coordinator.onNetworkAvailable();
   });
@@ -100,9 +103,11 @@ final appTelemetryReporterProvider = Provider<AppTelemetryRecorder>((ref) {
     );
   });
 
-  AppExceptionTelemetryService.instance.bind(reporter: coordinator);
+  final runtimeLogger = ref.watch(runtimeLoggerProvider);
+  AppExceptionTelemetryService.instance.bind(logger: runtimeLogger);
   ref.onDispose(() {
-    AppExceptionTelemetryService.instance.unbind(coordinator);
+    AppExceptionTelemetryService.instance.unbind(runtimeLogger);
+    AppPageExperienceTracker.instance.detachReporter(coordinator);
     unawaited(networkSubscription.cancel());
     unawaited(coordinator.dispose());
   });

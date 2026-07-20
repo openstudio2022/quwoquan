@@ -2,12 +2,14 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	react "quwoquan_service/services/assistant-service/internal/application/reasoning"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 )
 
 type recordingModelProvider struct {
@@ -46,6 +48,73 @@ func (p *recordingModelProvider) Complete(_ context.Context, req ModelRequest) (
 	}
 }
 
+type streamingFinalModelProvider struct{}
+
+func (streamingFinalModelProvider) Complete(_ context.Context, req ModelRequest) (ModelResponse, error) {
+	if req.Stage == "reasoning" {
+		return ModelResponse{
+			Text:            "直接回答",
+			StructuredDelta: map[string]any{"nextAction": "answer"},
+		}, nil
+	}
+	return ModelResponse{Text: "不应调用非流式 final"}, nil
+}
+
+func (streamingFinalModelProvider) Stream(
+	_ context.Context,
+	_ ModelRequest,
+	emit func(ModelTextDelta) error,
+) (ModelResponse, error) {
+	for _, text := range []string{"真实", "流式回答"} {
+		if err := emit(ModelTextDelta{Text: text}); err != nil {
+			return ModelResponse{}, err
+		}
+	}
+	return ModelResponse{Text: "真实流式回答", FinishReason: "stop"}, nil
+}
+
+type unavailableStreamingFinalProvider struct {
+	completeCalls int
+}
+
+func (provider *unavailableStreamingFinalProvider) Complete(
+	_ context.Context,
+	_ ModelRequest,
+) (ModelResponse, error) {
+	provider.completeCalls++
+	return ModelResponse{Text: "非流式回退回答", FinishReason: "stop"}, nil
+}
+
+func (*unavailableStreamingFinalProvider) Stream(
+	_ context.Context,
+	_ ModelRequest,
+	_ func(ModelTextDelta) error,
+) (ModelResponse, error) {
+	return ModelResponse{}, errors.New("stream transport unavailable")
+}
+
+func TestCompleteFinalModelResponseFallsBackBeforeAnyDelta(t *testing.T) {
+	provider := &unavailableStreamingFinalProvider{}
+	response, streamed, err := completeFinalModelResponse(
+		t.Context(),
+		provider,
+		ModelRequest{Stage: "final"},
+		func(ModelTextDelta) error {
+			t.Fatal("stream delta must not be emitted")
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("completeFinalModelResponse() error = %v", err)
+	}
+	if streamed {
+		t.Fatal("fallback response must not be marked streamed")
+	}
+	if provider.completeCalls != 1 || response.Text != "非流式回退回答" {
+		t.Fatalf("fallback response=%+v completeCalls=%d", response, provider.completeCalls)
+	}
+}
+
 func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 	now := time.Date(2026, 4, 29, 3, 0, 0, 0, time.UTC)
 	model := &recordingModelProvider{}
@@ -54,7 +123,8 @@ func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 		ReactRuntime{
 			Model: model,
 			Tools: DefaultToolCoordinator{
-				Now: func() time.Time { return now },
+				Registry: testCloudToolRegistry(),
+				Now:      func() time.Time { return now },
 			},
 		},
 		func() time.Time { return now },
@@ -155,6 +225,36 @@ func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 	}
 }
 
+func TestAgentLoopEmitsProviderTextDeltasWithoutSyntheticChunking(t *testing.T) {
+	loop := NewAgentLoop(
+		staticSkillRuntime{selection: SkillSelection{SkillID: "general_qa"}},
+		ReactRuntime{Model: streamingFinalModelProvider{}},
+		nil,
+	)
+	events, failure, err := loop.RunTurn(t.Context(), assistant.AssistantTurn{
+		TurnID:         "atn_streaming",
+		ConversationID: "acv_streaming",
+		UserID:         "user_streaming",
+		Input:          assistant.AssistantTurnInput{Text: "请直接回答"},
+		TraceID:        "trace_streaming",
+	})
+	if err != nil {
+		t.Fatalf("RunTurn() error = %v", err)
+	}
+	if failure != nil {
+		t.Fatalf("failure=%+v", failure)
+	}
+	deltas := []string{}
+	for _, event := range events {
+		if event.EventType == "partial_answer" {
+			deltas = append(deltas, stringValue(event.Payload["text"]))
+		}
+	}
+	if strings.Join(deltas, "") != "真实流式回答" || len(deltas) != 2 {
+		t.Fatalf("deltas=%#v", deltas)
+	}
+}
+
 func TestAgentLoop_RunTurnStream_ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	now := time.Date(2026, 4, 29, 3, 10, 0, 0, time.UTC)
 	loop := NewAgentLoop(
@@ -162,6 +262,7 @@ func TestAgentLoop_RunTurnStream_ToolFailureReturnsRuntimeFailure(t *testing.T) 
 		ReactRuntime{
 			Model: &recordingModelProvider{},
 			Tools: DefaultToolCoordinator{
+				Registry:  testCloudToolRegistry(),
 				Now:       func() time.Time { return now },
 				ForceFail: true,
 			},
@@ -357,7 +458,8 @@ func TestReactRuntime_RetriesEmptyFinalAnswer(t *testing.T) {
 	runtime := ReactRuntime{
 		Model: model,
 		Tools: DefaultToolCoordinator{
-			Now: func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+			Registry: testCloudToolRegistry(),
+			Now:      func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
 		},
 	}
 	result, err := runtime.Run(context.Background(), assistant.AssistantTurn{
@@ -423,7 +525,8 @@ func TestReactRuntime_RetriesInternalFinalWording(t *testing.T) {
 	runtime := ReactRuntime{
 		Model: model,
 		Tools: DefaultToolCoordinator{
-			Now: func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+			Registry: testCloudToolRegistry(),
+			Now:      func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
 		},
 	}
 	result, err := runtime.Run(context.Background(), assistant.AssistantTurn{
@@ -448,33 +551,25 @@ func TestReactRuntime_RetriesInternalFinalWording(t *testing.T) {
 	}
 }
 
-func TestSplitAnswerDeltasUsesSmallerReadableChunks(t *testing.T) {
-	chunks := splitAnswerDeltas("第一段说明你需要关注天气、交通、同行人数和备选方案。\n\n- 第一天安排户外活动，保留室内备选，并提前确认开放时间。\n- 第二天提前查看交通与排队情况，给孩子安排休息窗口。")
-	if len(chunks) < 3 {
-		t.Fatalf("chunks=%#v, want at least 3", chunks)
-	}
-	for _, chunk := range chunks {
-		if len([]rune(chunk)) > 52 {
-			t.Fatalf("chunk too long: %q (%d)", chunk, len([]rune(chunk)))
-		}
-	}
-}
-
 func TestAssistantService_StreamTurnPassesConversationHistory(t *testing.T) {
 	now := time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC)
 	model := &recordingModelProvider{}
-	service := NewAssistantService(nil, nil, nil, WithAgentLoop(NewAgentLoop(
-		staticSkillRuntime{selection: SkillSelection{
-			SkillID:    "weather",
-			DomainID:   "weather",
-			ToolPolicy: []string{"web_search"},
-		}},
-		ReactRuntime{
-			Model: model,
-			Tools: DefaultToolCoordinator{Now: func() time.Time { return now }},
-		},
-		func() time.Time { return now },
-	)))
+	service := NewAssistantService(nil, nil, nil,
+		WithConversationRunStore(persistence.NewMemoryConversationRunStore()), WithAgentLoop(NewAgentLoop(
+			staticSkillRuntime{selection: SkillSelection{
+				SkillID:    "weather",
+				DomainID:   "weather",
+				ToolPolicy: []string{"web_search"},
+			}},
+			ReactRuntime{
+				Model: model,
+				Tools: DefaultToolCoordinator{
+					Registry: testCloudToolRegistry(),
+					Now:      func() time.Time { return now },
+				},
+			},
+			func() time.Time { return now },
+		)))
 	ctx := context.Background()
 	conversation, err := service.CreateConversation(ctx, "user_history", assistant.CreateConversationInput{Summary: "history"})
 	if err != nil {
@@ -486,8 +581,8 @@ func TestAssistantService_StreamTurnPassesConversationHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTurn(first) error = %v", err)
 	}
-	if _, err := service.BuildFakeTurnStream(ctx, "user_history", first.TurnID); err != nil {
-		t.Fatalf("BuildFakeTurnStream(first) error = %v", err)
+	if _, err := service.ExecuteTurn(ctx, "user_history", first.TurnID); err != nil {
+		t.Fatalf("ExecuteTurn(first) error = %v", err)
 	}
 	second, err := service.CreateTurn(ctx, "user_history", conversation.ConversationID, assistant.CreateTurnInput{
 		Input: assistant.AssistantTurnInput{Text: "剩下2天有什么外出推荐"},
@@ -495,8 +590,8 @@ func TestAssistantService_StreamTurnPassesConversationHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTurn(second) error = %v", err)
 	}
-	if _, err := service.BuildFakeTurnStream(ctx, "user_history", second.TurnID); err != nil {
-		t.Fatalf("BuildFakeTurnStream(second) error = %v", err)
+	if _, err := service.ExecuteTurn(ctx, "user_history", second.TurnID); err != nil {
+		t.Fatalf("ExecuteTurn(second) error = %v", err)
 	}
 	foundSecondReasoning := false
 	for _, call := range model.calls {
@@ -573,7 +668,8 @@ func TestReactRuntime_UsesStructuredToolDeltaWithinPolicy(t *testing.T) {
 	runtime := ReactRuntime{
 		Model: structuredToolModelProvider{toolName: "app_search"},
 		Tools: DefaultToolCoordinator{
-			Now: func() time.Time { return now },
+			Registry: testCloudToolRegistry(),
+			Now:      func() time.Time { return now },
 		},
 	}
 	result, err := runtime.Run(context.Background(), assistant.AssistantTurn{
@@ -610,7 +706,8 @@ func TestReactRuntime_RejectsStructuredToolOutsidePolicy(t *testing.T) {
 	runtime := ReactRuntime{
 		Model: structuredToolModelProvider{toolName: "app_search"},
 		Tools: DefaultToolCoordinator{
-			Now: func() time.Time { return now },
+			Registry: testCloudToolRegistry(),
+			Now:      func() time.Time { return now },
 		},
 	}
 	_, err := runtime.Run(context.Background(), assistant.AssistantTurn{
@@ -658,7 +755,8 @@ func TestAgentLoop_RunTurnStream_DeviceActionEmitsConfirmation(t *testing.T) {
 				},
 			},
 			Tools: DefaultToolCoordinator{
-				Now: func() time.Time { return now },
+				Registry: testCloudToolRegistry(),
+				Now:      func() time.Time { return now },
 			},
 		},
 		func() time.Time { return now },

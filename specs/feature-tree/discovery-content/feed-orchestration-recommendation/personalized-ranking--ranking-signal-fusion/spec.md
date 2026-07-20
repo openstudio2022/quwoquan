@@ -1,4 +1,4 @@
-# L4 特性：ranking-signal-fusion
+# L3 特性：ranking-signal-fusion
 
 ## 功能说明
 

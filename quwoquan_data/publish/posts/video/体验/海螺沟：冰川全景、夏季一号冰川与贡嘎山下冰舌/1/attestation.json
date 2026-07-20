@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260719--travel-video-cold-start--cn-sichuan--canary-001",
+  "executionBinding": "frozen",
+  "objectRef": "海螺沟_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "review_controller",
+    "model": "deterministic",
+    "modelFamily": "deterministic",
+    "runId": "review_海螺沟_video",
+    "resultHash": "sha256:ed27ea2b001c4a79095d681374e3597862bc0b40a2e62503baa0877a74304bf2"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

@@ -59,8 +59,12 @@ func (facade *CommandFacade) Join(ctx context.Context, circleID string) (Command
 		return CommandResult{}, err
 	}
 	role := membershipmodel.CircleMemberRoleMember
+	pending := false
 	if actorID == circle.OwnerPersonaID {
 		role = membershipmodel.CircleMemberRoleOwner
+	} else if circle.JoinPolicy == "approval" {
+		// 审批制圈子：加入意图建 pending 档，等待 owner/admin 审批（ApproveCircleMember）。
+		pending = true
 	} else if circle.JoinPolicy != "open" {
 		return CommandResult{}, generated.AppErrorFromJoinApprovalRequired("Circle join policy does not allow direct membership creation")
 	}
@@ -75,9 +79,65 @@ func (facade *CommandFacade) Join(ctx context.Context, circleID string) (Command
 	}
 	return facade.commit(ctx, currentContext, actorID, membershipmodel.ChangeSet{
 		Kind: membershipmodel.ChangeJoin, MembershipID: membershipID,
-		CircleID: circle.CircleID, PersonaID: actorID, Role: role,
+		CircleID: circle.CircleID, PersonaID: actorID, Role: role, Pending: pending,
 		ExpectedVersion: expectedVersion, OccurredAt: facade.now().UTC(),
 	})
+}
+
+// DecideCommand 是圈子级审批（Approve/Reject）的命令输入。
+type DecideCommand struct {
+	CircleID        string
+	TargetPersonaID string
+}
+
+func (facade *CommandFacade) Approve(ctx context.Context, command DecideCommand) (CommandResult, error) {
+	return facade.decide(ctx, command, membershipmodel.ChangeApprove)
+}
+
+func (facade *CommandFacade) Reject(ctx context.Context, command DecideCommand) (CommandResult, error) {
+	return facade.decide(ctx, command, membershipmodel.ChangeReject)
+}
+
+func (facade *CommandFacade) decide(ctx context.Context, command DecideCommand, kind membershipmodel.ChangeKind) (CommandResult, error) {
+	currentContext, actorID, err := trustedMembershipContext(ctx)
+	if err != nil {
+		return CommandResult{}, err
+	}
+	circle, err := facade.requireActiveCircle(ctx, command.CircleID)
+	if err != nil {
+		return CommandResult{}, err
+	}
+	if err := facade.requireModerator(ctx, circle, actorID); err != nil {
+		return CommandResult{}, err
+	}
+	targetPersonaID := strings.TrimSpace(command.TargetPersonaID)
+	target, found, readErr := facade.store.LoadByIdentity(ctx, circle.CircleID, targetPersonaID)
+	if readErr != nil {
+		return CommandResult{}, generated.AppErrorFromMembershipStorageWriteFailed(readErr.Error())
+	}
+	if !found {
+		return CommandResult{}, generated.AppErrorFromMembershipNotFound("target membership not found")
+	}
+	return facade.commit(ctx, currentContext, actorID, membershipmodel.ChangeSet{
+		Kind: kind, MembershipID: target.ID,
+		CircleID: target.CircleID, PersonaID: target.PersonaID,
+		ExpectedVersion: target.Version, OccurredAt: facade.now().UTC(),
+	})
+}
+
+func (facade *CommandFacade) requireModerator(ctx context.Context, circle membershipports.CirclePolicySlice, actorID string) error {
+	if actorID == circle.OwnerPersonaID {
+		return nil
+	}
+	actorMembership, found, readErr := facade.memberships.ReadCircleMembership(ctx, circle.CircleID, actorID)
+	if readErr != nil {
+		return generated.AppErrorFromMembershipStorageWriteFailed(readErr.Error())
+	}
+	if found && actorMembership.State == membershipmodel.CircleMembershipStateActive &&
+		actorMembership.Role == membershipmodel.CircleMemberRoleAdmin {
+		return nil
+	}
+	return generated.AppErrorFromPermissionDenied("Circle membership approval requires owner or admin")
 }
 
 func (facade *CommandFacade) Leave(ctx context.Context, command LeaveCommand) (CommandResult, error) {
@@ -108,17 +168,8 @@ func (facade *CommandFacade) UpdateRole(ctx context.Context, command UpdateRoleC
 	if err != nil {
 		return CommandResult{}, err
 	}
-	moderator := actorID == circle.OwnerPersonaID
-	if !moderator {
-		actorMembership, found, readErr := facade.memberships.ReadCircleMembership(ctx, circle.CircleID, actorID)
-		if readErr != nil {
-			return CommandResult{}, generated.AppErrorFromMembershipStorageWriteFailed(readErr.Error())
-		}
-		moderator = found && actorMembership.State == membershipmodel.CircleMembershipStateActive &&
-			actorMembership.Role == membershipmodel.CircleMemberRoleAdmin
-	}
-	if !moderator {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("Circle membership role changes require owner or admin")
+	if err := facade.requireModerator(ctx, circle, actorID); err != nil {
+		return CommandResult{}, err
 	}
 	targetPersonaID := strings.TrimSpace(command.TargetPersonaID)
 	target, found, readErr := facade.store.LoadByIdentity(ctx, circle.CircleID, targetPersonaID)
@@ -200,7 +251,8 @@ func membershipCommandDigest(actorID string, change membershipmodel.ChangeSet) (
 		CircleID     string                           `json:"circleId"`
 		PersonaID    string                           `json:"personaId"`
 		Role         membershipmodel.CircleMemberRole `json:"role"`
-	}{actorID, change.Kind, change.MembershipID, change.CircleID, change.PersonaID, change.Role})
+		Pending      bool                             `json:"pending"`
+	}{actorID, change.Kind, change.MembershipID, change.CircleID, change.PersonaID, change.Role, change.Pending})
 	if err != nil {
 		return "", err
 	}
@@ -232,6 +284,8 @@ func mapMembershipCommitError(err error) error {
 		return generated.AppErrorFromMembershipVersionConflict(err.Error())
 	case errors.Is(err, membershipmodel.ErrIdempotencyConflict):
 		return generated.AppErrorFromMembershipIdempotencyConflict(err.Error())
+	case errors.Is(err, membershipmodel.ErrStateConflict):
+		return generated.AppErrorFromMembershipStateConflict(err.Error())
 	case errors.Is(err, membershipmodel.ErrInvalidChange):
 		return generated.AppErrorFromInvalidArgument(err.Error())
 	default:
@@ -268,19 +322,60 @@ type PersonaCirclePageResult struct {
 }
 
 type QueryFacade struct {
-	memberships membershipports.MembershipReader
-	circles     membershipports.CircleSummaryReader
+	memberships    membershipports.MembershipReader
+	personaCircles membershipports.PersonaCircleReader
+	policies       membershipports.CirclePolicyReader
 }
 
-func NewQueryFacade(memberships membershipports.MembershipReader, circles membershipports.CircleSummaryReader) *QueryFacade {
-	if memberships == nil || circles == nil {
+func NewQueryFacade(memberships membershipports.MembershipReader, personaCircles membershipports.PersonaCircleReader, policies membershipports.CirclePolicyReader) *QueryFacade {
+	if memberships == nil || personaCircles == nil || policies == nil {
 		panic("CircleMembership QueryFacade requires named Readers")
 	}
-	return &QueryFacade{memberships: memberships, circles: circles}
+	return &QueryFacade{
+		memberships: memberships, personaCircles: personaCircles, policies: policies,
+	}
 }
 
 func (facade *QueryFacade) ListCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (MembershipPageResult, error) {
 	slice, err := facade.memberships.ListCircleMemberships(ctx, strings.TrimSpace(circleID), limit, cursor)
+	if err != nil {
+		return MembershipPageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
+	}
+	items := make([]MembershipSlice, 0, len(slice.Items))
+	for _, membership := range slice.Items {
+		items = append(items, newMembershipSlice(membership))
+	}
+	return MembershipPageResult{Items: items, Cursor: slice.Cursor}, nil
+}
+
+// ListPendingCircleMemberships 返回待审批队列；仅圈主或 active admin 可读。
+func (facade *QueryFacade) ListPendingCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (MembershipPageResult, error) {
+	current, ok := operation.FromContext(ctx)
+	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
+		return MembershipPageResult{}, generated.AppErrorFromInvalidArgument("trusted persona is required")
+	}
+	actorID := strings.TrimSpace(current.Actor.PersonaID)
+	trimmedCircleID := strings.TrimSpace(circleID)
+	circle, found, err := facade.policies.ReadCirclePolicy(ctx, trimmedCircleID)
+	if err != nil {
+		return MembershipPageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
+	}
+	if !found {
+		return MembershipPageResult{}, generated.AppErrorFromCircleNotFound("CircleMembership target Circle not found")
+	}
+	moderator := actorID == circle.OwnerPersonaID
+	if !moderator {
+		actorMembership, memberFound, readErr := facade.memberships.ReadCircleMembership(ctx, trimmedCircleID, actorID)
+		if readErr != nil {
+			return MembershipPageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(readErr.Error())
+		}
+		moderator = memberFound && actorMembership.State == membershipmodel.CircleMembershipStateActive &&
+			actorMembership.Role == membershipmodel.CircleMemberRoleAdmin
+	}
+	if !moderator {
+		return MembershipPageResult{}, generated.AppErrorFromPermissionDenied("Circle pending membership queue requires owner or admin")
+	}
+	slice, err := facade.memberships.ListPendingCircleMemberships(ctx, trimmedCircleID, limit, cursor)
 	if err != nil {
 		return MembershipPageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
@@ -335,18 +430,35 @@ func newMembershipSlice(membership membershipmodel.CircleMembership) MembershipS
 	}
 }
 
-func (facade *QueryFacade) ListPersonaCircles(ctx context.Context, personaID string, limit int, cursor string) (PersonaCirclePageResult, error) {
-	slice, err := facade.memberships.ListPersonaMemberships(ctx, strings.TrimSpace(personaID), limit, cursor)
+func (facade *QueryFacade) ListPersonaCircles(
+	ctx context.Context,
+	personaID string,
+	query string,
+	limit int,
+	cursor string,
+) (PersonaCirclePageResult, error) {
+	personaID = strings.TrimSpace(personaID)
+	if personaID == "" {
+		return PersonaCirclePageResult{}, generated.AppErrorFromInvalidArgument(
+			"personaId is required",
+		)
+	}
+	viewerPersonaID := ""
+	if current, ok := operation.FromContext(ctx); ok {
+		viewerPersonaID = strings.TrimSpace(current.Actor.PersonaID)
+	}
+	slice, err := facade.personaCircles.ListPersonaCircles(
+		ctx,
+		membershipports.PersonaCircleQuery{
+			PersonaID:       personaID,
+			ViewerPersonaID: viewerPersonaID,
+			Query:           strings.TrimSpace(query),
+			Limit:           limit,
+			Cursor:          strings.TrimSpace(cursor),
+		},
+	)
 	if err != nil {
 		return PersonaCirclePageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
-	ids := make([]string, 0, len(slice.Items))
-	for _, membership := range slice.Items {
-		ids = append(ids, membership.CircleID)
-	}
-	circles, err := facade.circles.ReadCircleSummaries(ctx, ids)
-	if err != nil {
-		return PersonaCirclePageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
-	}
-	return PersonaCirclePageResult{Items: circles, Cursor: slice.Cursor}, nil
+	return PersonaCirclePageResult{Items: slice.Items, Cursor: slice.Cursor}, nil
 }

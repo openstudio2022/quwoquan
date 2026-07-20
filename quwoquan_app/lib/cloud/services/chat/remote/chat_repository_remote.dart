@@ -6,7 +6,6 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
@@ -17,9 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
@@ -27,7 +24,6 @@ import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 
 part 'chat_repository_remote_decoders.dart';
 
@@ -177,33 +173,6 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<ConversationSearchItemView>> searchConversations({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final uri = _uri(
-      ChatApiMetadata.searchConversationsPath,
-      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.globalSearchSuggestions,
-        operationId: ChatApiMetadata.searchConversationsOperation,
-        clientPageId: ChatRequestPageIds.searchConversations,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.globalSearchSuggestions,
-        operationId: ChatApiMetadata.searchConversationsOperation,
-      ),
-      fromMap: ConversationSearchItemView.fromMap,
-    );
-  }
-
-  @override
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
@@ -320,33 +289,6 @@ class RemoteChatRepository implements ChatRepository {
       ),
     ).items;
     return items.map(ChatMessageDto.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<List<MessageSearchItemView>> searchMessages({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final uri = _uri(
-      ChatApiMetadata.searchMessagesPath,
-      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.globalSearchSuggestions,
-        operationId: ChatApiMetadata.searchMessagesOperation,
-        clientPageId: ChatRequestPageIds.searchMessages,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.globalSearchSuggestions,
-        operationId: ChatApiMetadata.searchMessagesOperation,
-      ),
-      fromMap: MessageSearchItemView.fromMap,
-    );
   }
 
   @override
@@ -482,6 +424,35 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<ChatConversationMemberDto>> searchMembers({
+    required String conversationId,
+    required String query,
+    int limit = 50,
+  }) async {
+    final uri = _uri(
+      ChatApiMetadata.listMembersPath(conversationId: conversationId),
+      queryParameters: <String, String>{
+        'query': query.trim(),
+        'limit': '${limit.clamp(1, 50)}',
+        'sort': 'display_name_asc',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatDetail,
+        operationId: ChatApiMetadata.listMembersOperation,
+        clientPageId: ChatRequestPageIds.listMembers,
+      ),
+    );
+    return _decodeObjectItems(
+      decoded,
+      context: ChatRequestPageIds.listMembers,
+      fromMap: ChatConversationMemberDto.fromMap,
+    );
+  }
+
+  @override
   Future<void> addMembers({
     required String conversationId,
     required List<String> userIds,
@@ -501,6 +472,22 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
+  Future<void> leaveConversation(String conversationId) async {
+    final uri = _uri(
+      ChatApiMetadata.leaveConversationPath(conversationId: conversationId),
+    );
+    await _httpClient.postJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatSettings,
+        operationId: ChatApiMetadata.leaveConversationOperation,
+        clientPageId: ChatRequestPageIds.leaveConversation,
+      ),
+      body: const <String, dynamic>{},
+    );
+  }
+
+  @override
   Future<void> removeMember({
     required String conversationId,
     required String userId,
@@ -514,7 +501,7 @@ class RemoteChatRepository implements ChatRepository {
     await _httpClient.deleteJson(
       uri,
       headers: await _resolveHeaders(
-        AppUiSurfaces.chatManage,
+        AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.removeMemberOperation,
         clientPageId: ChatRequestPageIds.removeMember,
       ),
@@ -671,19 +658,22 @@ class RemoteChatRepository implements ChatRepository {
     );
   }
 
-  // ── 从群聊中选择联系人 ──────────────────────────────────────────────────────
+  // ── 从群聊/圈子中选择联系人 ─────────────────────────────────────────────────
 
   @override
   Future<List<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
+    ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final normalizedQuery = query?.trim() ?? '';
+    final sourceValue = source.wireValue;
     final uri = _uri(
       ChatApiMetadata.listSelectableGroupConversationsPath,
       queryParameters: <String, String>{
         if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
+        'source': ?sourceValue,
         'limit': '$limit',
       },
     );
@@ -734,63 +724,6 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final uri = _uri(
-      CircleApiMetadata.listCirclesPath,
-      queryParameters: <String, String>{'limit': '$limit'},
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listContactsOperation,
-        clientPageId: ChatRequestPageIds.listContacts,
-      ),
-    );
-    final obj = CloudResponseDecoder.asObject(
-      decoded,
-      context: ChatRequestPageIds.listContacts,
-    );
-    final items = obj['items'];
-    if (items is! List) {
-      return const <ChatContactTabCircleRowDto>[];
-    }
-    return items
-        .whereType<Map<String, dynamic>>()
-        .take(limit)
-        .map(
-          (m) => ChatContactTabCircleRowDto.fromMap(<String, dynamic>{
-            'circleId': m['id'],
-            'displayName': m['name'],
-            'avatarUrl': m['coverUrl'],
-            'subtitle': m['description'] ?? '',
-          }),
-        )
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final conversations = await listConversations(limit: limit);
-    return conversations
-        .where((item) => item.type == 'group')
-        .take(limit)
-        .map(
-          (item) => ChatContactTabFunGroupRowDto(
-            conversationId: item.id,
-            displayName: item.title,
-            avatarUrl: item.avatarUrl,
-            subtitle: item.lastMessagePreview,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  @override
   Future<List<String>> listMemberUserIds(String conversationId) async {
     final members = await listMembers(
       conversationId: conversationId,
@@ -800,30 +733,6 @@ class RemoteChatRepository implements ChatRepository {
         .map((m) => m.userId)
         .where((id) => id.isNotEmpty)
         .toList(growable: false);
-  }
-
-  @override
-  Future<List<ChatContactSearchItemDto>> searchContacts({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final uri = _uri(
-      ChatApiMetadata.searchContactsPath,
-      queryParameters: <String, String>{'query': query, 'limit': '$limit'},
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.globalSearchSuggestions,
-        operationId: ChatApiMetadata.searchContactsOperation,
-        clientPageId: ChatRequestPageIds.searchContacts,
-      ),
-    );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.searchContacts,
-      fromMap: ChatContactSearchItemDto.fromMap,
-    );
   }
 
   // ── 会话时间戳索引 ──────────────────────────────────────────────────────────
@@ -917,19 +826,40 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     ChatGroupSettingsDto settings,
   ) async {
+    // 群治理开关走 Conversation 聚合专属 governance 命令；
+    // UpdateConversationSettings 只承载用户级 mute/pin，禁止混用。
     final uri = _uri(
-      ChatApiMetadata.updateConversationSettingsPath(
+      ChatApiMetadata.updateGroupGovernanceSettingsPath(
         conversationId: conversationId,
       ),
     );
     await _httpClient.patchJson(
       uri,
       headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.updateConversationSettingsOperation,
-        clientPageId: ChatRequestPageIds.updateConversationSettings,
+        AppUiSurfaces.chatManage,
+        operationId: ChatApiMetadata.updateGroupGovernanceSettingsOperation,
+        clientPageId: ChatRequestPageIds.updateGroupGovernanceSettings,
       ),
       body: settings.toGroupSettingsPatchBody(),
+    );
+  }
+
+  @override
+  Future<void> updateAnnouncement(
+    String conversationId,
+    String announcement,
+  ) async {
+    final uri = _uri(
+      ChatApiMetadata.updateAnnouncementPath(conversationId: conversationId),
+    );
+    await _httpClient.patchJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatManage,
+        operationId: ChatApiMetadata.updateAnnouncementOperation,
+        clientPageId: ChatRequestPageIds.updateAnnouncement,
+      ),
+      body: <String, Object?>{'announcement': announcement},
     );
   }
 

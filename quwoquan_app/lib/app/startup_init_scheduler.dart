@@ -5,6 +5,7 @@ import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show appTelemetryReporterProvider, realtimeConnectionManagerProvider;
@@ -109,6 +110,9 @@ final class StartupInitScheduler {
     AppStartupRuntime.instance.bindProductTelemetry(
       ref.read(appTelemetryReporterProvider),
     );
+    _bestEffort('startup_runtime_diagnostics', () {
+      ref.read(runtimeDiagnosticsProvider);
+    });
     _bestEffort('startup_realtime_foreground', () {
       ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
     });

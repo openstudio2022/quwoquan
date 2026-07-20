@@ -19,6 +19,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 // ── 测试辅助 ─────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ class _ErrorContentRepository extends MockContentRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -73,6 +75,7 @@ class _ErrorContentRepository extends MockContentRepository {
 
 class _RecordingContentRepository extends MockContentRepository {
   String? lastCategory;
+  String? lastChannelId;
   String? lastIdentity;
   String? lastType;
   String? lastSessionId;
@@ -81,6 +84,7 @@ class _RecordingContentRepository extends MockContentRepository {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
+    String? channelId,
     String? identity,
     String? type,
     String? subCategory,
@@ -93,12 +97,14 @@ class _RecordingContentRepository extends MockContentRepository {
     DateTime? deadlineAt,
   }) async {
     lastCategory = category;
+    lastChannelId = channelId;
     lastIdentity = identity;
     lastType = type;
     lastSessionId = sessionId;
     lastFeedRequestId = feedRequestId;
     return super.listDiscoveryFeedPage(
       category: category,
+      channelId: channelId,
       identity: identity,
       type: type,
       subCategory: subCategory,

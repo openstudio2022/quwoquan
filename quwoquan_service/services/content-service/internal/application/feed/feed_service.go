@@ -3,6 +3,7 @@ package feed
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,15 +11,20 @@ import (
 
 	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
+	recpolicy "quwoquan_service/runtime/recpolicy"
 	"quwoquan_service/services/content-service/internal/application/identity"
 	"quwoquan_service/services/content-service/internal/application/intersection"
 	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 )
 
 type FeedService struct {
-	engine        *rtrec.Engine
-	postReader    postports.PostFeedReader
-	intersections feedIntersectionProvider
+	engine           *rtrec.Engine
+	postReader       postports.PostFeedReader
+	intersections    feedIntersectionProvider
+	objectCards      ObjectCardProvider
+	objectCardPolicy func() recpolicy.ObjectCardConfig
+	filterObserver   FeedFilterObserver
+	viewerBlocks     FeedViewerBlockReader
 }
 
 func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
@@ -34,23 +40,56 @@ func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts 
 
 type FeedServiceOption func(*FeedService)
 
+// FeedViewerBlockReader 返回与当前 viewer 任一方向存在拉黑关系的 persona。
+// 该事实来自 user 域 PersonaBlocked 投影，客户端不得通过 header/query 自报拉黑集合。
+type FeedViewerBlockReader interface {
+	ListBlockedPersonaIDs(
+		ctx context.Context,
+		viewerPersonaID string,
+	) ([]string, error)
+}
+
+func WithFeedViewerBlockReader(reader FeedViewerBlockReader) FeedServiceOption {
+	return func(service *FeedService) {
+		service.viewerBlocks = reader
+	}
+}
+
+type FeedFilterObserver interface {
+	ObserveBlockedKeywordFilter(
+		ctx context.Context,
+		evaluated int,
+		filtered int,
+	)
+}
+
+func WithFeedFilterObserver(observer FeedFilterObserver) FeedServiceOption {
+	return func(service *FeedService) {
+		service.filterObserver = observer
+	}
+}
+
 // WithFeedIntersectionProvider 注入交集理由池来源（70/20/10 内容流附着）。
 func WithFeedIntersectionProvider(provider feedIntersectionProvider) FeedServiceOption {
 	return func(s *FeedService) { s.intersections = provider }
 }
 
 type ListFeedRequest struct {
-	UserID      string
-	SessionID   string
-	Identity    string
-	Type        string
-	Sort        string
+	UserID          string
+	ViewerPersonaID string
+	SessionID       string
+	Identity        string
+	Type            string
+	Sort            string
+	// ChannelID 首页频道路由标识（home_channels.feed_query.channel 真相源）。
+	// 频道推荐主链路与 identity/type 浏览流互斥：channelId 非空时 identity/type 被忽略，
+	// 请求必须进推荐引擎并按 channelId 归因，禁止落入 PostReader 时间线具名查询。
+	ChannelID   string
 	SubCategory string
 	Cursor      string
 	Limit       int
 	// FeedRequestID 客户端回显的归因 id：首刷为空，分页/继续加载回显服务端首刷下发的 id。
 	FeedRequestID   string
-	BlockedUserIDs  []string
 	BlockedKeywords []string
 }
 
@@ -94,9 +133,12 @@ type FeedItemView struct {
 }
 
 type ListFeedResponse struct {
-	Items      []FeedItemView `json:"items"`
-	NextCursor string         `json:"nextCursor,omitempty"`
-	Cursor     string         `json:"cursor,omitempty"`
+	Items []FeedItemView `json:"items"`
+	// ObjectCards 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在
+	// items[anchorIndex] 之前；空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
+	ObjectCards []ObjectCardView `json:"objectCards,omitempty"`
+	NextCursor  string           `json:"nextCursor,omitempty"`
+	Cursor      string           `json:"cursor,omitempty"`
 	// FeedRequestID 服务端权威下发的归因 id（frq_ 前缀 ULID）；端侧回显 + 透传行为事件。
 	FeedRequestID string `json:"feedRequestId"`
 	// RankingVersion / ReasonVersion 本次结果的排序与理由管线版本。
@@ -135,9 +177,34 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	views := make([]FeedItemView, 0, limit)
 	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
+	// 频道推荐主链路与浏览流互斥（B1 收口）：channelId 非空即为首页频道请求，
+	// identity/type 一律忽略，禁止据此落入 PostReader 时间线具名查询。
+	channelRouted := strings.TrimSpace(req.ChannelID) != ""
+	if channelRouted {
+		requestedIdentity = ""
+		requestedType = ""
+	}
+	blockedPersonaIDs, blockErr := s.resolveViewerBlockedPersonaIDs(
+		ctx,
+		req.ViewerPersonaID,
+	)
+	if blockErr != nil {
+		return nil, blockErr
+	}
 	route := resolveFeedRoute(req)
-	blockedUsers := toLowerSet(req.BlockedUserIDs)
+	blockedUsers := toLowerSet(blockedPersonaIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
+	blockedKeywordEvaluated := 0
+	blockedKeywordFiltered := 0
+	defer func() {
+		if s.filterObserver != nil && len(blockedKeywords) > 0 {
+			s.filterObserver.ObserveBlockedKeywordFilter(
+				ctx,
+				blockedKeywordEvaluated,
+				blockedKeywordFiltered,
+			)
+		}
+	}()
 
 	requestedCursor := strings.TrimSpace(req.Cursor)
 	postReaderCursor := decodePostReaderFeedCursor(requestedCursor)
@@ -147,7 +214,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则，
 	// 必须在推荐召回和显式类型/身份查询两种具名读路径生效。
 	feedbackExclusions := s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
-	usePostReaderQuery := postReaderCursor != "" || requestedType != "" || requestedIdentity != ""
+	usePostReaderQuery := !channelRouted &&
+		(postReaderCursor != "" || requestedType != "" || requestedIdentity != "")
 	appendPost := func(post *postports.PostFeedItemSlice, recItem *rtrec.FeedItem) bool {
 		if post == nil {
 			return false
@@ -172,8 +240,12 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		if !postMatchesVertical(post, route.Vertical) {
 			return false
 		}
-		if containsBlockedKeyword(post, blockedKeywords) {
-			return false
+		if len(blockedKeywords) > 0 {
+			blockedKeywordEvaluated++
+			if containsBlockedKeyword(post, blockedKeywords) {
+				blockedKeywordFiltered++
+				return false
+			}
 		}
 		postIdentity := resolvedContentIdentity(string(post.ContentType), string(post.ContentIdentity))
 		if requestedIdentity != "" && postIdentity != requestedIdentity {
@@ -225,43 +297,71 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		})
 		return true
 	}
+	// N3-3 served 记账口径：engine 推迟记账（DeferDeliveryAccounting），装配层
+	// 按「真正进入响应」的最终下发集回调 RecordDelivery——hydration 失败、
+	// 拉黑、负反馈、垂类/关键词过滤丢弃的候选不再被记 served（否则曝光过滤
+	// 会拉黑用户从未见过的内容，训练样本分母也被污染）。
+	type deliveryBatch struct {
+		attribution rtrec.DeliveryAttribution
+		items       []rtrec.FeedItem
+	}
+	deliveryBatches := make([]deliveryBatch, 0, 4)
 	for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-			UserID:        req.UserID,
-			SessionID:     req.SessionID,
-			FeedType:      route.FeedType,
-			Sort:          normalizeFeedSort(req.Sort),
-			Cursor:        cursor,
-			Limit:         limit,
-			Surface:       route.Surface,
-			ChannelID:     route.ChannelID,
-			Vertical:      route.Vertical,
-			FeedRequestID: feedRequestID,
+			UserID:                  req.UserID,
+			SessionID:               req.SessionID,
+			FeedType:                route.FeedType,
+			Sort:                    normalizeFeedSort(req.Sort),
+			Cursor:                  cursor,
+			Limit:                   limit,
+			Surface:                 route.Surface,
+			ChannelID:               route.ChannelID,
+			Vertical:                route.Vertical,
+			FeedRequestID:           feedRequestID,
+			DeferDeliveryAccounting: true,
 		})
 		if err != nil {
 			return nil, err
 		}
 		nextCursor = recResp.NextCursor
+		// N3-1：单次 $in 批量取回本轮召回条目（消除逐条 FindPublishedFeedPost
+		// 的 N+1 往返），装配顺序仍严格跟随引擎排序。
+		recallIDs := make([]postports.PostID, 0, len(recResp.Items))
 		for _, item := range recResp.Items {
-			post, ok, readErr := s.postReader.FindPublishedFeedPost(
-				ctx,
-				postports.NewPostID(item.ContentID),
-			)
-			if readErr != nil {
-				return nil, readErr
-			}
+			recallIDs = append(recallIDs, postports.NewPostID(item.ContentID))
+		}
+		postsByID, readErr := s.postReader.FindPublishedFeedPosts(ctx, recallIDs)
+		if readErr != nil {
+			return nil, readErr
+		}
+		attemptDelivery := make([]rtrec.FeedItem, 0, len(recResp.Items))
+		for _, item := range recResp.Items {
+			post, ok := postsByID[postports.NewPostID(item.ContentID)]
 			if !ok {
 				continue
 			}
-			appendPost(&post, &item)
+			if appendPost(&post, &item) {
+				attemptDelivery = append(attemptDelivery, item)
+			}
 			if len(views) >= limit {
 				break
 			}
+		}
+		if len(attemptDelivery) > 0 {
+			deliveryBatches = append(deliveryBatches, deliveryBatch{
+				attribution: recResp.Attribution,
+				items:       attemptDelivery,
+			})
 		}
 		if nextCursor == "" {
 			break
 		}
 		cursor = nextCursor
+	}
+	for _, batch := range deliveryBatches {
+		// 每次 engine 分页调用保留自己的 scorer/modelRelease 归因；模型热切换
+		// 或单次降级时，禁止把后续页错误归因到首批结果。
+		s.engine.RecordDelivery(ctx, req.UserID, req.SessionID, batch.attribution, batch.items)
 	}
 	// 只有显式类型/身份过滤或 PostReader cursor 才使用具名查询。
 	// 普通推荐请求不允许在召回不足时偷渡到第二读主线。
@@ -309,14 +409,38 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			attachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
+	// 混合对象卡只注入推荐主链路首刷/续页（引擎路由页面），浏览流具名查询不混排。
+	var objectCards []ObjectCardView
+	if !usePostReaderQuery && route.Surface == "home" {
+		objectCards = s.resolveObjectCards(ctx, req.UserID, len(views))
+	}
 	return &ListFeedResponse{
 		Items:          views,
+		ObjectCards:    objectCards,
 		NextCursor:     nextCursor,
 		Cursor:         nextCursor,
 		FeedRequestID:  feedRequestID,
 		RankingVersion: rtrec.RankingVersion,
 		ReasonVersion:  rtrec.ReasonVersion,
 	}, nil
+}
+
+func (s *FeedService) resolveViewerBlockedPersonaIDs(
+	ctx context.Context,
+	viewerPersonaID string,
+) ([]string, error) {
+	viewerPersonaID = strings.TrimSpace(viewerPersonaID)
+	if viewerPersonaID == "" {
+		return nil, nil
+	}
+	if s == nil || s.viewerBlocks == nil {
+		return nil, fmt.Errorf("feed viewer block reader is not configured")
+	}
+	blocked, err := s.viewerBlocks.ListBlockedPersonaIDs(ctx, viewerPersonaID)
+	if err != nil {
+		return nil, fmt.Errorf("read feed viewer block facts: %w", err)
+	}
+	return blocked, nil
 }
 
 func encodePostReaderFeedCursor(postID string) string {
@@ -384,6 +508,40 @@ type feedRoute struct {
 }
 
 func resolveFeedRoute(req ListFeedRequest) feedRoute {
+	// 首页频道路由（B1/B16 收口）：channelId 是频道推荐主链路的唯一路由标识，
+	// 优先于 type/subCategory token。following 走关注召回主路（fail-closed），
+	// travel 归入 travel_photography 垂类，其余频道进推荐引擎并按 channelId 归因。
+	if channel := strings.TrimSpace(strings.ToLower(req.ChannelID)); channel != "" {
+		switch channel {
+		case "following":
+			return feedRoute{
+				FeedType:  rtrec.FeedFollow,
+				Surface:   "home",
+				ChannelID: "following",
+			}
+		case "travel", "travel_photography":
+			return feedRoute{
+				FeedType:  rtrec.FeedDiscovery,
+				Surface:   "travel_photography",
+				Vertical:  "travel_photography",
+				ChannelID: "travel_photography",
+			}
+		case "premium", "premium_stream":
+			return feedRoute{
+				FeedType:  rtrec.FeedSimilar,
+				Surface:   "premium_stream",
+				ChannelID: "premium_stream",
+			}
+		default:
+			// recommend/campus/photography/tech/car 及运营远程新增频道：
+			// 统一进推荐引擎，channelId 原样归因（交集池与埋点按频道区分）。
+			return feedRoute{
+				FeedType:  rtrec.FeedDiscovery,
+				Surface:   "home",
+				ChannelID: channel,
+			}
+		}
+	}
 	tokens := []string{
 		strings.TrimSpace(strings.ToLower(req.Type)),
 		strings.TrimSpace(strings.ToLower(req.SubCategory)),

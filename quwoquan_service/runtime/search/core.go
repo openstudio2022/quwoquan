@@ -120,47 +120,52 @@ type Hit struct {
 	Evidence     []Evidence
 }
 
+// Citation / Reason / Evidence / Facet / DegradeSignal / Provenance cross the
+// HTTP wire inside RetrieveResponse. JSON keys must stay lowerCamelCase to match
+// the unified retrieve contract (_shared/search_contract.yaml) and the App-side
+// decoders in quwoquan_cloud_contracts; without tags Go leaks exported names
+// (e.g. "Label") and the App silently drops every ranking explanation.
 type Citation struct {
-	CitationID   string
-	ObjectType   string
-	ObjectID     string
-	Title        string
-	ContentType  string
-	Snippet      string
-	URL          string
-	DeepLink     string
-	BadgeLabel   string
-	SourceDomain string
-	Score        float64
+	CitationID   string  `json:"citationId"`
+	ObjectType   string  `json:"objectType"`
+	ObjectID     string  `json:"objectId"`
+	Title        string  `json:"title"`
+	ContentType  string  `json:"contentType,omitempty"`
+	Snippet      string  `json:"snippet,omitempty"`
+	URL          string  `json:"url,omitempty"`
+	DeepLink     string  `json:"deepLink,omitempty"`
+	BadgeLabel   string  `json:"badgeLabel,omitempty"`
+	SourceDomain string  `json:"sourceDomain,omitempty"`
+	Score        float64 `json:"score"`
 }
 
 type Reason struct {
-	Code   string
-	Label  string
-	Weight float64
+	Code   string  `json:"code"`
+	Label  string  `json:"label"`
+	Weight float64 `json:"weight"`
 }
 
 type Evidence struct {
-	Field   string
-	Snippet string
+	Field   string `json:"field"`
+	Snippet string `json:"snippet"`
 }
 
 type Facet struct {
-	Key   string
-	Label string
-	Count int
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
 }
 
 type DegradeSignal struct {
-	Code       string
-	Message    string
-	ObjectType string
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	ObjectType string `json:"objectType,omitempty"`
 }
 
 type Provenance struct {
-	Provider     string
-	IndexVersion string
-	GeneratedAt  time.Time
+	Provider     string    `json:"provider"`
+	IndexVersion string    `json:"indexVersion,omitempty"`
+	GeneratedAt  time.Time `json:"generatedAt"`
 }
 
 type QuerySafety struct {

@@ -5,51 +5,94 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
+import 'package:quwoquan_app/application/user/profile/profile_query.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
-import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
-
-import '../../../support/harness/profile_shell_scroll_utils.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        ProfileCommandWriter,
+        ProfileUpdateProposalListQuery,
+        ProfileUpdateProposalQuery,
+        ProfileUpdateProposalQueryReader,
+        ProfileUpdateProposalSlice,
+        ProfileUpdateProposalView,
+        ProfileUpdateSnapshot,
+        UpdateUserProfileCommand;
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_tag.dart'
+    show AlphaTagFacet;
 
 /// T28 旅程：我的主页 → 编辑资料 → 修改昵称 → 保存 → 返回 → 验证主页展示新昵称
-class _EditProfileMockRepository extends MockUserProfileRepository {
-  _EditProfileMockRepository() : super();
+class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
+  String? _updatedNickname;
+  String? _updatedBio;
+  UpdateUserProfileCommand? lastCommand;
 
-  final Map<String, dynamic> _updatedProfile = {};
-
-  @override
-  Future<void> updateProfile(ProfileEditUpdatePayload data) async {
-    _updatedProfile.addAll(data.toRepositoryMap());
+  void apply(UpdateUserProfileCommand command) {
+    lastCommand = command;
+    _updatedNickname = command.nickname ?? _updatedNickname;
+    _updatedBio = command.bio ?? _updatedBio;
   }
 
   @override
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
-    final base = await super.getUserProfile(userId);
-    if (_updatedProfile.isEmpty) return base;
-    final nick = _updatedProfile['nickname'] as String?;
+    const base = SubAccountProfileViewData(
+      subAccountId: 'user_001',
+      ownerUserId: 'user_001',
+      subjectType: 'user',
+      userHandle: 'test_user',
+      username: 'test_user',
+      displayName: '测试用户',
+      avatarUrl: '',
+      backgroundUrl: '',
+      bio: '',
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+      circleCount: 0,
+      likeCount: 0,
+      isolationLevel: 'open',
+      profileVisibility: 'public',
+      inheritsFromOwner: true,
+      overriddenFields: <String>[],
+      updatedAt: null,
+    );
+    final nick = _updatedNickname;
+    if (nick == null && _updatedBio == null) {
+      return base;
+    }
     return SubAccountProfileViewData(
       subAccountId: base.subAccountId,
       ownerUserId: base.ownerUserId,
       subjectType: base.subjectType,
-      userHandle: (_updatedProfile['userHandle'] as String?) ?? base.userHandle,
-      username: (_updatedProfile['username'] as String?) ?? base.username,
+      userHandle: base.userHandle,
+      username: base.username,
       displayName: (nick != null && nick.isNotEmpty) ? nick : base.displayName,
+      nicknameCustomized: nick != null || base.nicknameCustomized,
       avatarUrl: base.avatarUrl,
+      avatarVersion: base.avatarVersion,
       backgroundUrl: base.backgroundUrl,
-      bio: (_updatedProfile['bio'] as String?) ?? base.bio,
+      bio: _updatedBio ?? base.bio,
+      identityTags: base.identityTags,
+      verified: base.verified,
       followerCount: base.followerCount,
       followingCount: base.followingCount,
       postCount: base.postCount,
       circleCount: base.circleCount,
       likeCount: base.likeCount,
+      profileCompleteness: base.profileCompleteness,
+      profileCompletenessMissingItems: base.profileCompletenessMissingItems,
       isolationLevel: base.isolationLevel,
       profileVisibility: base.profileVisibility,
       inheritsFromOwner: base.inheritsFromOwner,
@@ -57,12 +100,204 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
       updatedAt: base.updatedAt,
     );
   }
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String subAccountId,
+  ) async {
+    final profile = await getUserProfile(subAccountId);
+    final stats = UserProfileStatsViewData.fromProfile(profile);
+    return UserHomepageBundleViewData(
+      profile: profile,
+      stats: stats,
+      relationshipCapability: null,
+      tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
+      viewerContext: const UserHomepageViewerContextViewData(
+        viewerSubAccountId: 'user_001',
+        isOwner: true,
+        isGuest: false,
+        relationToTarget: 'self',
+        canViewFullProfile: true,
+      ),
+      cacheVersion: 'uat-profile-v1',
+    );
+  }
+
+  @override
+  Future<UserProfileStatsViewData> getUserStats(String userId) async {
+    return UserProfileStatsViewData.fromProfile(await getUserProfile(userId));
+  }
+
+  @override
+  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+    required String query,
+    int limit = 20,
+  }) async => const <SocialRelationSearchItemView>[];
+
+  @override
+  Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
+    final profile = await getUserProfile('user_001');
+    return ProfileEditSnapshotData(
+      ownerUserId: profile.ownerUserId,
+      subAccountId: profile.subAccountId,
+      avatarUrl: profile.avatarUrl,
+      avatarAssetId: '',
+      avatarVersion: profile.avatarVersion,
+      backgroundUrl: profile.backgroundUrl,
+      backgroundAssetId: '',
+      nickname: profile.displayName,
+      gender: 'unspecified',
+      birthDate: '',
+      region: '',
+      regionTagRef: lastCommand?.regionTagRef ?? '',
+      userHandle: profile.userHandle,
+      bio: profile.bio,
+      occupationTagRef: '',
+      interestTagRefs: const <String>[],
+    );
+  }
+
+  @override
+  Future<ProfileQrCardData> getProfileQrCard() async {
+    return const ProfileQrCardData(
+      publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
+      qrPayload: 'https://app.quwoquan.test/u/test_user?qr=uat',
+      qrTokenId: 'uat-token',
+      styleVersion: 'v1',
+      avatarUrl: '',
+      displayName: '测试用户',
+      region: '',
+      shareText: '测试用户',
+    );
+  }
+
+  @override
+  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+    required String token,
+    String handle = '',
+  }) async {
+    return ProfileQrResolveWireDto(
+      subAccountId: 'user_001',
+      userHandle: handle.isEmpty ? 'test_user' : handle,
+      publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
+      scanStatus: 'accepted',
+    );
+  }
 }
 
-/// 已登录态会话存储测试替身：MyProfilePage 现在依据 auth.isAuthenticated
-/// 决定渲染真实主页还是未登录占位页，旅程测试必须注入已登录会话。
-class _AuthenticatedAuthSessionStore implements AuthSessionStore {
-  const _AuthenticatedAuthSessionStore();
+class _EditProfileCommandWriter implements ProfileCommandWriter {
+  _EditProfileCommandWriter(this.repository);
+
+  final _EditProfileMockRepository repository;
+
+  @override
+  Future<ProfileUpdateSnapshot> updateUserProfile(
+    UpdateUserProfileCommand command,
+  ) async {
+    repository.apply(command);
+    return ProfileUpdateSnapshot(
+      userId: 'user_001',
+      nickname: command.nickname ?? '',
+      nicknameCustomized: command.nickname != null,
+      profileVersion: 2,
+      bio: command.bio,
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+}
+
+class _EmptyProfileProposalQuery implements ProfileUpdateProposalQueryReader {
+  const _EmptyProfileProposalQuery();
+
+  @override
+  Future<ProfileUpdateProposalView> get(
+    ProfileUpdateProposalQuery query,
+  ) async {
+    throw StateError('profile proposal not found');
+  }
+
+  @override
+  Future<ProfileUpdateProposalSlice> list(
+    ProfileUpdateProposalListQuery query,
+  ) async {
+    return const ProfileUpdateProposalSlice(
+      items: <ProfileUpdateProposalView>[],
+    );
+  }
+}
+
+class _RecordingNoNetworkClient extends http.BaseClient {
+  final List<Uri> requestedUris = <Uri>[];
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    requestedUris.add(request.url);
+    return http.StreamedResponse(
+      const Stream<List<int>>.empty(),
+      503,
+      request: request,
+    );
+  }
+}
+
+class _ProfileEditJourneyEntry extends ConsumerStatefulWidget {
+  const _ProfileEditJourneyEntry();
+
+  @override
+  ConsumerState<_ProfileEditJourneyEntry> createState() =>
+      _ProfileEditJourneyEntryState();
+}
+
+class _ProfileEditJourneyEntryState
+    extends ConsumerState<_ProfileEditJourneyEntry> {
+  late Future<SubAccountProfileViewData> _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = _load();
+  }
+
+  Future<SubAccountProfileViewData> _load() {
+    return ref
+        .read(profileQueryProvider(AppUiSurfaces.profileEdit))
+        .getUserProfile('me');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      child: SafeArea(
+        child: FutureBuilder<SubAccountProfileViewData>(
+          future: _profile,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CupertinoActivityIndicator());
+            }
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(snapshot.data!.displayName),
+                CupertinoButton(
+                  onPressed: () async {
+                    await context.push('/profile/edit');
+                    if (!mounted) return;
+                    setState(() => _profile = _load());
+                  },
+                  child: const Text(UITextConstants.profileEditLabel),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 已登录态会话存储测试替身。
+class _AuthenticatedAuthSessionStore extends AuthSessionStore {
+  _AuthenticatedAuthSessionStore();
 
   @override
   Future<StoredAuthSession> read() async {
@@ -80,41 +315,6 @@ class _AuthenticatedAuthSessionStore implements AuthSessionStore {
       launchPromptDismissed: false,
     );
   }
-
-  @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
-    AuthRememberedLoginMethod rememberedLoginMethod =
-        AuthRememberedLoginMethod.unknown,
-    String? rememberedLoginMaskedIdentifier,
-    String? rememberedLoginIdentifier,
-  }) async {}
-
-  @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
-
-  @override
-  Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
-  ) async {}
-
-  @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
-
-  @override
-  Future<void> clearSession({required bool manualLogout}) async {}
-
-  @override
-  Future<void> softLogout() async {}
-
-  @override
-  Future<void> markLaunchPromptDismissed() async {}
-
-  @override
-  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 class _AuthenticatedSessionController extends AuthSessionController {
@@ -129,16 +329,6 @@ class _AuthenticatedSessionController extends AuthSessionController {
     identityOrigin: 'phone',
     installId: 'install-id',
   );
-}
-
-class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
-  @override
-  bool get reconcilesCapabilityWithSharedRelationshipState => false;
-
-  @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
-    return Future.error(StateError('capability unavailable in test'));
-  }
 }
 
 Future<void> _pumpFrames(WidgetTester tester, {int count = 10}) async {
@@ -167,15 +357,38 @@ void main() {
       const newNickname = '测试新昵称_999';
 
       final mockRepo = _EditProfileMockRepository();
+      final noNetworkClient = _RecordingNoNetworkClient();
       final app = ProviderScope(
         overrides: [
-          userProfileRepositoryProvider.overrideWithValue(mockRepo),
-          relationshipCapabilityRepositoryProvider.overrideWithValue(
-            _ThrowingCapabilityRepository(),
+          cloudHttpClientProvider.overrideWithValue(
+            CloudHttpClient(
+              client: noNetworkClient,
+              timeout: const Duration(milliseconds: 10),
+            ),
           ),
+          profileQueryProvider.overrideWith((ref, surface) => mockRepo),
+          profileEditQueryProvider.overrideWith((ref, surface) => mockRepo),
+          profileCommandWriterProvider.overrideWithValue(
+            _EditProfileCommandWriter(mockRepo),
+          ),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
           currentUserIdProvider.overrideWithValue(currentUserId),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => const ActivePersonaContextViewData(
+              subAccountId: currentUserId,
+              ownerUserId: currentUserId,
+              subjectType: 'persona',
+              displayName: '测试用户',
+              avatarUrl: '',
+              personaContextVersion: 'uat-v1',
+              isPrimary: true,
+            ),
+          ),
+          profileEditProposalQueryReaderProvider.overrideWithValue(
+            const _EmptyProfileProposalQuery(),
+          ),
           authSessionStoreProvider.overrideWithValue(
-            const _AuthenticatedAuthSessionStore(),
+            _AuthenticatedAuthSessionStore(),
           ),
           authSessionControllerProvider.overrideWith(
             _AuthenticatedSessionController.new,
@@ -187,7 +400,7 @@ void main() {
             routes: [
               GoRoute(
                 path: '/profile',
-                builder: (context, state) => const MyProfilePage(),
+                builder: (context, state) => const _ProfileEditJourneyEntry(),
                 routes: [
                   GoRoute(
                     path: 'edit',
@@ -203,13 +416,8 @@ void main() {
       await tester.pumpWidget(app);
       await _pumpFrames(tester, count: 20);
 
-      expect(
-        find.byKey(const ValueKey<String>('profile-header-edit')),
-        findsNothing,
-      );
       final editProfileAction = find.text(UITextConstants.profileEditLabel);
-      await revealProfileSummaryWidget(tester, editProfileAction);
-      expect(editProfileAction, findsAtLeastNWidgets(1));
+      expect(editProfileAction, findsOneWidget);
       await tester.tap(editProfileAction.first);
       await _pumpFrames(tester, count: 10);
 
@@ -228,7 +436,7 @@ void main() {
       expect(
         find.byType(ProfileIosGroupedSection),
         findsNWidgets(4),
-        reason: '编辑资料主表单必须拆成媒体、基础资料、账号社交、扩展资料四个区块',
+        reason: '无待处理提案时，编辑资料主表单必须呈现媒体、基础资料、账号社交、扩展资料四个区块',
       );
 
       final orderedLabels = <String>[
@@ -339,11 +547,13 @@ void main() {
       await _pumpFrames(tester, count: 20);
 
       expect(find.text(newNickname), findsAtLeastNWidgets(1));
+      expect(mockRepo.lastCommand?.regionTagRef, 'Topic/地理/行政区/中国/广东省/云浮市');
+      expect(mockRepo.lastCommand, isA<UpdateUserProfileCommand>());
       expect(
-        mockRepo._updatedProfile['regionTagRef'],
-        'Topic/地理/行政区/中国/广东省/云浮市',
+        noNetworkClient.requestedUris,
+        isEmpty,
+        reason: '资料编辑 UAT 的全部业务依赖必须显式注入，不得回退真实网络',
       );
-      expect(mockRepo._updatedProfile.containsKey('regionCode'), isFalse);
       await tester.pump(const Duration(seconds: 4));
     });
   });

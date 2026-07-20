@@ -17,8 +17,9 @@ import (
 )
 
 // Config is the ES/OpenSearch connection + index configuration. It is supplied by
-// the service from configs/config.yaml (with env overrides) rather than read
-// ad-hoc from os.Getenv in business code, so endpoints/credentials are auditable.
+// the service from configs/default/config.yaml plus configs/<env>/config.yaml
+// rather than read ad-hoc from os.Getenv in business code, so
+// endpoints/credentials are auditable.
 type Config struct {
 	// Endpoints are base URLs (scheme+host[:port]); multiple enable failover.
 	Endpoints []string

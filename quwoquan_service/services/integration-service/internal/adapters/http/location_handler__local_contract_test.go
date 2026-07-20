@@ -106,7 +106,7 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 		"expiresAt":"2030-01-01T00:00:00Z",
 		"payload":{"challengeId":"ch-1","codeRef":"otpref.test","phoneHash":"hash","maskedRecipient":"180****3909"}
 	}`)
-	req := httptest.NewRequest(http.MethodPost, externalRequestsPath, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, generated.ExternalRequestsPath, bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusAccepted {

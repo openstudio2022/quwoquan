@@ -7,11 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
+import '../../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
 
 const _assistantSmokeProfile = String.fromEnvironment(
@@ -41,7 +41,7 @@ void main() {
       ProviderScope(
         overrides: [
           if (runtimeEnv == 'alpha')
-            assistantRepositoryProvider.overrideWithValue(
+            ...alphaAssistantFacetOverrides(
               ScenarioMockAssistantRepository(pack: scenarioPack),
             ),
         ],

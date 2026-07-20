@@ -2,6 +2,9 @@
 # 设计见 specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md
 name: 07. Deploy To Prod (Auto)
 
+permissions:
+  contents: read
+
 env:
   QWQ_OUTPUT_ROOT: .qwq_output
 
@@ -14,36 +17,12 @@ on:
   workflow_dispatch:
     inputs:
       release_run_id:
-        description: '02. Service Pipeline run id（留空则使用手填版本）'
-        required: false
+        description: '02. Service Pipeline run id'
+        required: true
       cloud_provider:
         description: 'Cloud provider'
         required: false
         default: 'aliyun'
-      from_image:
-        description: 'Current prod image (empty = resolve from QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state)'
-        required: false
-      to_image:
-        description: 'Target image version'
-        required: false
-      from_config:
-        description: 'Current prod config (empty = resolve from QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state)'
-        required: false
-      to_config:
-        description: 'Target config version'
-        required: false
-      error_rate:
-        description: 'SLO error rate'
-        required: false
-        default: '0.005'
-      p95_ms:
-        description: 'SLO p95 latency ms'
-        required: false
-        default: '100'
-      redis_error_rate:
-        description: 'SLO redis error rate'
-        required: false
-        default: '0'
       dry_run:
         description: 'Dry run'
         required: false
@@ -51,13 +30,17 @@ on:
         type: boolean
 
 concurrency:
-  group: mainline-auto-prod-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: prod-hosted-release
   cancel-in-progress: false
 
 jobs:
   prepare:
     name: Prepare mainline auto prod inputs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     if: >-
       ${{
         github.event_name != 'workflow_run' ||
@@ -72,17 +55,15 @@ jobs:
       PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
     outputs:
       initial_step: ${{ steps.stages.outputs.initial_step }}
+      carry_step: ${{ steps.stages.outputs.carry_step }}
       full_step: ${{ steps.stages.outputs.full_step }}
       from_image: ${{ steps.inputs.outputs.from_image }}
       from_config: ${{ steps.inputs.outputs.from_config }}
       to_image: ${{ steps.inputs.outputs.to_image }}
       to_config: ${{ steps.inputs.outputs.to_config }}
-      error_rate: ${{ steps.inputs.outputs.error_rate }}
-      p95_ms: ${{ steps.inputs.outputs.p95_ms }}
-      redis_error_rate: ${{ steps.inputs.outputs.redis_error_rate }}
       cloud_provider: ${{ steps.inputs.outputs.cloud_provider }}
       dry_run: ${{ steps.inputs.outputs.dry_run }}
-      checkout_ref: ${{ steps.context.outputs.checkout_ref }}
+      checkout_ref: ${{ steps.release_context.outputs.checkout_ref }}
       base_sha: ${{ steps.diff.outputs.base_sha }}
       head_sha: ${{ steps.context.outputs.head_sha }}
       artifact_note: ${{ steps.inputs.outputs.artifact_note }}
@@ -103,7 +84,7 @@ jobs:
             echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
             echo "release_run_id=${{ github.event.inputs.release_run_id }}" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 2
           ref: ${{ steps.context.outputs.checkout_ref }}
@@ -117,8 +98,7 @@ jobs:
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
       - name: Download mainline release artifact
         if: ${{ steps.context.outputs.release_run_id != '' }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: mainline-release-artifact
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
@@ -127,26 +107,41 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download service pipeline timing summary
         if: ${{ steps.context.outputs.release_run_id != '' }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: service-pipeline-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/service-pipeline-timing
           run-id: ${{ steps.context.outputs.release_run_id }}
           repository: ${{ github.repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Regenerate release artifact locally when download missing
-        if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) == '' }}
+      - name: Require immutable release artifact
         run: |
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
-          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${{ steps.context.outputs.head_sha }}" \
-            --run-number "${{ github.run_number }}" \
+          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
+            echo "::error::02. Service Pipeline release artifact is required; local regeneration is forbidden"
+            exit 1
+          }
+      - id: release_context
+        name: Resolve exact release source
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from pathlib import Path
+          path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
+          manifest = json.loads(path.read_text(encoding="utf-8"))
+          print(f"checkout_ref={manifest['source']['gitSha']}")
+          print(f"manifest_digest={manifest['manifestDigest']}")
+          PY
+      - name: Require reviewed PR release governance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 quwoquan_ops/ci/verify_release_governance.py \
             --repository "${{ github.repository }}" \
-            --registry "${{ env.REGISTRY }}" \
-            --image-version "${{ github.event.inputs.to_image }}" \
-            --config-version "${{ github.event.inputs.to_config }}"
+            --git-sha "${{ steps.release_context.outputs.checkout_ref }}" \
+            --manifest-digest "${{ steps.release_context.outputs.manifest_digest }}" \
+            --minimum-approvals 1 \
+            --output "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/governance-receipt.json"
       - name: Unpack generated release snapshots
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
@@ -174,8 +169,7 @@ jobs:
           fi
       - name: Upload resolved release artifact
         if: ${{ steps.artifact.outputs.has_release_artifact == 'true' }}
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: resolved-mainline-release-artifact
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline/**
@@ -184,87 +178,52 @@ jobs:
       - name: Resolve rollout inputs
         id: inputs
         run: |
-          FROM_IMG="${{ github.event.inputs.from_image }}"
-          FROM_CFG="${{ github.event.inputs.from_config }}"
-          TO_IMG="${{ github.event.inputs.to_image }}"
-          TO_CFG="${{ github.event.inputs.to_config }}"
-          ERROR_RATE="${{ github.event.inputs.error_rate }}"
-          P95_MS="${{ github.event.inputs.p95_ms }}"
-          REDIS_ERROR_RATE="${{ github.event.inputs.redis_error_rate }}"
           CLOUD_PROVIDER="${{ github.event.inputs.cloud_provider }}"
           DRY_RUN="${{ github.event.inputs.dry_run }}"
-          ARTIFACT_NOTE="manual inputs"
+          ARTIFACT_NOTE="consumed 02 mainline service release artifact"
           if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
-          if [[ -z "$ERROR_RATE" ]]; then ERROR_RATE="0.005"; fi
-          if [[ -z "$P95_MS" ]]; then P95_MS="100"; fi
-          if [[ -z "$REDIS_ERROR_RATE" ]]; then REDIS_ERROR_RATE="0"; fi
           if [[ -z "$DRY_RUN" ]]; then DRY_RUN="false"; fi
-          if [[ -f "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" ]]; then
-            if [[ -z "$TO_IMG" ]]; then
-              TO_IMG="$(python3 - <<'PY'
+          readarray -t RELEASE_VERSIONS < <(python3 - <<'PY'
           import json
           import os
           from pathlib import Path
           manifest_path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           print(str(manifest["versions"]["imageVersion"]))
-          PY
-              )"
-            fi
-            if [[ -z "$TO_CFG" ]]; then
-              TO_CFG="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          manifest_path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
-          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           print(str(manifest["versions"]["configVersion"]))
           PY
-              )"
-            fi
-            ARTIFACT_NOTE="consumed 02 mainline service release artifact"
-          fi
-          if [[ -z "$TO_IMG" || -z "$TO_CFG" ]]; then
-            echo "::error::missing target image/config version; provide workflow inputs or a valid 02 mainline service release artifact"
-            exit 1
-          fi
-          STATE="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/seed-box.state"
-          if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
-            if [[ ! -f "$STATE" ]]; then
-              eval "$(python3 quwoquan_ops/cli/prod/resolve_prod_release_state.py --output-format shell)"
-              if [[ -z "$FROM_IMG" ]]; then FROM_IMG="$RESOLVED_FROM_IMAGE"; fi
-              if [[ -z "$FROM_CFG" ]]; then FROM_CFG="$RESOLVED_FROM_CONFIG"; fi
-              ARTIFACT_NOTE="${ARTIFACT_NOTE}; current prod resolved via ${RESOLVED_FROM_SOURCE_ACCOUNT}@${RESOLVED_FROM_SOURCE_HOST}"
-            else
-              if [[ -z "$FROM_IMG" ]]; then FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE"); fi
-              if [[ -z "$FROM_CFG" ]]; then FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE"); fi
-            fi
-          fi
+          )
+          TO_IMG="${RELEASE_VERSIONS[0]}"
+          TO_CFG="${RELEASE_VERSIONS[1]}"
+          eval "$(python3 quwoquan_ops/cli/prod/resolve_prod_release_state.py --output-format shell)"
+          FROM_IMG="$RESOLVED_FROM_IMAGE"
+          FROM_CFG="$RESOLVED_FROM_CONFIG"
+          ARTIFACT_NOTE="${ARTIFACT_NOTE}; current prod resolved via ${RESOLVED_FROM_SOURCE_ACCOUNT}@${RESOLVED_FROM_SOURCE_HOST}"
           echo "from_image=$FROM_IMG" >> $GITHUB_OUTPUT
           echo "from_config=$FROM_CFG" >> $GITHUB_OUTPUT
           echo "to_image=$TO_IMG" >> $GITHUB_OUTPUT
           echo "to_config=$TO_CFG" >> $GITHUB_OUTPUT
-          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
-          echo "p95_ms=$P95_MS" >> $GITHUB_OUTPUT
-          echo "redis_error_rate=$REDIS_ERROR_RATE" >> $GITHUB_OUTPUT
           echo "cloud_provider=$CLOUD_PROVIDER" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
           echo "artifact_note=$ARTIFACT_NOTE" >> $GITHUB_OUTPUT
       - name: Parse gray_rollout_stages
         id: stages
         run: |
-          total=$(grep '^total_replicas:' quwoquan_ops/environments/gray_rollout_stages.yaml | awk '{print $2}')
-          total=${total:-2}
-          r1=$(awk '/name: initial/,/replicas:/{if(/replicas:/){print $2;exit}}' quwoquan_ops/environments/gray_rollout_stages.yaml)
-          r2=$(awk '/name: full/,/replicas:/{if(/replicas:/){print $2;exit}}' quwoquan_ops/environments/gray_rollout_stages.yaml)
-          r1=${r1:-1}; r2=${r2:-2}
-          s1=$((r1 * 100 / total)); s2=$((r2 * 100 / total))
-          for x in 5 25 50 100; do [[ $s1 -le $x ]] && { s1=$x; break; }; done
-          [[ $s1 -gt 100 ]] && s1=100
-          for x in 5 25 50 100; do [[ $s2 -le $x ]] && { s2=$x; break; }; done
-          [[ $s2 -gt 100 ]] && s2=100
-          echo "initial_step=$s1" >> $GITHUB_OUTPUT
-          echo "full_step=$s2" >> $GITHUB_OUTPUT
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import yaml
+          from pathlib import Path
+          payload = yaml.safe_load(
+              Path("quwoquan_ops/environments/gray_rollout_stages.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )
+          stages = {item["name"]: int(item["step"]) for item in payload["stages"]}
+          if stages != {"gray-initial": 5, "carry-on": 25, "full": 100}:
+              raise SystemExit(f"invalid canonical rollout stages: {stages}")
+          print(f"initial_step={stages['gray-initial']}")
+          print(f"carry_step={stages['carry-on']}")
+          print(f"full_step={stages['full']}")
+          PY
 
   delivery_gate:
     name: Delivery Gate (mainline)
@@ -283,7 +242,7 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - id: start
@@ -295,7 +254,7 @@ jobs:
             --env alpha \
             --target alpha-local \
             --kind all \
-            --tier t1 \
+            --profile smoke \
             --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify"
       - name: Package alpha environment
         run: |
@@ -324,7 +283,7 @@ jobs:
       - name: Upload alpha stackctl artifacts
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mainline-auto-prod-alpha
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/alpha/runs/**
@@ -348,15 +307,20 @@ jobs:
   prod_initial:
     name: Prod initial rollout
     needs: [prepare, beta_device_matrix]
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, macOS, prod-release]
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
-      RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Validate prod plane SSH credentials
@@ -364,24 +328,16 @@ jobs:
         run: |
           python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage gray-initial
       - name: Download resolved release artifact
-        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: resolved-mainline-release-artifact
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-      - name: Regenerate release snapshot locally
-        if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) == '' }}
+      - name: Require immutable release manifest
         run: |
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
-          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${{ needs.prepare.outputs.head_sha }}" \
-            --run-number "${{ github.run_number }}" \
-            --repository "${{ github.repository }}" \
-            --registry "${{ env.REGISTRY }}" \
-            --image-version "${{ needs.prepare.outputs.to_image }}" \
-            --config-version "${{ needs.prepare.outputs.to_config }}"
+          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
+            echo "::error::resolved release artifact is required; local regeneration is forbidden"
+            exit 1
+          }
       - name: Unpack generated release snapshots
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
@@ -399,6 +355,21 @@ jobs:
               dst.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(src, dst)
           PY
+      - name: Build ops portal release
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 quwoquan_ops/cli/prod/build_portal_release.py \
+            --version "${{ needs.prepare.outputs.to_image }}" \
+            --oidc-issuer "${{ vars.PROD_OPS_OIDC_ISSUER }}" \
+            --oidc-client-id "${{ vars.PROD_OPS_OIDC_CLIENT_ID }}" \
+            --oidc-audience "${{ vars.PROD_OPS_OIDC_AUDIENCE }}" \
+            --oidc-scope "${{ vars.PROD_OPS_OIDC_SCOPE }}"
+      - name: Login immutable image registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -409,21 +380,19 @@ jobs:
           python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service seed-box \
+            --service prod-stack \
             --from-image "${{ needs.prepare.outputs.from_image }}" \
             --to-image "${{ needs.prepare.outputs.to_image }}" \
             --from-config "${{ needs.prepare.outputs.from_config }}" \
             --to-config "${{ needs.prepare.outputs.to_config }}" \
+            --stage gray-initial \
             --step "${{ needs.prepare.outputs.initial_step }}" \
             --dry-run "${{ needs.prepare.outputs.dry_run }}" \
-            --error-rate "${{ needs.prepare.outputs.error_rate }}" \
-            --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
-            --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}" \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-initial"
       - name: Upload prod initial artifacts
         if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mainline-auto-prod-prod-initial
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**
@@ -435,18 +404,105 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
+  prod_carry_on:
+    name: Prod carry-on rollout
+    needs: [prepare, prod_initial]
+    runs-on: [self-hosted, macOS, prod-release]
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    env:
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Validate prod plane SSH credentials
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage carry-on
+      - name: Download resolved release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: resolved-mainline-release-artifact
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+          root = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline"
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest["releaseFiles"].values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
+      - name: Login immutable image registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Deploy prod carry-on via stackctl
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
+            --service prod-stack \
+            --from-image "${{ needs.prepare.outputs.from_image }}" \
+            --to-image "${{ needs.prepare.outputs.to_image }}" \
+            --from-config "${{ needs.prepare.outputs.from_config }}" \
+            --to-config "${{ needs.prepare.outputs.to_config }}" \
+            --stage carry-on \
+            --step "${{ needs.prepare.outputs.carry_step }}" \
+            --dry-run "${{ needs.prepare.outputs.dry_run }}" \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-carry-on"
+      - name: Upload prod carry-on artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mainline-auto-prod-carry-on
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**
+          if-no-files-found: ignore
+          compression-level: 0
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
   prod_full:
     name: Prod full rollout
-    needs: [prepare, prod_initial]
-    runs-on: [self-hosted, macOS]
+    needs: [prepare, prod_carry_on]
+    runs-on: [self-hosted, macOS, prod-release]
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
-      RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Validate prod plane SSH credentials
@@ -454,24 +510,16 @@ jobs:
         run: |
           python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage full
       - name: Download resolved release artifact
-        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: resolved-mainline-release-artifact
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
-      - name: Regenerate release snapshot locally
-        if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) == '' }}
+      - name: Require immutable release manifest
         run: |
-          rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
-          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
-            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${{ needs.prepare.outputs.head_sha }}" \
-            --run-number "${{ github.run_number }}" \
-            --repository "${{ github.repository }}" \
-            --registry "${{ env.REGISTRY }}" \
-            --image-version "${{ needs.prepare.outputs.to_image }}" \
-            --config-version "${{ needs.prepare.outputs.to_config }}"
+          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
+            echo "::error::resolved release artifact is required; local regeneration is forbidden"
+            exit 1
+          }
       - name: Unpack generated release snapshots
         if: ${{ hashFiles(format('{0}/env/repo/local/ci-packages/process/service/mainline/manifest.json', env.QWQ_OUTPUT_ROOT)) != '' }}
         run: |
@@ -489,6 +537,12 @@ jobs:
               dst.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(src, dst)
           PY
+      - name: Login immutable image registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -499,21 +553,19 @@ jobs:
           python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
-            --service seed-box \
+            --service prod-stack \
             --from-image "${{ needs.prepare.outputs.from_image }}" \
             --to-image "${{ needs.prepare.outputs.to_image }}" \
             --from-config "${{ needs.prepare.outputs.from_config }}" \
             --to-config "${{ needs.prepare.outputs.to_config }}" \
+            --stage full \
             --step "${{ needs.prepare.outputs.full_step }}" \
             --dry-run "${{ needs.prepare.outputs.dry_run }}" \
-            --error-rate "${{ needs.prepare.outputs.error_rate }}" \
-            --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
-            --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}" \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-full"
       - name: Upload prod full artifacts
         if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mainline-auto-prod-prod-full
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/**
@@ -533,17 +585,18 @@ jobs:
       - alpha_local
       - beta_device_matrix
       - prod_initial
+      - prod_carry_on
       - prod_full
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Download service pipeline timing summary
         if: ${{ needs.prepare.outputs.service_pipeline_run_id != '' }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: service-pipeline-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/service-pipeline-timing
@@ -553,28 +606,28 @@ jobs:
       - name: Download delivery gate timing summary
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: delivery-gate-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/delivery-gate-timing
       - name: Download beta timing summary
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: app-env-device-matrix-timing-summary
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/beta-device-timing
       - name: Download alpha stackctl artifacts
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: mainline-auto-prod-alpha
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-alpha
       - name: Download beta stackctl artifacts
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: app-env-device-matrix-*-mobile
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-beta
@@ -582,23 +635,31 @@ jobs:
       - name: Download prod initial stackctl artifacts
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: mainline-auto-prod-prod-initial
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-initial
       - name: Download prod full stackctl artifacts
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: mainline-auto-prod-prod-full
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-full
+      - name: Download prod carry-on stackctl artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: mainline-auto-prod-carry-on
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/process/downloads/mainline-prod-carry-on
       - name: Render mainline timing summary
         env:
           DELIVERY_SECONDS: ${{ needs.delivery_gate.outputs.critical_path_seconds }}
           ALPHA_SECONDS: ${{ needs.alpha_local.outputs.duration_seconds }}
           BETA_SECONDS: ${{ needs.beta_device_matrix.outputs.critical_path_seconds }}
           PROD_INITIAL_SECONDS: ${{ needs.prod_initial.outputs.duration_seconds }}
+          PROD_CARRY_ON_SECONDS: ${{ needs.prod_carry_on.outputs.duration_seconds }}
           PROD_FULL_SECONDS: ${{ needs.prod_full.outputs.duration_seconds }}
         run: |
           SERVICE_PIPELINE=0
@@ -618,8 +679,9 @@ jobs:
           ALPHA="${ALPHA_SECONDS:-0}"
           BETA="${BETA_SECONDS:-0}"
           PROD_INITIAL="${PROD_INITIAL_SECONDS:-0}"
+          PROD_CARRY_ON="${PROD_CARRY_ON_SECONDS:-0}"
           PROD_FULL="${PROD_FULL_SECONDS:-0}"
-          CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + PROD_INITIAL + PROD_FULL ))
+          CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + PROD_INITIAL + PROD_CARRY_ON + PROD_FULL ))
           COMMIT_TO_PROD_SECONDS=$(( SERVICE_PIPELINE + CRITICAL_PATH_SECONDS ))
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 07.mainline_auto_prod \
@@ -629,6 +691,7 @@ jobs:
             --phase "alpha_stage=${ALPHA}" \
             --phase "beta_device_matrix=${BETA}" \
             --phase "prod_initial_checks=${PROD_INITIAL}" \
+            --phase "prod_carry_on=${PROD_CARRY_ON}" \
             --phase "prod_full=${PROD_FULL}" \
             --note "目标版本来源：${{ needs.prepare.outputs.artifact_note }}；主链 checkout 已锁定到触发 02 的 main commit。" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/mainline-auto-prod-summary.json" \
@@ -670,7 +733,7 @@ jobs:
       - name: Upload mainline timing summaries
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mainline-auto-prod-timing-summaries
           path: |
@@ -684,6 +747,7 @@ jobs:
           ALPHA_RESULT: ${{ needs.alpha_local.result }}
           BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
           PROD_INITIAL_RESULT: ${{ needs.prod_initial.result }}
+          PROD_CARRY_ON_RESULT: ${{ needs.prod_carry_on.result }}
           PROD_FULL_RESULT: ${{ needs.prod_full.result }}
         run: |
           set -euo pipefail
@@ -699,6 +763,7 @@ jobs:
           expect_success "alpha_local" "${ALPHA_RESULT}" "检查 alpha-local package/up/health artifacts"
           expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted matrix gate"
           expect_success "prod_initial" "${PROD_INITIAL_RESULT}" "检查 prod initial deploy 与 post-deploy probes"
+          expect_success "prod_carry_on" "${PROD_CARRY_ON_RESULT}" "检查 prod carry-on SLO 留观与配置复核"
           expect_success "prod_full" "${PROD_FULL_RESULT}" "检查 prod full deploy 与 rollback 闭环"
           if [ "${fail}" -ne 0 ]; then
             exit 1

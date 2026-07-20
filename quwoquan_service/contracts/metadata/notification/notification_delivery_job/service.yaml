@@ -2,13 +2,81 @@ service:
   name: notification-service
   domain: notification
   owner: notification-platform
-  description: NotificationDeliveryJob 对象专属租约、重试与 DLQ command packet。
+  description: NotificationDeliveryJob 对象专属租约、重试、Incoming Call 设备协调与 DLQ command packet。
+  incoming_call_slo:
+    durable_consumer_lag_p95_ms: 250
+    online_realtime_dispatch_p95_ms: 500
+    presentation_ack_grace_ms: 750
+    offline_external_interaction_accept_p95_ms: 1500
+    cancellation_convergence_p95_ms: 500
+    availability_percent: 99.95
+    alerts:
+      - consumer_lag_p95_ms > 500 for 5m
+      - no_ack_fallback_ratio > 0.20 for 10m
+      - external_interaction_accept_failure_ratio > 0.01 for 5m
   commercial_defaults:
     status: blocked
-    block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+    block_reason: M2 Incoming Call 协调链已实现；Web Push、真实移动 provider delivered 与签名 delivery-result callback 仍待凭据化 release evidence
     gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
+  - method: POST
+    path: /notifications/incoming-calls/presentation:ack
+    operation: AckIncomingCallPresentation
+    actor: persona
+    application:
+      kind: command
+      facet: NotificationDeliveryJobCommandFacade
+      method: ackIncomingCallPresentation
+      aggregate_owner: NotificationDeliveryJob
+      mutation_target: NotificationDeliveryJob
+      invariant_target: NotificationDeliveryJob
+    authorization:
+      principal: account
+      ownership_policy: target_persona_and_trusted_device
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - NOTIFICATION.USER.unauthorized
+      - NOTIFICATION.USER.invalid_argument
+      - NOTIFICATION.USER.delivery_not_found
+      - NOTIFICATION.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_incoming_call_presentation_ack
+      trace: true
+      attributes: [outcome, status, raced, grace_bucket]
+    slo:
+      latency_p95_ms: 100
+      availability_percent: 99.95
+    request_entity: AckIncomingCallPresentationCommand
+    request_fields: [deliveryKey]
+    response_entity: AckIncomingCallPresentationResult
+    response_body: AckIncomingCallPresentationResult
+    response_body_kind: object
+    client_contract:
+      dart_import: ../notification/incoming_call_delivery_contracts.dart
+      request_type: AckIncomingCallPresentationCommand
+      response_type: AckIncomingCallPresentationResultDto
+      request_encoder: encodeAckIncomingCallPresentationCommand
+      response_decoder: decodeAckIncomingCallPresentationResult
+    description: 当前 trusted persona/device 确认已展示 deliveryKey 对应来电；只允许 realtime_dispatched CAS 到 realtime_presented
+    security:
+      auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: GET
     path: /internal/notifications/delivery-jobs/metrics
 
@@ -27,7 +95,7 @@ api_routes:
       ownership_policy: operator_delivery_plane
     commercial:
       status: blocked
-      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
       gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
       target_story: app-cloud-business-object-commercial-closure
     reliability:
@@ -78,7 +146,7 @@ api_routes:
       ownership_policy: operator_delivery_plane
     commercial:
       status: blocked
-      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
       gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
       target_story: app-cloud-business-object-commercial-closure
     reliability:
@@ -132,7 +200,7 @@ api_routes:
       ownership_policy: operator_delivery_plane
     commercial:
       status: blocked
-      block_reason: Gamma 尚未装配真实 Push provider 与签名 delivery-result callback，无法证明 provider delivered 收敛
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
       gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
       target_story: app-cloud-business-object-commercial-closure
     reliability:
@@ -170,7 +238,9 @@ api_routes:
 
 consumers:
   - name: notification-service-worker
-    capabilities: [lease, dispatch, retry, dead_letter]
+    capabilities: [lease, dispatch, retry, dead_letter, incoming_call_grace, incoming_call_push]
+  - name: rtc-call-lifecycle-consumer
+    capabilities: [consume_call_ringing, consume_call_answered, consume_call_ended, replay]
   - name: platform-ops
     capabilities: [inspect_delivery_job, recover_delivery_job]
 

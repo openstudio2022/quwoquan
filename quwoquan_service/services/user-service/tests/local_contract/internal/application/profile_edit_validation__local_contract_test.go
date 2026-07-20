@@ -47,9 +47,10 @@ func TestProfileIdentityTagsUpdateDedupeAndDropsOldRoots(t *testing.T) {
 		"Audience/用户/兴趣偏好/生活/咖啡",
 		"Topic/兴趣/旅行",
 	}
-	next, ok := application.ProfileIdentityTagsFromUpdate(map[string]any{
-		"occupationTagRef": "Audience/用户/职业/产品运营/产品经理",
-		"interestTagRefs": []string{
+	occupation := "Audience/用户/职业/产品运营/产品经理"
+	next, ok := application.ProfileIdentityTagsFromUpdate(application.ProfileUpdateCommand{
+		OccupationTagRef: &occupation,
+		InterestTagRefs: []string{
 			"Audience/用户/兴趣偏好/旅行摄影/旅行",
 			"Audience/用户/兴趣偏好/旅行摄影/旅行",
 			"Audience/用户/兴趣偏好/校园/图书馆",
@@ -82,8 +83,8 @@ func TestProfileIdentityTagsUpdatePreservesUntouchedCareerInterestFields(t *test
 		"Audience/用户/兴趣偏好/生活/咖啡",
 	}
 
-	next, ok := application.ProfileIdentityTagsFromUpdate(map[string]any{
-		"interestTagRefs": []string{"Audience/用户/兴趣偏好/旅行摄影/旅行"},
+	next, ok := application.ProfileIdentityTagsFromUpdate(application.ProfileUpdateCommand{
+		InterestTagRefs: []string{"Audience/用户/兴趣偏好/旅行摄影/旅行"},
 	}, current)
 	if !ok {
 		t.Fatalf("expected profile tags to be touched")
@@ -97,8 +98,9 @@ func TestProfileIdentityTagsUpdatePreservesUntouchedCareerInterestFields(t *test
 		t.Fatalf("interest-only update should preserve occupation\nwant=%v\n got=%v", want, next)
 	}
 
-	next, ok = application.ProfileIdentityTagsFromUpdate(map[string]any{
-		"occupationTagRef": "Audience/用户/职业/产品运营/产品经理",
+	occupation := "Audience/用户/职业/产品运营/产品经理"
+	next, ok = application.ProfileIdentityTagsFromUpdate(application.ProfileUpdateCommand{
+		OccupationTagRef: &occupation,
 	}, current)
 	if !ok {
 		t.Fatalf("expected profile tags to be touched")

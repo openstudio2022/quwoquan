@@ -135,6 +135,7 @@ def collect_coverage_index() -> dict[str, Any]:
         "area": {},
         "layer": {},
         "quality_facet": {facet: 0 for facet in QUALITY_FACETS},
+        "execution_profile": {profile: 0 for profile in ("baseline", "smoke", "integration", "release")},
     }
     for area, path, layer in iter_canonical_files():
         rel_path = path.relative_to(ROOT).as_posix()
@@ -173,6 +174,9 @@ def collect_coverage_index() -> dict[str, Any]:
                         facet_text = str(entry.get("quality_facet") or "")
                         if facet_text in acceptance_quality_facets:
                             acceptance_quality_facets[facet_text] += 1
+                        profile = str(entry.get("execution_profile") or "")
+                        if profile in counts["execution_profile"]:
+                            counts["execution_profile"][profile] += 1
 
     return {
         "counts": counts,

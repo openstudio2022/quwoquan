@@ -1,6 +1,8 @@
 import 'dart:convert';
 
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+
+import '../../cloud_services/assistant_facets_mock.dart';
 
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
   'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
@@ -189,7 +191,7 @@ AssistantEvalScenarioPack loadAssistantEvalScenarioPack() {
   );
 }
 
-class ScenarioEvalMockAssistantRepository extends MockAssistantRepository {
+class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
   ScenarioEvalMockAssistantRepository({required AssistantEvalScenarioPack pack})
     : _scenarios = {
         for (final scenario in pack.assistantTurnScenariosFor('alpha'))

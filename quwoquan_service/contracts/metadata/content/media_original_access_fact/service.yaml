@@ -5,8 +5,8 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: App typed Media Facet、真实 S3-compatible 集成与 Gamma 页面验收尚未完成
-    gap_id: CONTENT_MEDIA_OBJECT_MIGRATION_PENDING
+    block_reason: typed Media Facet、Mongo append/outbox 与真实 S3-compatible 集成已完成；仅差 Gamma 原图访问页面证据
+    gap_id: CONTENT_MEDIA_GAMMA_UAT
     target_story: app-cloud-business-object-commercial-closure
   description: MediaOriginalAccessFact 的对象中心不可变授权事实追加入口。
 

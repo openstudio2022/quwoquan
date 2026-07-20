@@ -1,4 +1,4 @@
-# L4 特性：follow-unfollow-contract
+# L3 特性：follow-unfollow-contract
 
 ## 功能说明
 - 细化 follow-unfollow-contract 特性的功能边界与端云协同行为。

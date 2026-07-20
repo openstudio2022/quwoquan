@@ -1,4 +1,4 @@
-# L4 特性：settings-read-write-contract
+# L3 特性：settings-read-write-contract
 
 ## 功能说明
 - 细化 settings-read-write-contract 特性的功能边界与端云协同行为。

@@ -1,193 +1,215 @@
 package local_contract
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"quwoquan_service/runtime/controlplane"
 	confighttp "quwoquan_service/services/platform-ops-service/internal/adapters/http/config_layer"
 	configapp "quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer"
-	configmodel "quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/model"
-	configports "quwoquan_service/services/platform-ops-service/internal/domain/platform_ops/config_layer/ports"
 )
 
-func TestConfigLayerHTTPBoundaryIsTypedIdempotentAndStrict(t *testing.T) {
-	store := newLocalConfigLayerStore()
-	catalog := localConfigCatalog()
-	facade, err := configapp.NewFacade(store, store, catalog)
+// seedSnapshotRepo 构造仓库模式的最小配置树：
+// 一个云侧服务（content-service）+ 端侧 App + 数据工程 catalog。
+func seedSnapshotRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	mustWrite := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	base := filepath.Join(root, "quwoquan_service", "services", "content-service", "configs")
+	mustWrite(filepath.Join(base, "default", "config.yaml"),
+		"config:\n  version: \"1.0.0\"\nsys.content.mongo.max_pool_size: 100\n")
+	mustWrite(filepath.Join(base, "gamma", "config.yaml"),
+		"sys.content.mongo.max_pool_size: 120\n")
+	mustWrite(filepath.Join(base, "releases", "v1.0.1.yaml"), "config:\n  version: \"1.0.1\"\n")
+	mustWrite(filepath.Join(base, "releases", "v1.0.0.yaml"), "config:\n  version: \"1.0.0\"\n")
+	mustWrite(filepath.Join(root, "quwoquan_app", "configs", "gamma", "app_runtime.yaml"),
+		"gatewayBaseUrl: https://gamma.example.test\n")
+	mustWrite(filepath.Join(root, "quwoquan_data", "control_plane", "_shared", "catalogs", "region_catalog.yaml"),
+		"regions: []\n")
+	return root
+}
+
+func newSnapshotHandler(t *testing.T, repoRoot string) http.Handler {
+	t.Helper()
+	catalog, err := configapp.NewConfigKeyCatalog(map[string]any{
+		"configs": []any{
+			map[string]any{
+				"key": "sys.content.mongo.max_pool_size", "type": "int", "owner": "platform-ops",
+				"default": 100, "scope": "service", "reload": "restart", "risk_level": "medium",
+				"ui_editable": false,
+			},
+			map[string]any{"key": "sys.error_message", "key_namespace": true, "type": "string"},
+		},
+	})
 	if err != nil {
-		t.Fatalf("build config facade: %v", err)
+		t.Fatalf("build catalog: %v", err)
+	}
+	source, err := configapp.NewSnapshotSource("", repoRoot)
+	if err != nil {
+		t.Fatalf("build snapshot source: %v", err)
+	}
+	facade, err := configapp.NewFacade(source, catalog)
+	if err != nil {
+		t.Fatalf("build facade: %v", err)
 	}
 	handler, err := confighttp.NewHandler(facade)
 	if err != nil {
-		t.Fatalf("build config handler: %v", err)
+		t.Fatalf("build handler: %v", err)
 	}
-	path := "/control-plane/platform/configs/sys.content.mongo.max_pool_size:update"
-	body := []byte(`{"layerId":"service:gamma:gamma-user-a:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"int","intValue":120}}`)
-
-	first := performLocalConfigRequest(handler, path, body, "config-idem-1")
-	if first.Code != http.StatusOK {
-		t.Fatalf("first config write status=%d body=%s", first.Code, first.Body.String())
-	}
-	replay := performLocalConfigRequest(handler, path, body, "config-idem-1")
-	if replay.Code != http.StatusOK {
-		t.Fatalf("config replay status=%d body=%s", replay.Code, replay.Body.String())
-	}
-	if got := store.eventCount(); got != 1 {
-		t.Fatalf("idempotent replay emitted %d events, want 1", got)
-	}
-
-	wrongKind := []byte(`{"layerId":"service:content-service","scopeLevel":"service","scopeId":"content-service","environment":"gamma","cluster":"gamma-user-a","service":"content-service","value":{"kind":"string","stringValue":"120"}}`)
-	wrong := performLocalConfigRequest(handler, path, wrongKind, "config-idem-2")
-	if wrong.Code != http.StatusBadRequest {
-		t.Fatalf("wrong value kind status=%d body=%s", wrong.Code, wrong.Body.String())
-	}
-
-	unknownField := append(body[:len(body)-1], []byte(`,"unexpectedValue":120}`)...)
-	unknown := performLocalConfigRequest(handler, path, unknownField, "config-idem-3")
-	if unknown.Code != http.StatusBadRequest {
-		t.Fatalf("unknown request field status=%d body=%s", unknown.Code, unknown.Body.String())
-	}
-
-	resolved := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/resolve?env=gamma&cluster=gamma-user-a&service=content-service", nil)
-	handler.ServeHTTP(resolved, request)
-	if resolved.Code != http.StatusOK {
-		t.Fatalf("resolve status=%d body=%s", resolved.Code, resolved.Body.String())
-	}
-	var result configapp.EffectiveConfigSlice
-	if err := json.Unmarshal(resolved.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode resolve response: %v", err)
-	}
-	if len(result.Items) != 1 || result.Items[0].SourceLayerID != "service:gamma:gamma-user-a:content-service" {
-		t.Fatalf("resolved config did not use service layer: %+v", result)
-	}
+	return handler
 }
 
-func performLocalConfigRequest(handler http.Handler, path string, body []byte, idempotencyKey string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
-	request.Header.Set("Idempotency-Key", idempotencyKey)
-	request.Header.Set("If-Match", `"0"`)
+func TestConfigSnapshotResolveUsesReleasePackageOverrides(t *testing.T) {
+	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+
 	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/resolve?env=gamma&service=content-service", nil)
 	handler.ServeHTTP(recorder, request)
-	return recorder
-}
-
-type localConfigLayerStore struct {
-	mu       sync.Mutex
-	layers   map[string]configmodel.ConfigLayer
-	receipts map[string]localReceipt
-	events   []configmodel.Event
-}
-
-type localReceipt struct {
-	digest  string
-	receipt configports.CommitReceipt
-}
-
-func newLocalConfigLayerStore() *localConfigLayerStore {
-	return &localConfigLayerStore{
-		layers: map[string]configmodel.ConfigLayer{}, receipts: map[string]localReceipt{},
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("resolve status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-}
-
-func (s *localConfigLayerStore) Load(_ context.Context, id string) (configmodel.ConfigLayer, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	layer, found := s.layers[id]
-	if !found {
-		return configmodel.ConfigLayer{}, configmodel.ErrNotFound
+	var resolved controlplane.ConfigResolveResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &resolved); err != nil {
+		t.Fatalf("decode resolve: %v", err)
 	}
-	return layer, nil
-}
-
-func (s *localConfigLayerStore) List(context.Context) ([]configmodel.ConfigLayer, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	items := make([]configmodel.ConfigLayer, 0, len(s.layers))
-	for _, layer := range s.layers {
-		items = append(items, layer)
+	if resolved.Source != "release-package" {
+		t.Fatalf("resolve source=%q want release-package", resolved.Source)
 	}
-	return items, nil
-}
-
-func (s *localConfigLayerStore) Replay(
-	_ context.Context,
-	layerID, idempotencyKey, digest string,
-) (configports.CommitReceipt, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	stored, found := s.receipts[layerID+"\x00"+idempotencyKey]
-	if !found {
-		return configports.CommitReceipt{}, false, nil
+	if resolved.DesiredHash == "" || resolved.DesiredHash != resolved.EffectiveHash {
+		t.Fatalf("central resolve must expose desired==effective hash: %+v", resolved)
 	}
-	if stored.digest != digest {
-		return configports.CommitReceipt{}, false, configmodel.ErrIdempotencyConflict
-	}
-	receipt := stored.receipt
-	receipt.Replayed = true
-	return receipt, true, nil
-}
-
-func (s *localConfigLayerStore) Commit(
-	_ context.Context,
-	expectedVersion int64,
-	changes configports.ChangeSet,
-) (configports.CommitReceipt, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key := changes.Layer.ID + "\x00" + changes.IdempotencyKey
-	if stored, found := s.receipts[key]; found {
-		if stored.digest != changes.CommandDigest {
-			return configports.CommitReceipt{}, configmodel.ErrIdempotencyConflict
+	var poolSize any
+	var sourceLayer string
+	for _, value := range resolved.Values {
+		if value.Key == "sys.content.mongo.max_pool_size" {
+			poolSize = value.Value
+			sourceLayer = value.SourceLayer
 		}
-		receipt := stored.receipt
-		receipt.Replayed = true
-		return receipt, nil
 	}
-	current, found := s.layers[changes.Layer.ID]
-	if (!found && expectedVersion != 0) || (found && current.Version != expectedVersion) {
-		return configports.CommitReceipt{}, configmodel.ErrVersionConflict
+	if asInt(poolSize) != 120 {
+		t.Fatalf("env override must win: got %v (source=%s)", poolSize, sourceLayer)
 	}
-	s.layers[changes.Layer.ID] = changes.Layer
-	s.events = append(s.events, changes.Events...)
-	receipt := configports.CommitReceipt{LayerID: changes.Layer.ID, Version: changes.Layer.Version}
-	s.receipts[key] = localReceipt{digest: changes.CommandDigest, receipt: receipt}
-	return receipt, nil
+	if sourceLayer == "config_schema" {
+		t.Fatalf("override source must be a release package file, got %s", sourceLayer)
+	}
+
+	missingEnv := httptest.NewRecorder()
+	handler.ServeHTTP(missingEnv, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/resolve", nil))
+	if missingEnv.Code != http.StatusBadRequest {
+		t.Fatalf("resolve without env status=%d want 400", missingEnv.Code)
+	}
 }
 
-func (s *localConfigLayerStore) eventCount() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.events)
+func TestConfigSnapshotViewCoversAllDomains(t *testing.T) {
+	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+
+	cases := []struct {
+		query        string
+		wantDomain   string
+		wantFiles    int
+		wantReleases int
+	}{
+		{"env=gamma&service=content-service", "cloud-service", 4, 2},
+		{"env=gamma&service=app", "app", 1, 0},
+		{"env=gamma&service=data", "data", 1, 0},
+	}
+	for _, testCase := range cases {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/snapshot?"+testCase.query, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", testCase.query, recorder.Code, recorder.Body.String())
+		}
+		var view configapp.ConfigSnapshotView
+		if err := json.Unmarshal(recorder.Body.Bytes(), &view); err != nil {
+			t.Fatalf("decode snapshot: %v", err)
+		}
+		if view.Domain != testCase.wantDomain {
+			t.Fatalf("%s domain=%q want %q", testCase.query, view.Domain, testCase.wantDomain)
+		}
+		if len(view.Files) != testCase.wantFiles {
+			t.Fatalf("%s files=%d want %d", testCase.query, len(view.Files), testCase.wantFiles)
+		}
+		if len(view.ReleaseVersions) != testCase.wantReleases {
+			t.Fatalf("%s releases=%v want %d", testCase.query, view.ReleaseVersions, testCase.wantReleases)
+		}
+		for _, file := range view.Files {
+			if file.SHA256 == "" || file.Content == "" || file.Path == "" {
+				t.Fatalf("%s snapshot file must expose path/sha256/content: %+v", testCase.query, file)
+			}
+		}
+		if view.MergedSha256 == "" {
+			t.Fatalf("%s mergedSha256 must be present", testCase.query)
+		}
+	}
+
+	unknown := httptest.NewRecorder()
+	handler.ServeHTTP(unknown, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/snapshot?env=gamma&service=nope-service", nil))
+	if unknown.Code != http.StatusNotFound {
+		t.Fatalf("unknown service status=%d want 404", unknown.Code)
+	}
 }
 
-type localCatalog struct {
-	item configports.ConfigKeyDescriptor
+func TestConfigWriteRoutesRetired(t *testing.T) {
+	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/platform/configs/sys.content.mongo.max_pool_size:update",
+		nil,
+	))
+	if update.Code != http.StatusBadRequest && update.Code != http.StatusNotFound {
+		t.Fatalf("write route must be retired, status=%d", update.Code)
+	}
+
+	layers := httptest.NewRecorder()
+	handler.ServeHTTP(layers, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/layers", nil))
+	if layers.Code != http.StatusBadRequest && layers.Code != http.StatusNotFound {
+		t.Fatalf("layers route must be retired, status=%d", layers.Code)
+	}
 }
 
-func localConfigCatalog() *localCatalog {
-	defaultValue := int64(100)
-	return &localCatalog{item: configports.ConfigKeyDescriptor{
-		Key: "sys.content.mongo.max_pool_size", Kind: configmodel.ValueKindInt,
-		Scope: "service", Default: configmodel.ConfigValue{Kind: configmodel.ValueKindInt, IntValue: &defaultValue},
-	}}
+func TestConfigDomainsCatalog(t *testing.T) {
+	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/domains", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("domains status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var domains configapp.ConfigDomainSlice
+	if err := json.Unmarshal(recorder.Body.Bytes(), &domains); err != nil {
+		t.Fatalf("decode domains: %v", err)
+	}
+	got := map[string]bool{}
+	for _, item := range domains.Items {
+		got[item.Domain] = true
+	}
+	for _, want := range []string{"cloud-service", "app", "data"} {
+		if !got[want] {
+			t.Fatalf("domain catalog missing %q: %+v", want, domains.Items)
+		}
+	}
 }
 
-func (c *localCatalog) Get(key string) (configports.ConfigKeyDescriptor, bool) {
-	return c.item, key == c.item.Key
+func asInt(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case float64:
+		return int(typed)
+	default:
+		return -1
+	}
 }
-
-func (c *localCatalog) List() []configports.ConfigKeyDescriptor {
-	return []configports.ConfigKeyDescriptor{c.item}
-}
-
-var (
-	_ configports.AggregateStore   = (*localConfigLayerStore)(nil)
-	_ configports.LayerReader      = (*localConfigLayerStore)(nil)
-	_ configports.ConfigKeyCatalog = (*localCatalog)(nil)
-)

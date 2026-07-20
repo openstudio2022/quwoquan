@@ -110,9 +110,6 @@ profile_tabs:
         label_key: interaction_sub_shares
         order: 2
         modes: [mine]
-      - id: views
-        label_key: interaction_sub_views
-        order: 3
     direction_filter:
       mine: [received, sent]
       other: [received]

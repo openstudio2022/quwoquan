@@ -181,7 +181,7 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
         platform="百度百科",
         source_category="encyclopedia",
         source_kind="baidu_baike",
-        extractor="baidu_baike_openapi",
+        extractor="baidu_baike_html",
         policy_revision="encyclopedia-primary",
         research_lane="homepage",
         url="https://baike.baidu.com/item/沙湖旅游景区",

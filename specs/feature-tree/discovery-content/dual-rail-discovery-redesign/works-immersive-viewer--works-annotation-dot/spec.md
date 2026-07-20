@@ -1,4 +1,4 @@
-# L4 契约/任务：works-annotation-dot
+# L3 契约/任务：works-annotation-dot
 
 ## 功能说明
 长按点位评论入口（P1 UI）：全局长按 500ms 在原位生成克莱因蓝脉冲光点，同时锁定 PageView 双向滑动；点击光点打开 `WorksGlassDrawer`；松手/取消后光点 200ms 淡出，PageView 解锁。P2（坐标持久化）搁置。

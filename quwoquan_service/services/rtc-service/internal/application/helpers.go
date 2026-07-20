@@ -1,12 +1,11 @@
 package application
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"github.com/google/uuid"
 )
 
 func generateID() string {
-	b := make([]byte, 12)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+	// CallKit/CXCallUpdate 要求通话标识为 RFC 4122 UUID。CallSession 直接使用
+	// 同一个 UUID，避免端云再维护一套 nativeCallId 映射。
+	return uuid.NewString()
 }

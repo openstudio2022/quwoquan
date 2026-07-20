@@ -1,0 +1,38 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260719--travel-homepage-coverage--cn-zhejiang--canary-001",
+  "objectRef": "/entity/地点/自然景观/东钱湖",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:57a176d21f2346c944a225961a21ef9d2758b0f74cce1743bdf73431547d343e"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:a3604402ca8180bba30365c42c715b56d358eb43db5d36dc32c5770c5b21187e"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:53ae91d951522a8bba9dc16ef799150ba02071d8ad2161408b6d59d7985ddc13"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:c1140267296d349e8e11228c75ce5e0d58ee9cbc0191c607f3c890109c2b22d2"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:d49738828888de645fcbf14467777879f93d9c3c0c5ca422d881261a74b2267c"
+    }
+  ]
+}

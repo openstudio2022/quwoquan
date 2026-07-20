@@ -34,6 +34,9 @@ class SeededMediaCAPathContractTest(unittest.TestCase):
             all((media_surface.MEDIA_ROOT / reference).is_file() for reference in refs),
         )
 
+    def test_fixture_media_has_no_unreferenced_legacy_paths(self) -> None:
+        self.assertEqual(media_surface._legacy_unreferenced_media_paths(), [])
+
     def test_seeded_media_probes_keep_kind_specific_bases_under_parallel_execution(
         self,
     ) -> None:
@@ -46,6 +49,8 @@ class SeededMediaCAPathContractTest(unittest.TestCase):
             "media/avatar/s/archived-avatar/user/a/v1/avatar.png",
             "media/image/s/archived-image/post/a/v1/cover.png",
             "media/video/s/video-a/post/a/source.mp4",
+            "media/video/s/video-a/post/a/cover.webp?variant=thumb",
+            "media/video/s/video-a/post/a/preview/manifest.json",
         ]
 
         with mock.patch.object(
@@ -68,15 +73,36 @@ class SeededMediaCAPathContractTest(unittest.TestCase):
                 "https://avatar.example.test/media/avatar/s/archived-avatar/user/a/v1/avatar.png",
                 "https://image.example.test/media/image/s/archived-image/post/a/v1/cover.png",
                 "https://video.example.test/media/video/s/video-a/post/a/source.mp4",
+                "https://video.example.test/media/video/s/video-a/post/a/cover.webp?variant=thumb",
+                "https://video.example.test/media/video/s/video-a/post/a/preview/manifest.json",
             },
         )
         video_call = next(
             call
             for call in probe.call_args_list
-            if call.args[0].startswith("https://video.example.test/")
+            if call.args[0].endswith("/source.mp4")
         )
         self.assertTrue(video_call.kwargs["range_probe"])
         self.assertTrue(video_call.kwargs["resolve_local"])
+        non_video_calls = [
+            call
+            for call in probe.call_args_list
+            if call.args[0].endswith(("variant=thumb", "manifest.json"))
+        ]
+        self.assertTrue(non_video_calls)
+        self.assertTrue(all(not call.kwargs["range_probe"] for call in non_video_calls))
+        self.assertEqual(
+            media_surface._expected_content_type_prefix(
+                "media/video/s/video-a/post/a/cover.webp?variant=thumb",
+            ),
+            "image/",
+        )
+        self.assertEqual(
+            media_surface._expected_content_type_prefix(
+                "media/video/s/video-a/post/a/preview/manifest.json",
+            ),
+            "application/json",
+        )
 
     def test_local_ca_is_resolved_from_external_deploy_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

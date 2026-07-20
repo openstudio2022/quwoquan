@@ -42,8 +42,6 @@ final class StartupDeferredPluginRegistry {
     attached &= registerPlugin(
         flutterEngine, "url_launcher_android", "io.flutter.plugins.urllauncher.UrlLauncherPlugin");
     attached &= registerPlugin(
-        flutterEngine, "video_player_android", "io.flutter.plugins.videoplayer.VideoPlayerPlugin");
-    attached &= registerPlugin(
         flutterEngine, "wakelock_plus", "dev.fluttercommunity.plus.wakelock.WakelockPlusPlugin");
     attached &= registerPlugin(
         flutterEngine, "webview_flutter_android", "io.flutter.plugins.webviewflutter.WebViewFlutterPlugin");
@@ -59,16 +57,6 @@ final class StartupDeferredPluginRegistry {
         flutterEngine,
         "package_info_plus",
         "dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin");
-    attached &= registerPlugin(
-        flutterEngine,
-        "flutter_secure_storage",
-        "com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin");
-    attached &= registerPlugin(
-        flutterEngine,
-        "shared_preferences_android",
-        "io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin");
-    attached &= registerPlugin(
-        flutterEngine, "sqflite_android", "com.tekartik.sqflite.SqflitePlugin");
     if (attached) {
       markRegistered(flutterEngine, "startupPostFirstFrame");
       Log.i(TAG, "android_startup_post_first_frame_plugins_registered");
@@ -84,10 +72,6 @@ final class StartupDeferredPluginRegistry {
         flutterEngine, "flutter_webrtc", "com.cloudwebrtc.webrtc.FlutterWebRTCPlugin");
     attached &= registerPlugin(
         flutterEngine, "livekit_client", "io.livekit.plugin.LiveKitPlugin");
-    attached &= registerPlugin(
-        flutterEngine,
-        "flutter_callkit_incoming",
-        "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin");
     if (attached) {
       markRegistered(flutterEngine, "rtc");
       Log.i(TAG, "android_deferred_rtc_plugins_registered");

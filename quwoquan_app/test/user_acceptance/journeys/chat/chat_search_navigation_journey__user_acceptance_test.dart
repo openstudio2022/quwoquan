@@ -8,42 +8,57 @@ import 'package:hive/hive.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
-import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../support/fixtures/chat/chat_mock_seed_refs.dart';
+import '../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
 
 Widget _buildApp() {
   final repo = MockChatRepository(
     seedConversations: <Map<String, dynamic>>[
-      chatConversationSeedById('conv_001'),
-      chatConversationSeedById('conv_002'),
+      chatConversationSeedById('fixture_conv_direct'),
+      chatConversationSeedById('fixture_conv_group'),
     ],
   );
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
-      chatRepositoryProvider.overrideWithValue(repo),
-      greetingRepositoryProvider.overrideWithValue(MockGreetingRepository()),
+      realtimeConnectionManagerProvider.overrideWith(
+        () => RealtimeConnectionNotifier(
+          delegateFactory:
+              ({
+                required ref,
+                required onStateChanged,
+                required currentUserIdResolver,
+              }) => FixtureRealtimeConnectionDelegate(
+                read: ref.read,
+                invalidate: ref.invalidate,
+                onStateChanged: onStateChanged,
+              ),
+        ),
+      ),
+      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
-        MockRelationshipCapabilityRepository(),
+        mutualRelationshipCapabilityRepository(),
       ),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
-      assistantRepositoryProvider.overrideWithValue(_NoopAssistantRepository()),
+      assistantXiaoquSearchFacetProvider.overrideWithValue(
+        _NoopAssistantXiaoquSearchFacet(),
+      ),
       voiceQueuedSenderProvider.overrideWithValue(
         (_, _) async => VoiceSendStatus.completed,
       ),
@@ -248,11 +263,6 @@ void main() {
   });
 }
 
-final class _MockModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-}
-
 class _FakeSearchRepository implements SearchRepository {
   @override
   Future<SearchResponse> search(
@@ -296,7 +306,7 @@ class _FakeSearchRepository implements SearchRepository {
   }
 }
 
-class _NoopAssistantRepository extends AssistantRepository {
+class _NoopAssistantXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

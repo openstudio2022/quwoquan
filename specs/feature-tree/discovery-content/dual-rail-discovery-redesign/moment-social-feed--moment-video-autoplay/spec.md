@@ -1,4 +1,4 @@
-# L4 契约/任务：moment-video-autoplay
+# L3 契约/任务：moment-video-autoplay
 
 ## 功能说明
 微趣帖子内嵌视频卡片：`VisibilityDetector` 监听视口可见率，≥ 60% 时自动播放（音量淡入），< 60% 时暂停；点击卡片可全屏播放（不进入作品频道沉浸模式）。

@@ -1,0 +1,34 @@
+entity: Report
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。举报写路径经 typed Facet
+  （ContentReportCommandWriter → alpha adapter / test recording adapter）。
+
+command_scenarios:
+  - name: submit_report_all_target_types
+    route: POST /content/reports
+    variants: [post, comment, user, circle, message]
+    assertions:
+      - status_204
+      - empty_response_body
+      - alpha adapter 与 Remote adapter 请求形状同构
+    dart_tests:
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/content/alpha_report_command_test.dart
+      - quwoquan_app/test/local_contract/core/providers/create_report_service_provider__local_contract_test.dart
+
+  - name: report_entry_surfaces
+    description: 三个 surface（沉浸浏览/首页 feed/用户主页）注入各自 writer，失败展示结构化错误
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/content_interaction_contract__local_contract_test.dart
+
+query_scenarios:
+  - name: list_my_reports_private_progress
+    route: GET /content/users/me/reports
+    assertions:
+      - 只返回当前 persona 的举报
+      - pending、reviewing、resolved、dismissed 状态均可稳定解码
+      - 不暴露 reviewerId 与内部处置细节
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/report_query_contract__functional__local_contract_test.dart
+      - quwoquan_app/test/user_acceptance/pages/settings/my_reports/my_reports_page__user_acceptance_test.dart

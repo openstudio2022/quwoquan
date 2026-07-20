@@ -1,4 +1,4 @@
-# L4 特性：governance-action-policy
+# L3 特性：governance-action-policy
 
 ## 功能说明
 - 细化 governance-action-policy 特性的功能边界与端云协同行为。

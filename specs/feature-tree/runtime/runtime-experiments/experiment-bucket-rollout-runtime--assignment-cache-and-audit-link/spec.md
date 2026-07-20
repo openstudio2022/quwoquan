@@ -1,4 +1,4 @@
-# L4 特性：assignment-cache-and-audit-link
+# L3 特性：assignment-cache-and-audit-link
 
 ## 功能说明
 - 完成对象级任务落地（模型/接口/策略/存储）。

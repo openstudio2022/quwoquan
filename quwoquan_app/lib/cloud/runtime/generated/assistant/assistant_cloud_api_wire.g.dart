@@ -711,6 +711,93 @@ class AssistantPolicyView {
       };
 }
 
+class AssistantPreferenceFact {
+  const AssistantPreferenceFact({
+    required this.preferenceId,
+    required this.userId,
+    required this.scope,
+    this.conversationId,
+    required this.kind,
+    required this.value,
+    required this.sourceType,
+    required this.status,
+    this.revokedAt,
+    this.revocationDeadline,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.version,
+  });
+
+  final String preferenceId;
+  final String userId;
+  final String? scope;
+  final String? conversationId;
+  final String? kind;
+  final String value;
+  final String? sourceType;
+  final String? status;
+  final String? revokedAt;
+  final String? revocationDeadline;
+  final String createdAt;
+  final String updatedAt;
+  final int version;
+
+  factory AssistantPreferenceFact.fromJson(Map<String, dynamic> json) {
+    return AssistantPreferenceFact(
+      preferenceId: (json['preferenceId'] ?? '').toString(),
+      userId: (json['userId'] ?? '').toString(),
+      scope: json['scope']?.toString(),
+      conversationId: json['conversationId']?.toString(),
+      kind: json['kind']?.toString(),
+      value: (json['value'] ?? '').toString(),
+      sourceType: json['sourceType']?.toString(),
+      status: json['status']?.toString(),
+      revokedAt: json['revokedAt']?.toString(),
+      revocationDeadline: json['revocationDeadline']?.toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
+      updatedAt: (json['updatedAt'] ?? '').toString(),
+      version: (json['version'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'preferenceId': preferenceId,
+        'userId': userId,
+        'scope': scope,
+        'conversationId': conversationId,
+        'kind': kind,
+        'value': value,
+        'sourceType': sourceType,
+        'status': status,
+        'revokedAt': revokedAt,
+        'revocationDeadline': revocationDeadline,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'version': version,
+      };
+}
+
+class AssistantPreferenceFactListView {
+  const AssistantPreferenceFactListView({
+    required this.items,
+  });
+
+  final List<AssistantPreferenceFact> items;
+
+  factory AssistantPreferenceFactListView.fromJson(Map<String, dynamic> json) {
+    return AssistantPreferenceFactListView(
+      items: ((json['items'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => AssistantPreferenceFact.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'items': items,
+      };
+}
+
 class AssistantReportPageContextRequestWire {
   const AssistantReportPageContextRequestWire({
     required this.pageType,
@@ -1064,62 +1151,78 @@ class AssistantTurnEnvelope {
       };
 }
 
-class AssistantUserMemoryView {
-  const AssistantUserMemoryView({
-    required this.memoryId,
-    required this.title,
-    this.snippet,
-    this.sourceType,
-    this.createdAt,
-    this.updatedAt,
+class AssistantTurnSummaryView {
+  const AssistantTurnSummaryView({
+    required this.turnId,
+    required this.conversationId,
+    required this.status,
+    required this.inputText,
+    this.answerText,
+    this.skillId,
+    this.domainId,
+    required this.createdAt,
+    this.completedAt,
   });
 
-  final String memoryId;
-  final String title;
-  final String? snippet;
-  final String? sourceType;
-  final String? createdAt;
-  final String? updatedAt;
+  final String turnId;
+  final String conversationId;
+  final String status;
+  final String inputText;
+  final String? answerText;
+  final String? skillId;
+  final String? domainId;
+  final String createdAt;
+  final String? completedAt;
 
-  factory AssistantUserMemoryView.fromJson(Map<String, dynamic> json) {
-    return AssistantUserMemoryView(
-      memoryId: (json['memoryId'] ?? '').toString(),
-      title: (json['title'] ?? '').toString(),
-      snippet: json['snippet']?.toString(),
-      sourceType: json['sourceType']?.toString(),
-      createdAt: json['createdAt']?.toString(),
-      updatedAt: json['updatedAt']?.toString(),
+  factory AssistantTurnSummaryView.fromJson(Map<String, dynamic> json) {
+    return AssistantTurnSummaryView(
+      turnId: (json['turnId'] ?? '').toString(),
+      conversationId: (json['conversationId'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      inputText: (json['inputText'] ?? '').toString(),
+      answerText: json['answerText']?.toString(),
+      skillId: (json['skillId'] ?? '').toString(),
+      domainId: json['domainId']?.toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
+      completedAt: json['completedAt']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'memoryId': memoryId,
-        'title': title,
-        'snippet': snippet,
-        'sourceType': sourceType,
+        'turnId': turnId,
+        'conversationId': conversationId,
+        'status': status,
+        'inputText': inputText,
+        'answerText': answerText,
+        'skillId': skillId,
+        'domainId': domainId,
         'createdAt': createdAt,
-        'updatedAt': updatedAt,
+        'completedAt': completedAt,
       };
 }
 
-class AssistantUserMemoryListView {
-  const AssistantUserMemoryListView({
+class AssistantTurnListView {
+  const AssistantTurnListView({
     required this.items,
+    this.nextCursor,
   });
 
-  final List<AssistantUserMemoryView> items;
+  final List<AssistantTurnSummaryView> items;
+  final String? nextCursor;
 
-  factory AssistantUserMemoryListView.fromJson(Map<String, dynamic> json) {
-    return AssistantUserMemoryListView(
+  factory AssistantTurnListView.fromJson(Map<String, dynamic> json) {
+    return AssistantTurnListView(
       items: ((json['items'] as List?) ?? const [])
             .whereType<Map>()
-            .map((item) => AssistantUserMemoryView.fromJson(item.cast<String, dynamic>()))
+            .map((item) => AssistantTurnSummaryView.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
+      nextCursor: json['nextCursor']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'items': items,
+        'nextCursor': nextCursor,
       };
 }
 

@@ -46,6 +46,104 @@ groups:
           summary: "登录路由 {{ $labels.route }} P95 连续两个窗口 > 1.5s"
           description: "当前 P95 = {{ $value | humanizeDuration }}，超出登录契约 SLO；优先验证 provider 降级和短信恢复路径。"
 
+      # B1 身份账号 packet：OTP 发送/校验 5xx 直接阻断手机号登录主链路。
+      - alert: AuthOtpFailureRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/auth/(otp/send|login/phone)", status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_total{service="user-service", route=~"/auth/(otp/send|login/phone)"}[5m])), 1e-9) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "OTP 发送/手机号登录 5xx 比率 > 1%"
+          description: "authentication_challenge 一次性消费链路异常（当前 {{ $value | humanizePercentage }}）；核查 challenge 表约束、短信 provider 与 consume 原子性。"
+
+      # UserSettings 对象命令（PATCH /user/settings/*）：CAS 写失败或存储异常。
+      - alert: UserSettingsWriteFailureRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", method="PATCH", route=~"/user/settings/.*", status=~"5.."}[10m]))
+          / clamp_min(sum(rate(http_server_requests_total{service="user-service", method="PATCH", route=~"/user/settings/.*"}[10m])), 1e-9) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "用户设置写失败率连续两个窗口 > 2%"
+          description: "UserSettings 聚合 CAS/事务提交异常（当前 {{ $value | humanizePercentage }}）；409 版本冲突属预期重试，不计入本告警。"
+
+      # Persona 生命周期命令（创建/更新/激活/退役/删除/同步）失败率。
+      - alert: PersonaCommandFailureRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/personas.*", status=~"5.."}[10m]))
+          / clamp_min(sum(rate(http_server_requests_total{service="user-service", method!="GET", route=~"/user/personas.*"}[10m])), 1e-9) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "分身管理命令 5xx 比率连续两个窗口 > 2%"
+          description: "Persona 聚合命令（创建/激活/退役等）失败率 {{ $value | humanizePercentage }}；核查 persona command receipt 与激活排他写。"
+
+      - alert: UserAccountCloseOutboxFailureRateHigh
+        expr: |
+          sum(rate(user_account_close_outbox_delivery_total{result="failed"}[10m]))
+          / clamp_min(sum(rate(user_account_close_outbox_delivery_total[10m])), 1e-9) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号注销终态事件投递失败率 > 1%"
+          description: "UserAccountClosed durable outbox 未能推进；核查 PostgreSQL 租约、events.user.account Redis Stream 与下游匿名化消费者。"
+
+      - alert: UserAccountClosedConsumerRetrying
+        expr: |
+          sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="retry"}[10m])) > 0
+        for: 2m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号注销下游清理正在重试"
+          description: "至少一个 UserAccountClosed 消费者在最近 10 分钟发生重试；核查 MongoDB、Redis pending、外部索引和消费者健康探针。"
+
+      - alert: UserAccountClosedDeadLetterPresent
+        expr: |
+          sum(increase({__name__=~"(content|chat|circle|notification|search)_user_account_closed_consumer_total", result="dlq"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号注销清理事件进入 DLQ"
+          description: "UserAccountClosed 已达到有限重试上限；必须按 canonical event 修复后重放并验证各域清理探针，不得仅清空 DLQ。"
+
+      - alert: UserAccountClosedCleanupP95High
+        expr: |
+          max(
+            histogram_quantile(
+              0.95,
+              sum by (le, __name__) (
+                rate({__name__=~"(content|chat|circle|notification|search)_user_account_closed_cleanup_seconds_bucket"}[10m])
+              )
+            )
+          ) > 60
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号注销单消费者清理 P95 超过 60 秒"
+          description: "下游总目标为 15 分钟；单消费者处理时间持续超过 60 秒会侵蚀重试与排空预算。"
+
   - name: quwoquan_l2_mq
     rules:
       - alert: MQConsumeLagHigh
@@ -97,6 +195,78 @@ groups:
         annotations:
           summary: "SLS 产品遥测写入 P95 超过 1 秒"
           description: "接近 1200ms 服务端超时预算；检查 VPC 网络、SLS 配额与批量大小。"
+
+      - alert: RuntimeLogSpoolBacklogHigh
+        expr: runtime_log_export_spool_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          layer: l1
+          domain: runtime-observability
+        annotations:
+          summary: "服务 {{ $labels.service }} 运行日志 spool 积压超过 100 批"
+          description: "检查 product-ops runtime-log ingest、机器 token、网络和 SLS；spool 会按指数退避保留关键日志。"
+
+      - alert: RuntimeLogDeadLetterPresent
+        expr: runtime_log_export_dead_letter_pending > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l1
+          domain: runtime-observability
+        annotations:
+          summary: "服务 {{ $labels.service }} 存在运行日志 DLQ"
+          description: "永久 4xx、TTL 过期或容量淘汰已进入 DLQ；修复契约/凭据后按 batch digest 幂等重放。"
+
+      - alert: RuntimeLogCriticalCapacityEviction
+        expr: increase(runtime_log_export_batches_total{result="critical_capacity_evicted"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l1
+          domain: runtime-observability
+        annotations:
+          summary: "服务 {{ $labels.service }} 关键日志因 spool 容量被淘汰"
+          description: "ERROR/WARN spool 已满；立即恢复 ingest 并扩容持久卷。"
+
+      # Prometheus 只承载低基数近实时预警；Portal 的精确 ANR/卡顿会话率仍从
+      # SLS/Postgres 权威事件按 session 去重计算，禁止在时序标签中放 sessionId。
+      - alert: AppANREventRateHigh
+        expr: |
+          sum(rate(ops_app_experience_events_total{event_type="app_anr_outcome",result="detected"}[10m]))
+          / clamp_min(sum(rate(ops_app_experience_events_total{event_type="app_startup"}[10m])), 0.001) > 0.0047
+        for: 10m
+        labels:
+          severity: critical
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "App ANR 近实时事件率超过 0.47%"
+          description: "先按 appVersion/networkClass 在产品体验权威回读中核对去重会话率，再下钻 app_anr_outcome 与 runtime signal。"
+
+      - alert: AppJankSessionSignalHigh
+        expr: |
+          sum(rate(ops_app_experience_events_total{event_type="app_frame_jank_outcome"}[10m]))
+          / clamp_min(sum(rate(ops_app_experience_events_total{event_type="app_startup"}[10m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "App 卡顿批次相对启动量超过 5%"
+          description: "从产品体验页核对去重会话率、jankyFrames/sampleFrames 和 worstFrameMs；缺启动分母不得解释为健康。"
+
+      - alert: AppExperienceTelemetryMissing
+        expr: absent(ops_app_experience_events_total{event_type="app_startup"})
+        for: 15m
+        labels:
+          severity: critical
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "App 体验黄金指标没有启动分母"
+          description: "检查 App telemetry outbox、product-ops ingest、SLS 与 Prometheus scrape；缺样本必须显示 unavailable。"
 
   - name: quwoquan_l1_startup_welcome
     # 以下规则只消费 product-ops-service 的受限匿名启动阶段事实。
@@ -170,6 +340,51 @@ groups:
         annotations:
           summary: "启动 journal 发生容量淘汰"
           description: "离线或 endpoint 故障导致启动记录超过本地容量；检查补传延迟与网络可用性。"
+
+  - name: quwoquan_l2_circle
+    rules:
+      # Circle 域核心命令（本体生命周期 / membership join-leave / file / placement）
+      # 写路径错误率：命令失败直接阻断建圈/入圈/存储/放置主任务流。
+      - alert: CircleCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="circle-service",method!="GET",status=~"5..",route=~"/circles.*"}[5m]))
+          / clamp_min(sum(rate(http_server_requests_total{service="circle-service",method!="GET",route=~"/circles.*"}[5m])), 1e-9) > 0.01
+        for: 3m
+        labels:
+          severity: critical
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle 域命令 5xx 错误率 > 1%"
+          description: "Circle 写路径（建圈/入圈/群组/文件/放置）当前错误率 {{ $value | humanizePercentage }}，持续 3 分钟。"
+
+      - alert: CircleCommandP95LatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="circle-service",method!="GET",route=~"/circles.*"}[5m])) by (le, route)
+          ) > 0.7
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle 命令 {{ $labels.route }} P95 > 700ms（SLO 上限）"
+          description: "当前 P95 = {{ $value | humanizeDuration }}，对照 metadata slo.latency_p95_ms。"
+
+      - alert: CircleReadP95LatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"/circles.*|/personas/.*/circles"}[5m])) by (le, route)
+          ) > 0.6
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle 读路径 {{ $labels.route }} P95 > 600ms"
+          description: "发现/详情/feed/roster 读投影延迟超标，影响圈子首屏体验。"
 
   - name: quwoquan_l3_mongo
     rules:
@@ -278,13 +493,13 @@ groups:
 
       - alert: EventStorePublishFailures
         expr: |
-          sum(rate(eventstore_publish_failures_total[5m])) by (aggregate_type) > 0
+          sum(rate(mq_publish_total{status="error"}[5m])) by (topic) > 0
         for: 5m
         labels:
           severity: warning
           layer: l2
         annotations:
-          summary: "EventStore publish 失败: {{ $labels.aggregate_type }}"
+          summary: "事件发布失败: topic={{ $labels.topic }}"
 
   - name: quwoquan_rec_model
     # SLI/SLO 真相源：quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml。
@@ -297,16 +512,19 @@ groups:
     #   等 P1/P2 指标，真实 emitter 落地前不代表已具备触发数据。
     rules:
       - alert: RecModelFallbackRateHigh
+        # N1-1 语义修正：只统计真实降级（rec_pipeline_model_fallback_total，
+        # N0-1 CascadeScorer 记账）。旧表达式用 rule_hits 占比，在 shadow-only
+        # 阶段（rule 分桶 100%）永远为真，属语义失真告警。
         expr: |
-          sum(rate(rec_pipeline_rule_hits_total[5m]))
-          / (sum(rate(rec_pipeline_model_hits_total[5m])) + sum(rate(rec_pipeline_rule_hits_total[5m])) + 0.001) > 0.5
+          sum(rate(rec_pipeline_model_fallback_total[5m]))
+          / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001) > 0.05
         for: 5m
         labels:
           severity: critical
           layer: l2
         annotations:
-          summary: "推荐模型 fallback 率 > 50%（rule 打分占比过高）"
-          description: "模型服务可能不可用，当前 {{ $value | humanizePercentage }} 请求走 rule fallback"
+          summary: "推荐模型降级率 > 5%（模型故障回退 RuleScorer）"
+          description: "模型服务可能不可用，当前 {{ $value | humanizePercentage }} 请求由 CascadeScorer 降级 RuleScorer 供给"
 
       - alert: RecPipelineLatencyHigh
         expr: |
@@ -345,19 +563,9 @@ groups:
           summary: "推荐空 Feed 率 > 5%"
           description: "用户收到空 feed 比例过高，当前 {{ $value | humanizePercentage }}"
 
-      - alert: RecScoreDistributionAnomaly
-        expr: |
-          abs(
-            histogram_quantile(0.50, sum(rate(rec_score_value_bucket[5m])) by (le))
-            - histogram_quantile(0.50, sum(rate(rec_score_value_bucket[5m] offset 1d)) by (le))
-          ) > 0.15
-        for: 15m
-        labels:
-          severity: warning
-          layer: l2
-        annotations:
-          summary: "推荐分数分布异常（中位数偏移 > 0.15）"
-          description: "rec-model-service 打分分布发生显著变化，可能存在特征漂移、模型退化或切流异常"
+      # N1-1 死告警清理：RecScoreDistributionAnomaly 已删除——rec_score_value
+      # histogram 无任何 emitter，该告警从未可求值。分数分布/特征漂移监控的
+      # 真实通道是 CI 训练管线 monitoring job（make verify-ml-drift 的 PSI 报表）。
 
       - alert: RecommendationRepeatExposureRateHigh
         expr: |
@@ -371,44 +579,22 @@ groups:
           summary: "推荐重复曝光率 > 1%"
           description: "served/impressed 窗口内重复曝光占比 {{ $value | humanizePercentage }}，超出商用成熟度 SLO（repeat_exposure_rate<=0.01）。"
 
-      - alert: RecommendationExposureGiniHigh
-        expr: recommendation_feed_exposure_gini > 0.65
-        for: 30m
-        labels:
-          severity: warning
-          layer: l2
-        annotations:
-          summary: "推荐曝光基尼 > 0.65"
-          description: "内容曝光分布过度集中，动态曝光预算或覆盖率约束可能失效。"
-
-      - alert: RecommendationContentCoverageLow
-        expr: |
-          count(count_over_time(recommendation_feed_served_total[1h])) / (eligible_feed_item_count + 0.001) < 0.30
-        for: 1h
-        labels:
-          severity: warning
-          layer: l2
-        annotations:
-          summary: "推荐内容覆盖率 < 30%"
-          description: "推荐窗口覆盖的可推荐内容比例过低，可能存在赢家通吃或召回过窄。"
-
-      - alert: RecommendationPolicyTakedownEjectionSlow
-        expr: |
-          histogram_quantile(0.95,
-            sum(rate(recommendation_feed_policy_takedown_ejection_seconds_bucket[5m])) by (le)
-          ) > 60
-        for: 5m
-        labels:
-          severity: critical
-          layer: l2
-        annotations:
-          summary: "推荐违规/下架剔除 P95 > 60s"
-          description: "内容被下架或判违规后仍滞留推荐池，违反商用治理 SLO。"
+      # 曝光基尼（exposure_gini）为 objective_only SLI：per-content 分布无法在
+      # PromQL 侧低基数计算，评估走离线 replay 报表；此处不留死告警。
+      #
+      # N1-1 死告警清理：
+      # - RecommendationContentCoverageLow 已删除——recommendation_offline_eval_metric_value
+      #   无生产 emitter（Go ReplayReport.Emit 无调度）；覆盖率回归门在 CI 训练管线
+      #   promote gate（make verify-ml-model-quality）。
+      # - RecommendationPolicyTakedownEjectionSlow 已删除——
+      #   recommendation_feed_policy_takedown_ejection_seconds histogram 无 emitter；
+      #   对应 SLI（policy_takedown_ejection_latency）保持 objective_only，接入真实
+      #   emitter 后再恢复告警。
 
       - alert: RecommendationABValidityLow
         expr: |
-          sum(rate(recommendation_feed_ab_valid_experiments_total[1h]))
-          / (sum(rate(recommendation_feed_ab_valid_experiments_total[1h])) + sum(rate(recommendation_feed_ab_invalid_experiments_total[1h])) + 0.001) < 0.95
+          sum(rate(recommendation_feed_ab_experiment_validity_total{result="valid"}[1h]))
+          / (sum(rate(recommendation_feed_ab_experiment_validity_total[1h])) + 0.001) < 0.95
         for: 1h
         labels:
           severity: warning
@@ -695,6 +881,60 @@ groups:
           summary: "交集 Redis 降级速率偏高（op={{ $labels.op }}）"
           description: "交集 Redis 降级速率 {{ $value }}/s（op={{ $labels.op }}）超出 SLO（redis_degraded_rate<=0.05）。Redis 可能不可用——读位已由 rm_intersection_watermark 持久兜底、主请求未阻断，但应尽快恢复 Redis 以回到热路径。"
 
+      - alert: IntersectionVisitClearErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="content-service", route="/content/intersections/visit", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="content-service", route="/content/intersections/visit"}[10m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: intersection
+        annotations:
+          summary: "交集清红点（MarkIntersectionsVisited）错误率 > 2%"
+          description: "已读水位推进失败率 {{ $value | humanizePercentage }}。端侧降级容忍不阻断列表，但红点无法清零；检查 rm_intersection_watermark Mongo 写路径。"
+
+  - name: quwoquan_l2_ops_objects
+    rules:
+      # B9 运营对象核心链路：visit 计数、config 变更事件投递、experiment 控制面。
+      - alert: OpsVisitRecordErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="product-ops-service", route="/ops/visits", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="product-ops-service", route="/ops/visits"}[10m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: product-ops
+        annotations:
+          summary: "访问计数上报（RecordVisit）错误率 > 2%"
+          description: "当前非 2xx 比率 {{ $value | humanizePercentage }}。端侧有 200 条补传队列兜底；检查 Mongo visit_records 写入与 Redis 幂等台账。"
+
+      - alert: PgOutboxDispatchFailuresSustained
+        expr: |
+          sum(rate(pg_outbox_dispatch_failures_total[10m])) by (table) > 0
+        for: 15m
+        labels:
+          severity: critical
+          layer: l2
+          domain: ops-outbox
+        annotations:
+          summary: "outbox 事件投递持续失败（table={{ $labels.table }}）"
+          description: "事务 outbox（product_ops_outbox / platform_ops_outbox）发布持续失败并进入退避重试；事件滞留可恢复但需尽快检查 Redis 事件总线与 publisher 凭据，防止 ConfigLayerValueSet / ExperimentRolloutUpdated 长期滞留。"
+
+      - alert: ControlPlaneConfigWriteErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="platform-ops-service", route=~"/control-plane/platform/configs/.*", status=~"5.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="platform-ops-service", route=~"/control-plane/platform/configs/.*"}[10m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: platform-ops
+        annotations:
+          summary: "ConfigLayer 控制面 5xx 比率 > 5%"
+          description: "UpdateServiceConfig/Resolve 服务端错误率异常；检查 PostgreSQL platform_config_layers CAS 提交与 generated guard。"
+
   - name: quwoquan_l4_infrastructure
     rules:
       - alert: HighGoroutineCount
@@ -723,6 +963,107 @@ groups:
           layer: l4
         annotations:
           summary: "实例 {{ $labels.instance }} FD 使用率 > 80%"
+
+      # ===== 主机（node-exporter）：整体负荷与毛刺 =====
+      - alert: HostCPUHigh
+        expr: |
+          100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 85
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "主机 CPU 平均利用率 > 85%（10m）"
+          description: "prod-hosted 主机整体负荷过高（当前 {{ $value | printf \"%.1f\" }}%），先看 podman-exporter 容器分布定位吃 CPU 的服务。"
+
+      - alert: HostCPUSpike
+        expr: |
+          100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 95
+        for: 2m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "主机 CPU 毛刺 > 95%（1m 窗口持续 2m）"
+
+      - alert: HostMemoryHigh
+        expr: |
+          100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 5m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "主机内存使用率 > 90%"
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 85
+        for: 10m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "磁盘 {{ $labels.mountpoint }} 使用率 > 85%"
+
+      - alert: HostNetworkErrorSpike
+        expr: |
+          sum(rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "主机网络错误速率 > 10/s（收发合计）"
+
+      # ===== 容器（podman-exporter）：单实例负荷 =====
+      - alert: ContainerMemoryHigh
+        expr: |
+          podman_container_mem_usage_bytes / (podman_container_mem_limit_bytes > 0) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "容器 {{ $labels.name }} 内存使用超限 90%"
+
+      # ===== 数据面（mongodb / postgres / redis exporter） =====
+      - alert: DataPlaneExporterDown
+        expr: |
+          up{job=~"mongodb-exporter|postgres-exporter|redis-exporter|node-exporter|podman-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "基础设施 exporter {{ $labels.job }} 不可达"
+
+      - alert: MongoConnectionsHigh
+        expr: mongodb_ss_connections{conn_type="current"} > 800
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "MongoDB 当前连接数 > 800"
+
+      - alert: PostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) > 80
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "Postgres 活跃连接数 > 80"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9 and redis_memory_max_bytes > 0
+        for: 10m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "Redis 内存使用超 maxmemory 90%"
 
   - name: quwoquan_content_flywheel
     rules:
@@ -771,7 +1112,7 @@ groups:
       - alert: HomepageReadLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/homepages.*"}[5m])) by (le)
+            sum(rate(http_server_duration_seconds_bucket{service="entity-service", method="GET", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*"}[5m])) by (le)
           ) > 0.3
         for: 5m
         labels:
@@ -779,19 +1120,46 @@ groups:
           layer: l2
         annotations:
           summary: "实体主页读路由 P95 延迟 > 300ms"
-          description: "entity-service /homepages* 路由 P95 = {{ $value | humanizeDuration }}，超出 SLO（p95_ms=300）；homepage_state 单文档读模型不应出现请求期聚合。"
+          description: "entity-service Homepage/ClaimRequest/StatusReport/Review 读路由 P95 = {{ $value | humanizeDuration }}，超出 SLO（p95_ms=300）；检查对象索引、查询 Slice 与下游依赖。"
 
       - alert: HomepageReadAvailabilityLow
         expr: |
-          sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*", status=~"5.."}[5m]))
-          / (sum(rate(http_server_requests_total{service="entity-service", route=~"/homepages.*"}[5m])) + 0.001) > 0.005
+          sum(rate(http_server_requests_total{service="entity-service", method="GET", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="entity-service", method="GET", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*"}[5m])) + 0.001) > 0.005
         for: 10m
         labels:
           severity: critical
           layer: l2
         annotations:
           summary: "实体主页读路由 5xx 错误率 > 0.5%"
-          description: "entity-service /homepages* 5xx 比率 {{ $value | humanizePercentage }}，低于可用性 SLO（0.995）。优先检查 Mongo homepage_state 连接与最近一次 homepage-import。"
+          description: "entity-service Homepage/ClaimRequest/StatusReport/Review 读路由 5xx 比率 {{ $value | humanizePercentage }}，低于可用性 SLO（0.995）。优先检查 per-object Mongo stores、outbox 投影与最近一次 homepage-import。"
+
+      - alert: HomepageCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="entity-service", method=~"POST|PATCH|DELETE", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="entity-service", method=~"POST|PATCH|DELETE", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*"}[5m])) + 0.001) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "实体主页对象命令 5xx 错误率 > 1%"
+          description: "Homepage/Claim/Report/Review 对象命令失败率 {{ $value | humanizePercentage }}；检查 CAS、command receipt、事务 outbox 与权限 actor 链。"
+
+      - alert: HomepageCommandLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="entity-service", method=~"POST|PATCH|DELETE", route=~"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*"}[5m])) by (le)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "实体主页对象命令 P95 延迟 > 800ms"
+          description: "对象命令 P95 = {{ $value | humanizeDuration }}，超出 metadata SLO；检查 Mongo transaction、索引命中与 outbox 提交。"
 
       - alert: HomepageImportIssuesPresent
         expr: |
@@ -814,3 +1182,974 @@ groups:
         annotations:
           summary: "homepage-import 超过 7 天未成功（env={{ $labels.env }}）"
           description: "环境主页读模型快照可能过期；数据发布链（promote→ship→homepage-import）停摆或 textfile collector 未接入。"
+
+  # B8 助手域对象级告警：消费 assistant service.yaml 声明的 operation SLO
+  # （run 1.5s/99.9%、conversation 500ms/99.9%、SSE 首事件 2s、consent/subscription 500ms）。
+  - name: quwoquan_l2_assistant_recordings
+    # recording rules：从 assistant_grounding_total counter 对派生 spec 声明的
+    # assistant_grounding_success_rate（specs/.../commercial_slo_observability.md）。
+    rules:
+      - record: assistant_grounding_success_rate
+        expr: |
+          sum(rate(assistant_grounding_total{outcome="success"}[5m]))
+          / (sum(rate(assistant_grounding_total[5m])) + 0.000001)
+
+  - name: quwoquan_l2_assistant_objects
+    rules:
+      - alert: AssistantRunCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/conversations.*|/assistant/runs.*", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/conversations.*|/assistant/runs.*"}[5m])) + 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "助手 conversation/run 路由 5xx 错误率 > 0.5%"
+          description: "低于 availability SLO 99.9%；优先检查 assistant_runs/assistant_conversations Mongo store 与 agent loop provider。"
+
+      - alert: AssistantRunStartLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="assistant-service", route=~"/assistant/conversations/[^/]+/runs"}[5m])) by (le)
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "StartAssistantRun P95 连续两个窗口 > 1.5s"
+          description: "超出 assistant_run service.yaml SLO（latency_p95_ms=1500）；检查 run 持久化与幂等读回路径。"
+
+      - alert: AssistantConsentUnavailable
+        expr: |
+          sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/consents|/assistant/skills/.*/consent", status="503"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "consent 服务持续 503（fail-closed 生效中）"
+          description: "PG skill_consents 不可用会让全部敏感能力按未授权拒绝；检查 postgres 连接与 consent store 迁移。"
+
+      - alert: AssistantSubscriptionCronStalled
+        expr: |
+          sum(increase(http_server_requests_total{service="assistant-service", route="/internal/assistant/skill-subscriptions:tick", status=~"2.."}[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "订阅调度 tick 30 分钟内无成功执行"
+          description: "主动订阅投递停摆；检查外部调度器与 Redis 租约（assistant:cron:lease:*）。"
+
+      # ---- 小趣商用业务级告警（真相源：specs/feature-tree/assistant-run-learning/
+      # commercial_slo_observability.md §告警）。指标由 assistant-service 业务
+      # metrics 产出；emit 缺失时规则静默（不触发），emit 接线随 R-ASSIST-003 收口。----
+      - alert: AssistantMentionedConsumerDLQBacklog
+        expr: |
+          sum(increase(assistant_mentioned_consumer_dlq_total[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "@小趣 群聊消费 DLQ 持续积压"
+          description: "events.chat.assistant_mentions.dlq 15 分钟内有新增死信；检查 chat grounding 拉取、模型执行与 SendMessage 回投链路后重放 DLQ。"
+
+      - alert: AssistantGroundingSuccessRateLow
+        expr: |
+          avg_over_time(assistant_grounding_success_rate[30m]) < 0.95
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 grounding 成功率 < 95%"
+          description: "上下文注入/引用生成成功率低于商用 SLO；检查 page-context Redis、检索工具与证据接纳链路，必要时按 grounding feature flag 降级为通用回答。"
+
+      - alert: AssistantFirstVisibleResponseP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(assistant_first_visible_response_ms_bucket[5m])) by (le)
+          ) > 3000
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣首个可见响应 P95 > 3s"
+          description: "@小趣/私助提问到首个可见回答超商用 SLO（p95≤3s）；检查模型网关时延、技能选择阶段与 SSE 转发。"
+
+      - alert: AssistantWrongDestinationIncident
+        expr: |
+          sum(increase(assistant_wrong_destination_incidents_total[5m])) > 0
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣主动投递出现错发（P0）"
+          description: "投递目的地校验失败计数非零：可能把订阅产出发给了错误用户/会话。立即停用 proactive 投递（独立灰度开关）并审计 SkillSubscription destination 校验链。"
+
+  - name: quwoquan_l2_chat_objects
+    rules:
+      - alert: ChatMessageSendErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/messages", method="POST", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/messages", method="POST"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat SendMessage 错误率连续两个窗口 > 2%"
+          description: "metric chat_message_send；发送失败直接打断消息主旅程，检查 Mongo 事务/幂等回执与关系 gate 依赖。"
+
+      - alert: ChatMessageSendLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="chat-service", route=~"/chat/conversations/[^/]+/messages", method="POST"}[5m])) by (le)
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat SendMessage P95 连续两个窗口 > 800ms"
+          description: "metric chat_message_send；超出 metadata SLO（latency_p95_ms: 800），检查 seq 分配事务与 outbox 写入放大。"
+
+      - alert: ChatInboxListLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="chat-service", route="/chat/inbox"}[5m])) by (le)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ListInbox P95 连续两个窗口 > 500ms"
+          description: "metric chat_inbox_list；超出 metadata SLO（latency_p95_ms: 500），检查 conversation_user_states join conversations 的索引与投影推进。"
+
+      - alert: ChatMessageListErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/messages", method="GET", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/messages", method="GET"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ListMessages 错误率连续两个窗口 > 2%"
+          description: "metric chat_message_list；历史消息拉取失败会阻断会话页首屏与 gap 补全。"
+
+      - alert: ChatConversationCreateErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-service", route="/chat/conversations", method="POST", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="chat-service", route="/chat/conversations", method="POST"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat CreateConversation 5xx 错误率连续两个窗口 > 2%"
+          description: "metric chat_conversation_command；建群/建会话失败直接打断群聊入口旅程（黄金指标：群有效创建率），检查 Mongo 事务、幂等回执与关系 gate 依赖。4xx 属关系/授权 gate 预期拒绝，不计入本告警。"
+
+      - alert: ChatConversationCreateLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="chat-service", route="/chat/conversations", method="POST"}[5m])) by (le)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat CreateConversation P95 连续两个窗口 > 500ms"
+          description: "超过 CreateConversation metadata SLO；检查 relationship gate 批量校验、Mongo 事务、receipt 与 outbox 写入。"
+
+      - alert: ChatGroupCandidateSourceErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/selectable-group-conversations(/[^/]+/contact-members)?", method="GET", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/selectable-group-conversations(/[^/]+/contact-members)?", method="GET"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 群聊/圈子候选源 5xx 错误率连续两个窗口 > 2%"
+          description: "三来源建群入口无法读取服务端权威来源或互关成员；检查 Conversation/Member 索引与 relationship gate。"
+
+      - alert: ChatGroupCandidateSourceLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="chat-service", route=~"/chat/selectable-group-conversations(/[^/]+/contact-members)?", method="GET"}[5m])) by (le, route)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 群聊/圈子候选源 {{ $labels.route }} P95 > 500ms"
+          description: "超过 ListSelectableGroupConversations/ListSelectableGroupContactMembers metadata SLO；排查逐群成员读取和关系聚合耗时。"
+
+      - alert: ChatProjectionOrOutboxRelayUnhealthy
+        expr: |
+          runtime_health_check_status{instance=~"chat-service(:[0-9]+)?",check=~"(message|conversation|membership|user_state)_outbox_relay|inbox_projection"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 投影/Outbox {{ $labels.check }} 持续不健康"
+          description: "消息实时投递或 Inbox 未读/排序投影可能停滞；检查 checkpoint、Mongo outbox 与 realtime Redis scene。"
+
+      - alert: ChatProjectionOrOutboxSignalStale
+        expr: |
+          time() - runtime_health_check_last_success_timestamp_seconds{instance=~"chat-service(:[0-9]+)?",check=~"(message|conversation|membership|user_state)_outbox_relay|inbox_projection"} > 30
+        for: 2m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 投影/Outbox {{ $labels.check }} 成功信号超过 30 秒未刷新"
+          description: "health 检查未能持续证明 relay/projector 前进；检查 health scraper 与对应 goroutine。"
+
+      - alert: ChatSyncHintToPullLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_runtime_media_sync_hint_to_pull_delay_ms_bucket{instance=~"chat-service(:[0-9]+)?"}[10m])) by (le)
+          ) > 500
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat durable sync hint-to-pull P95 超过 500ms"
+          description: "客户端从 realtime hint 到 durable patch 拉取的观测延迟超预算；检查 realtime-gateway、Redis realtime scene 与 App 补拉调度。"
+
+      - alert: ChatSyncPatchFanoutFailureRateHigh
+        expr: |
+          sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~"chat-service(:[0-9]+)?",result="failure"}[10m]))
+          / clamp_min(sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~"chat-service(:[0-9]+)?"}[10m])), 1e-9) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat durable sync hint fanout 失败率 > 1%"
+          description: "patch 已持久化但 realtime hint 投递失败；客户端只能依赖周期补拉，检查 realtime Redis 与网关订阅。"
+
+      - alert: ChatSyncRequiresResync
+        expr: |
+          increase(quwoquan_runtime_media_sync_requires_resync_total{instance=~"chat-service(:[0-9]+)?"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat durable sync 出现 patch gap，需要全量重同步"
+          description: "检查 patch TTL、Redis 数据丢失和客户端 afterSeq 水位；该指标正常应为 0。"
+
+      - alert: ChatGroupGovernanceErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/(members(/[^/]+)?|leave|owner|admins|governance|announcement)", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="chat-service", route=~"/chat/conversations/[^/]+/(members(/[^/]+)?|leave|owner|admins|governance|announcement)"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 群治理命令（成员/退群/转让/管理员/治理开关/公告）5xx 错误率连续两个窗口 > 2%"
+          description: "metric chat_membership_command + chat_conversation_command；成员进出与群治理写路径退化会打断群生命周期（黄金指标：成员操作成功率）。403/404/409 为授权矩阵与生命周期预期拒绝，不计入本告警。"
+
+      - alert: ChatGroupGovernanceLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="chat-service", route=~"/chat/conversations/[^/]+/(members(/[^/]+)?|leave|owner|admins|governance|announcement)"}[5m])) by (le)
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 群治理命令 P95 连续两个窗口 > 800ms"
+          description: "metric chat_membership_command；超出 metadata SLO（latency_p95_ms: 800），检查 membership 事务、roster revision 递增与群头像重算调度。"
+
+  - name: quwoquan_l2_notification_inbox
+    rules:
+      - alert: AppMessageCreateErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="notification-service", route="/internal/app-messages", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="notification-service", route="/internal/app-messages"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "CreateAppMessage 错误率连续两个窗口 > 2%"
+          description: "互动通知写入通道退化；检查 app_messages Mongo transaction 与 idempotency 索引（metric notification_app_message_create）。"
+
+      - alert: AppMessageInboxLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="notification-service", route=~"/app-messages(/unread-count)?"}[5m])) by (le, route)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "通知 inbox 路由 {{ $labels.route }} P95 连续两个窗口 > 500ms"
+          description: "超出 notification service.yaml SLO（latency_p95_ms=500，含 unread-count 徽标读取）。"
+
+      - alert: InteractionNotificationDLQGrowing
+        expr: |
+          sum(rate(redis_stream_length{stream=~"events\\..*\\.notification-dlq"}[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "互动通知 DLQ 持续增长"
+          description: "七源事件投影连续失败并进入 dead-letter；检查 interaction_notification_failures 与事件 payload 契约（接收者字段缺失）。"
+
+  - name: quwoquan_l2_integration_external
+    rules:
+      - alert: ExternalInteractionSubmitErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="integration-service", route="/integrations/external-requests", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="integration-service", route="/integrations/external-requests"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "SubmitExternalInteractionRequest 错误率连续两个窗口 > 2%"
+          description: "外部可靠交互受理退化（metric integration_external_interaction_submit）；检查 typed wire 校验与 reliable task outbox。"
+
+      - alert: ExternalInteractionDeadLettersPresent
+        expr: |
+          sum(reliable_task_dead_letters{owner_domain="integration"}) > 0
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "外部交互死信 30 分钟未清零"
+          description: "provider 连续失败超过重试预算；operator 经 /integrations/external-requests/dead-letters:recover 补偿并核对 provider 凭据。"
+
+  - name: quwoquan_l2_rtc_call
+    rules:
+      - alert: RtcCallLifecycleLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="rtc-service", route=~"/rtc/calls(/.*)?"}[5m])) by (le, route)
+          ) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "通话命令路由 {{ $labels.route }} P95 连续两个窗口 > 300ms"
+          description: "超出 rtc call_session service.yaml SLO（latency_p95_ms=300，metric rtc_call_lifecycle_command）；检查 LiveKit 房间创建与 Mongo CAS 提交。"
+
+      - alert: RtcCallInitiateErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="rtc-service", route="/rtc/calls", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="rtc-service", route="/rtc/calls"}[5m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "InitiateCall 错误率连续两个窗口 > 2%"
+          description: "发起通话退化（metric rtc_call_lifecycle_command）；检查关系门禁、活跃通话去重与 LiveKit token 签发。"
+
+      - alert: LiveKitMetricsUnavailable
+        expr: up{job="livekit-sfu"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "LiveKit SFU 指标端点不可达"
+          description: "媒体面无法观测且通话可能不可用；检查 livekit-sfu:6789、固定配置挂载和 edge-media workload。"
+
+      - alert: LiveKitPacketLossP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(livekit_packet_loss_percent_bucket{job="livekit-sfu"}[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "LiveKit 媒体流 P95 丢包率持续高于 2%"
+          description: "检查 SFU 节点带宽、UDP 7882、TURN 路径与宿主网络；不得仅以 rtc-service HTTP 健康替代媒体面诊断。"
+
+      - alert: LiveKitMedianQualityLow
+        expr: |
+          histogram_quantile(0.5,
+            sum(rate(livekit_quality_score_bucket{job="livekit-sfu"}[5m])) by (le)
+          ) < 3
+          and on()
+          sum(rate(livekit_quality_score_count{job="livekit-sfu"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "LiveKit 媒体质量中位分持续低于 3"
+          description: "真实媒体样本质量退化；结合 rtc_media_qoe 的建连、重连与终止原因下钻，不把 SFU 指标冒充端侧首帧事实。"
+
+  - name: quwoquan_l2_realtime_gateway
+    rules:
+      - alert: RealtimeTicketRejectRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="realtime-gateway", route="/realtime/tickets", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="realtime-gateway", route="/realtime/tickets"}[5m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "连接 ticket 签发拒绝率连续两个窗口 > 5%"
+          description: "metric realtime_connection_ticket；检查 Bearer 鉴权与 realtime Redis scene 可用性。"
+
+      - alert: RealtimeConnectionUpgradeErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="realtime-gateway", route=~"/realtime/(ws|poll)", status!~"2.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="realtime-gateway", route=~"/realtime/(ws|poll)"}[5m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "实时连接升级/轮询错误率连续两个窗口 > 5%"
+          description: "metric realtime_connection_session；ticket 消费失败或 Redis 订阅不可用会阻断 chat 实时推送与 rtc 来电信令。"
+
+  - name: quwoquan_l2_relationship_objects
+    rules:
+      # B3 关系与个人投影：关注命令、主体关注、打招呼破冰、关注频道读链路。
+      - alert: PersonaFollowCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/user/sub-accounts/.*/(follow|block)", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/user/sub-accounts/.*/(follow|block)"}[10m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "用户关注/拉黑命令错误率 > 2%（metric user_persona_relationship_command）"
+          description: "当前非 2xx 比率 {{ $value | humanizePercentage }}。检查 persona_relationship PG 事务（advisory lock / receipt / outbox）与 profile 计数联动。"
+
+      - alert: PersonaRelationshipCommandLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_command_latency_ms_bucket[10m])) by (le)) > 500
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "关注/取关/拉黑/解除拉黑命令 P95 超过 500ms"
+          description: "对象级 histogram 已超过 persona_relationship service.yaml SLO；检查 PG pair 锁竞争、receipt 与 outbox 写入，禁止把派生计数恢复到命令路径。"
+
+      - alert: PersonaRelationshipCounterProjectionLagHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_counter_projection_lag_ms_bucket[10m])) by (le)) > 5000
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "关系 follower/following 派生计数投影 P95 延迟超过 5s"
+          description: "检查 PersonaRelationship outbox backlog、Redis Stream 发布、counter projector 与 profile cache 失效；命令路径不得恢复同步 COUNT。"
+
+      - alert: PersonaRelationshipConsistencyMismatchDetected
+        expr: |
+          sum(increase(quwoquan_persona_relationship_events_total{metric=~"persona_relationship_(counter_mismatch|page_drift|filter_mismatch|capability_mismatch)_count"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "关系对象计数、分页、过滤或能力位出现一致性漂移"
+          description: "该指标应恒为 0；立即核对关系事务、分页过滤顺序、viewer capability 与投影 freshness。"
+
+      - alert: ProfileSubjectReadLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(quwoquan_profile_subject_public_read_latency_ms_bucket[10m])) by (le)) > 500
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "公开用户主页主体读取 P95 超过 500ms"
+          description: "主页首屏 TTI 依赖该读取；检查 profile/persona 查询、缓存命中和可见性判定。"
+
+      - alert: PersonaSwitchLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(quwoquan_persona_switch_latency_ms_bucket[10m])) by (le)) > 1500
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "分身切换 P95 超过 1500ms"
+          description: "已超过 persona ActivatePersona service.yaml SLO；检查 session context、profile sync 和缓存失效。"
+
+      - alert: SubjectFollowCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/relationships/subjects/.*", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/relationships/subjects/.*"}[10m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "主体关注（SubjectFollow）命令错误率 > 2%（metric user_subject_follow_command）"
+          description: "主页/圈子/地点关注唯一写入口失败会同时阻断关注频道投影与 homepage follower 计数；检查 subject_follows 事务与 relay。"
+
+      - alert: FollowingSubjectReadErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/user/(following-subjects|followed-subjects/.*)", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/user/(following-subjects|followed-subjects/.*)"}[10m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "关注频道列表/红点水位链路错误率 > 5%（metric user_following_subject_query / user_followed_subject_visit_command）"
+          description: "首页关注频道依赖 following_subjects Mongo 投影与 visit 水位；检查 Mongo 可用性与 relay 投影是否滞后。"
+
+      - alert: GreetingCommandErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/user/greeting-request.*", method!="GET", status!~"(2..|409|429)"}[10m]))
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/user/greeting-request.*", method!="GET"}[10m])) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-relationship
+        annotations:
+          summary: "打招呼命令错误率 > 2%（metric user_greeting_request_command；409/429 为业务预期不计入）"
+          description: "破冰链路（发送/回复/忽略/撤回）失败会阻断陌生人会话升级；检查 greeting receipt/outbox 事务与 chat 会话网关。"
+
+  - name: quwoquan_l2_content_objects
+    # operation/contract_metric 由 content_contract/*.yaml 从唯一 ContractGraph 生成；
+    # 这些规则消费真实 recording series，不依赖 route 注释或手写 metric 文本。
+    rules:
+      - alert: ContentPostPublishAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.SubmitPostPublication",contract_metric="content_post_publication_submit",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.SubmitPostPublication",contract_metric="content_post_publication_submit"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "SubmitPostPublication 可用性低于 99.9%"
+          description: "发布 operation/metric 的 5xx 比率超出 ContractGraph availability SLO；检查 Post 事务、媒体绑定与 outbox。"
+
+      - alert: ContentReactionAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.content_reaction\\.(LikePost|UnlikePost)",contract_metric=~"content_post_(like|unlike)",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.content_reaction\\.(LikePost|UnlikePost)",contract_metric=~"content_post_(like|unlike)"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "点赞 operation 可用性低于 99.9%"
+          description: "LikePost/UnlikePost 5xx 比率超出 SLO；检查 reaction CAS 与计数投影 checkpoint。"
+
+      - alert: ContentBehaviorReportAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.ReportBehaviors",contract_metric="content_behavior_batch_report",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.ReportBehaviors",contract_metric="content_behavior_batch_report"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "行为上报可用性低于 99.9%"
+          description: "ReportBehaviors 退化会断开推荐 HotPath、特征回流与足迹。"
+
+      - alert: ContentMediaUploadAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.media_upload_session\\..+",contract_metric=~"content_media_upload_.+",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.media_upload_session\\..+",contract_metric=~"content_media_upload_.+"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体上传会话可用性低于 99.9%"
+          description: "init/complete/abort/get 任一 operation 退化会阻断图文、视频与评论附件上传。"
+
+      - alert: ContentReportSubmitAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.report.CreateReport",contract_metric="content_report_create",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.report.CreateReport",contract_metric="content_report_create"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "举报提交可用性低于 99.9%"
+          description: "CreateReport 失败会断开举报入口与 report→moderation case 闭环。"
+
+      - alert: ContentPostReadLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\.post\\.(GetPost|GetFeed)",contract_metric=~"content_(post_get|feed_get)"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "内容详情/feed P95 超过 500ms"
+          description: "GetPost/GetFeed 超出 ContractGraph latencyP95Milliseconds=500。"
+
+      - alert: ContentModerationAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.post_moderation_case\\..+",contract_metric=~"content_moderation_.+",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.post_moderation_case\\..+",contract_metric=~"content_moderation_.+"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "审核 operation {{ $labels.operation }} 可用性低于 99.9%"
+          description: "审核 case 命令/资格查询退化；检查 moderation store、revision CAS 与 relay checkpoint。"
+
+      - alert: ContentModerationCommandLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\.post_moderation_case\\.(DecidePostModeration|OpenPostModerationCase|ReviewPostModerationCase|SupersedePostModerationCase)",contract_metric=~"content_moderation_case_.+"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "审核命令 {{ $labels.operation }} P95 超过 800ms"
+          description: "超出对应 ContractGraph latency SLO。"
+
+      - alert: ContentModerationEligibilityLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation="content.post_moderation_case.GetPostPublicationEligibility",contract_metric="content_moderation_publication_eligibility_get"}[5m])) by (le)
+          ) > 0.4
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "发布资格查询 P95 超过 400ms"
+          description: "发布前审核资格读超时会阻断 SubmitPostPublication。"
+
+      - alert: ContentOriginalAccessOrOutboundShareServerErrors
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\.(media_original_access_fact\\.RequestOriginalImageAccess|outbound_share_fact\\.CreateOutboundShare)",contract_metric=~"content_(media_original_access_request|outbound_share_append)",commercial_status=~"ready|blocked",status=~"5.."}[10m])) by (operation, contract_metric, commercial_status) > 0
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "原图访问/站外分享出现持续 5xx"
+          description: "blocked 阶段预期 403 不告警；5xx 表示 fail-closed 边界或底层存储异常。"
+
+      - alert: ContentProfileInteractionAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"(content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.UpdateProfileInteractionState)",contract_metric=~"content_profile_interaction_.+",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"(content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.UpdateProfileInteractionState)",contract_metric=~"content_profile_interaction_.+"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "个人主页互动 {{ $labels.operation }} 可用性低于 99.9%"
+          description: "received/sent 列表或 seen/read 状态写入退化。"
+
+      - alert: ContentProfileInteractionLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"(content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.UpdateProfileInteractionState)",contract_metric=~"content_profile_interaction_.+"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "个人主页互动 {{ $labels.operation }} P95 超过 500ms"
+          description: "超出三条 profile interaction operation 的 ContractGraph latency SLO。"
+
+      - alert: ContentMediaProcessingAvailabilityLow
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result"}[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理结果回写可用性低于 99.9%"
+          description: "处理 worker 无法落 processing_status 会阻断媒体可发布状态推进。"
+
+      - alert: ContentMediaProcessingLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result"}[5m])) by (le)
+          ) > 1.2
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理结果回写 P95 超过 1.2s"
+          description: "超出 RecordMediaProcessingResult latencyP95Milliseconds=1200。"
+
+      - alert: ContentMediaProcessingWorkerUnhealthy
+        expr: |
+          runtime_health_check_status{check="content_media_processing_worker"} == 0
+        for: 2m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理 Worker 持续不健康"
+          description: "检查 media outbox/checkpoint、对象存储以及 ffmpeg/ffprobe 运行时；失败期间 checkpoint 不会推进。"
+
+      - alert: ContentMediaProcessingInfrastructureErrors
+        expr: |
+          sum(rate(content_media_processing_jobs_total{result=~"infrastructure_error|record_failed"}[10m])) > 0
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理基础设施错误持续发生"
+          description: "对象存储、转码运行时或处理结果持久化失败；对应 MediaAssetCreated 会保留在 checkpoint 后等待重放。"
+
+      - alert: ContentMediaProcessingOutboxBacklog
+        expr: |
+          max(content_media_processing_outbox_pending) >= 20
+        for: 15m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理 outbox 连续满批"
+          description: "Worker 每批上限为 20；连续满批表示消费落后或单条事件反复失败。"
+
+      - alert: ContentProjectionCheckpointUnhealthy
+        expr: |
+          runtime_health_check_status{instance=~"content-service(:[0-9]+)?",check=~".*(projection|outbox|lifecycle|count).*"} == 0
+        for: 2m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "内容投影/checkpoint {{ $labels.check }} 持续不健康"
+          description: "health check 直接调用 relay.Healthy；失败表示 scan 出错或 checkpoint 超过 5 秒未成功推进。"
+
+      - alert: ContentProjectionCheckpointSignalStale
+        expr: |
+          time() - runtime_health_check_last_success_timestamp_seconds{instance=~"content-service(:[0-9]+)?",check=~".*(projection|outbox|lifecycle|count).*"} > 30
+        for: 2m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "内容投影/checkpoint {{ $labels.check }} 成功信号超过 30 秒未刷新"
+          description: "检查容器 health probe、relay scan 与底层 checkpoint store。"
+
+  - name: quwoquan_l2_identity
+    rules:
+      - alert: IdentityAuthenticationChallengeErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation="user.authentication_challenge.SendOtp",contract_metric="user_otp_send",status!~"2.."}[5m]))
+          / clamp_min(sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation="user.authentication_challenge.SendOtp",contract_metric="user_otp_send"}[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: user-identity }
+        annotations:
+          summary: "AuthenticationChallenge 发码错误率连续两个窗口 > 2%"
+          description: "检查 challenge PostgreSQL packet、integration sms_otp provider 与限频策略。"
+
+      - alert: IdentityAccountSessionRefreshErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation="user.account_session.RefreshToken",contract_metric="user_auth_token_refresh",status!~"2.."}[5m]))
+          / clamp_min(sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation="user.account_session.RefreshToken",contract_metric="user_auth_token_refresh"}[5m])), 0.001) > 0.01
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: user-identity }
+        annotations:
+          summary: "AccountSession refresh rotation 错误率 > 1%"
+          description: "检查 refresh hash-only 存储、rotation lineage 与 replay revoke。"
+
+      - alert: IdentityCredentialBindingErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.credential_binding.(BindPhoneCredential|BindCarrierPhoneCredential|UnbindCredential)",status!~"2.."}[5m]))
+          / clamp_min(sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.credential_binding.(BindPhoneCredential|BindCarrierPhoneCredential|UnbindCredential)"}[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: user-identity }
+        annotations:
+          summary: "CredentialBinding 命令错误率 > 2%"
+          description: "检查 challenge 消费、全局唯一约束、最后可恢复凭证保护与 security outbox。"
+
+      - alert: IdentityDevicePushEndpointErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.device_registration.(UpsertDevicePushEndpoint|RemoveDevicePushEndpoint|InvalidateDevicePushEndpoint|ResolveIncomingCallPushDestinations|ResolvePushEndpointSecret)",status!~"2.."}[5m]))
+          / clamp_min(sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.device_registration.(UpsertDevicePushEndpoint|RemoveDevicePushEndpoint|InvalidateDevicePushEndpoint|ResolveIncomingCallPushDestinations|ResolvePushEndpointSecret)"}[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: user-identity }
+        annotations:
+          summary: "DeviceRegistration endpoint packet 错误率 > 2%"
+          description: "检查父子 version CAS、active fingerprint 唯一约束、AES-GCM AAD 与内部 secret reader 授权。"
+
+      - alert: IdentityUserSettingsWriteErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.user_settings.Update.*Settings",status!~"2.."}[5m]))
+          / clamp_min(sum(rate(quwoquan_contract_operation_requests_total{service="user-service",operation=~"user.user_settings.Update.*Settings"}[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: user-identity }
+        annotations:
+          summary: "UserSettings 写入错误率 > 2%"
+          description: "检查内部 CAS、同值 no-op 与 user_settings_outbox 原子提交。"
+
+      - alert: IdentityUserSettingsLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user.user_settings.(Get|Update).*Settings"}[5m])) by (le, operation)
+          ) > 0.8
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: user-identity }
+        annotations:
+          summary: "UserSettings {{ $labels.operation }} P95 超过 800ms"
+          description: "超出 UserSettings service.yaml latency SLO。"
+
+  - name: quwoquan_l2_content_comment_compliance
+    rules:
+      - alert: CommentIPLocationResolverErrors
+        expr: |
+          sum(rate(content_comment_ip_location_lookup_total{outcome=~"error|unavailable"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: content-comment
+        annotations:
+          summary: "评论 IP 属地离线解析持续失败"
+          description: "生产离线库查询连续 10 分钟出现 error/unavailable；核查 xdb 完整性、双栈数据库与 content-service 实例。原始 IP 不得写入日志。"
+
+      - alert: CommentIPLocationCoverageLow
+        expr: |
+          sum(rate(content_comment_ip_location_lookup_total{outcome="not_found"}[15m]))
+          / clamp_min(sum(rate(content_comment_ip_location_lookup_total{outcome=~"ok|not_found"}[15m])), 0.001) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content-comment
+        annotations:
+          summary: "评论 IP 属地有效查询未命中率超过 20%"
+          description: "排除无效/私网 IP 后的 not_found 比率持续过高；核查 xdb 覆盖率与网关受信客户端 IP 注入，禁止用臆造属地兜底。"
+
+      - alert: CommentIPLocationDatabaseNearExpiry
+        expr: content_comment_ip_location_data_age_days > 35
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+          domain: content-comment
+        annotations:
+          summary: "评论 IP 属地离线库即将超过新鲜度门"
+          description: "当前数据年龄 {{ $value }} 天；须在 45 天启动硬门前升级 Dockerfile 固定版本、双库 SHA256 与 config data_version，并完成 gamma 回归。"
+
+      - alert: CommentReadLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{
+              service="content-service",
+              operation=~"content\\.comment\\.(ListComments|ListCommentReplies|ListCommentsByAuthor|ListCommentsForPostAuthor)"
+            }[5m])) by (le, operation)
+          ) > 0.4
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content-comment }
+        annotations:
+          summary: "评论读取 {{ $labels.operation }} P95 超过 400ms"
+          description: "超出 content.comment service.yaml 商用读取 SLO；检查 Mongo keyset 索引、批量关系投影与下游存储。"
+
+      - alert: CommentCommandLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{
+              service="content-service",
+              operation=~"content\\.comment\\.(BindMediaAssetsToComment|CreateComment|DeleteComment|HideComment|PinComment|RestoreComment|UnpinComment)"
+            }[5m])) by (le, operation)
+          ) > 0.5
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content-comment }
+        annotations:
+          summary: "评论命令 {{ $labels.operation }} P95 超过 500ms"
+          description: "超出 content.comment service.yaml 商用命令 SLO；检查 aggregate 事务、author 频控锁与 outbox 提交。"
+
+      - alert: CommentOperationAvailabilitySLOBreach
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{
+            service="content-service",
+            operation=~"content\\.comment\\..+",
+            status=~"5.."
+          }[10m])) by (operation)
+          / clamp_min(
+            sum(rate(quwoquan_content_contract_operation_requests_total{
+              service="content-service",
+              operation=~"content\\.comment\\..+"
+            }[10m])) by (operation),
+            0.001
+          ) > 0.001
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content-comment }
+        annotations:
+          summary: "评论操作 {{ $labels.operation }} 可用性低于 99.9%"
+          description: "10 分钟窗口 5xx 比率超过 0.1%；按 operation 检查 RuntimeFailure、Mongo/Redis 依赖与 trace。"
+
+      - alert: CommentCreateRateLimitedRatioHigh
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{
+            service="content-service",
+            operation="content.comment.CreateComment",
+            status="429"
+          }[15m]))
+          / clamp_min(
+            sum(rate(quwoquan_content_contract_operation_requests_total{
+              service="content-service",
+              operation="content.comment.CreateComment"
+            }[15m])),
+            0.001
+          ) > 0.2
+        for: 15m
+        labels: { severity: warning, layer: l2, domain: content-comment }
+        annotations:
+          summary: "评论创建频控命中率超过 20%"
+          description: "区分异常流量、自动化攻击与真实创作阻塞；调整阈值必须先更新 config、压测和产品验收，不得绕过事务频控。"
+
+      - alert: CommentProjectionRelayUnhealthy
+        expr: |
+          runtime_health_check_status{
+            instance=~"content-service(:[0-9]+)?",
+            check=~"content_comment_.*|report_comment_moderation"
+          } == 0
+        for: 2m
+        labels: { severity: critical, layer: l2, domain: content-comment }
+        annotations:
+          summary: "评论投影 {{ $labels.check }} 持续不健康"
+          description: "评论计数、hotScore、通知流、推荐信号或举报治理至少一条独立 checkpoint 未收敛；按 runbook 检查 relay、checkpoint 与 poison event。"

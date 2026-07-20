@@ -140,6 +140,25 @@ void main() {
   });
 
   group('legacy string bridge', () {
+    test('未注入运行时端点时不构造网络候选', () {
+      expect(
+        resolveContentMediaUrlCandidates(
+          imageKey,
+          imageCdnBaseUrl: '',
+          videoCdnBaseUrl: '',
+        ),
+        isEmpty,
+      );
+      expect(
+        resolveContentVideoUrlCandidates(
+          videoKey,
+          imageCdnBaseUrl: '',
+          videoCdnBaseUrl: '',
+        ),
+        isEmpty,
+      );
+    });
+
     test('返回唯一注入 endpoint URL，不再生成 gateway 或主机候选', () {
       expect(
         resolveContentVideoUrlCandidates(

@@ -39,7 +39,7 @@ final messageHomeRowsStateProvider =
             phase: 'onlineLoading',
             source: 'online',
           );
-      final repo = ref.watch(chatRepositoryProvider);
+      final repo = ref.watch(chatConversationRepositoryProvider);
       try {
         final rows = await repo.listMessageHome(filter: filter, limit: 100);
         _storeMessageRowsInConversationCache(ref, rows);

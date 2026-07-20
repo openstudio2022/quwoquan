@@ -1,7 +1,8 @@
 read_model: HomepageReviewSummaryData
 
 description: |
-  主页评价摘要 wire（壳层 / getHomepageReviewSummary）；dimensionScores 元素为 HomepageReviewDimensionScore。
+  主页评价摘要 wire（壳层 / getHomepageReviewSummary）；由 HomepageReview 事件投影
+  真实聚合：平均分、评分数与亮点标签（review tagRefs 频次聚合）。
 
 source_entities:
   - Homepage
@@ -13,8 +14,6 @@ client_projection:
   dart_class: HomepageReviewSummaryData
   base_class: ""
   output_path: cloud/runtime/generated/entity/homepage_review_summary_data.g.dart
-  dart_imports:
-    - homepage_review_dimension_score.g.dart
   fields:
     - name: averageRating
       dart_type: double
@@ -30,8 +29,3 @@ client_projection:
       dart_type: List<String>
       nullable: false
       source: highlightTags
-    - name: dimensionScores
-      dart_type: List<HomepageReviewDimensionScore>
-      nullable: false
-      source: dimensionScores
-      list_element_dart_class: HomepageReviewDimensionScore

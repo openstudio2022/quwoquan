@@ -10,13 +10,16 @@ var (
 func IsValidBehaviorEventType(value BehaviorEventType) bool {
 	switch value {
 	case BehaviorEventTypeImpression, BehaviorEventTypeClick, BehaviorEventTypeDwell,
-		BehaviorEventTypeLike, BehaviorEventTypeDislike, BehaviorEventTypeHideAuthor,
+		BehaviorEventTypeLike, BehaviorEventTypeDislike, BehaviorEventTypeUndoDislike,
+		BehaviorEventTypeHideAuthor,
 		BehaviorEventTypeHideContentType, BehaviorEventTypeReport, BehaviorEventTypeShare,
 		BehaviorEventTypeComment, BehaviorEventTypeIntersectionExpand, BehaviorEventTypeIntersectionFeedback,
 		BehaviorEventTypeWishlistAdd, BehaviorEventTypeWishlistRemove, BehaviorEventTypeSkip,
-		BehaviorEventTypeFollow, BehaviorEventTypeJoinCircle, BehaviorEventTypeAddContact,
-		BehaviorEventTypeAuthorView, BehaviorEventTypeTagClick, BehaviorEventTypeContentDepth,
-		BehaviorEventTypePlayProgress, BehaviorEventTypeAssistantInterest:
+		BehaviorEventTypeFollow, BehaviorEventTypeJoinCircle, BehaviorEventTypeLeaveCircle,
+		BehaviorEventTypeAddContact, BehaviorEventTypeAuthorView, BehaviorEventTypeEntityPageView,
+		BehaviorEventTypeTagClick, BehaviorEventTypeContentDepth, BehaviorEventTypePlayProgress,
+		BehaviorEventTypeEffectivePlay, BehaviorEventTypeAssistantInterest,
+		BehaviorEventTypeOnboardingInterest:
 		return true
 	default:
 		return false

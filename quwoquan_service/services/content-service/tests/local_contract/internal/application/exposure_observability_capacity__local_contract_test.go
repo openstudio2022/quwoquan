@@ -25,8 +25,11 @@ type recommendationSLOContract struct {
 		ObjectiveMax float64 `yaml:"objective_max"`
 		Measured     bool    `yaml:"measured"`
 	} `yaml:"slis"`
-	RollbackLayers []string `yaml:"rollback_layers"`
-	AlertsSource   string   `yaml:"alerts_source"`
+	RollbackLayers []struct {
+		ID        string `yaml:"id"`
+		Mechanism string `yaml:"mechanism"`
+	} `yaml:"rollback_layers"`
+	AlertsSource string `yaml:"alerts_source"`
 }
 
 type prometheusAlertsFile struct {
@@ -98,14 +101,33 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 		t.Fatalf("hotpath_buffer_drop_total objective_max=%v, want 0", hotPathDrop.ObjectiveMax)
 	}
 
+	// N1-1 收敛：rollback_layers 只登记有真实实现机制的层（id + mechanism），
+	// 无实现的 disable_resurface_source / fallback_to_hot_and_new_content_sources
+	// 已删除，不得回潮。
+	layerIDs := make([]string, 0, len(slo.RollbackLayers))
+	for _, layer := range slo.RollbackLayers {
+		if strings.TrimSpace(layer.Mechanism) == "" {
+			t.Fatalf("rollback layer %q must declare an executable mechanism", layer.ID)
+		}
+		layerIDs = append(layerIDs, layer.ID)
+	}
 	for _, required := range []string{
 		"force_rule_scorer",
 		"disable_exposure_dynamic_budget",
+		"disable_premium_pool_source",
+		"disable_collaborative_recall_sources",
+		"disable_object_cards",
+	} {
+		if !slices.Contains(layerIDs, required) {
+			t.Fatalf("rollback_layers missing %q: %#v", required, layerIDs)
+		}
+	}
+	for _, forbidden := range []string{
 		"disable_resurface_source",
 		"fallback_to_hot_and_new_content_sources",
 	} {
-		if !slices.Contains(slo.RollbackLayers, required) {
-			t.Fatalf("rollback_layers missing %q: %#v", required, slo.RollbackLayers)
+		if slices.Contains(layerIDs, forbidden) {
+			t.Fatalf("rollback layer %q has no implementation and must not be declared", forbidden)
 		}
 	}
 	if got := slo.AlertsSource; got != "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
@@ -113,11 +135,9 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 	}
 
 	requiredAlerts := map[string]string{
-		"RecommendationBehaviorIngestDropHigh":     "recommendation_behavior_ingest_dropped_total",
-		"RecommendationHotPathBufferDropHigh":      "rec_hotpath_dropped_total",
-		"RecommendationRepeatExposureRateHigh":     "recommendation_feed_duplicate_exposure_total",
-		"RecommendationContentCoverageLow":         "eligible_feed_item_count",
-		"RecommendationPolicyTakedownEjectionSlow": "recommendation_feed_policy_takedown_ejection_seconds_bucket",
+		"RecommendationBehaviorIngestDropHigh": "recommendation_behavior_ingest_dropped_total",
+		"RecommendationHotPathBufferDropHigh":  "rec_hotpath_dropped_total",
+		"RecommendationRepeatExposureRateHigh": "recommendation_feed_duplicate_exposure_total",
 	}
 	rules := flattenAlerts(alerts)
 	for alertName, metricFragment := range requiredAlerts {
@@ -127,6 +147,16 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 		}
 		if !strings.Contains(expr, metricFragment) {
 			t.Fatalf("alert %q expr drifted, missing %q: %s", alertName, metricFragment, expr)
+		}
+	}
+	// N1-1 死告警清理（emitter 不存在的告警必须删除，回潮由
+	// recommendation_alert_metric_existence__local_contract_test.go 阻断）。
+	for _, dead := range []string{
+		"RecommendationContentCoverageLow",
+		"RecommendationPolicyTakedownEjectionSlow",
+	} {
+		if _, exists := rules[dead]; exists {
+			t.Fatalf("dead alert %q must stay removed until a real emitter exists", dead)
 		}
 	}
 }

@@ -281,7 +281,7 @@ chat-service → Redis Pub/Sub (channel: rt:conversation:{id})
 | G-A6 | 飞书 Webhook 消息经 adapter 路由到端侧 | L2 |
 | G-A7 | system/config topic 骨架注册，端侧 handler 可接收空帧 | L3 |
 | G-A8 | Prometheus 指标（连接数、消息吞吐、延迟）可采集 | L2 |
-| G-A9 | make gate-full 通过（含 realtime-gateway 契约测试） | L1~L2 |
+| G-A9 | make gate-release ENV=gamma 通过（含 realtime-gateway 契约测试） | L1~L2 |
 | G-A10 | WebSocket 连接失败时自动降级到 long-polling，消息不丢 | L2+L3 |
 | G-A11 | 单用户 > 5 连接时踢掉最早连接，发送 connection_replaced | L2 |
 | G-A12 | 节点达 80% 容量时拒绝新连接返回 503 + Retry-After | L2 |

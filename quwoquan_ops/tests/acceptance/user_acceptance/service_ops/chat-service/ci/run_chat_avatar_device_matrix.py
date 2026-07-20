@@ -198,8 +198,18 @@ def report_path(raw: str) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
+SUPPORTED_ENVIRONMENTS = {"alpha", "beta", "gamma", "prod"}
+
+
 def envs(raw: str) -> list[str]:
-    return [item.strip() for item in raw.split(",") if item.strip()]
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    unsupported = sorted(set(values) - SUPPORTED_ENVIRONMENTS)
+    if unsupported:
+        raise SystemExit(
+            f"unsupported environments {unsupported}; expected "
+            f"{sorted(SUPPORTED_ENVIRONMENTS)}"
+        )
+    return values
 
 
 def default_base_url(env_name: str, override: str) -> str:
@@ -207,16 +217,16 @@ def default_base_url(env_name: str, override: str) -> str:
         return override.rstrip("/")
     if env_name == "gamma":
         return os.environ.get("GAMMA_BASE_URL", "").rstrip("/")
-    if env_name == "local-gamma":
-        return os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", "http://127.0.0.1:18080").rstrip("/")
+    if env_name == "prod":
+        return os.environ.get("PROD_GATEWAY_BASE_URL", "").rstrip("/")
     return os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL", "http://127.0.0.1:18080").rstrip("/")
 
 
 def default_media_url(env_name: str, override: str) -> str:
     if override:
         return override.rstrip("/")
-    if env_name == "local-gamma":
-        return os.environ.get("LOCAL_GAMMA_MEDIA_BASE_URL", "http://127.0.0.1:18080").rstrip("/")
+    if env_name == "prod":
+        return os.environ.get("PROD_MEDIA_BASE_URL", "").rstrip("/")
     return os.environ.get("MEDIA_AVATAR_CDN_BASE_URL", "").rstrip("/")
 
 
@@ -262,7 +272,7 @@ def run_probe(
         command.extend(["--test-auth-token", args.test_auth_token])
     if args.skip_media_check:
         command.append("--skip-media-check")
-    if env_name == "local-gamma":
+    if env_name == "gamma":
         command.append("--compose-mongo")
     if args.dry_run:
         command.append("--dry-run")
@@ -321,9 +331,9 @@ def run_patrol(
         "-d",
         device["id"],
         "--dart-define=RUN_T4_PATROL=true",
-        f"--dart-define=APP_RUNTIME_ENV={'gamma' if env_name in {'gamma', 'local-gamma'} else env_name}",
+        f"--dart-define=APP_RUNTIME_ENV={env_name}",
         "--dart-define=APP_DATA_SOURCE=remote",
-        f"--dart-define=API_CONTRACT_ENV={'gamma' if env_name == 'local-gamma' else env_name}",
+        f"--dart-define=API_CONTRACT_ENV={env_name}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
         f"--dart-define=TEST_AUTH_TOKEN={args.test_auth_token}",
@@ -416,10 +426,14 @@ def main() -> int:
             requested_environments=requested_envs,
             extra={"platform": args.platform, "reportPath": repo_relative(out)},
         )
-        if any(env_name == "gamma" and not default_base_url(env_name, args.gateway_base_url) for env_name in requested_envs):
+        if any(
+            env_name in {"gamma", "prod"}
+            and not default_base_url(env_name, args.gateway_base_url)
+            for env_name in requested_envs
+        ):
             report["status"] = "gate_block"
             report["failureCategory"] = "gateway_unreachable"
-            report["blockingReason"] = "gamma gateway base URL is not configured"
+            report["blockingReason"] = "required gateway base URL is not configured"
             report["rerunRecommended"] = True
             return write_report(report, out, 2)
         failed = False

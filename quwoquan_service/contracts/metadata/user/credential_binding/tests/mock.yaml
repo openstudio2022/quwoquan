@@ -1,0 +1,23 @@
+aggregate: CredentialBinding
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  执行：flutter test test/local_contract/cloud/user/
+
+scenarios:
+  - name: credential_row_dto_parse
+    description: 凭证列表脱敏展示（displayLabel，不含 credentialKey 明文）
+    assertions:
+      - credential_key_never_rendered
+      - bound_at_and_type_rendered
+
+  - name: error_code_mapping
+    description: 绑定错误码端侧映射
+    cases:
+      - http_status: 409
+        code: USER.AUTH.credential_conflict
+        expected_dart_const: credentialConflict
+      - http_status: 409
+        code: USER.AUTH.last_credential
+        expected_dart_const: lastCredential

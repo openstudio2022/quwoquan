@@ -1,0 +1,35 @@
+entity: AssistantRun
+
+scenarios:
+  - name: run_start_persisted_and_idempotent
+    operation: StartAssistantRun
+    go_func: TestAssistantRunStartPersistedAndIdempotent
+    evidence: api_integration
+    assertions:
+      - assistant_runs、command receipts 在同一 Mongo 事务提交
+      - 相同 clientRequestId 重放返回同一 runId，不启动第二次执行
+      - 服务重启后 GET /assistant/runs/{runId} 返回已持久化信封
+
+  - name: run_stream_resume_semantics
+    operation: StreamAssistantRunEvents
+    go_func: TestAssistantRunStreamResumeSemantics
+    evidence: api_integration
+    assertions:
+      - StreamState/ResumeToken 随聚合持久化
+      - completed run 重放 SSE 返回终态事件而非 404
+
+  - name: run_owner_isolation
+    operation: GetAssistantRun
+    go_func: TestAssistantRunOwnerIsolation
+    evidence: api_integration
+    assertions:
+      - 非 owner 读取返回 not_found（防枚举）
+      - 匿名请求 401；conversation/run 写路径要求 persona
+
+  - name: run_scorecard_written_on_completion
+    operation: StartAssistantRun
+    go_func: TestAssistantRunWritesScorecardOnCompletion
+    evidence: api_integration
+    assertions:
+      - run 完成时服务端按 scoreId dedupe 落 assistant_scorecard_facts
+      - 重复完成回调不产生第二条 scorecard

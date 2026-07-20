@@ -3,7 +3,7 @@ profileId: cursor_local_calibrated
 policy:
   cursor:
     provider: cursor_sdk
-    model: composer
+    model: composer-2.5
     runtime: local
   workers:
     author: 3
@@ -16,6 +16,10 @@ policy:
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 1200
     defaultObjectTokenBudget: 12000
+    # 仅覆盖 N=30 校准；H200/H1000/H10K 必须先以新审批 revision 提高批次上限。
+    defaultObjectCostBudgetUsd: 5.0
+    maxBatchCostUsd: 150.0
+    maxDailyCostUsd: 150.0
     authRetryLimit: 12
     authRetryDelaySeconds: 300
     noProgressRoundLimit: 6
@@ -72,9 +76,9 @@ policy:
     coverageWikiRetryBackoffSeconds: 5.0
     coverageWikiInterRequestDelaySeconds: 0.3
     coverageOverpassRetryLimit: 3
-    coverageOverpassRetryBackoffSeconds: 8.0
-    coverageOverpassInterRequestDelaySeconds: 3.0
-    coverageOverpassQueryTimeoutSeconds: 45
+    coverageOverpassRetryBackoffSeconds: 5.0
+    coverageOverpassInterRequestDelaySeconds: 2.0
+    coverageOverpassQueryTimeoutSeconds: 60
   coverageDiscovery:
     saturationThreshold: 0.05
     saturationRounds: 2
@@ -88,7 +92,13 @@ policy:
     rateLimitPerSecond: 0.5
     wikiCategoryDepth: 4
     retryBackoffMultiplier: 2.0
-    overpassResultLimit: 200
+    wikidataSparqlEndpoint: https://query.wikidata.org/sparql
+    wikidataResultLimit: 500
+    overpassConcurrency: 4
+    overpassResultLimit: 500
+    overpassEndpoints:
+      - https://maps.mail.ru/osm/tools/overpass/api/interpreter
+      - https://overpass-api.de/api/interpreter
   network:
     curlRetries: 1
     curlRetryDelaySeconds: 1
@@ -97,4 +107,4 @@ policy:
       mediawiki: 20
       qunar: 20
       openverse: 25
-      overpass: 90
+      overpass: 75

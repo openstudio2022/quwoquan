@@ -7,10 +7,9 @@ import (
 
 func TestErrorCode_UserNotFound(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	headers := map[string]string{
-		"X-Request-Id": "user-req-1",
-		"X-Trace-Id":   "user-trace-1",
-	}
+	headers := authHeaders("nonexistent_user")
+	headers["X-Request-Id"] = "user-req-1"
+	headers["X-Trace-Id"] = "user-trace-1"
 	rec := doRequest(t, http.MethodGet, "/user/profile/nonexistent_user", "", headers)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -31,17 +30,22 @@ func TestErrorCode_UserNotFound(t *testing.T) {
 }
 
 func TestErrorCode_InvalidArgument(t *testing.T) {
-	headers := map[string]string{
-		"X-Request-Id": "user-req-invalid-1",
-		"X-Trace-Id":   "user-trace-invalid-1",
-	}
-	rec := doRequest(t, http.MethodGet, "/user/blocked", "", headers)
+	headers := authHeadersForPersona("error-owner", "error-persona")
+	headers["X-Request-Id"] = "user-req-invalid-1"
+	headers["X-Trace-Id"] = "user-trace-invalid-1"
+	rec := doRequest(
+		t,
+		http.MethodPost,
+		"/user/sub-accounts/error-persona/block",
+		"",
+		headers,
+	)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
-	if result["code"] != "USER.USER.invalid_argument" {
-		t.Errorf("expected code=USER.USER.invalid_argument, got %v", result["code"])
+	if result["code"] != "USER.RELATIONSHIP.invalid_pair" {
+		t.Errorf("expected code=USER.RELATIONSHIP.invalid_pair, got %v", result["code"])
 	}
 	if rec.Header().Get("X-Request-Id") != "user-req-invalid-1" || rec.Header().Get("X-Trace-Id") != "user-trace-invalid-1" {
 		t.Errorf(
@@ -52,13 +56,13 @@ func TestErrorCode_InvalidArgument(t *testing.T) {
 	}
 }
 
-func TestErrorCode_PrimaryGuard_DeletePrimary(t *testing.T) {
+func TestErrorCode_PrimaryGuard_RetirePrimary(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "err_user_1", "err_user1")
 	createTestPersona(t, "err_pa_primary", "err_user_1", "Primary", true, true)
 
 	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodDelete, "/user/personas/err_pa_primary_sa/delete-empty", "", authHeaders("err_user_1"))
+	rec := doRequest(t, http.MethodPost, "/user/personas/err_pa_primary_sa/retire", "", authHeaders("err_user_1"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}

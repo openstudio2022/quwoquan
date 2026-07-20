@@ -10,10 +10,13 @@
   - Discovery 侧反馈入口统一接入 Provider/Repository（Works + Moment）。
   - `POST /content/behaviors`（批量行为）与专用路由（like/favorite/comment/report）边界清晰化。
   - 用户域反馈（`block user`、`block keywords`）与推荐过滤语义对齐。
+  - 举报理由、举报人私有进度查询、结案通知与运营审核回流。
+  - 更多操作面板只展示已具备真实结果或安全终态的能力；禁止“功能开发中”假入口。
   - metadata 对齐：`behaviors.yaml`、`user_profile/fields.yaml`、相关 service/events 契约。
 - **不负责**：
-  - UI 视觉样式改版。
   - 推荐模型参数调优（仅完成信号打通，不做权重实验结论）。
+  - 打赏、会员、虚拟币等交易能力；未完成 R-LEGAL-001 前不得展示入口。
+  - 通用 App 意见反馈；该能力应在帮助与反馈业务对象中独立规划，不挂靠 Post 负反馈。
 
 ## 8 类反馈对象映射
 
@@ -34,6 +37,10 @@
   - `impression/click/dwell/share/dislike` 走 `ContentBehaviorTracker` 批量缓冲。
   - `block keywords` 必须 metadata-first，先补 `UserSetting.blockedKeywords` 再接 UI。
   - 推荐实时链路依赖 `sessionId`，端侧 headers 必须稳定注入。
+  - Post 举报必须先选择 metadata `ReportReason`，不得固定提交 `other`。
+  - 举报进度只允许 reporter 本人读取，不暴露 reviewerId、内部处置细节或其他举报人。
+  - `block user` 文案必须明确表达“拉黑”及其影响，不能用轻量措辞包装重操作。
+  - `block keywords` 必须由用户确认具体词，并提供查看、删除与恢复入口。
 
 ## 与父/子节点关系
 
@@ -49,7 +56,9 @@
 - A2：`dislike/share/impression/dwell/click` 可进入 HotPath Redis 并影响下一次推荐。
 - A3：`like/favorite/comment/report` 专用路由语义与 metadata 一致。
 - A4：`block user` 可驱动内容过滤；`block keywords` 可持久化到用户设置。
-- A5：端侧反馈入口不再存在空回调（除明确延期项）。
+- A5：端侧反馈入口无空回调、开发中 toast 或点击即关闭的假成功；延期能力不展示。
 - A6：计数链路（like/favorite/comment/share/view）具备对账策略与契约测试。
 - A7：L1/L2/L3 对应测试补齐并可在 gate 中复现。
-- A8：`make verify` + codegen + `make gate-full` 全通过。
+- A8：`make verify` + codegen + `make gate-release ENV=gamma` 全通过。
+- A9：举报理由 → 提交 → 运营结案 → reporter 通知/进度回流无断点。
+- A10：首页与沉浸态的负反馈归因、即时移除/跳过和后续窗口过滤语义一致。

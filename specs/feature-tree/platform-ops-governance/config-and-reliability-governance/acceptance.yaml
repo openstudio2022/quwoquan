@@ -20,7 +20,7 @@ sit_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
-      - file: quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs
+      - file: quwoquan_ops/tests/local_contract/portal_control_plane__local_contract_test.mjs
       recorded:
       - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
       - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
@@ -28,12 +28,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.platform_ops_governance.config_and_reliability_governance.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.platform_ops_governance.config_and_reliability_governance.sit1.sit1_api_integration
@@ -42,6 +44,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.platform_ops_governance.config_and_reliability_governance.sit1.sit1_local_contract
@@ -53,5 +56,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -23,13 +23,15 @@ def _managed_author_ref(prompt: str) -> str:
             return line[len(prefix):].strip()
     return ""
 
-def _managed_author_failure_refs(outcomes: list[dict[str, Any]]) -> list[str]:
+def _managed_author_failure_refs(
+    outcomes: Sequence["ManagedAgentJobOutcome"],
+) -> list[str]:
     refs: list[str] = []
     seen: set[str] = set()
     for outcome in outcomes:
-        if str(outcome.get("status")) == "finished":
+        if outcome.succeeded:
             continue
-        ref = str(outcome.get("ref") or "").strip()
+        ref = outcome.ref
         if not ref or ref in seen:
             continue
         seen.add(ref)
@@ -37,31 +39,24 @@ def _managed_author_failure_refs(outcomes: list[dict[str, Any]]) -> list[str]:
     return refs
 
 def _managed_consecutive_no_start_infra_failures(state: ExecutionStateTransition, *, stage: str) -> int:
+    from content.execution.agent.history import state_managed_agent_runs
+
     recovery_cutoffs = state.managed_infra_recovery_cutoffs
     recovery_cutoff = ""
     if isinstance(recovery_cutoffs, Mapping):
         recovery_cutoff = str(recovery_cutoffs.get(stage) or "")
-    rows: list[Any] = []
-    history = state.agent_run_history
-    if isinstance(history, list):
-        rows.extend(history)
-    last = state.last_agent_run
-    if isinstance(last, Mapping):
-        rows.append(last)
     count = 0
-    for run in reversed(rows):
-        if not isinstance(run, Mapping):
-            continue
-        if str(run.get("stage") or "") != stage:
+    for run in reversed(state_managed_agent_runs(state)):
+        if run.stage.value != stage:
             if count:
                 break
             continue
-        finished_at = str(run.get("finishedAt") or "")
+        finished_at = run.finished_at
         if recovery_cutoff and finished_at and finished_at <= recovery_cutoff:
             break
-        infra_failures = int(run.get("infrastructureFailures") or 0)
-        started = int(run.get("startedCount") or 0)
-        finished = int(run.get("finishedCount") or 0)
+        infra_failures = run.infrastructure_failures
+        started = run.started_count
+        finished = run.finished_count
         if infra_failures > 0 and started == 0 and finished == 0:
             count += 1
             continue
@@ -75,16 +70,16 @@ def _managed_infra_failed_refs_after_checkpoint(
     stage: str,
     checkpoint_issues: Sequence[str] | None = None,
 ) -> list[str]:
+    from content.execution.agent.history import last_managed_agent_run
+
     if stage != "post_author":
         return []
     refs = [str(item).strip() for item in (checkpoint_issues or []) if str(item).strip()]
     if refs:
         return refs
-    last_run = state.last_agent_run or {}
-    if isinstance(last_run, Mapping):
-        return _managed_author_failure_refs(
-            list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
-        )
+    last_run = last_managed_agent_run(state)
+    if last_run is not None:
+        return _managed_author_failure_refs(last_run.outcomes)
     _ok, issues = _checkpoint_is_done(ctx, stage)
     return [str(item).strip() for item in issues if str(item).strip()]
 
@@ -97,19 +92,24 @@ def _handle_managed_infra_budget_exhausted(
     infrastructure_failures: int,
     checkpoint_issues: Sequence[str] | None = None,
 ) -> int | None:
+    from content.execution.agent.history import last_managed_agent_run, save_managed_agent_run
+
     ok_after_failures, issues_after_failures = _checkpoint_is_done(ctx, stage)
     if checkpoint_issues is None:
         checkpoint_issues = issues_after_failures
     if ok_after_failures:
-        last_run = dict(state.last_agent_run or {})
-        if last_run:
-            last_run["recovered"] = True
-            last_run["recoveredAt"] = store.now_iso()
-            last_run["recoveryReason"] = (
-                f"{stage} checkpoint gate passed despite "
-                f"{infrastructure_failures} infrastructure failure(s)"
+        last_run = last_managed_agent_run(state)
+        if last_run is not None:
+            save_managed_agent_run(
+                state,
+                last_run.with_recovery(
+                    recovered_at=store.now_iso(),
+                    recovery_reason=(
+                        f"{stage} checkpoint gate passed despite "
+                        f"{infrastructure_failures} infrastructure failure(s)"
+                    ),
+                ),
             )
-            state.last_agent_run = last_run
         state.status = ExecutionStateStatus.RUNNING
         state.failed_objects = []
         state.next_action = (
@@ -233,7 +233,7 @@ def _managed_checkpoint_job_issues(
 def _finalize_managed_author_outputs(
     ctx: ExecutionContext,
     prompts: list[str],
-    outcomes: list[dict[str, Any]],
+    outcomes: list["ManagedAgentJobOutcome"],
 ) -> None:
     """用确定性 helper 补齐 Agent 草稿的 run ID 和四类 provenance hash。"""
     from content.execution.controller.homepage_author_evidence import _managed_image_author_meta_issues
@@ -245,10 +245,16 @@ def _finalize_managed_author_outputs(
         read_draft_meta,
         read_writing_pack,
     )
-    for outcome in outcomes:
-        if str(outcome.get("status")) != "finished":
+    from content.execution.agent.outcome import ManagedAgentJobOutcome
+    from content.execution.controller.post_author_evidence import (
+        write_post_author_evidence,
+    )
+
+    for job_outcome in outcomes:
+        if not job_outcome.succeeded:
             continue
-        job_index = int(outcome.get("jobIndex", -1))
+        outcome = job_outcome.outcome
+        job_index = job_outcome.job_index
         if job_index < 0 or job_index >= len(prompts):
             continue
         ref = _managed_author_ref(prompts[job_index])
@@ -264,10 +270,11 @@ def _finalize_managed_author_outputs(
             finalize_video_author_meta(
                 ctx.execution_id,
                 ref,
-                run_id=str(outcome.get("runId") or meta.get("agentRunId") or ""),
-                agent_id=outcome.get("agentId") or meta.get("agentId"),
+                run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
+                agent_id=outcome.agent_id or meta.get("agentId"),
                 model=str(meta.get("model") or ctx.model or ""),
             )
+            write_post_author_evidence(ctx, ref=ref, outcome=outcome)
             continue
         if is_image_carrier:
             if _managed_image_author_meta_issues(meta, writing_pack=pack, require_agent_run=False):
@@ -296,8 +303,8 @@ def _finalize_managed_author_outputs(
                     "generator": "image_evidence_pack",
                     "status": "completed",
                     "model": meta.get("model") or ctx.model,
-                    "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
-                    "agentId": outcome.get("agentId") or meta.get("agentId"),
+                    "agentRunId": outcome.run_id or meta.get("agentRunId"),
+                    "agentId": outcome.agent_id or meta.get("agentId"),
                     "citedSourcePaths": [str(item) for item in cited_paths],
                     "promptSha256": facts.get("promptSha256"),
                     "writingPackSha256": facts.get("writingPackSha256"),
@@ -308,6 +315,7 @@ def _finalize_managed_author_outputs(
                 }
             )
             write_json(draft_meta_path(ctx.execution_id, ref), enriched_meta)
+            write_post_author_evidence(ctx, ref=ref, outcome=outcome)
             continue
         article_path = draft_article_path(ctx.execution_id, ref)
         if not article_path.is_file():
@@ -329,8 +337,8 @@ def _finalize_managed_author_outputs(
                 "generator": "agent",
                 "status": "completed",
                 "model": meta.get("model") or ctx.model,
-                "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
-                "agentId": outcome.get("agentId") or meta.get("agentId"),
+                "agentRunId": outcome.run_id or meta.get("agentRunId"),
+                "agentId": outcome.agent_id or meta.get("agentId"),
                 "citedSourcePaths": [str(item) for item in cited_paths],
                 "promptSha256": facts.get("promptSha256"),
                 "writingPackSha256": facts.get("writingPackSha256"),
@@ -341,3 +349,4 @@ def _finalize_managed_author_outputs(
             }
         )
         write_json(draft_meta_path(ctx.execution_id, ref), enriched_meta)
+        write_post_author_evidence(ctx, ref=ref, outcome=outcome)

@@ -18,6 +18,10 @@ enum ChatErrorCode {
   blocked('CHAT.USER.blocked', '当前状态不能继续发送消息', 403),
   groupMemberNotMutual('CHAT.USER.group_member_not_mutual', '只能邀请互相关注的好友加入群聊', 403),
   groupMemberBlocked('CHAT.USER.group_member_blocked', '存在已屏蔽的成员，无法发起群聊', 403),
+  groupGovernanceForbidden('CHAT.USER.group_governance_forbidden', '只有群主或管理员可以执行该操作', 403),
+  groupFull('CHAT.USER.group_full', '群成员已达上限', 400),
+  conversationDissolved('CHAT.USER.conversation_dissolved', '该群聊已解散', 409),
+  groupOwnerMustTransferBeforeLeave('CHAT.USER.group_owner_must_transfer_before_leave', '群主退群前需先转让群主', 409),
   internalError('CHAT.SYSTEM.internal_error', '消息服务异常，请稍后重试', 500),
   unknown('', '消息服务异常，请稍后重试', 500);
 
@@ -56,6 +60,10 @@ class ChatErrorMessages {
     ChatErrorCode.blocked: '当前状态不能继续发送消息',
     ChatErrorCode.groupMemberNotMutual: '只能邀请互相关注的好友加入群聊',
     ChatErrorCode.groupMemberBlocked: '存在已屏蔽的成员，无法发起群聊',
+    ChatErrorCode.groupGovernanceForbidden: '只有群主或管理员可以执行该操作',
+    ChatErrorCode.groupFull: '群成员已达上限',
+    ChatErrorCode.conversationDissolved: '该群聊已解散',
+    ChatErrorCode.groupOwnerMustTransferBeforeLeave: '群主退群前需先转让群主',
     ChatErrorCode.internalError: '消息服务异常，请稍后重试',
   };
 
@@ -76,6 +84,10 @@ class ChatErrorMessages {
     ChatErrorCode.blocked: 'Current relationship does not allow messaging',
     ChatErrorCode.groupMemberNotMutual: 'Only mutually-followed friends can be invited to a group',
     ChatErrorCode.groupMemberBlocked: 'Cannot start a group while some members are blocked',
+    ChatErrorCode.groupGovernanceForbidden: 'Only the group owner or an admin can perform this action',
+    ChatErrorCode.groupFull: 'The group has reached its member limit',
+    ChatErrorCode.conversationDissolved: 'This group has been dissolved',
+    ChatErrorCode.groupOwnerMustTransferBeforeLeave: 'Transfer ownership before leaving the group',
     ChatErrorCode.internalError: 'Chat service error, please try again',
   };
 }

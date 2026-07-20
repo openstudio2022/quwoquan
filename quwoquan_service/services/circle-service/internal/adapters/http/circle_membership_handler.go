@@ -40,6 +40,47 @@ func (handler *CircleHandler) handleMemberships(w http.ResponseWriter, request *
 		}
 		return
 	}
+	if len(rest) == 1 && rest[0] == "pending" {
+		if request.Method != http.MethodGet {
+			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "pending memberships only accepts GET"))
+			return
+		}
+		result, err := handler.membershipQueries.ListPendingCircleMemberships(
+			request.Context(), circleID, membershipPageLimit(request), request.URL.Query().Get("cursor"),
+		)
+		if err != nil {
+			writeHTTPError(w, request, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if len(rest) == 1 && (strings.HasSuffix(rest[0], ":approve") || strings.HasSuffix(rest[0], ":reject")) {
+		if request.Method != http.MethodPost {
+			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "membership approval only accepts POST"))
+			return
+		}
+		target, kind := rest[0], "approve"
+		if strings.HasSuffix(target, ":approve") {
+			target = strings.TrimSuffix(target, ":approve")
+		} else {
+			target, kind = strings.TrimSuffix(target, ":reject"), "reject"
+		}
+		command := membershipapp.DecideCommand{CircleID: circleID, TargetPersonaID: strings.TrimSpace(target)}
+		var result membershipapp.CommandResult
+		var err error
+		if kind == "approve" {
+			result, err = handler.membershipCommands.Approve(request.Context(), command)
+		} else {
+			result, err = handler.membershipCommands.Reject(request.Context(), command)
+		}
+		if err != nil {
+			writeHTTPError(w, request, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
 	if len(rest) == 1 && rest[0] == "self" {
 		if request.Method == http.MethodGet {
 			result, err := handler.membershipQueries.GetMyCircleMembership(request.Context(), circleID)
@@ -102,7 +143,11 @@ func (handler *CircleHandler) handlePersonaCircles(w http.ResponseWriter, reques
 		return
 	}
 	result, err := handler.membershipQueries.ListPersonaCircles(
-		request.Context(), parts[0], membershipPageLimit(request), request.URL.Query().Get("cursor"),
+		request.Context(),
+		parts[0],
+		request.URL.Query().Get("query"),
+		membershipPageLimit(request),
+		request.URL.Query().Get("cursor"),
 	)
 	if err != nil {
 		writeHTTPError(w, request, err)

@@ -1,11 +1,14 @@
-// ignore_for_file: deprecated_member_use
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
@@ -26,20 +29,19 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _pin = false;
   bool _membersExpanded = false;
 
-  static const int _memberColumns = 5;
+  /// 移出成员模式（owner/admin 经「−」进入；点成员头像确认移出）。
+  bool _removeMemberMode = false;
 
-  /// 收起时最多 4 行（5×4 格末格为「添加」）：超过则折叠，仅展示本容量内成员。
-  static const int _memberRowsCollapsed = 4;
-  static int get _collapsedMemberCapacity =>
-      _memberColumns * _memberRowsCollapsed - 1;
-
-  /// 退出群聊：二次确认 → removeMember(self) 走 Remote → 返回会话列表。
-  Future<void> _confirmExitGroup() async {
+  /// 移出成员：确认对话框 → RemoveMember（治理动作）→ roster 刷新。
+  Future<void> _confirmRemoveMember(String userId, String displayName) async {
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(UITextConstants.exitGroupChat),
-        content: Text(UITextConstants.exitGroupChatConfirmMessage),
+        title: Text(ChatText.removeMemberEntry),
+        content: Text(
+          '${ChatText.removeMemberConfirmPrefix}$displayName'
+          '${ChatText.removeMemberConfirmSuffix}',
+        ),
         actions: [
           CupertinoDialogAction(
             child: Text(UITextConstants.cancel),
@@ -47,22 +49,67 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: Text(UITextConstants.exitGroupChat),
+            child: Text(UITextConstants.confirm),
             onPressed: () => Navigator.pop(dialogContext, true),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    final selfId = ref.read(currentUserIdProvider);
     try {
       await ref
           .read(conversationMembersProvider(widget.conversationId).notifier)
-          .removeMember(selfId);
+          .removeMember(userId);
+      if (!mounted) return;
+      AppToast.show(context, ChatText.removeMemberSuccess);
+    } catch (error) {
+      if (!mounted) return;
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
+    }
+  }
+
+  static const int _memberColumns = 5;
+
+  /// 收起时最多 4 行（5×4 格末格为「添加」）：超过则折叠，仅展示本容量内成员。
+  static const int _memberRowsCollapsed = 4;
+  static int get _collapsedMemberCapacity =>
+      _memberColumns * _memberRowsCollapsed - 1;
+
+  /// 退出群聊：二次确认 → LeaveConversation（自愿离开语义；owner 须先转让）。
+  Future<void> _confirmExitGroup() async {
+    final confirmed = await showAppCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(ChatText.exitGroupChat),
+        content: Text(ChatText.exitGroupChatConfirmMessage),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(UITextConstants.cancel),
+            onPressed: () => Navigator.pop(dialogContext, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(ChatText.exitGroupChat),
+            onPressed: () => Navigator.pop(dialogContext, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref
+          .read(conversationMembersProvider(widget.conversationId).notifier)
+          .leaveConversation();
       if (!mounted) return;
       ref.invalidate(conversationMembersProvider(widget.conversationId));
       ref.invalidate(groupHomeProvider(widget.conversationId));
-      AppToast.show(context, UITextConstants.exitGroupChatSuccess);
+      AppToast.show(context, ChatText.exitGroupChatSuccess);
       context.go(AppRoutePaths.chat);
     } catch (error) {
       if (!mounted) return;
@@ -91,7 +138,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       showAppCupertinoDialog<void>(
         context: context,
         builder: (_) => CupertinoAlertDialog(
-          content: Text(UITextConstants.groupNameAdminOnly),
+          content: Text(ChatText.groupNameAdminOnly),
           actions: [
             CupertinoDialogAction(
               child: Text(UITextConstants.confirm),
@@ -106,12 +153,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     showAppCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: Text(UITextConstants.editGroupName),
+        title: Text(ChatText.editGroupName),
         content: Padding(
           padding: EdgeInsets.only(top: AppSpacing.sm),
           child: CupertinoTextField(
             controller: controller,
-            placeholder: UITextConstants.groupNameHint,
+            placeholder: ChatText.groupNameHint,
             autofocus: true,
             maxLength: 30,
           ),
@@ -138,7 +185,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       .updateGroupDisplayTitle(newName);
                   if (mounted) {
                     ref.invalidate(groupHomeProvider(widget.conversationId));
-                    AppToast.show(context, UITextConstants.groupNameUpdated);
+                    AppToast.show(context, ChatText.groupNameUpdated);
                   }
                 } catch (error) {
                   if (!mounted) {
@@ -153,7 +200,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   final semantic = UiErrorSemantic(
                     category: resolved.category,
                     scope: resolved.scope,
-                    title: '群名称修改未完成',
+                    title: ChatText.groupNameUpdateIncompleteTitle,
                     message: resolved.message,
                     secondaryMessage: resolved.secondaryMessage,
                     primaryAction: const UiErrorAction(
@@ -187,6 +234,24 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     );
   }
 
+  Future<void> _startGroupCall(
+    RtcCallEntryMediaType mediaType, {
+    required int participantCount,
+  }) {
+    return ref
+        .read(rtcCallEntryPresenterProvider)
+        .start(
+          context: context,
+          ref: ref,
+          intent: RtcCallEntryIntent.conversation(
+            mediaType: mediaType,
+            conversationId: widget.conversationId,
+            participantCount: participantCount,
+          ),
+          sourceSurface: AppUiSurfaces.chatSettings,
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
@@ -197,14 +262,43 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     );
     final members = membersState.members;
     final isAdminOrOwner = membersState.isAdminOrOwner;
-    final privacyShield = membersState.groupSettings.privacyShieldAdminOnly;
+    final loadError = groupHomeAsync.hasError
+        ? groupHomeAsync.error
+        : membersState.error;
+
+    if (loadError != null && groupHome == null && members.isEmpty) {
+      return SettingsInsetFormPageScaffold(
+        isDark: isDark,
+        title: ChatText.chatInfoTitle,
+        onBack: () => context.pop(),
+        body: AppPageErrorState(
+          semantic: runtimeErrorSemantic(
+            context,
+            error: loadError,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              ref.invalidate(groupHomeProvider(widget.conversationId));
+              await ref
+                  .read(
+                    conversationMembersProvider(widget.conversationId).notifier,
+                  )
+                  .load();
+            }
+          },
+        ),
+      );
+    }
 
     final memberCount = members.isNotEmpty
         ? members.length
         : (groupHome?.memberCount ?? 0);
     final groupTitle = groupHome?.title.trim().isNotEmpty == true
         ? groupHome!.title.trim()
-        : UITextConstants.groupNameHint;
+        : ChatText.groupNameHint;
     final announcement = groupHome?.announcement.trim() ?? '';
 
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
@@ -227,7 +321,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     );
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: '${UITextConstants.chatInfoTitle}($memberCount)',
+      title: '${ChatText.chatInfoTitle}($memberCount)',
       onBack: () => context.pop(),
       body: WebPageMaxWidthFrame(
         child: SafeArea(
@@ -254,6 +348,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   isDark: isDark,
                   enabledCapabilities:
                       groupHome?.capabilities ?? const <String>[],
+                  onVoiceCall: () => _startGroupCall(
+                    RtcCallEntryMediaType.audio,
+                    participantCount: memberCount,
+                  ),
+                  onVideoCall: () => _startGroupCall(
+                    RtcCallEntryMediaType.video,
+                    participantCount: memberCount,
+                  ),
                 ),
               ),
               SizedBox(
@@ -267,7 +369,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   children: [
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        final totalCells = visibleMemberCount + 1;
+                        // owner/admin 追加「−」移出成员入口格（对齐微信成员网格治理语义）。
+                        final actionCells = isAdminOrOwner ? 2 : 1;
+                        final totalCells = visibleMemberCount + actionCells;
                         final gridGap = AppSpacing.sm;
                         final availableWidth = constraints.maxWidth.isFinite
                             ? constraints.maxWidth
@@ -304,10 +408,35 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 child: _AddMemberPlaceholder(
                                   borderColor: borderColor,
                                   size: AppSpacing.avatarUserLg,
-                                  onTap: () => context.push(
-                                    AppRoutePaths.chatAddMembers(
-                                      id: widget.conversationId,
-                                    ),
+                                  onTap: () {
+                                    if (_removeMemberMode) {
+                                      setState(() => _removeMemberMode = false);
+                                      return;
+                                    }
+                                    context.push(
+                                      AppRoutePaths.chatAddMembers(
+                                        id: widget.conversationId,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            }
+                            if (index == visibleMemberCount + 1) {
+                              return Align(
+                                alignment: Alignment.topCenter,
+                                child: _AddMemberPlaceholder(
+                                  key: const ValueKey(
+                                    'chat_settings_remove_member_entry',
+                                  ),
+                                  borderColor: borderColor,
+                                  size: AppSpacing.avatarUserLg,
+                                  icon: _removeMemberMode
+                                      ? CupertinoIcons.checkmark
+                                      : CupertinoIcons.minus,
+                                  onTap: () => setState(
+                                    () =>
+                                        _removeMemberMode = !_removeMemberMode,
                                   ),
                                 ),
                               );
@@ -316,20 +445,58 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             final username = m.userId.isNotEmpty
                                 ? m.userId
                                 : 'user_$index';
-                            return _MemberAvatar(
+                            // 服务端为强制门（owner 不可移出、admin 仅可移出普通成员）；
+                            // UI 侧同源预判避免必败请求。
+                            final removable =
+                                _removeMemberMode &&
+                                !m.isCurrentUser &&
+                                m.role != 'owner' &&
+                                (membersState.isOwner || m.role == 'member');
+                            final avatar = _MemberAvatar(
                               name: m.displayName,
                               avatarUrl: m.avatarUrl,
                               textColor: fgPrimary,
                               username: username,
                               role: m.role,
-                              onTap: () => context.push(
-                                AppRoutePaths.userProfile(username: username),
-                                extra: UserProfileRouteExtra(
-                                  subAccountId: username,
-                                  avatar: m.avatarUrl,
-                                  displayName: m.displayName,
+                              onTap: removable
+                                  ? () => _confirmRemoveMember(
+                                      m.userId,
+                                      m.displayName,
+                                    )
+                                  : () => context.push(
+                                      AppRoutePaths.userProfile(
+                                        username: username,
+                                      ),
+                                      extra: UserProfileRouteExtra(
+                                        subAccountId: username,
+                                        avatar: m.avatarUrl,
+                                        displayName: m.displayName,
+                                      ),
+                                    ),
+                            );
+                            if (!removable) {
+                              return avatar;
+                            }
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                avatar,
+                                Positioned(
+                                  top: -AppSpacing.xs,
+                                  right: AppSpacing.xs,
+                                  child: IgnorePointer(
+                                    child: Icon(
+                                      CupertinoIcons.minus_circle_fill,
+                                      key: ValueKey(
+                                        'chat_settings_remove_badge_'
+                                        '${m.userId}',
+                                      ),
+                                      size: AppSpacing.iconMedium,
+                                      color: AppColors.error,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
                             );
                           },
                         );
@@ -347,8 +514,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             children: [
                               Text(
                                 _membersExpanded
-                                    ? UITextConstants.collapseMembers
-                                    : UITextConstants.moreMembers,
+                                    ? ChatText.collapseMembers
+                                    : ChatText.moreMembers,
                                 style: TextStyle(
                                   fontSize: AppTypography.md,
                                   color: fgPrimary.withValues(alpha: 0.75),
@@ -380,7 +547,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   children: [
                     SettingsInsetFormRow(
                       isDark: isDark,
-                      label: UITextConstants.groupName,
+                      label: ChatText.groupName,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -413,24 +580,45 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     SettingsInsetFormSectionDivider(isDark: isDark),
                     SettingsInsetFormRow(
                       isDark: isDark,
-                      label: UITextConstants.groupAnnouncement,
-                      trailing: Text(
-                        announcement.isEmpty
-                            ? UITextConstants.groupAnnouncementEmpty
-                            : announcement,
-                        style: TextStyle(
-                          fontSize: AppTypography.base,
-                          color: secondaryText,
+                      label: ChatText.groupAnnouncement,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.4,
+                            ),
+                            child: Text(
+                              announcement.isEmpty
+                                  ? ChatText.groupAnnouncementEmpty
+                                  : announcement,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                color: secondaryText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: AppSpacing.containerSm),
+                          Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconMedium,
+                            color: chevronColor,
+                          ),
+                        ],
+                      ),
+                      onTap: () => context.push(
+                        AppRoutePaths.chatAnnouncement(
+                          id: widget.conversationId,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (isAdminOrOwner) ...[
                       SettingsInsetFormSectionDivider(isDark: isDark),
                       SettingsInsetFormRow(
                         isDark: isDark,
-                        label: UITextConstants.groupManagement,
+                        label: ChatText.groupManagement,
                         trailing: Icon(
                           CupertinoIcons.chevron_forward,
                           size: AppSpacing.iconMedium,
@@ -454,7 +642,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   children: [
                     SettingsInsetFormRow(
                       isDark: isDark,
-                      label: UITextConstants.muteNotifications,
+                      label: ChatText.muteNotifications,
                       trailing: _buildSettingSwitch(
                         isDark: isDark,
                         value: _mute,
@@ -464,40 +652,11 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     SettingsInsetFormSectionDivider(isDark: isDark),
                     SettingsInsetFormRow(
                       isDark: isDark,
-                      label: UITextConstants.pinChat,
+                      label: ChatText.pinChat,
                       trailing: _buildSettingSwitch(
                         isDark: isDark,
                         value: _pin,
                         onChanged: (v) => setState(() => _pin = v),
-                      ),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    SettingsInsetFormRow(
-                      isDark: isDark,
-                      label: UITextConstants.privacyShield,
-                      trailing: _buildSettingSwitch(
-                        isDark: isDark,
-                        value: privacyShield,
-                        onChanged: isAdminOrOwner
-                            ? (v) {
-                                final cur = ref.read(
-                                  conversationMembersProvider(
-                                    widget.conversationId,
-                                  ),
-                                );
-                                ref
-                                    .read(
-                                      conversationMembersProvider(
-                                        widget.conversationId,
-                                      ).notifier,
-                                    )
-                                    .updateGroupSettings(
-                                      cur.groupSettings.copyWith(
-                                        privacyShieldAdminOnly: v,
-                                      ),
-                                    );
-                              }
-                            : null,
                       ),
                     ),
                   ],
@@ -511,7 +670,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 density: SettingsInsetSectionDensity.compact,
                 child: SettingsInsetCenteredActionRow(
                   isDark: isDark,
-                  label: UITextConstants.exitGroupChat,
+                  label: ChatText.exitGroupChat,
                   isDestructive: true,
                   onTap: _confirmExitGroup,
                 ),
@@ -544,10 +703,14 @@ class _GroupCapabilityGrid extends StatelessWidget {
   const _GroupCapabilityGrid({
     required this.isDark,
     required this.enabledCapabilities,
+    required this.onVoiceCall,
+    required this.onVideoCall,
   });
 
   final bool isDark;
   final List<String> enabledCapabilities;
+  final VoidCallback onVoiceCall;
+  final VoidCallback onVideoCall;
 
   bool _enabled(String capability) {
     return enabledCapabilities.isEmpty ||
@@ -558,14 +721,26 @@ class _GroupCapabilityGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_GroupCapabilityItem>[
       _GroupCapabilityItem(
-        label: UITextConstants.groupCapabilityAlbum,
+        label: ChatText.groupCapabilityAlbum,
         icon: CupertinoIcons.photo,
         enabled: _enabled('album'),
       ),
       _GroupCapabilityItem(
-        label: UITextConstants.groupCapabilityFile,
+        label: ChatText.groupCapabilityFile,
         icon: CupertinoIcons.folder,
         enabled: _enabled('file'),
+      ),
+      _GroupCapabilityItem(
+        label: UITextConstants.callGroupVoice,
+        icon: CupertinoIcons.phone,
+        enabled: true,
+        onPressed: onVoiceCall,
+      ),
+      _GroupCapabilityItem(
+        label: UITextConstants.callGroupVideo,
+        icon: CupertinoIcons.video_camera,
+        enabled: true,
+        onPressed: onVideoCall,
       ),
     ];
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
@@ -579,7 +754,7 @@ class _GroupCapabilityGrid extends StatelessWidget {
             (item) => Expanded(
               child: CupertinoButton(
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                onPressed: null,
+                onPressed: item.enabled ? item.onPressed : null,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -611,11 +786,13 @@ class _GroupCapabilityItem {
     required this.label,
     required this.icon,
     required this.enabled,
+    this.onPressed,
   });
 
   final String label;
   final IconData icon;
   final bool enabled;
+  final VoidCallback? onPressed;
 }
 
 class _MemberAvatar extends StatelessWidget {
@@ -640,9 +817,9 @@ class _MemberAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final roleLabel = role == 'owner'
-        ? UITextConstants.owner
+        ? ChatText.owner
         : role == 'admin'
-        ? UITextConstants.admin
+        ? ChatText.admin
         : null;
     return GestureDetector(
       onTap: onTap,
@@ -706,14 +883,17 @@ class _MemberAvatar extends StatelessWidget {
 
 class _AddMemberPlaceholder extends StatelessWidget {
   const _AddMemberPlaceholder({
+    super.key,
     required this.borderColor,
     required this.size,
     required this.onTap,
+    this.icon = CupertinoIcons.add,
   });
 
   final Color borderColor;
   final double size;
   final VoidCallback onTap;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -727,11 +907,7 @@ class _AddMemberPlaceholder extends StatelessWidget {
             border: Border.all(color: borderColor, style: BorderStyle.solid),
             borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           ),
-          child: Icon(
-            CupertinoIcons.add,
-            size: AppSpacing.iconMedium,
-            color: borderColor,
-          ),
+          child: Icon(icon, size: AppSpacing.iconMedium, color: borderColor),
         ),
       ),
     );

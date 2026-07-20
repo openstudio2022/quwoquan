@@ -5,8 +5,8 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: OutboundShareFact append sink 与真实渠道成功回执尚未完成生产装配
-    gap_id: OUTBOUND_SHARE_FACT_WIRING
+    block_reason: 真实 Mongo append/dedupe/outbox 与 generated App client 已完成；仅差 Gamma 渠道回执旅程证据
+    gap_id: OUTBOUND_SHARE_FACT_GAMMA_UAT
     target_story: app-cloud-business-object-commercial-closure
   description: 站外成功分享的不可变事实追加入口。
 

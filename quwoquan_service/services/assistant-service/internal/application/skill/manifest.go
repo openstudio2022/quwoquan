@@ -31,9 +31,9 @@ func DefaultManifest() Manifest {
 		ExecutionTarget: "cloud",
 		RoutingHints:    []string{"assistant", "general"},
 		ToolPolicy: ToolPolicy{
-			AllowedTools:   []string{"mock_search"},
-			PreferredTools: []string{"mock_search"},
-			MaxToolCalls:   3,
+			AllowedTools:   []string{},
+			PreferredTools: []string{},
+			MaxToolCalls:   0,
 		},
 	}
 }

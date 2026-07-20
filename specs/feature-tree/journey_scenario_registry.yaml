@@ -56,6 +56,7 @@ journeys:
     scenario_refs:
       - content-feed-open-detail
       - content-detail-profile-handoff
+      - content-comment-interaction
     domain_services:
       - discovery-content
       - user-identity-profile-relationship
@@ -63,6 +64,24 @@ journeys:
     uat_refs:
       - UAT1
     status: draft
+
+  - id: content-creation-to-publication
+    title: 内容创作到发布回流
+    user_goal: 用户从全局创作入口写文字、发照片或发视频，可靠保存草稿与媒体，经过安全准入和真实媒体处理后发布，并立即看到内容及真实分发去向；失败、排队、处理中和审核结果都有可恢复终态。
+    scenario_refs:
+      - text-post-create-publish-return
+      - photo-post-create-publish-return
+      - video-post-create-process-publish-return
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - tag-interest-taxonomy
+      - integration
+      - product-ops-growth
+    uat_refs:
+      - UAT_CONTENT_CREATION_TO_PUBLICATION
+    status: specified
 
   - id: cross-domain-search
     title: 跨领域搜索
@@ -197,6 +216,97 @@ journeys:
     status: specified
 
 scenarios:
+  - id: text-post-create-publish-return
+    title: 写文字创建、可靠发布与结果回流
+    parent_journey: content-creation-to-publication
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - tag-interest-taxonomy
+      - integration
+      - product-ops-growth
+    business_capabilities:
+      - discovery-content/content-type-framework
+      - discovery-content/publish-comment-reaction
+    stories:
+      - discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+      - discovery-content/content-type-framework/creation-tagging-ia
+      - discovery-content/content-type-framework/markdown-article-kernel
+      - discovery-content/publish-comment-reaction/text-post-commercial-publication
+      - discovery-content/publish-comment-reaction/post-create-update
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/acceptance.yaml
+      - specs/feature-tree/discovery-content/publish-comment-reaction/acceptance.yaml#SIT2
+      - specs/feature-tree/acceptance.yaml#UAT_CONTENT_CREATION_TO_PUBLICATION
+    boundary_notes:
+      - 草稿与发布任务属于端侧可靠性对象，Post 只表示通过准入的已发布事实。
+      - 圈子 placement、tag、entity、location 分别由其对象真相源治理，发布页面只消费 typed Facet。
+      - 创作漏斗进入产品遥测，不进入推荐行为 ReportBehaviors。
+    status: specified
+
+  - id: photo-post-create-publish-return
+    title: 照片创建、像素编辑、原图可靠上传与发布回流
+    parent_journey: content-creation-to-publication
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - integration
+      - product-ops-growth
+    business_capabilities:
+      - discovery-content/publish-comment-reaction
+      - discovery-content/media-processing-helper-read
+    stories:
+      - discovery-content/publish-comment-reaction/image-editing
+      - discovery-content/publish-comment-reaction/filter-catalog-release
+      - discovery-content/publish-comment-reaction/post-create-update
+      - discovery-content/media-processing-helper-read/media-status-pipeline
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/acceptance.yaml
+      - specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/acceptance.yaml
+      - specs/feature-tree/discovery-content/publish-comment-reaction/acceptance.yaml#SIT3
+      - specs/feature-tree/discovery-content/media-processing-helper-read/acceptance.yaml#SIT1
+      - specs/feature-tree/acceptance.yaml#UAT_CONTENT_CREATION_TO_PUBLICATION
+    boundary_notes:
+      - 图片编辑会话是纯端侧 runtime session，确认结果才进入 MediaUploadSession；编辑器不拥有云端上传、处理或公开 URL。
+      - 滤镜目录由 FilterCatalogRelease 单轨发布；App 仅消费 active release、verified cache 或同源 bootstrap replica。
+      - 端侧流式读取并上传本地原图，发布 payload 只携带 MediaAsset ID，不携带本地路径或临时 URL。
+      - 图片 MediaAsset 完成校验后直接 ready；Post 发布、圈子 placement 与公开性仍由各自对象真相源治理。
+      - 上传、发布与结果回流进入产品遥测，不进入推荐行为 ReportBehaviors。
+    status: specified
+
+  - id: video-post-create-process-publish-return
+    title: 视频创建、转码处理、发布与结果回流
+    parent_journey: content-creation-to-publication
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - integration
+      - product-ops-growth
+    business_capabilities:
+      - discovery-content/publish-comment-reaction
+      - discovery-content/media-processing-helper-read
+      - runtime/runtime-media
+    stories:
+      - discovery-content/publish-comment-reaction/post-create-update
+      - discovery-content/media-processing-helper-read/media-status-pipeline
+      - discovery-content/media-processing-helper-read/media-failure-recovery
+      - discovery-content/media-processing-helper-read/media-status-pipeline--media-processing-state-machine
+      - discovery-content/media-processing-helper-read/media-failure-recovery--recovery-and-rollback-policy
+    acceptance_refs:
+      - specs/feature-tree/discovery-content/publish-comment-reaction/acceptance.yaml#SIT2
+      - specs/feature-tree/discovery-content/media-processing-helper-read/acceptance.yaml#SIT1
+      - specs/feature-tree/acceptance.yaml#UAT_CONTENT_CREATION_TO_PUBLICATION
+    boundary_notes:
+      - 本地原视频按流式上传进入私有 CAS；Post 只绑定 ready 的视频与封面 MediaAsset。
+      - content-service 内媒体处理模块是独立功能边界，可替换 adapter 后拆分部署，但不复制聚合状态机。
+      - 首发播放交付是 H.264/AAC progressive fast-start MP4；adaptive flag 关闭时不得宣称 HLS/DASH 已交付。
+    status: specified
+
   - id: identity-entry-persona-continuation
     title: 欢迎、授权、商业登录、Persona 与原动作续接
     parent_journey: identity-entry-and-continuation
@@ -279,6 +389,7 @@ scenarios:
       - discovery-content/exposure-governance/cross-session-fatigue-memory
       - discovery-content/exposure-governance/dynamic-exposure-budget
       - discovery-content/exposure-governance/content-lifecycle-resurfacing
+      - discovery-content/content-display-journey-consistency/content-action-intent-contract
       - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
       - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
@@ -288,6 +399,26 @@ scenarios:
       - 发现流排序归 discovery-content；作者关系与画像归 user-identity-profile-relationship。
       - 曝光记忆、动态曝光预算、生命周期复活与曝光健康归 exposure-governance；feed-orchestration-recommendation 只消费其业务边界，不维护第二套曝光真相源。
     status: draft
+
+  - id: content-comment-interaction
+    title: 评论互动与回流
+    parent_journey: content-discovery-to-consumption
+    domain_services:
+      - discovery-content
+      - notification
+    business_capabilities:
+      - discovery-content/publish-comment-reaction
+    stories:
+      - discovery-content/publish-comment-reaction/comment-thread
+      - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+    acceptance_refs:
+      - specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+      - specs/feature-tree/discovery-content/publish-comment-reaction/acceptance.yaml#SIT1
+      - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
+    boundary_notes:
+      - 评论排序、治理状态机与展示投影（IP 属地/作者赞过/关系标签）真相源在 content-service；关系写模型归 user 域，评论只消费 persona_follow_projection 事实投影。
+      - 评论/回复/@/置顶通知由 notification 消费 comment lifecycle 事实产生；通知点击经评论深链回到原评论。
+    status: specified
 
   - id: content-detail-profile-handoff
     title: 内容详情跳转作者主页
@@ -461,6 +592,7 @@ scenarios:
       - global-search-experience/cross-domain-search-journey
     stories:
       - assistant-run-learning/run-stream-policy/run-sync-contract
+      - assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control
       - runtime/runtime-assistant/context-grounded-answering
       - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:

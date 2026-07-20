@@ -1,4 +1,4 @@
-# L4 契约：settings-page-structure
+# L3 契约：settings-page-structure
 
 ## 功能说明
 

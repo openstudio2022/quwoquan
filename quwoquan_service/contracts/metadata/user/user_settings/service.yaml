@@ -5,10 +5,198 @@ service:
   description: UserSettings 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: ACCOUNT_OBJECT_PACKET_WIRING
+    block_reason: operation must carry explicit commercial evidence before enablement
+    gap_id: USER_SETTINGS_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
+  - method: GET
+    path: /user/settings/notifications
+    operation: GetNotificationSettings
+    actor: account
+    application:
+      kind: query
+      facet: UserSettingsQueryFacade
+      method: getNotificationSettings
+      reader: GetNotificationSettingsReader
+      slice: GetNotificationSettingsSlice
+    response_entity: NotificationSettingsView
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [USER.USER.unauthorized, USER.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_notifications_get
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UserSettingsQuery
+      response_type: NotificationSettingsView
+      request_encoder: encodeUserSettingsQuery
+      response_decoder: decodeNotificationSettingsView
+
+  - method: GET
+    path: /user/settings/privacy
+    operation: GetPrivacySettings
+    actor: account
+    application:
+      kind: query
+      facet: UserSettingsQueryFacade
+      method: getPrivacySettings
+      reader: GetPrivacySettingsReader
+      slice: GetPrivacySettingsSlice
+    response_entity: PrivacySettingsView
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [USER.USER.unauthorized, USER.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_privacy_get
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UserSettingsQuery
+      response_type: PrivacySettingsView
+      request_encoder: encodeUserSettingsQuery
+      response_decoder: decodePrivacySettingsView
+
+  - method: GET
+    path: /user/settings/calls
+    operation: GetCallSettings
+    actor: account
+    application:
+      kind: query
+      facet: UserSettingsQueryFacade
+      method: getCallSettings
+      reader: GetCallSettingsReader
+      slice: GetCallSettingsSlice
+    response_entity: CallSettingsView
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [USER.USER.unauthorized, USER.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_calls_get
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UserSettingsQuery
+      response_type: CallSettingsView
+      request_encoder: encodeUserSettingsQuery
+      response_decoder: decodeCallSettingsView
+
+  - method: GET
+    path: /user/settings/appearance
+    operation: GetAppearanceSettings
+    actor: account
+    application:
+      kind: query
+      facet: UserSettingsQueryFacade
+      method: getAppearanceSettings
+      reader: GetAppearanceSettingsReader
+      slice: GetAppearanceSettingsSlice
+    response_entity: AppearanceSettingsView
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [USER.USER.unauthorized, USER.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_appearance_get
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UserSettingsQuery
+      response_type: AppearanceSettingsView
+      request_encoder: encodeUserSettingsQuery
+      response_decoder: decodeAppearanceSettingsView
+
   - method: PATCH
     path: /user/settings/notifications
 
@@ -21,13 +209,50 @@ api_routes:
       aggregate_owner: UserSettings
       mutation_target: UserSettings
       invariant_target: UserSettings
+    description: 更新通知设置（推送/营销/免打扰时段）
+    commercial:
+      status: ready
     request_entity: UserSetting
+    request_fields: [enablePush, enableMarketing, quietHoursStart, quietHoursEnd]
+    response_entity: UserSettingsCommandResult
+    response_fields: [userId, version, idempotentReplay]
     security:
       auth_mode: required
       principal: owner
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.SETTING.settings_version_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_notifications_update
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UpdateNotificationSettingsCommand
+      response_type: UserSettingsCommandResult
+      request_encoder: encodeUpdateNotificationSettingsCommand
+      response_decoder: decodeUserSettingsCommandResult
 
   - method: PATCH
     path: /user/settings/privacy
@@ -41,13 +266,50 @@ api_routes:
       aggregate_owner: UserSettings
       mutation_target: UserSettings
       invariant_target: UserSettings
+    description: 更新隐私设置（陌生人私信/主页可见性/屏蔽词/助手开关）
+    commercial:
+      status: ready
     request_entity: UserSetting
+    request_fields: [allowStrangerMsg, profileVisibility, blockedKeywords, assistantEnabled]
+    response_entity: UserSettingsCommandResult
+    response_fields: [userId, version, idempotentReplay]
     security:
       auth_mode: required
       principal: owner
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.SETTING.settings_version_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_privacy_update
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UpdatePrivacySettingsCommand
+      response_type: UserSettingsCommandResult
+      request_encoder: encodeUpdatePrivacySettingsCommand
+      response_decoder: decodeUserSettingsCommandResult
 
   - method: PATCH
     path: /user/settings/calls
@@ -62,14 +324,50 @@ api_routes:
       mutation_target: UserSettings
       invariant_target: UserSettings
     description: 更新来电与铃声设置（仅支持官方铃声库 ID）
+    commercial:
+      status: ready
     request_entity: UserSetting
     request_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+    response_entity: UserSettingsCommandResult
+    response_fields: [userId, version, idempotentReplay]
     security:
       auth_mode: required
       principal: owner
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.SETTING.invalid_call_ringtone
+      - USER.SETTING.settings_version_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_calls_update
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UpdateCallSettingsCommand
+      response_type: UserSettingsCommandResult
+      request_encoder: encodeUpdateCallSettingsCommand
+      response_decoder: decodeUserSettingsCommandResult
 
   - method: PATCH
     path: /user/settings/appearance
@@ -84,6 +382,8 @@ api_routes:
       mutation_target: UserSettings
       invariant_target: UserSettings
     description: 更新外观与字号设置；支持全账号同步、当前子账号覆盖、恢复继承 owner 默认
+    commercial:
+      status: ready
     request_entity: AppearanceSettingsMutation
     request_fields: [themeMode, fontSizePreset, applyScope]
     security:
@@ -94,3 +394,35 @@ api_routes:
       visibility: private
     response_entity: AppearanceSettingsView
     response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.SETTING.invalid_appearance_scope
+      - USER.SETTING.settings_version_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_settings_appearance_update
+      trace: true
+      attributes: [outcome, error_code]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_settings_contracts.dart
+      request_type: UpdateAppearanceSettingsCommand
+      response_type: AppearanceSettingsView
+      request_encoder: encodeUpdateAppearanceSettingsCommand
+      response_decoder: decodeAppearanceSettingsView

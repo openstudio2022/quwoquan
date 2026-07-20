@@ -24,6 +24,27 @@ thresholds:
     consecutive_slow_frame_ms: 32
     consecutive_slow_frame_count: 2
 
+readback:
+  window: 5m
+  minimum_samples: 100
+  settle_seconds:
+    gray-initial: 120
+    carry-on: 120
+    full: 120
+  # N2-5 推荐业务指标（仅对 content-service readback 生效）：
+  # 空 feed 率与负反馈率超 critical 直接阻断放量；CTR 为观察指标——
+  # impression 样本低于 min_impressions 时诚实跳过（不虚报、不拦截）。
+  recommendation:
+    service: content-service
+    min_impressions: 200
+    empty_feed_rate:
+      warn: 0.05
+      critical: 0.20
+    negative_feedback_rate:
+      warn: 0.05
+      critical: 0.15
+    ctr_floor_warn: 0.005
+
 decisions:
   continue_when: "all metrics below warn"
   pause_when: "any metric >= warn and all metrics < critical"

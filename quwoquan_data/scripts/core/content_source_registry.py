@@ -302,6 +302,11 @@ def verify_content_source_registry() -> list[str]:
                 issues.append(
                     f"sourceTierSignals.bySourceClass: missing explicit mapping for sourceClass {cls!r} (falls back to default)"
                 )
+    from core.video_source_admission import (
+        verify_video_commercial_admission,
+    )
+
+    issues.extend(verify_video_commercial_admission(data))
     return issues
 
 

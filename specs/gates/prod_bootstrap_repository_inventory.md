@@ -11,17 +11,16 @@
 | `contentRepositoryProvider` | `RemoteContentRepository` | `MockContentRepository` |
 | `homepageRepositoryProvider` | `RemoteHomepageRepository` | `MockHomepageRepository` |
 | `integrationRepositoryProvider` | `RemoteIntegrationRepository` | `MockIntegrationRepository` |
-| `chatRepositoryProvider` | `RemoteChatRepository`（[`remote/chat_repository_remote.dart`](../../quwoquan_app/lib/cloud/services/chat/remote/chat_repository_remote.dart)） | `MockChatRepository` |
-| `userRepositoryProvider` | `RemoteUserRepository` | `MockUserRepository` |
+| `chatRepositoryCompositionProvider` | `RemoteChatRepository`（[`remote/chat_repository_remote.dart`](../../quwoquan_app/lib/cloud/services/chat/remote/chat_repository_remote.dart)） | production 无 Mock；alpha/test 共用 `quwoquan_cloud_mock` 状态引擎，test DTO mapper 由 runner mapper 生成并做 parity 校验 |
+| `personaQueryProvider` / `personaCommandWriterProvider` / `profileCommandWriterProvider` | `RemotePersonaQuery` / `RemotePersonaCommandWriter` | production 无 Mock；alpha runner 使用 `AlphaPersonaFacet` |
 | `behaviorRepositoryProvider` | `RemoteBehaviorRepository` | `MockBehaviorRepository` |
 | `userProfileRepositoryProvider` | `RemoteUserProfileRepository` | `MockUserProfileRepository` |
-| `blockRepositoryProvider` | `RemoteBlockRepository` | `MockBlockRepository` |
+| `personaRelationshipBlockWriterProvider` / `blockedListQueryProvider` | `RemotePersonaRelationshipFacet` | alpha adapter 仅位于 `quwoquan_cloud_mock` |
 | `homeFeedContentReportCommandWriterProvider` / `workBrowserContentReportCommandWriterProvider` / `userProfileContentReportCommandWriterProvider` | `RemoteContentReportAdapter`（context 由各 surface Provider 固定） | `AlphaContentReportAdapter`（仅 `quwoquan_cloud_mock`，override 位于 alpha runner） |
-| `keywordBlockRepositoryProvider` | `RemoteKeywordBlockRepository` | `MockKeywordBlockRepository` |
 | `circleRepositoryProvider` | `RemoteCircleRepository` | `MockCircleRepository` |
 | `searchRepositoryProvider` | `RemoteSearchRepository` | `MockSearchRepository` |
-| `rtcRepositoryProvider` | `RemoteRtcRepository` | `MockRtcRepository` |
-| `callSettingsRepositoryProvider` | `RemoteCallSettingsRepository` | `MockCallSettingsRepository` |
+| `rtcCall*Provider` 对象级 Facet | `RemoteCall*` generated-client adapters | alpha adapters 仅位于 `quwoquan_cloud_mock` |
+| `userSettingsCommandWriterProvider` / `userSettingsQueryReaderProvider` | `RemoteUserSettingsCommandWriter` / `RemoteUserSettingsQueryReader` | alpha adapter 仅位于 `quwoquan_cloud_mock` |
 | `greetingRepositoryProvider` | `RemoteGreetingRepository` | `MockGreetingRepository` |
 
 `appContentRepositoryProvider` 已删除；不得新增同类跨对象组合门面。

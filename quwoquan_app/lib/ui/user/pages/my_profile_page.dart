@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -9,7 +10,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// 我的主页入口；`ProfileShell` 经 UserProfileRepository 加载 SubAccountProfileViewData。
+/// 我的主页入口；`ProfileShell` 经对象级 ProfileQuery 加载公开分身资料。
 ///
 /// 路由：/profile（MainAppShell IndexedStack 第4项）
 /// 也可通过 /user/:username（当前用户）push 进入，此时传入 onBack 显示返回按钮。
@@ -61,7 +62,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     if (!_didTriggerLoad) {
       _didTriggerLoad = true;
       final currentUserId = ref.read(currentUserIdProvider);
-      ref.read(userDataProvider.notifier).loadUser(currentUserId);
+      ref
+          .read(userDataProvider.notifier)
+          .loadUser(currentUserId, sourceSurface: AppUiSurfaces.profileHome);
     }
     final userData = ref.watch(userDataProvider);
     final currentUserId = ref.watch(currentUserIdProvider);

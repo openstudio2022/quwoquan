@@ -12,6 +12,8 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.controller.homepage_author_evidence import _write_homepage_author_evidence  # noqa: E402
+from content.execution.agent.outcome import AgentRunOutcome  # noqa: E402
+from content.execution.queue.core import stable_job_id  # noqa: E402
 from content.execution.production_contracts import sha256_file, sha256_text, validate_agent_result_envelope  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.schema import assert_valid  # noqa: E402
@@ -49,7 +51,7 @@ def test_homepage_author_evidence_binds_real_cursor_run_and_page(tmp_path: Path)
         domain="地点",
         etype="景区",
         entity="测试景区",
-        outcome={"runId": "cursor-run-1", "agentId": "agent-1", "agentProvider": "cursor_sdk"},
+        outcome=AgentRunOutcome.finished(run_id="cursor-run-1", agent_id="agent-1"),
         draft_meta=draft_meta,
     )
 
@@ -59,4 +61,7 @@ def test_homepage_author_evidence_binds_real_cursor_run_and_page(tmp_path: Path)
     assert_valid(envelope, "content", "agent_result_envelope")
     assert self_check["passed"] is True
     assert envelope["agent"]["runId"] == "cursor-run-1"
+    assert envelope["jobId"] == stable_job_id(execution_id, object_ref, "author")
+    assert envelope["ref"] == object_ref
+    assert envelope["stage"] == "author"
     assert validate_agent_result_envelope(envelope, workspace_root=draft_dir) == []

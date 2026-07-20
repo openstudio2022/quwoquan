@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 
 class HomepagePickerPageRouteExtra {
   const HomepagePickerPageRouteExtra({this.initialSelection});
@@ -36,6 +37,7 @@ class HomepageDetailPageRouteExtra {
     this.recommendationTraceId = '',
     this.experimentBucket = '',
     this.rolloutCohort = '',
+    this.initialTabTarget,
   });
 
   final bool selectionMode;
@@ -46,4 +48,5 @@ class HomepageDetailPageRouteExtra {
   final String recommendationTraceId;
   final String experimentBucket;
   final String rolloutCohort;
+  final HomepageDetailTabTarget? initialTabTarget;
 }

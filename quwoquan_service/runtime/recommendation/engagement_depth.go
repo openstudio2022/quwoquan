@@ -20,7 +20,7 @@ type EngagementDepthInput struct {
 	ImagesViewed int
 	TotalImages  int
 	// For video: play position vs total duration (milliseconds)
-	PlayPositionMs int
+	PlayPositionMs  int
 	TotalDurationMs int
 	// Fallback: raw dwell time for short-content correction
 	DwellMs int

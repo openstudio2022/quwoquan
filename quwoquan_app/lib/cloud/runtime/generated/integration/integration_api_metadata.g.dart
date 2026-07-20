@@ -10,50 +10,40 @@ class IntegrationApiMetadata {
   static const List<String> apiPrefixes = <String>[
     '/integration/location',
     '/integrations/external-requests',
-    '/integrations/push-deliveries',
-    '/integrations/push-deliveries:callback',
-    '/integrations/sms-otp:callback',
-    '/integrations/sms-otp:send',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'GetExternalInteractionMetricsSnapshot': '/integrations/external-requests/metrics:snapshot',
     'GetExternalInteractionRequest': '/integrations/external-requests/{requestId}',
     'GetNearbyLocations': '/integration/location/nearby',
     'ListExternalInteractionAttempts': '/integrations/external-requests/{requestId}/attempts',
     'ListExternalInteractionDeadLetters': '/integrations/external-requests/dead-letters',
-    'PushDeliveryProviderCallback': '/integrations/push-deliveries:callback',
+    'RecoverExternalInteractionDeadLetter': '/integrations/external-requests/dead-letters:recover',
     'SearchLocations': '/integration/location/search',
-    'SendSmsOtp': '/integrations/sms-otp:send',
-    'SmsOtpProviderCallback': '/integrations/sms-otp:callback',
     'SubmitExternalInteractionRequest': '/integrations/external-requests',
-    'SubmitPushDelivery': '/integrations/push-deliveries',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'GetExternalInteractionMetricsSnapshot': 'GET',
     'GetExternalInteractionRequest': 'GET',
     'GetNearbyLocations': 'GET',
     'ListExternalInteractionAttempts': 'GET',
     'ListExternalInteractionDeadLetters': 'GET',
-    'PushDeliveryProviderCallback': 'POST',
+    'RecoverExternalInteractionDeadLetter': 'POST',
     'SearchLocations': 'GET',
-    'SendSmsOtp': 'POST',
-    'SmsOtpProviderCallback': 'POST',
     'SubmitExternalInteractionRequest': 'POST',
-    'SubmitPushDelivery': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'GetExternalInteractionMetricsSnapshot': 'required',
     'GetExternalInteractionRequest': 'required',
     'GetNearbyLocations': 'optional',
     'ListExternalInteractionAttempts': 'required',
     'ListExternalInteractionDeadLetters': 'required',
-    'PushDeliveryProviderCallback': 'required',
+    'RecoverExternalInteractionDeadLetter': 'required',
     'SearchLocations': 'optional',
-    'SendSmsOtp': 'required',
-    'SmsOtpProviderCallback': 'required',
     'SubmitExternalInteractionRequest': 'required',
-    'SubmitPushDelivery': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -64,17 +54,16 @@ class IntegrationApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String getExternalInteractionMetricsSnapshotOperation = 'GetExternalInteractionMetricsSnapshot';
   static const String getExternalInteractionRequestOperation = 'GetExternalInteractionRequest';
   static const String getNearbyLocationsOperation = 'GetNearbyLocations';
   static const String listExternalInteractionAttemptsOperation = 'ListExternalInteractionAttempts';
   static const String listExternalInteractionDeadLettersOperation = 'ListExternalInteractionDeadLetters';
-  static const String pushDeliveryProviderCallbackOperation = 'PushDeliveryProviderCallback';
+  static const String recoverExternalInteractionDeadLetterOperation = 'RecoverExternalInteractionDeadLetter';
   static const String searchLocationsOperation = 'SearchLocations';
-  static const String sendSmsOtpOperation = 'SendSmsOtp';
-  static const String smsOtpProviderCallbackOperation = 'SmsOtpProviderCallback';
   static const String submitExternalInteractionRequestOperation = 'SubmitExternalInteractionRequest';
-  static const String submitPushDeliveryOperation = 'SubmitPushDelivery';
 
+  static const String getExternalInteractionMetricsSnapshotPath = '/integrations/external-requests/metrics:snapshot';
   static const String getExternalInteractionRequestPathTemplate = '/integrations/external-requests/{requestId}';
   static String getExternalInteractionRequestPath({required String requestId}) {
     return _fillPath(getExternalInteractionRequestPathTemplate, <String, String>{
@@ -89,12 +78,9 @@ class IntegrationApiMetadata {
     });
   }
   static const String listExternalInteractionDeadLettersPath = '/integrations/external-requests/dead-letters';
-  static const String pushDeliveryProviderCallbackPath = '/integrations/push-deliveries:callback';
+  static const String recoverExternalInteractionDeadLetterPath = '/integrations/external-requests/dead-letters:recover';
   static const String searchLocationsPath = '/integration/location/search';
-  static const String sendSmsOtpPath = '/integrations/sms-otp:send';
-  static const String smsOtpProviderCallbackPath = '/integrations/sms-otp:callback';
   static const String submitExternalInteractionRequestPath = '/integrations/external-requests';
-  static const String submitPushDeliveryPath = '/integrations/push-deliveries';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

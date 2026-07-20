@@ -40,7 +40,8 @@ import core.paths as _paths_mod  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
 from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
 from content.post.article.draft_io import write_agent_draft  # noqa: E402
-from content.review.ledger import load_ledger, KIND_IMAGE  # noqa: E402
+from core.control_types import ReviewItemKind  # noqa: E402
+from content.review.ledger import load_ledger  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from content.execution.planning.brief import resolve_compose_brief  # noqa: E402
 from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
@@ -198,7 +199,7 @@ def test_ledger_written_and_copied():
     # 账本落内容对象 5.review（与成品同处对象根，promote 发布门据此过滤）
     copied = read_json(post_dir / "5.review" / "review_ledger.json")
     assert copied["ref"] == REF
-    assert any(i["kind"] == KIND_IMAGE for i in copied["images"])
+    assert any(i["kind"] == ReviewItemKind.IMAGE.value for i in copied["images"])
 
 
 def test_mined_entity_enters_review_without_placeholder_homepage():

@@ -29,7 +29,21 @@ type MessageStore interface {
 	CommitMessage(ctx context.Context, commit MessageCommit) (MessageCommitResult, error)
 	FindMessageByID(ctx context.Context, id string) (*messagemodel.Message, error)
 	ListMessages(ctx context.Context, conversationID string, limit int, afterSeq, beforeSeq int64) ([]messagemodel.Message, error)
+	CountUnreadMessages(ctx context.Context, conversationID, userID string, afterSeq, throughSeq int64) (UnreadMessageCounts, error)
 	SetMessageRecalled(ctx context.Context, id string) error
+	// AppendMessageOutboxEvent 供 Recall 等已提交消息上的命名迁移在事务内
+	// 追加事件；(aggregateId, aggregateVersion, eventType) 唯一索引保证重放幂等。
+	AppendMessageOutboxEvent(
+		ctx context.Context,
+		event MessageOutboxEvent,
+		aggregateID string,
+		aggregateVersion int64,
+	) error
+}
+
+type UnreadMessageCounts struct {
+	Total     int
+	Mentioned int
 }
 
 type MessageOutboxEvent struct {
@@ -91,6 +105,7 @@ type ListMembersQuery struct {
 	Limit  int
 	Cursor string
 	Role   string
+	Query  string
 	Sort   MemberListSort
 }
 
@@ -111,6 +126,7 @@ type MemberStore interface {
 	ListMembers(ctx context.Context, conversationID string, query ListMembersQuery) ([]conversationmodel.ConversationMember, error)
 	BumpMembersRosterRevision(ctx context.Context, conversationID string, memberCount *int) error
 	CountMembers(ctx context.Context, conversationID string) (int, error)
+	CountUserMembers(ctx context.Context, conversationID string) (int, error)
 	FindAssistantMember(ctx context.Context, conversationID string) (*conversationmodel.ConversationMember, error)
 }
 
@@ -118,6 +134,17 @@ type UserStateStore interface {
 	UpsertUserState(ctx context.Context, state *conversationmodel.ConversationUserState) error
 	FindUserState(ctx context.Context, userID, conversationID string) (*conversationmodel.ConversationUserState, error)
 	ListUserStates(ctx context.Context, userID string, limit int, cursor string) ([]conversationmodel.ConversationUserState, error)
+	// AdvanceInboxUnread 是 ChatInbox 投影的单调幂等写入口；eventSeq 不高于
+	// inboxProjectedSeq 时为 no-op，且 eventSeq 不高于 readSeq 时只推进投影水位。
+	AdvanceInboxUnread(
+		ctx context.Context,
+		userID string,
+		conversationID string,
+		eventSeq int64,
+		unreadDelta int,
+		mentionDelta int,
+		lastMessageAt time.Time,
+	) error
 }
 
 type ReceiptStore interface {
@@ -140,4 +167,9 @@ type ChatStoragePorts struct {
 	Members           MemberStore
 	UserStates        UserStateStore
 	Receipts          ReceiptStore
+	// 三个非 Message 聚合各自的命令回执 + 事务 outbox 端口；state 写入与
+	// CommitAggregateCommand 必须在同一事务闭包内完成。
+	ConversationCommands AggregateCommandStore
+	MembershipCommands   AggregateCommandStore
+	UserStateCommands    AggregateCommandStore
 }

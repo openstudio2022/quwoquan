@@ -1,6 +1,17 @@
 part of 'circle_shell.dart';
 
-enum _CircleMoreAction { edit, manage, submitPost, share, copyLink, report }
+enum _CircleMoreAction {
+  edit,
+  manage,
+  approval,
+  voiceCall,
+  videoCall,
+  submitPost,
+  invite,
+  share,
+  copyLink,
+  report,
+}
 
 class _CircleToolbarButton extends StatelessWidget {
   const _CircleToolbarButton({

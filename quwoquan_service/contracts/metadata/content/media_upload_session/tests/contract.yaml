@@ -4,6 +4,10 @@ tests:
     operation: InitMediaUpload
     go_func: TestMediaUploadSessionOwnerExpiryAndStateContracts
     command: InitMediaUpload/AbortMediaUpload/CompleteMediaUpload
+  - name: media_upload_session_admission_policy_contract
+    operation: InitMediaUpload
+    go_func: TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersistence
+    command: InitMediaUpload
   - name: media_upload_session_atomic_completion_contract
     operation: CompleteMediaUpload
     go_func: TestMediaCompleteIsIdempotentAndOutboxVersionsAreAtomic

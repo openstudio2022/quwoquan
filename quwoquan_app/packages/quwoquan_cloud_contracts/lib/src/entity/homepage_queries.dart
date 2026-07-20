@@ -278,13 +278,6 @@ HomepageReviewSummaryProjection _decodeReviewSummary(
     averageRating: _optionalDouble(root['averageRating']),
     ratingCount: _optionalInt(root['ratingCount']) ?? 0,
     highlightTags: _stringList(root['highlightTags'], 'highlightTags'),
-    dimensionScores: _objectList(root['dimensionScores'], 'dimensionScores')
-        .map(
-          (score) => HomepageReviewDimensionProjection(
-            label: _requiredText(score['label'], 'dimensionScores.label'),
-            score: _requiredDouble(score['score'], 'dimensionScores.score'),
-          ),
-        ),
   );
 }
 
@@ -470,12 +463,6 @@ int? _optionalInt(Object? value) {
   if (value == null) return null;
   if (value is! num) throw const FormatException('Expected a number');
   return value.toInt();
-}
-
-double _requiredDouble(Object? value, String name) {
-  final number = _optionalDouble(value);
-  if (number == null) throw FormatException('$name must be numeric');
-  return number;
 }
 
 double? _optionalDouble(Object? value) {

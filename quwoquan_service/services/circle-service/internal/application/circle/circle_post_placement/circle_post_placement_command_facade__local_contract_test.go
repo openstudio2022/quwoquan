@@ -114,6 +114,25 @@ func (store *contractStore) Load(_ context.Context, id string) (placementmodel.C
 	return *store.placement, true, nil
 }
 
+func (store *contractStore) RecordNoopReceipt(_ context.Context, noop placementports.NoopReceipt) (placementports.CommitReceipt, error) {
+	if receipt, found := store.receipts[noop.ReceiptKey]; found {
+		if receipt.digest != noop.CommandDigest {
+			return placementports.CommitReceipt{}, placementmodel.ErrIdempotencyConflict
+		}
+		result := receipt.result
+		result.Replayed = true
+		return result, nil
+	}
+	result := placementports.CommitReceipt{
+		PlacementID: noop.PlacementID, Version: noop.Version, State: noop.State,
+	}
+	store.receipts[noop.ReceiptKey] = struct {
+		digest string
+		result placementports.CommitReceipt
+	}{noop.CommandDigest, result}
+	return result, nil
+}
+
 func (store *contractStore) Commit(_ context.Context, request placementports.CommitRequest) (placementports.CommitReceipt, error) {
 	if store.conflictOnce {
 		store.conflictOnce = false

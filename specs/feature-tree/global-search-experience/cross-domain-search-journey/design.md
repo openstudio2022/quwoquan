@@ -285,6 +285,49 @@ Journey 级结果分组冻结为：
 - `circle.group` fallback 不写在页面 if/switch 中，而由 execution policy 统一决定。
 - Journey 只消费 `resolvedFrom=local / remote / local_fallback` 等 typed 降级标记，并展示一致的降级态。
 
+### KD12：动态筛选只消费云侧 facet，首批冻结地点与圈子两维
+
+- `SearchResponse.facets` 是动态筛选唯一真相源；页面不得按命中标题、关键词或本地计数猜测筛选项。
+- 首批只开放 `location` 与 `circle` 两个对象维度：
+  - `location` 表示把结果范围收窄到 `location.place + entity.homepage`，不等价于 `filters.near` 半径筛选。
+  - `circle` 表示把结果范围收窄到 `circle.circle + circle.group`。
+- facet 仅在 `count > 0` 时出现，标签来自 `_shared/search_objects.yaml` codegen，不在页面硬编码。
+- 选择 facet 后重新发起 canonical search，保留原 query，生成新的 `requestId`，并上报
+  `SearchFeedbackFact(eventType=refine)`；取消后回到未收窄的同 query 请求。
+- 结果、空态、降级态始终以新请求为准；supersede 必须取消旧请求，禁止把两代 facet/hit 混合。
+- 后续若增加时间、附近或标签筛选，必须先扩 metadata 闭集与 contract tests，不允许向页面注入自由
+  `Map` 或动态 where 表达式。
+
+### KD13：Tag 是搜索过滤维度，不是独立结果对象
+
+- `tag.TagNodeView` 是受版本治理的 taxonomy projection，用于 `filters.tags`、相关词与内容/用户/圈子
+  召回收窄；它没有独立搜索结果落地页，不进入 `RetrieveTarget` 与结果 section。
+- 搜索命中可携带 `matchedTags` 解释匹配，但点击仍落到承载该标签的业务对象，禁止制造第二套 Tag
+  详情页或在 App 内合成标签结果。
+- `_shared/search_objects.yaml` 中 Tag 的执行角色必须表达为 `filter_only`，不得宣称不存在的
+  `tag_remote` 结果 provider；`tags` 结果 section 必须删除。
+- 若未来产品需要可导航标签主页，必须先把该主页登记为独立 canonical object、route/surface 和
+  生命周期，再经新的 CR 把它提升为检索 target；本设计不预留兼容双轨。
+
+### KD14：产品搜索漏斗以 requestId 对账，原始 query 与对象标识不得进入产品遥测
+
+- 事件闭集由 `ops/event_record/event_catalog.yaml` 生成：
+  `search_query_submit / search_result_impression / search_result_click / search_refine /
+  search_zero_result / search_result_dwell`。页面不得用通用 `product_action` 拼第二套搜索漏斗。
+- `query_submit` 在云响应返回 `requestId` 后补记，但 `occurredAt` 必须保留真实提交时刻；
+  `result_impression` 与 `zero_result` 对同一 `requestId` 互斥。
+- `result_dwell` 只允许对非空结果上报；零结果页停留不得计为有效行动。点击只记录 canonical
+  `objectType + rankPosition`，不记录 `objectId`。
+- 所有搜索产品事件禁止携带原始 query、objectId、userId；SLS 仅按 requestId、低基数 action、
+  聚合计数与耗时直方图对账。
+- 三项黄金指标唯一口径：
+  - 有效搜索成功率 = 有点击或结果页停留至少 3 秒的 requestId / 提交 requestId，目标 ≥35%。
+  - 提交到首个可操作结果 P95 = 非空 `result_impression.durationMs` P95，目标 ≤1.5 秒。
+  - 结果到有效行动率 = 有点击或停留至少 3 秒的 requestId / 非空结果 requestId，目标 ≥20%。
+- Delivery Gate 必须执行 search-service `/search` contract smoke；Pre-Release 的
+  `manual_full/mainline_auto_prod` 必须由调用方显式提供 beta/prod base URL 并通过真实
+  `/search` 商业信封探针。`pr_light` 不伪造远端证据，hosted gamma 预检保持退役。
+
 ## metadata / codegen 方案
 
 本次设计不是“代码优先”，而是以下顺序：
@@ -333,13 +376,11 @@ G1 基线已在本轮 `/design` 实际执行并通过。
 
 ### 观测
 
-- `global_search_query_latency_ms`
-- `global_search_section_timeout_count`
-- `global_search_history_sync_failure_count`
-- `global_search_asr_failure_count`
-- `global_search_xiaoqu_handoff_success_count`
-- `global_search_local_index_hit_count`
-- `global_search_circle_group_local_fallback_count`
+- 服务健康：`search_retrieve_duration_seconds`、`search_retrieve_requests_total`、
+  `search_retrieve_zero_results_total`、`search_retrieve_degraded_total`。
+- 产品漏斗：SLS `app-product-telemetry-search-funnel-hourly`，事件与口径只取 KD14 闭集。
+- 告警：有效搜索成功率 <35%、首个可操作结果 P95 >1.5 秒、结果到有效行动率 <20%，
+  各自至少 100 样本后才触发。
 
 ### SLO 验证
 

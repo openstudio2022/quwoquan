@@ -6,8 +6,8 @@ Map / 弱类型基线报告（与 map-typing-remediation 规划对齐）。
 specs/feature-tree/runtime/runtime-client-foundation/map-typing-remediation-baseline.md
 
 用法:
-  python3 scripts/report_map_typing_baseline.py > path/to/baseline.md
-  python3 scripts/report_map_typing_baseline.py --run-page-abc-c  # 附录：门禁 C 结果
+  python3 quwoquan_app/scripts/runtime/report_map_typing_baseline.py > path/to/baseline.md
+  python3 quwoquan_app/scripts/runtime/report_map_typing_baseline.py --run-page-abc-c
 """
 
 from __future__ import annotations
@@ -75,16 +75,22 @@ def repository_map_signatures() -> str:
         if not p.is_file():
             lines_out.append(f"| `{rel}` | (missing) |")
             continue
-        text = p.read_text(encoding="utf-8", errors="utf-8")
+        text = p.read_text(encoding="utf-8", errors="replace")
         hits = fut_map.findall(text)
         lines_out.append(f"| `{rel}` | ~{len(hits)} `Future<...Map<String,dynamic>>` shapes |")
     return "\n".join(lines_out)
 
 
-def run_page_abc_c() -> str:
-    script = ROOT / "scripts" / "verify_page_abc_governance.py"
+def run_page_abc_c() -> tuple[str, int]:
+    script = (
+        ROOT
+        / "quwoquan_app"
+        / "scripts"
+        / "runtime"
+        / "verify_page_abc_governance.py"
+    )
     if not script.is_file():
-        return "_verify_page_abc_governance.py not found_\n"
+        return "_verify_page_abc_governance.py not found_\n", 2
     try:
         r = subprocess.run(
             [sys.executable, str(script), "--enforce-c"],
@@ -97,9 +103,9 @@ def run_page_abc_c() -> str:
         return (
             f"- **exit code**: `{r.returncode}` (0 = pass)\n"
             f"- **tail**:\n\n```\n{tail}\n```\n"
-        )
+        ), r.returncode
     except (subprocess.TimeoutExpired, OSError) as e:
-        return f"_failed to run: {e}_\n"
+        return f"_failed to run: {e}_\n", 2
 
 
 def main() -> int:
@@ -117,7 +123,7 @@ def main() -> int:
     md: list[str] = [
         "# Map / 弱类型数据整改 — 基线快照",
         "",
-        f"_Generated: {now}_ (`scripts/report_map_typing_baseline.py`)",
+        f"_Generated: {now}_ (`quwoquan_app/scripts/runtime/report_map_typing_baseline.py`)",
         "",
         "## 1. 口径",
         "",
@@ -175,7 +181,7 @@ def main() -> int:
             "命令:",
             "",
             "```bash",
-            "python3 scripts/verify_page_abc_governance.py --enforce-c",
+            "python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c",
             "# 或",
             "make verify-app-page-abc-governance",
             "```",
@@ -183,17 +189,19 @@ def main() -> int:
         ]
     )
 
+    exit_code = 0
     if args.run_page_abc_c:
         md.append("### 本次运行结果\n")
-        md.append(run_page_abc_c())
+        result, exit_code = run_page_abc_c()
+        md.append(result)
     else:
         md.append(
-            "_附录：使用 `python3 scripts/report_map_typing_baseline.py --run-page-abc-c` "
+            "_附录：使用 `python3 quwoquan_app/scripts/runtime/report_map_typing_baseline.py --run-page-abc-c` "
             "生成时可附带执行门禁 C 并写入 tail。_\n"
         )
 
     sys.stdout.write("\n".join(md) + "\n")
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

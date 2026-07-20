@@ -1,4 +1,4 @@
-# L4 特性：mask-encrypt-retention-enforcement
+# L3 特性：mask-encrypt-retention-enforcement
 
 ## 功能说明
 - 待补充

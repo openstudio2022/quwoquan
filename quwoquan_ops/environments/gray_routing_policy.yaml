@@ -1,0 +1,48 @@
+# 灰度路由策略（IaC 唯一真相源）
+#
+# 语义：
+# - 公网边缘（prod 栈 Caddy）按请求头做维度匹配；命中任一启用维度即路由到
+#   灰度栈 edge（OR 语义），未命中走稳定栈。
+# - 灰度流量默认打到更高版本服务（gray 栈先于 prod 栈升级）。
+# - 服务实例无状态：同版本任意实例可服务同一请求；跨版本粘滞由本策略维度保证。
+# - 本文件随发布 PR 变更并经 render_prod_plane_stack.py 编译进 Caddyfile；
+#   不提供任何在线编辑入口。Portal 只读展示。
+#
+# 维度与请求头对应（契约：contracts/metadata/_shared/openapi_common.yaml）：
+# - appVersions -> X-Client-App-Version（精确匹配，发布时列出目标灰度版本号）
+# - userIds     -> X-Client-User-Id（灰度白名单用户）
+# - provinces   -> X-Client-Region-Code（GB/T 2260 六位省级码，如 330000=浙江）
+# - carriers    -> X-Client-Carrier（chinamobile/chinaunicom/chinatelecom/chinabroadnet）
+#
+# 头缺失 = 该维度不匹配；不做任何猜测或默认命中。
+policy:
+  enabled: true
+  grayUpstream: "http://host.containers.internal:29000"
+  grayUpstreamTlsInsecureSkipVerify: false # 同机容器桥接，不经过公网；禁止伪造 internal CA
+  dimensions:
+    appVersions: ["1.1.0"]
+    userIds: [ops-release-canary]
+    provinces: []
+    carriers: []
+  stageDimensions:
+    gray-initial:
+      appVersions: []
+      userIds: [ops-release-canary]
+      provinces: []
+      carriers: []
+    carry-on:
+      appVersions: ["1.1.0"]
+      userIds: [ops-release-canary]
+      provinces: []
+      carriers: []
+    full:
+      appVersions: []
+      userIds: []
+      provinces: []
+      carriers: []
+  syntheticCanary:
+    path: /healthz
+    requests: 120
+    intervalMs: 50
+    headers:
+      X-Client-User-Id: ops-release-canary

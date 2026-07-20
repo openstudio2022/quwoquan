@@ -57,7 +57,7 @@ curl -s "$GW/v1/tag/search?q=旅"
 - **无 Docker 的 api_integration**：本机 MongoDB 时 `make -C quwoquan_service test-contract-local`，或
   `TEST_MONGO_URI=mongodb://localhost:27017 go test ./services/tag-service/... -count=1`。
 - **patrol（user_acceptance）**：`dart pub global activate patrol_cli` + 启动 iOS/Android 模拟器，
-  交集 user_acceptance case 经 `quwoquan_ops/cli/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
+  交集 user_acceptance case 由 `stackctl verify --env gamma --kind all --profile release` 的 T4 page smoke 执行。
 
 ## 4. 当前能力边界
 

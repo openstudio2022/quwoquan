@@ -9,8 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -20,13 +25,20 @@ import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/utils/content_keyword_suggester.dart';
+import 'package:quwoquan_app/core/widgets/blocked_keyword_confirmation_sheet.dart';
+import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
+import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
@@ -58,6 +70,7 @@ import 'package:quwoquan_app/ui/discovery/services/discovery_share_template.dart
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/components/media/video/player/video_playback_center_glyph.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
@@ -74,6 +87,8 @@ part 'home_multi_form_feed_media.dart';
 part 'home_multi_form_feed_media_autoplay.dart';
 part 'home_multi_form_feed_media_grid.dart';
 part 'home_multi_form_feed_actions.dart';
+part 'home_multi_form_feed_report_actions.dart';
+part 'home_multi_form_feed_object_cards.dart';
 
 const double _feedCardVerticalPadding = AppSpacing.fourteen;
 const double _feedCardSectionGap =
@@ -139,13 +154,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final articleDistributionEnabled = ref.watch(
       contentFeatureFlagProvider('enable_article_distribution_profiles'),
     );
-    final embeddedCatalog = ref
-        .watch(contentConfigRepositoryProvider)
-        .usesEmbeddedContentCatalog;
     final shouldShowFollowingArticles =
-        channelId == 'following' &&
-        articleDistributionEnabled &&
-        embeddedCatalog;
+        channelId == 'following' && articleDistributionEnabled;
 
     if (!feedMap.containsKey(channelId)) {
       // 任务 B · 首屏 TTI：在触发首屏加载时起算（仅 widget 层旁路采集）。
@@ -161,13 +171,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final moments = dtos
         .where((post) => post.identity == 'moment')
         .toList(growable: false);
-    final articleFallback = shouldShowFollowingArticles
-        ? ref
-              .read(contentReadRepositoryProvider)
-              .embeddedDiscoveryArticlePostsForFollowingMix()
-        : const <PostBaseDto>[];
     final articlesById = <String, PostBaseDto>{
-      for (final article in articleFallback) article.id: article,
       for (final article in dtos.where((post) => post.isArticleLike))
         article.id: article,
     };
@@ -175,6 +179,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final feedPosts = shouldShowFollowingArticles
         ? <PostBaseDto>[...moments, ...articles]
         : dtos;
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      _scheduleHomeReportContinuationResume(context, ref, feedPosts);
+    }
     final blockingError = feedAsync.value?.blockingError;
     final appendError = feedAsync.value?.appendError;
     final staleDataError = feedAsync.value?.staleDataError;
@@ -263,40 +270,138 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final horizontalPad = isMultiColumn
         ? AppSpacing.feedContentHorizontal(context)
         : AppSpacing.zero;
+    // Impression gate 可能在子树 dispose 时补报弱曝光。此处捕获与本批卡片同源的
+    // tracker/session 快照，禁止在 deactivated element 的回调里再次通过 ref 查祖先。
+    final behaviorTracker = ref.read(contentBehaviorTrackerProvider);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    final impressionFeedRequestId = feedSession.currentFeedRequestId;
+    final impressionRankingVersion = feedSession.currentRankingVersion;
+    final impressionReasonVersion = feedSession.currentReasonVersion;
 
     Widget buildCard(
       PostBaseDto dto,
       int index,
       ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
     ) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final feedSession = ref.read(feedSessionProvider.notifier);
-        ref
-            .read(contentBehaviorTrackerProvider)
-            .trackImpression(
+      // N0-4 七态语义：impressed 必须来自真实视口可见性（50%+1s 门控），
+      // 由 _QualifiedImpressionGate 驱动；build 帧不再直接上报（预构建卡片
+      // 曾被误记 impressed → 拉黑 7 天 + CTR 分母污染）。
+      Widget withImpressionGate(Widget child) {
+        return _QualifiedImpressionGate(
+          key: ValueKey<String>('home-feed-impression-${dto.id}'),
+          contentId: dto.id,
+          onQualified: (visibleFraction, visibleDuration) {
+            behaviorTracker.trackQualifiedImpression(
               dto.id,
+              visibleFraction: visibleFraction,
+              visibleDuration: visibleDuration,
               contentType: dto.identity,
               position: index,
               referralSource: ReferralSource.organicFeed,
-              feedRequestId: feedSession.currentFeedRequestId,
+              feedRequestId: impressionFeedRequestId,
               channelId: channelId,
-              rankingVersion: feedSession.currentRankingVersion,
-              reasonVersion: feedSession.currentReasonVersion,
+              rankingVersion: impressionRankingVersion,
+              reasonVersion: impressionReasonVersion,
               recallPath: dto.recallPath,
               contentVertical: dto.contentVertical,
               supplySource: dto.supplySource,
             );
-      });
+          },
+          onWeakVisible: () {
+            behaviorTracker.trackVisible(
+              dto.id,
+              contentType: dto.identity,
+              position: index,
+              referralSource: ReferralSource.organicFeed,
+              feedRequestId: impressionFeedRequestId,
+              channelId: channelId,
+              rankingVersion: impressionRankingVersion,
+              reasonVersion: impressionReasonVersion,
+              recallPath: dto.recallPath,
+              contentVertical: dto.contentVertical,
+              supplySource: dto.supplySource,
+            );
+          },
+          child: child,
+        );
+      }
+
       if (dto.isArticleLike && shouldShowFollowingArticles) {
-        return _FeedPatchVisibilityReporter(
+        return withImpressionGate(
+          _FeedPatchVisibilityReporter(
+            key: ValueKey<String>('feed-patch-reporter-$index'),
+            postId: dto.id,
+            child: _FollowingArticleCard(
+              item: dto,
+              isDark: isDark,
+              summaryLineLimit:
+                  _followingArticleDistributionProfile.summaryLineLimit,
+              onTap: () {
+                final feedSession = ref.read(feedSessionProvider.notifier);
+                ref
+                    .read(contentBehaviorTrackerProvider)
+                    .trackClick(
+                      dto.id,
+                      contentType: dto.identity,
+                      feedRequestId: feedSession.currentFeedRequestId,
+                      position: index,
+                      referralSource: ReferralSource.organicFeed,
+                      channelId: channelId,
+                      rankingVersion: feedSession.currentRankingVersion,
+                      reasonVersion: feedSession.currentReasonVersion,
+                      recallPath: dto.recallPath,
+                      contentVertical: dto.contentVertical,
+                      supplySource: dto.supplySource,
+                    );
+                onPostTap?.call(dto, 0, feedPosts: feedPosts);
+              },
+              onMoreTap: () {
+                if (onMoreTap != null) {
+                  onMoreTap!(dto);
+                } else {
+                  _showMoreActions(context, ref, dto);
+                }
+              },
+            ),
+          ),
+        );
+      }
+      return withImpressionGate(
+        _FeedPatchVisibilityReporter(
           key: ValueKey<String>('feed-patch-reporter-$index'),
           postId: dto.id,
-          child: _FollowingArticleCard(
+          child: _HomeRelationPostCard(
+            cardContainerKey: ValueKey<String>('home-feed-card-$index'),
+            moreButtonKey: ValueKey<String>('home-feed-more-$index'),
+            wideLayout: isMultiColumn,
             item: dto,
             isDark: isDark,
-            summaryLineLimit:
-                _followingArticleDistributionProfile.summaryLineLimit,
-            onTap: () {
+            isLiked: effectivePostLiked(ref, dto.id),
+            likeCount: effectivePostLikeCount(
+              ref,
+              dto.id,
+              fallback: dto.likeCount,
+            ),
+            shareCount: effectivePostShareCount(
+              ref,
+              dto.id,
+              fallback: dto.shareCount,
+            ),
+            commentCount: effectivePostCommentCount(
+              ref,
+              dto.id,
+              fallback: dto.commentCount,
+            ),
+            inlineImageCarousel: effectiveInlineCarousel,
+            videoScrollSignal: videoScrollSignal,
+            isFocused: index == 0,
+            onUserTap: (id) => onUserTap(
+              id,
+              avatarUrl: dto.avatarUrl,
+              displayName: dto.displayName,
+              backgroundUrl: dto.authorBackgroundUrl,
+            ),
+            onImageTap: (imgIndex) {
               final feedSession = ref.read(feedSessionProvider.notifier);
               ref
                   .read(contentBehaviorTrackerProvider)
@@ -313,126 +418,66 @@ class HomeMultiFormFeed extends ConsumerWidget {
                     contentVertical: dto.contentVertical,
                     supplySource: dto.supplySource,
                   );
-              onPostTap?.call(dto, 0, feedPosts: feedPosts);
+              if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
+                onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
+              }
             },
-            onMoreTap: () {
+            onCommentTap: () {
+              CommentViewer.showModal(
+                context: context,
+                postId: dto.id,
+                entryObservedCommentCount: ref
+                    .read(postInteractionStateProvider)
+                    .commentCountFor(dto.id, fallback: dto.commentCount),
+                onShareTap: () => _showShare(
+                  context,
+                  ref,
+                  dto,
+                  enableIdentityTemplate: ref.read(
+                    contentFeatureFlagProvider(
+                      'enable_identity_share_template',
+                    ),
+                  ),
+                ),
+              );
+            },
+            onShareTap: () => _showShare(
+              context,
+              ref,
+              dto,
+              enableIdentityTemplate: ref.read(
+                contentFeatureFlagProvider('enable_identity_share_template'),
+              ),
+            ),
+            onLikeTap: () {
+              runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+                final wasLiked = effectivePostLiked(ref, dto.id);
+                final currentLikeCount = effectivePostLikeCount(
+                  ref,
+                  dto.id,
+                  fallback: dto.likeCount,
+                );
+                final nextLiked = !wasLiked;
+                final nextLikeCount = wasLiked
+                    ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+                    : currentLikeCount + 1;
+                syncPostLikeIntent(
+                  ref,
+                  postId: dto.id,
+                  previousLiked: wasLiked,
+                  isLiked: nextLiked,
+                  likeCount: nextLikeCount,
+                );
+              });
+            },
+            onMoreTap: (cardWidth) {
               if (onMoreTap != null) {
                 onMoreTap!(dto);
               } else {
-                _showMoreActions(context, ref, dto);
+                _showMoreActions(context, ref, dto, panelMaxWidth: cardWidth);
               }
             },
           ),
-        );
-      }
-      return _FeedPatchVisibilityReporter(
-        key: ValueKey<String>('feed-patch-reporter-$index'),
-        postId: dto.id,
-        child: _HomeRelationPostCard(
-          cardContainerKey: ValueKey<String>('home-feed-card-$index'),
-          moreButtonKey: ValueKey<String>('home-feed-more-$index'),
-          wideLayout: isMultiColumn,
-          item: dto,
-          isDark: isDark,
-          isLiked: effectivePostLiked(ref, dto.id),
-          likeCount: effectivePostLikeCount(
-            ref,
-            dto.id,
-            fallback: dto.likeCount,
-          ),
-          shareCount: effectivePostShareCount(
-            ref,
-            dto.id,
-            fallback: dto.shareCount,
-          ),
-          commentCount: effectivePostCommentCount(
-            ref,
-            dto.id,
-            fallback: dto.commentCount,
-          ),
-          inlineImageCarousel: effectiveInlineCarousel,
-          videoScrollSignal: videoScrollSignal,
-          isFocused: index == 0,
-          onUserTap: (id) => onUserTap(
-            id,
-            avatarUrl: dto.avatarUrl,
-            displayName: dto.displayName,
-            backgroundUrl: dto.authorBackgroundUrl,
-          ),
-          onImageTap: (imgIndex) {
-            final feedSession = ref.read(feedSessionProvider.notifier);
-            ref
-                .read(contentBehaviorTrackerProvider)
-                .trackClick(
-                  dto.id,
-                  contentType: dto.identity,
-                  feedRequestId: feedSession.currentFeedRequestId,
-                  position: index,
-                  referralSource: ReferralSource.organicFeed,
-                  channelId: channelId,
-                  rankingVersion: feedSession.currentRankingVersion,
-                  reasonVersion: feedSession.currentReasonVersion,
-                  recallPath: dto.recallPath,
-                  contentVertical: dto.contentVertical,
-                  supplySource: dto.supplySource,
-                );
-            if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
-              onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
-            }
-          },
-          onCommentTap: () {
-            CommentViewer.showModal(
-              context: context,
-              postId: dto.id,
-              entryObservedCommentCount: ref
-                  .read(postInteractionStateProvider)
-                  .commentCountFor(dto.id, fallback: dto.commentCount),
-              onShareTap: () => _showShare(
-                context,
-                ref,
-                dto,
-                enableIdentityTemplate: ref.read(
-                  contentFeatureFlagProvider('enable_identity_share_template'),
-                ),
-              ),
-            );
-          },
-          onShareTap: () => _showShare(
-            context,
-            ref,
-            dto,
-            enableIdentityTemplate: ref.read(
-              contentFeatureFlagProvider('enable_identity_share_template'),
-            ),
-          ),
-          onLikeTap: () {
-            runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-              final wasLiked = effectivePostLiked(ref, dto.id);
-              final currentLikeCount = effectivePostLikeCount(
-                ref,
-                dto.id,
-                fallback: dto.likeCount,
-              );
-              final nextLiked = !wasLiked;
-              final nextLikeCount = wasLiked
-                  ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
-                  : currentLikeCount + 1;
-              syncPostLikeIntent(
-                ref,
-                postId: dto.id,
-                previousLiked: wasLiked,
-                isLiked: nextLiked,
-                likeCount: nextLikeCount,
-              );
-            });
-          },
-          onMoreTap: (cardWidth) {
-            if (onMoreTap != null) {
-              onMoreTap!(dto);
-            } else {
-              _showMoreActions(context, ref, dto, panelMaxWidth: cardWidth);
-            }
-          },
         ),
       );
     }
@@ -448,6 +493,32 @@ class HomeMultiFormFeed extends ConsumerWidget {
 
     final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
     final resourceProfile = ref.watch(appResourceCacheProfileProvider);
+    // 混合对象卡编织（B4 插卡模式）：anchorIndex 基于内容序位；post 的埋点
+    // position 与 card key 仍用数据索引（postIndex），不受对象卡插入影响。
+    final feedEntries = _weaveObjectCards(
+      feedPosts,
+      feedAsync.value?.objectCards ?? const <FeedObjectCardDto>[],
+    );
+    Widget buildEntry(
+      int entryIndex,
+      ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
+    ) {
+      final entry = feedEntries[entryIndex];
+      return switch (entry) {
+        _HomeFeedPostEntry(:final post, :final postIndex) => buildCard(
+          post,
+          postIndex,
+          videoScrollSignal,
+        ),
+        _HomeFeedObjectCardEntry(:final card) => _HomeEntityObjectCard(
+          key: ValueKey<String>('home-object-card-entry-$entryIndex'),
+          card: card,
+          isDark: isDark,
+          channelId: channelId,
+        ),
+      };
+    }
+
     final scrollView = _HomeFeedScrollView(
       pageBackground: pageBackground,
       isDark: isDark,
@@ -457,13 +528,15 @@ class HomeMultiFormFeed extends ConsumerWidget {
       horizontalPad: horizontalPad,
       topPad: topPad,
       bottomPad: isMultiColumn ? bottomPad + AppSpacing.sm : bottomPad,
-      itemCount: feedPosts.length,
-      itemBuilder: (index, videoScrollSignal) =>
-          buildCard(feedPosts[index], index, videoScrollSignal),
-      isFullSpanItem: (index) =>
-          layoutPolicy.shouldRenderFullSpan(feedPosts[index]),
-      fullSpanBuilder: (index, videoScrollSignal) =>
-          buildCard(feedPosts[index], index, videoScrollSignal),
+      itemCount: feedEntries.length,
+      itemBuilder: buildEntry,
+      isFullSpanItem: (index) => switch (feedEntries[index]) {
+        _HomeFeedPostEntry(:final post) => layoutPolicy.shouldRenderFullSpan(
+          post,
+        ),
+        _HomeFeedObjectCardEntry() => true,
+      },
+      fullSpanBuilder: buildEntry,
       segmentBuilder: null,
       dividerColor: listDividerColor,
       isLoadingMore: feedAsync.value?.isLoading ?? false,
@@ -551,7 +624,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
       final template = buildDiscoveryShareTemplate(
         post: post,
-        wire: _rawDiscoveryItem(ref, post.id),
+        wire: _rawDiscoveryItem(post),
         enableIdentityTemplate: enableIdentityTemplate,
       );
       ContentShareSheet.show(
@@ -577,21 +650,33 @@ class HomeMultiFormFeed extends ConsumerWidget {
     PostBaseDto post, {
     double? panelMaxWidth,
   }) {
+    final journeyTracker = ref.read(journeyEventTrackerProvider);
+    unawaited(
+      journeyTracker.trackAction(
+        journey: 'content_more_actions',
+        action: 'open',
+        pageName: 'home_multi_form_feed',
+        targetType: 'post',
+        targetKey: post.id,
+      ),
+    );
     MoreActionPopup.show(
       context: context,
       panelMaxWidth: panelMaxWidth,
       config: MediaPostMoreActionConfig(
+        onActionInvoked: (actionId) => unawaited(
+          journeyTracker.trackAction(
+            journey: 'content_more_actions',
+            action: 'invoke',
+            pageName: 'home_multi_form_feed',
+            targetType: 'post',
+            targetKey: post.id,
+            payload: <String, Object?>{'actionId': actionId},
+          ),
+        ),
         showShareAction: false,
         showViewOriginalAction: false,
         onCopyLink: () => _copyLink(
-          context,
-          ref,
-          post,
-          enableIdentityTemplate: ref.read(
-            contentFeatureFlagProvider('enable_identity_share_template'),
-          ),
-        ),
-        onShare: () => _showShare(
           context,
           ref,
           post,
@@ -622,104 +707,227 @@ class HomeMultiFormFeed extends ConsumerWidget {
             ref,
             post.id,
             toast: DiscoveryFeedText.feedNegativeFeedbackNotInterested,
-          );
-        },
-        onBlockUser: () {
-          final feedSession = ref.read(feedSessionProvider.notifier);
-          ref.read(blockRepositoryProvider).blockUser(post.authorId);
-          ref
-              .read(contentBehaviorTrackerProvider)
-              .trackHideAuthor(
-                post.id,
-                authorId: post.authorId,
-                contentType: post.type,
-                feedRequestId: feedSession.currentFeedRequestId,
-                referralSource: ReferralSource.organicFeed,
-                channelId: channelId,
-                rankingVersion: feedSession.currentRankingVersion,
-                reasonVersion: feedSession.currentReasonVersion,
-                recallPath: post.recallPath,
-                contentVertical: post.contentVertical,
-                supplySource: post.supplySource,
-              );
-          _dismissFeedPost(
-            context,
-            ref,
-            post.id,
-            toast: DiscoveryFeedText.feedNegativeFeedbackAuthorReduced,
-          );
-        },
-        onBlockWords: () async {
-          final keyword = _extractKeyword(post.normalizedBody);
-          if (keyword.isEmpty) return;
-          final feedSession = ref.read(feedSessionProvider.notifier);
-          await ref
-              .read(keywordBlockRepositoryProvider)
-              .addBlockedKeyword(keyword);
-          if (!context.mounted) return;
-          ref
-              .read(contentBehaviorTrackerProvider)
-              .trackHideContentType(
-                post.id,
-                contentType: post.type,
-                authorId: post.authorId,
-                feedRequestId: feedSession.currentFeedRequestId,
-                referralSource: ReferralSource.organicFeed,
-                channelId: channelId,
-                rankingVersion: feedSession.currentRankingVersion,
-                reasonVersion: feedSession.currentReasonVersion,
-                recallPath: post.recallPath,
-                contentVertical: post.contentVertical,
-                supplySource: post.supplySource,
-              );
-          _dismissFeedPost(
-            context,
-            ref,
-            post.id,
-            toast: DiscoveryFeedText.feedNegativeFeedbackContentReduced,
-          );
-        },
-        onReport: () {
-          runWhenLoggedIn(
-            ref,
-            context,
-            AuthGateReason.report,
-            () async {
-              try {
-                await ref
-                    .read(homeFeedContentReportCommandWriterProvider)
-                    .createReport(
-                      CreateContentReportCommand(
-                        targetId: post.id,
-                        targetType: ContentReportTargetType.post,
-                        reason: ContentReportReason.other,
-                      ),
-                    );
-                if (!context.mounted) return;
-                _dismissFeedPost(
-                  context,
-                  ref,
-                  post.id,
-                  toast: UITextConstants.commentReportSubmitted,
-                );
-              } catch (error) {
-                if (!context.mounted) return;
-                await AppActionErrorFeedback.show(
-                  context,
-                  semantic: runtimeErrorSemantic(
-                    context,
-                    error: error,
-                    category: UiErrorCategory.submit,
-                    scope: UiErrorScope.global,
-                  ),
-                );
-              }
+            onUndo: () {
+              ref
+                  .read(contentBehaviorTrackerProvider)
+                  .trackUndoDislike(
+                    post.id,
+                    contentType: post.type,
+                    authorId: post.authorId,
+                    feedRequestId: feedSession.currentFeedRequestId,
+                    referralSource: ReferralSource.organicFeed,
+                    channelId: channelId,
+                    rankingVersion: feedSession.currentRankingVersion,
+                    reasonVersion: feedSession.currentReasonVersion,
+                    recallPath: post.recallPath,
+                    contentVertical: post.contentVertical,
+                    supplySource: post.supplySource,
+                  );
+              AppToast.show(context, UITextConstants.notInterestedUndone);
             },
-            dismissPolicy: LoginDismissPolicy.safeFallback,
           );
         },
+        onBlockUser: () =>
+            unawaited(_requestHomeBlockAuthor(context, ref, post)),
+        onBlockWords: () =>
+            unawaited(_requestHomeBlockKeyword(context, ref, post)),
+        onReport: () => unawaited(_requestHomePostReport(context, ref, post)),
       ),
     );
+  }
+
+  Future<void> _requestHomeBlockAuthor(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post,
+  ) async {
+    final confirmed = await showAppActionSheet<bool>(
+      context,
+      title: UITextConstants.profileBlockConfirmTitle,
+      message: UITextConstants.profileBlockConfirmMessage,
+      sections: const <AppActionSheetSection<bool>>[
+        AppActionSheetSection<bool>(
+          items: <AppActionSheetItem<bool>>[
+            AppActionSheetItem<bool>(
+              value: true,
+              label: UITextConstants.blockAuthor,
+              icon: CupertinoIcons.person_crop_circle_badge_xmark,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
+    );
+    if (confirmed != true || !context.mounted) return;
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await _applyHomeBlockAuthor(context, ref, post);
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ContentModerationContinuation(
+            postId: post.id,
+            surface: ContentModerationContinuationSurface.homeFeed,
+            action: ContentModerationContinuationAction.blockAuthor,
+            authorId: post.authorId,
+          ),
+          ownerToken: 'home-feed-block-author:${post.id}',
+        );
+    if (!accepted) return;
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.blockUser,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _applyHomeBlockAuthor(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post,
+  ) async {
+    try {
+      await ref
+          .read(personaRelationshipBlockWriterProvider(AppUiSurfaces.homeFeed))
+          .blockUser(BlockUserCommand(targetSubAccountId: post.authorId));
+      final feedSession = ref.read(feedSessionProvider.notifier);
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackHideAuthor(
+            post.id,
+            authorId: post.authorId,
+            contentType: post.type,
+            feedRequestId: feedSession.currentFeedRequestId,
+            referralSource: ReferralSource.organicFeed,
+            channelId: channelId,
+            rankingVersion: feedSession.currentRankingVersion,
+            reasonVersion: feedSession.currentReasonVersion,
+            recallPath: post.recallPath,
+            contentVertical: post.contentVertical,
+            supplySource: post.supplySource,
+          );
+      if (!context.mounted) return;
+      _dismissFeedPost(
+        context,
+        ref,
+        post.id,
+        toast: DiscoveryFeedText.feedNegativeFeedbackAuthorReduced,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _applyHomeBlockAuthor(context, ref, post);
+          }
+        },
+      );
+    }
+  }
+
+  Future<void> _requestHomeBlockKeyword(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post,
+  ) async {
+    final suggested = suggestContentBlockedKeyword(<String>[
+      post.title,
+      post.normalizedBody,
+    ]);
+    final keyword = await showBlockedKeywordConfirmationSheet(
+      context,
+      suggestedKeyword: suggested,
+    );
+    if (keyword == null || !context.mounted) return;
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await _applyHomeBlockKeyword(context, ref, post, keyword);
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ContentModerationContinuation(
+            postId: post.id,
+            surface: ContentModerationContinuationSurface.homeFeed,
+            action: ContentModerationContinuationAction.blockKeyword,
+            keyword: keyword,
+          ),
+          ownerToken: 'home-feed-block-keyword:${post.id}',
+        );
+    if (!accepted) return;
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.settingsAccount,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _applyHomeBlockKeyword(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post,
+    String keyword,
+  ) async {
+    try {
+      await ref.read(blockedKeywordWriterProvider).add(keyword);
+      final feedSession = ref.read(feedSessionProvider.notifier);
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackHideContentType(
+            post.id,
+            contentType: post.type,
+            authorId: post.authorId,
+            feedRequestId: feedSession.currentFeedRequestId,
+            referralSource: ReferralSource.organicFeed,
+            channelId: channelId,
+            rankingVersion: feedSession.currentRankingVersion,
+            reasonVersion: feedSession.currentReasonVersion,
+            recallPath: post.recallPath,
+            contentVertical: post.contentVertical,
+            supplySource: post.supplySource,
+          );
+      if (!context.mounted) return;
+      _dismissFeedPost(
+        context,
+        ref,
+        post.id,
+        toast: DiscoveryFeedText.feedNegativeFeedbackContentReduced,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _applyHomeBlockKeyword(context, ref, post, keyword);
+          }
+        },
+      );
+    }
   }
 
   Future<void> _copyLink(
@@ -732,7 +940,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
       context,
       buildDiscoveryShareTemplate(
         post: post,
-        wire: _rawDiscoveryItem(ref, post.id),
+        wire: _rawDiscoveryItem(post),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
       ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
@@ -761,32 +969,26 @@ class HomeMultiFormFeed extends ConsumerWidget {
     WidgetRef ref,
     String postId, {
     required String toast,
+    VoidCallback? onUndo,
   }) {
-    ref.read(discoveryFeedMapProvider.notifier).removePostLocally(postId);
+    final notifier = ref.read(discoveryFeedMapProvider.notifier);
+    final removed = notifier.removePostLocally(postId);
     if (context.mounted) {
-      AppToast.show(context, toast);
+      AppToast.show(
+        context,
+        toast,
+        actionLabel: onUndo == null ? null : UITextConstants.undo,
+        onAction: onUndo == null
+            ? null
+            : () {
+                notifier.restorePostsLocally(removed);
+                onUndo();
+              },
+      );
     }
   }
 
-  DiscoveryPresentationWire? _rawDiscoveryItem(WidgetRef ref, String postId) {
-    return ref
-        .read(contentReadRepositoryProvider)
-        .discoveryPresentationWireForPost(postId);
-  }
-
-  String _extractKeyword(String text) {
-    final tokens = text
-        .split(RegExp(r'[^\\u4e00-\\u9fa5A-Za-z0-9_]+'))
-        .map((e) => e.trim())
-        .where((e) => e.length >= 2)
-        .toList();
-    return tokens.isEmpty ? '' : tokens.first;
+  DiscoveryPresentationWire _rawDiscoveryItem(PostBaseDto post) {
+    return DiscoveryPresentationWire(post.toMap());
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Feed 容器：CustomScrollView + 分段瀑布(多列) / SliverList(单列) + 触底分页
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// 多列瀑布每段卡数：段尾由 sliver 边界天然两列齐平，段间可插入交集模块。
-const int _kFeedSegmentSize = 10;

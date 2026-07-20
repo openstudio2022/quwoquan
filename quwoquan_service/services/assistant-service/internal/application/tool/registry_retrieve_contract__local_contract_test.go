@@ -7,27 +7,32 @@ import (
 )
 
 func TestRetrieveToolsDoNotRequireCompatQuery(t *testing.T) {
-	registry := DefaultRegistry()
-	for _, name := range []string{"search", "app_search"} {
-		meta, ok := registry.Metadata(name)
-		if !ok {
-			t.Fatalf("tool %q not registered", name)
+	registry := retrievalContractTestRegistry()
+	appSearch, ok := registry.Metadata("app_search")
+	if !ok {
+		t.Fatal(`tool "app_search" not registered`)
+	}
+	for _, key := range appSearch.RequiredInputKeys {
+		if key == "query" || key == "mode" || key == "strategy" || key == "type" || key == "relation" {
+			t.Fatalf("tool %q must not require compat key %q", appSearch.ToolName, key)
 		}
-		for _, key := range meta.RequiredInputKeys {
-			if key == "query" || key == "mode" || key == "strategy" || key == "type" || key == "relation" {
-				t.Fatalf("tool %q must not require compat key %q", name, key)
-			}
-		}
-		for _, forbidden := range []string{"mode", "type", "relation"} {
-			if strings.Contains(meta.Description, "\""+forbidden+"\"") {
-				t.Fatalf("tool %q description should not promote %q", name, forbidden)
-			}
+	}
+	webSearch, ok := registry.Metadata("web_search")
+	if !ok {
+		t.Fatal(`tool "web_search" not registered`)
+	}
+	if !containsString(webSearch.RequiredInputKeys, "query") {
+		t.Fatalf("web_search required inputs=%#v, want query", webSearch.RequiredInputKeys)
+	}
+	for _, forbidden := range []string{"mode", "type", "relation"} {
+		if strings.Contains(webSearch.Description, "\""+forbidden+"\"") {
+			t.Fatalf("tool %q description should not promote %q", webSearch.ToolName, forbidden)
 		}
 	}
 }
 
 func TestAppSearchExecutesViaRetrieveTargets(t *testing.T) {
-	registry := DefaultRegistry()
+	registry := retrievalContractTestRegistry()
 	result, err := registry.Execute(context.Background(), Request{
 		ToolName: "app_search",
 		Input: map[string]any{
@@ -56,15 +61,70 @@ func TestAppSearchExecutesViaRetrieveTargets(t *testing.T) {
 }
 
 func TestSearchToolQueryCanonicalInput(t *testing.T) {
-	registry := DefaultRegistry()
+	registry := retrievalContractTestRegistry()
 	result, err := registry.Execute(context.Background(), Request{
-		ToolName: "search",
+		ToolName: "web_search",
 		Input:    map[string]any{"query": "四川 露营"},
 	})
 	if err != nil {
-		t.Fatalf("search err=%v", err)
+		t.Fatalf("web_search err=%v", err)
 	}
 	if result.Output["provider"] == nil {
-		t.Fatalf("search output missing provider: %#v", result.Output)
+		t.Fatalf("web_search output missing provider: %#v", result.Output)
 	}
+}
+
+func retrievalContractTestRegistry() Registry {
+	registry := BaseRegistry()
+	appSearchMetadata := AppSearchMetadata()
+	appSearchMetadata.RequiredInputKeys = []string{"targets", "terms"}
+	registry.Register(appSearchMetadata, func(_ context.Context, request Request) (Result, error) {
+		targets := toTestStringSlice(request.Input["targets"])
+		results := make([]map[string]any, 0, len(targets))
+		for _, target := range targets {
+			results = append(results, map[string]any{
+				"target":   target,
+				"objectId": target + "_test",
+				"title":    "typed test result",
+			})
+		}
+		return Result{Output: map[string]any{
+			"provider":  "test_search_adapter",
+			"summary":   "typed test result",
+			"results":   results,
+			"citations": []map[string]any{},
+			"provenance": map[string]any{
+				"provider":     "test_search_adapter",
+				"indexVersion": "test",
+			},
+		}}, nil
+	})
+	registry.Register(WebSearchMetadata(), func(_ context.Context, _ Request) (Result, error) {
+		return Result{Output: map[string]any{
+			"provider":   "test_web_adapter",
+			"summary":    "web test result",
+			"references": []map[string]any{},
+		}}, nil
+	})
+	return registry
+}
+
+func toTestStringSlice(value any) []string {
+	raw, _ := value.([]any)
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if text, ok := item.(string); ok {
+			result = append(result, text)
+		}
+	}
+	return result
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

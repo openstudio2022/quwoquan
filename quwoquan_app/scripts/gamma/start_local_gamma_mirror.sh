@@ -4,6 +4,26 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
+WORKLOAD="${QWQ_WORKLOAD:-full}"
+case "$WORKLOAD" in
+  content-release)
+    # Content import/API/media are intentionally independent from commercial
+    # telemetry.  The release profile validates telemetry separately.
+    PRODUCT_TELEMETRY_AVAILABLE=0
+    ;;
+  full)
+    if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+      echo "[local-gamma] GATE_BLOCK: full workload requires product telemetry" >&2
+      exit 2
+    fi
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability"
+    ;;
+  *)
+    echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release or full" >&2
+    exit 2
+    ;;
+esac
 LOCAL_RUN_ACTION="up"
 for arg in "$@"; do
   if [[ "$arg" == "--down" ]]; then LOCAL_RUN_ACTION="down"; fi
@@ -116,8 +136,10 @@ case "$STAGE" in
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-gamma}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-gamma}"
     ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-1}"
-    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-deterministic}"
-    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}"
+    # gamma 必须消费 configs/gamma/config.yaml 的真实 provider；空环境覆盖表示
+    # 保留配置真相源，禁止用 deterministic 绕过商用依赖校验。
+    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"
+    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}"
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
     ;;
   prod)
@@ -125,9 +147,9 @@ case "$STAGE" in
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-prod}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-prod-onebox}"
     ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-0}"
-    # ECS prod onebox: deterministic assistant unless a real provider is injected.
-    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-deterministic}"
-    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}"
+    # prod 同样保留 configs/prod/config.yaml 的真实 provider，缺凭据必须 fail-fast。
+    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"
+    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}"
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}"
     ;;
   *)
@@ -196,7 +218,10 @@ local_gamma_service_default_image_ref() {
     circle-service) echo "localhost/quwoquan_service_circle-service:latest" ;;
     integration-service) echo "localhost/quwoquan_service_integration-service:latest" ;;
     notification-service) echo "localhost/quwoquan_service_notification-service:latest" ;;
-    rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
+    rtc-service)
+      echo "FAIL: LOCAL_GAMMA_RTC_SERVICE_IMAGE must come from stackctl source provenance" >&2
+      return 1
+      ;;
     *) return 1 ;;
   esac
 }
@@ -598,6 +623,7 @@ PY
     "$out/quwoquan_service/services/product-ops-service/configs/releases" \
     "$out/configs/platform-ops-service/default" \
     "$out/configs/platform-ops-service/${CONFIG_SOURCE_ENV}" \
+    "$out/configs/platform-ops-service/gamma-integration" \
     "$out/quwoquan_service/services/platform-ops-service/configs/releases" \
     "$out/configs/recommendation-service/default" \
     "$out/configs/recommendation-service/${CONFIG_SOURCE_ENV}" \
@@ -626,6 +652,10 @@ PY
   copy_service_package_config assistant-service assistant-service
   copy_service_package_config product-ops-service product-ops-service
   copy_service_package_config platform-ops-service platform-ops-service
+  # 本地 Gamma 使用 gamma-integration 的认证策略，但配置内容仍唯一派生自 Gamma 包。
+  cp \
+    "$out/configs/platform-ops-service/${CONFIG_SOURCE_ENV}/config.yaml" \
+    "$out/configs/platform-ops-service/gamma-integration/config.yaml"
   copy_service_package_config rec-model-service recommendation-service
   copy_service_package_config tag-service tag-service
   copy_service_package_config search-service search-service
@@ -1131,6 +1161,54 @@ else
   fi
 fi
 
+prepare_local_gamma_mongosh() {
+  local container_cli="$1"
+  if command -v mongosh >/dev/null 2>&1; then
+    return 0
+  fi
+  local wrapper_dir="${LOCAL_GAMMA_PROCESS_ROOT}/bin"
+  mkdir -p "$wrapper_dir"
+  cat > "${wrapper_dir}/mongosh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+container_cli="${LOCAL_GAMMA_CONTAINER_CLI:?LOCAL_GAMMA_CONTAINER_CLI is required}"
+container_name=""
+for candidate in quwoquan_service-mongodb-1 quwoquan_service_mongodb_1; do
+  if "$container_cli" inspect "$candidate" >/dev/null 2>&1; then
+    container_name="$candidate"
+    break
+  fi
+done
+if [[ -z "$container_name" ]]; then
+  echo "local-gamma mongosh wrapper cannot find the MongoDB container" >&2
+  exit 1
+fi
+
+rewritten=()
+for arg in "$@"; do
+  case "$arg" in
+    mongodb://127.0.0.1:*)
+      rewritten+=("mongodb://127.0.0.1:27017/?directConnection=true")
+      ;;
+    *)
+      rewritten+=("$arg")
+      ;;
+  esac
+done
+exec "$container_cli" exec -i "$container_name" mongosh "${rewritten[@]}"
+SH
+  chmod 0755 "${wrapper_dir}/mongosh"
+  export LOCAL_GAMMA_CONTAINER_CLI="$container_cli"
+  export PATH="${wrapper_dir}:${PATH}"
+}
+
+if [[ "$podman_compose" == "1" ]]; then
+  prepare_local_gamma_mongosh podman
+else
+  prepare_local_gamma_mongosh docker
+fi
+
 compose_build_services=(
   rec-model-service
   content-service
@@ -1146,6 +1224,13 @@ compose_build_services=(
   integration-service
   notification-service
 )
+if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+  filtered_build_services=()
+  for service_name in "${compose_build_services[@]}"; do
+    [[ "$service_name" == "product-ops-service" ]] || filtered_build_services+=("$service_name")
+  done
+  compose_build_services=("${filtered_build_services[@]}")
+fi
 if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
   compose_build_services+=(rtc-service)
 fi
@@ -1320,38 +1405,42 @@ if [[ "$podman_compose" == "1" ]]; then
     "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_rec-model-service_1
 
-  podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
-    --net "$network_name" --network-alias product-ops-service \
-    -e SERVICE_NAME=product-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
-    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
-    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PRODUCT_OPS_SERVICE_ADDR=:18086 \
-    -e MONGO_URI=mongodb://mongodb:27017 \
-    -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
-    -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
-    -e PRODUCT_OPS_SLS_REGION="${PRODUCT_OPS_SLS_REGION:?PRODUCT_OPS_SLS_REGION is required}" \
-    -e PRODUCT_OPS_SLS_ENDPOINT="${PRODUCT_OPS_SLS_ENDPOINT:?PRODUCT_OPS_SLS_ENDPOINT is required}" \
-    -e PRODUCT_OPS_SLS_PROJECT="${PRODUCT_OPS_SLS_PROJECT:?PRODUCT_OPS_SLS_PROJECT is required}" \
-    -e ALIBABA_CLOUD_ACCESS_KEY_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:?ALIBABA_CLOUD_ACCESS_KEY_ID is required}" \
-    -e ALIBABA_CLOUD_ACCESS_KEY_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:?ALIBABA_CLOUD_ACCESS_KEY_SECRET is required}" \
-    -e ALIBABA_CLOUD_SECURITY_TOKEN="${ALIBABA_CLOUD_SECURITY_TOKEN:-}" \
-    -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
-    -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
-    -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
-    -e AUTH_JWT_TOKEN_VERSION="${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}" \
-    -e AUTH_DEVICE_TICKET_SECRET="${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}" \
-    -e AUTH_DEVICE_TICKET_ISSUER="${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}" \
-    -e AUTH_DEVICE_TICKET_AUDIENCE="${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}" \
-    -e AUTH_DEVICE_TICKET_TOKEN_VERSION="${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}" \
-    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
-    -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
-    --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
-    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" >/dev/null
-  wait_healthy quwoquan_service_product-ops-service_1
+  if [[ "$PRODUCT_TELEMETRY_AVAILABLE" == "1" ]]; then
+    podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
+      --net "$network_name" --network-alias product-ops-service \
+      -e SERVICE_NAME=product-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
+      -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+      -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PRODUCT_OPS_SERVICE_ADDR=:18086 \
+      -e MONGO_URI=mongodb://mongodb:27017 \
+      -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
+      -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
+      -e PRODUCT_OPS_SLS_REGION="${PRODUCT_OPS_SLS_REGION:?PRODUCT_OPS_SLS_REGION is required}" \
+      -e PRODUCT_OPS_SLS_ENDPOINT="${PRODUCT_OPS_SLS_ENDPOINT:?PRODUCT_OPS_SLS_ENDPOINT is required}" \
+      -e PRODUCT_OPS_SLS_PROJECT="${PRODUCT_OPS_SLS_PROJECT:?PRODUCT_OPS_SLS_PROJECT is required}" \
+      -e ALIBABA_CLOUD_ACCESS_KEY_ID="${ALIBABA_CLOUD_ACCESS_KEY_ID:?ALIBABA_CLOUD_ACCESS_KEY_ID is required}" \
+      -e ALIBABA_CLOUD_ACCESS_KEY_SECRET="${ALIBABA_CLOUD_ACCESS_KEY_SECRET:?ALIBABA_CLOUD_ACCESS_KEY_SECRET is required}" \
+      -e ALIBABA_CLOUD_SECURITY_TOKEN="${ALIBABA_CLOUD_SECURITY_TOKEN:-}" \
+      -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
+      -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
+      -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
+      -e AUTH_JWT_TOKEN_VERSION="${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}" \
+      -e AUTH_DEVICE_TICKET_SECRET="${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}" \
+      -e AUTH_DEVICE_TICKET_ISSUER="${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}" \
+      -e AUTH_DEVICE_TICKET_AUDIENCE="${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}" \
+      -e AUTH_DEVICE_TICKET_TOKEN_VERSION="${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}" \
+      -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+      -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
+      --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
+      --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+      "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" >/dev/null
+    wait_healthy quwoquan_service_product-ops-service_1
+  else
+    echo "[local-gamma] product telemetry unavailable; skipping product-ops without blocking App startup."
+  fi
 
   podman run --pull=never --name quwoquan_service_platform-ops-service_1 -d \
     --net "$network_name" --network-alias platform-ops-service \
-    -e SERVICE_NAME=platform-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
+    -e SERVICE_NAME=platform-ops-service -e APP_ENV=gamma-integration \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PLATFORM_OPS_SERVICE_ADDR=:18088 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
@@ -1415,6 +1504,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18082 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
+    -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
     -e REDIS_ADDR=redis:6379 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v "${ROOT}/quwoquan_service/contracts/metadata/user:/contracts/metadata/user:ro" \
@@ -1431,6 +1521,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e INTEGRATION_SERVICE_ADDR=:18086 \
     -e INTEGRATION_MONGO_URI=mongodb://mongodb:27017 -e INTEGRATION_MONGO_DATABASE=quwoquan_integration \
+    -e INTEGRATION_PUSH_ENABLED=false \
     -e INTEGRATION_LOCATION_BAIDU_AK="${LOCAL_GAMMA_BAIDU_AK:-}" \
     -e INTEGRATION_LOCATION_AMAP_KEY="${LOCAL_GAMMA_AMAP_KEY:-}" \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
@@ -1457,6 +1548,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e NOTIFICATION_MONGO_DATABASE=quwoquan_notification \
     -e NOTIFICATION_INTEGRATION_BASE_URL=http://integration-service:18086 \
     -e NOTIFICATION_INTEGRATION_TIMEOUT_MS=1500 \
+    -e NOTIFICATION_USER_BASE_URL=http://user-service:18082 \
+    -e NOTIFICATION_REALTIME_BASE_URL=http://realtime-gateway:18090 \
     -e NOTIFICATION_CLAIM_PER_SECOND=100 -e NOTIFICATION_DISPATCH_PER_SECOND=100 -e NOTIFICATION_RETRY_PER_SECOND=20 \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
@@ -1531,6 +1624,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
     -e ENTITY_MONGO_URI=mongodb://mongodb:27017 -e ENTITY_MONGO_DATABASE=quwoquan_entity \
+    -e ENTITY_REDIS_ADDR=redis:6379 \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -1700,6 +1794,14 @@ gamma_canonical_video_range_mime_ready() {
   [[ "$status" == "206" && "$content_type" == video/* ]]
 }
 
+gamma_product_ops_ready() {
+  if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+    return 0
+  fi
+  curl -kfsS --resolve "gamma-product-ops.quwoquan-env.test:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:127.0.0.1" \
+    "${PRODUCT_OPS_BASE_URL%/}/healthz" >/dev/null 2>&1
+}
+
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
   local gw_host="gamma-api.quwoquan-env.test"
@@ -1723,10 +1825,10 @@ wait_local_gamma_host_ready() {
       last_gamma_proxy_retry=$(date +%s)
     fi
     if curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >/dev/null 2>&1 \
-      && curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >/dev/null 2>&1 \
+      && gamma_product_ops_ready \
       && curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >/dev/null 2>&1 \
       && gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" \
-      && curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1 \
+      && { [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && curl -fsS "http://127.0.0.1:${platform_ops_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${integration_port}/healthz" >/dev/null 2>&1 \
@@ -1738,7 +1840,7 @@ wait_local_gamma_host_ready() {
   done
   echo "[local-gamma] FAIL: host cannot reach the canonical media video Range/MIME surface or required health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
   curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >&2 || true
-  curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >&2 || true
+  gamma_product_ops_ready >&2 || true
   curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
   gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" || true
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps >&2 || true
@@ -1921,12 +2023,16 @@ from pathlib import Path
 root, mongo_port, gateway, report_path = sys.argv[1:5]
 sys.path.insert(0, root)
 
-from quwoquan_ops.cli.lib.local_gamma_auth import (
-    open_local_gamma_acceptance_session,
-    request_local_gamma_json,
+from quwoquan_ops.cli.lib.local_environment_auth import (
+    open_local_acceptance_session,
+    request_local_environment_json,
 )
 
-session = open_local_gamma_acceptance_session(gateway)
+session = open_local_acceptance_session(
+    gateway,
+    environment="gamma",
+    target_name="gamma-local",
+)
 viewer = session.persona_id
 person = "sys_travel_9003_sub_01"
 third_a = "sys_travel_9004_sub_01"
@@ -2021,7 +2127,7 @@ if seed.returncode != 0:
     raise SystemExit(seed.returncode)
 
 def request_json(path: str) -> dict:
-    return request_local_gamma_json(
+    return request_local_environment_json(
         gateway,
         path=path,
         session=session,
@@ -2033,6 +2139,13 @@ object_body = request_json(
 reasons = object_body.get("items") or []
 if not reasons:
     raise SystemExit("object intersection seed probe returned no items")
+
+# SVO displayBinding 适配：对象页响应是 host_plain 投影（宿主 span 已去链接），
+# 直接塞进收件箱快照会被 explicit_link 严格校验淘汰（summary/list 恒空）。
+# 物化前重置为 canonical explicit 形态，由服务端 hydrate 按收件箱语境重建 spans。
+for reason in reasons:
+    reason.pop("displayBinding", None)
+    reason.pop("primarySpans", None)
 
 materialize_js = f"""
 const viewer = '{viewer}';
@@ -2123,14 +2236,16 @@ from pathlib import Path
 root, mongo_port, gateway, report_path = sys.argv[1:5]
 sys.path.insert(0, root)
 
-from quwoquan_ops.cli.lib.local_gamma_auth import (
-    open_local_gamma_acceptance_session,
-    request_local_gamma_json,
+from quwoquan_ops.cli.lib.local_environment_auth import (
+    open_local_acceptance_session,
+    request_local_environment_json,
 )
 
 run_id = Path(report_path).parent.name
-session = open_local_gamma_acceptance_session(
+session = open_local_acceptance_session(
     gateway,
+    environment="gamma",
+    target_name="gamma-local",
     subject=f"premium-pool-seed-{run_id}",
 )
 eligible = "gamma_premium_pool_eligible_post"
@@ -2168,6 +2283,7 @@ for (const id of ids) {{
     authorDisplayNameSnapshot: '交集约伴体验号',
     status: 'published',
     visibility: 'public',
+    moderationStatus: 'approved',
     likeCount: 12,
     commentCount: 3,
     shareCount: 1,
@@ -2278,7 +2394,7 @@ if seed.returncode != 0:
     print(seed.stderr, file=sys.stderr)
     raise SystemExit(seed.returncode)
 
-body = request_local_gamma_json(
+body = request_local_environment_json(
     gateway,
     path="/content/feed?type=premium&limit=5",
     session=session,

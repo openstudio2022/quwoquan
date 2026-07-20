@@ -1,27 +1,22 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-enum RegenerateOption {
-  regenerate,
-  concise,
-  detailed,
-  casual,
-  deepThink,
-}
+enum RegenerateOption { regenerate, concise, detailed, casual, deepThink }
 
 extension RegenerateOptionLabel on RegenerateOption {
   String get label {
     switch (this) {
       case RegenerateOption.regenerate:
-        return '重新生成';
+        return AssistantText.assistantActionRegenerate;
       case RegenerateOption.concise:
-        return '更加简洁';
+        return AssistantText.assistantActionBrief;
       case RegenerateOption.detailed:
-        return '更加详细';
+        return AssistantText.assistantActionDetailed;
       case RegenerateOption.casual:
-        return '更口语化';
+        return AssistantText.assistantActionCasual;
       case RegenerateOption.deepThink:
-        return '深度思考';
+        return AssistantText.assistantActionDeepThink;
     }
   }
 
@@ -52,13 +47,12 @@ class RegenerateOptionsPopup extends StatelessWidget {
   final void Function(RegenerateOption option)? onSelected;
 
   static const _options = RegenerateOption.values;
-  static const double _itemHeight = 40;
-  static const double _popupWidth = 160;
+  static const double _itemHeight = AppSpacing.forty;
+  static const double _popupWidth = AppSpacing.oneHundredSixty;
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppColors.iosSystemSurfaceDark : AppColors.white;
     final textColor = isDark
         ? AppColors.iosPopupPrimaryLabelOnDark
@@ -68,7 +62,7 @@ class RegenerateOptionsPopup extends StatelessWidget {
         : AppColors.iosPopupHairlineSeparatorLight;
 
     final popupHeight = _options.length * _itemHeight;
-    final popupTop = anchorRect.top - popupHeight - 8;
+    final popupTop = anchorRect.top - popupHeight - AppSpacing.sm;
     final popupLeft = anchorRect.right - _popupWidth;
 
     return Stack(
@@ -80,12 +74,12 @@ class RegenerateOptionsPopup extends StatelessWidget {
         ),
         Positioned(
           left: popupLeft.clamp(
-            8.0,
-            MediaQuery.of(context).size.width - _popupWidth - 8,
+            AppSpacing.sm,
+            MediaQuery.of(context).size.width - _popupWidth - AppSpacing.sm,
           ),
           top: popupTop.clamp(
-            8.0,
-            MediaQuery.of(context).size.height - popupHeight - 8,
+            AppSpacing.sm,
+            MediaQuery.of(context).size.height - popupHeight - AppSpacing.sm,
           ),
           child: ColoredBox(
             color: AppColors.transparent,
@@ -96,9 +90,11 @@ class RegenerateOptionsPopup extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.black.withValues(alpha: isDark ? 0.4 : 0.12),
-                    blurRadius: 16,
-                    offset: const Offset(0, -4),
+                    color: AppColors.black.withValues(
+                      alpha: isDark ? 0.4 : 0.12,
+                    ),
+                    blurRadius: AppSpacing.md,
+                    offset: const Offset(AppSpacing.zero, -AppSpacing.xs),
                   ),
                 ],
               ),
@@ -138,11 +134,7 @@ class RegenerateOptionsPopup extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.fourteen),
           child: Row(
             children: [
-              Icon(
-                option.icon,
-                size: AppSpacing.iconSmall,
-                color: textColor,
-              ),
+              Icon(option.icon, size: AppSpacing.iconSmall, color: textColor),
               SizedBox(width: AppSpacing.sm + AppSpacing.xs / 2),
               Text(
                 option.label,

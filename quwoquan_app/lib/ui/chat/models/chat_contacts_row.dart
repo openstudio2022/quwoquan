@@ -4,8 +4,11 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 
 enum ChatContactsRowKind { user, circle, group }
 
@@ -119,7 +122,12 @@ class ChatContactsRow {
   void open(BuildContext context) {
     switch (kind) {
       case ChatContactsRowKind.circle:
-        context.push(AppRoutePaths.circleDetail(id: circleId ?? id));
+        context.push(
+          AppRoutePaths.circleDetail(id: circleId ?? id),
+          extra: const CircleDetailPageRouteExtra(
+            referralSource: ReferralSource.chatLink,
+          ),
+        );
         break;
       case ChatContactsRowKind.group:
         context.push(AppRoutePaths.chatDetail(id: conversationId ?? id));

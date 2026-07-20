@@ -1,0 +1,78 @@
+{
+  "dashboard": {
+    "title": "L2 — Entity Homepage 对象可观测",
+    "uid": "qwq-l2-entity-objects",
+    "tags": ["quwoquan", "l2", "entity", "homepage", "contract-graph"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "description": "Homepage/ClaimRequest/StatusReport/HomepageReview 对象的读写 SLI；阈值与 entity service.yaml SLO 对齐。",
+    "panels": [
+      {
+        "title": "Homepage 读路径 5xx 错误率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"entity-service\",method=\"GET\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"entity-service\",method=\"GET\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\"}[5m])), 0.001)",
+            "legendFormat": "read 5xx"
+          }
+        ]
+      },
+      {
+        "title": "Homepage 读路径 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"entity-service\",method=\"GET\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\"}[5m])) by (le, route))",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "对象命令 5xx 错误率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{service=\"entity-service\",method=~\"POST|PATCH|DELETE\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\",status=~\"5..\"}[5m])) by (route) / clamp_min(sum(rate(http_server_requests_total{service=\"entity-service\",method=~\"POST|PATCH|DELETE\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\"}[5m])) by (route), 0.001)",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "对象命令 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"entity-service\",method=~\"POST|PATCH|DELETE\",route=~\"/homepages.*|/homepage-reviews.*|/homepage-claim-requests.*|/homepage-status-reports.*\"}[5m])) by (le, route))",
+            "legendFormat": "{{ route }}"
+          }
+        ]
+      },
+      {
+        "title": "Homepage import issues",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "max(quwoquan_homepage_import_objects{result=\"issues\"}) by (env)",
+            "legendFormat": "{{ env }}"
+          }
+        ]
+      },
+      {
+        "title": "Entity projection / outbox health",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "runtime_health_check_status{instance=~\"entity-service(:[0-9]+)?\",check=~\".*(projection|outbox|homepage).*\"}",
+            "legendFormat": "{{ check }}"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+entity: ContentReaction
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。点赞/取消点赞经 ClientStateSyncOutbox 乐观态 +
+  专用路由 typed Facet（ContentPostReactionFacet）；alpha 侧由
+  quwoquan_cloud_mock 的 AlphaContentPostReactionFacet 物理隔离承接。
+
+command_scenarios:
+  - name: post_like_optimistic_outbox
+    description: 点赞先落乐观态与 outbox，重启后自动重放；失败回滚计数
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/contract/content_reaction_and_counters__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/discovery/discovery_realtime_patch_provider__local_contract_test.dart
+
+  - name: alpha_reaction_facet_isomorphism
+    description: alpha facet 与 production pure contract 同型；三态 none/like/dislike 聚合
+    dart_tests:
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/alpha_content_post_reaction_facet__local_contract_test.dart
+
+  - name: remote_reaction_wire_contract
+    description: Remote adapter 请求/响应 wire 与 metadata 对齐，错误映射结构化
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/services/content/content_post_reaction_remote__local_contract_test.dart

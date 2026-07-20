@@ -22,10 +22,12 @@ const (
 	ModuleUser         Module = "USER"
 	ModuleChat         Module = "CHAT"
 	ModuleRTC          Module = "RTC"
+	ModuleRealtime     Module = "REALTIME"
 	ModuleOps          Module = "OPS"
 	ModuleAssistant    Module = "ASSISTANT"
 	ModuleNotification Module = "NOTIFICATION"
 	ModuleSearch       Module = "SEARCH"
+	ModuleTag          Module = "TAG"
 	ModuleDB           Module = "DB"
 	ModuleMQ           Module = "MQ"
 	ModuleCache        Module = "CACHE"
@@ -203,10 +205,12 @@ var allowedModules = map[Module]struct{}{
 	ModuleUser:         {},
 	ModuleChat:         {},
 	ModuleRTC:          {},
+	ModuleRealtime:     {},
 	ModuleOps:          {},
 	ModuleAssistant:    {},
 	ModuleNotification: {},
 	ModuleSearch:       {},
+	ModuleTag:          {},
 	ModuleDB:           {},
 	ModuleMQ:           {},
 	ModuleCache:        {},
@@ -608,7 +612,6 @@ func HTTPStatusFromError(err *AppError) int {
 			"primary_guard",
 			"active_guard",
 			"retired_guard",
-			"delete_empty_only",
 			"handle_readonly",
 			"invalid_region",
 			"invalid_tag_ref",
@@ -635,7 +638,6 @@ func HTTPStatusFromError(err *AppError) int {
 			"handle_taken",
 			"credential_conflict",
 			"already_accepted",
-			"retire_required",
 			"already_in_call",
 			"call_full",
 			"cannot_answer",

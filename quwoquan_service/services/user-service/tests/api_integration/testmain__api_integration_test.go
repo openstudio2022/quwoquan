@@ -15,6 +15,7 @@ import (
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
@@ -25,32 +26,61 @@ import (
 	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
 	"quwoquan_service/services/user-service/internal/adapters/mq"
 	"quwoquan_service/services/user-service/internal/application"
+	accountsessionapp "quwoquan_service/services/user-service/internal/application/account/account_session"
+	challengeapp "quwoquan_service/services/user-service/internal/application/account/authentication_challenge"
+	credentialapp "quwoquan_service/services/user-service/internal/application/account/credential_binding"
+	registrationapp "quwoquan_service/services/user-service/internal/application/account/device_registration"
+	useraccountapp "quwoquan_service/services/user-service/internal/application/account/user_account"
+	usersettingsapp "quwoquan_service/services/user-service/internal/application/account/user_settings"
 	personaapp "quwoquan_service/services/user-service/internal/application/persona/persona"
 	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
+	visitapp "quwoquan_service/services/user-service/internal/application/relationship/followed_subject_visit_state"
+	followingapp "quwoquan_service/services/user-service/internal/application/relationship/following_subject"
 	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
+	subjectfollowapp "quwoquan_service/services/user-service/internal/application/relationship/subject_follow"
+	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
+	sfmodel "quwoquan_service/services/user-service/internal/domain/relationship/subject_follow/model"
+	accountsessionpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence"
+	challengepersistence "quwoquan_service/services/user-service/internal/infrastructure/account/authentication_challenge/persistence"
+	credentialpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/credential_binding/persistence"
+	registrationpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence"
+	useraccountcache "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/cache"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/persistence"
+	useraccountprojection "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/projection"
+	usersettingspersistence "quwoquan_service/services/user-service/internal/infrastructure/account/user_settings/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 	personapersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence"
 	proposalpersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/profile_update_proposal/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
 	relationshippersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence"
+	relationshipprojection "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/projection"
+	subjectfollowpersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/subject_follow/persistence"
+	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/user-service/internal/infrastructure/tagindex"
+	usercache "quwoquan_service/services/user-service/internal/infrastructure/user/cache"
+	userpersistence "quwoquan_service/services/user-service/internal/infrastructure/user/persistence"
 )
 
 var (
-	testHandler                http.Handler
-	pgPool                     *pgxpool.Pool
-	mongoDB                    *mongo.Database
-	integrationRedis           *testinfra.RealRedis
-	redisRouter                *rtredis.Router
-	redisClient                rtredis.Client
-	mongoClient                *mongo.Client
-	mongoContainer             *mongomod.MongoDBContainer
-	mongoRuntimeMu             sync.Mutex
-	externalProviderRuntime    *externalProviderContractRuntime
-	externalInteractionRuntime *externalInteractionContractRuntime
-	chatContractRuntime        *chatServiceContractRuntime
-	conversationGateway        application.ConversationGateway
-	relationshipRelayCancel    context.CancelFunc
+	testHandler                   http.Handler
+	pgPool                        *pgxpool.Pool
+	mongoDB                       *mongo.Database
+	integrationRedis              *testinfra.RealRedis
+	redisRouter                   *rtredis.Router
+	redisClient                   rtredis.Client
+	mongoClient                   *mongo.Client
+	mongoContainer                *mongomod.MongoDBContainer
+	mongoRuntimeMu                sync.Mutex
+	externalProviderRuntime       *externalProviderContractRuntime
+	externalInteractionRuntime    *externalInteractionContractRuntime
+	chatContractRuntime           *chatServiceContractRuntime
+	conversationGateway           application.ConversationGateway
+	relationshipCounterProjector  *relationshipprojection.CounterProjector
+	relationshipCounterReconciler *relationshipprojection.CounterReconciler
+	relationshipRelayCancel       context.CancelFunc
+	accountCloseRelayCancel       context.CancelFunc
+	integrationRelayRunners       sync.WaitGroup
 
 	testAccessConfig = rtauth.TokenConfig{
 		Secret:       []byte("test-user-service-access-secret-v1"),
@@ -147,9 +177,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// Teardown
-	if relationshipRelayCancel != nil {
-		relationshipRelayCancel()
-	}
+	stopIntegrationRelayRunners()
 	pgPool.Close()
 	if mongoClient != nil {
 		_ = mongoClient.Disconnect(ctx)
@@ -165,7 +193,22 @@ func TestMain(m *testing.M) {
 	if embeddedPG != nil {
 		_ = embeddedPG.Stop()
 	}
+	if embeddedPGRuntimePath != "" {
+		_ = os.RemoveAll(embeddedPGRuntimePath)
+	}
 	os.Exit(code)
+}
+
+func stopIntegrationRelayRunners() {
+	if relationshipRelayCancel != nil {
+		relationshipRelayCancel()
+		relationshipRelayCancel = nil
+	}
+	if accountCloseRelayCancel != nil {
+		accountCloseRelayCancel()
+		accountCloseRelayCancel = nil
+	}
+	integrationRelayRunners.Wait()
 }
 
 func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
@@ -229,21 +272,71 @@ func bootstrapMongoRuntime(ctx context.Context, allowLocalUnavailable bool) erro
 
 func rebuildTestHandler(ctx context.Context) error {
 	profileStore := persistence.NewPgProfileStore(pgPool)
-	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
-	settingStore := persistence.NewPgSettingStore(pgPool)
+	personaStore := userpersistence.NewPgPersonaStore(pgPool)
+	userSettingsStore, err := usersettingspersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	userSettingsCommands := usersettingsapp.NewUserSettingsCommandFacade(
+		userSettingsStore,
+	)
+	userSettingsQueries := usersettingsapp.NewUserSettingsQueryFacade(
+		userSettingsStore,
+	)
 	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
-	greetingStore := persistence.NewPgGreetingStore(pgPool)
-	workStore := persistence.NewPgWorkStore(pgPool)
-	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
-	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
-	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
-	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
+	greetingStore := userpersistence.NewPgGreetingStore(pgPool)
+	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	credentialCommands := credentialapp.NewCredentialCommandFacade(
+		credentialStore,
+	)
+	credentialQueries := credentialapp.NewCredentialQueryFacade(
+		credentialStore,
+	)
+	accountSessionStore, err := accountsessionpersistence.NewAccountSessionPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	accountSessionCommands :=
+		accountsessionapp.NewAccountSessionCommandFacade(accountSessionStore)
+	deviceRegistrationStore, err := registrationpersistence.NewPostgresStore(
+		pgPool,
+	)
+	if err != nil {
+		return err
+	}
+	pushTokenCipher, err := registrationpersistence.NewAESGCMTokenCipher(
+		make([]byte, 32),
+	)
+	if err != nil {
+		return err
+	}
+	deviceRegistrationCommands := registrationapp.NewCommandFacade(
+		deviceRegistrationStore,
+		pushTokenCipher,
+	)
+	deviceRegistrationQueries := registrationapp.NewQueryFacade(
+		deviceRegistrationStore,
+		deviceRegistrationStore,
+		personaStore,
+		pushTokenCipher,
+	)
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
-	otpChallengeStore := persistence.NewPgOtpChallengeStore(pgPool)
-	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
-	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
-	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
-	inviteStore := persistence.NewPgInviteStore(pgPool)
+	authenticationChallengeStore, err :=
+		challengepersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	authenticationChallenges :=
+		challengeapp.NewAuthenticationChallengeCommandFacade(
+			authenticationChallengeStore,
+			challengeapp.OTPCredentialVerifier{},
+		)
+	anonymousDeviceBindingStore := userpersistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	profileQrTokenStore := userpersistence.NewPgProfileQrTokenStore(pgPool)
+	contactDiscoveryStore := userpersistence.NewPgContactDiscoveryStore(pgPool)
 	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
 	if err != nil {
 		return err
@@ -253,8 +346,15 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 
-	profileCache := cache.NewProfileCache(redisClient)
-	settingCache := cache.NewSettingCache(redisClient)
+	profileCache := usercache.NewProfileCache(redisClient)
+	relationshipCounterProjector = relationshipprojection.NewCounterProjector(
+		pgPool,
+		profileCache,
+	)
+	relationshipCounterReconciler = relationshipprojection.NewCounterReconciler(
+		pgPool,
+		profileCache,
+	)
 	userEventPublisher := mq.NewEventPublisher(redisClient)
 	userSyncService := runtimesync.NewService(redisClient, redisClient)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -265,48 +365,94 @@ func rebuildTestHandler(ctx context.Context) error {
 	profileService := application.NewProfileService(
 		profileStore,
 		personaStore,
-		settingStore,
 		profileCache,
 		userEventPublisher,
 		userSyncService,
 		application.WithProfileQrTokenStore(profileQrTokenStore),
 	)
-	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
+	searchService := application.NewSearchService(profileStore, personaStore)
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
-		profileStore,
 		personaStore,
 		profileCache,
 		greetingStore,
 	)
-	if relationshipRelayCancel != nil {
-		relationshipRelayCancel()
+	// SubjectFollow / FollowingSubject / FollowedSubjectVisitState packet
+	subjectFollowStore := subjectfollowpersistence.NewPgSubjectFollowStore(pgPool)
+	subjectFollowService := subjectfollowapp.NewSubjectFollowService(subjectFollowStore)
+	followingSubjectStore := persistence.NewMongoFollowingSubjectStore(mongoDB)
+	followedSubjectVisitStore := persistence.NewMongoFollowedSubjectVisitStore(mongoDB)
+	var followingProjector *followingapp.Projector
+	if mongoDB != nil {
+		if err := followingSubjectStore.EnsureIndexes(ctx); err != nil {
+			return err
+		}
+		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
+			return err
+		}
+		followingProjector = followingapp.NewProjector(followingSubjectStore)
 	}
+	followedSubjectVisitService := visitapp.NewVisitService(followedSubjectVisitStore, followingSubjectStore)
+	followingSubjectQueryService := followingapp.NewQueryService(followingSubjectStore, personaStore, nil)
+	stopIntegrationRelayRunners()
 	relationshipRelayContext, cancelRelationshipRelay := context.WithCancel(context.Background())
 	relationshipRelayCancel = cancelRelationshipRelay
-	relationshipRelay := relationshipapp.NewOutboxRelay(relationshipStore, userEventPublisher)
-	go func() { _ = relationshipRelay.Run(relationshipRelayContext, 10*time.Millisecond) }()
+	relationshipRelay := relationshipapp.NewOutboxRelay(
+		relationshipStore,
+		&testPersonaRelationshipFanout{
+			events:    userEventPublisher,
+			projector: followingProjector,
+			counters:  relationshipCounterProjector,
+		},
+	)
+	integrationRelayRunners.Add(1)
+	go func() {
+		defer integrationRelayRunners.Done()
+		_ = relationshipRelay.Run(relationshipRelayContext, 10*time.Millisecond)
+	}()
+	subjectFollowRelay := subjectfollowapp.NewOutboxRelay(
+		subjectFollowStore,
+		&testSubjectFollowFanout{events: userEventPublisher, projector: followingProjector},
+	)
+	integrationRelayRunners.Add(1)
+	go func() {
+		defer integrationRelayRunners.Done()
+		_ = subjectFollowRelay.Run(relationshipRelayContext, 10*time.Millisecond)
+	}()
 	greetingService := application.NewGreetingService(
+		greetingStore,
 		greetingStore,
 		relationshipService,
 		conversationGateway,
 		userEventPublisher,
+		userEventPublisher,
+		application.NewSettingsGreetingNotifyPolicy(
+			userSettingsStore,
+			personaStore,
+		),
 	)
-	personaService := application.NewPersonaService(personaStore, personaStore, profileCache)
-	workService := application.NewWorkService(workStore)
-	lifeItemService := application.NewLifeItemService(lifeItemStore)
-	settingService := application.NewSettingService(settingStore, settingCache)
+	greetingRelay := application.NewGreetingOutboxRelay(
+		greetingStore,
+		userEventPublisher,
+		userEventPublisher,
+	)
+	integrationRelayRunners.Add(1)
+	go func() {
+		defer integrationRelayRunners.Done()
+		_ = greetingRelay.Run(relationshipRelayContext, 10*time.Millisecond)
+	}()
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
 		shardDirectory,
-		application.WithAccountSessionStore(userAuthStore),
-		application.WithDeviceRegistrationStore(userDeviceStore),
+		application.WithAccountSessionCommands(accountSessionCommands),
+		application.WithCredentialCommands(credentialCommands),
+		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
-		application.WithOtpChallengeStore(otpChallengeStore),
+		application.WithAuthenticationChallenges(authenticationChallenges),
 		application.WithOTPCodeSealer(testOTPCodeSealer),
 		application.WithExternalInteractionClient(externalInteractionRuntime.client),
 		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
@@ -316,15 +462,17 @@ func rebuildTestHandler(ctx context.Context) error {
 			"carrier_token_existing": "+8618013813902",
 		}),
 	)
+	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
 	subAccountService := application.NewSubAccountService(
 		personaStore,
-		personaStore,
-		personaStore,
+		personaCommandStore,
 		profileStore,
 		profileCache,
 	)
-	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
-	inviteService := application.NewInviteService(inviteStore, inviteStore)
+	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
 	var interestReader application.InterestProfileReader
 	if mongoDB != nil {
 		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
@@ -344,20 +492,112 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 
-	userHandler, err := httpadapter.NewUserHandler(
-		profileService, searchService, relationshipService, greetingService,
-		personaService, workService, lifeItemService, settingService,
-		authService, subAccountService, contactDiscoveryService, inviteService,
-		interestProfileService,
-		profileProposalFacade,
+	accountCloseStore, err := useraccountpersistence.NewCloseStore(pgPool)
+	if err != nil {
+		return err
+	}
+	accountCloseOutboxStore, err :=
+		useraccountpersistence.NewCloseOutboxStore(pgPool)
+	if err != nil {
+		return err
+	}
+	accountCloseProjections := searchindex.ComposePublisher()
+	if mongoDB != nil {
+		accountCloseProjections = searchindex.ComposePublisher(
+			accountCloseProjections,
+			tagindex.NewProjector(
+				mongoDB.Collection("object_tag_index"),
+				profileStore,
+			),
+			useraccountprojection.NewMongoCleanupProjector(mongoDB),
+		)
+	}
+	accountCloseFanout, err := mq.NewUserAccountClosedFanout(
+		userEventPublisher,
+		accountCloseProjections,
 	)
 	if err != nil {
 		return err
 	}
+	accountCloseOutboxRelay, err := useraccountapp.NewCloseOutboxRelay(
+		accountCloseOutboxStore,
+		accountCloseFanout,
+		"user-service-api-integration",
+	)
+	if err != nil {
+		return err
+	}
+	accountCloseRelayContext, cancelAccountCloseRelay :=
+		context.WithCancel(context.Background())
+	accountCloseRelayCancel = cancelAccountCloseRelay
+	integrationRelayRunners.Add(1)
+	go func() {
+		defer integrationRelayRunners.Done()
+		accountCloseOutboxRelay.Run(accountCloseRelayContext)
+	}()
+	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
+		accountCloseStore,
+		useraccountcache.NewClosedAccountCache(redisClient),
+	)
+	userHandler, err := httpadapter.NewUserHandler(
+		profileService, searchService, relationshipService, greetingService,
+		userSettingsCommands, userSettingsQueries,
+		authService, credentialQueries,
+		deviceRegistrationCommands, deviceRegistrationQueries,
+		subAccountService, contactDiscoveryService,
+		interestProfileService,
+		profileProposalFacade,
+		subjectFollowService,
+		followedSubjectVisitService,
+		followingSubjectQueryService,
+	)
+	if err != nil {
+		return err
+	}
+	userHandler.WithAccountLifecycle(closeAccountFacade)
+	authorized := rtauth.EnforceGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("user"),
+	)(userHandler.Routes())
 	testHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier: testAccessVerifier,
-	})(userHandler.Routes())
+	})(authorized)
 	return nil
+}
+
+// testPersonaRelationshipFanout / testSubjectFollowFanout 与生产 composition
+// 的 fanout 同构：Redis 发布 + following_subjects 投影都成功才推进 checkpoint。
+type testPersonaRelationshipFanout struct {
+	events    *mq.EventPublisher
+	projector *followingapp.Projector
+	counters  *relationshipprojection.CounterProjector
+}
+
+func (f *testPersonaRelationshipFanout) PublishPersonaRelationship(ctx context.Context, event relmodel.OutboxEvent) error {
+	if err := f.events.PublishPersonaRelationship(ctx, event); err != nil {
+		return err
+	}
+	if err := f.counters.Apply(ctx, event); err != nil {
+		return err
+	}
+	if f.projector == nil {
+		return nil
+	}
+	return f.projector.ApplyPersonaRelationship(ctx, event)
+}
+
+type testSubjectFollowFanout struct {
+	events    *mq.EventPublisher
+	projector *followingapp.Projector
+}
+
+func (f *testSubjectFollowFanout) PublishSubjectFollow(ctx context.Context, event sfmodel.OutboxEvent) error {
+	if err := f.events.PublishSubjectFollow(ctx, event); err != nil {
+		return err
+	}
+	if f.projector == nil {
+		return nil
+	}
+	return f.projector.ApplySubjectFollow(ctx, event)
 }
 
 func requireMongoBackedRuntime(tb testing.TB) {

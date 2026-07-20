@@ -1,4 +1,4 @@
-# L4 特性：timeout-circuit-degrade-policy
+# L3 特性：timeout-circuit-degrade-policy
 
 ## 功能说明
 - 待补充

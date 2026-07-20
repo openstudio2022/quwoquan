@@ -33,16 +33,21 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 	for _, operation := range []string{
 		"SubmitPostPublication",
 		"CreateComment",
+		"HideComment",
+		"RestoreComment",
 		"LikePost",
 		"InitMediaUpload",
 		"GetMediaAssetReference",
 		"GetMediaAssetDeliveryReference",
 		"CreateOutboundShare",
 		"CreateReport",
+		"ListMyReports",
 		"ListReports",
 		"GetReport",
 		"BeginReportReview",
+		"DismissReport",
 		"ResolveReport",
+		"GetCurrentPostModerationCase",
 	} {
 		if _, found := operations[operation]; !found {
 			t.Errorf("route packet is missing %s", operation)
@@ -77,17 +82,22 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"CreateComment":                  "handleCreateComment",
 		"CreateOutboundShare":            "handleCreateOutboundShare",
 		"DeleteComment":                  "handleDeleteComment",
+		"DismissReport":                  "handleDismissReport",
 		"GetReport":                      "handleGetReport",
+		"GetCurrentPostModerationCase":   "handleGetCurrentPostModerationCase",
 		"GetMediaAssetReference":         "handleGetMediaAssetReference",
 		"GetMediaAssetDeliveryReference": "handleGetMediaAssetDeliveryReference",
+		"HideComment":                    "handleHideComment",
 		"ListCommentReplies":             "handleListCommentReplies",
 		"ListComments":                   "handleListComments",
 		"ListCommentsByAuthor":           "handleListCommentsByAuthor",
 		"ListCommentsForPostAuthor":      "handleListCommentsForPostAuthor",
+		"ListMyReports":                  "handleListMyReports",
 		"ListReports":                    "handleListReports",
 		"PinComment":                     "handleSetCommentPinned",
 		"ReactToComment":                 "handleReactToComment",
 		"ResolveReport":                  "handleResolveReport",
+		"RestoreComment":                 "handleRestoreComment",
 		"SubmitPostPublication":          "handleSubmitPostPublication",
 		"UpdatePostSettings":             "handleUpdatePostSettings",
 		"PromotePostToWork":              "handlePromotePostToWork",
@@ -116,10 +126,12 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"BindMediaAssetsToComment": {"commentId"},
 		"CreateComment":            {"postId"},
 		"DeleteComment":            {"postId", "commentId"},
+		"HideComment":              {"commentId"},
 		"ListCommentReplies":       {"postId", "commentId"},
 		"ListComments":             {"postId"},
 		"PinComment":               {"postId", "commentId"},
 		"ReactToComment":           {"commentId"},
+		"RestoreComment":           {"commentId"},
 		"UnpinComment":             {"postId", "commentId"},
 	} {
 		block := generatedOperationDispatchBlock(t, string(generated), operation)
@@ -172,6 +184,46 @@ func TestContentErrorGenerationPreservesStableIdentityAndHTTPMetadata(t *testing
 		if !strings.Contains(sourceText, needle) {
 			t.Fatalf("generated errors missing %q", needle)
 		}
+	}
+}
+
+func TestContentMediaUploadPolicyGenerationPreservesPerTypeLimits(t *testing.T) {
+	t.Parallel()
+
+	source, err := contractcodegen.NewSource(
+		"../../contracts/metadata",
+		validate.ProfileBaseline,
+	)
+	if err != nil {
+		t.Fatalf("NewSource() error = %v", err)
+	}
+	outputDir := t.TempDir()
+	if err := generateContentMediaUploadPolicy(source, outputDir); err != nil {
+		t.Fatalf("generateContentMediaUploadPolicy() error = %v", err)
+	}
+	generated, err := os.ReadFile(
+		filepath.Join(outputDir, "generated", "content_media_upload_policy.go"),
+	)
+	if err != nil {
+		t.Fatalf("read generated media upload policy: %v", err)
+	}
+	sourceText := string(generated)
+	for _, needle := range []string{
+		"ContentMediaUploadPolicies",
+		`"audio": {`,
+		"MaxFileSizeBytes: 10485760",
+		`"file": {`,
+		"MaxFileSizeBytes: 104857600",
+		`"audio/wav"`,
+		`"video/webm"`,
+		`"*/*"`,
+	} {
+		if !strings.Contains(sourceText, needle) {
+			t.Fatalf("generated media upload policy missing %q", needle)
+		}
+	}
+	if strings.Contains(sourceText, "ContentMediaUploadMaxFileSizeBytes int64") {
+		t.Fatal("generated policy regressed to one global media size limit")
 	}
 }
 

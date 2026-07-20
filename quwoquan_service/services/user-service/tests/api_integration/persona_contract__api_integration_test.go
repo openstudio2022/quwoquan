@@ -5,29 +5,34 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
+
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 )
 
-func seedPersonaInviteHistory(t *testing.T, recordID, subAccountID, ownerID string) {
+func seedPersonaGreetingHistory(
+	t *testing.T,
+	recordID string,
+	subAccountID string,
+	_ string,
+) {
 	t.Helper()
 	_, err := pgPool.Exec(
 		context.Background(),
-		`INSERT INTO invite_records (
-			id, inviter_sub_account_id, inviter_owner_account_id, channel, link_code,
-			invitee_phone_hash, status, expire_at, generated_at
-		) VALUES ($1, $2, $3, 'link', $4, $5, 'generated', NOW() + INTERVAL '1 day', NOW())`,
-		recordID,
+		`INSERT INTO greeting_requests (
+			id, requester_sub_account_id, target_sub_account_id, request_message,
+			status, source, created_at, updated_at
+		) VALUES ($1, $2, $3, 'persona history fixture', 'replied', 'profile', NOW(), NOW())`,
+		uuid.NewString(),
 		subAccountID,
-		ownerID,
-		recordID+"_code",
-		recordID+"_phone",
+		"history-target-"+recordID,
 	)
 	if err != nil {
-		t.Fatalf("seed invite history: %v", err)
+		t.Fatalf("seed greeting history: %v", err)
 	}
 }
 
-func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
+func TestGetPersonaLifecycleGuard_HistoryDoesNotChangeRetireDecision(t *testing.T) {
 	cases := []struct {
 		name string
 		seed func(t *testing.T, subAccountID string)
@@ -47,6 +52,12 @@ func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
 		{
 			name: "notification",
 			seed: seedPersonaNotificationHistory,
+		},
+		{
+			name: "greeting",
+			seed: func(t *testing.T, subAccountID string) {
+				seedPersonaGreetingHistory(t, "greeting", subAccountID, "")
+			},
 		},
 	}
 	for _, tc := range cases {
@@ -68,11 +79,11 @@ func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
 				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 			}
 			result := parseJSON(t, rec)
-			if result["hasAttributedHistory"] != true {
-				t.Fatalf("expected hasAttributedHistory=true for %s, got %v", tc.name, result["hasAttributedHistory"])
+			if result["allowed"] != true {
+				t.Fatalf("expected retire allowed for %s, got %v", tc.name, result["allowed"])
 			}
-			if result["reasonCode"] != "retire_instead_of_delete" {
-				t.Fatalf("expected retire_instead_of_delete for %s, got %v", tc.name, result["reasonCode"])
+			if result["reason"] != "allowed" {
+				t.Fatalf("expected reason=allowed for %s, got %v", tc.name, result["reason"])
 			}
 		})
 	}
@@ -83,7 +94,7 @@ func TestCreatePersona_Success(t *testing.T) {
 	createTestProfile(t, "persona_user_1", "persona_user1")
 
 	rec := doRequest(t, http.MethodPost, "/user/personas",
-		`{"displayName":"Shadow","isPrivate":true}`,
+		`{"displayName":"Shadow","isolationLevel":"strict"}`,
 		authHeaders("persona_user_1"))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
@@ -141,15 +152,15 @@ func TestActivatePersona_Transaction(t *testing.T) {
 	}
 }
 
-func TestDeletePersona_PrimaryForbidden(t *testing.T) {
+func TestRetirePersona_PrimaryForbidden(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "persona_user_3", "persona_user3")
 	createTestPersona(t, "pa_primary", "persona_user_3", "Primary", true, true)
 
 	createTestPersonaFull(t, "pa_other", "persona_user_3", "pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodDelete, "/user/personas/pa_primary_sa/delete-empty", "", authHeaders("persona_user_3"))
+	rec := doRequest(t, http.MethodPost, "/user/personas/pa_primary_sa/retire", "", authHeaders("persona_user_3"))
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for deleting primary persona, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 for retiring primary persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -318,25 +329,25 @@ func TestGetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
-	if result["reasonCode"] != "blocked_primary_persona" {
-		t.Fatalf("expected blocked_primary_persona, got %v", result["reasonCode"])
+	if result["reason"] != "blocked_primary_persona" {
+		t.Fatalf("expected blocked_primary_persona, got %v", result["reason"])
 	}
 	if result["requiresSuccessor"] != false {
 		t.Fatalf("expected requiresSuccessor=false when primary guard wins, got %v", result["requiresSuccessor"])
 	}
-	if result["canRetire"] != false {
-		t.Fatalf("expected canRetire=false for active primary persona, got %v", result["canRetire"])
+	if result["allowed"] != false {
+		t.Fatalf("expected allowed=false for active primary persona, got %v", result["allowed"])
 	}
 }
 
-func TestGetPersonaLifecycleGuard_HistoryRequiresRetire(t *testing.T) {
+func TestGetPersonaLifecycleGuard_AllowsInactiveAuxiliary(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	usertelemetry.Reset()
 	t.Cleanup(usertelemetry.Reset)
 	createTestProfile(t, "persona_user_8", "persona_user8")
 	createTestPersonaFull(t, "pa_primary", "persona_user_8", "pa_primary_sa", "Primary", "open", true, true)
 	createTestPersonaFull(t, "pa_shadow", "persona_user_8", "pa_shadow_sa", "Shadow", "open", false, false)
-	seedPersonaInviteHistory(t, "invite_hist_8", "pa_shadow_sa", "persona_user_8")
+	seedPersonaGreetingHistory(t, "greeting_hist_8", "pa_shadow_sa", "persona_user_8")
 
 	rec := doRequest(
 		t,
@@ -349,48 +360,11 @@ func TestGetPersonaLifecycleGuard_HistoryRequiresRetire(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
-	if result["reasonCode"] != "retire_instead_of_delete" {
-		t.Fatalf("expected retire_instead_of_delete, got %v", result["reasonCode"])
+	if result["reason"] != "allowed" {
+		t.Fatalf("expected allowed reason, got %v", result["reason"])
 	}
-	if result["hasAttributedHistory"] != true {
-		t.Fatalf("expected hasAttributedHistory=true, got %v", result["hasAttributedHistory"])
-	}
-	if result["canDelete"] != false || result["canRetire"] != true {
-		t.Fatalf("expected delete blocked and retire allowed, got delete=%v retire=%v", result["canDelete"], result["canRetire"])
-	}
-	if result["requiredAction"] != "retire" {
-		t.Fatalf("expected requiredAction=retire, got %v", result["requiredAction"])
-	}
-	snapshot := usertelemetry.Collector().Snapshot()
-	if snapshot[usertelemetry.MetricRetiredSubjectAttributionFallbackCount] != 0 {
-		t.Fatalf("expected no mongo fallback metric for pg-backed history, got %v", snapshot)
-	}
-}
-
-func TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric(t *testing.T) {
-	requireMongoBackedRuntime(t)
-	t.Cleanup(func() { cleanAll(t) })
-	usertelemetry.Reset()
-	t.Cleanup(usertelemetry.Reset)
-	createTestProfile(t, "persona_user_mongo_metric", "persona_user_mongo_metric")
-	createTestPersonaFull(t, "pa_primary_metric", "persona_user_mongo_metric", "pa_primary_metric_sa", "Primary", "open", true)
-	createTestPersonaFull(t, "pa_shadow_metric", "persona_user_mongo_metric", "pa_shadow_metric_sa", "Shadow", "open", false)
-	seedPersonaPostHistory(t, "pa_shadow_metric_sa")
-
-	rec := doRequest(
-		t,
-		http.MethodGet,
-		"/user/personas/pa_shadow_metric_sa/lifecycle-guard",
-		"",
-		authHeaders("persona_user_mongo_metric"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	snapshot := usertelemetry.Collector().Snapshot()
-	if snapshot[usertelemetry.MetricRetiredSubjectAttributionFallbackCount] != 1 {
-		t.Fatalf("expected mongo fallback metric = 1, got %v", snapshot)
+	if result["allowed"] != true {
+		t.Fatalf("expected retire allowed, got %v", result["allowed"])
 	}
 }
 
@@ -399,7 +373,7 @@ func TestRetirePersona_PersistsRetiredStatus(t *testing.T) {
 	createTestProfile(t, "persona_user_9", "persona_user9")
 	createTestPersonaFull(t, "pa_primary", "persona_user_9", "pa_primary_sa", "Primary", "open", true)
 	createTestPersonaFull(t, "pa_shadow", "persona_user_9", "pa_shadow_sa", "Shadow", "open", false)
-	seedPersonaInviteHistory(t, "invite_hist_9", "pa_shadow_sa", "persona_user_9")
+	seedPersonaGreetingHistory(t, "greeting_hist_9", "pa_shadow_sa", "persona_user_9")
 
 	rec := doRequest(
 		t,
@@ -443,31 +417,12 @@ func TestRetirePersona_PersistsRetiredStatus(t *testing.T) {
 	}
 }
 
-func TestDeleteEmptyPersona_HistoryRequiresRetireConflict(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_10", "persona_user10")
-	createTestPersonaFull(t, "pa_primary", "persona_user_10", "pa_primary_sa", "Primary", "open", true)
-	createTestPersonaFull(t, "pa_shadow", "persona_user_10", "pa_shadow_sa", "Shadow", "open", false)
-	seedPersonaInviteHistory(t, "invite_hist_10", "pa_shadow_sa", "persona_user_10")
-
-	rec := doRequest(
-		t,
-		http.MethodDelete,
-		"/user/personas/pa_shadow_sa/delete-empty",
-		"",
-		authHeaders("persona_user_10"),
-	)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "persona_user_11", "persona_user11")
 	createTestPersonaFull(t, "pa_primary", "persona_user_11", "pa_primary_sa", "Primary", "open", true)
 	createTestPersonaFull(t, "pa_shadow", "persona_user_11", "pa_shadow_sa", "Shadow", "open", false)
-	seedPersonaInviteHistory(t, "invite_hist_11", "pa_shadow_sa", "persona_user_11")
+	seedPersonaGreetingHistory(t, "greeting_hist_11", "pa_shadow_sa", "persona_user_11")
 
 	retireRec := doRequest(
 		t,
@@ -521,8 +476,8 @@ func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
 		if item["status"] != "retired" {
 			t.Fatalf("expected summary status=retired, got %v", item["status"])
 		}
-		if item["hasAttributedHistory"] != true {
-			t.Fatalf("expected summary hasAttributedHistory=true, got %v", item["hasAttributedHistory"])
+		if _, exists := item["hasAttributedHistory"]; exists {
+			t.Fatalf("summary must not expose retired hasAttributedHistory field: %#v", item)
 		}
 	}
 	if !foundRetired {

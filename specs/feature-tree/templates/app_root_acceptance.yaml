@@ -47,6 +47,7 @@ uat_acceptance:
           cases:
             - user_acceptance.journey-id.scenario-id.primary
           envs: [gamma_local, prod]
+          execution_profile: release
           rollout_stages: [gray_initial]
           test_object: page
           quality_facet: experience
@@ -56,6 +57,7 @@ uat_acceptance:
           cases:
             - api_integration.domain.operation.primary
           envs: [beta, gamma]
+          execution_profile: integration
           test_object: api_operation
           quality_facet: contract
     tests:
@@ -67,5 +69,9 @@ uat_acceptance:
 execution:
   local_gate:
     - make gate
-  full_gate:
-    - make gate-full
+  smoke_gate:
+    - make gate-smoke
+  integration_gate:
+    - make gate-integration ENV=beta
+  release_gate:
+    - make gate-release ENV=gamma

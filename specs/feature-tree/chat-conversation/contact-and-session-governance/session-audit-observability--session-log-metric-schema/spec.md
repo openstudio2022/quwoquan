@@ -1,4 +1,4 @@
-# L4 特性：session-log-metric-schema
+# L3 特性：session-log-metric-schema
 
 ## 功能说明
 - 细化 session-log-metric-schema 特性的功能边界与端云协同行为。

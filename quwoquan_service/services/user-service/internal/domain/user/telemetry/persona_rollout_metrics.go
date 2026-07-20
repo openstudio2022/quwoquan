@@ -12,8 +12,14 @@ const (
 	MetricPersonaMigrationFailedCount     = "persona_migration_failed_count"
 )
 
+type PersonaRolloutMetricsSink interface {
+	ObservePersonaSwitchLatency(milliseconds float64)
+	IncrementPersonaRolloutCounter(metricName string)
+}
+
 type PersonaRolloutMetrics struct {
 	mu                       sync.Mutex
+	sink                     PersonaRolloutMetricsSink
 	switchLatencyMs          float64
 	attributionMismatchCount float64
 	publicLeakageCount       float64
@@ -28,6 +34,15 @@ func RolloutCollector() *PersonaRolloutMetrics {
 
 func ResetRollout() {
 	defaultPersonaRolloutMetrics.Reset()
+}
+
+func (m *PersonaRolloutMetrics) SetSink(sink PersonaRolloutMetricsSink) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.sink = sink
+	m.mu.Unlock()
 }
 
 func (m *PersonaRolloutMetrics) Reset() {
@@ -51,20 +66,27 @@ func (m *PersonaRolloutMetrics) RecordSwitchLatency(duration time.Duration) {
 		latencyMs = 0.001
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.switchLatencyMs = latencyMs
+	sink := m.sink
+	m.mu.Unlock()
+	if sink != nil {
+		sink.ObservePersonaSwitchLatency(latencyMs)
+	}
 }
 
 func (m *PersonaRolloutMetrics) RecordAttributionMismatch() {
-	m.increment(&m.attributionMismatchCount)
+	m.increment(
+		&m.attributionMismatchCount,
+		MetricPersonaAttributionMismatchCount,
+	)
 }
 
 func (m *PersonaRolloutMetrics) RecordPublicLeakage() {
-	m.increment(&m.publicLeakageCount)
+	m.increment(&m.publicLeakageCount, MetricPersonaPublicLeakageCount)
 }
 
 func (m *PersonaRolloutMetrics) RecordMigrationFailure() {
-	m.increment(&m.migrationFailedCount)
+	m.increment(&m.migrationFailedCount, MetricPersonaMigrationFailedCount)
 }
 
 func (m *PersonaRolloutMetrics) Snapshot() map[string]float64 {
@@ -81,11 +103,15 @@ func (m *PersonaRolloutMetrics) Snapshot() map[string]float64 {
 	}
 }
 
-func (m *PersonaRolloutMetrics) increment(target *float64) {
+func (m *PersonaRolloutMetrics) increment(target *float64, metricName string) {
 	if m == nil {
 		return
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	*target = *target + 1
+	sink := m.sink
+	m.mu.Unlock()
+	if sink != nil {
+		sink.IncrementPersonaRolloutCounter(metricName)
+	}
 }

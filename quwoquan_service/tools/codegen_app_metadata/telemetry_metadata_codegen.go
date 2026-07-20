@@ -29,6 +29,9 @@ func validateTelemetryMetadata(
 	if strings.Join(catalog.CommonFields, ",") != strings.Join(telemetryCommonFields, ",") {
 		return fmt.Errorf("telemetry common_fields must be the frozen nine-field envelope in canonical order")
 	}
+	if strings.Join(catalog.ContextExtensions, ",") != "devicePlatform" {
+		return fmt.Errorf("telemetry context_extensions must be [devicePlatform]")
+	}
 	if strings.Join(catalog.LogTypes, ",") != "event,error" {
 		return fmt.Errorf("telemetry log_types must be [event, error]")
 	}
@@ -41,6 +44,11 @@ func validateTelemetryMetadata(
 	for name, extension := range catalog.ExtensionFields {
 		if strings.TrimSpace(name) == "" || !allowedExtensionTypes[extension.Type] {
 			return fmt.Errorf("invalid telemetry extension %q type %q", name, extension.Type)
+		}
+	}
+	for _, field := range catalog.ContextExtensions {
+		if _, ok := catalog.ExtensionFields[field]; !ok {
+			return fmt.Errorf("telemetry context extension references unknown extension %s", field)
 		}
 	}
 	seenEvents := map[string]bool{}
@@ -156,6 +164,14 @@ func renderAppTelemetryCatalogDart(catalog *telemetryEventCatalogFile) string {
 		b.WriteString(fmt.Sprintf("'%s'", field))
 	}
 	b.WriteString("];\n")
+	b.WriteString("  static const Set<String> contextExtensions = <String>{")
+	for i, field := range catalog.ContextExtensions {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(fmt.Sprintf("'%s'", field))
+	}
+	b.WriteString("};\n")
 	b.WriteString("  static const Set<String> networkClasses = <String>{")
 	for i, value := range catalog.NetworkClasses {
 		if i > 0 {

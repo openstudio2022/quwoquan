@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -45,41 +46,70 @@ type VisitStats struct {
 	Items       []VisitRecord `json:"items"`
 }
 
-// EventRecordInput 是 /ops/events 唯一 wire shape。九个公共字段之外只允许
+// EventRecordInput 是 /ops/events 唯一 wire shape。公共上下文字段之外只允许
 // event_catalog.yaml 中登记的强类型扩展；JSON decoder 会拒绝任何未知字段。
 type EventRecordInput struct {
-	LogType              string   `json:"logType"`
-	EventType            string   `json:"eventType"`
-	SessionID            string   `json:"sessionId"`
-	PageName             string   `json:"pageName"`
-	OccurredAt           string   `json:"occurredAt"`
-	DeviceManufacturer   string   `json:"deviceManufacturer"`
-	DeviceModel          string   `json:"deviceModel"`
-	AppVersion           string   `json:"appVersion"`
-	NetworkClass         string   `json:"networkClass"`
-	DurationMS           *int     `json:"durationMs,omitempty"`
-	Result               *string  `json:"result,omitempty"`
-	FailReasonCode       *string  `json:"failReasonCode,omitempty"`
-	ErrorCode            *string  `json:"errorCode,omitempty"`
-	OperationID          *string  `json:"operationId,omitempty"`
-	HTTPStatus           *int     `json:"httpStatus,omitempty"`
-	CallStack            []string `json:"callStack,omitempty"`
-	TClickToFirstFrameMS *int     `json:"tClickToFirstFrameMs,omitempty"`
-	TFirstFrameToShellMS *int     `json:"tFirstFrameToShellMs,omitempty"`
-	TShellToContentMS    *int     `json:"tShellToContentMs,omitempty"`
-	TClickToContentMS    *int     `json:"tClickToContentMs,omitempty"`
-	HasError             *bool    `json:"hasError,omitempty"`
-	Journey              *string  `json:"journey,omitempty"`
-	Action               *string  `json:"action,omitempty"`
-	ReadyMS              *int     `json:"readyMs,omitempty"`
-	TTFFMS               *int     `json:"ttffMs,omitempty"`
-	RebufferCount        *int     `json:"rebufferCount,omitempty"`
-	RebufferMS           *int     `json:"rebufferMs,omitempty"`
-	SeekCount            *int     `json:"seekCount,omitempty"`
-	DeclaredDurationMS   *int     `json:"declaredDurationMs,omitempty"`
-	ObservedDurationMS   *int     `json:"observedDurationMs,omitempty"`
-	DurationMismatch     *bool    `json:"durationMismatch,omitempty"`
-	PlaybackMode         *string  `json:"playbackMode,omitempty"`
+	LogType                string   `json:"logType"`
+	EventType              string   `json:"eventType"`
+	SessionID              string   `json:"sessionId"`
+	PageName               string   `json:"pageName"`
+	OccurredAt             string   `json:"occurredAt"`
+	DeviceManufacturer     string   `json:"deviceManufacturer"`
+	DeviceModel            string   `json:"deviceModel"`
+	AppVersion             string   `json:"appVersion"`
+	NetworkClass           string   `json:"networkClass"`
+	DevicePlatform         string   `json:"devicePlatform"`
+	DurationMS             *int     `json:"durationMs,omitempty"`
+	Result                 *string  `json:"result,omitempty"`
+	CallType               *string  `json:"callType,omitempty"`
+	ParticipantCount       *int     `json:"participantCount,omitempty"`
+	ConnectTimeMS          *int     `json:"connectTimeMs,omitempty"`
+	MediaConnected         *bool    `json:"mediaConnected,omitempty"`
+	ReconnectCount         *int     `json:"reconnectCount,omitempty"`
+	DisconnectReason       *string  `json:"disconnectReason,omitempty"`
+	NetworkQuality         *string  `json:"networkQuality,omitempty"`
+	FailReasonCode         *string  `json:"failReasonCode,omitempty"`
+	ErrorCode              *string  `json:"errorCode,omitempty"`
+	OperationID            *string  `json:"operationId,omitempty"`
+	RequestID              *string  `json:"requestId,omitempty"`
+	TraceID                *string  `json:"traceId,omitempty"`
+	RecoveryAction         *string  `json:"recoveryAction,omitempty"`
+	SurfaceID              *string  `json:"surfaceId,omitempty"`
+	DetectionSource        *string  `json:"detectionSource,omitempty"`
+	SampledFrames          *int     `json:"sampledFrames,omitempty"`
+	JankyFrames            *int     `json:"jankyFrames,omitempty"`
+	WorstFrameMS           *int     `json:"worstFrameMs,omitempty"`
+	JankThresholdMS        *int     `json:"jankThresholdMs,omitempty"`
+	TerminalState          *string  `json:"terminalState,omitempty"`
+	HTTPStatus             *int     `json:"httpStatus,omitempty"`
+	CallStack              []string `json:"callStack,omitempty"`
+	TClickToFirstFrameMS   *int     `json:"tClickToFirstFrameMs,omitempty"`
+	TFirstFrameToShellMS   *int     `json:"tFirstFrameToShellMs,omitempty"`
+	TShellToContentMS      *int     `json:"tShellToContentMs,omitempty"`
+	TClickToContentMS      *int     `json:"tClickToContentMs,omitempty"`
+	HasError               *bool    `json:"hasError,omitempty"`
+	Journey                *string  `json:"journey,omitempty"`
+	Action                 *string  `json:"action,omitempty"`
+	ReadyMS                *int     `json:"readyMs,omitempty"`
+	TTFFMS                 *int     `json:"ttffMs,omitempty"`
+	RebufferCount          *int     `json:"rebufferCount,omitempty"`
+	RebufferMS             *int     `json:"rebufferMs,omitempty"`
+	EffectivePlaybackMS    *int     `json:"effectivePlaybackMs,omitempty"`
+	SeekCount              *int     `json:"seekCount,omitempty"`
+	SeekFailureCount       *int     `json:"seekFailureCount,omitempty"`
+	SeekCommandMaxMS       *int     `json:"seekCommandMaxMs,omitempty"`
+	SeekSettleMaxMS        *int     `json:"seekSettleMaxMs,omitempty"`
+	DroppedFrames          *int     `json:"droppedFrames,omitempty"`
+	ProcessedVideoFrames   *int     `json:"processedVideoFrames,omitempty"`
+	AudioUnderrunCount     *int     `json:"audioUnderrunCount,omitempty"`
+	RendererMode           *string  `json:"rendererMode,omitempty"`
+	DecoderQueueMode       *string  `json:"decoderQueueMode,omitempty"`
+	DecoderFallbackEnabled *bool    `json:"decoderFallbackEnabled,omitempty"`
+	SeekEvidenceSource     *string  `json:"seekEvidenceSource,omitempty"`
+	DeclaredDurationMS     *int     `json:"declaredDurationMs,omitempty"`
+	ObservedDurationMS     *int     `json:"observedDurationMs,omitempty"`
+	DurationMismatch       *bool    `json:"durationMismatch,omitempty"`
+	PlaybackMode           *string  `json:"playbackMode,omitempty"`
 }
 
 type EventRecord struct {
@@ -103,8 +133,10 @@ type EventSummary struct {
 	TotalCount        int64                     `json:"totalCount"`
 	SessionCount      int64                     `json:"sessionCount"`
 	DimensionCounters map[string]map[string]int `json:"dimensions"`
-	Source            string                    `json:"source"`
+	SourceKind        string                    `json:"sourceKind"`
 	Freshness         string                    `json:"freshness"`
+	GeneratedThrough  string                    `json:"generatedThrough"`
+	LagSeconds        int64                     `json:"lagSeconds"`
 	ActualFrom        string                    `json:"actualFrom"`
 	ActualTo          string                    `json:"actualTo"`
 }
@@ -117,49 +149,69 @@ type EventDrilldownQuery struct {
 }
 
 type EventDrilldownItem struct {
-	RowKey               string   `json:"rowKey"`
-	LogType              string   `json:"logType"`
-	EventType            string   `json:"eventType"`
-	SessionID            string   `json:"sessionId"`
-	PageName             string   `json:"pageName"`
-	OccurredAt           string   `json:"occurredAt"`
-	DeviceManufacturer   string   `json:"deviceManufacturer"`
-	DeviceModel          string   `json:"deviceModel"`
-	AppVersion           string   `json:"appVersion"`
-	NetworkClass         string   `json:"networkClass"`
-	DurationMS           *int     `json:"durationMs,omitempty"`
-	Result               *string  `json:"result,omitempty"`
-	FailReasonCode       *string  `json:"failReasonCode,omitempty"`
-	ErrorCode            *string  `json:"errorCode,omitempty"`
-	OperationID          *string  `json:"operationId,omitempty"`
-	HTTPStatus           *int     `json:"httpStatus,omitempty"`
-	CallStack            []string `json:"callStack,omitempty"`
-	TClickToFirstFrameMS *int     `json:"tClickToFirstFrameMs,omitempty"`
-	TFirstFrameToShellMS *int     `json:"tFirstFrameToShellMs,omitempty"`
-	TShellToContentMS    *int     `json:"tShellToContentMs,omitempty"`
-	TClickToContentMS    *int     `json:"tClickToContentMs,omitempty"`
-	HasError             *bool    `json:"hasError,omitempty"`
-	Journey              *string  `json:"journey,omitempty"`
-	Action               *string  `json:"action,omitempty"`
-	ReadyMS              *int     `json:"readyMs,omitempty"`
-	TTFFMS               *int     `json:"ttffMs,omitempty"`
-	RebufferCount        *int     `json:"rebufferCount,omitempty"`
-	RebufferMS           *int     `json:"rebufferMs,omitempty"`
-	SeekCount            *int     `json:"seekCount,omitempty"`
-	DeclaredDurationMS   *int     `json:"declaredDurationMs,omitempty"`
-	ObservedDurationMS   *int     `json:"observedDurationMs,omitempty"`
-	DurationMismatch     *bool    `json:"durationMismatch,omitempty"`
-	PlaybackMode         *string  `json:"playbackMode,omitempty"`
-	IngestedAt           string   `json:"ingestedAt"`
+	RowKey                 string   `json:"rowKey"`
+	LogType                string   `json:"logType"`
+	EventType              string   `json:"eventType"`
+	SessionID              string   `json:"sessionId"`
+	PageName               string   `json:"pageName"`
+	OccurredAt             string   `json:"occurredAt"`
+	DeviceManufacturer     string   `json:"deviceManufacturer"`
+	DeviceModel            string   `json:"deviceModel"`
+	AppVersion             string   `json:"appVersion"`
+	NetworkClass           string   `json:"networkClass"`
+	DevicePlatform         string   `json:"devicePlatform"`
+	DurationMS             *int     `json:"durationMs,omitempty"`
+	Result                 *string  `json:"result,omitempty"`
+	FailReasonCode         *string  `json:"failReasonCode,omitempty"`
+	ErrorCode              *string  `json:"errorCode,omitempty"`
+	OperationID            *string  `json:"operationId,omitempty"`
+	RequestID              *string  `json:"requestId,omitempty"`
+	TraceID                *string  `json:"traceId,omitempty"`
+	RecoveryAction         *string  `json:"recoveryAction,omitempty"`
+	SurfaceID              *string  `json:"surfaceId,omitempty"`
+	DetectionSource        *string  `json:"detectionSource,omitempty"`
+	TerminalState          *string  `json:"terminalState,omitempty"`
+	HTTPStatus             *int     `json:"httpStatus,omitempty"`
+	CallStack              []string `json:"callStack,omitempty"`
+	TClickToFirstFrameMS   *int     `json:"tClickToFirstFrameMs,omitempty"`
+	TFirstFrameToShellMS   *int     `json:"tFirstFrameToShellMs,omitempty"`
+	TShellToContentMS      *int     `json:"tShellToContentMs,omitempty"`
+	TClickToContentMS      *int     `json:"tClickToContentMs,omitempty"`
+	HasError               *bool    `json:"hasError,omitempty"`
+	Journey                *string  `json:"journey,omitempty"`
+	Action                 *string  `json:"action,omitempty"`
+	ReadyMS                *int     `json:"readyMs,omitempty"`
+	TTFFMS                 *int     `json:"ttffMs,omitempty"`
+	RebufferCount          *int     `json:"rebufferCount,omitempty"`
+	RebufferMS             *int     `json:"rebufferMs,omitempty"`
+	EffectivePlaybackMS    *int     `json:"effectivePlaybackMs,omitempty"`
+	SeekCount              *int     `json:"seekCount,omitempty"`
+	SeekFailureCount       *int     `json:"seekFailureCount,omitempty"`
+	SeekCommandMaxMS       *int     `json:"seekCommandMaxMs,omitempty"`
+	SeekSettleMaxMS        *int     `json:"seekSettleMaxMs,omitempty"`
+	DroppedFrames          *int     `json:"droppedFrames,omitempty"`
+	ProcessedVideoFrames   *int     `json:"processedVideoFrames,omitempty"`
+	AudioUnderrunCount     *int     `json:"audioUnderrunCount,omitempty"`
+	RendererMode           *string  `json:"rendererMode,omitempty"`
+	DecoderQueueMode       *string  `json:"decoderQueueMode,omitempty"`
+	DecoderFallbackEnabled *bool    `json:"decoderFallbackEnabled,omitempty"`
+	SeekEvidenceSource     *string  `json:"seekEvidenceSource,omitempty"`
+	DeclaredDurationMS     *int     `json:"declaredDurationMs,omitempty"`
+	ObservedDurationMS     *int     `json:"observedDurationMs,omitempty"`
+	DurationMismatch       *bool    `json:"durationMismatch,omitempty"`
+	PlaybackMode           *string  `json:"playbackMode,omitempty"`
+	IngestedAt             string   `json:"ingestedAt"`
 }
 
 type EventDrilldown struct {
-	TotalCount int64                `json:"totalCount"`
-	Items      []EventDrilldownItem `json:"items"`
-	Source     string               `json:"source"`
-	Freshness  string               `json:"freshness"`
-	ActualFrom string               `json:"actualFrom"`
-	ActualTo   string               `json:"actualTo"`
+	TotalCount       int64                `json:"totalCount"`
+	Items            []EventDrilldownItem `json:"items"`
+	SourceKind       string               `json:"sourceKind"`
+	Freshness        string               `json:"freshness"`
+	GeneratedThrough string               `json:"generatedThrough"`
+	LagSeconds       int64                `json:"lagSeconds"`
+	ActualFrom       string               `json:"actualFrom"`
+	ActualTo         string               `json:"actualTo"`
 }
 
 // EventTelemetrySnapshot 是 Portal 聚合卡片的服务端组合视图。它不引入新的
@@ -177,6 +229,7 @@ type StartupDiagnosticRecord struct {
 
 type VisitTelemetryStore interface {
 	RecordVisit(context.Context, VisitInput) (VisitRecord, error)
+	GetVisit(ctx context.Context, userID, targetType, targetKey string) (VisitRecord, bool, error)
 	GetVisitStats(context.Context, VisitStatsQuery) (VisitStats, error)
 }
 
@@ -187,6 +240,23 @@ type EventLogStore interface {
 	GetEventDrilldown(context.Context, EventDrilldownQuery) (EventDrilldown, error)
 	PutStartupDiagnostics(context.Context, string, []StartupDiagnosticRecord) error
 	HasStartupDiagnosticBatch(context.Context, string, int) (bool, error)
+	// GetPageExperienceStats 按 pageName 聚合页面体验事实（打开次数、逐页 TTI
+	// 均值、停留均值、错误次数），供页面矩阵热力图消费；无数据页面不合成。
+	GetPageExperienceStats(context.Context, PageExperienceQuery) ([]PageExperienceStat, error)
+}
+
+type PageExperienceQuery struct {
+	From, To time.Time
+}
+
+type PageExperienceStat struct {
+	PageName      string  `json:"pageName"`
+	Opens         int64   `json:"opens"`
+	AvgReadyMs    float64 `json:"avgReadyMs"`
+	ReadySamples  int64   `json:"readySamples"`
+	AvgStayMs     float64 `json:"avgStayMs"`
+	StaySamples   int64   `json:"staySamples"`
+	RuntimeErrors int64   `json:"runtimeErrors"`
 }
 
 type EventBatchLedger interface {
@@ -202,35 +272,89 @@ const (
 	BatchLedgerAccepted BatchLedgerState = "accepted"
 )
 
-type TelemetryStore interface {
-	VisitTelemetryStore
-	EventLogStore
-	EventBatchLedger
-}
-
 type TelemetryService struct {
-	visits VisitTelemetryStore
-	events EventLogStore
-	ledger EventBatchLedger
-	now    func() time.Time
+	visits      VisitTelemetryStore
+	events      EventLogStore
+	ledger      EventBatchLedger
+	rtcMediaQoe RtcMediaQoeSummaryReader
+	now         func() time.Time
 }
 
-func NewTelemetryService(store TelemetryStore, _ any) *TelemetryService {
-	return NewTelemetryServiceWithStores(store, store, store)
+func NewTelemetryService(
+	visits VisitTelemetryStore,
+	events EventLogStore,
+	ledger EventBatchLedger,
+) *TelemetryService {
+	return NewTelemetryServiceWithStores(visits, events, ledger)
 }
 
 func NewTelemetryServiceWithStores(visits VisitTelemetryStore, events EventLogStore, ledger EventBatchLedger) *TelemetryService {
 	return &TelemetryService{visits: visits, events: events, ledger: ledger, now: time.Now}
 }
 
-func (s *TelemetryService) RecordVisit(ctx context.Context, input VisitInput) (VisitRecord, error) {
+func NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
+	visits VisitTelemetryStore,
+	events EventLogStore,
+	ledger EventBatchLedger,
+	rtcMediaQoe RtcMediaQoeSummaryReader,
+) *TelemetryService {
+	service := NewTelemetryServiceWithStores(visits, events, ledger)
+	service.rtcMediaQoe = rtcMediaQoe
+	return service
+}
+
+// VisitCommandResult 携带访问计数状态与幂等重放标志。
+type VisitCommandResult struct {
+	VisitRecord
+	Replayed bool `json:"replayed,omitempty"`
+}
+
+// ErrVisitIdempotencyKeyRequired：RecordVisit 声明 idempotency: required，
+// 缺 Idempotency-Key 属调用方契约违规。
+var ErrVisitIdempotencyKeyRequired = errors.New("visit idempotency key is required")
+
+// RecordVisit 推进访问计数状态。idempotencyKey 是调用方稳定的业务重放身份，
+// 经两阶段台账（pending→accepted，复用 telemetry batch ledger，count 恒为 1）
+// 保证相同 actor + key 的重放回读当前状态而不重复累加。
+func (s *TelemetryService) RecordVisit(
+	ctx context.Context,
+	input VisitInput,
+	idempotencyKey string,
+) (VisitCommandResult, error) {
 	input.TargetType = strings.TrimSpace(input.TargetType)
 	input.TargetKey = strings.TrimSpace(input.TargetKey)
 	input.UserID = strings.TrimSpace(input.UserID)
 	if input.UserID == "" {
 		input.UserID = "anonymous"
 	}
-	return s.visits.RecordVisit(ctx, input)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return VisitCommandResult{}, ErrVisitIdempotencyKeyRequired
+	}
+	dedupeKey := "visit:" + input.UserID + ":" + idempotencyKey
+	state, err := s.ledger.Begin(ctx, dedupeKey, 1)
+	if err != nil {
+		return VisitCommandResult{}, err
+	}
+	if state == BatchLedgerAccepted {
+		record, found, err := s.visits.GetVisit(ctx, input.UserID, input.TargetType, input.TargetKey)
+		if err != nil {
+			return VisitCommandResult{}, err
+		}
+		if found {
+			return VisitCommandResult{VisitRecord: record, Replayed: true}, nil
+		}
+		// accepted 但状态缺失（如 TTL 内计数被运维清理）：按新访问收敛。
+	}
+	// new 或 pending（首次写入中途失败后的重试）都继续推进计数再落 accepted。
+	record, err := s.visits.RecordVisit(ctx, input)
+	if err != nil {
+		return VisitCommandResult{}, err
+	}
+	if err := s.ledger.MarkAccepted(ctx, dedupeKey, 1); err != nil {
+		return VisitCommandResult{}, err
+	}
+	return VisitCommandResult{VisitRecord: record}, nil
 }
 
 func (s *TelemetryService) GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error) {
@@ -287,7 +411,13 @@ func (s *TelemetryService) ReportStartupDiagnostics(ctx context.Context, proof s
 	if len(records) == 0 || len(records) > 32 || strings.TrimSpace(proof) == "" {
 		return EventBatchAck{}, ErrInvalidEventBatch
 	}
-	digest := sha256.Sum256([]byte("startup:" + proof))
+	// proof 只用于匿名入口的防滥用与限流，不是批次身份。使用本批完整
+	// canonical body 计算 digest，避免同一启动 proof 的第二批事件被误判 duplicate。
+	canonical, err := json.Marshal(records)
+	if err != nil {
+		return EventBatchAck{}, fmt.Errorf("%w: startup batch canonicalization failed", ErrInvalidEventBatch)
+	}
+	digest := sha256.Sum256(append([]byte("startup:"), canonical...))
 	batchKey := hex.EncodeToString(digest[:])
 	state, err := s.ledger.Begin(ctx, batchKey, len(records))
 	if err != nil {
@@ -356,6 +486,26 @@ func (s *TelemetryService) GetEventDrilldown(ctx context.Context, query EventDri
 	return s.events.GetEventDrilldown(ctx, query)
 }
 
+// GetPageExperience 返回窗口内按 pageName 聚合的页面体验事实（热力图数据源）。
+func (s *TelemetryService) GetPageExperience(
+	ctx context.Context,
+	query PageExperienceQuery,
+) ([]PageExperienceStat, error) {
+	now := s.now().UTC()
+	if query.To.IsZero() {
+		query.To = now
+	}
+	if query.From.IsZero() {
+		query.From = query.To.Add(-24 * time.Hour)
+	}
+	if !query.From.Before(query.To) ||
+		query.To.Sub(query.From) > 72*time.Hour ||
+		query.To.After(now.Add(5*time.Minute)) {
+		return nil, ErrInvalidEventQuery
+	}
+	return s.events.GetPageExperienceStats(ctx, query)
+}
+
 func (s *TelemetryService) SnapshotEvents(
 	ctx context.Context,
 	query EventSummaryQuery,
@@ -402,6 +552,13 @@ func validateEvent(input EventRecordInput, now time.Time) error {
 	if _, ok := generated.EventNetworkClasses[input.NetworkClass]; !ok {
 		return fmt.Errorf("unknown networkClass")
 	}
+	if _, ok := generated.EventContextExtensions["devicePlatform"]; !ok {
+		return fmt.Errorf("devicePlatform is not registered as a context extension")
+	}
+	devicePlatformDefinition := generated.EventExtensionFields["devicePlatform"]
+	if _, ok := devicePlatformDefinition.AllowedValues[input.DevicePlatform]; !ok {
+		return fmt.Errorf("unknown devicePlatform")
+	}
 	if _, ok := generated.AppPageNames[input.PageName]; !ok {
 		return fmt.Errorf("unknown pageName")
 	}
@@ -422,6 +579,7 @@ func validateEvent(input EventRecordInput, now time.Time) error {
 		return fmt.Errorf("occurredAt outside accepted window")
 	}
 	extensions := input.extensions()
+	extensions["devicePlatform"] = input.DevicePlatform
 	for required := range definition.RequiredExtensions {
 		if _, ok := extensions[required]; !ok {
 			return fmt.Errorf("missing extension %s", required)
@@ -430,7 +588,9 @@ func validateEvent(input EventRecordInput, now time.Time) error {
 	for name, value := range extensions {
 		if _, ok := definition.RequiredExtensions[name]; !ok {
 			if _, ok := definition.OptionalExtensions[name]; !ok {
-				return fmt.Errorf("unknown extension %s", name)
+				if _, ok := generated.EventContextExtensions[name]; !ok {
+					return fmt.Errorf("unknown extension %s", name)
+				}
 			}
 		}
 		if err := validateExtension(name, value); err != nil {
@@ -448,6 +608,27 @@ func (input EventRecordInput) extensions() map[string]any {
 	if input.Result != nil {
 		out["result"] = *input.Result
 	}
+	if input.CallType != nil {
+		out["callType"] = *input.CallType
+	}
+	if input.ParticipantCount != nil {
+		out["participantCount"] = *input.ParticipantCount
+	}
+	if input.ConnectTimeMS != nil {
+		out["connectTimeMs"] = *input.ConnectTimeMS
+	}
+	if input.MediaConnected != nil {
+		out["mediaConnected"] = *input.MediaConnected
+	}
+	if input.ReconnectCount != nil {
+		out["reconnectCount"] = *input.ReconnectCount
+	}
+	if input.DisconnectReason != nil {
+		out["disconnectReason"] = *input.DisconnectReason
+	}
+	if input.NetworkQuality != nil {
+		out["networkQuality"] = *input.NetworkQuality
+	}
 	if input.FailReasonCode != nil {
 		out["failReasonCode"] = *input.FailReasonCode
 	}
@@ -456,6 +637,36 @@ func (input EventRecordInput) extensions() map[string]any {
 	}
 	if input.OperationID != nil {
 		out["operationId"] = *input.OperationID
+	}
+	if input.RequestID != nil {
+		out["requestId"] = *input.RequestID
+	}
+	if input.TraceID != nil {
+		out["traceId"] = *input.TraceID
+	}
+	if input.RecoveryAction != nil {
+		out["recoveryAction"] = *input.RecoveryAction
+	}
+	if input.SurfaceID != nil {
+		out["surfaceId"] = *input.SurfaceID
+	}
+	if input.DetectionSource != nil {
+		out["detectionSource"] = *input.DetectionSource
+	}
+	if input.SampledFrames != nil {
+		out["sampledFrames"] = *input.SampledFrames
+	}
+	if input.JankyFrames != nil {
+		out["jankyFrames"] = *input.JankyFrames
+	}
+	if input.WorstFrameMS != nil {
+		out["worstFrameMs"] = *input.WorstFrameMS
+	}
+	if input.JankThresholdMS != nil {
+		out["jankThresholdMs"] = *input.JankThresholdMS
+	}
+	if input.TerminalState != nil {
+		out["terminalState"] = *input.TerminalState
 	}
 	if input.HTTPStatus != nil {
 		out["httpStatus"] = *input.HTTPStatus
@@ -496,8 +707,41 @@ func (input EventRecordInput) extensions() map[string]any {
 	if input.RebufferMS != nil {
 		out["rebufferMs"] = *input.RebufferMS
 	}
+	if input.EffectivePlaybackMS != nil {
+		out["effectivePlaybackMs"] = *input.EffectivePlaybackMS
+	}
 	if input.SeekCount != nil {
 		out["seekCount"] = *input.SeekCount
+	}
+	if input.SeekFailureCount != nil {
+		out["seekFailureCount"] = *input.SeekFailureCount
+	}
+	if input.SeekCommandMaxMS != nil {
+		out["seekCommandMaxMs"] = *input.SeekCommandMaxMS
+	}
+	if input.SeekSettleMaxMS != nil {
+		out["seekSettleMaxMs"] = *input.SeekSettleMaxMS
+	}
+	if input.DroppedFrames != nil {
+		out["droppedFrames"] = *input.DroppedFrames
+	}
+	if input.ProcessedVideoFrames != nil {
+		out["processedVideoFrames"] = *input.ProcessedVideoFrames
+	}
+	if input.AudioUnderrunCount != nil {
+		out["audioUnderrunCount"] = *input.AudioUnderrunCount
+	}
+	if input.RendererMode != nil {
+		out["rendererMode"] = *input.RendererMode
+	}
+	if input.DecoderQueueMode != nil {
+		out["decoderQueueMode"] = *input.DecoderQueueMode
+	}
+	if input.DecoderFallbackEnabled != nil {
+		out["decoderFallbackEnabled"] = *input.DecoderFallbackEnabled
+	}
+	if input.SeekEvidenceSource != nil {
+		out["seekEvidenceSource"] = *input.SeekEvidenceSource
 	}
 	if input.DeclaredDurationMS != nil {
 		out["declaredDurationMs"] = *input.DeclaredDurationMS
@@ -532,6 +776,11 @@ func validateExtension(name string, value any) error {
 		text, ok := value.(string)
 		if !ok || strings.TrimSpace(text) == "" || (definition.MaxLength > 0 && utf8.RuneCountInString(text) > definition.MaxLength) {
 			return fmt.Errorf("%s is invalid", name)
+		}
+		if len(definition.AllowedValues) > 0 {
+			if _, allowed := definition.AllowedValues[text]; !allowed {
+				return fmt.Errorf("%s is not an allowed value", name)
+			}
 		}
 	case "bool":
 		if _, ok := value.(bool); !ok {

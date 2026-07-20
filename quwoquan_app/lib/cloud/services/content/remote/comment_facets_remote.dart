@@ -25,8 +25,14 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
+    ContentCommentSort sort = ContentCommentSort.hot,
   }) => client.contentCommentListComments(
-    ListContentCommentsQuery(postId: postId, cursor: cursor, limit: limit),
+    ListContentCommentsQuery(
+      postId: postId,
+      cursor: cursor,
+      limit: limit,
+      sort: sort,
+    ),
     context: invocationContext(
       ContentRequestPageIds.listComments,
       command: false,

@@ -1,0 +1,114 @@
+{
+  "dashboard": {
+    "title": "L2 — 搜索商用健康度与有效行动漏斗",
+    "uid": "qwq-l2-search-commercial",
+    "tags": ["quwoquan", "l2", "search", "commercial", "funnel"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "检索 P95 / P99",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(search_retrieve_duration_seconds_bucket{status=\"ok\"}[5m])) by (le, mode))",
+            "legendFormat": "{{ mode }} P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(search_retrieve_duration_seconds_bucket{status=\"ok\"}[5m])) by (le, mode))",
+            "legendFormat": "{{ mode }} P99"
+          }
+        ]
+      },
+      {
+        "title": "可用性 / 零结果 / 降级率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "1 - sum(rate(search_retrieve_requests_total{status=\"error\"}[5m])) / clamp_min(sum(rate(search_retrieve_requests_total[5m])), 0.001)",
+            "legendFormat": "availability"
+          },
+          {
+            "expr": "sum(rate(search_retrieve_zero_results_total[5m])) / clamp_min(sum(rate(search_retrieve_requests_total{status=\"ok\"}[5m])), 0.001)",
+            "legendFormat": "zero result"
+          },
+          {
+            "expr": "sum(rate(search_retrieve_degraded_total[5m])) / clamp_min(sum(rate(search_retrieve_requests_total{status=\"ok\"}[5m])), 0.001)",
+            "legendFormat": "degrade"
+          }
+        ]
+      },
+      {
+        "title": "搜索反馈事实",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(search_feedback_events_total[5m])) by (event_type)",
+            "legendFormat": "{{ event_type }}"
+          }
+        ]
+      },
+      {
+        "title": "交集 attach 延迟与覆盖",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(search_intersection_attach_duration_seconds_bucket[5m])) by (le, status))",
+            "legendFormat": "{{ status }} P95"
+          },
+          {
+            "expr": "sum(rate(search_intersection_attach_hits_total[5m])) by (result)",
+            "legendFormat": "{{ result }}"
+          }
+        ]
+      },
+      {
+        "title": "RecentSearchState 操作健康度",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(search_recent_requests_total[5m])) by (operation, status)",
+            "legendFormat": "{{ operation }} {{ status }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(search_recent_duration_seconds_bucket[5m])) by (le, operation, status))",
+            "legendFormat": "{{ operation }} {{ status }} P95"
+          }
+        ]
+      },
+      {
+        "title": "负载与热点缓存",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "max(search_retrieve_inflight)",
+            "legendFormat": "inflight"
+          },
+          {
+            "expr": "sum(rate(search_retrieve_load_shed_total[5m])) by (reason)",
+            "legendFormat": "shed {{ reason }}"
+          },
+          {
+            "expr": "sum(rate(search_retrieve_related_terms_cache_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(search_retrieve_related_terms_cache_total[5m])), 0.001)",
+            "legendFormat": "related terms cache hit"
+          }
+        ]
+      },
+      {
+        "title": "三项产品黄金指标（SLS 单一事实源）",
+        "type": "text",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+        "options": {
+          "mode": "markdown",
+          "content": "产品漏斗来自 SLS `app-product-telemetry-search-funnel-hourly`（`rowKind=search_funnel`），按 `requestId` 去重：①有效搜索成功率 = `effectiveActionRequestCount / querySubmitCount`，目标 ≥35%；②提交→首个可操作结果 P95 来自 `firstActionableHistogram`，目标 ≤1500ms；③结果→有效行动率 = `effectiveActionRequestCount / nonEmptyResultCount`，目标 ≥20%。有效行动定义为结果点击或结果页连续停留 ≥3000ms。原始事件禁止写 query、objectId 或用户身份；Prometheus 面板仅表示服务健康，不能替代 SLS 产品漏斗。"
+        }
+      }
+    ]
+  }
+}

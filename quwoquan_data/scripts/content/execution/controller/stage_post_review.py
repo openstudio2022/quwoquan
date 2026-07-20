@@ -352,6 +352,8 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         review_refs = [ref for ref in matched_refs if ref in active_refs]
     elif stale_review_refs:
         review_refs = sorted(set(stale_review_refs))
+    # 控制器路径必须拿到全部 per-ref review gate 再走 ReAct 修复链；
+    # allow_partial=False 会在任一 ref 失败时 SystemExit，绕过回退重写机制。
     handle_post(
         PostStageRequest(
             execution_id=ctx.execution_id,
@@ -360,7 +362,7 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
             ),
             stage=PostStage.REVIEW,
             refs=tuple(review_refs),
-            allow_partial=False,
+            allow_partial=True,
             materialize=True,
         )
     )

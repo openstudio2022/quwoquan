@@ -379,11 +379,17 @@ func appendOutbox(
 	command relmodel.Command,
 	result relmodel.MutationResult,
 ) error {
+	sourceFollowCleared, targetFollowCleared := clearedFollowDirections(
+		command,
+		result.ClearedFollowing,
+	)
 	payload, err := json.Marshal(relmodel.OutboxPayload{
 		PairID:                  pairID,
 		SourcePersonaID:         command.SourcePersonaID,
 		TargetPersonaID:         command.TargetPersonaID,
 		Following:               result.State.IsFollowing,
+		SourceFollowCleared:     sourceFollowCleared,
+		TargetFollowCleared:     targetFollowCleared,
 		ClearedFollowDirections: len(result.ClearedFollowing),
 		Version:                 version,
 		OccurredAt:              result.OccurredAt,
@@ -401,6 +407,23 @@ func appendOutbox(
 		return fmt.Errorf("append persona relationship outbox: %w", err)
 	}
 	return nil
+}
+
+func clearedFollowDirections(
+	command relmodel.Command,
+	directions []relmodel.Direction,
+) (sourceCleared bool, targetCleared bool) {
+	for _, direction := range directions {
+		switch {
+		case direction.SourcePersonaID == command.SourcePersonaID &&
+			direction.TargetPersonaID == command.TargetPersonaID:
+			sourceCleared = true
+		case direction.SourcePersonaID == command.TargetPersonaID &&
+			direction.TargetPersonaID == command.SourcePersonaID:
+			targetCleared = true
+		}
+	}
+	return sourceCleared, targetCleared
 }
 
 func (s *PgPersonaRelationshipStore) ClaimPendingOutbox(
@@ -422,11 +445,18 @@ func (s *PgPersonaRelationshipStore) ClaimPendingOutbox(
 	leaseBefore := time.Now().UTC().Add(-lease)
 	rows, err := s.pool.Query(ctx, `
 		WITH candidates AS (
-			SELECT event_id
-			FROM persona_relationship_outbox
-			WHERE published_at IS NULL
-				AND (claim_owner IS NULL OR claimed_at < $2)
-			ORDER BY occurred_at, event_id
+			SELECT candidate.event_id
+			FROM persona_relationship_outbox AS candidate
+			WHERE candidate.published_at IS NULL
+				AND (candidate.claim_owner IS NULL OR candidate.claimed_at < $2)
+				AND NOT EXISTS (
+					SELECT 1
+					FROM persona_relationship_outbox AS earlier
+					WHERE earlier.aggregate_id = candidate.aggregate_id
+						AND earlier.published_at IS NULL
+						AND earlier.aggregate_version < candidate.aggregate_version
+				)
+			ORDER BY candidate.occurred_at, candidate.event_id
 			LIMIT $3
 			FOR UPDATE SKIP LOCKED
 		)
@@ -593,8 +623,79 @@ func (s *PgPersonaRelationshipStore) ListFollowers(ctx context.Context, targetPe
 	return s.listDirections(ctx, targetPersonaID, cursor, limit, "target_persona_id", "following", "followed_at")
 }
 
-func (s *PgPersonaRelationshipStore) ListBlocked(ctx context.Context, sourcePersonaID, cursor string, limit int) ([]relmodel.Direction, string, error) {
-	return s.listDirections(ctx, sourcePersonaID, cursor, limit, "source_persona_id", "blocked", "blocked_at")
+func (s *PgPersonaRelationshipStore) ListBlocked(
+	ctx context.Context,
+	sourcePersonaID, cursor string,
+	limit int,
+) ([]relports.BlockedListItem, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	args := []any{sourcePersonaID}
+	where := "d.source_persona_id = $1 AND d.blocked = TRUE"
+	if cursorTime, cursorPairID, ok := parseCursor(cursor); ok {
+		args = append(args, cursorTime, cursorPairID)
+		where += fmt.Sprintf(
+			" AND (d.blocked_at, d.pair_id) < ($%d, $%d)",
+			len(args)-1,
+			len(args),
+		)
+	}
+	args = append(args, limit+1)
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT d.pair_id, d.target_persona_id,
+			COALESCE(NULLIF(p.display_name, ''), d.target_persona_id),
+			COALESCE(NULLIF(p.user_handle, ''), d.target_persona_id),
+			COALESCE(p.avatar_url, ''),
+			d.blocked_at
+		FROM persona_relationship_directions d
+		LEFT JOIN personas p ON p.sub_account_id = d.target_persona_id
+		WHERE %s
+		ORDER BY d.blocked_at DESC, d.pair_id DESC
+		LIMIT $%d`, where, len(args)), args...)
+	if err != nil {
+		return nil, "", fmt.Errorf("list blocked persona views: %w", err)
+	}
+	defer rows.Close()
+
+	type blockedRow struct {
+		pairID string
+		item   relports.BlockedListItem
+	}
+	items := make([]blockedRow, 0, limit+1)
+	for rows.Next() {
+		var row blockedRow
+		if err := rows.Scan(
+			&row.pairID,
+			&row.item.TargetSubAccountID,
+			&row.item.DisplayName,
+			&row.item.UserHandle,
+			&row.item.AvatarURL,
+			&row.item.BlockedAt,
+		); err != nil {
+			return nil, "", fmt.Errorf("scan blocked persona view: %w", err)
+		}
+		row.item.BlockedAt = row.item.BlockedAt.UTC()
+		items = append(items, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", fmt.Errorf("iterate blocked persona views: %w", err)
+	}
+
+	nextCursor := ""
+	if len(items) > limit {
+		items = items[:limit]
+		last := items[len(items)-1]
+		nextCursor = last.item.BlockedAt.Format(time.RFC3339Nano) + "|" + last.pairID
+	}
+	result := make([]relports.BlockedListItem, 0, len(items))
+	for _, row := range items {
+		result = append(result, row.item)
+	}
+	return result, nextCursor, nil
 }
 
 func (s *PgPersonaRelationshipStore) listDirections(
@@ -667,23 +768,6 @@ func directionCursor(direction relmodel.Direction, orderColumn string) string {
 		return ""
 	}
 	return value.UTC().Format(time.RFC3339Nano) + "|" + direction.PairID
-}
-
-func (s *PgPersonaRelationshipStore) CountFollowing(ctx context.Context, sourcePersonaID string) (int64, error) {
-	return s.countDirections(ctx, "source_persona_id", sourcePersonaID)
-}
-
-func (s *PgPersonaRelationshipStore) CountFollowers(ctx context.Context, targetPersonaID string) (int64, error) {
-	return s.countDirections(ctx, "target_persona_id", targetPersonaID)
-}
-
-func (s *PgPersonaRelationshipStore) countDirections(ctx context.Context, column, personaID string) (int64, error) {
-	var count int64
-	query := fmt.Sprintf("SELECT COUNT(*) FROM persona_relationship_directions WHERE %s = $1 AND following = TRUE", column)
-	if err := s.pool.QueryRow(ctx, query, personaID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count persona relationship directions: %w", err)
-	}
-	return count, nil
 }
 
 func nullableString(value string) *string {

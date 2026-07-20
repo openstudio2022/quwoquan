@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:livekit_client/livekit_client.dart'
+    show VideoTrackRenderer, VideoViewFit;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -28,11 +30,11 @@ class PipCallOverlay extends ConsumerStatefulWidget {
 }
 
 class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
-  static const _width = 120.0;
-  static const _height = 160.0;
-  static const _edgePadding = 12.0;
+  static const _width = AppSpacing.rtcPipWidth;
+  static const _height = AppSpacing.rtcPipHeight;
+  static const _edgePadding = AppSpacing.rtcPipEdgePadding;
 
-  Offset _position = const Offset(_edgePadding, 100.0);
+  Offset _position = const Offset(_edgePadding, AppSpacing.rtcPipInitialTop);
 
   void _onDragEnd(DragEndDetails details, BoxConstraints constraints) {
     final maxX = constraints.maxWidth - _width - _edgePadding;
@@ -132,17 +134,9 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
 
   Widget _buildContent(ActiveCallState callState) {
     final speaker = widget.activeSpeaker;
-    if (speaker != null && speaker.isCameraOn) {
-      return Container(
-        color: AppColors.overlayMedium,
-        child: Center(
-          child: Icon(
-            CupertinoIcons.video_camera,
-            color: AppColors.white.withValues(alpha: 0.4),
-            size: AppSpacing.xl,
-          ),
-        ),
-      );
+    final videoTrack = speaker?.videoTrack;
+    if (speaker?.isCameraOn == true && videoTrack != null) {
+      return VideoTrackRenderer(videoTrack, fit: VideoViewFit.cover);
     }
 
     return Container(

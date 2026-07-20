@@ -1,0 +1,36 @@
+object: CirclePostPlacement
+operations:
+  - PlacePostInCircle
+  - RemovePostFromCircle
+  - PinCirclePost
+  - FeatureCirclePost
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/model/behavior.go
+    - quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement/circle_post_placement_command_facade.go
+  store:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence/mongo_aggregate_store.go
+  outbox:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence/mongo_outbox.go
+    - quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement/outbox_relay.go
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence/mongo_post_count_projector.go
+    - quwoquan_service/services/circle-service/internal/infrastructure/messaging/circle_post_placement_stream_publisher.go
+  reader:
+    - quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence/mongo_policy_readers.go
+  transport:
+    - quwoquan_service/services/circle-service/internal/adapters/http/post_placement_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/circle/post_placement_contracts.dart
+    - quwoquan_app/lib/cloud/remote/circle/post_placement/post_placement_remote.dart
+  page:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page_state.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/model/behavior__local_contract_test.go
+    - quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement/circle_post_placement_command_facade__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/circle-service/tests/api_integration/circle_post_placement__api_integration_test.go
+    - quwoquan_service/services/circle-service/tests/api_integration/circle_post_projection_stream__api_integration_test.go
+    - quwoquan_service/services/circle-service/tests/api_integration/circle_section_contract__api_integration_test.go
+  user_acceptance: []
+environments: []

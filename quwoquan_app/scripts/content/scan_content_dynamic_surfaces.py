@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Scan content-domain surfaces for Map<String, dynamic> / dynamic markers (inventory aid).
 
-Run from repo root: python3 scripts/scan_content_dynamic_surfaces.py
+Run from repo root:
+  python3 quwoquan_app/scripts/content/scan_content_dynamic_surfaces.py
 Prints path:line:content for manual merge into
 specs/gates/content_domain_dynamic_map_inventory.yaml
 """

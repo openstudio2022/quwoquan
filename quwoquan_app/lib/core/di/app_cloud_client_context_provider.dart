@@ -19,6 +19,8 @@ final class AppCloudClientContextProvider
         defaultValue: 'dev',
       ),
       locale: PlatformDispatcher.instance.locale.toLanguageTag(),
+      regionCode: AppTraceContextStore.instance.grayRegionCode,
+      carrier: AppTraceContextStore.instance.grayCarrier,
     );
   }
 }

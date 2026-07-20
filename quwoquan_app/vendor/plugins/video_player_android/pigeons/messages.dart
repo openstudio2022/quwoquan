@@ -60,6 +60,57 @@ class AudioTrackChangedEvent extends PlatformVideoEvent {
   late final String? selectedTrackId;
 }
 
+/// Sent when ExoPlayer has rendered the first video frame for this player.
+///
+/// This is a real surface/first-frame signal and must not be confused with
+/// controller initialize / READY state transitions.
+class RenderedFirstFrameEvent extends PlatformVideoEvent {
+  /// Native elapsed time from prepare to the rendered frame.
+  late final int ttffMs;
+}
+
+/// Sent when a seek request has produced a newly rendered frame near the target.
+///
+/// The seek command Future completing is never enough; settle requires native
+/// render evidence after DISCONTINUITY_REASON_SEEK.
+class SeekSettledEvent extends PlatformVideoEvent {
+  /// Target position that was requested, in milliseconds.
+  late final int targetPositionMs;
+
+  /// Observed playback position when the settle frame was rendered, in milliseconds.
+  late final int settledPositionMs;
+
+  /// Native elapsed time from the seek request to the settle frame.
+  late final int settleMs;
+}
+
+/// Reports a batch of video frames dropped by the active renderer.
+class DroppedVideoFramesEvent extends PlatformVideoEvent {
+  late final int droppedFrames;
+  late final int elapsedMs;
+}
+
+/// Reports one audio output underrun from the active renderer.
+class AudioUnderrunEvent extends PlatformVideoEvent {
+  late final int bufferSize;
+  late final int bufferSizeMs;
+  late final int elapsedSinceLastFeedMs;
+}
+
+/// Reports frame-processing samples used as the dropped-frame denominator.
+class VideoFrameProcessingEvent extends PlatformVideoEvent {
+  late final int processedFrames;
+}
+
+/// Reports the actual broad-compatibility renderer configuration.
+///
+/// It deliberately carries no brand, model, or other device fingerprint.
+class PlaybackDiagnosticsEvent extends PlatformVideoEvent {
+  late final String rendererMode;
+  late final String decoderQueueMode;
+  late final bool decoderFallbackEnabled;
+}
+
 /// Information passed to the platform view creation.
 class PlatformVideoViewCreationParams {
   const PlatformVideoViewCreationParams({required this.playerId});

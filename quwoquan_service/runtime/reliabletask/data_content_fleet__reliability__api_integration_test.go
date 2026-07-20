@@ -1,3 +1,5 @@
+//go:build api_integration
+
 package reliabletask_test
 
 import (
@@ -6,6 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,8 +31,7 @@ func dataJob(i int) reliabletask.DataContentJob {
 		Carrier:        "homepage",
 		SourceRevision: fmt.Sprintf("sha256:%064d", i+1),
 		JobID:          fmt.Sprintf("job-%03d", i),
-		TaskID:         "data-commercial",
-		BatchID:        "fleet-local-contract",
+		ExecutionID:    "20260719--travel-homepage-coverage--cn-zhejiang--canary-001",
 		Ref:            entity,
 		Stage:          "author",
 		PartitionKey:   entity,
@@ -98,14 +102,27 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	completed := 0
 	deadline := time.Now().Add(30 * time.Second)
 	for completed < total && time.Now().Before(deadline) {
-		processed, err := fleet.ProcessOne(ctx, func(_ context.Context, task reliabletask.ReliableAsyncTask) error {
-			if task.AggregateID == dataJob(7).EntityRef && !failOnce[task.TaskID] {
-				failOnce[task.TaskID] = true
-				return errors.New("transient integration failure")
-			}
-			completed++
-			return nil
-		})
+		processed, err := fleet.ProcessOneContent(
+			ctx,
+			reliabletask.DataContentExecutorFunc(
+				func(_ context.Context, item reliabletask.DataContentWorkItem) (reliabletask.DataContentExecutionResult, error) {
+					if item.EntityRef == dataJob(7).EntityRef && !failOnce[item.RuntimeTaskID] {
+						failOnce[item.RuntimeTaskID] = true
+						return reliabletask.DataContentExecutionResult{}, errors.New("transient integration failure")
+					}
+					completed++
+					return reliabletask.DataContentExecutionResult{
+						ExecutionID:         item.ExecutionID,
+						JobID:               item.JobID,
+						CanonicalObjectRef:  "publish/" + item.EntityRef,
+						ObjectTransactionID: "object-transaction-" + item.JobID,
+						ResultEnvelopeRef:   "results/" + item.JobID + ".json",
+						AcceptanceClass:     reliabletask.DataContentAcceptanceContractFixture,
+						CompletedAt:         time.Now().UTC(),
+					}, nil
+				},
+			),
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,6 +144,19 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if count != total {
 		t.Fatalf("succeeded task count=%d want=%d", count, total)
 	}
+	recorded, err := db.Collection("reliable_async_task").CountDocuments(
+		ctx,
+		bson.M{
+			"result.schema": "quwoquan.data_content_object_result",
+			"result.status": "contract_fixture",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorded != total {
+		t.Fatalf("contract fixture task result count=%d want=%d", recorded, total)
+	}
 	outboxes, err := db.Collection("reliable_task_outbox").CountDocuments(ctx, bson.M{})
 	if err != nil {
 		t.Fatal(err)
@@ -142,30 +172,33 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 		t.Fatalf("terminal replay dispatched duplicate tasks=%d err=%v", len(tasks), err)
 	}
 	if reportOut := os.Getenv("QWQ_RELIABLETASK_REPORT_OUT"); reportOut != "" {
-		elapsed := time.Since(startedAt)
-		report := map[string]any{
-			"schema":                     "quwoquan.reliabletask_fleet_report",
-			"passed":                            true,
-			"backend":                           "mongodb+redis",
-			"total":                             total,
-			"succeeded":                         total,
-			"controlPlaneTaskThroughputPerHour": float64(total) / elapsed.Hours(),
-			"acceptedContentThroughputPerHour":  0.0,
-			"acceptedContentThroughputStatus":   "GATE_BLOCK_NO_COMMERCIAL_BATCH",
-			"stageLatencyP99Ms":                 elapsed.Milliseconds(),
-			"finalizedWithinStageBudgetRate":    1.0,
-			"automaticRecoveryRate":             1.0,
-			"workerUtilization":                 1.0,
-			"repairCount":                       1,
-			"reasonedAbandonCount":              0,
-			"tokenCount":                        0,
-			"costUsd":                           0.0,
-			"storageErrorCount":                 0,
-			"queueLag":                          0,
-			"duplicatePublishCount":             0,
-			"missingObjectCount":                0,
-			"idempotencyKey":                    "entity+carrier+sourceRevision",
-			"completedAt":                       time.Now().UTC().Format(time.RFC3339),
+		cursor, err := db.Collection("reliable_async_task").Find(
+			ctx,
+			bson.M{"taskType": reliabletask.DataContentTaskType},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cursor.Close(ctx)
+		var taskRows []reliabletask.ReliableAsyncTask
+		if err := cursor.All(ctx, &taskRows); err != nil {
+			t.Fatal(err)
+		}
+		report := reliabletask.BuildDataContentFleetReport(
+			taskRows,
+			startedAt,
+			time.Now().UTC(),
+			int(outboxes)-total,
+			total-len(taskRows),
+		)
+		if report.Passed ||
+			report.CommercialAcceptedCount != 0 ||
+			report.AcceptedContentThroughputPerHour != 0 ||
+			report.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
+			t.Fatalf(
+				"control-plane fixture was misreported as commercial throughput: %#v",
+				report,
+			)
 		}
 		data, err := json.MarshalIndent(report, "", "  ")
 		if err != nil {
@@ -175,4 +208,341 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
+	repoRoot := strings.TrimSpace(os.Getenv("TEST_REPO_ROOT"))
+	python := strings.TrimSpace(os.Getenv("TEST_QWQ_DATA_PYTHON"))
+	mongoURI := strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
+	redisAddr := strings.TrimSpace(os.Getenv("TEST_REDIS_ADDR"))
+	if repoRoot == "" || python == "" || mongoURI == "" || redisAddr == "" {
+		t.Fatal(
+			"TEST_REPO_ROOT, TEST_QWQ_DATA_PYTHON, TEST_MONGO_URI and " +
+				"TEST_REDIS_ADDR are required for the real data worker E2E",
+		)
+	}
+	tempRoot := t.TempDir()
+	outputRoot := filepath.Join(tempRoot, "output")
+	publishRoot := filepath.Join(tempRoot, "publish")
+	fixtureCommand := exec.Command(
+		python,
+		filepath.Join(
+			repoRoot,
+			"quwoquan_data/tests/support/reliabletask_process_fixture.py",
+		),
+		"--output-root",
+		outputRoot,
+		"--publish-root",
+		publishRoot,
+	)
+	fixtureCommand.Dir = repoRoot
+	fixtureCommand.Env = dataContentTestEnvironment(
+		os.Environ(),
+		outputRoot,
+		publishRoot,
+	)
+	fixtureOutput, err := fixtureCommand.Output()
+	if err != nil {
+		t.Fatalf("prepare real Python worker fixture: %v", err)
+	}
+	var fixture struct {
+		Schema               string                      `json:"schema"`
+		Job                  reliabletask.DataContentJob `json:"job"`
+		IdempotencyKey       string                      `json:"idempotencyKey"`
+		ExpectedCanonicalRef string                      `json:"expectedCanonicalRef"`
+	}
+	if err := json.Unmarshal(fixtureOutput, &fixture); err != nil {
+		t.Fatalf("decode real Python worker fixture: %v", err)
+	}
+	if fixture.Schema != "quwoquan.reliabletask_process_fixture" {
+		t.Fatalf("fixture schema drift: %q", fixture.Schema)
+	}
+	key, err := fixture.Job.IdempotencyKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != fixture.IdempotencyKey {
+		t.Fatalf("fixture idempotency drift: got=%q want=%q", key, fixture.IdempotencyKey)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+	db := client.Database(fmt.Sprintf("reliabletask_data_process_%d", time.Now().UnixNano()))
+	t.Cleanup(func() { _ = db.Drop(context.Background()) })
+	store := reliabletaskmongo.New(db)
+	if err := store.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	router := platformredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"reliabletask": {Mode: "standalone", Addr: redisAddr},
+		},
+		DefaultScene: "reliabletask",
+	})
+	t.Cleanup(func() { _ = router.Close() })
+	ready, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
+		Client: router.Scene("reliabletask"),
+		Stream: fmt.Sprintf(
+			"reliabletask:data:content:process:%d",
+			time.Now().UnixNano(),
+		),
+		Group: "data.content_supply.process.integration",
+		Queue: reliabletask.DataContentQueue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ready.Ensure(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fleet := reliabletask.DataContentFleet{
+		Store:          store,
+		Ready:          ready,
+		WorkerID:       "data-process-integration-worker",
+		LeaseTTL:       10 * time.Second,
+		PendingMinIdle: 10 * time.Millisecond,
+		Retry: reliabletask.RetryPolicy{
+			MaxAttempts: 2,
+			Backoff:     []time.Duration{10 * time.Millisecond},
+		},
+		ResultVerifier: reliabletask.DataContentFilesystemEvidenceVerifier{
+			PublishRoot:  publishRoot,
+			EvidenceRoot: outputRoot,
+		},
+	}
+	if _, err := fleet.Declare(ctx, fixture.Job); err != nil {
+		t.Fatal(err)
+	}
+	if tasks, err := fleet.Dispatch(ctx, 10); err != nil || len(tasks) != 1 {
+		t.Fatalf("dispatch real worker tasks=%d err=%v", len(tasks), err)
+	}
+	executor := reliabletask.DataContentProcessExecutor{
+		Command: []string{
+			python,
+			filepath.Join(repoRoot, "quwoquan_data/scripts/cli.py"),
+			"task",
+			"execute-object-worker",
+		},
+		WorkDir: filepath.Join(repoRoot, "quwoquan_data"),
+		Environment: dataContentTestEnvironment(
+			os.Environ(),
+			outputRoot,
+			publishRoot,
+		),
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	var task reliabletask.ReliableAsyncTask
+	for time.Now().Before(deadline) {
+		processed, err := fleet.ProcessOneContent(ctx, executor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = db.Collection("reliable_async_task").FindOne(
+			ctx,
+			bson.M{"payload.jobId": fixture.Job.JobID},
+		).Decode(&task)
+		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			t.Fatal(err)
+		}
+		if err == nil && task.Status == reliabletask.TaskStatusSucceeded {
+			break
+		}
+		if !processed {
+			time.Sleep(15 * time.Millisecond)
+		}
+		_, _ = fleet.Dispatch(ctx, 10)
+	}
+	if task.Status != reliabletask.TaskStatusSucceeded {
+		t.Fatalf(
+			"real Python worker did not succeed: status=%s failure=%#v",
+			task.Status,
+			task.LastFailure,
+		)
+	}
+	canonicalManifest := filepath.Join(
+		publishRoot,
+		filepath.FromSlash(fixture.ExpectedCanonicalRef),
+		"manifest.json",
+	)
+	if _, err := os.Stat(canonicalManifest); err != nil {
+		t.Fatalf("real canonical object missing: %v", err)
+	}
+	report := reliabletask.BuildDataContentFleetReport(
+		[]reliabletask.ReliableAsyncTask{task},
+		task.CreatedAt,
+		task.UpdatedAt,
+		0,
+		0,
+	)
+	if !report.Passed ||
+		report.CommercialAcceptedCount != 1 ||
+		report.AcceptedContentThroughputPerHour <= 0 ||
+		report.AcceptedContentThroughputStatus != "MEASURED" {
+		t.Fatalf("real accepted throughput was not measured: %#v", report)
+	}
+}
+
+func TestQWQDataCLIUsesProductionReliableTaskFleet(t *testing.T) {
+	repoRoot := strings.TrimSpace(os.Getenv("TEST_REPO_ROOT"))
+	python := strings.TrimSpace(os.Getenv("TEST_QWQ_DATA_PYTHON"))
+	mongoURI := strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
+	redisAddr := strings.TrimSpace(os.Getenv("TEST_REDIS_ADDR"))
+	if repoRoot == "" || python == "" || mongoURI == "" || redisAddr == "" {
+		t.Fatal(
+			"TEST_REPO_ROOT, TEST_QWQ_DATA_PYTHON, TEST_MONGO_URI and " +
+				"TEST_REDIS_ADDR are required for the production fleet E2E",
+		)
+	}
+	tempRoot := t.TempDir()
+	outputRoot := filepath.Join(tempRoot, "output")
+	publishRoot := filepath.Join(tempRoot, "publish")
+	fixtureCommand := exec.Command(
+		python,
+		filepath.Join(
+			repoRoot,
+			"quwoquan_data/tests/support/reliabletask_process_fixture.py",
+		),
+		"--output-root",
+		outputRoot,
+		"--publish-root",
+		publishRoot,
+	)
+	fixtureCommand.Dir = repoRoot
+	fixtureCommand.Env = dataContentTestEnvironment(
+		os.Environ(),
+		outputRoot,
+		publishRoot,
+	)
+	fixtureOutput, err := fixtureCommand.Output()
+	if err != nil {
+		t.Fatalf("prepare production fleet fixture: %v", err)
+	}
+	var fixture struct {
+		Job                  reliabletask.DataContentJob `json:"job"`
+		ExpectedCanonicalRef string                      `json:"expectedCanonicalRef"`
+	}
+	if err := json.Unmarshal(fixtureOutput, &fixture); err != nil {
+		t.Fatalf("decode production fleet fixture: %v", err)
+	}
+	databaseName := fmt.Sprintf(
+		"reliabletask_data_cli_%d",
+		time.Now().UnixNano(),
+	)
+	client, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = client.Database(databaseName).Drop(context.Background())
+		_ = client.Disconnect(context.Background())
+	})
+	command := exec.Command(
+		python,
+		filepath.Join(repoRoot, "quwoquan_data/scripts/cli.py"),
+		"task",
+		"reliabletask-fleet",
+		"--execution-id",
+		fixture.Job.ExecutionID,
+		"--stage",
+		"publish",
+		"--workers",
+		"2",
+		"--timeout-seconds",
+		"60",
+	)
+	command.Dir = filepath.Join(repoRoot, "quwoquan_data")
+	command.Env = dataContentEnvironment(
+		os.Environ(),
+		map[string]string{
+			"PYTHONDONTWRITEBYTECODE":            "1",
+			"QWQ_OUTPUT_ROOT":                    outputRoot,
+			"QWQ_PUBLISH_ROOT":                   publishRoot,
+			"QWQ_DATA_FLEET_MONGO_URI":           mongoURI,
+			"QWQ_DATA_FLEET_MONGO_DATABASE":      databaseName,
+			"QWQ_DATA_FLEET_REDIS_ADDR":          redisAddr,
+			"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS": "10",
+		},
+	)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf(
+			"production qwq-data ReliableTask fleet failed: %v\n%s",
+			err,
+			output,
+		)
+	}
+	reportPath := filepath.Join(
+		outputRoot,
+		"data",
+		"tasks",
+		fixture.Job.ExecutionID,
+		"evidence",
+		"reliabletask",
+		"publish_fleet_report.json",
+	)
+	reportBytes, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report reliabletask.DataContentFleetReport
+	if err := json.Unmarshal(reportBytes, &report); err != nil {
+		t.Fatal(err)
+	}
+	if reportOut := strings.TrimSpace(
+		os.Getenv("QWQ_RELIABLETASK_COMMERCIAL_REPORT_OUT"),
+	); reportOut != "" {
+		if err := os.MkdirAll(filepath.Dir(reportOut), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(reportOut, reportBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !report.Passed ||
+		report.CommercialAcceptedCount != 1 ||
+		report.AcceptedContentThroughputPerHour <= 0 {
+		t.Fatalf("production fleet report is not commercially accepted: %#v", report)
+	}
+	if _, err := os.Stat(filepath.Join(
+		publishRoot,
+		filepath.FromSlash(fixture.ExpectedCanonicalRef),
+		"manifest.json",
+	)); err != nil {
+		t.Fatalf("production fleet canonical object missing: %v", err)
+	}
+}
+
+func dataContentTestEnvironment(
+	current []string,
+	outputRoot string,
+	publishRoot string,
+) []string {
+	return dataContentEnvironment(current, map[string]string{
+		"PYTHONDONTWRITEBYTECODE": "1",
+		"QWQ_OUTPUT_ROOT":         outputRoot,
+		"QWQ_PUBLISH_ROOT":        publishRoot,
+	})
+}
+
+func dataContentEnvironment(
+	current []string,
+	overrides map[string]string,
+) []string {
+	result := make([]string, 0, len(current)+len(overrides))
+	for _, row := range current {
+		key, _, found := strings.Cut(row, "=")
+		if _, overridden := overrides[key]; found && overridden {
+			continue
+		}
+		result = append(result, row)
+	}
+	for key, value := range overrides {
+		result = append(result, key+"="+value)
+	}
+	return result
 }

@@ -1,21 +1,37 @@
-# L4 Story：call-lifecycle-contract — 1v1 呼叫状态机契约
+# L3 Story：call-lifecycle-contract — CallSession 生命周期合同
 
-> **层级**：L4_story（隶属 L3 `one-to-one-call`）
-> **状态**：specified
-> **父节点**：`chat-conversation/realtime-call/one-to-one-call`
+> **层级**：L3_story（隶属 L2 `realtime-call`）
+> **状态**：specified；验收 pending
+> **父能力**：`chat-conversation/realtime-call`
 
-## 定位
+## 最小价值
 
-1v1 呼叫状态机契约的可验收交付：定义并实现 CallSession 状态流转（INITIATED→RINGING→CONNECTING→IN_CALL→ENDED）及端云协同行为。
+CallSession 在并发、重复命令与媒体延迟下仍按同一服务端状态机收敛，App 不需要提交版本或
+猜测媒体已连接。
 
-## 职责边界
+## Contract
 
-- 状态机：InitiateCall、AnswerCall、RejectCall、HangupCall、超时 30s 无应答
-- 端到端：1v1 语音/视频完整旅程（发起→接听→通话→挂断→记录消息）
-- 对应 L2 `realtime-call` acceptance A17~A21、A32~A33
+- 聚合状态：`initiated | ringing | connecting | in_call | ended`。
+- 参与者状态：`invited | ringing | connecting | connected | left | timeout`。
+- 结束原因：
+  `normal | cancelled | rejected | no_answer | error | timeout | last_leave`。
+- `InitiateCall` 创建聚合；同 actor 活跃通话由唯一约束防止双呼。
+- `AnswerCall` 只推进到 connecting；`ReportMediaConnected` 才记录媒体 connected，
+  至少两人 connected 后进入 in_call。
+- `RejectCall`、`CancelCall`、`HangupCall` 与最后一人 `LeaveCall` 使用各自命名意图。
+- state CAS、command receipt 与 outbox 在同一 Mongo transaction 提交。
+- 重复 idempotency key 返回首次结果；目标态已满足时持久化 no-op receipt 且不递增 version。
+- `ended` 后不再发生业务状态推进。
 
-## 与父节点关系
+## 边界
 
-- 父节点 `realtime-call/spec.md` §4.1 CallSession、§4.4 API 端点、§6.2 业务约束
-- 父节点 `one-to-one-call/spec.md` 定义 1v1 端到端闭环
-- 详细规格与验收标准见 L2 `realtime-call/spec.md` 及 `realtime-call/acceptance.yaml`。
+- wire `callType` 只使用 `audio/video`。
+- token 由 Initiate/Answer/Join 响应直接返回。
+- 事件在线投递统一走 realtime-gateway；媒体连接由 LiveKit 负责。
+- 本 Story 不包含离线 Push provider、页面视觉或媒体 QoE 汇总，但需要向对应 Story 暴露
+  可验证的状态终点。
+
+## 验收
+
+重点验证 answer 与 connected 分离、30 秒 no_answer、取消/接听竞态、重复命令、BOLA、
+receipt/outbox 原子性。测试路径见本节点 `acceptance.yaml`；未有 recorded 证据时保持 pending。

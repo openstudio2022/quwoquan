@@ -207,7 +207,7 @@ E2E 准出：
 - `Behavior`：`referralSource`、`feedRequestId`、trace/request id、互动反馈完整。
 - `Recommendation`：HotPath、特征投影、AB 分桶、护栏指标、回滚开关。
 - `Observability`：曝光、停留、互动、错误、延迟、freshness/correctness、dashboard/report。
-- `Environment`：alpha/beta/gamma/prod 数据源、包纯度、topology、`stackctl verify --tier all`。
+- `Environment`：alpha/beta/gamma/prod 数据源、包纯度、topology，以及按证据级别执行 `stackctl verify --profile smoke|integration|release`；`baseline` 不连接环境。
 
 跨域任务至少需要 `local_contract` 与 `api_integration`；用户旅程或发布前能力必须补 `user_acceptance`。
 

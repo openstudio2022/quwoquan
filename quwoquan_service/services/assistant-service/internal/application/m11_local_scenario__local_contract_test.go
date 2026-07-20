@@ -38,7 +38,8 @@ func TestM11CloudAlphaUserInitiatedScenariosProduceTypedStream(t *testing.T) {
 				ReactRuntime{
 					Model: DeterministicModelProvider{},
 					Tools: DefaultToolCoordinator{
-						Now: func() time.Time { return now },
+						Registry: testCloudToolRegistry(),
+						Now:      func() time.Time { return now },
 					},
 				},
 				func() time.Time { return now },

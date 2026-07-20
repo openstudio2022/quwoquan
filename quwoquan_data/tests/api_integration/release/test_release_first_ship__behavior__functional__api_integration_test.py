@@ -83,6 +83,7 @@ def _patch_roots(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
         "resolve_environment_release_target",
         lambda env: _target(root, DeploymentEnvironment(env)),
     )
+    monkeypatch.setattr(handler, "require_environment_readiness", lambda **_kwargs: None)
 
 
 def test_apply_writes_append_only_environment_run(

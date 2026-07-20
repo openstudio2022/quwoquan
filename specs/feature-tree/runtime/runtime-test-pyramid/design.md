@@ -80,10 +80,7 @@
 - `quwoquan_ops/acceptance/api_integration/**`
 - `quwoquan_ops/acceptance/user_acceptance/**`
 
-legacy 源文件可以暂时保留，但：
-
-- 必须存在 canonical bridge
-- `tests.recorded` 不得再直接引用 legacy 路径
+测试文件必须物理位于 canonical 根；不保留 bridge、旧目录或豁免入口。
 
 ## Gate Flow
 
@@ -93,10 +90,15 @@ legacy 源文件可以暂时保留，但：
   - `verify-test-no-fake`
   - `verify-test-coverage-map`
   - `test-local-contract`
-- `make gate-full`
+- `make gate-smoke`
   - `make gate`
-  - `test-api-integration`
-  - `test-user-acceptance ENV=local`
+  - Alpha 固定投影的关键页面、API、导入形状与恢复契约
+- `make gate-integration ENV=beta|gamma`
+  - `make gate`
+  - 内容数据面的真实 import、API、媒体、幂等、回滚/replay
+- `make gate-release ENV=gamma|prod`
+  - `make gate`
+  - Gamma 真机 UAT、trace/SLO；Prod 审批、灰度与回滚
 
 ## Exit Rule
 
@@ -136,39 +138,23 @@ retry: 1
 
 ---
 
-## 8. 门禁全景：make gate / gate-full / gate-ftl 分层
+## 8. 门禁全景：baseline / smoke / integration / release
 
 ```
-make gate           ← 每次 PR（阻塞合入）
-  ├── flutter test test/cloud/ test/components/ test/ui/   [L1a+b+c]
-  ├── go test ./services/content-service/... -count=1      [L2]
-  ├── flutter analyze                                       [静态分析]
-  ├── verify_metadata_internal                              [metadata 一致性]
-  └── patrol_flow 文件存在性检查（warn 级）
+make gate                           ← baseline；每次 PR，阻塞合入
+  ├── metadata/codegen、目录、coverage、非功能契约
+  ├── local_contract
+  └── 不读取远端 URL、SLS、设备或运行输出配置
 
-make gate-full      ← daily CI + pre-release（advisory → pre-release 阻塞发布）
-  ├── make gate（以上全部）
-  └── flutter test test/api_integration/cloud/content/api_contract_runner.dart \
-        --dart-define=API_CONTRACT_ENV=gamma \
-        --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
-        --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)   [L3]
+make gate-smoke                     ← alpha；可重复 smoke
+  └── mock/contract 投影、关键页面/API、导入形状与错误恢复
 
-Firebase Test Lab   ← pre-release tag 触发（阻塞发布）
-  └── patrol test test/user_acceptance/patrol/ \
-        --dart-define=APP_RUNTIME_ENV=gamma \
-        --dart-define=API_CONTRACT_ENV=gamma                [L4]
+make gate-integration ENV=beta|gamma ← 内容数据面集成
+  └── full-sync、API、媒体、幂等、rollback/replay
+
+make gate-release ENV=gamma|prod   ← 商业准出
+  └── Gamma 真机 UAT、trace/SLO；Prod 审批、灰度、观察和回滚
 ```
 
-**Makefile targets**（根目录）：
-```makefile
-test-api-contract:
-    @if [ -z "$(GAMMA_BASE_URL)" ] || [ -z "$(GAMMA_PRODUCT_OPS_BASE_URL)" ]; then \
-        echo "[L3] FAIL: set GAMMA_BASE_URL and GAMMA_PRODUCT_OPS_BASE_URL"; exit 2; \
-    fi
-    cd quwoquan_app && flutter test test/api_integration/cloud/content/api_contract_runner.dart \
-        --dart-define=API_CONTRACT_ENV=gamma \
-        --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
-        --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)
-
-gate-full: gate test-api-contract
-```
+所有 profile 都通过根 Makefile 和 `stackctl verify --profile` 进入；不得在
+profile 之间隐式降级、替换环境或将外部依赖缺失记为通过。

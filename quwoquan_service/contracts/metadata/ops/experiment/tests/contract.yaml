@@ -1,0 +1,20 @@
+entity: Experiment
+
+scenarios:
+  - name: experiment_rollout_if_match_cas
+    operation: UpdateExperimentRollout
+    go_func: TestExperimentHTTPBoundary
+    evidence: api_integration
+    assertions:
+      - If-Match 携带带引号正整数聚合版本；缺失或非法返回 400
+      - CAS 成功后 policyVersion 递增且 outbox 恰好一条 ExperimentRolloutUpdated
+      - 相同 Idempotency-Key 重放返回原回执；同 key 不同摘要返回 OPS.USER.idempotency_conflict
+      - allocationSeed（SECRET）不进入任何响应
+
+  - name: experiment_list_operator_scope
+    operation: ListExperiments
+    go_func: TestExperimentHTTPBoundary
+    evidence: api_integration
+    assertions:
+      - 缺 operator scope 返回 403；匿名返回 401
+      - 列表响应不包含 audienceRule 与 allocationSeed

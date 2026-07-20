@@ -1,7 +1,7 @@
 # Explore：元数据驱动客户端数据契约 — baseline 就绪度与全页缺口（2026-03-29）
 
 > **L1 / L2 / L3**：`runtime` → `runtime-client-foundation` → `metadata-driven-client-data-contract`  
-> **对照源**：`spec.md` / `design.md` / `acceptance.yaml` / `树内计划文档`、`specs/gates/metadata_driven_ui_gap_inventory.yaml`、`page-horizontal-quality-matrix.md`（P2 列）、`quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py`、`CR-20260329-004-metadata-driven-client-data-contract.yaml`
+> **对照源**：`spec.md` / `acceptance.yaml`、`specs/gates/metadata_driven_ui_gap_inventory.yaml`、`page-horizontal-quality-matrix.md`（P2 列）、`quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py`、`CR-20260329-004-metadata-driven-client-data-contract.yaml`
 
 ---
 
@@ -87,7 +87,7 @@
 
 ## 6. 结论摘要
 
-- **元数据驱动 L3 功能规格**（目标/范围/交付/验收）**已具备进入 baseline 的文档条件**；**实现闭环**仍按 `树内计划文档` 分切片推进。  
+- **元数据驱动 L3 功能规格**（目标/范围/交付/验收）**已具备进入 baseline 的文档条件**；**实现闭环**按领域 PR 推进并回写 acceptance 证据。
 - **全页面路径**在清单与矩阵层面 **无遗漏**；**P2 与清单 status** 已通过 **spec 口径 + 矩阵列回写** 对齐，避免「全 ✓」误导。  
 - **待收敛**：`target_dto: TBD`、可选矩阵↔清单 CI；**CR-004 已 baseline_complete**；合入前建议本地 `make gate`。  
 - **S2 会话（2026-03-30）**：横向九会话中 **P2 维** 的全页逐行对照、统计与「规格基线锁定」声明见 [`../page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md`](../page-horizontal-quality/s2-metadata-driven-contract-baseline-20260330.md)。  

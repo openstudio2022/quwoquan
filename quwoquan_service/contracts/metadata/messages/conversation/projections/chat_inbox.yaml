@@ -1,13 +1,16 @@
 read_model: ChatInbox
 
 description: |
-  聊天列表 per-user ReadModel。
-  由 ConversationUserState 驱动，按 pinned DESC + lastMessageTime DESC 排序。
-  source_events 扩展：ConversationMemberAdded 创建条目，ConversationMemberRemoved 删除条目，
-  ConversationUserSettingsChanged 更新 muted/pinned，ConversationReadWatermarkAdvanced 负责未读回落。
+  聊天列表 per-user ReadModel（逻辑视图）。
+  物理载体是 conversation_user_states（未读/排序行）join conversations（标题、
+  头像、lastMessage 摘要），不复制第二份集合：未读推进由 inbox projector 消费
+  Message outbox 的 MessageSent 原子 $inc；已读回落与 muted/pinned 由
+  ConversationUserState 命令在聚合 state 内原子完成；标题/头像/lastSeq 由
+  Conversation 侧投影（ProjectCommittedMessage / 群头像流水线）维护。
+  按 pinned DESC + lastMessageTime(updatedAt) DESC 排序。
 
 storage_backend: mongodb
-collection: rm_chat_inbox
+collection: conversation_user_states
 
 source_entities:
   - Conversation

@@ -146,19 +146,6 @@ type AssistantUserTaskListView struct {
 	Items []AssistantUserTaskView `json:"items"`
 }
 
-type AssistantUserMemoryView struct {
-	MemoryID   string `json:"memoryId"`
-	Title      string `json:"title"`
-	Snippet    string `json:"snippet,omitempty"`
-	SourceType string `json:"sourceType,omitempty"`
-	CreatedAt  string `json:"createdAt,omitempty"`
-	UpdatedAt  string `json:"updatedAt,omitempty"`
-}
-
-type AssistantUserMemoryListView struct {
-	Items []AssistantUserMemoryView `json:"items"`
-}
-
 type AssistantLearningOpsSummaryView struct {
 	UserID                string             `json:"userId"`
 	TotalFeedbackCount    int64              `json:"totalFeedbackCount"`

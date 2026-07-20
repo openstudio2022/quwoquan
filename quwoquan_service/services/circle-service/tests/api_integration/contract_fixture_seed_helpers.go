@@ -55,8 +55,10 @@ type circleFixtureCircle struct {
 	UpdatedAt            string `json:"updatedAt"`
 }
 
+// fixture 场景文件是存储 seed（bson 语义），标识键为 `_id`；
+// 结构体标签必须与 circle_scenarios.json 的真实键名一致。
 type circleFixtureGroup struct {
-	ID                   string `json:"id"`
+	ID                   string `json:"_id"` // 存储 seed 只认 bson `_id` 键，非 wire
 	Version              int64  `json:"version"`
 	CircleID             string `json:"circleId"`
 	ParentGroupID        string `json:"parentGroupId"`
@@ -66,7 +68,7 @@ type circleFixtureGroup struct {
 	Description          string `json:"description"`
 	Visibility           string `json:"visibility"`
 	JoinPolicy           string `json:"joinPolicy"`
-	CreatedByPersonaID   string `json:"createdByPersonaId"`
+	CreatedByPersonaID   string `json:"ownerUserId"`
 	ConversationID       string `json:"conversationId"`
 	StorageEnabled       bool   `json:"storageEnabled"`
 	NoticeEnabled        bool   `json:"noticeEnabled"`
@@ -77,9 +79,9 @@ type circleFixtureGroup struct {
 }
 
 type circleFixtureMember struct {
-	ID           string `json:"id"`
+	ID           string `json:"_id"` // 存储 seed 只认 bson `_id` 键，非 wire
 	CircleID     string `json:"circleId"`
-	PersonaID    string `json:"personaId"`
+	PersonaID    string `json:"userId"`
 	Role         string `json:"role"`
 	JoinedAt     string `json:"joinedAt"`
 	LastActiveAt string `json:"lastActiveAt"`
@@ -87,7 +89,7 @@ type circleFixtureMember struct {
 }
 
 type circleFixtureFile struct {
-	ID                string `json:"id"`
+	ID                string `json:"_id"` // 存储 seed 只认 bson `_id` 键，非 wire
 	Version           int64  `json:"version"`
 	CircleID          string `json:"circleId"`
 	GroupID           string `json:"groupId"`
@@ -97,7 +99,7 @@ type circleFixtureFile struct {
 	AssetID           string `json:"assetId"`
 	MimeType          string `json:"mimeType"`
 	SizeBytes         int64  `json:"sizeBytes"`
-	UploaderPersonaID string `json:"uploaderPersonaId"`
+	UploaderPersonaID string `json:"uploaderId"`
 	Status            string `json:"status"`
 	CreatedAt         string `json:"createdAt"`
 	UpdatedAt         string `json:"updatedAt"`
@@ -237,9 +239,9 @@ func circleFromFixture(fc circleFixtureCircle) *model.Circle {
 		AutoSyncChat:             fc.AutoSyncChat,
 		SectionConfig: []model.CircleSectionConfig{
 			{SectionType: model.CircleSectionTypeWorks, Visible: true, Order: 0},
-			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 1},
-			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 2},
-			{SectionType: model.CircleSectionTypeInteraction, Visible: true, Order: 3},
+			{SectionType: model.CircleSectionTypeMembers, Visible: true, Order: 1},
+			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 2},
+			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 3},
 		},
 		StorageQuotaBytes: 1024 * 1024 * 1024,
 		DomainID:          fc.DomainID,
@@ -267,9 +269,13 @@ func circleMembershipFromFixture(fm circleFixtureMember) *membershipmodel.Circle
 }
 
 func circleGroupFromFixture(fg circleFixtureGroup) *groupmodel.CircleGroup {
+	version := fg.Version
+	if version <= 0 {
+		version = 1
+	}
 	return &groupmodel.CircleGroup{
 		ID:                   fg.ID,
-		Version:              fg.Version,
+		Version:              version,
 		CircleID:             fg.CircleID,
 		ParentGroupID:        fg.ParentGroupID,
 		GroupType:            groupmodel.CircleGroupType(fg.GroupType),
@@ -291,7 +297,7 @@ func circleGroupFromFixture(fg circleFixtureGroup) *groupmodel.CircleGroup {
 
 func circleFileFromFixture(ff circleFixtureFile) *filemodel.CircleFile {
 	return &filemodel.CircleFile{
-		ID: ff.ID, Version: ff.Version, CircleID: ff.CircleID, GroupID: ff.GroupID,
+		ID: ff.ID, Version: max(ff.Version, 1), CircleID: ff.CircleID, GroupID: ff.GroupID,
 		ParentFolderID: ff.ParentFolderID, Name: ff.Name,
 		FileType: filemodel.CircleFileType(ff.FileType), AssetID: ff.AssetID,
 		MimeType: ff.MimeType, SizeBytes: ff.SizeBytes,

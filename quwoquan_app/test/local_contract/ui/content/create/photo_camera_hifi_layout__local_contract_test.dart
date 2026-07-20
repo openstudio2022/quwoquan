@@ -110,7 +110,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 1,
         enabled: true,
         defaultStrength: 0,
-        params: <String, double>{},
+        adjustments: ImageEditorFilterAdjustments(),
       ),
       ImageEditorFilterPreset(
         id: 'vivid',
@@ -119,7 +119,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
         sort: 2,
         enabled: true,
         defaultStrength: 80,
-        params: <String, double>{'saturation': 12},
+        adjustments: ImageEditorFilterAdjustments(saturation: 12),
       ),
     ];
   }

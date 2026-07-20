@@ -28,6 +28,7 @@ func main() {
 		exitErr(err)
 	}
 	beginGeneratedManifest(appDir, activeContractSHA256)
+	removeRetiredGeneratedOutputs(appDir)
 	shared, err := readShared(filepath.Join(metadataDir, "_shared", "types.yaml"))
 	if err != nil {
 		exitErr(err)
@@ -139,7 +140,6 @@ func main() {
 	}
 
 	contentGenDir := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content")
-	writeFile(filepath.Join(contentGenDir, "post_search_item_view_dto.g.dart"), renderPostSearchItemViewDtoDart())
 	writeFile(filepath.Join(contentGenDir, "report_create_request_wire.g.dart"), renderCreateReportRequestWireDart())
 
 	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
@@ -147,8 +147,10 @@ func main() {
 	}
 	writeContentAppConfigClientDart(filepath.Join(contentGenDir, "content_app_config_client_dto.g.dart"))
 
-	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）
-	if errsDef, err := readErrors(filepath.Join(postDir, "errors.yaml")); err == nil {
+	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）。
+	// content 域错误码按对象目录拆分登记，此处按固定顺序合并为域级客户端枚举；
+	// code 必须全域唯一（由 verify_error_code_endcloud_parity 与 codegen 共同锁定）。
+	if errsDef, err := readMergedErrors(contentDomainErrorsPaths(metadataDir)); err == nil {
 		out := renderContentErrorsDart(errsDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"), out)
 	}
@@ -175,10 +177,21 @@ func main() {
 			renderSimpleErrorsDart("CircleErrorCode", "social/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
 		)
 	}
-	if entityErrs, err := readErrors(filepath.Join(metadataDir, "entity", "homepage", "errors.yaml")); err == nil {
+	if entityErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "entity", "homepage", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "homepage_claim_request", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "homepage_review", "errors.yaml"),
+		filepath.Join(metadataDir, "entity", "homepage_status_report", "errors.yaml"),
+	}); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "entity", "generated", "entity_errors.g.dart"),
-			renderSimpleErrorsDart("EntityErrorCode", "entity/homepage/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
+			renderSimpleErrorsDart("EntityErrorCode", "entity/*/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
+		)
+	}
+	if notificationErrs, err := readErrors(filepath.Join(metadataDir, "notification", "notification", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "notification", "notification_errors.g.dart"),
+			renderSimpleErrorsDart("NotificationErrorCode", "notification/notification/errors.yaml", "通知服务异常，请稍后重试", notificationErrs),
 		)
 	}
 	opsEventErrs, err := readErrors(
@@ -191,6 +204,25 @@ func main() {
 		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "ops_event_record_errors.g.dart"),
 		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
 	)
+	if searchErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "search", "query", "errors.yaml"),
+		filepath.Join(metadataDir, "search", "recent_search_state", "errors.yaml"),
+	}); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_errors.g.dart"),
+			renderSimpleErrorsDart("SearchErrorCode", "search/**/errors.yaml", "搜索服务异常，请稍后重试", searchErrs),
+		)
+	}
+	if tagErrs, err := readMergedErrors([]string{
+		filepath.Join(metadataDir, "tag", "errors.yaml"),
+		filepath.Join(metadataDir, "tag", "tag_feedback", "errors.yaml"),
+		filepath.Join(metadataDir, "tag", "taxonomy_release", "errors.yaml"),
+	}); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "tag", "tag_errors.g.dart"),
+			renderSimpleErrorsDart("TagErrorCode", "tag/**/errors.yaml", "标签服务异常，请稍后重试", tagErrs),
+		)
+	}
 
 	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
 	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
@@ -213,6 +245,48 @@ func main() {
 		out := renderContentUIConfigDart(uiDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_ui_config.g.dart"), out)
 	}
+
+	publicationPolicy, policyErr := readContentPublicationPolicy(
+		filepath.Join(postDir, "publication_policy.yaml"),
+	)
+	if policyErr != nil {
+		exitErr(fmt.Errorf("read content publication policy: %w", policyErr))
+	}
+	writeFile(
+		filepath.Join(
+			appDir,
+			"lib",
+			"cloud",
+			"content",
+			"generated",
+			"content_publication_policy.g.dart",
+		),
+		renderContentPublicationPolicyDart(publicationPolicy),
+	)
+
+	mediaUploadPolicy, mediaUploadPolicyErr := readContentMediaUploadPolicy(
+		filepath.Join(
+			metadataDir,
+			"content",
+			"media_upload_session",
+			"upload_policy.yaml",
+		),
+	)
+	if mediaUploadPolicyErr != nil {
+		exitErr(fmt.Errorf("read content media upload policy: %w", mediaUploadPolicyErr))
+	}
+	writeFile(
+		filepath.Join(
+			appDir,
+			"lib",
+			"application",
+			"content",
+			"media",
+			"generated",
+			"content_media_upload_policy.g.dart",
+		),
+		renderContentMediaUploadPolicyDart(mediaUploadPolicy),
+	)
 
 	prefabUserDef, err := readPrefabUserProvenance(
 		filepath.Join(metadataDir, "_shared", "prefab_user_provenance.yaml"),
@@ -462,6 +536,19 @@ func main() {
 	writeGeneratedOperationContracts(appDir, activeContractLock)
 	if err := writeGeneratedManifest(generatedManifestPath); err != nil {
 		exitErr(err)
+	}
+}
+
+func removeRetiredGeneratedOutputs(appDir string) {
+	retired := []string{
+		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_search_item_view_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "user", "profile_interaction_activity_wire_dto.g.dart"),
+	}
+	for _, relativePath := range retired {
+		path := filepath.Join(appDir, relativePath)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			exitErr(fmt.Errorf("remove retired generated output %s: %w", path, err))
+		}
 	}
 }
 

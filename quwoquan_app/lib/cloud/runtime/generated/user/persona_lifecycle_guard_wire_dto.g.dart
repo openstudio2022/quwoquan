@@ -3,58 +3,52 @@
 
 class PersonaLifecycleGuardWireDto {
   final String subAccountId;
-  final bool canDelete;
-  final bool canRetire;
-  final String requiredAction;
-  final String reasonCode;
-  final String message;
+  final String requestedAction;
+  final bool allowed;
+  final String reason;
+  final bool requiresSuccessor;
 
   PersonaLifecycleGuardWireDto({
     this.subAccountId = '',
-    this.canDelete = false,
-    this.canRetire = false,
-    this.requiredAction = '',
-    this.reasonCode = '',
-    this.message = '',
+    this.requestedAction = 'retire',
+    this.allowed = false,
+    this.reason = 'allowed',
+    this.requiresSuccessor = false,
   });
 
   factory PersonaLifecycleGuardWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaLifecycleGuardWireDto(
       subAccountId: m['subAccountId']?.toString() ?? '',
-      canDelete: m['canDelete'] as bool? ?? false,
-      canRetire: m['canRetire'] as bool? ?? false,
-      requiredAction: m['requiredAction']?.toString() ?? '',
-      reasonCode: m['reasonCode']?.toString() ?? '',
-      message: m['message']?.toString() ?? '',
+      requestedAction: m['requestedAction']?.toString() ?? 'retire',
+      allowed: m['allowed'] as bool? ?? false,
+      reason: m['reason']?.toString() ?? 'allowed',
+      requiresSuccessor: m['requiresSuccessor'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'subAccountId': subAccountId,
-      'canDelete': canDelete,
-      'canRetire': canRetire,
-      'requiredAction': requiredAction,
-      'reasonCode': reasonCode,
-      'message': message,
+      'requestedAction': requestedAction,
+      'allowed': allowed,
+      'reason': reason,
+      'requiresSuccessor': requiresSuccessor,
     };
   }
 
   PersonaLifecycleGuardWireDto copyWith({
     String? subAccountId,
-    bool? canDelete,
-    bool? canRetire,
-    String? requiredAction,
-    String? reasonCode,
-    String? message,
+    String? requestedAction,
+    bool? allowed,
+    String? reason,
+    bool? requiresSuccessor,
   }) {
     return PersonaLifecycleGuardWireDto(
       subAccountId: subAccountId ?? this.subAccountId,
-      canDelete: canDelete ?? this.canDelete,
-      canRetire: canRetire ?? this.canRetire,
-      requiredAction: requiredAction ?? this.requiredAction,
-      reasonCode: reasonCode ?? this.reasonCode,
-      message: message ?? this.message,
+      requestedAction: requestedAction ?? this.requestedAction,
+      allowed: allowed ?? this.allowed,
+      reason: reason ?? this.reason,
+      requiresSuccessor: requiresSuccessor ?? this.requiresSuccessor,
     );
   }
 }

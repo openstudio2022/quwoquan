@@ -1,0 +1,19 @@
+entity: FilterCatalogRelease
+layer: app_side
+
+description: |
+  App local_contract 只通过 quwoquan_cloud_mock 的 typed FilterCatalogQuery 注入
+  canonical alpha release；production composition 不可达 mock package。
+
+command_scenarios:
+  - name: active_filter_catalog_typed_mapping
+    description: generated response、application model 和编辑器参数模型强类型映射。
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
+
+  - name: verified_cache_and_bootstrap_replica
+    description: remote 成功、离线 cache、同源 bootstrap 和 digest 损坏拒绝。
+    dart_tests:
+      - quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/components/media/image_editor_filter_catalog__local_contract_test.dart
+

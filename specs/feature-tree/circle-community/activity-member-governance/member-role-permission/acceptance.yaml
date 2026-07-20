@@ -7,45 +7,118 @@ node:
   parent_domain_service: circle-community
   parent_business_capability: activity-member-governance
 scope:
-  summary: member role permission 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 圈子成员角色与权限治理：加入（open/approval 双策略）、圈子级审批、角色变更与退出的对象状态机及页面承载。
+  in_scope:
+  - CircleMembership 生命周期（pending/active/left/removed）与 joinPolicy=approval 的圈子级审批命令
+  - owner/admin 审批队列的页面承载与申请者 pending 态反馈
+  - 角色（owner/admin/member/visitor）与页面操作权限（编辑/管理/审批入口仅 owner/admin）
+  out_of_scope:
+  - CircleGroupMembership 群单元级审批（circle-collaboration-tools 承载）
+  - 通知投递通道实现（notification 域承载，本 story 只验证事件发布）
 gwt_acceptance:
   GWT1:
-    title: member role permission GWT
+    title: approval 圈子加入进入 pending 并由 owner/admin 审批
     given:
-    - 前置条件明确。
+    - 圈子 joinPolicy=approval 且申请者为登录 persona 非成员。
     when:
-    - 用户或系统动作发生。
+    - 申请者点击加入圈子；owner/admin 在审批队列执行 Approve 或 Reject。
     then:
-    - 可观察结果符合预期。
+    - 加入后 membership state=pending，申请者按钮呈「加入审批中」禁用态。
+    - Approve 后 state=active、memberCount 投影 +1、发布 CircleMembershipJoined。
+    - Reject 后 state 回到可再申请态，发布对应事实事件；申请者可见结果反馈。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 圈子级 Approve/Reject 命令经 metadata→codegen→circle-service 落地，审批页可达且权限受限于 owner/admin。
+    edge_cases:
+    - 重复 Approve 幂等重放（command_receipt）不重复计数。
+    - 非 owner/admin 调用审批命令返回 CIRCLE.USER.permission_denied。
+    - archived 圈子拒绝新的加入与审批命令。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/social/circle_membership/service.yaml
+    - quwoquan_service/contracts/metadata/social/circle/errors.yaml
+    performance_points:
+    - 审批命令 P95 ≤ 700ms（circle 写 SLO 同源）
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/model/behavior__local_contract_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
+      - quwoquan_app/test/local_contract/ui/circle/pages/circle_membership_approval_page__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.circle_community.activity_member_governance.member_role_permission.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.circle_community.activity_member_governance.member_role_permission.gwt1_local_contract
         envs: *id001
-      supporting: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: circle_membership_approval
+        cases:
+        - api_integration.circle.membership.approve_reject_lifecycle
+        envs:
+        - gamma
+      - layer: user_acceptance
+        execution_profile: release
+        suite: circle_membership_approval_journey
+        cases:
+        - user_acceptance.circle.membership.approval_journey
+        envs:
+        - gamma_local
+    notes:
+    - 缺口登记 docs/outstanding_risks_backlog.md R-CIRCLE-002；规格落点 docs/functional_module_commercial_maturity_matrix.md M8-H Phase 3。
+  GWT2:
+    title: open 圈子加入即 active 且游客走登录续接
+    given:
+    - 圈子 joinPolicy=open；访问者可能为游客或登录 persona。
+    when:
+    - 游客点击加入触发登录门并在登录成功后续接；登录用户点击加入直接提交。
+    then:
+    - 登录成功后 JoinCircleContinuation 自动补完加入，state=active。
+    - join/leave 非幂等重放时追加 CircleBehaviorFact（joinCircle/leaveCircle）进推荐 HotPath。
+    done_when:
+    - 加入/退出乐观更新 + 失败回滚 + 行为事实链路在 local_contract 有断言。
+    edge_cases:
+    - 登录续接圈子与当前页不一致时不自动执行并保留续接。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/social/circle_membership/service.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/auth/auth_continuation__local_contract_test.dart
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.circle_community.activity_member_governance.member_role_permission.gwt2_join_continuation
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: circle_membership
+        cases:
+        - api_integration.circle.membership.join_leave_lifecycle
+        envs:
+        - gamma
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

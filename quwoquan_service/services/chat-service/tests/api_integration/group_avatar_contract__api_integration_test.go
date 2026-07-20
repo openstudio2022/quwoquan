@@ -20,7 +20,7 @@ func TestGroupAvatar_GetConversationReturnsPrecomposedAvatar(t *testing.T) {
 	if avatarURL == "" {
 		t.Fatal("expected non-empty avatarUrl in conversation detail")
 	}
-	if !strings.Contains(avatarURL, "/media/avatar/conversation/"+convId+"/") {
+	if !strings.Contains(avatarURL, "/media/avatar/s/conversation/"+convId+"/") {
 		t.Fatalf("expected precomposed conversation avatar URL, got %q", avatarURL)
 	}
 	version, ok := result["groupAvatarVersion"].(float64)
@@ -46,14 +46,14 @@ func TestGroupAvatar_InboxReturnsPrecomposedAvatar(t *testing.T) {
 	}
 	for _, item := range items {
 		row, _ := item.(map[string]any)
-		if row["conversationId"] != convId {
+		if row["id"] != convId {
 			continue
 		}
 		avatarURL, _ := row["avatarUrl"].(string)
 		if avatarURL == "" {
 			t.Fatal("expected non-empty avatarUrl in inbox row")
 		}
-		if !strings.Contains(avatarURL, "/media/avatar/conversation/"+convId+"/") {
+		if !strings.Contains(avatarURL, "/media/avatar/s/conversation/"+convId+"/") {
 			t.Fatalf("expected precomposed conversation avatar URL in inbox, got %q", avatarURL)
 		}
 		return

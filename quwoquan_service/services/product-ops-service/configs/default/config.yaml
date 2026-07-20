@@ -23,6 +23,7 @@ sls:
   project: "${PRODUCT_OPS_SLS_PROJECT}"
   raw_logstore: "app-product-telemetry-raw"
   startup_diagnostic_logstore: "app-startup-diagnostic-raw"
+  runtime_logstore: "runtime-diagnostics-raw"
   aggregate_logstore: "app-product-telemetry-hourly"
   timeout_ms: 1200
 

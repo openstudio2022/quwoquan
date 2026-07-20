@@ -18,6 +18,7 @@ import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
@@ -43,6 +44,7 @@ Future<void> runQuwoquanApp({
   await runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      registerFirebaseIncomingCallBackgroundHandler();
       _bootstrapProviderScopeOverrides = List<Override>.unmodifiable(
         providerScopeOverrides,
       );

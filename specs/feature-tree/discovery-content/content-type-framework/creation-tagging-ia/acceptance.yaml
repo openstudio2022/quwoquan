@@ -41,6 +41,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt1_local_contract
@@ -71,6 +72,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt2_local_contract
@@ -99,6 +101,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt3_local_contract
@@ -127,11 +130,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt4_local_contract
@@ -159,11 +164,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt5_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: integration
         cases:
         - api_integration.discovery_content.content_type_framework.creation_tagging_ia.integration
@@ -193,6 +200,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt6_local_contract
         cases:
         - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt6_local_contract
@@ -204,5 +212,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

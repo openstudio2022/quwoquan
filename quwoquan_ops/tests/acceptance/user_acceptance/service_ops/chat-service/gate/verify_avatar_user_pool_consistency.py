@@ -44,6 +44,7 @@ GAMMA_CURATED_EXPECTATIONS = {
         "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
         "refs": [
             "content_discovery_core",
+            "comment_thread_core",
             "intersection_core",
             "home_showcase_core",
             "profile_share_interaction_core",
@@ -59,7 +60,16 @@ GAMMA_CURATED_EXPECTATIONS = {
     },
     "user": {
         "fixturePath": "user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
-        "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core"],
+        "refs": [
+            "user_profile_core",
+            "persona_core",
+            "profile_feed_core",
+            "relationship_core",
+            "greeting_core",
+            "subject_follow_core",
+            "contact_discovery_core",
+            "following_subject_core",
+        ],
     },
     "entity": {
         "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",

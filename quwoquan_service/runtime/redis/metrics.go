@@ -142,6 +142,13 @@ func (c *instrumentedClient) GetBytes(ctx context.Context, key string) ([]byte, 
 	return v, err
 }
 
+func (c *instrumentedClient) GetDel(ctx context.Context, key string) (string, error) {
+	t := time.Now()
+	v, err := c.inner.GetDel(ctx, key)
+	c.record(t, err)
+	return v, err
+}
+
 func (c *instrumentedClient) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	t := time.Now()
 	err := c.inner.Set(ctx, key, value, ttl)

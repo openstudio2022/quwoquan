@@ -6,7 +6,6 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_rea
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/article_typography_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 
@@ -26,10 +25,11 @@ void main() {
                 height: 620,
               ),
               document: ArticleDocumentData(
-                assets: <ArticleDocumentAsset>[
-                  const ArticleDocumentAsset(
+                nodes: const <ArticleDocumentNode>[
+                  ArticleDocumentNode(
                     id: 'picked_asset',
-                    offset: 0,
+                    type: ArticleDocumentNodeType.figure,
+                    assetId: 'picked_asset',
                     imageUrl: imagePath,
                   ),
                 ],
@@ -114,10 +114,11 @@ void main() {
     final notifier = container.read(createEditorProvider.notifier);
     final anchorId = container
         .read(createEditorProvider)
-        .articleBlocks
-        .first
+        .articleDocument
+        .nodes
+        .firstWhere((node) => node.isBodyText)
         .id;
-    notifier.updateArticleTextBlock(
+    notifier.updateArticleNodeText(
       anchorId,
       List<String>.generate(
         120,
@@ -127,10 +128,10 @@ void main() {
     );
     var lastBlockId = anchorId;
     for (var index = 0; index < 24; index += 1) {
-      lastBlockId = notifier.insertArticleTextBlock(
-        afterBlockId: lastBlockId,
-        type: CreateTextBlockType.heading2,
-        text: '第${index + 1}节：分页锚点用于验证预览页切片',
+      lastBlockId = notifier.insertTextNodeAfter(
+        lastBlockId,
+        type: ArticleDocumentNodeType.headingMajor,
+        initialText: '第${index + 1}节：分页锚点用于验证预览页切片',
       );
     }
 

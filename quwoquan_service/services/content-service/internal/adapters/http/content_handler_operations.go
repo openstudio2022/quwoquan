@@ -14,100 +14,11 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
+// handleNotImplemented 只服务 generated dispatch 表的 default 分支。
+// operation → handler 的绑定唯一存在于 codegen 模板
+// （tools/codegen_content_service，生成 generated_routes.go）；
+// 禁止在此重建第二套手写 dispatch（契约单轨）。
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {
-	switch operation {
-	case "LikePost":
-		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "UnlikePost":
-		h.handleUnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "GetContentReactionState":
-		h.handleGetReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "GetMyFootprint":
-		h.handleGetMyFootprint(w, r)
-		return
-	case "CreateComment":
-		h.handleCreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "SubmitPostPublication":
-		h.handleSubmitPostPublication(w, r)
-		return
-	case "UpdatePostSettings":
-		h.handleUpdatePostSettings(w, r)
-		return
-	case "PromotePostToWork":
-		h.handlePromotePostToWork(w, r)
-		return
-	case "DeletePost":
-		h.handleDeletePost(w, r)
-		return
-	case "GenerateArticleSummary":
-		h.handleGenerateArticleSummary(w, r)
-		return
-	case "ListComments":
-		h.handleListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "ListCommentReplies":
-		h.handleListCommentReplies(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
-		return
-	case "ReactToComment":
-		h.handleReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
-		return
-	case "BindMediaAssetsToComment":
-		h.handleBindMediaAssetsToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
-		return
-	case "DeleteComment":
-		h.handleDeleteComment(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
-		return
-	case "PinComment":
-		h.handleSetCommentPinned(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-			true,
-		)
-		return
-	case "UnpinComment":
-		h.handleSetCommentPinned(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-			false,
-		)
-		return
-	case "GetCounters":
-		h.handleGetCounters(w, r, strings.TrimSpace(r.PathValue("postId")))
-		return
-	case "GetHelperRead":
-		h.handleGetHelperRead(w, r)
-		return
-	case "ListUserPosts":
-		h.handleListUserPosts(w, r)
-		return
-	case "ListCommentsByAuthor":
-		h.handleListCommentsByAuthor(w, r)
-		return
-	case "ListCommentsForPostAuthor":
-		h.handleListCommentsForPostAuthor(w, r)
-		return
-	case "GetAppConfig":
-		h.handleGetAppConfig(w, r)
-		return
-	}
 	writeHTTPError(w, r, rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
 		"接口暂未开放",
@@ -141,6 +52,52 @@ func (h *ContentHandler) handleListReports(w http.ResponseWriter, r *http.Reques
 	payload, err := h.reportService.ListReports(
 		r.Context(),
 		reportapp.ListReportsQuery{Limit: limit},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (h *ContentHandler) handleListMyReports(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.writeReportServiceUnavailable(w, r)
+		return
+	}
+	reporterID := strings.TrimSpace(resolvePersonaID(r))
+	if reporterID == "" {
+		writeHTTPError(
+			w,
+			r,
+			contentgenerated.AppErrorFromUnauthorized(
+				"ListMyReports requires a verified persona",
+			),
+		)
+		return
+	}
+	limit := 20
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed < 1 || parsed > 100 {
+			writeHTTPError(
+				w,
+				r,
+				contentgenerated.AppErrorFromInvalidArgument(
+					"ListMyReports limit must be an integer between 1 and 100",
+				),
+			)
+			return
+		}
+		limit = parsed
+	}
+	payload, err := h.reportService.ListMyReports(
+		r.Context(),
+		reportapp.ListMyReportsQuery{
+			ReporterID: reporterID,
+			Cursor:     strings.TrimSpace(r.URL.Query().Get("cursor")),
+			Limit:      limit,
+		},
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -210,6 +167,50 @@ func (h *ContentHandler) handleBeginReportReview(w http.ResponseWriter, r *http.
 	payload, err := h.reportService.BeginReview(
 		r.Context(),
 		reportapp.BeginReviewReportCommand{
+			ReportID:   reportID,
+			ReviewerID: operatorAccountID,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (h *ContentHandler) handleDismissReport(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.writeReportServiceUnavailable(w, r)
+		return
+	}
+	operatorAccountID, ok := verifiedReportOperatorAccountID(w, r)
+	if !ok {
+		return
+	}
+	if err := decodeEmptyReportReviewRequest(r); err != nil {
+		writeHTTPError(
+			w,
+			r,
+			contentgenerated.AppErrorFromInvalidArgument(
+				"DismissReport request body must be empty",
+			),
+		)
+		return
+	}
+	reportID := pathParamAfter(r.URL.Path, "/content/reports/", ":dismiss")
+	if reportID == "" {
+		writeHTTPError(
+			w,
+			r,
+			contentgenerated.AppErrorFromInvalidArgument(
+				"DismissReport requires reportId",
+			),
+		)
+		return
+	}
+	payload, err := h.reportService.Dismiss(
+		r.Context(),
+		reportapp.DismissReportCommand{
 			ReportID:   reportID,
 			ReviewerID: operatorAccountID,
 		},

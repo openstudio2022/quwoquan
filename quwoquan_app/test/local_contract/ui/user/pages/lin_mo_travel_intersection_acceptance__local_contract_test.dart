@@ -436,8 +436,6 @@ class _LinMoTravelRepository implements IntersectionRepository {
     return filterDefaultInboxLifecycle(all);
   }
 
-  @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({

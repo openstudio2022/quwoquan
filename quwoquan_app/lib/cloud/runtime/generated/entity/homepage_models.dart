@@ -18,7 +18,6 @@ export 'homepage_content_preview.g.dart';
 export 'homepage_geo_point.g.dart';
 export 'homepage_question_preview.g.dart';
 export 'homepage_related_group_summary.g.dart';
-export 'homepage_review_dimension_score.g.dart';
 export 'homepage_review_summary_data.g.dart';
 export 'homepage_status_report_record.g.dart';
 
@@ -446,7 +445,7 @@ class HomepageClaimRequestDraft {
     this.identityCardFrontUrl = '',
     this.identityCardBackUrl = '',
     this.note = '',
-    this.requesterUserId = '',
+    this.requesterPersonaId = '',
   });
 
   final String claimTier;
@@ -455,7 +454,7 @@ class HomepageClaimRequestDraft {
   final String identityCardFrontUrl;
   final String identityCardBackUrl;
   final String note;
-  final String requesterUserId;
+  final String requesterPersonaId;
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'claimTier': claimTier,
@@ -467,8 +466,6 @@ class HomepageClaimRequestDraft {
     if (identityCardBackUrl.trim().isNotEmpty)
       'identityCardBackUrl': identityCardBackUrl.trim(),
     if (note.trim().isNotEmpty) 'note': note.trim(),
-    if (requesterUserId.trim().isNotEmpty)
-      'requesterUserId': requesterUserId.trim(),
   };
 }
 
@@ -511,19 +508,17 @@ class HomepageStatusReportDraft {
     required this.reason,
     this.description = '',
     this.evidenceUrls = const <String>[],
-    this.reporterUserId = '',
+    this.reporterPersonaId = '',
   });
 
   final String reason;
   final String description;
   final List<String> evidenceUrls;
-  final String reporterUserId;
+  final String reporterPersonaId;
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'reason': reason,
     if (description.trim().isNotEmpty) 'description': description.trim(),
     if (evidenceUrls.isNotEmpty) 'evidenceUrls': evidenceUrls,
-    if (reporterUserId.trim().isNotEmpty)
-      'reporterUserId': reporterUserId.trim(),
   };
 }

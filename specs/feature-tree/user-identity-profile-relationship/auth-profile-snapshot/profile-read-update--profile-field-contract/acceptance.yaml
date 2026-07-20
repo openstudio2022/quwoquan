@@ -57,12 +57,14 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: contract
           cases:
             - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.region_tag_ref_contract
           envs: &local_envs
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: tag_user_profile_region
           cases:
             - api_integration.tag_service.children.admin_regions
@@ -70,6 +72,7 @@ gwt_acceptance:
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: edit_profile_region_journey
           cases:
             - user_acceptance.my_profile.edit_profile.select_region.save
@@ -77,6 +80,7 @@ gwt_acceptance:
             - gamma_local
       supporting:
         - layer: local_contract
+          execution_profile: baseline
           suite: data_publish_tags
           cases:
             - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.admin_region_direct_children_publish_integrity
@@ -91,5 +95,5 @@ execution:
     - make -C quwoquan_service codegen-app
     - go test ./services/tag-service/tests ./services/user-service/tests
     - cd quwoquan_app && flutter test test/cloud/tag/tag_repository_consistency_test.dart test/ui/user/journeys/edit_profile_journey_test.dart
-  full_gate:
+  profile_gates:
     - make gate

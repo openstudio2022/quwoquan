@@ -1,4 +1,4 @@
-# L4 特性：feed-dto-cursor-contract
+# L3 特性：feed-dto-cursor-contract
 
 ## 功能说明
 - 细化 feed-dto-cursor-contract 特性的功能边界与端云协同行为。

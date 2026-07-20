@@ -30,7 +30,7 @@ fields:
 
   - name: grantedScope
     source: grantedScope
-    type: jsonb
+    type: string
     constraints: [NOT_NULL]
     classification: SENSITIVE
     log_policy: mask

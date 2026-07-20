@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -46,10 +46,7 @@ class MemberListNavigateTile extends StatelessWidget {
       ),
       title: Text(
         name,
-        style: TextStyle(
-          fontSize: AppTypography.lg,
-          color: fgPrimary,
-        ),
+        style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -134,8 +131,9 @@ class MemberListMultiSelectTile extends StatelessWidget {
                 size: AppSpacing.largeButtonSize,
                 imageUrl: avatar,
                 name: name,
-                backgroundColor:
-                    SettingsSemanticConstants.blockBackground(isDark),
+                backgroundColor: SettingsSemanticConstants.blockBackground(
+                  isDark,
+                ),
               ),
               SizedBox(width: AppSpacing.interGroupSm),
               Expanded(
@@ -172,7 +170,7 @@ class MemberListMultiSelectTile extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              UITextConstants.admin,
+                              ChatText.admin,
                               style: TextStyle(
                                 fontSize: AppTypography.xs,
                                 color: AppColors.primaryColor,

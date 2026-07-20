@@ -2,20 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-Widget _scopedApp({CircleRepository? mock}) {
+class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
+  @override
+  Future<void> append(AppendCircleBehaviorFactCommand command) async {}
+}
+
+Widget _scopedApp({
+  CircleRepository? mock,
+  String circleId = 'fixture_circle_photo',
+}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
-    overrides: [circleRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      circleRepositoryProvider.overrideWithValue(repo),
+      // 游客态：行为信号守卫短路，不触发 Remote-only 装配链。
+      resolvedOwnerUserIdProvider.overrideWithValue(''),
+      circleDetailBehaviorFactWriterProvider.overrideWithValue(
+        _NoopCircleBehaviorFactWriter(),
+      ),
+      behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
+    ],
     child: MaterialApp(
       home: Scaffold(
-        body: CircleDetailPage(
-          circleId: 'fixture_circle_photo',
-          onBack: () {},
-        ),
+        body: CircleDetailPage(circleId: circleId, onBack: () {}),
       ),
     ),
   );
@@ -49,20 +64,7 @@ void main() {
 
   group('CircleDetailPage — 错误态渲染', () {
     testWidgets('空 circleId 安全渲染', (tester) async {
-      final widget = ProviderScope(
-        overrides: [
-          circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: CircleDetailPage(
-              circleId: '',
-              onBack: () {},
-            ),
-          ),
-        ),
-      );
-      await tester.pumpWidget(widget);
+      await tester.pumpWidget(_scopedApp(circleId: ''));
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(CircleDetailPage), findsOneWidget);

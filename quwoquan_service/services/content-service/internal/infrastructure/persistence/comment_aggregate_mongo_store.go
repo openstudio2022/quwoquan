@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 const (
 	commentAggregateCollection  = "comments"
 	commentReceiptsCollection   = "comment_command_receipts"
+	commentRateLocksCollection  = "comment_author_rate_limit_locks"
 	commentOutboxCollection     = "comment_outbox"
 	commentCheckpointCollection = "comment_projection_checkpoints"
 	postsRelationCollection     = "posts"
@@ -29,6 +31,7 @@ const (
 type MongoCommentDataAdapter struct {
 	comments    *mongo.Collection
 	receipts    *mongo.Collection
+	rateLocks   *mongo.Collection
 	outbox      *mongo.Collection
 	checkpoints *mongo.Collection
 	posts       *mongo.Collection
@@ -38,6 +41,7 @@ func NewMongoCommentDataAdapter(db *mongo.Database) *MongoCommentDataAdapter {
 	return &MongoCommentDataAdapter{
 		comments:    db.Collection(commentAggregateCollection),
 		receipts:    db.Collection(commentReceiptsCollection),
+		rateLocks:   db.Collection(commentRateLocksCollection),
 		outbox:      db.Collection(commentOutboxCollection),
 		checkpoints: db.Collection(commentCheckpointCollection),
 		posts:       db.Collection(postsRelationCollection),
@@ -57,122 +61,6 @@ var (
 	_ commentports.CommentRelationReader     = (*MongoCommentDataAdapter)(nil)
 	_ commentports.PostOwnershipReader       = (*MongoCommentDataAdapter)(nil)
 )
-
-// EnsureIndexes creates exactly the named indexes declared by
-// contracts/metadata/content/comment/storage.yaml.
-func (s *MongoCommentDataAdapter) EnsureIndexes(ctx context.Context) error {
-	if _, err := s.comments.Indexes().CreateMany(ctx, commentMongoIndexes()); err != nil {
-		return fmt.Errorf("create comment aggregate indexes: %w", err)
-	}
-	if _, err := s.receipts.Indexes().CreateMany(ctx, commentReceiptMongoIndexes()); err != nil {
-		return fmt.Errorf("create comment receipt indexes: %w", err)
-	}
-	if _, err := s.outbox.Indexes().CreateMany(ctx, commentOutboxMongoIndexes()); err != nil {
-		return fmt.Errorf("create comment outbox indexes: %w", err)
-	}
-	if _, err := s.checkpoints.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "updatedAt", Value: -1}},
-		Options: options.Index().SetName("idx_comment_projection_checkpoint_updated"),
-	}); err != nil {
-		return fmt.Errorf("create comment checkpoint indexes: %w", err)
-	}
-	return nil
-}
-
-func commentMongoIndexes() []mongo.IndexModel {
-	return []mongo.IndexModel{
-		{
-			Keys: bson.D{
-				{Key: "postId", Value: 1},
-				{Key: "parentCommentId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "isPinned", Value: -1},
-				{Key: "pinnedAt", Value: -1},
-				{Key: "createdAt", Value: -1},
-				{Key: "_id", Value: -1},
-			},
-			Options: options.Index().SetName("idx_comments_post_page"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "postId", Value: 1},
-				{Key: "parentCommentId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "createdAt", Value: -1},
-				{Key: "_id", Value: -1},
-			},
-			Options: options.Index().SetName("idx_comments_reply_page"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "parentCommentId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "createdAt", Value: -1},
-				{Key: "_id", Value: -1},
-			},
-			Options: options.Index().SetName("idx_comments_parent_summary"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "authorId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "createdAt", Value: -1},
-				{Key: "_id", Value: -1},
-			},
-			Options: options.Index().SetName("idx_comments_author_page"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "postId", Value: 1},
-				{Key: "createdAt", Value: 1},
-			},
-			Options: options.Index().SetName("idx_comments_post_created_at"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "postId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "deletedAt", Value: 1},
-			},
-			Options: options.Index().SetName("idx_comments_post_deleted_at"),
-		},
-		{
-			Keys:    bson.D{{Key: "_id", Value: 1}, {Key: "version", Value: 1}},
-			Options: options.Index().SetName("idx_comments_version").SetUnique(true),
-		},
-	}
-}
-
-func commentReceiptMongoIndexes() []mongo.IndexModel {
-	return []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "aggregateId", Value: 1}, {Key: "aggregateVersion", Value: -1}},
-			Options: options.Index().SetName("idx_comment_command_receipts_aggregate"),
-		},
-		{
-			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
-			Options: options.Index().SetName("idx_comment_command_receipts_expire").SetExpireAfterSeconds(0),
-		},
-	}
-}
-
-func commentOutboxMongoIndexes() []mongo.IndexModel {
-	return []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}},
-			Options: options.Index().SetName("idx_comment_outbox_replay"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "aggregateId", Value: 1},
-				{Key: "aggregateVersion", Value: 1},
-			},
-			Options: options.Index().
-				SetName("idx_comment_outbox_aggregate_version").
-				SetUnique(true),
-		},
-	}
-}
 
 func (s *MongoCommentDataAdapter) Load(
 	ctx context.Context,
@@ -328,21 +216,32 @@ func (s *MongoCommentDataAdapter) Commit(
 			}
 		}
 
+		if err := s.enforceAuthorRateLimit(txCtx, commit.AuthorRateLimit); err != nil {
+			return nil, err
+		}
+
 		record := commentAggregateDocumentFromSnapshot(commit.Aggregate.Snapshot())
 		if commit.ExpectedVersion == 0 {
+			// 创建时 hotScore 以 0 分落库，保证 sort=hot keyset 谓词无需缺失字段兼容。
 			if _, err := s.comments.InsertOne(txCtx, record); err != nil {
 				return nil, err
 			}
 		} else {
-			replaceResult, err := s.comments.ReplaceOne(
+			// 只 $set 聚合拥有的字段；hotScore 是 relay 维护的投影字段，
+			// 聚合命令不得覆盖（整文档 Replace 会把投影分抹为缺失）。
+			aggregateFields, err := commentAggregateSetFields(record)
+			if err != nil {
+				return nil, err
+			}
+			updateResult, err := s.comments.UpdateOne(
 				txCtx,
 				bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
-				record,
+				bson.M{"$set": aggregateFields},
 			)
 			if err != nil {
 				return nil, err
 			}
-			if replaceResult.MatchedCount != 1 {
+			if updateResult.MatchedCount != 1 {
 				return nil, contentgenerated.AppErrorFromVersionConflict(
 					"comment version changed before commit",
 				)
@@ -403,6 +302,70 @@ func (s *MongoCommentDataAdapter) Commit(
 	return result, nil
 }
 
+func (s *MongoCommentDataAdapter) enforceAuthorRateLimit(
+	ctx context.Context,
+	policy *commentports.AuthorRateLimit,
+) error {
+	if policy == nil {
+		return nil
+	}
+	authorID := strings.TrimSpace(policy.AuthorID)
+	evaluatedAt := policy.EvaluatedAt.UTC()
+	if authorID == "" || evaluatedAt.IsZero() || len(policy.Windows) == 0 {
+		return contentgenerated.AppErrorFromCommentRateLimited(
+			"comment author rate limit policy is incomplete",
+		)
+	}
+	oldestSince := evaluatedAt
+	for _, window := range policy.Windows {
+		if window.Max > 0 && !window.Since.IsZero() &&
+			window.Since.UTC().Before(oldestSince) {
+			oldestSince = window.Since.UTC()
+		}
+	}
+	lockTTL := evaluatedAt.Sub(oldestSince)
+	if lockTTL <= 0 {
+		lockTTL = 24 * time.Hour
+	}
+	_, err := s.rateLocks.UpdateOne(
+		ctx,
+		bson.M{"_id": authorID},
+		bson.M{
+			"$inc": bson.M{"revision": 1},
+			"$set": bson.M{
+				"updatedAt": evaluatedAt,
+				"expiresAt": evaluatedAt.Add(lockTTL),
+			},
+		},
+		options.UpdateOne().SetUpsert(true),
+	)
+	if err != nil {
+		return err
+	}
+	for _, window := range policy.Windows {
+		if window.Max <= 0 || window.Since.IsZero() {
+			continue
+		}
+		count, err := s.comments.CountDocuments(ctx, bson.M{
+			"authorId":  authorID,
+			"createdAt": bson.M{"$gte": window.Since.UTC()},
+		})
+		if err != nil {
+			return err
+		}
+		if count >= window.Max {
+			return contentgenerated.AppErrorFromCommentRateLimited(
+				fmt.Sprintf(
+					"comment author rate window exceeded: count=%d max=%d",
+					count,
+					window.Max,
+				),
+			)
+		}
+	}
+	return nil
+}
+
 func validateCommentCommit(commit commentports.Commit) error {
 	if commit.Aggregate == nil || strings.TrimSpace(commit.Aggregate.ID()) == "" {
 		return contentgenerated.AppErrorFromVersionConflict("comment commit requires aggregate")
@@ -423,6 +386,11 @@ func validateCommentCommit(commit commentports.Commit) error {
 	if commit.Aggregate.Version() != commit.ExpectedVersion+1 {
 		return contentgenerated.AppErrorFromVersionConflict(
 			"comment aggregate version does not follow expected version",
+		)
+	}
+	if commit.AuthorRateLimit != nil && commit.ExpectedVersion != 0 {
+		return contentgenerated.AppErrorFromVersionConflict(
+			"comment author rate limit is only valid for aggregate creation",
 		)
 	}
 	if len(commit.Events) == 0 {
@@ -449,62 +417,6 @@ func validateCommentCommit(commit commentports.Commit) error {
 		eventIDs[event.EventID] = struct{}{}
 	}
 	return nil
-}
-
-func (s *MongoCommentDataAdapter) ReadAfter(
-	ctx context.Context,
-	checkpoint string,
-	limit int,
-) ([]commentports.OutboxEvent, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
-	filter := bson.M{}
-	if strings.TrimSpace(checkpoint) != "" {
-		occurredAt, eventID, err := parseCommentOutboxCheckpoint(checkpoint)
-		if err != nil {
-			return nil, err
-		}
-		filter["$or"] = bson.A{
-			bson.M{"occurredAt": bson.M{"$gt": occurredAt}},
-			bson.M{"occurredAt": occurredAt, "_id": bson.M{"$gt": eventID}},
-		}
-	}
-	cursor, err := s.outbox.Find(
-		ctx,
-		filter,
-		options.Find().
-			SetSort(bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}}).
-			SetLimit(int64(limit)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("read comment outbox: %w", err)
-	}
-	defer cursor.Close(ctx)
-
-	events := make([]commentports.OutboxEvent, 0, limit)
-	for cursor.Next(ctx) {
-		var document commentOutboxDocument
-		if err := cursor.Decode(&document); err != nil {
-			return nil, fmt.Errorf("decode comment outbox: %w", err)
-		}
-		events = append(events, commentports.OutboxEvent{
-			EventID:          document.ID,
-			EventType:        document.EventType,
-			AggregateID:      document.AggregateID,
-			AggregateVersion: document.AggregateVersion,
-			Payload:          append([]byte(nil), document.Payload...),
-			OccurredAt:       document.OccurredAt.UTC(),
-			Checkpoint:       commentOutboxCheckpoint(document.OccurredAt, document.ID),
-		})
-	}
-	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("iterate comment outbox: %w", err)
-	}
-	return events, nil
 }
 
 func (s *MongoCommentDataAdapter) LoadCheckpoint(
@@ -548,363 +460,94 @@ func (s *MongoCommentDataAdapter) SaveCheckpoint(
 	return err
 }
 
-func (s *MongoCommentDataAdapter) ListByPost(
-	ctx context.Context,
-	postID string,
-	request commentports.PageRequest,
-) (commentmodel.Page, error) {
-	filter := bson.M{
-		"postId":          strings.TrimSpace(postID),
-		"parentCommentId": "",
-		"status":          string(commentmodel.StatusActive),
-	}
-	cursor, hasCursor := commentmodel.DecodeCursor(request.Cursor)
-	if hasCursor {
-		filter["$or"] = topLevelAfter(cursor)
-	}
-	total, err := s.CountByPost(ctx, postID)
-	if err != nil {
-		return commentmodel.Page{}, err
-	}
-	return s.findPage(
-		ctx,
-		filter,
-		bson.D{
-			{Key: "isPinned", Value: -1},
-			{Key: "pinnedAt", Value: -1},
-			{Key: "createdAt", Value: -1},
-			{Key: "_id", Value: -1},
-		},
-		request.Limit,
-		total,
-	)
-}
-
-func (s *MongoCommentDataAdapter) ListReplies(
-	ctx context.Context,
-	postID string,
-	parentCommentID string,
-	request commentports.PageRequest,
-) (commentmodel.Page, error) {
-	filter := bson.M{
-		"postId":          strings.TrimSpace(postID),
-		"parentCommentId": strings.TrimSpace(parentCommentID),
-		"status":          string(commentmodel.StatusActive),
-	}
-	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
-		filter["$or"] = flatAfter(cursor)
-	}
-	total, err := s.comments.CountDocuments(ctx, filterWithoutCursor(filter))
-	if err != nil {
-		return commentmodel.Page{}, err
-	}
-	return s.findPage(
-		ctx,
-		filter,
-		bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}},
-		request.Limit,
-		total,
-	)
-}
-
-func (s *MongoCommentDataAdapter) ReadReplySummaries(
-	ctx context.Context,
-	parentCommentIDs []string,
-	previewLimit int,
-) (map[string]commentmodel.ReplySummary, error) {
-	parentCommentIDs = uniqueNonEmptyStrings(parentCommentIDs)
-	summaries := make(map[string]commentmodel.ReplySummary, len(parentCommentIDs))
-	if len(parentCommentIDs) == 0 {
-		return summaries, nil
-	}
-	if previewLimit <= 0 {
-		previewLimit = 1
-	}
-	if previewLimit > 10 {
-		previewLimit = 10
-	}
-	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{
-			"parentCommentId": bson.M{"$in": parentCommentIDs},
-			"status":          string(commentmodel.StatusActive),
-		}}},
-		{{Key: "$sort", Value: bson.D{
-			{Key: "parentCommentId", Value: 1},
-			{Key: "createdAt", Value: -1},
-			{Key: "_id", Value: -1},
-		}}},
-		{{Key: "$group", Value: bson.M{
-			"_id":   "$parentCommentId",
-			"count": bson.M{"$sum": 1},
-			"items": bson.M{"$push": "$$ROOT"},
-		}}},
-		{{Key: "$project", Value: bson.M{
-			"count": 1,
-			"items": bson.M{"$slice": []any{"$items", previewLimit}},
-		}}},
-	}
-	cursor, err := s.comments.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	for cursor.Next(ctx) {
-		var row struct {
-			ParentCommentID string                `bson:"_id"`
-			Count           int64                 `bson:"count"`
-			Items           []commentReadDocument `bson:"items"`
-		}
-		if err := cursor.Decode(&row); err != nil {
-			return nil, err
-		}
-		preview := make([]commentmodel.ReadModel, 0, len(row.Items))
-		for _, document := range row.Items {
-			preview = append(preview, document.readModel())
-		}
-		nextCursor := ""
-		if row.Count > int64(len(preview)) && len(preview) > 0 {
-			nextCursor = commentmodel.EncodeCursor(commentmodel.CursorFor(preview[len(preview)-1]))
-		}
-		summaries[row.ParentCommentID] = commentmodel.ReplySummary{
-			Count:      row.Count,
-			Preview:    preview,
-			NextCursor: nextCursor,
-		}
-	}
-	if err := cursor.Err(); err != nil {
-		return nil, err
-	}
-	return summaries, nil
-}
-
-func (s *MongoCommentDataAdapter) ListByAuthor(
-	ctx context.Context,
-	authorID string,
-	request commentports.PageRequest,
-) (commentmodel.Page, error) {
-	filter := bson.M{
-		"authorId": strings.TrimSpace(authorID),
-		"status":   string(commentmodel.StatusActive),
-	}
-	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
-		filter["$or"] = flatAfter(cursor)
-	}
-	total, err := s.comments.CountDocuments(ctx, filterWithoutCursor(filter))
-	if err != nil {
-		return commentmodel.Page{}, err
-	}
-	return s.findPage(
-		ctx,
-		filter,
-		bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}},
-		request.Limit,
-		total,
-	)
-}
-
-func (s *MongoCommentDataAdapter) ListReceivedByPostAuthor(
-	ctx context.Context,
-	postAuthorID string,
-	postIDs []string,
-	request commentports.PageRequest,
-) (commentmodel.Page, error) {
-	if len(postIDs) == 0 {
-		return commentmodel.Page{Items: []commentmodel.ReadModel{}}, nil
-	}
-	filter := bson.M{
-		"postId":   bson.M{"$in": cloneStrings(postIDs)},
-		"authorId": bson.M{"$ne": strings.TrimSpace(postAuthorID)},
-		"status":   string(commentmodel.StatusActive),
-	}
-	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
-		filter["$or"] = flatAfter(cursor)
-	}
-	total, err := s.comments.CountDocuments(ctx, filterWithoutCursor(filter))
-	if err != nil {
-		return commentmodel.Page{}, err
-	}
-	return s.findPage(
-		ctx,
-		filter,
-		bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}},
-		request.Limit,
-		total,
-	)
-}
-
-func (s *MongoCommentDataAdapter) CountByPost(ctx context.Context, postID string) (int64, error) {
-	return s.comments.CountDocuments(ctx, bson.M{
-		"postId": strings.TrimSpace(postID),
-		"status": string(commentmodel.StatusActive),
-	})
-}
-
-func (s *MongoCommentDataAdapter) FindReplyTarget(
+// SetCommentHotScore 写入 hotScore 投影分；hotScore 由 relay 独占维护，
+// 聚合命令路径经 commentAggregateSetFields 排除本字段。
+func (s *MongoCommentDataAdapter) SetCommentHotScore(
 	ctx context.Context,
 	commentID string,
-) (commentmodel.ReplyTarget, bool, error) {
-	var document commentRelationDocument
-	err := s.comments.FindOne(
+	score int64,
+) (bool, error) {
+	result, err := s.comments.UpdateOne(
 		ctx,
 		bson.M{"_id": strings.TrimSpace(commentID)},
-		options.FindOne().SetProjection(commentRelationProjection()),
-	).Decode(&document)
-	if err == mongo.ErrNoDocuments {
-		return commentmodel.ReplyTarget{}, false, nil
-	}
+		bson.M{"$set": bson.M{"hotScore": score}},
+	)
 	if err != nil {
-		return commentmodel.ReplyTarget{}, false, err
+		return false, err
 	}
-	return commentmodel.ReplyTarget{
-		ID:              document.ID,
-		PostID:          document.PostID,
-		AuthorID:        document.AuthorID,
-		ParentCommentID: document.ParentCommentID,
-		Status:          commentmodel.Status(document.Status),
-	}, true, nil
+	return result.MatchedCount == 1, nil
 }
 
-func (s *MongoCommentDataAdapter) FindPostOwnership(
+// TombstoneCommentsByPost 执行宿主 Post 删除的级联：active|hidden → tombstoned
+// 批量迁移，并在同一 Mongo 事务写入按 postId 聚合的 CommentsTombstoned outbox 事实。
+// 幂等：重放时候选集为空，零改动且不再追加事实。
+func (s *MongoCommentDataAdapter) TombstoneCommentsByPost(
 	ctx context.Context,
 	postID string,
-) (commentmodel.PostOwnership, bool, error) {
-	var document postOwnershipDocument
-	err := s.posts.FindOne(
-		ctx,
-		bson.M{"_id": strings.TrimSpace(postID)},
-		options.FindOne().SetProjection(bson.D{
-			{Key: "_id", Value: 1},
-			{Key: "authorId", Value: 1},
-			{Key: "status", Value: 1},
-		}),
-	).Decode(&document)
-	if err == mongo.ErrNoDocuments {
-		return commentmodel.PostOwnership{}, false, nil
+) (int64, error) {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return 0, fmt.Errorf("comment tombstone requires post id")
 	}
+	session, err := s.comments.Database().Client().StartSession()
 	if err != nil {
-		return commentmodel.PostOwnership{}, false, err
+		return 0, err
 	}
-	return commentmodel.PostOwnership{
-		PostID:   document.ID,
-		AuthorID: document.AuthorID,
-		Active:   strings.TrimSpace(document.Status) != "deleted",
-	}, true, nil
-}
-
-func (s *MongoCommentDataAdapter) ListOwnedPostIDs(
-	ctx context.Context,
-	postAuthorID string,
-) ([]string, error) {
-	cursor, err := s.posts.Find(
-		ctx,
-		bson.M{
-			"authorId": strings.TrimSpace(postAuthorID),
-			"status":   bson.M{"$ne": "deleted"},
-		},
-		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	postIDs := []string{}
-	for cursor.Next(ctx) {
-		var document postIDDocument
-		if err := cursor.Decode(&document); err != nil {
+	defer session.EndSession(ctx)
+	var tombstoned int64
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		now := time.Now().UTC()
+		result, err := s.comments.UpdateMany(
+			txCtx,
+			bson.M{
+				"postId": postID,
+				"status": bson.M{"$in": bson.A{
+					string(commentmodel.StatusActive),
+					string(commentmodel.StatusHidden),
+				}},
+			},
+			bson.M{
+				"$set": bson.M{
+					"status":    string(commentmodel.StatusTombstoned),
+					"isPinned":  false,
+					"updatedAt": now,
+				},
+				"$unset": bson.M{"pinnedAt": "", "hiddenAt": ""},
+				"$inc":   bson.M{"version": 1},
+			},
+		)
+		if err != nil {
 			return nil, err
 		}
-		if id := strings.TrimSpace(document.ID); id != "" {
-			postIDs = append(postIDs, id)
+		tombstoned = result.ModifiedCount
+		if tombstoned == 0 {
+			return nil, nil
 		}
-	}
-	if err := cursor.Err(); err != nil {
-		return nil, err
-	}
-	return postIDs, nil
-}
-
-func (s *MongoCommentDataAdapter) FindPostOwnerships(
-	ctx context.Context,
-	postIDs []string,
-) (map[string]commentmodel.PostOwnership, error) {
-	postIDs = uniqueNonEmptyStrings(postIDs)
-	ownerships := make(map[string]commentmodel.PostOwnership, len(postIDs))
-	if len(postIDs) == 0 {
-		return ownerships, nil
-	}
-	cursor, err := s.posts.Find(
-		ctx,
-		bson.M{"_id": bson.M{"$in": postIDs}},
-		options.Find().SetProjection(bson.D{
-			{Key: "_id", Value: 1},
-			{Key: "authorId", Value: 1},
-			{Key: "status", Value: 1},
-		}),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	for cursor.Next(ctx) {
-		var document postOwnershipDocument
-		if err := cursor.Decode(&document); err != nil {
+		payload, err := json.Marshal(struct {
+			PostID          string    `json:"postId"`
+			TombstonedCount int64     `json:"tombstonedCount"`
+			OccurredAt      time.Time `json:"occurredAt"`
+		}{PostID: postID, TombstonedCount: tombstoned, OccurredAt: now})
+		if err != nil {
 			return nil, err
 		}
-		ownerships[document.ID] = commentmodel.PostOwnership{
-			PostID:   document.ID,
-			AuthorID: document.AuthorID,
-			Active:   strings.TrimSpace(document.Status) != "deleted",
+		eventID := fmt.Sprintf("evt_tombstone_%s_%d", postID, now.UnixNano())
+		if _, err := s.outbox.InsertOne(txCtx, commentOutboxDocument{
+			ID:               eventID,
+			EventType:        "CommentsTombstoned",
+			AggregateID:      postID,
+			AggregateVersion: 0,
+			Payload:          payload,
+			OccurredAt:       now,
+		}); err != nil {
+			return nil, err
 		}
-	}
-	if err := cursor.Err(); err != nil {
-		return nil, err
-	}
-	return ownerships, nil
-}
-
-func (s *MongoCommentDataAdapter) findPage(
-	ctx context.Context,
-	filter bson.M,
-	sortSpec bson.D,
-	limit int,
-	total int64,
-) (commentmodel.Page, error) {
-	limit = normalizeCommentPageLimit(limit)
-	cursor, err := s.comments.Find(
-		ctx,
-		filter,
-		options.Find().
-			SetProjection(commentReadProjection()).
-			SetSort(sortSpec).
-			SetLimit(int64(limit+1)),
-	)
+		return nil, nil
+	})
 	if err != nil {
-		return commentmodel.Page{}, err
+		return 0, err
 	}
-	defer cursor.Close(ctx)
-
-	items := make([]commentmodel.ReadModel, 0, limit+1)
-	for cursor.Next(ctx) {
-		var document commentReadDocument
-		if err := cursor.Decode(&document); err != nil {
-			return commentmodel.Page{}, err
-		}
-		items = append(items, document.readModel())
-	}
-	if err := cursor.Err(); err != nil {
-		return commentmodel.Page{}, err
-	}
-	nextCursor := ""
-	if len(items) > limit {
-		items = items[:limit]
-		nextCursor = commentmodel.EncodeCursor(commentmodel.CursorFor(items[len(items)-1]))
-	}
-	return commentmodel.Page{
-		Items:      cloneReadModels(items),
-		NextCursor: nextCursor,
-		Total:      total,
-	}, nil
+	return tombstoned, nil
 }
 
 func (s *MongoCommentDataAdapter) findReceipt(
@@ -920,41 +563,4 @@ func (s *MongoCommentDataAdapter) findReceipt(
 		return commentCommandReceiptDocument{}, false, err
 	}
 	return receipt, true, nil
-}
-
-func commentReadProjection() bson.D {
-	return bson.D{
-		{Key: "_id", Value: 1},
-		{Key: "version", Value: 1},
-		{Key: "postId", Value: 1},
-		{Key: "authorId", Value: 1},
-		{Key: "authorDisplayNameSnapshot", Value: 1},
-		{Key: "authorAvatarUrlSnapshot", Value: 1},
-		{Key: "personaContextVersion", Value: 1},
-		{Key: "content", Value: 1},
-		{Key: "replyToCommentId", Value: 1},
-		{Key: "replyToUserId", Value: 1},
-		{Key: "parentCommentId", Value: 1},
-		{Key: "attachmentMediaIds", Value: 1},
-		{Key: "mentions", Value: 1},
-		{Key: "assistantMentioned", Value: 1},
-		{Key: "assistantReplySource", Value: 1},
-		{Key: "assistantCorrectionStatus", Value: 1},
-		{Key: "status", Value: 1},
-		{Key: "isPinned", Value: 1},
-		{Key: "pinnedAt", Value: 1},
-		{Key: "createdAt", Value: 1},
-		{Key: "updatedAt", Value: 1},
-		{Key: "deletedAt", Value: 1},
-	}
-}
-
-func commentRelationProjection() bson.D {
-	return bson.D{
-		{Key: "_id", Value: 1},
-		{Key: "postId", Value: 1},
-		{Key: "authorId", Value: 1},
-		{Key: "parentCommentId", Value: 1},
-		{Key: "status", Value: 1},
-	}
 }

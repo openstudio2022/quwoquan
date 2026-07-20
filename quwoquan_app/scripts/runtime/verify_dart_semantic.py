@@ -8,24 +8,23 @@ Scans quwoquan_app/lib/**/*.dart for:
    (AppSpacing, AppTypography, AppColors).
 2) iOS semantic style violations (chevron icon semantics, Cupertino page
    mixing Material interaction components, selector leading semantics).
+3) user-visible Chinese string literals in Text/label/title/hint/message
+   positions. Migrated domains are zero-tolerance; remaining domains use a
+   checked-in per-file ratchet that may only decrease.
 
 Excluded paths: lib/core/design_system/, lib/core/constants/, *_test.dart
 
 Usage:
-  python3 scripts/verify_dart_semantic.py [--targets PATH] [--update-baseline]
-  --update-baseline: 将当前违规写入 baseline，用于首次建立或刷新
+  python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py [--targets PATH]
 
 Exit 0 on success, 1 on failure.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
-
-BASELINE_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), ".verify_dart_semantic_baseline.txt"
-)
 
 # Patterns: (regex, hint message)
 PATTERNS = [
@@ -57,6 +56,42 @@ GLOBAL_BANS = [
     (r"\bIcons\.arrow_back\b", "iOS 语义：应使用 CupertinoIcons.back"),
     (r"\bIcons\.chevron_right\b", "iOS 语义：应使用 CupertinoIcons.chevron_forward"),
 ]
+
+HAN_CHARACTER = re.compile(r"[\u3400-\u9fff]")
+STRING_LITERAL_WITH_HAN = re.compile(
+    r"""(?:r)?(?:'[^'\n]*[\u3400-\u9fff][^'\n]*'|"[^"\n]*[\u3400-\u9fff][^"\n]*")"""
+)
+USER_VISIBLE_TEXT_ARGUMENT = re.compile(
+    r"\b(?:title|label|hintText|helperText|placeholder|message|subtitle|"
+    r"description|tooltip|semanticLabel|emptyText|errorText|buttonText|"
+    r"caption|header|prompt)\s*:"
+)
+USER_VISIBLE_TEXT_CONSTRUCTOR = re.compile(
+    r"\b(?:Text|SelectableText|AppToast\.show)\s*\("
+)
+
+# 本轮已批准的页面商用成熟度范围。这里零容忍，不接受 baseline。
+MIGRATED_TEXT_SCOPE_PREFIXES = (
+    "quwoquan_app/lib/ui/content/",
+    "quwoquan_app/lib/ui/discovery/",
+    "quwoquan_app/lib/ui/chat/",
+    "quwoquan_app/lib/ui/intersection/",
+    "quwoquan_app/lib/ui/welcome/",
+    "quwoquan_app/lib/ui/settings/",
+    "quwoquan_app/lib/ui/share/",
+)
+MIGRATED_TEXT_SCOPE_FILES = frozenset(
+    {
+        "quwoquan_app/lib/ui/user/pages/my_intersection_inbox_page.dart",
+    }
+)
+
+TEXT_BASELINE_PATH = os.path.join(
+    "quwoquan_app",
+    "scripts",
+    "runtime",
+    "dart_semantic_text_baseline.json",
+)
 
 # iOS 语义风格检查（增量门禁）
 IOS_STYLE_EXCLUDE_FILES = {
@@ -160,25 +195,97 @@ def scan_file(path: str, lib_root: str, repo_root: str) -> list[tuple[int, str, 
     return violations
 
 
-def load_baseline() -> set[str]:
-    """Load baseline entries: 'path:line_no'."""
-    out = set()
-    if os.path.isfile(BASELINE_FILE):
-        with open(BASELINE_FILE, encoding="utf-8") as f:
-            for line in f:
-                entry = line.strip()
-                if entry and not entry.startswith("#"):
-                    out.add(entry)
-    return out
+def scan_user_visible_text_literals(
+    path: str,
+    lib_root: str,
+    repo_root: str,
+) -> list[tuple[int, str, str]]:
+    """Return user-visible Chinese literal violations.
+
+    The scanner intentionally targets presentation argument positions rather
+    than every Han character: comments, logs, wire enums, regex dictionaries,
+    and user-generated content are not UI copy.
+    """
+    violations: list[tuple[int, str, str]] = []
+    rel_path = os.path.relpath(path, repo_root).replace("\\", "/")
+    if not rel_path.startswith("quwoquan_app/lib/ui/"):
+        return violations
+    # Codegen 文案来自 metadata（其唯一真相源），不应再复制到 UITextConstants。
+    if "/generated/" in rel_path or rel_path.endswith(".g.dart"):
+        return violations
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("//"):
+                continue
+            if "// ignore: verify_dart_semantic" in line:
+                continue
+            if not HAN_CHARACTER.search(line):
+                continue
+            if not STRING_LITERAL_WITH_HAN.search(line):
+                continue
+
+            current_is_argument = USER_VISIBLE_TEXT_ARGUMENT.search(line) is not None
+            current_is_constructor = USER_VISIBLE_TEXT_CONSTRUCTOR.search(line) is not None
+
+            # Handles the common multiline shape:
+            #   Text(
+            #     'literal',
+            #   )
+            lookback = "".join(lines[max(0, index - 2) : index + 1])
+            multiline_constructor = (
+                USER_VISIBLE_TEXT_CONSTRUCTOR.search(lookback) is not None
+                and lookback.rfind("(") > lookback.rfind(")")
+            )
+            if not (
+                current_is_argument
+                or current_is_constructor
+                or multiline_constructor
+            ):
+                continue
+            violations.append(
+                (
+                    index + 1,
+                    line.rstrip(),
+                    "用户可见文案应使用 UITextConstants.* 或 context.l10n.*",
+                )
+            )
+    except OSError as error:
+        print(
+            f"verify_dart_semantic: ERROR reading {rel_path}: {error}",
+            file=sys.stderr,
+        )
+    return violations
 
 
-def save_baseline(entries: set[str]) -> None:
-    """Write baseline file."""
-    sorted_entries = sorted(entries)
-    with open(BASELINE_FILE, "w", encoding="utf-8") as f:
-        f.write("# verify_dart_semantic baseline: 已知违规，逐步修复\n")
-        for e in sorted_entries:
-            f.write(e + "\n")
+def load_text_baseline(repo_root: str) -> dict[str, int]:
+    path = os.path.join(repo_root, TEXT_BASELINE_PATH)
+    try:
+        with open(path, encoding="utf-8") as file:
+            raw = json.load(file)
+    except (OSError, json.JSONDecodeError) as error:
+        print(
+            f"verify_dart_semantic: ERROR reading text baseline: {error}",
+            file=sys.stderr,
+        )
+        return {}
+    counts = raw.get("counts")
+    if not isinstance(counts, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, value in counts.items():
+        if isinstance(key, str) and isinstance(value, int) and value >= 0:
+            result[key] = value
+    return result
+
+
+def is_migrated_text_scope(rel_path: str) -> bool:
+    return (
+        rel_path in MIGRATED_TEXT_SCOPE_FILES
+        or rel_path.startswith(MIGRATED_TEXT_SCOPE_PREFIXES)
+    )
 
 
 def main() -> int:
@@ -189,9 +296,9 @@ def main() -> int:
         help="Path to scan (default: quwoquan_app/lib)",
     )
     parser.add_argument(
-        "--update-baseline",
+        "--print-text-baseline",
         action="store_true",
-        help="Write current violations to baseline and exit 0",
+        help="Print current out-of-scope text counts as JSON and exit",
     )
     args = parser.parse_args()
 
@@ -201,8 +308,9 @@ def main() -> int:
         print(f"verify_dart_semantic: ERROR {lib_root} not found", file=sys.stderr)
         return 1
 
-    baseline = load_baseline()
     all_violations: list[tuple[str, int, str, str]] = []
+    text_violations_by_file: dict[str, list[tuple[int, str, str]]] = {}
+    text_baseline = load_text_baseline(root)
 
     for dirpath, _dirnames, filenames in os.walk(lib_root):
         for name in filenames:
@@ -213,26 +321,43 @@ def main() -> int:
                 continue
             rel = os.path.relpath(path, root).replace("\\", "/")
             for line_no, line_content, hint in scan_file(path, lib_root, root):
-                entry = f"{rel}:{line_no}"
-                if entry not in baseline:
-                    all_violations.append((rel, line_no, line_content, hint))
+                all_violations.append((rel, line_no, line_content, hint))
+            text_violations = scan_user_visible_text_literals(
+                path,
+                lib_root,
+                root,
+            )
+            if text_violations:
+                text_violations_by_file[rel] = text_violations
 
-    if args.update_baseline:
-        # Collect all current violations for baseline
-        baseline_entries = set()
-        for dirpath, _dirnames, filenames in os.walk(lib_root):
-            for name in filenames:
-                if not name.endswith(".dart"):
-                    continue
-                path = os.path.join(dirpath, name)
-                if should_skip(path, lib_root):
-                    continue
-                rel = os.path.relpath(path, root).replace("\\", "/")
-                for line_no, _lc, _h in scan_file(path, lib_root, root):
-                    baseline_entries.add(f"{rel}:{line_no}")
-        save_baseline(baseline_entries)
-        print(f"verify_dart_semantic: baseline 已更新，共 {len(baseline_entries)} 条")
+    if args.print_text_baseline:
+        print(
+            json.dumps(
+                {
+                    "description": (
+                        "范围外域用户可见中文文案字面量棘轮；"
+                        "页面商用成熟度专项范围始终零容忍，计数只减不增。"
+                    ),
+                    "counts": {
+                        rel: len(violations)
+                        for rel, violations in sorted(
+                            text_violations_by_file.items()
+                        )
+                        if not is_migrated_text_scope(rel)
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
+
+    for rel, violations in sorted(text_violations_by_file.items()):
+        allowed = 0 if is_migrated_text_scope(rel) else text_baseline.get(rel, 0)
+        if len(violations) <= allowed:
+            continue
+        for line_no, line_content, hint in violations[allowed:]:
+            all_violations.append((rel, line_no, line_content, hint))
 
     found = False
     for rel, line_no, line_content, hint in all_violations:
@@ -242,7 +367,8 @@ def main() -> int:
 
     if found:
         print(
-            "\nverify_dart_semantic: 硬编码视觉字面量应使用 AppSpacing/AppTypography/AppColors",
+            "\nverify_dart_semantic: 视觉与用户文案必须使用语义 token；"
+            "范围外文案 baseline 只允许递减",
             file=sys.stderr,
         )
         return 1

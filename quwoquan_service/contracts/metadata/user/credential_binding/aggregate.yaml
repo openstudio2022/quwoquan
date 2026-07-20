@@ -11,10 +11,11 @@ business_rules:
   - Account 必须始终保留至少一种可恢复凭证，除非账号 closed
   - revoked 绑定不可恢复，重新绑定创建新 identity
   - bind/revoke 与安全审计 outbox 在同一 PostgreSQL transaction 提交
+  - 同账号重复绑定同一凭证为幂等 no-op，由全局唯一约束承载，不接收调用方幂等键
 lifecycle:
   states: [active, revoked]
   optimistic_concurrency: version
-  idempotency: command_receipt
+  idempotency: unique_credential_key
 ddd_layer_mapping:
   domain_model: internal/domain/account/credential_binding/model
   ports: internal/domain/account/credential_binding/ports

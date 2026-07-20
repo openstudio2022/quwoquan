@@ -56,18 +56,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: profile_identity_sync
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_identity_sync
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: user_profile_creation
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.user_profile_creation
         envs:
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: profile_identity_sync
         cases:
         - user_acceptance.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_identity_sync
@@ -75,6 +78,7 @@ gwt_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: chat_message_snapshot
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.chat_message_snapshot
@@ -148,12 +152,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: user_profile_repository_contract
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_payload_and_qr_payload_required
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: profile_crud_contract
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_snapshot_qr_token_and_profile_patch_contract
@@ -161,18 +167,21 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: edit_profile_page
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_field_order_and_sections
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: profile_crud_contract
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_update_contract
         envs:
         - gamma
       - layer: api_integration
+        execution_profile: integration
         suite: credential_contract
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.private_phone_credential_binding_contract
@@ -188,5 +197,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

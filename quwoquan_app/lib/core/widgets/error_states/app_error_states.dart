@@ -7,29 +7,155 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
+
+part 'app_error_state_visuals.dart';
 
 typedef UiErrorActionCallback = Future<void> Function(UiErrorAction action);
 
 const double _softErrorIllustrationSize = 80.0;
 
-class AppPageErrorState extends StatelessWidget {
+class AppPageErrorState extends StatefulWidget {
   const AppPageErrorState({
     super.key,
     required this.semantic,
     this.onAction,
     this.padding,
+    this.experienceTracker,
   });
 
   final UiErrorSemantic semantic;
   final UiErrorActionCallback? onAction;
   final EdgeInsetsGeometry? padding;
+  final AppPageExperienceTracker? experienceTracker;
+
+  @override
+  State<AppPageErrorState> createState() => _AppPageErrorStateState();
+}
+
+class _AppPageErrorStateState extends State<AppPageErrorState> {
+  late DateTime _shownAt;
+  Future<void> _telemetryTail = Future<void>.value();
+
+  AppPageExperienceTracker get _experienceTracker =>
+      widget.experienceTracker ?? AppPageExperienceTracker.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _shownAt = DateTime.now();
+    _scheduleShownOutcome();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppPageErrorState oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_telemetryIdentity(oldWidget.semantic) ==
+        _telemetryIdentity(widget.semantic)) {
+      return;
+    }
+    _shownAt = DateTime.now();
+    _scheduleShownOutcome();
+  }
+
+  void _scheduleShownOutcome() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final semantic = widget.semantic;
+      unawaited(
+        _experienceTracker.recordFirstUsable(
+          terminal: AppPageUsableTerminal.error,
+          surfaceId: semantic.sourceSurfaceId ?? semantic.sourceRouteId,
+          failReasonCode: semantic.sourceCode,
+        ),
+      );
+      _enqueueErrorOutcome(semantic: semantic, result: 'shown', durationMs: 0);
+    });
+  }
+
+  Future<void> _handleAction(UiErrorAction action) async {
+    final callback = widget.onAction;
+    if (callback == null) {
+      return;
+    }
+    final semantic = widget.semantic;
+    _enqueueErrorOutcome(
+      semantic: semantic,
+      result: 'recovery_started',
+      action: action,
+    );
+    try {
+      await callback(action);
+      _enqueueErrorOutcome(
+        semantic: semantic,
+        result: 'recovered',
+        action: action,
+      );
+    } catch (error, stackTrace) {
+      _enqueueErrorOutcome(
+        semantic: semantic,
+        result: 'recovery_failed',
+        action: action,
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  void _enqueueErrorOutcome({
+    required UiErrorSemantic semantic,
+    required String result,
+    UiErrorAction? action,
+    int? durationMs,
+  }) {
+    _telemetryTail = _telemetryTail.then(
+      (_) => _recordErrorOutcome(
+        semantic: semantic,
+        result: result,
+        action: action,
+        durationMs: durationMs,
+      ),
+    );
+  }
+
+  Future<void> _recordErrorOutcome({
+    required UiErrorSemantic semantic,
+    required String result,
+    UiErrorAction? action,
+    int? durationMs,
+  }) async {
+    await _experienceTracker.recordPageErrorOutcome(
+      surfaceId: semantic.sourceSurfaceId ?? semantic.sourceRouteId,
+      errorCode: semantic.sourceCode,
+      recoveryAction: semantic.recoveryAction?.name,
+      result: result,
+      action: action?.type.name,
+      durationMs: durationMs ?? _visibleDurationMs(),
+    );
+  }
+
+  int _visibleDurationMs() {
+    final duration = DateTime.now().difference(_shownAt).inMilliseconds;
+    return duration < 0 ? 0 : duration;
+  }
+
+  String _telemetryIdentity(UiErrorSemantic semantic) {
+    return <String>[
+      semantic.sourceCode ?? '',
+      semantic.sourceSurfaceId ?? '',
+      semantic.sourceRouteId ?? '',
+      semantic.recoveryAction?.name ?? '',
+      semantic.presentation.name,
+    ].join('|');
+  }
 
   @override
   Widget build(BuildContext context) {
     return _wrapWithErrorAppearance(
       context,
-      semantic,
+      widget.semantic,
       Builder(
         builder: (themedContext) {
           final background = AppColors.iosPageBackground(themedContext);
@@ -53,14 +179,17 @@ class AppPageErrorState extends StatelessWidget {
                     child: Center(
                       child: Padding(
                         padding:
-                            padding ?? EdgeInsets.all(AppSpacing.containerMd),
+                            widget.padding ??
+                            EdgeInsets.all(AppSpacing.containerMd),
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(
                             maxWidth: AppSpacing.feedMaxContentWidth,
                           ),
                           child: _ErrorEmptyPageBody(
-                            semantic: semantic,
-                            onAction: onAction,
+                            semantic: widget.semantic,
+                            onAction: widget.onAction == null
+                                ? null
+                                : _handleAction,
                           ),
                         ),
                       ),
@@ -821,113 +950,4 @@ class _ErrorActionRow extends StatelessWidget {
   bool _canDispatch(UiErrorAction action) {
     return onAction != null;
   }
-}
-
-class _SoftPlanetIllustration extends StatelessWidget {
-  const _SoftPlanetIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(_softErrorIllustrationSize, _softErrorIllustrationSize),
-      painter: _SoftPlanetPainter(
-        planetColor: AppColors.iosTintedFill(context),
-        orbitColor: AppColors.iosAccent(context).withValues(alpha: 0.62),
-        signalColor: AppColors.iosTertiaryLabel(
-          context,
-        ).withValues(alpha: 0.35),
-      ),
-    );
-  }
-}
-
-class _SoftPlanetPainter extends CustomPainter {
-  const _SoftPlanetPainter({
-    required this.planetColor,
-    required this.orbitColor,
-    required this.signalColor,
-  });
-
-  final Color planetColor;
-  final Color orbitColor;
-  final Color signalColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final planetPaint = Paint()..color = planetColor;
-    canvas.drawCircle(center, size.width * 0.22, planetPaint);
-
-    final orbitPaint = Paint()
-      ..color = orbitColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = AppSpacing.hairline * 4
-      ..strokeCap = StrokeCap.round;
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(-math.pi / 7);
-    canvas.drawArc(
-      Rect.fromCenter(
-        center: Offset.zero,
-        width: size.width * 0.72,
-        height: size.height * 0.32,
-      ),
-      math.pi * 0.08,
-      math.pi * 1.55,
-      false,
-      orbitPaint,
-    );
-    canvas.restore();
-
-    final signalPaint = Paint()
-      ..color = signalColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = AppSpacing.hairline * 3
-      ..strokeCap = StrokeCap.round;
-    final signalOrigin = Offset(size.width * 0.64, size.height * 0.24);
-    for (var i = 0; i < 2; i++) {
-      final radius = size.width * (0.11 + i * 0.09);
-      canvas.drawArc(
-        Rect.fromCircle(center: signalOrigin, radius: radius),
-        -math.pi / 2.4,
-        math.pi / 2.5,
-        false,
-        signalPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SoftPlanetPainter oldDelegate) {
-    return oldDelegate.planetColor != planetColor ||
-        oldDelegate.orbitColor != orbitColor ||
-        oldDelegate.signalColor != signalColor;
-  }
-}
-
-Color _toneAccentColor(BuildContext context, UiErrorTone tone) {
-  return switch (tone) {
-    UiErrorTone.info => AppColors.iosAccent(context),
-    UiErrorTone.caution => CupertinoDynamicColor.resolve(
-      CupertinoColors.systemOrange,
-      context,
-    ),
-    UiErrorTone.critical => AppColors.iosDestructive(context),
-    UiErrorTone.neutral => AppColors.iosSecondaryLabel(context),
-  };
-}
-
-Widget _wrapWithErrorAppearance(
-  BuildContext context,
-  UiErrorSemantic semantic,
-  Widget child,
-) {
-  final brightness = semantic.appearanceMode.brightness;
-  if (brightness == null) {
-    return child;
-  }
-  return CupertinoTheme(
-    data: CupertinoTheme.of(context).copyWith(brightness: brightness),
-    child: child,
-  );
 }

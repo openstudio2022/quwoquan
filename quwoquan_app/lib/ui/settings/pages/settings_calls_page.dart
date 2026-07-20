@@ -1,0 +1,203 @@
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/settings/providers/user_settings_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show OfficialRingtoneId;
+
+class SettingsCallsPage extends ConsumerStatefulWidget {
+  const SettingsCallsPage({super.key});
+
+  @override
+  ConsumerState<SettingsCallsPage> createState() => _SettingsCallsPageState();
+}
+
+class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
+  static final OfficialRingtoneId _defaultRingtone = OfficialRingtoneId(
+    'official.default',
+  );
+  static final OfficialRingtoneId _classicRingtone = OfficialRingtoneId(
+    'official.classic',
+  );
+  static final OfficialRingtoneId _softRingtone = OfficialRingtoneId(
+    'official.soft',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(
+      () => ref.read(userSettingsSectionsProvider.notifier).load(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = ref.watch(isDarkProvider);
+    final state = ref.watch(userSettingsSectionsProvider);
+    final settings = state.call;
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.settingsCallSection,
+      onBack: () => _goBack(context),
+      body: WebPageMaxWidthFrame(
+        child: SafeArea(
+          bottom: false,
+          child: settings == null
+              ? _buildUnavailable(state)
+              : ListView(
+                  padding: EdgeInsets.only(
+                    left: SettingsSemanticConstants
+                        .insetFormListHorizontalPadding,
+                    right: SettingsSemanticConstants
+                        .insetFormListHorizontalPadding,
+                    top: AppSpacing.intraGroupSm,
+                    bottom: AppSpacing.xl,
+                  ),
+                  children: <Widget>[
+                    SettingsInsetGroupedSection(
+                      isDark: isDark,
+                      header: UITextConstants.settingsCallRingtone,
+                      child: Column(
+                        children: <Widget>[
+                          _ringtoneRow(
+                            isDark: isDark,
+                            label: UITextConstants.settingsCallRingtoneDefault,
+                            ringtoneId: _defaultRingtone,
+                            selected: settings.defaultIncomingCallRingtoneId,
+                          ),
+                          SettingsInsetFormSectionDivider(isDark: isDark),
+                          _ringtoneRow(
+                            isDark: isDark,
+                            label: UITextConstants.settingsCallRingtoneClassic,
+                            ringtoneId: _classicRingtone,
+                            selected: settings.defaultIncomingCallRingtoneId,
+                          ),
+                          SettingsInsetFormSectionDivider(isDark: isDark),
+                          _ringtoneRow(
+                            isDark: isDark,
+                            label: UITextConstants.settingsCallRingtoneSoft,
+                            ringtoneId: _softRingtone,
+                            selected: settings.defaultIncomingCallRingtoneId,
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height:
+                          SettingsSemanticConstants.insetFormSectionVerticalGap,
+                    ),
+                    SettingsInsetGroupedSection(
+                      isDark: isDark,
+                      child: Column(
+                        children: <Widget>[
+                          SettingsInsetSwitchRow(
+                            isDark: isDark,
+                            label: UITextConstants
+                                .settingsAllowCallerRingtoneOverride,
+                            subtitle: UITextConstants
+                                .settingsAllowCallerRingtoneOverrideSubtitle,
+                            value: settings.allowCallerRingtoneOverride,
+                            onChanged: (value) => unawaited(
+                              _update(
+                                ref
+                                    .read(userSettingsSectionsProvider.notifier)
+                                    .setAllowCallerRingtoneOverride(value),
+                              ),
+                            ),
+                          ),
+                          SettingsInsetFormSectionDivider(isDark: isDark),
+                          SettingsInsetSwitchRow(
+                            isDark: isDark,
+                            label: UITextConstants.settingsEnableCallVibration,
+                            value: settings.enableCallVibration,
+                            onChanged: (value) => unawaited(
+                              _update(
+                                ref
+                                    .read(userSettingsSectionsProvider.notifier)
+                                    .setEnableCallVibration(value),
+                              ),
+                            ),
+                          ),
+                          SettingsInsetFormSectionDivider(isDark: isDark),
+                          SettingsInsetSwitchRow(
+                            isDark: isDark,
+                            label: UITextConstants.settingsEnableGroupCallRing,
+                            subtitle: UITextConstants
+                                .settingsEnableGroupCallRingSubtitle,
+                            value: settings.enableGroupCallRing,
+                            onChanged: (value) => unawaited(
+                              _update(
+                                ref
+                                    .read(userSettingsSectionsProvider.notifier)
+                                    .setEnableGroupCallRing(value),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ringtoneRow({
+    required bool isDark,
+    required String label,
+    required OfficialRingtoneId ringtoneId,
+    required OfficialRingtoneId? selected,
+  }) => SettingsInsetChoiceRow(
+    isDark: isDark,
+    label: label,
+    isSelected: selected == ringtoneId,
+    onTap: () => unawaited(
+      _update(
+        ref
+            .read(userSettingsSectionsProvider.notifier)
+            .setDefaultRingtone(ringtoneId),
+      ),
+    ),
+  );
+
+  Widget _buildUnavailable(UserSettingsSectionsState state) {
+    if (state.isLoading) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    return AppPageErrorState(
+      semantic: UiErrorSemanticResolver.resolve(
+        context,
+        error: state.rawError ?? StateError('call_settings_unavailable'),
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry) {
+          await ref.read(userSettingsSectionsProvider.notifier).load();
+        }
+      },
+    );
+  }
+
+  Future<void> _update(Future<bool> operation) async {
+    if (!await operation && mounted) {
+      AppToast.show(context, UITextConstants.settingsUpdateFailedToast);
+    }
+  }
+
+  void _goBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutePaths.settings);
+    }
+  }
+}

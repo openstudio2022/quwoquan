@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -17,11 +18,15 @@ import (
 // its own aggregate outbox + exact-count projector and must not enter this delta path.
 // Aligned with contracts/metadata/_projections/discovery_feed.yaml.
 type DiscoveryFeedProjector struct {
-	coll *mongo.Collection
+	coll  *mongo.Collection
+	posts *mongo.Collection
 }
 
 func NewDiscoveryFeedProjector(db *mongo.Database) *DiscoveryFeedProjector {
-	return &DiscoveryFeedProjector{coll: db.Collection("rm_discovery_feed")}
+	return &DiscoveryFeedProjector{
+		coll:  db.Collection("rm_discovery_feed"),
+		posts: db.Collection("posts"),
+	}
 }
 
 func (p *DiscoveryFeedProjector) Name() string { return "DiscoveryFeedProjector" }
@@ -131,6 +136,7 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 	setOnInsert := bson.M{
 		"likeCount":    int64(0),
 		"commentCount": int64(0),
+		"shareCount":   int64(0),
 		"viewCount":    int64(0),
 	}
 	// 时间语义：createdAt 仅首次插入置位（来自 Post.CreatedAt，永不被后续事件覆盖）；
@@ -156,33 +162,99 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 }
 
 func (p *DiscoveryFeedProjector) onBehaviorReported(ctx context.Context, event ProjectorEvent) error {
-	events, ok := event.Payload["events"].([]any)
-	if !ok || len(events) == 0 {
+	// behaviorPayloadEvents 同时接受 []any（wire 解码）与 []map[string]any
+	// （进程内 relay 直连），避免类型不匹配静默 no-op。
+	events := behaviorPayloadEvents(event.Payload["events"])
+	if len(events) == 0 {
 		return nil
 	}
+	if strings.TrimSpace(event.ID) == "" {
+		return fmt.Errorf("BehaviorBatchReported requires a projection event id")
+	}
 
-	for _, raw := range events {
-		ev, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		action, _ := ev["action"].(string)
+	deltas := map[string]int64{}
+	for _, ev := range events {
 		contentID, _ := ev["contentId"].(string)
 		if contentID == "" {
 			continue
 		}
-
-		inc := bson.M{}
-		switch action {
-		case "impression":
-			inc["viewCount"] = int64(1)
+		if delta := behaviorViewCountDelta(ev); delta > 0 {
+			deltas[contentID] += delta
 		}
-
-		if len(inc) > 0 {
-			_, _ = p.coll.UpdateOne(ctx, bson.M{"postId": contentID}, bson.M{"$inc": inc})
+	}
+	for contentID, delta := range deltas {
+		filter := bson.M{
+			"postId": contentID,
+			"$or": []bson.M{
+				{"behaviorProjectionLastId": bson.M{"$exists": false}},
+				{"behaviorProjectionLastId": bson.M{"$lt": event.ID}},
+			},
+		}
+		result, err := p.coll.UpdateOne(
+			ctx,
+			filter,
+			bson.M{
+				"$inc": bson.M{"viewCount": delta},
+				"$set": bson.M{"behaviorProjectionLastId": event.ID},
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("increment DiscoveryFeed viewCount for %q: %w", contentID, err)
+		}
+		if result.MatchedCount > 0 {
+			continue
+		}
+		// 文档存在但水位不小于当前事件，说明是 checkpoint 重放，计数已落。
+		existing, countErr := p.coll.CountDocuments(
+			ctx,
+			bson.M{"postId": contentID},
+			options.Count().SetLimit(1),
+		)
+		if countErr != nil {
+			return fmt.Errorf("check DiscoveryFeed replay for %q: %w", contentID, countErr)
+		}
+		if existing > 0 {
+			continue
+		}
+		eligible, countErr := p.posts.CountDocuments(
+			ctx,
+			discoveryFeedEligibleSourceFilter(contentID),
+			options.Count().SetLimit(1),
+		)
+		if countErr != nil {
+			return fmt.Errorf("check DiscoveryFeed source post %q: %w", contentID, countErr)
+		}
+		if eligible > 0 {
+			// Post 与行为 relay 有独立 checkpoint：公开已发布内容的 feed row
+			// 尚未建立时必须失败重试，不能推进游标永久丢掉 viewCount。
+			return fmt.Errorf("DiscoveryFeed viewCount target %q is missing", contentID)
 		}
 	}
 	return nil
+}
+
+func discoveryFeedEligibleSourceFilter(contentID string) bson.M {
+	return bson.M{
+		"_id":              contentID,
+		"status":           "published",
+		"visibility":       "public",
+		"moderationStatus": "approved",
+	}
+}
+
+func behaviorViewCountDelta(event map[string]any) int64 {
+	action := strings.ToLower(strings.TrimSpace(strVal(event, "action")))
+	if action != "impression" {
+		return 0
+	}
+	// 七态漏斗中 visible 只是进入视窗的弱证据；只有满足面积+停留门槛的
+	// impressed 才是 viewCount。行为入口已强校验 state，缺失状态不得兼容计数。
+	switch strings.ToLower(strings.TrimSpace(strVal(event, "state"))) {
+	case "impressed":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func strVal(m map[string]any, key string) string {
@@ -233,7 +305,8 @@ func normalizeVisibility(value string) string {
 
 func eligibleForDiscovery(payload map[string]any) bool {
 	return normalizedStatus(payload) == "published" &&
-		normalizeVisibility(strVal(payload, "visibility")) == "public"
+		normalizeVisibility(strVal(payload, "visibility")) == "public" &&
+		strings.EqualFold(strings.TrimSpace(strVal(payload, "moderationStatus")), "approved")
 }
 
 func parseEventTime(raw string, fallback time.Time) time.Time {

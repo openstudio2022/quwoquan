@@ -1,4 +1,4 @@
-# L4 对象任务：mongo-event-collection-and-mq-integration
+# L3 对象任务：mongo-event-collection-and-mq-integration
 
 ## 功能说明
 - **MongoDB events 集合**：存储领域事件，字段 aggregate_id、event_type、payload、timestamp、trace_id；索引按 aggregate_id + timestamp。

@@ -13,7 +13,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/notification-service/internal/infrastructure/persistence"
 )
 
@@ -23,6 +25,10 @@ var (
 	notificationMongoContainer  *mongomod.MongoDBContainer
 	notificationReliableStore   *persistence.MongoNotificationDeliveryJobStore
 	notificationAppMessageStore *persistence.MongoAppMessageStore
+	notificationAccountClosure  *persistence.MongoUserAccountClosedProjection
+	notificationRedisRuntime    *testinfra.RealRedis
+	notificationRedisRouter     *rtredis.Router
+	notificationRedisClient     rtredis.Client
 )
 
 func TestMain(m *testing.M) {
@@ -68,6 +74,41 @@ func TestMain(m *testing.M) {
 	if err := notificationAppMessageStore.EnsureIndexes(startupCtx); err != nil {
 		panic("ensure notification-service app-message indexes: " + err.Error())
 	}
+	notificationAccountClosure, err =
+		persistence.NewMongoUserAccountClosedProjection(notificationMongoDB)
+	if err != nil {
+		panic("create notification-service account-closure projection: " + err.Error())
+	}
+	if err := notificationAccountClosure.EnsureIndexes(startupCtx); err != nil {
+		panic("ensure notification-service account-closure indexes: " + err.Error())
+	}
+	notificationRedisRuntime, err = testinfra.StartRealRedis(startupCtx)
+	if err != nil {
+		panic(
+			"notification-service api_integration requires real Redis: " +
+				err.Error(),
+		)
+	}
+	notificationRedisRouter, err = platformredis.NewRouter(
+		rtredis.RouterConfig{
+			Scenes: map[string]rtredis.SceneConfig{
+				"realtime": {
+					Mode:     "standalone",
+					Addr:     notificationRedisRuntime.Addr,
+					Password: notificationRedisRuntime.Password,
+					TLS:      notificationRedisRuntime.TLS,
+				},
+			},
+			DefaultScene: "realtime",
+		},
+	)
+	if err != nil {
+		panic("connect notification-service api_integration Redis: " + err.Error())
+	}
+	notificationRedisClient = notificationRedisRouter.Scene("realtime")
+	if err := notificationRedisClient.Ping(startupCtx); err != nil {
+		panic("ping notification-service api_integration Redis: " + err.Error())
+	}
 	cancelStartup()
 
 	code := m.Run()
@@ -75,6 +116,15 @@ func TestMain(m *testing.M) {
 	cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), 30*time.Second)
 	_ = notificationMongoDB.Drop(cleanupCtx)
 	_ = notificationMongoClient.Disconnect(cleanupCtx)
+	if notificationRedisRuntime != nil {
+		_ = notificationRedisRuntime.FlushDBs(cleanupCtx, 0)
+	}
+	if notificationRedisRouter != nil {
+		_ = notificationRedisRouter.Close()
+	}
+	if notificationRedisRuntime != nil {
+		_ = notificationRedisRuntime.Close(cleanupCtx)
+	}
 	if notificationMongoContainer != nil {
 		_ = notificationMongoContainer.Terminate(cleanupCtx)
 	}
@@ -108,9 +158,16 @@ func resetNotificationCollections(t *testing.T) {
 		"app_messages",
 		"external_provider_attempt_ledger",
 		"reliable_task_leases",
+		persistence.UserAccountClosedInboxCollection,
+		persistence.UserAccountClosedFailureCollection,
 	} {
 		if _, err := notificationMongoDB.Collection(collection).DeleteMany(ctx, bson.D{}); err != nil {
 			t.Fatalf("clean %s: %v", collection, err)
+		}
+	}
+	if notificationRedisRuntime != nil {
+		if err := notificationRedisRuntime.FlushDBs(ctx, 0); err != nil {
+			t.Fatalf("clean Redis: %v", err)
 		}
 	}
 }

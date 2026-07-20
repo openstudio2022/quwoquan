@@ -55,6 +55,21 @@ type GetFeedRequest struct {
 	FeedRequestID string
 	Cursor        string
 	Limit         int
+	// DeferDeliveryAccounting（N3-3 served 口径）：调用方在装配层还会过滤候选
+	// （hydration 失败/不可见跳过）时置 true——engine 跳过 served/learning
+	// impression 记账，由调用方按最终下发集调用 RecordDelivery。否则被丢弃的
+	// 候选会被曝光过滤拉黑（用户从未见过）并污染训练样本分母。
+	DeferDeliveryAccounting bool
+}
+
+// DeliveryAttribution 是延迟记账所需的本次评分归因（RecordDelivery 消费）。
+type DeliveryAttribution struct {
+	FeedRequestID  string
+	ChannelID      string
+	ModelBucket    string
+	ModelVersion   string
+	ModelReleaseID string
+	ScoringBucket  string
 }
 
 // NewFeedRequestID 生成服务端权威 feedRequestId（frq_ 前缀 ULID）。
@@ -73,6 +88,8 @@ type FeedResponse struct {
 	// RankingVersion / ReasonVersion 为本次结果的排序与理由管线版本，随 envelope 下发。
 	RankingVersion string `json:"rankingVersion,omitempty"`
 	ReasonVersion  string `json:"reasonVersion,omitempty"`
+	// Attribution 仅在 DeferDeliveryAccounting 模式下回传（RecordDelivery 输入）。
+	Attribution DeliveryAttribution `json:"-"`
 }
 
 // FeedItem represents a single item in the feed.
@@ -87,6 +104,9 @@ type FeedItem struct {
 	QualityScore    float64  `json:"qualityScore,omitempty"`
 	ContentVertical string   `json:"contentVertical,omitempty"`
 	SupplySource    string   `json:"supplySource,omitempty"`
+	// trainingFeatures 只在进程内随最终下发集流转，不进入客户端 wire。
+	// FeedbackRecorder 将其写入不可变曝光事实，训练不得再回查当前可变宽表。
+	trainingFeatures *trainingFeatureSnapshot
 }
 
 type feedCursorState struct {
@@ -329,6 +349,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// Stage 1: Load session state (from SessionCache or HotPath)
 	session, err := e.sessions.GetSessionState(ctx, req.UserID, req.SessionID)
 	if err != nil {
+		// Redis 会话读失败 fail-open 为空会话（个性化降级为冷启动路径），
+		// 降级必须可观测（N1-2）。
+		RecordRedisDegraded("session_state")
 		session = &SessionState{UserID: req.UserID, SessionID: req.SessionID}
 	}
 
@@ -341,6 +364,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	sort.Slice(allCandidates, func(i, j int) bool {
 		return allCandidates[i].ContentID < allCandidates[j].ContentID
 	})
+	// Stage 2.5: Recall fusion source quota (W9/B10 轻量融合)：按 policy 源配额
+	// 截断单源候选占比，防单源霸屏；boost 在打分后应用（applyRecallSourceBoost）。
+	allCandidates = applySourceQuota(allCandidates, e.policyStore.Current().RecallFusion, req.Limit*3)
 	recallLatency := time.Since(recallStart)
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
@@ -371,6 +397,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if e.exposureFilter != nil {
 		exposureFiltered, filterErr := e.exposureFilter.FilterCandidates(ctx, req.UserID, filtered, pipelineStart)
 		if filterErr != nil {
+			// 曝光过滤 Redis 失败 fail-open（不过滤继续下发）——重复曝光风险
+			// 上升，降级必须可观测（N1-2）。
+			RecordRedisDegraded("exposure_filter")
 			if e.logger != nil {
 				e.logger.Warn("rec.exposure_filter.error", slog.String("err", filterErr.Error()))
 			}
@@ -433,12 +462,13 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	modelVersion := policy.ResolveBucketOr(recpolicy.ExpModelVersion, req.UserID, userSegments, "champion")
 
 	scoringFeatures := &ScoringFeatures{
-		Session:       session,
-		User:          userFeatures,
-		Weights:       resolved.Weights,
-		Scorer:        resolved.Scorer,
-		ExploreRate:   resolved.Scorer.ExploreFraction,
-		Deterministic: req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
+		Session:           session,
+		User:              userFeatures,
+		Weights:           resolved.Weights,
+		FeatureSnapshotAt: time.Now().UTC(),
+		Scorer:            resolved.Scorer,
+		ExploreRate:       resolved.Scorer.ExploreFraction,
+		Deterministic:     req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
 	}
 
 	// Stage 6: Model scoring (RuleScorer, RemoteModelScorer, or CascadeScorer)
@@ -446,6 +476,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// model_version experiment: when "challenger", ask model service for canary version.
 	scoreStart := time.Now()
 	activeScorer := e.scorer
+	// actualScorerPath 是真实使用的打分路径（区别于实验分桶）：
+	// "rule"=分桶主动规则分；"model"=模型分成功；"rule_fallback"=模型故障降级。
+	// model_fallback_rate 只统计 rule_fallback（此前误用分桶名导致降级不可测）。
+	actualScorerPath := modelBucket
 	if modelBucket == "rule" {
 		if cascade, ok := e.scorer.(*CascadeScorer); ok {
 			activeScorer = cascade.Fallback
@@ -462,35 +496,71 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			}
 		}
 	}
-	scored, scoreErr := activeScorer.ScoreBatch(ctx, scoringFeatures, filtered)
+	var scored []ScoredCandidate
+	var scoreErr error
+	if cascade, ok := activeScorer.(*CascadeScorer); ok {
+		var usedFallback bool
+		scored, usedFallback, scoreErr = cascade.ScoreBatchWithPath(ctx, scoringFeatures, filtered)
+		if usedFallback {
+			actualScorerPath = "rule_fallback"
+		}
+	} else {
+		scored, scoreErr = activeScorer.ScoreBatch(ctx, scoringFeatures, filtered)
+	}
 	if scoreErr != nil {
 		if e.logger != nil {
 			e.logger.Error("rec.score.error", slog.String("err", scoreErr.Error()))
 		}
 		scored = make([]ScoredCandidate, 0)
 	}
-	scoreLatency := time.Since(scoreStart)
-
-	// Shadow scoring: async call to challenger model for offline comparison
-	if modelBucket == "model" && modelVersion == "champion" && e.feedback != nil {
-		if cascade, ok := e.scorer.(*CascadeScorer); ok {
-			if remote, ok := cascade.Primary.(*RemoteModelScorer); ok {
-				shadowScorer := remote.WithModelVersion("challenger")
-				go func() {
-					shadowCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-					defer cancel()
-					shadowScored, err := shadowScorer.ScoreBatch(shadowCtx, scoringFeatures, filtered)
-					if err != nil {
-						if e.logger != nil {
-							e.logger.Debug("rec.shadow.error", slog.String("err", err.Error()))
-						}
-						return
-					}
-					e.recordShadowScores(shadowCtx, req.UserID, req.SessionID, shadowScored)
-				}()
+	modelReleaseID := ""
+	if actualScorerPath == "model" {
+		for _, candidate := range scored {
+			if candidate.ModelReleaseID != "" {
+				modelReleaseID = candidate.ModelReleaseID
+				break
 			}
 		}
 	}
+	scoreLatency := time.Since(scoreStart)
+
+	// Shadow scoring（W9 S0 shadow-only 常开）：主打 rule 时异步请求 champion
+	// 模型分留档（积累训练样本与 replay 对比证据，LTR 爬坡的 S1 触发依据）；
+	// 主打 model champion 时 shadow challenger（canary 对比，原语义保留）。
+	// 全部异步 + 500ms 超时，不影响线上排序延迟。
+	if e.feedback != nil {
+		if cascade, ok := e.scorer.(*CascadeScorer); ok {
+			if remote, ok := cascade.Primary.(*RemoteModelScorer); ok {
+				var shadowScorer ModelScorer
+				switch {
+				case modelBucket == "rule":
+					shadowScorer = remote
+				case modelVersion == "champion":
+					shadowScorer = remote.WithModelVersion("challenger")
+				}
+				if shadowScorer != nil {
+					RecordShadowScore("attempted")
+					go func() {
+						shadowCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+						defer cancel()
+						shadowScored, err := shadowScorer.ScoreBatch(shadowCtx, scoringFeatures, filtered)
+						if err != nil {
+							RecordShadowScore("failed")
+							if e.logger != nil {
+								e.logger.Debug("rec.shadow.error", slog.String("err", err.Error()))
+							}
+							return
+						}
+						RecordShadowScore("succeeded")
+						e.recordShadowScores(shadowCtx, req.UserID, req.SessionID, shadowScored)
+					}()
+				}
+			}
+		}
+	}
+
+	// Recall fusion source boost (W9)：policy 源间校准乘数（默认 1.0 中性）。
+	applyRecallSourceBoost(scored, policy.RecallFusion)
 
 	// Sort by score (scorer returns unsorted). Tie-break by ContentID for stable pagination.
 	sort.Slice(scored, func(i, j int) bool {
@@ -524,17 +594,23 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 
 	allItems := make([]FeedItem, 0, len(reranked))
 	for _, s := range reranked {
+		trainingFeatures := newTrainingFeatureSnapshot(
+			userFeatures,
+			candidateInputAt(s.Candidate, scoringFeatures.FeatureSnapshotAt),
+			scoringFeatures.FeatureSnapshotAt,
+		)
 		allItems = append(allItems, FeedItem{
-			ContentID:       s.Candidate.ContentID,
-			ContentType:     s.Candidate.ContentType,
-			AuthorID:        s.Candidate.AuthorID,
-			Title:           s.Candidate.Title,
-			Tags:            s.Candidate.Tags,
-			Score:           s.Score,
-			RecallPath:      s.Candidate.RecallPath,
-			QualityScore:    s.Candidate.QualityScore,
-			ContentVertical: s.Candidate.ContentVertical,
-			SupplySource:    s.Candidate.SupplySource,
+			ContentID:        s.Candidate.ContentID,
+			ContentType:      s.Candidate.ContentType,
+			AuthorID:         s.Candidate.AuthorID,
+			Title:            s.Candidate.Title,
+			Tags:             s.Candidate.Tags,
+			Score:            s.Score,
+			RecallPath:       s.Candidate.RecallPath,
+			QualityScore:     s.Candidate.QualityScore,
+			ContentVertical:  s.Candidate.ContentVertical,
+			SupplySource:     s.Candidate.SupplySource,
+			trainingFeatures: trainingFeatures,
 		})
 	}
 
@@ -590,7 +666,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			FilteredCount:      len(filtered),
 			ResultCount:        len(items),
 			SourceBreakdown:    sourceBreakdown,
-			ModelUsed:          modelBucket,
+			ModelUsed:          actualScorerPath,
 			ExperimentBucket:   scoringBucket,
 			PolicyVersion:      resolved.PolicyVersion,
 			ScoringPreset:      resolved.Preset,
@@ -611,34 +687,81 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		}
 	}
 
-	// Learning: record impressions asynchronously (fire-and-forget)
+	RecordPipelineResult(actualScorerPath, len(items) == 0)
+
+	attribution := DeliveryAttribution{
+		FeedRequestID:  req.FeedRequestID,
+		ChannelID:      req.ChannelID,
+		ModelBucket:    modelBucket,
+		ModelReleaseID: modelReleaseID,
+		ScoringBucket:  scoringBucket,
+	}
+	if modelBucket == "model" {
+		attribution.ModelVersion = modelVersion
+	}
+	if req.DeferDeliveryAccounting {
+		// N3-3 served 口径：装配层还会过滤候选，记账推迟到最终下发集
+		// （调用方 RecordDelivery）。归因随响应回传。
+		resp.Attribution = attribution
+		return resp, nil
+	}
+	e.RecordDelivery(ctx, req.UserID, req.SessionID, attribution, items)
+
+	return resp, nil
+}
+
+// RecordDelivery 按最终下发集记账（N3-3 served 口径）：learning impression
+// 训练事实 + served 曝光记忆 + served 指标。items 必须是真实进入响应的内容
+// （装配层 hydration 失败被丢弃的候选不得计入，否则曝光过滤拉黑未曾展示的
+// 内容、训练样本分母被污染）。
+func (e *Engine) RecordDelivery(
+	ctx context.Context,
+	userID, sessionID string,
+	attribution DeliveryAttribution,
+	items []FeedItem,
+) {
+	if len(items) == 0 {
+		return
+	}
 	if e.feedback != nil {
 		feedbackItems := make([]FeedItem, len(items))
 		copy(feedbackItems, items)
-		go func() {
-			fbCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-			_ = e.feedback.RecordImpression(fbCtx, req.UserID, req.SessionID, feedbackItems)
-		}()
+		impressionAttribution := ImpressionAttribution{
+			FeedRequestID:  attribution.FeedRequestID,
+			ModelBucket:    attribution.ModelBucket,
+			ModelVersion:   attribution.ModelVersion,
+			ModelReleaseID: attribution.ModelReleaseID,
+		}
+		// 训练事实必须在响应返回前进入进程内可靠缓冲；不能把 enqueue 本身
+		// fire-and-forget，否则优雅关闭时 Stop 可能先于 goroutine，整批曝光丢失。
+		// BufferedRecorder 的实际 Mongo flush 仍异步批处理，不把存储 RTT 放进 feed P95。
+		if err := e.feedback.RecordImpression(
+			ctx,
+			userID,
+			sessionID,
+			impressionAttribution,
+			feedbackItems,
+		); err != nil && e.logger != nil {
+			e.logger.Warn(
+				"rec.impression.write_failed",
+				slog.String("feedRequestId", attribution.FeedRequestID),
+				slog.String("error", err.Error()),
+			)
+		}
 	}
-
-	RecordPipelineResult(modelBucket, len(items) == 0)
-
-	if e.exposureMemory != nil && req.UserID != "" && len(items) > 0 {
+	if e.exposureMemory != nil && userID != "" {
 		servedItems := make([]FeedItem, len(items))
 		copy(servedItems, items)
 		RecordServedItems(len(servedItems))
-		RecordServedItemsByAttribution(servedItems, req.ChannelID, RankingVersion, ReasonVersion)
+		RecordServedItemsByAttribution(servedItems, attribution.ChannelID, RankingVersion, ReasonVersion, attribution.ScoringBucket)
 		go func() {
 			servedCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
-			if err := e.exposureMemory.RecordServed(servedCtx, req.UserID, servedItems, time.Now().UTC()); err != nil && e.logger != nil {
+			if err := e.exposureMemory.RecordServed(servedCtx, userID, servedItems, time.Now().UTC()); err != nil && e.logger != nil {
 				e.logger.Warn("rec.exposure.served_write_failed", slog.String("err", err.Error()))
 			}
 		}()
 	}
-
-	return resp, nil
 }
 
 func normalizeSort(raw string) string {
@@ -706,6 +829,7 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 		for _, src := range e.sources {
 			candidates, err := src.Recall(recallCtx, recallReq)
 			if err != nil {
+				RecordRecallSourceFailure(recallSourceLabel(src))
 				if e.logger != nil {
 					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
 				}
@@ -727,6 +851,7 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 			defer wg.Done()
 			candidates, err := s.Recall(recallCtx, recallReq)
 			if err != nil {
+				RecordRecallSourceFailure(recallSourceLabel(s))
 				if e.logger != nil {
 					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
 				}
@@ -740,6 +865,19 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 	for _, r := range results {
 		*out = append(*out, r.candidates...)
 	}
+}
+
+// recallSourceLabel 从源类型派生低基数指标标签（去包路径与指针前缀）。
+func recallSourceLabel(src CandidateSource) string {
+	if src == nil {
+		return "unknown"
+	}
+	name := fmt.Sprintf("%T", src)
+	name = strings.TrimPrefix(name, "*")
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[idx+1:]
+	}
+	return name
 }
 
 // rerank applies diversity constraints: content type variety, author dedup, tag dedup,

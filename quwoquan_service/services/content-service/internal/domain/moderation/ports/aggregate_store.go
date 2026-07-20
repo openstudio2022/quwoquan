@@ -112,3 +112,14 @@ type OutboxReader interface {
 		limit int,
 	) ([]OutboxEvent, error)
 }
+
+// ProjectionCheckpointStore tracks per-consumer moderation relay progress.
+type ProjectionCheckpointStore interface {
+	LoadModerationCheckpoint(ctx context.Context, consumer string) (string, error)
+	SaveModerationCheckpoint(ctx context.Context, consumer, checkpoint string) error
+}
+
+// OutboxPublisher delivers committed moderation facts to one consumer.
+type OutboxPublisher interface {
+	Publish(ctx context.Context, event OutboxEvent) error
+}

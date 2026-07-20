@@ -1,4 +1,4 @@
-# L4 特性：timeout-retry-circuit-ratelimit-degrade
+# L3 特性：timeout-retry-circuit-ratelimit-degrade
 
 ## 功能说明
 - 待补充

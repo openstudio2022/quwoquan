@@ -8,75 +8,86 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	profileinteractionapp "quwoquan_service/services/content-service/internal/application/content/profile_interaction"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
-func (h *ContentHandler) handleListProfileInteractionActivitiesReceived(w http.ResponseWriter, r *http.Request) {
+func (h *ContentHandler) handleListProfileInteractionActivitiesReceived(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	h.handleListProfileInteractionActivities(w, r, "received")
 }
 
-func (h *ContentHandler) handleListProfileInteractionActivitiesSent(w http.ResponseWriter, r *http.Request) {
+func (h *ContentHandler) handleListProfileInteractionActivitiesSent(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	h.handleListProfileInteractionActivities(w, r, "sent")
 }
 
-func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseWriter, r *http.Request, direction string) {
-	subAccountID := r.PathValue("subAccountId")
-	if strings.TrimSpace(subAccountID) == "" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "subAccountId 不能为空", "missing subAccountId"))
+func (h *ContentHandler) handleListProfileInteractionActivities(
+	w http.ResponseWriter,
+	r *http.Request,
+	direction string,
+) {
+	if h.profileInteractionService == nil {
+		writeHTTPError(w, r, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+			"ProfileInteractionActivity query facade is not configured",
+		))
+		return
+	}
+	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
+	if subAccountID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"互动身份不能为空",
+			"missing subAccountId",
+		))
 		return
 	}
 	limit := 20
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
-	activityType := strings.TrimSpace(r.URL.Query().Get("type"))
-	if activityType != "" && activityType != "share" {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromInteractionTypeInvalid(
-			"supported interaction type filter is share",
-		))
-		return
-	}
-	if activityType == "share" {
-		if err := requireActiveShareInteractionOwner(r, subAccountID); err != nil {
-			writeHTTPError(w, r, err)
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			writeHTTPError(w, r, contentgenerated.AppErrorFromInvalidArgument(
+				"profile interaction limit must be positive",
+			))
 			return
 		}
-		items, nextCursor, hasMore, err := h.postService.ListProfileShareInteractions(
-			r.Context(), subAccountID, direction, cursor, limit,
-		)
-		if err != nil {
-			writeHTTPError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"items":      profileShareInteractionJSONItems(items),
-			"nextCursor": nextCursor,
-			"hasMore":    hasMore,
-		})
-		return
+		limit = parsed
 	}
-	items, nextCursor, hasMore, err := h.postService.ListProfileInteractionActivities(
-		r.Context(), subAccountID, operationActorID(r), direction, cursor, limit,
+	page, err := h.profileInteractionService.ListActivities(
+		r.Context(),
+		profileinteractionapp.ActivityPageQuery{
+			OwnerPersonaID: subAccountID,
+			ViewerPersonaID: operationActorID(r),
+			Direction: direction,
+			ActivityType: strings.TrimSpace(r.URL.Query().Get("type")),
+			Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")),
+			Limit: limit,
+		},
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":      items,
-		"nextCursor": nextCursor,
-		"hasMore":    hasMore,
-	})
+	writeJSON(w, http.StatusOK, page)
 }
 
-func (h *ContentHandler) handleUpdateProfileInteractionState(w http.ResponseWriter, r *http.Request) {
+func (h *ContentHandler) handleUpdateProfileInteractionState(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if h.profileInteractionService == nil {
+		writeHTTPError(w, r, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+			"ProfileInteractionReadFact append facade is not configured",
+		))
+		return
+	}
 	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	interactionID := strings.TrimSpace(r.PathValue("interactionId"))
-	if subAccountID == "" || interactionID == "" {
+	activityID := strings.TrimSpace(r.PathValue("interactionId"))
+	if subAccountID == "" || activityID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"互动标识不能为空",
@@ -84,59 +95,56 @@ func (h *ContentHandler) handleUpdateProfileInteractionState(w http.ResponseWrit
 		))
 		return
 	}
-	if err := requireActiveShareInteractionOwner(r, subAccountID); err != nil {
+	if err := requireActiveProfileInteractionOwner(r, subAccountID); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	if err := h.postService.MarkProfileShareInteractionState(
+	var body struct {
+		State string `json:"state"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeHTTPError(w, r, contentgenerated.AppErrorFromInvalidArgument(
+			"decode ProfileInteractionReadFact request: " + err.Error(),
+		))
+		return
+	}
+	ack, err := h.profileInteractionService.AppendReadFact(
 		r.Context(),
-		subAccountID,
-		interactionID,
-		strings.TrimSpace(r.URL.Query().Get("state")),
-	); err != nil {
+		profileinteractionapp.AppendReadFactCommand{
+			OwnerPersonaID: subAccountID,
+			ActivityID: activityID,
+			State: strings.TrimSpace(body.State),
+		},
+	)
+	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusAccepted, ack)
 }
 
-func requireActiveShareInteractionOwner(r *http.Request, subAccountID string) error {
+func requireActiveProfileInteractionOwner(
+	r *http.Request,
+	subAccountID string,
+) error {
 	claims, ok := rtauth.PrincipalFromContext(r.Context())
 	if !ok || strings.TrimSpace(claims.Subject) == "" {
-		return contentgenerated.AppErrorFromUnauthorized("share interactions require authenticated principal")
-	}
-	activeSubAccountID := strings.TrimSpace(claims.Persona)
-	if activeSubAccountID == "" {
 		return contentgenerated.AppErrorFromUnauthorized(
-			"share interactions require an active persona principal",
+			"profile interactions require authenticated principal",
 		)
 	}
-	if activeSubAccountID != strings.TrimSpace(subAccountID) {
+	activePersonaID := strings.TrimSpace(claims.Persona)
+	if activePersonaID == "" {
+		return contentgenerated.AppErrorFromUnauthorized(
+			"profile interactions require an active persona",
+		)
+	}
+	if activePersonaID != strings.TrimSpace(subAccountID) {
 		return contentgenerated.AppErrorFromInteractionOwnerForbidden(
 			"requested sub-account is not the active principal persona",
 		)
 	}
 	return nil
-}
-
-func profileShareInteractionJSONItems(items []postmodel.ProfileInteractionActivityView) []map[string]any {
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		raw, err := json.Marshal(item)
-		if err != nil {
-			continue
-		}
-		payload := map[string]any{}
-		if err := json.Unmarshal(raw, &payload); err != nil {
-			continue
-		}
-		if item.SeenAt.IsZero() {
-			delete(payload, "seenAt")
-		}
-		if item.ReadAt.IsZero() {
-			delete(payload, "readAt")
-		}
-		result = append(result, payload)
-	}
-	return result
 }

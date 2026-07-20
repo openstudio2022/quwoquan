@@ -102,7 +102,8 @@ metrics:
   feed_negative_feedback_total: recommendation_feed_negative_feedback_total
   feed_engagement_total: recommendation_feed_engagement_total
   feed_completion_total: recommendation_feed_completion_total
-  feed_exposure_gini: recommendation_feed_exposure_gini
+  # exposure_gini 为 objective_only：per-content 分布评估走离线 replay 报表，
+  # 不注册在线 Prometheus 指标（避免死告警与高基数序列）。
   feed_resurfaced_total: recommendation_feed_resurfaced_total
   feed_dynamic_budget_total: recommendation_feed_dynamic_budget_total
   feed_frequency_capped_total: recommendation_feed_frequency_capped_total
@@ -174,8 +175,9 @@ slis:
     measured: true
 
   - id: model_fallback_rate
-    description: 模型 scorer 不可用时回退 RuleScorer 的请求占比（rule 路径 / 总请求）。
-    source: rec_pipeline_rule_hits_total / rec_pipeline_requests_total
+    description: 模型 scorer 故障/超时降级 RuleScorer 的请求占比（N0-1 语义修正：
+      只统计真实降级 rec_pipeline_model_fallback_total；分桶主动走 rule 不计入）。
+    source: rec_pipeline_model_fallback_total / rec_pipeline_requests_total
     objective_max: 0.05
     measured: true
 
@@ -192,8 +194,9 @@ slis:
     objective_only: true
 
   - id: exposure_gini
-    description: 内容曝光分布基尼系数；越高说明曝光过度集中。
-    source: recommendation_feed_exposure_gini
+    description: 内容曝光分布基尼系数；越高说明曝光过度集中。评估通道为离线
+      replay 报表（per-content 分布，不进在线 Prometheus），无在线告警。
+    source: offline_replay_report
     objective_max: 0.65
     objective_only: true
 
@@ -218,9 +221,11 @@ slis:
     observe_only: true
 
   - id: collaborative_recall_lift
-    description: 协同召回候选相对非协同召回的 CTR/完成率增益；由离线 replay report 统一计算并写入 offline_eval_metric_value。
-    source: recommendation_offline_eval_metric_value{metric="collaborative_recall_lift"}
-    measured: true
+    description: 协同召回候选相对非协同召回的 CTR/完成率增益。N1-1 诚实化：证据通道
+      为 CI 训练管线（eval_report artifact + rec_model_registry.metrics），Go 侧
+      ReplayReport.Emit 无生产调度，Prometheus 无该序列，禁止按 measured 验收。
+    source: ci://ml_training_pipeline/eval_report_*.json#collaborative_recall_lift
+    objective_only: true
     objective_min: 0.05
 
   - id: recommendation_attribution_bucket_coverage
@@ -253,38 +258,44 @@ slis:
     objective_min: 0.05
     measured: true
 
+  # N1-1 诚实化：offline_* 评估证据通道为 CI 训练管线（evaluate.py →
+  # eval_report artifact + rec_model_registry.metrics + promote gate），Go 侧
+  # ReplayReport.Emit 无生产调度、Prometheus 无 recommendation_offline_eval_metric_value
+  # 数据。以下五项一律 objective_only；接入在线序列前禁止翻回 measured。
   - id: ranking_calibration_error
     description: 推荐预估分与真实点击/完成率的校准误差，按 channel/segment/scorer_variant 切分。
-    source: recommendation_offline_eval_metric_value{metric="calibration_error"}
-    measured: true
+    source: ci://ml_training_pipeline/eval_report_*.json#calibration_error
+    objective_only: true
     objective_max: 0.08
 
   - id: time_decay_feature_freshness
     description: 时间加权统计特征的新鲜度，衡量 CTR/完成率等统计是否过期。
-    source: recommendation_offline_eval_metric_value{metric="time_decay_feature_freshness"}
-    measured: true
+    source: ci://ml_training_pipeline/eval_report_*.json#time_decay_feature_freshness
+    objective_only: true
     objective_min: 0.95
 
   - id: offline_ndcg_at_k
-    description: replay 离线评估 NDCG@K，作为排序质量回归门。
-    source: recommendation_offline_eval_metric_value{metric="ndcg_at_k"}
-    measured: true
+    description: replay 离线评估 NDCG@K，作为排序质量回归门（CI promote gate 消费）。
+    source: ci://ml_training_pipeline/eval_report_*.json#ndcg_at_k
+    objective_only: true
     objective_min: 0.20
 
   - id: offline_recall_at_k
-    description: replay 离线评估 Recall@K，作为召回质量回归门。
-    source: recommendation_offline_eval_metric_value{metric="recall_at_k"}
-    measured: true
+    description: replay 离线评估 Recall@K，作为召回质量回归门（CI promote gate 消费）。
+    source: ci://ml_training_pipeline/eval_report_*.json#recall_at_k
+    objective_only: true
     objective_min: 0.25
 
   - id: offline_diversity_rate
     description: replay 离线评估多样性，覆盖作者、标签、内容类型和交集维度。
-    source: recommendation_offline_eval_metric_value{metric="diversity_rate"}
-    measured: true
+    source: ci://ml_training_pipeline/eval_report_*.json#diversity_rate
+    objective_only: true
     objective_min: 0.30
 
   - id: ab_experiment_validity
-    description: 在线 AB 实验样本量、分桶稳定性（SRM）和显著性口径是否达标；准入校验由 EvaluateABAdmission 喂 recommendation_feed_ab_experiment_validity_total{result}。
+    description: 在线 AB 实验样本量、分桶稳定性（SRM）和显著性口径是否达标；准入校验由
+      AB 准入后台周期任务（N1-3）调用 EvaluateAndRecordABAdmission 喂
+      recommendation_feed_ab_experiment_validity_total{result}。
     source: recommendation_feed_ab_experiment_validity_total{result="valid"} / sum(recommendation_feed_ab_experiment_validity_total)
     measured: true
     objective_min: 0.95
@@ -345,7 +356,10 @@ slis:
     measured: true
 
   - id: exposure_filter_smembers_fallback_rate
-    description: 曝光过滤回退到全量 SMembers 的占比；商用容量下应趋零，主路径走 membership 点查或 Bloom。
+    description: 曝光过滤回退到全量 SMembers 的占比。守护性 tripwire：生产
+      FilterCandidates 主路径为 per-candidate SIsMember 点查、无 SMembers 回退
+      分支，本序列恒 0 即健康事实；任何未来引入的回退分支必须调用
+      RecordExposureSMembersFallback 记账，否则告警失守。
     source: recommendation_exposure_filter_smembers_fallback_total / rec_pipeline_requests_total
     objective_max: 0.01
     measured: true
@@ -355,15 +369,28 @@ slis:
     source: rec_model_score_cache_hit_total / (rec_model_score_cache_hit_total + rec_pipeline_model_hits_total)
     observe_only: true
 
+# N1-1 收敛：只登记有真实实现机制的回滚层（mechanism 指向可执行入口），
+# 删除无实现的 disable_resurface_source（复活召回源不存在）与
+# fallback_to_hot_and_new_content_sources（无专用开关，属多层组合动作）。
 rollback_layers:
-  - force_rule_scorer
-  - disable_remote_model_scorer
-  - disable_exposure_dynamic_budget
-  - disable_resurface_source
-  - disable_collaborative_recall_sources
-  - disable_ops_intervention_boost
-  - disable_intersection_affinity_signal
-  - fallback_to_hot_and_new_content_sources
+  - id: force_rule_scorer
+    mechanism: "policy 热更：rec_model_vs_rule buckets → rule weightPct 100（policy.yaml，无需重启）"
+  - id: disable_remote_model_scorer
+    mechanism: "配置：recModelService.enabled=false（cmd/api config，重启生效；beta/gamma/prod fail-fast 要求先切 policy）"
+  - id: disable_exposure_dynamic_budget
+    mechanism: "policy 热更：exposureGovernance.dynamicBudget.enabled=false"
+  - id: disable_collaborative_recall_sources
+    mechanism: "env：QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES=1（装配级，重启）或 policy collaborativeRecall.enabled=false（热更）"
+  - id: disable_premium_pool_source
+    mechanism: "env：QWQ_DISABLE_PREMIUM_POOL_SOURCE=1（装配级，重启；premium 请求 fail-closed 空池）"
+  - id: disable_ops_intervention_boost
+    mechanism: "policy 热更：opsIntervention.enabled=false"
+  - id: disable_intersection_affinity_signal
+    mechanism: "policy 热更：scorer.intersectionAffinityFactor=0"
+  - id: disable_object_cards
+    mechanism: "policy 热更：objectCards.enabled=false（混合对象卡零成本关闭）"
+  - id: disable_recall_fusion
+    mechanism: "policy 热更：recallFusion.enabled=false（回退无配额/无 boost 原始合并）"
 
 ab:
   segmentation_labels:

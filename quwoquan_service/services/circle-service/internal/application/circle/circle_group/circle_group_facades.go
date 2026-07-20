@@ -132,17 +132,34 @@ func (facade *CommandFacade) Archive(ctx context.Context, command ArchiveCommand
 	if err != nil {
 		return CommandResult{}, err
 	}
-	if group.Status == groupmodel.CircleGroupStatusArchived {
-		return CommandResult{
-			GroupID: group.ID,
-			Version: group.Version,
-			Status:  string(group.Status),
-		}, nil
-	}
-	return facade.commit(ctx, current, actorID, groupmodel.ChangeSet{
+	change := groupmodel.ChangeSet{
 		Kind: groupmodel.ChangeArchive, GroupID: group.ID, CircleID: group.CircleID,
 		ExpectedVersion: group.Version, OccurredAt: facade.now().UTC(),
+	}
+	if group.Status == groupmodel.CircleGroupStatusArchived {
+		return facade.recordNoop(ctx, current, actorID, group, change)
+	}
+	return facade.commit(ctx, current, actorID, change)
+}
+
+// recordNoop 持久化"目标状态已满足"回执；首个 Idempotency-Key 也能重放原始结果。
+func (facade *CommandFacade) recordNoop(ctx context.Context, current operation.Context, actorID string, group groupmodel.CircleGroup, change groupmodel.ChangeSet) (CommandResult, error) {
+	digest, err := groupCommandDigest(actorID, change)
+	if err != nil {
+		return CommandResult{}, generated.AppErrorFromGroupStorageWriteFailed(err.Error())
+	}
+	receipt, err := facade.store.RecordNoopReceipt(ctx, groupports.NoopReceipt{
+		GroupID: group.ID, Version: group.Version, Status: group.Status,
+		ReceiptKey:    groupReceiptKey(actorID, current.IdempotencyKey),
+		CommandDigest: digest, ReceiptExpiresAt: facade.now().UTC().Add(groupReceiptRetention),
 	})
+	if err != nil {
+		return CommandResult{}, mapGroupCommitError(err)
+	}
+	return CommandResult{
+		GroupID: receipt.GroupID, Version: receipt.Version,
+		Status: string(receipt.Status), IdempotentReplay: true,
+	}, nil
 }
 
 func (facade *CommandFacade) requireActiveCircleMember(ctx context.Context, circleID, personaID string) (groupports.CircleMembershipPolicySlice, error) {
@@ -232,11 +249,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 			return CommandResult{}, mapGroupCommitError(groupmodel.ErrNotFound)
 		}
 		if latest.Status == groupmodel.CircleGroupStatusArchived {
-			return CommandResult{
-				GroupID: latest.ID,
-				Version: latest.Version,
-				Status:  string(latest.Status),
-			}, nil
+			return facade.recordNoop(ctx, current, actorID, latest, change)
 		}
 		change.ExpectedVersion = latest.Version
 	}

@@ -35203,23 +35203,23 @@
     },
     "fixture_video_001": {
       "cover": {
-        "objectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+        "objectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
         "version": 1,
-        "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1440813,
-        "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+        "mimeType": "image/webp",
+        "width": 540,
+        "height": 960,
+        "sizeBytes": 3906,
+        "sourceHash": "sha256:c54f284bf8cdbc0a5562650dd3c894f61a1f102e9e6abcd463aad18767c3f31e"
       },
       "images": [
         {
-          "objectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "objectKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
           "version": 1,
-          "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1440813,
-          "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+          "mimeType": "image/webp",
+          "width": 540,
+          "height": 960,
+          "sizeBytes": 3906,
+          "sourceHash": "sha256:c54f284bf8cdbc0a5562650dd3c894f61a1f102e9e6abcd463aad18767c3f31e"
         },
         {
           "objectKey": "media/image/s/archived-image/post/fixture_video_001/image-2.png",
@@ -35234,23 +35234,23 @@
     },
     "fixture_video_002": {
       "cover": {
-        "objectKey": "media/image/s/archived-image/post/fixture_video_002/cover.png",
+        "objectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
         "version": 1,
-        "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:9543a165857fca383751039d4e0a16cfe4efb807a3f07430bef699ce628ad2ea"
+        "mimeType": "image/webp",
+        "width": 540,
+        "height": 960,
+        "sizeBytes": 3996,
+        "sourceHash": "sha256:de873a0665a703570cc441209b2291067738d000e92ef62cfa6d7ca131e1ac71"
       },
       "images": [
         {
-          "objectKey": "media/image/s/archived-image/post/fixture_video_002/cover.png",
+          "objectKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
           "version": 1,
-          "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:9543a165857fca383751039d4e0a16cfe4efb807a3f07430bef699ce628ad2ea"
+          "mimeType": "image/webp",
+          "width": 540,
+          "height": 960,
+          "sizeBytes": 3996,
+          "sourceHash": "sha256:de873a0665a703570cc441209b2291067738d000e92ef62cfa6d7ca131e1ac71"
         },
         {
           "objectKey": "media/image/s/archived-image/post/fixture_video_002/image-2.png",

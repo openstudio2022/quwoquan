@@ -28,10 +28,7 @@ api_routes:
       scopes: [content.post.moderation.open]
       ownership_policy: post_revision_snapshot
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MODERATION_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -77,10 +74,7 @@ api_routes:
       permissions: [content.moderation.review]
       ownership_policy: moderation_queue
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MODERATION_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -128,10 +122,7 @@ api_routes:
       permissions: [content.moderation.decide]
       ownership_policy: moderation_queue
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MODERATION_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -178,10 +169,7 @@ api_routes:
       scopes: [content.post.moderation.supersede]
       ownership_policy: post_revision_snapshot
     commercial:
-      status: blocked
-      block_reason: Post lifecycle wiring is owned by the primary Post migration thread
-      gap_id: CONTENT_POST_PUBLICATION_ELIGIBILITY_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -210,6 +198,57 @@ api_routes:
     description: Post revision 变更后由 lifecycle 调用，使旧 Case 不再具备发布资格。
 
   - method: GET
+    path: /internal/content/posts/{postId}/moderation-case
+
+    operation: GetCurrentPostModerationCase
+    actor: account
+    application:
+      kind: query
+      facet: PostModerationCaseQueryFacet
+      method: getCurrentPostModerationCase
+      reader: CurrentPostModerationCaseReader
+      slice: PostModerationCaseOpsSlice
+    authorization:
+      principal: operator
+      scopes: [ops.case.read]
+      permissions: [content.moderation.read]
+      ownership_policy: moderation_queue
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.USER.moderation_case_not_found
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: redacted
+    telemetry:
+      metric: content_moderation_case_get
+      trace: true
+      attributes: [status, outcome]
+    slo:
+      latency_p95_ms: 400
+      availability_percent: 99.9
+    response_entity: PostModerationCaseOpsSlice
+    response_body: PostModerationCaseOpsSlice
+    response_body_kind: object
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    description: 运营人员读取指定 Post 当前最新且未 superseded 的审核 Case。
+
+  - method: GET
     path: /internal/content/posts/{postId}/publication-eligibility
 
     operation: GetPostPublicationEligibility
@@ -225,10 +264,7 @@ api_routes:
       scopes: [content.post.publish]
       ownership_policy: post_revision_snapshot
     commercial:
-      status: blocked
-      block_reason: Post lifecycle wiring is owned by the primary Post migration thread
-      gap_id: CONTENT_POST_PUBLICATION_ELIGIBILITY_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -257,3 +293,5 @@ api_routes:
 consumers:
   - name: moderation-service
     capabilities: [decide_post_moderation]
+  - name: platform-ops
+    capabilities: [read_current_post_moderation_case, review_post_moderation_case, decide_post_moderation]

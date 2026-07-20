@@ -42,7 +42,6 @@ _Generated: 2026-04-04 14:46 UTC_ (`quwoquan_app/scripts/runtime/report_map_typi
 | assistant/reasoning/runtime/react_runtime.dart | `43` |
 | assistant/tool/impl/search/search_tool.dart | `42` |
 | cloud/services/assistant/assistant_repository.dart | `30` |
-| cloud/services/chat/mock/chat_repository_mock.dart | `29` |
 | ui/assistant/providers/assistant_conversation_controller.dart | `28` |
 | assistant/protocol/persisted_assistant_turn.dart | `27` |
 | cloud/services/rtc/rtc_repository.dart | `27` |
@@ -55,7 +54,6 @@ _Generated: 2026-04-04 14:46 UTC_ (`quwoquan_app/scripts/runtime/report_map_typi
 | cloud/runtime/generated/entity/homepage_models.dart | `20` |
 | cloud/services/chat/remote/chat_repository_remote.dart | `19` |
 | cloud/services/user/auth_repository.dart | `18` |
-| cloud/services/chat/mock/chat_mock_data.dart | `17` |
 | cloud/services/user/invite_repository.dart | `17` |
 | core/services/search_repository.dart | `17` |
 | cloud/services/content/mock/content_mock_data.dart | `16` |

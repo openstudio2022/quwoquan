@@ -21,9 +21,13 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/assistant-service/internal/adapters/http"
 	"quwoquan_service/services/assistant-service/internal/application"
+	preferencefact "quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/creationgrounding"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/intersectionclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/notificationclient"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/userprofile"
 )
 
@@ -39,6 +43,17 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("runtime identity invalid: %w", err)
 	}
+	runtimeConfigProvider := runtimeconfig.EnvRuntimeConfigProvider{}
+	modelDebugSetting, _ := runtimeConfigProvider.GetString(
+		"ASSISTANT_MODEL_DEBUG_LOG",
+	)
+	assistantModelDebugLogEnabled = strings.EqualFold(modelDebugSetting, "true")
+	if err := validateAssistantModelDebugLogPolicy(
+		appEnv,
+		assistantModelDebugLogEnabled,
+	); err != nil {
+		return fmt.Errorf("model debug log policy invalid: %w", err)
+	}
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
 		return fmt.Errorf("config load failed: %w", err)
@@ -53,7 +68,7 @@ func run() error {
 		return err
 	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
-		runtimeconfig.EnvRuntimeConfigProvider{},
+		runtimeConfigProvider,
 	)
 	if err != nil {
 		return fmt.Errorf("access token config invalid: %w", err)
@@ -67,12 +82,27 @@ func run() error {
 		addr = ":18087"
 	}
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		return fmt.Errorf("runtime log exporter init failed: %w", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, nil)
 	if err != nil {
 		return fmt.Errorf("process logger init failed: %w", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
@@ -163,13 +193,107 @@ func run() error {
 		return dependencyError("notification-service", "initialization", err)
 	}
 
+	newObservedEgressClient := func(sourceID string, timeoutMs int) *http.Client {
+		httpConfig := rthttp.DefaultHTTPClientFactoryConfig()
+		httpConfig.Timeout = providerTimeout(timeoutMs)
+		observed := rthttp.NewObservedHTTPClient(
+			nil,
+			httpConfig,
+			rthttp.HTTPClientMiddlewareConfig{
+				Service:           "assistant-service",
+				Origin:            "cloud",
+				Direction:         "outbound",
+				SourceID:          sourceID,
+				Src:               "assistant-service",
+				ServiceName:       "assistant-service",
+				ServiceInstanceID: instanceID,
+			},
+			ioLogger,
+			processLogger,
+			exceptionLogger,
+		)
+		return rtgov.WrapClientWithCB(
+			observed,
+			rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
+		)
+	}
+	canonicalSearch, err := searchclient.New(
+		cfg.SearchService.BaseURL,
+		newObservedEgressClient(
+			"assistant-service.search-query",
+			cfg.SearchService.TimeoutMs,
+		),
+	)
+	if err != nil {
+		return dependencyError("search-service", "initialization", err)
+	}
+	creationGroundingClient, err := creationgrounding.New(
+		canonicalSearch,
+		cfg.EntityService.BaseURL,
+		newObservedEgressClient(
+			"assistant-service.entity-homepage-query",
+			cfg.EntityService.TimeoutMs,
+		),
+	)
+	if err != nil {
+		return dependencyError("creation-grounding", "initialization", err)
+	}
+	intersectionAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{"content.my_intersections.read"},
+	)
+	if err != nil {
+		return dependencyError("content-service", "credentials", err)
+	}
+	intersectionInbox, err := intersectionclient.New(intersectionclient.Config{
+		BaseURL: cfg.ContentService.BaseURL,
+		HTTPClient: newObservedEgressClient(
+			"assistant-service.content-intersections",
+			cfg.ContentService.TimeoutMs,
+		),
+		Authorization: intersectionAuthorization,
+	})
+	if err != nil {
+		return dependencyError("content-service", "intersection-reader", err)
+	}
+	agentLoop, err := buildAgentLoop(cfg, appEnv, canonicalSearch)
+	if err != nil {
+		return dependencyError("assistant-agent-loop", "initialization", err)
+	}
+
 	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
+	if deps.preferenceStore == nil || deps.preferenceReader == nil {
+		return dependencyError(
+			"mongodb.assistant_preference_facts",
+			"wiring",
+			errors.New("preference store and reader are required"),
+		)
+	}
+	conversationOwnerReader, ok := deps.conversationRunStore.(preferencefact.ConversationOwnerReader)
+	if !ok {
+		return dependencyError(
+			"mongodb.assistant_conversations",
+			"wiring",
+			errors.New("conversation owner reader is required"),
+		)
+	}
+	preferenceCommands := preferencefact.NewCommandFacade(
+		deps.preferenceStore,
+		conversationOwnerReader,
+	)
+	preferenceQueries := preferencefact.NewQueryFacade(deps.preferenceReader)
 	assistantOpts := []application.AssistantServiceOption{
 		application.WithLearningProfileStore(deps.profileStore),
 		application.WithEventPublisher(publisher),
 		application.WithNotificationAppMessageCommandWriter(notificationWriter),
 		application.WithSkillSubscriptionStore(deps.subscriptionStore),
-		application.WithAgentLoop(buildAgentLoop(cfg, appEnv)),
+		application.WithConversationRunStore(deps.conversationRunStore),
+		application.WithPreferenceSnapshotReader(preferenceQueries),
+		application.WithCreationSuggestGrounding(creationGroundingClient),
+		application.WithXiaoquSearchReader(canonicalSearch),
+		application.WithIntersectionInboxReader(intersectionInbox),
+		application.WithAgentLoop(agentLoop),
 	}
 	chatGroundingEnabled := false
 	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
@@ -204,7 +328,13 @@ func run() error {
 		go consumer.Run(serviceCtx, 500*time.Millisecond)
 		log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
 	}
-	baseHandler := httpadapter.NewHandler(service).Routes()
+	baseHandler := httpadapter.NewHandler(
+		service,
+		httpadapter.WithPreferenceFacades(
+			preferenceCommands,
+			preferenceQueries,
+		),
+	).Routes()
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())

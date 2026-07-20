@@ -24,6 +24,7 @@ FORBIDDEN_EXISTING_DIRS = {
     "scripts/migration",
     "scripts/_scratch",
     "scripts/ops",
+    "scripts/verify/audit",
     "publish/user_media",
 }
 

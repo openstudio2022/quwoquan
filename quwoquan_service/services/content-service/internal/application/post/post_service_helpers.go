@@ -95,6 +95,8 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
 		"visibility":         normalizeVisibility(post.Visibility),
+		"moderationStatus":   strings.ToLower(strings.TrimSpace(post.ModerationStatus)),
+		"contentDigest":      strings.TrimSpace(post.ContentDigest),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"createdAt":          formatTimePtr(post.CreatedAt),
@@ -121,6 +123,9 @@ func durationMsFromPost(post *postmodel.Post) int64 {
 	if post == nil {
 		return 0
 	}
+	if post.DurationMs > 0 {
+		return post.DurationMs
+	}
 	if duration := int64FromMaps("durationMs", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot); duration > 0 {
 		return duration
 	}
@@ -131,12 +136,18 @@ func widthFromPost(post *postmodel.Post) int64 {
 	if post == nil {
 		return 0
 	}
+	if post.Width > 0 {
+		return post.Width
+	}
 	return int64FromMaps("width", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot)
 }
 
 func heightFromPost(post *postmodel.Post) int64 {
 	if post == nil {
 		return 0
+	}
+	if post.Height > 0 {
+		return post.Height
 	}
 	return int64FromMaps("height", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot)
 }
@@ -463,18 +474,15 @@ func validatePostPublicationPayload(post *postmodel.Post) error {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "微趣内容不能为空", "moment requires body/image/video at least one")
 		}
 	case "image":
-		if len(asStringSlice(post.MediaUrls)) == 0 &&
-			!strings.EqualFold(strings.TrimSpace(post.Status), "draft") {
+		if len(asStringSlice(post.MediaUrls)) == 0 {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "美图至少需要一张图片", "photo requires mediaUrls")
 		}
 	case "video":
-		if strings.TrimSpace(post.VideoUrl) == "" &&
-			!strings.EqualFold(strings.TrimSpace(post.Status), "draft") {
+		if strings.TrimSpace(post.VideoUrl) == "" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "视频地址不能为空", "video requires videoUrl")
 		}
 		if strings.TrimSpace(post.ThumbnailUrl) == "" &&
-			strings.TrimSpace(post.CoverUrl) == "" &&
-			!strings.EqualFold(strings.TrimSpace(post.Status), "draft") {
+			strings.TrimSpace(post.CoverUrl) == "" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "视频封面不能为空", "video requires thumbnailUrl or coverUrl")
 		}
 	case "article":

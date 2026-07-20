@@ -21,11 +21,14 @@ import (
 	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
+	filtercatalogapp "quwoquan_service/services/content-service/internal/application/content/filter_catalog_release"
 	outboundshareapp "quwoquan_service/services/content-service/internal/application/content/outbound_share_fact/command"
+	profileinteractionapp "quwoquan_service/services/content-service/internal/application/content/profile_interaction"
 	feedapp "quwoquan_service/services/content-service/internal/application/feed"
 	importerapp "quwoquan_service/services/content-service/internal/application/importer"
 	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
+	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
@@ -45,7 +48,10 @@ type ContentHandler struct {
 	commentService            *commentapp.Facades
 	reactionService           *reactionapp.Facades
 	reportService             *reportapp.Facades
+	moderationService         *moderationapp.Facades
 	outboundShareService      *outboundshareapp.Facades
+	profileInteractionService *profileinteractionapp.Facades
+	filterCatalogService      *filtercatalogapp.Facades
 	mediaService              *mediaapp.Facades
 	behaviorService           *behaviorapp.BehaviorService
 	importService             *importerapp.BulkImportService
@@ -205,6 +211,22 @@ func WithOutboundShareService(service *outboundshareapp.Facades) ContentHandlerO
 	return func(handler *ContentHandler) { handler.outboundShareService = service }
 }
 
+func WithProfileInteractionService(
+	service *profileinteractionapp.Facades,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.profileInteractionService = service }
+}
+
+func WithFilterCatalogReleaseService(
+	service *filtercatalogapp.Facades,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.filterCatalogService = service }
+}
+
+func WithModerationService(service *moderationapp.Facades) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.moderationService = service }
+}
+
 func WithMediaService(service *mediaapp.Facades) ContentHandlerOption {
 	return func(handler *ContentHandler) { handler.mediaService = service }
 }
@@ -361,15 +383,16 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	params := BindGeneratedGetFeedParams(r, 20)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
 		UserID:          resolveUserID(r),
+		ViewerPersonaID: resolvePersonaID(r),
 		SessionID:       resolveSessionID(r),
 		Identity:        params.Identity,
 		Type:            params.Type,
 		Sort:            params.Sort,
+		ChannelID:       params.ChannelId,
 		SubCategory:     params.SubCategory,
 		Cursor:          params.Cursor,
 		Limit:           params.Limit,
 		FeedRequestID:   params.FeedRequestId,
-		BlockedUserIDs:  resolveBlockedUserIDs(r),
 		BlockedKeywords: resolveBlockedKeywords(r),
 	})
 	if err != nil {
@@ -377,35 +400,6 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
-}
-
-func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
-		return
-	}
-	q := r.URL.Query()
-	limit, err := strconv.Atoi(q.Get("limit"))
-	if err != nil || limit <= 0 {
-		limit = 20
-	}
-	items, nextCursor, err := h.postService.SearchPosts(r.Context(), postapp.SearchPostsRequest{
-		Query:         q.Get("query"),
-		Identity:      q.Get("identity"),
-		RequestedType: q.Get("type"),
-		CategoryID:    q.Get("categoryId"),
-		SubCategory:   q.Get("subCategory"),
-		Cursor:        q.Get("cursor"),
-		Limit:         limit,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":  items,
-		"cursor": nextCursor,
-	})
 }
 
 func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Request) {

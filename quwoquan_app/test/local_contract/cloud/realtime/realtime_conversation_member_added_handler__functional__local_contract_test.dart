@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -46,7 +46,7 @@ void main() {
     final repo = _CountingMembersRepo();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
         child: Consumer(
           builder: (context, ref, _) {
             WidgetsBinding.instance.addPostFrameCallback((_) {

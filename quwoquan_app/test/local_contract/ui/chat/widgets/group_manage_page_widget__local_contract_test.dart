@@ -6,15 +6,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
-const _testConvId = 'conv_002';
+const _testConvId = 'fixture_conv_group';
+const _unsupportedJoinGovernanceLabels = <String>['二维码进群', '进群需要群主/群管理员确认'];
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
-  chatRepositoryProvider.overrideWithValue(repo),
+  chatRepositoryCompositionProvider.overrideWithValue(repo),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
@@ -75,37 +77,20 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.groupManagement), findsOneWidget);
+      expect(find.text(ChatText.groupManagement), findsOneWidget);
     });
 
-    testWidgets('包含二维码进群开关', (tester) async {
+    testWidgets('仅显示有权威契约支撑的群名治理开关', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.qrCodeJoin), findsOneWidget);
-    });
-
-    testWidgets('包含入群审核开关', (tester) async {
-      _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp());
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-
-      expect(find.text(UITextConstants.joinRequiresApproval), findsOneWidget);
-    });
-
-    testWidgets('包含仅管理员修改群名开关', (tester) async {
-      _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp());
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-
-      expect(
-        find.text(UITextConstants.nameEditableByAdminOnly),
-        findsOneWidget,
-      );
+      expect(find.text(ChatText.nameEditableByAdminOnly), findsOneWidget);
+      expect(find.byType(CupertinoSwitch), findsOneWidget);
+      for (final label in _unsupportedJoinGovernanceLabels) {
+        expect(find.text(label), findsNothing);
+      }
     });
 
     testWidgets('群主角色时可见群主管理权转让入口', (tester) async {
@@ -115,7 +100,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.transferOwnership), findsOneWidget);
+      expect(find.text(ChatText.transferOwnership), findsOneWidget);
     });
 
     testWidgets('群主角色时可见群管理员入口', (tester) async {
@@ -124,7 +109,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.groupAdmins), findsOneWidget);
+      expect(find.text(ChatText.groupAdmins), findsOneWidget);
     });
 
     testWidgets('群主角色时可见解散群聊按钮', (tester) async {
@@ -133,23 +118,26 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(UITextConstants.dissolveGroupChat), findsOneWidget);
+      expect(find.text(ChatText.dissolveGroupChat), findsOneWidget);
     });
   });
 
   group('GroupManagePage — 交互契约', () {
-    testWidgets('tap 开关不崩溃', (tester) async {
+    testWidgets('切换群名治理开关提交真实设置', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp());
+      final repo = _TrackingSettingsRepo();
+      await tester.pumpWidget(_scopedApp(mock: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
       final switches = find.byType(CupertinoSwitch);
-      expect(switches, findsWidgets);
-      await tester.tap(switches.first);
+      expect(switches, findsOneWidget);
+      final initialValue = tester.widget<CupertinoSwitch>(switches).value;
+      await tester.tap(switches);
       await tester.pump();
 
-      expect(find.byType(GroupManagePage), findsOneWidget);
+      expect(repo.lastSettings, isNotNull);
+      expect(repo.lastSettings!.nameEditableByAdminOnly, isNot(initialValue));
     });
 
     testWidgets('tap 解散群聊弹出确认弹窗', (tester) async {
@@ -158,7 +146,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.tap(find.text(UITextConstants.dissolveGroupChat));
+      await tester.tap(find.text(ChatText.dissolveGroupChat));
       await tester.pumpAndSettle();
 
       expect(
@@ -199,5 +187,17 @@ class _ErrorSettingsRepo extends MockChatRepository {
   @override
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
     throw Exception('settings error');
+  }
+}
+
+class _TrackingSettingsRepo extends MockChatRepository {
+  ChatGroupSettingsDto? lastSettings;
+
+  @override
+  Future<void> updateGroupSettings(
+    String conversationId,
+    ChatGroupSettingsDto settings,
+  ) async {
+    lastSettings = settings;
   }
 }

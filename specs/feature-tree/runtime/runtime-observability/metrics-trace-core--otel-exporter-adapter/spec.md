@@ -1,4 +1,4 @@
-# L4 特性：otel-exporter-adapter
+# L3 特性：otel-exporter-adapter
 
 ## 功能说明
 - 完成对象级任务落地（模型/接口/策略/存储）。

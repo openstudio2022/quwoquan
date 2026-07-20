@@ -42,12 +42,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gwt1_local_contract
@@ -80,12 +82,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gwt2_local_contract
@@ -137,16 +141,19 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: service_display_statement_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.service_svo_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: app_display_statement_contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.app_fail_closed_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gamma_t3_intersection_statement_semantics
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gamma_semantic_probe
@@ -159,5 +166,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

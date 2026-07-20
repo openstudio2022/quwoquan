@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/object_page/object_stats_row.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
@@ -42,7 +43,7 @@ class ProfileStatsRow extends StatelessWidget {
       ),
       ObjectStatItem(
         value: formatCompactActionCount(subject?.circleCount ?? 0),
-        label: UITextConstants.contactsTabCircles,
+        label: ChatText.contactsTabCircles,
         type: 'circles',
       ),
     ];

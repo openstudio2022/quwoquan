@@ -4,7 +4,7 @@ entities:
   HomepageClaimRequest:
     description: 共享主页认领申请及其审核状态
     fields:
-      - { name: _id, type: ObjectId, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: claimRequestId, source: _id, type: ObjectId, constraints: [PK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: version, type: int, constraints: [NOT_NULL, DEFAULT_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: homepageId, type: ObjectId, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: requesterPersonaId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read }
@@ -18,4 +18,5 @@ entities:
       - { name: reviewerAccountId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
       - { name: reviewNote, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: mask, api_exposure: read, ops_exposure: read_write }
       - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: reviewedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }

@@ -1,0 +1,15 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "userId": "qwq_creator_travel_blogger_001",
+  "authorId": "builtin_travel_blogger",
+  "displayName": "阿宁在路上",
+  "userHandle": "ning_on_road",
+  "headline": "写个人游记、城市漫步和探店榜单的旅行博主",
+  "bio": "更关心一个地方怎么玩得舒服、吃住是否顺路、以及普通游客会不会踩坑。",
+  "creatorArchetype": "travel_blogger",
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

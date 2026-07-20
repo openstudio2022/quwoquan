@@ -5,9 +5,9 @@ events:
     description: 会话创建
     producer: chat-service
     consumers: [notification-service]
-    channel: event_store
+    channel: transactional_outbox
     payload_entity: Conversation
-    payload_fields: [_id, type, creatorId, circleId, circleGroupId, maxGroupSize, receiptEnabled, createdAt]
+    payload_fields: [conversationId, type, creatorId, circleId, circleGroupId, maxGroupSize, receiptEnabled, createdAt]
 
   - name: ConversationRosterUpdated
     description: |
@@ -15,9 +15,10 @@ events:
       membersRosterRevision 和 updatedAt 定点拉取会话与成员，而不消费逐成员事件。
     producer: chat-service
     consumers: [realtime-gateway, projection-workers]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields: [conversationId, membersRosterRevision, updatedAt, aspects]
-    realtime_channel: "rt:conversation:{conversationId}"
+    realtime_channel: "rt:user:{recipientId}"
+    realtime_fanout: conversation_members
 
   - name: ConversationAvatarUpdated
     description: |
@@ -25,18 +26,23 @@ events:
       用于统一 sync patch `conversation.avatar.updated` 的上游事件输入。
     producer: chat-service
     consumers: [realtime-gateway, notification-service]
-    channel: event_store
+    channel: transactional_outbox
     payload_fields:
       - conversationId
       - groupAvatarAssetId
       - groupAvatarVersion
       - groupAvatarSourceHash
       - updatedAt
-    realtime_channel: "rt:conversation:{conversationId}"
+    realtime_channel: "rt:user:{recipientId}"
+    realtime_fanout: conversation_members
 
-  - name: ConversationArchived
-    description: 会话归档
+  - name: ConversationDissolved
+    description: |
+      群聊解散终态事件（与 aggregate lifecycle `dissolved` 同名单轨）。
+      成员端收到后收敛会话入口；投影据此下线群相关行。
     producer: chat-service
-    consumers: []
-    channel: event_store
-    payload_fields: [_id, status]
+    consumers: [realtime-gateway, projection-workers]
+    channel: transactional_outbox
+    payload_fields: [conversationId, status, dissolvedBy, dissolvedAt]
+    realtime_channel: "rt:user:{recipientId}"
+    realtime_fanout: conversation_members

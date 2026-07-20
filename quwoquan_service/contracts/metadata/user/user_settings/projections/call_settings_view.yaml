@@ -1,0 +1,12 @@
+read_model: CallSettingsView
+description: Account owner 的来电与铃声设置 typed slice。
+source_entities: [UserSetting]
+consumers: [app]
+fields:
+  - { name: userId, type: string }
+  - { name: defaultIncomingCallRingtoneId, type: string, nullable: true }
+  - { name: allowCallerRingtoneOverride, type: bool }
+  - { name: enableCallVibration, type: bool }
+  - { name: enableGroupCallRing, type: bool }
+  - { name: version, type: int }
+  - { name: updatedAt, type: timestamp }

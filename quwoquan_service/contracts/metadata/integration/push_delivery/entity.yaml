@@ -1,0 +1,21 @@
+domain: integration
+entity: PushDelivery
+object_kind: external_reference
+
+description: |
+  ExternalInteraction 的强类型来电 push delivery 引用。它不拥有独立 transport
+  operation 或 token 生命周期；worker 只在调用 user-service secret reader 后，
+  将一次内存 token 交给 APNs VoIP/FCM provider。
+
+storage_backend: external
+
+capabilities:
+  - reliable_async
+  - auditable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  application: services/integration-service/internal/application/push_delivery
+  adapter_rest: services/integration-service/internal/infrastructure/provider

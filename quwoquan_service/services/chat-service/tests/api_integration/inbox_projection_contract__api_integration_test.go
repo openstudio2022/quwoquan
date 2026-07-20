@@ -2,366 +2,234 @@ package api_integration
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	"quwoquan_service/internal/platform/reliabletaskmongo"
-	"quwoquan_service/runtime/reliabletask"
-	runtimesync "quwoquan_service/runtime/sync"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/chat-service/internal/application"
-	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
-// newInboxTestEnv creates a fresh InboxService + supporting services
-// wired to the shared real MongoDB and Redis dependencies.
-func newInboxTestEnv(t *testing.T) (
+// newInboxProjectionEnv 装配投影驱动的 inbox 链路：MessageSent 经 Message
+// outbox 由 InboxProjector 消费推进未读；已读回落由 MarkAsRead 命令在
+// ConversationUserState 聚合内原子完成。
+func newInboxProjectionEnv(t *testing.T) (
 	*application.InboxService,
-	*application.ConversationService,
 	*application.MessageService,
-	*application.MemberService,
+	*application.InboxProjector,
 ) {
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	chatStorage := chatStoragePorts(chatStore)
-	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
-	groupAvatarMedia := newGroupAvatarMediaForContractTest()
-	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
-	catalog, err := reliabletask.LoadCatalog(testReliableTaskCatalogPath())
-	if err != nil {
-		t.Fatalf("load reliable task catalog: %v", err)
-	}
-	reliableTaskStore := reliabletaskmongo.New(mongoDB)
-	if err := reliableTaskStore.EnsureIndexes(context.Background()); err != nil {
-		t.Fatalf("ensure reliable task indexes: %v", err)
-	}
-	readyIndex, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
-		Client: redisRouter.Scene("reliabletask"),
-		Stream: "reliabletask:chat:avatar:ready:inbox",
-		Group:  "chat.group_avatar_worker.inbox",
-		Queue:  "reliabletask.chat.avatar",
-	})
-	if err != nil {
-		t.Fatalf("new redis ready index: %v", err)
-	}
-	if err := readyIndex.Ensure(context.Background()); err != nil {
-		t.Fatalf("ensure redis ready index: %v", err)
-	}
-	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
-		reliableTaskStore,
-		catalog,
-		chatStorage,
-		eventPublisherForContractTest(),
-		groupAvatarMedia,
-		userSyncService,
-		nil,
-		application.WithReliableGroupAvatarDelay(80*time.Millisecond),
-		application.WithReliableGroupAvatarTick(40*time.Millisecond),
-		application.WithReliableGroupAvatarReadyIndex(readyIndex),
-	)
-	schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
-	if err := groupAvatarScheduler.Start(schedulerCtx); err != nil {
-		cancelScheduler()
-		t.Fatalf("start reliable group avatar scheduler: %v", err)
-	}
-	t.Cleanup(func() {
-		cancelScheduler()
-		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer waitCancel()
-		if err := groupAvatarScheduler.WaitForStop(waitCtx); err != nil {
-			t.Errorf("wait reliable group avatar scheduler stop: %v", err)
-		}
-	})
-
+	checkpoints := persistence.NewMongoProjectionCheckpointStore(mongoDB)
 	inboxSvc := application.NewInboxService(chatStorage)
-	convSvc := application.NewConversationService(
-		chatStorage,
-		convCache,
-		eventPublisherForContractTest(),
-		nil,
-		application.AllowRelationshipGateForTest(),
-		groupAvatarMedia,
-		userSyncService,
-		groupAvatarScheduler,
-	)
 	msgSvc := application.NewMessageService(
 		chatStorage,
-		convCache,
+		noopConversationCache{},
 		eventPublisherForContractTest(),
 		application.AllowRelationshipGateForTest(),
 		testMediaAssetDeliveryReader{},
 	)
-	memberSvc := application.NewMemberService(chatStorage, convCache, eventPublisherForContractTest(), nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
-
-	return inboxSvc, convSvc, msgSvc, memberSvc
+	projector := application.NewInboxProjector(chatStore, checkpoints, chatStore, chatStore)
+	return inboxSvc, msgSvc, projector
 }
 
-func TestInbox_NewMessageIncrementsUnread(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
+type noopConversationCache struct{}
 
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	conv := createConversation(t, `{"type":"group","title":"inbox unread test"}`)
-	convId := conv["id"].(string)
-
-	userId := "user_inbox_reader_001"
-	doPost(t, "/chat/conversations/"+convId+"/members",
-		`{"userIds":["user_inbox_reader_001"]}`, "user_test_001", 200)
-
-	if err := inboxSvc.IncrementUnread(ctx, userId, convId); err != nil {
-		t.Fatalf("IncrementUnread: %v", err)
-	}
-
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
-	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
-	}
-
-	found := false
-	for _, item := range items {
-		if item.Conversation.ID == convId {
-			found = true
-			if item.UserState.UnreadCount != 1 {
-				t.Errorf("expected unreadCount=1, got %d", item.UserState.UnreadCount)
-			}
-			break
-		}
-	}
-	if !found {
-		t.Error("conversation not found in inbox after IncrementUnread")
-	}
+func (noopConversationCache) InvalidateConversation(context.Context, string) error {
+	return nil
 }
 
-func TestInbox_MultipleIncrementsAccumulate(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	conv := createConversation(t, `{"type":"group","title":"inbox multi unread"}`)
-	convId := conv["id"].(string)
-	userId := "user_inbox_multi_001"
-
-	for i := 0; i < 5; i++ {
-		if err := inboxSvc.IncrementUnread(ctx, userId, convId); err != nil {
-			t.Fatalf("IncrementUnread[%d]: %v", i, err)
+func drainInboxProjector(t *testing.T, projector *application.InboxProjector) {
+	t.Helper()
+	for range 10 {
+		count, err := projector.Drain(context.Background(), 100)
+		if err != nil {
+			t.Fatalf("drain inbox projector: %v", err)
 		}
-	}
-
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
-	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
-	}
-
-	for _, item := range items {
-		if item.Conversation.ID == convId {
-			if item.UserState.UnreadCount != 5 {
-				t.Errorf("expected unreadCount=5, got %d", item.UserState.UnreadCount)
-			}
+		if count == 0 {
 			return
 		}
 	}
-	t.Error("conversation not found in inbox")
 }
 
-func TestInbox_MarkAsReadResetsUnread(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	conv := createConversation(t, `{"type":"group","title":"inbox mark read"}`)
-	convId := conv["id"].(string)
-	userId := "user_inbox_markread_001"
-
-	for i := 0; i < 3; i++ {
-		if err := inboxSvc.IncrementUnread(ctx, userId, convId); err != nil {
-			t.Fatalf("IncrementUnread[%d]: %v", i, err)
+func inboxUnread(t *testing.T, inboxSvc *application.InboxService, userId, convId string) (int, int64, bool) {
+	t.Helper()
+	items, err := inboxSvc.ListInbox(context.Background(), application.ListInboxRequest{
+		UserId: userId, Limit: 50,
+	})
+	if err != nil {
+		t.Fatalf("ListInbox: %v", err)
+	}
+	for _, item := range items {
+		if item.Conversation.ID == convId {
+			return item.UserState.UnreadCount, item.UserState.ReadSeq, true
 		}
 	}
+	return 0, 0, false
+}
 
-	if err := inboxSvc.MarkAsRead(ctx, userId, convId, 10); err != nil {
+func TestInbox_MessageSentEventAdvancesUnreadViaProjection(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, _, projector := newInboxProjectionEnv(t)
+
+	conv := createConversation(t, `{"type":"group","title":"inbox unread test","initialMemberIds":["user_inbox_reader_001"]}`)
+	convId := conv["id"].(string)
+
+	sendMessage(t, convId, `{"type":"text","content":"unread probe","clientMsgId":"inbox-unread-1"}`)
+	drainInboxProjector(t, projector)
+
+	unread, _, found := inboxUnread(t, inboxSvc, "user_inbox_reader_001", convId)
+	if !found {
+		t.Fatal("conversation not found in receiver inbox after projection")
+	}
+	if unread != 1 {
+		t.Fatalf("expected receiver unreadCount=1, got %d", unread)
+	}
+
+	senderUnread, _, senderFound := inboxUnread(t, inboxSvc, "user_test_001", convId)
+	if !senderFound {
+		t.Fatal("conversation not found in sender inbox")
+	}
+	if senderUnread != 0 {
+		t.Fatalf("sender unread must stay 0, got %d", senderUnread)
+	}
+}
+
+func TestInbox_MultipleMessagesAccumulateViaProjection(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, _, projector := newInboxProjectionEnv(t)
+
+	conv := createConversation(t, `{"type":"group","title":"inbox multi unread","initialMemberIds":["user_inbox_multi_001"]}`)
+	convId := conv["id"].(string)
+
+	for i := range 5 {
+		sendMessage(t, convId, `{"type":"text","content":"m","clientMsgId":"inbox-multi-`+string(rune('a'+i))+`"}`)
+	}
+	drainInboxProjector(t, projector)
+
+	unread, _, found := inboxUnread(t, inboxSvc, "user_inbox_multi_001", convId)
+	if !found {
+		t.Fatal("conversation not found in inbox")
+	}
+	if unread != 5 {
+		t.Fatalf("expected unreadCount=5, got %d", unread)
+	}
+}
+
+func TestInbox_ProjectionDrainIsReplayableFromCheckpoint(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, _, projector := newInboxProjectionEnv(t)
+
+	conv := createConversation(t, `{"type":"group","title":"inbox replay","initialMemberIds":["user_inbox_replay_001"]}`)
+	convId := conv["id"].(string)
+
+	sendMessage(t, convId, `{"type":"text","content":"first","clientMsgId":"inbox-replay-1"}`)
+	drainInboxProjector(t, projector)
+	// 再次 drain 不得重复推进（checkpoint 幂等）。
+	drainInboxProjector(t, projector)
+
+	unread, _, _ := inboxUnread(t, inboxSvc, "user_inbox_replay_001", convId)
+	if unread != 1 {
+		t.Fatalf("checkpoint replay must not double count: got %d", unread)
+	}
+}
+
+func TestInbox_MarkAsReadCommandResetsUnreadAndAdvancesWatermark(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, msgSvc, projector := newInboxProjectionEnv(t)
+	readerId := "user_inbox_markread_001"
+
+	conv := createConversation(t, `{"type":"group","title":"inbox mark read","initialMemberIds":["`+readerId+`"]}`)
+	convId := conv["id"].(string)
+
+	var lastMessageId string
+	for _, clientMsgId := range []string{"read-a", "read-b", "read-c"} {
+		message := sendMessage(t, convId, `{"type":"text","content":"m","clientMsgId":"`+clientMsgId+`"}`)
+		lastMessageId = message["messageId"].(string)
+	}
+	drainInboxProjector(t, projector)
+
+	readCtx := operation.WithContext(context.Background(), operation.Context{
+		OperationID:    "api_integration.mark_as_read",
+		IdempotencyKey: "inbox-markread-key-1",
+		Actor:          operation.ActorContext{AccountID: readerId, PersonaID: readerId},
+	})
+	if err := msgSvc.MarkAsRead(readCtx, application.MarkAsReadRequest{
+		ConversationId: convId,
+		MessageId:      lastMessageId,
+		UserId:         readerId,
+	}); err != nil {
 		t.Fatalf("MarkAsRead: %v", err)
 	}
 
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
-	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
+	unread, readSeq, found := inboxUnread(t, inboxSvc, readerId, convId)
+	if !found {
+		t.Fatal("conversation not found in inbox after MarkAsRead")
 	}
-
-	for _, item := range items {
-		if item.Conversation.ID == convId {
-			if item.UserState.UnreadCount != 0 {
-				t.Errorf("expected unreadCount=0 after MarkAsRead, got %d", item.UserState.UnreadCount)
-			}
-			if item.UserState.ReadSeq != 10 {
-				t.Errorf("expected readSeq=10, got %d", item.UserState.ReadSeq)
-			}
-			return
-		}
+	if unread != 0 {
+		t.Fatalf("expected unreadCount=0 after MarkAsRead, got %d", unread)
 	}
-	t.Error("conversation not found in inbox after MarkAsRead")
+	if readSeq < 3 {
+		t.Fatalf("expected readSeq >= 3, got %d", readSeq)
+	}
 }
 
-func TestInbox_MarkAsReadOnlyAdvancesSeq(t *testing.T) {
+func TestInbox_MarkAsReadStaleWatermarkIsNoop(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, msgSvc, projector := newInboxProjectionEnv(t)
+	readerId := "user_inbox_seqadv_001"
 
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	conv := createConversation(t, `{"type":"direct","title":"inbox seq advance","initialMemberIds":["user_test_002"]}`)
+	conv := createConversation(t, `{"type":"group","title":"inbox seq advance","initialMemberIds":["`+readerId+`"]}`)
 	convId := conv["id"].(string)
-	userId := "user_inbox_seqadv_001"
 
-	if err := inboxSvc.MarkAsRead(ctx, userId, convId, 50); err != nil {
-		t.Fatalf("MarkAsRead(50): %v", err)
-	}
-	// MarkAsRead with a lower seq should NOT regress
-	if err := inboxSvc.MarkAsRead(ctx, userId, convId, 30); err != nil {
-		t.Fatalf("MarkAsRead(30): %v", err)
-	}
+	first := sendMessage(t, convId, `{"type":"text","content":"first","clientMsgId":"seq-first"}`)
+	second := sendMessage(t, convId, `{"type":"text","content":"second","clientMsgId":"seq-second"}`)
+	drainInboxProjector(t, projector)
 
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
+	newerCtx := operation.WithContext(context.Background(), operation.Context{
+		OperationID:    "api_integration.mark_as_read",
+		IdempotencyKey: "seqadv-key-newer",
+		Actor:          operation.ActorContext{AccountID: readerId, PersonaID: readerId},
 	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
+	if err := msgSvc.MarkAsRead(newerCtx, application.MarkAsReadRequest{
+		ConversationId: convId,
+		MessageId:      second["messageId"].(string),
+		UserId:         readerId,
+	}); err != nil {
+		t.Fatalf("MarkAsRead newer: %v", err)
 	}
 
-	for _, item := range items {
-		if item.Conversation.ID == convId {
-			if item.UserState.ReadSeq != 50 {
-				t.Errorf("readSeq should not regress: expected 50, got %d", item.UserState.ReadSeq)
-			}
-			return
-		}
-	}
-	t.Error("conversation not found in inbox")
-}
-
-func TestInbox_ListInboxSortedByTime(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	userId := "user_inbox_sort_001"
-
-	conv1 := createConversationAs(t, userId, `{"type":"direct","title":"older conv","initialMemberIds":["user_test_002"]}`)
-	conv1Id := conv1["id"].(string)
-
-	conv2 := createConversationAs(t, userId, `{"type":"direct","title":"newer conv","initialMemberIds":["user_test_003"]}`)
-	conv2Id := conv2["id"].(string)
-
-	// Increment unread on conv1 first, then conv2 (conv2 should be more recent)
-	if err := inboxSvc.IncrementUnread(ctx, userId, conv1Id); err != nil {
-		t.Fatalf("IncrementUnread conv1: %v", err)
-	}
-	if err := inboxSvc.IncrementUnread(ctx, userId, conv2Id); err != nil {
-		t.Fatalf("IncrementUnread conv2: %v", err)
-	}
-
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
+	// 旧水位重放：no-op，不回退 readSeq，也不产生新事件。
+	staleCtx := operation.WithContext(context.Background(), operation.Context{
+		OperationID:    "api_integration.mark_as_read",
+		IdempotencyKey: "seqadv-key-stale",
+		Actor:          operation.ActorContext{AccountID: readerId, PersonaID: readerId},
 	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
+	if err := msgSvc.MarkAsRead(staleCtx, application.MarkAsReadRequest{
+		ConversationId: convId,
+		MessageId:      first["messageId"].(string),
+		UserId:         readerId,
+	}); err != nil {
+		t.Fatalf("MarkAsRead stale: %v", err)
 	}
 
-	if len(items) < 2 {
-		t.Fatalf("expected >=2 inbox items, got %d", len(items))
-	}
-
-	// Most recent conversation (conv2) should appear first or have later UpdatedAt
-	first := items[0]
-	if first.UserState.UpdatedAt.IsZero() {
-		t.Error("first item UpdatedAt should not be zero")
-	}
-}
-
-func TestInbox_ListInboxDefaultLimit(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	userId := "user_inbox_limit_001"
-
-	for i := 0; i < 3; i++ {
-		conv := createConversationAs(t, userId, fmt.Sprintf(`{"type":"direct","title":"limit conv %d","initialMemberIds":["peer_limit_%d"]}`, i, i))
-		if err := inboxSvc.IncrementUnread(ctx, userId, conv["id"].(string)); err != nil {
-			t.Fatalf("IncrementUnread[%d]: %v", i, err)
-		}
-	}
-
-	// Request with limit=0 should use default (20)
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
-	}
-
-	if len(items) != 3 {
-		t.Errorf("expected 3 items, got %d", len(items))
+	_, readSeq, _ := inboxUnread(t, inboxSvc, readerId, convId)
+	if readSeq != 2 {
+		t.Fatalf("readSeq should not regress: expected 2, got %d", readSeq)
 	}
 }
 
 func TestInbox_EmptyInbox(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
+	inboxSvc, _, _ := newInboxProjectionEnv(t)
 
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
+	items, err := inboxSvc.ListInbox(context.Background(), application.ListInboxRequest{
 		UserId: "user_no_conversations", Limit: 20,
 	})
 	if err != nil {
 		t.Fatalf("ListInbox: %v", err)
 	}
-
 	if len(items) != 0 {
-		t.Errorf("expected 0 items for empty inbox, got %d", len(items))
+		t.Fatalf("expected 0 items for empty inbox, got %d", len(items))
 	}
-}
-
-func TestInbox_IncrementUnreadCreatesStateIfMissing(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	inboxSvc, _, _, _ := newInboxTestEnv(t)
-	ctx := context.Background()
-
-	conv := createConversation(t, `{"type":"group","title":"inbox state create"}`)
-	convId := conv["id"].(string)
-	userId := "user_inbox_newstate_001"
-
-	// No prior state for this user/conversation pair
-	if err := inboxSvc.IncrementUnread(ctx, userId, convId); err != nil {
-		t.Fatalf("IncrementUnread should create state: %v", err)
-	}
-
-	items, err := inboxSvc.ListInbox(ctx, application.ListInboxRequest{
-		UserId: userId, Limit: 20,
-	})
-	if err != nil {
-		t.Fatalf("ListInbox: %v", err)
-	}
-
-	for _, item := range items {
-		if item.Conversation.ID == convId {
-			if item.UserState.UnreadCount != 1 {
-				t.Errorf("expected unreadCount=1, got %d", item.UserState.UnreadCount)
-			}
-			return
-		}
-	}
-	t.Error("newly created user state not found in inbox")
 }

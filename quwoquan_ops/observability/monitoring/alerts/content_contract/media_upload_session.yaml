@@ -1,0 +1,85 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+groups:
+  - name: quwoquan_content_contract_media_upload_session
+    rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/media/uploads/[^/]+:abort$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.AbortMediaUpload"
+          contract_metric: "content_media_upload_abort"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/media/uploads/[^/]+:abort$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.AbortMediaUpload"
+          contract_metric: "content_media_upload_abort"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/media/uploads/[^/]+:complete$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.CompleteMediaUpload"
+          contract_metric: "content_media_upload_complete"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/media/uploads/[^/]+:complete$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.CompleteMediaUpload"
+          contract_metric: "content_media_upload_complete"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/media/uploads/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.GetMediaUploadSession"
+          contract_metric: "content_media_upload_session_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/content/media/uploads/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.GetMediaUploadSession"
+          contract_metric: "content_media_upload_session_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/content/media/uploads:init"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.InitMediaUpload"
+          contract_metric: "content_media_upload_init"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/content/media/uploads:init"})
+        labels:
+          service: "content-service"
+          operation: "content.media_upload_session.InitMediaUpload"
+          contract_metric: "content_media_upload_init"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

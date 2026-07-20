@@ -41,6 +41,7 @@ class AssistantOpenContext {
     this.dimension,
     this.entityId,
     this.objectType,
+    this.conversationId = '',
     this.intersectionRefs = const [],
     this.hints = const {},
   });
@@ -59,6 +60,9 @@ class AssistantOpenContext {
   /// 被打开对象的类型：post / circle / entity / user（B2 上下文透传，供小趣按需解释）。
   final String? objectType;
 
+  /// 指定恢复的云端会话；空表示由页面按最近会话恢复（历史抽屉/最近会话入口）。
+  final String conversationId;
+
   /// 交集来源引用（路径制 tagRef 或 relation:{kind}:{objectId}），
   /// 供小趣按需深度解释时只引用真实来源，禁止编造（全局验收 G2）。
   final List<String> intersectionRefs;
@@ -75,6 +79,7 @@ class AssistantOpenContext {
     String? dimension,
     String? entityId,
     String? objectType,
+    String? conversationId,
     List<String>? intersectionRefs,
     VisitTarget? visitTarget,
     ExperienceLevel? experienceLevel,
@@ -86,6 +91,7 @@ class AssistantOpenContext {
       dimension: dimension ?? this.dimension,
       entityId: entityId ?? this.entityId,
       objectType: objectType ?? this.objectType,
+      conversationId: conversationId ?? this.conversationId,
       intersectionRefs: intersectionRefs ?? this.intersectionRefs,
       visitTarget: visitTarget ?? this.visitTarget,
       experienceLevel: experienceLevel ?? this.experienceLevel,

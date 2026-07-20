@@ -14,6 +14,11 @@ integration:
     search_default_limit: 20
     default_latitude: 30.6586
     default_longitude: 104.0648
+  external_interaction:
+    push:
+      enabled: true
+      mode: "fake"
+      timeout_ms: 5000
 
 redis:
   rec:

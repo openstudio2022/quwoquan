@@ -32,7 +32,13 @@ func TestSubAccountView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 		t.Fatalf("seed persona background: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/me", "", authHeaders("owner_me_profile"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/me",
+		"",
+		authHeadersForPersona("owner_me_profile", "sa_me_profile"),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get me profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

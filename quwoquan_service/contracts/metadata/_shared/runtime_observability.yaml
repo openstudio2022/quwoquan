@@ -1,0 +1,1145 @@
+schema: observability.slim
+log_kinds:
+- deploy
+- runtime
+- access
+- event
+- exception
+- audit
+severity_levels:
+- DEBUG
+- INFO
+- WARN
+- ERROR
+resource_version_fields:
+- appVersion
+- service.version
+forbidden_fields:
+- schemaVersion
+- eventVersion
+- contractVersion
+- protocolVersion
+- releaseVersion
+- releaseId
+- dataReleaseId
+failure_codes:
+  app_uncaught_flutter: APP.RUNTIME.uncaught_exception
+  app_uncaught_platform: APP.RUNTIME.uncaught_platform_exception
+  app_native_previous_crash: APP.RUNTIME.native_previous_crash
+  data_stage_failure: DATA.RUNTIME.stage_failed
+  portal_uncaught_browser: PORTAL.RUNTIME.uncaught_browser_exception
+  service_log_encoding: SERVICE.RUNTIME.log_encoding_failed
+envelope:
+  required:
+  - schema
+  - occurredAt
+  - observedAt
+  - logKind
+  - severity
+  - signal
+  - message
+  - resource
+  optional:
+  - recordId
+  - correlation
+  - step
+  - event
+  - result
+  - method
+  - route
+  - status
+  - durationMs
+  - action
+  - target
+  - errorCode
+  - fingerprint
+  - attributes
+  resource_required:
+  - sourceType
+  - service
+  resource_optional:
+  - environment
+  - component
+  - appVersion
+  - service.version
+  correlation_optional:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+kind_fields:
+  deploy:
+    ordered:
+    - step
+    - result
+    required:
+    - step
+    - result
+  runtime:
+    ordered:
+    - event
+    - result
+    required:
+    - event
+    - result
+  access:
+    ordered:
+    - method
+    - route
+    - status
+    - durationMs
+    required:
+    - method
+    - route
+    - status
+    - durationMs
+  event:
+    ordered:
+    - event
+    - result
+    required:
+    - event
+    - result
+  exception:
+    ordered:
+    - errorCode
+    required:
+    - errorCode
+  audit:
+    ordered:
+    - action
+    - target
+    - result
+    required:
+    - action
+    - target
+    - result
+limits:
+  max_batch_items: 50
+  max_canonical_body_bytes: 131072
+  max_message_bytes: 2048
+  max_attributes: 24
+  max_attributes_bytes: 4096
+  max_attribute_key_length: 64
+  max_attribute_value_length: 512
+  raw_retention_days: 3
+# 日志容量治理声明（SLS logstore 按量弹性；此处是运营容量预算的唯一真相源）：
+# raw/runtime logstore 3 天滚动；基准容量 512GB，弹性上限 50TB（超出即触发
+# 采样收紧与容量告警，不静默丢弃）。
+capacity:
+  logstore_base_gb: 512
+  logstore_elastic_max_tb: 50
+  overflow_policy: tighten_sampling_and_alert
+delivery:
+  app_buffer_capacity: 200
+  app_dead_letter_capacity: 100
+  service_spool_max_batches: 2000
+  service_dlq_max_batches: 500
+  ttl_hours: 72
+  retry_base_seconds: 5
+  retry_max_seconds: 300
+  retry_max_exponent: 6
+  retry_jitter_percent: 25
+privacy:
+  forbidden_attribute_keys:
+  - authorization
+  - password
+  - passwd
+  - secret
+  - token
+  - apiKey
+  - credential
+  - cookie
+  - phone
+  - email
+  - ssid
+  - ip
+  - preciseLocation
+  - sessionId
+  high_cardinality_metric_keys:
+  - userId
+  - sessionId
+  - requestId
+  - traceId
+  - rawPath
+signals:
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.runtime.lifecycle
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  log_kind: runtime
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.access.http
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  log_kind: access
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.exception.flutter
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.exception.platform
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  - android
+  - ios
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.performance.frame
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  log_kind: event
+  default_severity: WARN
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - stallMs
+  - anrThresholdMs
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.performance.anr
+  owner: runtime-client-foundation
+  producers:
+  - dart
+  log_kind: event
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: app.performance.media
+  owner: content-consumption
+  producers:
+  - dart
+  - android
+  - ios
+  log_kind: event
+  default_severity: WARN
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: service.access.http
+  owner: system-architecture-and-engineering-guide
+  producers:
+  - go
+  log_kind: access
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: service.runtime.process
+  owner: system-architecture-and-engineering-guide
+  producers:
+  - go
+  log_kind: runtime
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: service.exception.runtime
+  owner: system-architecture-and-engineering-guide
+  producers:
+  - go
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: service.audit.control
+  owner: platform-ops-governance
+  producers:
+  - go
+  log_kind: audit
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: data.runtime.stage
+  owner: runtime-data-engineering
+  producers:
+  - python
+  log_kind: runtime
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: data.exception.stage
+  owner: runtime-data-engineering
+  producers:
+  - python
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: ops.audit.control
+  owner: platform-ops-governance
+  producers:
+  - python
+  log_kind: audit
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: ops.deploy.stackctl
+  owner: platform-ops-governance
+  producers:
+  - python
+  log_kind: deploy
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: ops.exception.runtime
+  owner: platform-ops-governance
+  producers:
+  - python
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: ops.runtime.process
+  owner: platform-ops-governance
+  producers:
+  - python
+  log_kind: runtime
+  default_severity: INFO
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod
+- attribute_allowlist:
+  - source
+  - exceptionType
+  - stackFrameCount
+  - sampledFrames
+  - jankyFrames
+  - worstFrameMs
+  - jankThresholdMs
+  - ttffMs
+  - targetPositionMs
+  - settledPositionMs
+  - settleMs
+  - droppedFrames
+  - processedFrames
+  - rendererMode
+  - decoderQueueMode
+  - decoderFallbackEnabled
+  - module
+  - kind
+  - reason
+  - failurePoint
+  - inputKv
+  - outputKv
+  - stage
+  - outcome
+  - gate
+  - artifactCount
+  correlation_keys:
+  - requestId
+  - traceId
+  - spanId
+  - operationId
+  - pageName
+  - surfaceId
+  - executionId
+  - workPackageId
+  - environmentRunId
+  - actorHash
+  backend: runtime-sls
+  retention_days: 3
+  sampling: warn_error
+  alert: runtime_signal_rate
+  runbook: runtime-diagnostics
+  pii_classification: redacted
+  id: portal.exception.browser
+  owner: product-ops-growth
+  producers:
+  - typescript
+  log_kind: exception
+  default_severity: ERROR
+  environments:
+  - alpha
+  - beta
+  - gamma
+  - prod

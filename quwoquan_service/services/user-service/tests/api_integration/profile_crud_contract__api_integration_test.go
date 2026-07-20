@@ -9,12 +9,30 @@ import (
 	"testing"
 )
 
+func createProfileUpdateFixture(
+	t *testing.T,
+	ownerID string,
+	nickname string,
+) string {
+	t.Helper()
+	createTestProfile(t, ownerID, nickname)
+	personaID := ownerID + "_persona"
+	createTestPersona(t, personaID, ownerID, nickname, true, true)
+	return personaID + "_sa"
+}
+
 func TestGetProfile_Success(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_001", "alice")
 	createTestPersona(t, "p_001", "user_001", "Alice Primary", true, true)
 
-	rec := doRequest(t, http.MethodGet, "/user/profile/user_001", "", nil)
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/user_001",
+		"",
+		authHeaders("user_001"),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -33,7 +51,13 @@ func TestGetProfile_Success(t *testing.T) {
 
 func TestGetProfile_NotFound(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	rec := doRequest(t, http.MethodGet, "/user/profile/nonexistent", "", nil)
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/nonexistent",
+		"",
+		authHeaders("nonexistent"),
+	)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -45,11 +69,11 @@ func TestGetProfile_NotFound(t *testing.T) {
 
 func TestUpdateProfile_Success(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "user_002", "bob")
+	personaID := createProfileUpdateFixture(t, "user_002", "bob")
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"nickname":"bob_updated","bio":"hello world","backgroundAssetId":"asset_bg_user_002","backgroundUrl":"https://cdn.example.com/bg-user-002.png"}`,
-		authHeaders("user_002"))
+		authHeadersForPersona("user_002", personaID))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -74,11 +98,11 @@ func TestUpdateProfile_Success(t *testing.T) {
 
 func TestUpdateProfile_RegionTagRefUpdatesDerivedDisplay(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "region_owner", "region_user")
+	personaID := createProfileUpdateFixture(t, "region_owner", "region_user")
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"regionTagRef":"Topic/地理/行政区/中国/广东省/深圳市"}`,
-		authHeaders("region_owner"))
+		authHeadersForPersona("region_owner", personaID))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -93,11 +117,15 @@ func TestUpdateProfile_RegionTagRefUpdatesDerivedDisplay(t *testing.T) {
 
 func TestUpdateProfile_InvalidRegionTagRefReturnsInvalidRegion(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "invalid_region_owner", "invalid_region_user")
+	personaID := createProfileUpdateFixture(
+		t,
+		"invalid_region_owner",
+		"invalid_region_user",
+	)
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"regionTagRef":"Topic/旅行/城市/深圳"}`,
-		authHeaders("invalid_region_owner"))
+		authHeadersForPersona("invalid_region_owner", personaID))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -109,11 +137,15 @@ func TestUpdateProfile_InvalidRegionTagRefReturnsInvalidRegion(t *testing.T) {
 
 func TestUpdateProfile_RejectsClientRegionDisplayWithoutTagRef(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "display_region_owner", "display_region_user")
+	personaID := createProfileUpdateFixture(
+		t,
+		"display_region_owner",
+		"display_region_user",
+	)
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"region":"广东 深圳"}`,
-		authHeaders("display_region_owner"))
+		authHeadersForPersona("display_region_owner", personaID))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -126,11 +158,11 @@ func TestUpdateProfile_RejectsClientRegionDisplayWithoutTagRef(t *testing.T) {
 func TestUpdateProfile_DuplicateNicknameAllowed(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_003", "charlie")
-	createTestProfile(t, "user_004", "david")
+	personaID := createProfileUpdateFixture(t, "user_004", "david")
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"nickname":"charlie"}`,
-		authHeaders("user_004"))
+		authHeadersForPersona("user_004", personaID))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("duplicate nickname should be allowed, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -145,11 +177,15 @@ func TestUpdateProfile_DuplicateNicknameAllowed(t *testing.T) {
 
 func TestUpdateProfile_RejectsBareBackgroundURL(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "user_bare_cover", "bare_cover")
+	personaID := createProfileUpdateFixture(
+		t,
+		"user_bare_cover",
+		"bare_cover",
+	)
 
 	rec := doRequest(t, http.MethodPatch, "/user/profile",
 		`{"backgroundUrl":"https://cdn.example.com/bare-cover.png"}`,
-		authHeaders("user_bare_cover"))
+		authHeadersForPersona("user_bare_cover", personaID))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -195,7 +231,13 @@ func TestGetProfileEditSnapshot_ReturnsCommercialFields(t *testing.T) {
 		t.Fatalf("seed persona handle: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/profile/edit-snapshot", "", authHeaders("profile_edit_owner"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/edit-snapshot",
+		"",
+		authHeadersForPersona("profile_edit_owner", "profile_edit_sa"),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -240,7 +282,13 @@ func TestGetProfileQRCard_IssuesOpaqueResolvableToken(t *testing.T) {
 		t.Fatalf("seed qr handle: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/profile/qr-card", "", authHeaders("qr_owner"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/qr-card",
+		"",
+		authHeadersForPersona("qr_owner", "qr_sa"),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -285,8 +333,8 @@ func TestGetProfileQRCard_IssuesOpaqueResolvableToken(t *testing.T) {
 func TestResolveProfileQRToken_InvalidToken(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	rec := doRequest(t, http.MethodGet, "/public/profile/qr/resolve?handle=missing&qr=invalid", "", nil)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
 	if result["code"] != "USER.PROFILE.qr_token_invalid" {
@@ -298,12 +346,24 @@ func TestGetProfile_CacheHit(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_005", "eve")
 
-	rec1 := doRequest(t, http.MethodGet, "/user/profile/user_005", "", nil)
+	rec1 := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/user_005",
+		"",
+		authHeaders("user_005"),
+	)
 	if rec1.Code != http.StatusOK {
 		t.Fatalf("first GET: expected 200, got %d", rec1.Code)
 	}
 
-	rec2 := doRequest(t, http.MethodGet, "/user/profile/user_005", "", nil)
+	rec2 := doRequest(
+		t,
+		http.MethodGet,
+		"/user/profile/user_005",
+		"",
+		authHeaders("user_005"),
+	)
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("second GET (cache hit): expected 200, got %d", rec2.Code)
 	}

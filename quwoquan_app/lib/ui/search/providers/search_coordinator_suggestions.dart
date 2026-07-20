@@ -74,7 +74,7 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
   }) async {
     try {
       final homepages = await _coordinatorRef
-          .read(homepageRepositoryProvider)
+          .read(homepageQueryProvider)
           .searchHomepages(
             query: query,
             status: 'published',
@@ -195,41 +195,51 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
     final responseHits = _hitsFromResponse(response);
     final contacts = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
-        .map((hit) => ChatContactSearchItemDto.fromMap(hit.payload.toWireMap()))
+        .map((hit) => hit.asChatContactItem)
+        .whereType<ChatContactSearchItemDto>()
         .toList(growable: false);
     final conversationHits = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)
-        .map(
-          (hit) => ConversationSearchItemView.fromMap(hit.payload.toWireMap()),
-        )
+        .map((hit) => hit.asChatConversationItem)
+        .whereType<ConversationSearchItemView>()
         .toList(growable: false);
     final messageHits = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatMessage)
-        .map((hit) => MessageSearchItemView.fromMap(hit.payload.toWireMap()))
+        .map((hit) => hit.asChatMessageItem)
+        .whereType<MessageSearchItemView>()
         .toList(growable: false);
     final circleSuggestions = includesCircles
         ? responseHits
               .where((hit) => hit.objectType == SearchObjectType.circleGroup)
-              .map(
-                (hit) =>
-                    hit.asCircleCircleItem ??
-                    CircleSearchItemView.fromMap(hit.payload.toWireMap()),
-              )
+              .map((hit) => hit.asCircleGroupItem)
+              .whereType<CircleSearchItemView>()
               .toList(growable: false)
         : const <CircleSearchItemView>[];
     final locationSuggestions = responseHits
         .where(
-          (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
+          (hit) =>
+              hit.objectType == SearchObjectType.integrationLocationPoi ||
+              hit.objectType == SearchObjectType.locationPlace,
         )
-        .map((hit) => LocationPoiDto.fromMap(hit.payload.toWireMap()))
+        .map(
+          (hit) =>
+              hit.asLocationPoiItem ??
+              switch (hit.asLocationPlaceItem) {
+                final item? => LocationPoiDto(
+                  id: item.placeId,
+                  name: item.name,
+                  address: item.address,
+                ),
+                null => null,
+              },
+        )
+        .whereType<LocationPoiDto>()
         .where((item) => item.name.trim().isNotEmpty)
         .toList(growable: false);
     final followedPeopleSuggestions = responseHits
         .where((hit) => hit.objectType == SearchObjectType.userProfile)
-        .map(
-          (hit) =>
-              SocialRelationSearchItemView.fromMap(hit.payload.toWireMap()),
-        )
+        .map((hit) => hit.asSocialRelationItem)
+        .whereType<SocialRelationSearchItemView>()
         .where(
           (item) =>
               item.relationshipCapability.canOpenConversation ||
@@ -284,8 +294,8 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.chatRecord)
               .toList(growable: false),
           titleOverride: switch (objectTarget) {
-            SearchObjectTarget.directChats => '单聊',
-            SearchObjectTarget.groupChats => '讨论',
+            SearchObjectTarget.directChats => ChatText.searchChatDirect,
+            SearchObjectTarget.groupChats => ChatText.searchChatGroup,
             _ => null,
           },
         ),
@@ -401,218 +411,5 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
           }
         })
         .toList(growable: false);
-  }
-
-  List<ContactSearchSuggestion> _buildContactSuggestions({
-    required List<ChatContactSearchItemDto> contacts,
-    required List<ConversationSearchItemView> allConversations,
-  }) {
-    final suggestions = <ContactSearchSuggestion>[];
-    for (final contact in contacts) {
-      final userId = contact.contactId.trim();
-      final displayName = contact.displayName.trim();
-      if (userId.isEmpty || displayName.isEmpty) {
-        continue;
-      }
-      final directConversationId = contact.conversationId?.trim() ?? '';
-      suggestions.add(
-        ContactSearchSuggestion(
-          contactId: userId,
-          displayName: displayName,
-          conversationId: directConversationId.isNotEmpty
-              ? directConversationId
-              : _resolveContactConversationId(
-                  displayName: displayName,
-                  allConversations: allConversations,
-                ),
-          avatarUrl: contact.avatarUrl,
-          subtitle: contact.subtitle ?? '联系人',
-        ),
-      );
-    }
-    return suggestions;
-  }
-
-  String _resolveContactConversationId({
-    required String displayName,
-    required List<ConversationSearchItemView> allConversations,
-  }) {
-    final normalizedName = displayName.trim().toLowerCase();
-    for (final conversation in allConversations) {
-      final normalizedTitle = conversation.title.trim().toLowerCase();
-      final isDirectLike =
-          conversation.type == 'direct' || conversation.type == 'encrypted';
-      if (!isDirectLike) {
-        continue;
-      }
-      if (normalizedTitle == normalizedName ||
-          normalizedTitle.contains(normalizedName) ||
-          normalizedName.contains(normalizedTitle)) {
-        return conversation.conversationId;
-      }
-    }
-    return allConversations.isNotEmpty
-        ? allConversations.first.conversationId
-        : '';
-  }
-
-  List<ChatRecordSearchSuggestion> _buildChatRecordSuggestions({
-    required List<ConversationSearchItemView> conversationHits,
-    required List<MessageSearchItemView> messageHits,
-    required List<ConversationSearchItemView> allConversations,
-  }) {
-    final conversationIndex = <String, ConversationSearchItemView>{
-      for (final conversation in allConversations)
-        conversation.conversationId: conversation,
-    };
-    final accumulators = <String, _ChatRecordAccumulator>{};
-
-    for (final conversation in conversationHits) {
-      final accumulator = accumulators.putIfAbsent(
-        conversation.conversationId,
-        () => _ChatRecordAccumulator.fromConversation(conversation),
-      );
-      accumulator.includeConversationHit(conversation);
-    }
-
-    for (final message in messageHits) {
-      final seedConversation = conversationIndex[message.conversationId];
-      final accumulator = accumulators.putIfAbsent(
-        message.conversationId,
-        () => _ChatRecordAccumulator.fromMessage(
-          message,
-          seedConversation: seedConversation,
-        ),
-      );
-      accumulator.includeMessageHit(message);
-    }
-
-    final results = accumulators.values
-        .map((accumulator) => accumulator.build())
-        .toList(growable: false);
-    results.sort((left, right) {
-      final countCompare = right.matchCount.compareTo(left.matchCount);
-      if (countCompare != 0) {
-        return countCompare;
-      }
-      final leftTime = left.timestamp;
-      final rightTime = right.timestamp;
-      if (leftTime == null && rightTime == null) {
-        return left.conversationTitle.compareTo(right.conversationTitle);
-      }
-      if (leftTime == null) {
-        return 1;
-      }
-      if (rightTime == null) {
-        return -1;
-      }
-      return rightTime.compareTo(leftTime);
-    });
-    return results;
-  }
-
-  List<NetworkSearchSuggestion> _buildNetworkSuggestions(String query) {
-    final seeds = <NetworkSearchSuggestion>[
-      NetworkSearchSuggestion(
-        query: query,
-        title: query,
-        subtitle: '搜索全部结果',
-        initialTabId: 'all',
-      ),
-      NetworkSearchSuggestion(
-        query: query,
-        title: '$query 交集',
-        subtitle: '查看最值得连接的结果',
-        initialTabId: 'intersection',
-      ),
-      NetworkSearchSuggestion(
-        query: query,
-        title: '$query 图片',
-        subtitle: '只看图片结果',
-        initialTabId: 'image',
-      ),
-      NetworkSearchSuggestion(
-        query: query,
-        title: '$query 视频',
-        subtitle: '只看视频结果',
-        initialTabId: 'video',
-      ),
-      NetworkSearchSuggestion(
-        query: query,
-        title: '$query 长文',
-        subtitle: '只看长文结果',
-        initialTabId: 'article',
-      ),
-    ];
-    final unique = <String>{};
-    return seeds
-        .where(
-          (item) =>
-              unique.add('${item.query.trim()}::${item.initialTabId ?? ''}'),
-        )
-        .take(SearchCoordinator._maxNetworkSuggestions)
-        .toList(growable: false);
-  }
-
-  Future<void> _rememberQuery({required String query}) async {
-    final trimmedQuery = query.trim();
-    if (trimmedQuery.isEmpty) {
-      return;
-    }
-    final selectionFacet = _currentState.selection.toFacet();
-    final historyScope = _scopeForSelection(_currentState.selection);
-    final now = DateTime.now();
-    final localEntry = RecentSearchEntryView(
-      entryId: RecentSearchEntryView.buildEntryId(
-        query: trimmedQuery,
-        scope: historyScope,
-        facet: selectionFacet,
-      ),
-      query: trimmedQuery,
-      scope: historyScope,
-      facet: selectionFacet,
-      updatedAt: now,
-    );
-    final merged = _mergeHistory(<RecentSearchEntryView>[
-      localEntry,
-    ], _currentState.recentSearches);
-    _setState(_currentState.copyWith(recentSearches: merged));
-    await _localStore.save(merged);
-    try {
-      final remoteEntry = await _coordinatorRef
-          .read(userProfileRepositoryProvider)
-          .upsertRecentSearch(
-            query: trimmedQuery,
-            scope: historyScope,
-            facet: selectionFacet,
-          );
-      final nextEntries = _mergeHistory(<RecentSearchEntryView>[
-        remoteEntry,
-      ], merged);
-      if (!_isMounted) {
-        return;
-      }
-      _setState(_currentState.copyWith(recentSearches: nextEntries));
-      await _localStore.save(nextEntries);
-    } catch (_) {
-      // Local-first history remains available while remote sync degrades.
-    }
-  }
-
-  List<RecentSearchEntryView> _mergeHistory(
-    List<RecentSearchEntryView> primary,
-    List<RecentSearchEntryView> secondary,
-  ) {
-    final merged = <String, RecentSearchEntryView>{};
-    for (final entry in [...primary, ...secondary]) {
-      final key = _historyKeyForEntry(entry);
-      final existing = merged[key];
-      if (existing == null || entry.updatedAt.isAfter(existing.updatedAt)) {
-        merged[key] = entry;
-      }
-    }
-    final values = merged.values.toList(growable: false);
-    values.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    return values.take(15).toList(growable: false);
   }
 }

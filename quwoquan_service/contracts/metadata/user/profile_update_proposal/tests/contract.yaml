@@ -1,0 +1,47 @@
+aggregate: ProfileUpdateProposal
+
+scenarios:
+  - name: typed_state_machine_and_owner
+    operation: CreateProfileUpdateProposal
+    go_func: TestProfileUpdateProposalStateMachineAndInvariants
+    evidence: local_contract
+    assertions:
+      - 只允许 typed ProfileChangeSet，空变更与非法来源 fail closed
+      - proposal 只归 target persona owner 查询和命令
+      - pending/confirmed/applying/applied/rejected/expired 迁移单轨
+
+  - name: command_idempotency_and_noop_receipt
+    operation: ConfirmProposal
+    go_func: TestFacadeNoopIntentReplaysOriginalReceiptAfterStateAdvances
+    evidence: local_contract
+    assertions:
+      - 调用方不提交 proposal version，纯 CAS 冲突由服务端重载重放
+      - 目标状态已满足的首次 key 持久化 no-op receipt
+      - 后续状态演进后相同 key 仍重放原始结果且不制造 outbox
+
+  - name: apply_claim_blocks_concurrent_reject
+    operation: ApplyProposal
+    go_func: TestFacadeApplyClaimBlocksConcurrentReject
+    evidence: local_contract
+    assertions:
+      - applying 是跨 Proposal/Persona 写入的最小持久检查点
+      - apply claim 成功后并发 Reject fail closed
+      - Persona 快照过期时 claim 进入 expired 而不部分更新资料
+
+  - name: trusted_transport_and_bola
+    operation: GetProfileUpdateProposal
+    go_func: TestProfileProposalHTTPRequiresTrustedInvocationAndIdempotency
+    evidence: local_contract
+    assertions:
+      - actor 只来自可信 invocation context
+      - command 缺 Idempotency-Key 拒绝
+      - owner/path/body 不一致时返回结构化用户错误
+
+  - name: postgres_state_receipt_outbox_atomicity
+    operation: ApplyProposal
+    go_func: TestProfileUpdateProposalPostgresCommitIsAtomicAndReplayable
+    evidence: api_integration
+    assertions:
+      - Proposal state、command receipt 与 outbox 同事务提交
+      - Persona 应用失败可从 applying 检查点安全恢复
+      - 重放返回原 receipt 且无重复事实

@@ -2,21 +2,25 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';
 import 'package:quwoquan_app/ui/user/providers/share_interaction_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('received/initiated 双桶独立缓存并在分身切换时清空', () async {
     final repository = _ShareRepository.immediate();
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(repository),
+        profileInteractionQueryFacetProvider.overrideWithValue(repository),
+        profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+          repository,
+        ),
         authSessionControllerProvider.overrideWith(_TestAuthController.new),
       ],
     );
@@ -83,7 +87,10 @@ void main() {
     final repository = _ShareRepository.deferred();
     final container = ProviderContainer(
       overrides: [
-        userProfileRepositoryProvider.overrideWithValue(repository),
+        profileInteractionQueryFacetProvider.overrideWithValue(repository),
+        profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+          repository,
+        ),
         authSessionControllerProvider.overrideWith(_TestAuthController.new),
       ],
     );
@@ -111,6 +118,55 @@ void main() {
       'new-result',
     );
   });
+
+  test('read fact 失败回滚乐观态且可重试', () async {
+    final repository = _ShareRepository.immediate()..failWrites = true;
+    final telemetry = _CapturingTelemetryRecorder();
+    final container = ProviderContainer(
+      overrides: [
+        profileInteractionQueryFacetProvider.overrideWithValue(repository),
+        profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+          repository,
+        ),
+        authSessionControllerProvider.overrideWith(_TestAuthController.new),
+        journeyEventTrackerProvider.overrideWithValue(
+          JourneyEventTracker(telemetryReporter: telemetry),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    const key = ShareInteractionBucketKey(
+      subAccountId: 'persona-a',
+      direction: ShareInteractionDirection.received,
+    );
+    container.read(shareInteractionProvider(key));
+    await pumpEventQueue();
+    final notifier = container.read(shareInteractionProvider(key).notifier);
+    final interactionId = container
+        .read(shareInteractionProvider(key))
+        .items
+        .single
+        .interactionId;
+
+    await notifier.markRead(interactionId);
+    var state = container.read(shareInteractionProvider(key));
+    expect(state.items.single.readAt, isNull);
+    expect(state.error, isA<StateError>());
+
+    repository.failWrites = false;
+    await notifier.markRead(interactionId);
+    state = container.read(shareInteractionProvider(key));
+    expect(state.items.single.readAt, isNotNull);
+    expect(repository.appendCalls, 2);
+    expect(
+      telemetry.payloads.map((payload) => payload.extensions['action']),
+      <Object?>['mark_read', 'mark_read'],
+    );
+    expect(
+      telemetry.payloads.map((payload) => payload.extensions['result']),
+      <Object?>['failure', 'success'],
+    );
+  });
 }
 
 class _TestAuthController extends AuthSessionController {
@@ -127,59 +183,99 @@ class _TestAuthController extends AuthSessionController {
   }
 }
 
-class _ShareRepository extends MockUserProfileRepository {
+class _ShareRepository
+    implements
+        ContentProfileInteractionQueryFacet,
+        ContentProfileInteractionReadFactAppendFacet {
   _ShareRepository._(this._deferred);
 
   factory _ShareRepository.immediate() => _ShareRepository._(false);
   factory _ShareRepository.deferred() => _ShareRepository._(true);
 
   final bool _deferred;
-  final List<Completer<CursorPage<ProfileInteractionActivityViewData>>>
-  pending = <Completer<CursorPage<ProfileInteractionActivityViewData>>>[];
+  bool failWrites = false;
+  int appendCalls = 0;
+  final List<Completer<ContentProfileInteractionPage>> pending =
+      <Completer<ContentProfileInteractionPage>>[];
 
   @override
-  Future<CursorPage<ProfileInteractionActivityViewData>>
-  listProfileShareInteractions(
-    String subAccountId, {
-    required String direction,
-    String? cursor,
-    int limit = 20,
+  Future<ContentProfileInteractionPage> listActivities(
+    ContentProfileInteractionPageQuery query, {
+    required ContentProfileInteractionDirection direction,
   }) {
     if (!_deferred) {
-      return Future.value(_page('share-$direction', direction));
+      return Future.value(
+        _page('share-${direction.wireValue}', direction.wireValue),
+      );
     }
-    final completer =
-        Completer<CursorPage<ProfileInteractionActivityViewData>>();
+    final completer = Completer<ContentProfileInteractionPage>();
     pending.add(completer);
     return completer.future;
   }
+
+  @override
+  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+    AppendContentProfileInteractionReadFactCommand command,
+  ) async {
+    appendCalls += 1;
+    if (failWrites) {
+      throw StateError('read fact unavailable');
+    }
+    return ContentProfileInteractionReadFactAck(
+      factId: 'fact-${command.activityId}-${command.state.wireValue}',
+      activityId: command.activityId,
+      state: command.state.wireValue,
+      occurredAt: DateTime.utc(2026, 7, 12),
+      replayed: false,
+    );
+  }
 }
 
-CursorPage<ProfileInteractionActivityViewData> _page(
-  String id,
-  String direction,
-) {
-  return CursorPage<ProfileInteractionActivityViewData>(
-    items: <ProfileInteractionActivityViewData>[
-      ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-        ProfileInteractionActivityWireDto(
-          activityId: id,
-          activityType: 'share',
-          direction: direction,
-          actorSubAccountId: 'actor',
-          actorDisplayName: '山海来信',
-          targetSubAccountId: 'persona-a',
-          targetContentId: 'target',
-          targetContentType: 'image',
-          targetContentSummary: '川西晨光',
-          displaySubAccountId: 'actor',
-          displayName: '山海来信',
-          primaryText: '转发互动',
-          previewMediaKind: 'text',
-          previewText: '川西晨光',
-          filterKeys: const <String>['shares'],
-          occurredAt: DateTime(2026, 7, 12),
-        ),
+final class _CapturingTelemetryRecorder implements AppTelemetryRecorder {
+  final List<AppTelemetryPayload> payloads = <AppTelemetryPayload>[];
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async {
+    payloads.add(payload);
+    return AppTelemetryRecordResult.accepted;
+  }
+}
+
+ContentProfileInteractionPage _page(String id, String direction) {
+  return ContentProfileInteractionPage(
+    items: <ContentProfileInteractionActivity>[
+      ContentProfileInteractionActivity(
+        activityId: id,
+        activityType: 'share',
+        direction: direction,
+        actorSubAccountId: 'actor',
+        actorDisplayName: '山海来信',
+        targetSubAccountId: 'persona-a',
+        targetContentId: 'target',
+        targetContentType: 'image',
+        targetContentSummary: '川西晨光',
+        displaySubAccountId: 'actor',
+        displayName: '山海来信',
+        primaryText: '转发互动',
+        previewMediaKind: 'text',
+        previewText: '川西晨光',
+        filterKeys: const <String>['shares'],
+        createdAt: DateTime.utc(2026, 7, 12),
+        occurredAt: DateTime.utc(2026, 7, 12),
       ),
     ],
   );

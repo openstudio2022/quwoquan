@@ -1,0 +1,161 @@
+version: 2
+node:
+  id: account-lifecycle--self-service-account-closure
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle--self-service-account-closure
+  title: 自助账号注销
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: settings-and-device-token
+scope:
+  summary: 验证账号注销的 owner 命令、原子清理、跨域收敛与用户安全落点。
+  in_scope:
+  - CloseAccount 鉴权、幂等、并发串行化和 closed 终态。
+  - 用户域会话、凭证、Persona、PII/SECRET 原子清理与 durable outbox。
+  - 跨域匿名化/删除消费者、重试、DLQ、监控与 App 成功/失败体验。
+  out_of_scope:
+  - 冷静期、撤销注销与旧账号恢复。
+  - 数据导出、撤回同意和法定留存政策制定。
+gwt_acceptance:
+  GWT1_close_account_atomic_and_idempotent:
+    title: owner 注销原子成功且重放返回稳定终态
+    given:
+    - 当前用户是 authenticated account owner，账号尚未关闭。
+    when:
+    - 用户确认注销，或以同一幂等键重放 CloseAccount。
+    then:
+    - 首次提交原子撤销全部会话、擦除凭证和隐私字段、退役 Persona，并持久化 UserAccountClosed outbox。
+    - 首次结果为 closed 且 idempotentReplay=false；重放返回同一 closedAt 且 idempotentReplay=true。
+    done_when:
+    - 真实事务存储证明状态、receipt 与 outbox 同提交，并发提交只产生一个终态事实。
+    edge_cases:
+    - 客户端不得指定其他 accountId。
+    - 并发不同幂等键也不得产生重复关闭事件。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/account_session
+    performance_points:
+    - 注销事务 p95 不高于 3 秒。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/local_contract/close_account_facade__lifecycle__contract__local_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/local_contract/close_account_outbox_relay__reliability__local_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/close_account_contract__api_integration_test.go
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_closure_domain_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_closure.atomic_idempotent
+        envs: &local_envs
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_closure_transaction_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_closure.atomic_idempotent
+        envs: &integration_envs
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - 2026-07-20 已验证真实 PostgreSQL 事务中的 closed 终态、凭证/Persona 清理、session 撤销、单一 outbox 与幂等重放。
+    - 证据命令：go test ./services/user-service/tests/api_integration -run 'TestCloseAccount_(TerminalStateCascades|ReplayReturnsIdempotent|RequiresAuthentication)$' -count=1。
+  GWT2_failure_rolls_back_and_keeps_session:
+    title: 越权或事务失败不产生部分注销
+    given:
+    - 请求者不是 owner，或事务中的任一步骤失败。
+    when:
+    - 调用 CloseAccount。
+    then:
+    - 返回 metadata 定义的结构化失败；账号、会话和凭证保持原状，且不发布关闭事件。
+    - App 保留当前登录态并提供可重试入口。
+    done_when:
+    - 越权、存储失败和 outbox 写入失败均有 rollback 证据。
+    edge_cases:
+    - 网络超时后的安全重试不得把未知结果当作成功。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/account_session
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/user-service/tests/local_contract/close_account_facade__lifecycle__contract__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/settings/pages/b1_settings_pages__local_contract_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_closure_failure_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_closure.rollback
+        envs: *local_envs
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_closure_failure_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_closure.rollback
+        envs: *integration_envs
+      supporting: []
+    notes:
+    - local_contract 覆盖空 actor、not_found、撤销失败上抛、失败后 App 保留会话及恢复可操作入口；云端成功后本地清理失败仍 fail-closed 到游客安全态。
+  GWT3_cross_domain_cleanup_and_safe_landing:
+    title: 跨域最终清理并回到游客安全态
+    given:
+    - CloseAccount 已提交 UserAccountClosed durable fact。
+    when:
+    - Content、Chat、Circle、Notification、Search 与 Recommendation 消费该事实，用户完成 App 注销流程。
+    then:
+    - 每个消费者幂等清理或匿名化所属数据，失败进入重试/DLQ；旧 token 不能继续访问。
+    - App 仅在云侧成功后清理本地凭证并进入不会再次触发登录门的安全首页。
+    done_when:
+    - Gamma/Prod 真机 UAT、旧 token 拒绝、下游清理探针、DLQ 与排空演练均有制品。
+    edge_cases:
+    - 释放后的手机号或第三方凭证只能注册全新账号，不恢复历史身份。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/account_session
+    performance_points:
+    - outbox 一分钟内发布；下游清理目标十五分钟，承诺上限三十天。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/infrastructure/accountclosure/accountclosure__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/user_account_closed_cleanup__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/internal/adapters/mq/user_account_closed_consumer__reliability__local_contract_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/user_account_closed_projection__security__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/internal/infrastructure/messaging/user_account_closed_consumer__local_contract_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/user_account_closed__api_integration_test.go
+      - file: quwoquan_service/services/notification-service/tests/local_contract/user_account_closed_consumer__reliability__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/api_integration/user_account_closed_projection__data_consistency__api_integration_test.go
+      - file: quwoquan_service/services/search-service/internal/adapters/mq/user_account_closed_consumer__reliability__local_contract_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/user_account_closed_projection__privacy__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/settings/pages/b1_settings_pages__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_closure_cross_domain_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_closure.cross_domain_cleanup
+        envs: *integration_envs
+      - layer: user_acceptance
+        execution_profile: release
+        suite: account_closure_safe_landing_uat
+        cases:
+        - user_acceptance.user_identity_profile_relationship.settings_and_device_token.account_closure.safe_landing
+        envs:
+        - gamma_local
+      supporting: []
+    notes:
+    - 不以 Widget fake 或静态路径检查替代 production Remote 真机 UAT。
+    - 2026-07-20 Content、Chat、Circle、Notification、Search 的正常消费、幂等重放、冲突、重试/DLQ 与隐私清理定向 local_contract/api_integration 全绿；Content 同步清除 recommendation 私有特征与内容引用。
+    - 尚缺 gamma-local 真机 safe landing、旧 token 拒绝、跨服务十五分钟收敛探针和 prod 发布演练，因此保持 partial。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

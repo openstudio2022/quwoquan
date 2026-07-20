@@ -1,0 +1,39 @@
+aggregate: AuthenticationChallenge
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 PostgreSQL）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  postgres: embedded-postgres
+
+spy_targets: []
+mock_targets: [sms_provider]
+
+scenarios:
+  - name: send_otp_cooldown_and_idempotency
+    command: SendOtp x2 (same idempotency key)
+    assertions:
+      - single_challenge_row_created
+      - resend_within_cooldown_throttled
+
+  - name: consume_once_and_replay_same_result
+    command: verify otp (success) then replay same credential
+    assertions:
+      - first_consume_marks_consumed_at_and_result_fingerprint
+      - replay_with_same_credential_returns_original_success
+      - replay_with_different_credential_rejected
+
+  - name: bounded_failures_lock_challenge
+    command: verify otp x5 (wrong code)
+    assertions:
+      - failed_attempts_incremented_atomically
+      - challenge_locked_after_limit
+      - locked_challenge_rejects_correct_code
+
+  - name: expiry_is_terminal
+    command: verify otp after expiresAt
+    assertions:
+      - expired_challenge_rejected
+      - no_state_mutation_after_expiry

@@ -97,16 +97,17 @@ List<String> _resolveMediaReference(
     return <String>[source];
   }
 
-  final resolver = MediaDeliveryResolver(
-    MediaEndpointConfig(
-      avatarBaseUrl:
-          imageCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-      imageBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
-      videoBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-      attachmentBaseUrl:
-          imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    ),
+  final endpoints = MediaEndpointConfig.tryCreateAvailable(
+    avatarBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+    imageBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+    attachmentBaseUrl:
+        imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
   );
+  if (endpoints == null) {
+    return const <String>[];
+  }
+  final resolver = MediaDeliveryResolver(endpoints);
   final resolved = resolver.tryResolve(source, kind: kind);
   if (resolved == null) {
     return const <String>[];

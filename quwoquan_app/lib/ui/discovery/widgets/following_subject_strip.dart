@@ -4,13 +4,19 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 
 final followingSubjectsProvider = FutureProvider<List<FollowingSubjectItem>>((
   ref,
@@ -81,7 +87,19 @@ class FollowingSubjectStrip extends ConsumerWidget {
               SizedBox(height: AppSpacing.intraGroupSm),
               asyncItems.when(
                 loading: () => const _FollowingSubjectSkeletonStrip(),
-                error: (_, _) => _FollowingSubjectEmptyState(isDark: isDark),
+                error: (error, _) => AppSectionErrorState(
+                  semantic: runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.section,
+                  ),
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry) {
+                      ref.invalidate(followingSubjectsProvider);
+                    }
+                  },
+                ),
                 data: (items) {
                   if (items.isEmpty) {
                     return _FollowingSubjectEmptyState(isDark: isDark);
@@ -126,19 +144,38 @@ class FollowingSubjectStrip extends ConsumerWidget {
     if (onSubjectOpen != null) {
       onSubjectOpen!(item);
     } else {
-      final location = switch (item.subjectType) {
-        FollowingSubjectType.user => AppRoutePaths.userProfile(
-          username: item.targetObjectId,
-        ),
-        FollowingSubjectType.circle => AppRoutePaths.circleDetail(
-          id: item.targetObjectId,
-        ),
-        FollowingSubjectType.homepage => AppRoutePaths.homepageDetail(
-          id: item.targetObjectId,
-        ),
-      };
-      context.push(location);
+      switch (item.subjectType) {
+        case FollowingSubjectType.user:
+          context.push(
+            AppRoutePaths.userProfile(username: item.targetObjectId),
+          );
+        case FollowingSubjectType.circle:
+          context.push(
+            AppRoutePaths.circleDetail(id: item.targetObjectId),
+            extra: const CircleDetailPageRouteExtra(
+              referralSource: ReferralSource.organicFeed,
+            ),
+          );
+        case FollowingSubjectType.homepage:
+          context.push(
+            AppRoutePaths.homepageDetail(id: item.targetObjectId),
+          );
+      }
     }
+    // R20/R21 · 关注频道点击埋点（红点命中时带 unread 信号，驱动频道价值漏斗）。
+    unawaited(
+      ref
+          .read(journeyEventTrackerProvider)
+          .trackAction(
+            journey: 'following_channel',
+            action: item.hasUnreadChanges
+                ? 'open_subject_with_unread'
+                : 'open_subject',
+            pageName: 'HomePage',
+            targetType: item.subjectTypeWire,
+            targetKey: item.subjectId,
+          ),
+    );
     unawaited(
       ref
           .read(followingSubjectRepositoryProvider)
@@ -270,9 +307,10 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
 
   String get _label {
     return switch (type) {
-      FollowingSubjectType.user => '用户',
-      FollowingSubjectType.circle => '圈子',
-      FollowingSubjectType.homepage => '对象',
+      FollowingSubjectType.user => UITextConstants.followingSubjectTypeUser,
+      FollowingSubjectType.circle => UITextConstants.followingSubjectTypeCircle,
+      FollowingSubjectType.homepage =>
+        UITextConstants.followingSubjectTypeObject,
     };
   }
 }

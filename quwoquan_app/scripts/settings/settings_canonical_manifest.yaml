@@ -6,6 +6,22 @@ pages:
     shell: inset_form
   - path: quwoquan_app/lib/ui/settings/pages/settings_permissions_page.dart
     shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/settings_notifications_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/settings_privacy_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/settings_calls_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/settings_account_security_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/user/pages/blocked_users_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/user/pages/persona_management_form_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/blocked_keywords_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/my_reports_page.dart
+    shell: inset_form
   - path: quwoquan_app/lib/ui/settings/pages/settings_dark_mode_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
@@ -13,6 +29,8 @@ pages:
   - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
+    shell: inset_form
+  - path: quwoquan_app/lib/ui/chat/pages/chat_announcement_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/ui/chat/pages/transfer_ownership_page.dart
     shell: inset_member_picker

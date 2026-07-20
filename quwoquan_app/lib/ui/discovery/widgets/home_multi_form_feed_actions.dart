@@ -98,7 +98,7 @@ class _ActionRow extends StatelessWidget {
         _chip(
           context: context,
           buttonKey: moreButtonKey,
-          semanticsLabel: UITextConstants.more,
+          semanticsLabel: ChatText.more,
           iconOnly: true,
           alignment: Alignment.centerRight,
           child: Icon(
@@ -250,6 +250,134 @@ class _FeedPatchVisibilityReporterState
   Widget build(BuildContext context) => widget.child;
 }
 
+/// N0-4 七态曝光门控：真实视口可见性驱动 impressed（50% 面积 + 1s 停留）。
+///
+/// 此前首页卡片在 build 帧即以硬编码 fraction=1/1000ms 上报 impressed，列表
+/// 预构建（cacheExtent 内未入视口）的内容被记真实曝光 → 曝光过滤拉黑 7 天 +
+/// CTR 分母与训练样本污染。本组件周期采样卡片与视口的真实交叠：
+///  - 可见比例 ≥50% 累计 ≥1s → 上报一次 impressed（qualified）；
+///  - 曾部分可见但从未达标 → dispose 时上报一次弱可见 visible；
+///  - 从未进入视口（纯预构建）→ 不产生任何曝光事件。
+class _QualifiedImpressionGate extends StatefulWidget {
+  const _QualifiedImpressionGate({
+    super.key,
+    required this.contentId,
+    required this.onQualified,
+    required this.onWeakVisible,
+    required this.child,
+  });
+
+  final String contentId;
+  final void Function(double visibleFraction, Duration visibleDuration)
+  onQualified;
+  final VoidCallback onWeakVisible;
+  final Widget child;
+
+  @override
+  State<_QualifiedImpressionGate> createState() =>
+      _QualifiedImpressionGateState();
+}
+
+class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
+  static const Duration _sampleInterval = Duration(milliseconds: 250);
+  static const double _qualifiedFraction = 0.5;
+  static const Duration _qualifiedDuration = Duration(milliseconds: 1000);
+
+  Timer? _timer;
+  Duration _visibleAccum = Duration.zero;
+  double _peakFraction = 0;
+  bool _everVisible = false;
+  bool _reported = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_sampleInterval, (_) => _sample());
+  }
+
+  @override
+  void didUpdateWidget(covariant _QualifiedImpressionGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.contentId != widget.contentId) {
+      _flushWeakVisibleIfNeeded(oldWidget.onWeakVisible);
+      _visibleAccum = Duration.zero;
+      _peakFraction = 0;
+      _everVisible = false;
+      _reported = false;
+      _timer ??= Timer.periodic(_sampleInterval, (_) => _sample());
+    }
+  }
+
+  @override
+  void dispose() {
+    _flushWeakVisibleIfNeeded(widget.onWeakVisible);
+    _timer?.cancel();
+    _timer = null;
+    super.dispose();
+  }
+
+  void _flushWeakVisibleIfNeeded(VoidCallback onWeakVisible) {
+    if (!_reported && _everVisible) {
+      _reported = true;
+      onWeakVisible();
+    }
+  }
+
+  void _sample() {
+    if (_reported || !mounted) {
+      return;
+    }
+    final fraction = _viewportVisibleFraction();
+    if (fraction <= 0) {
+      // 离开视口即清零累计：impressed 要求连续停留而非碎片累加。
+      _visibleAccum = Duration.zero;
+      return;
+    }
+    _everVisible = true;
+    if (fraction > _peakFraction) {
+      _peakFraction = fraction;
+    }
+    if (fraction < _qualifiedFraction) {
+      _visibleAccum = Duration.zero;
+      return;
+    }
+    _visibleAccum += _sampleInterval;
+    if (_visibleAccum >= _qualifiedDuration) {
+      _reported = true;
+      _timer?.cancel();
+      _timer = null;
+      widget.onQualified(fraction, _visibleAccum);
+    }
+  }
+
+  /// 卡片自身 paint 区域与屏幕视口的交叠比例（0~1）。
+  double _viewportVisibleFraction() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) {
+      return 0;
+    }
+    if (!renderObject.hasSize || renderObject.size.isEmpty) {
+      return 0;
+    }
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final rect = topLeft & renderObject.size;
+    final view = View.of(context);
+    final screen = Offset.zero & (view.physicalSize / view.devicePixelRatio);
+    final intersection = rect.intersect(screen);
+    if (intersection.width <= 0 || intersection.height <= 0) {
+      return 0;
+    }
+    final cardArea = rect.width * rect.height;
+    if (cardArea <= 0) {
+      return 0;
+    }
+    return (intersection.width * intersection.height) / cardArea;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 /// 首页推荐「有更新 / N 条新内容」轻量入口（顶部浮层 pill）。
 ///
 /// 仅在该 channel 有实时 patch 提示（`new_candidate_hint` / `refresh_suggestion`）
@@ -273,7 +401,9 @@ class _FeedRealtimeUpdatePill extends ConsumerWidget {
       child = const SizedBox.shrink();
     } else {
       final label = hint.newCandidateCount > 0
-          ? DiscoveryFeedText.feedRealtimeNewContentBadge(hint.newCandidateCount)
+          ? DiscoveryFeedText.feedRealtimeNewContentBadge(
+              hint.newCandidateCount,
+            )
           : DiscoveryFeedText.feedRealtimeUpdateHint;
       child = _buildPill(label);
     }
@@ -287,10 +417,7 @@ class _FeedRealtimeUpdatePill extends ConsumerWidget {
       switchOutCurve: Curves.easeIn,
       transitionBuilder: (widget, animation) => FadeTransition(
         opacity: animation,
-        child: SizeTransition(
-          sizeFactor: animation,
-          child: widget,
-        ),
+        child: SizeTransition(sizeFactor: animation, child: widget),
       ),
       child: child,
     );

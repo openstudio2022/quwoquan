@@ -1,4 +1,4 @@
-# L4 契约/任务：arb-gen-l10n-string-extraction
+# L3 契约/任务：arb-gen-l10n-string-extraction
 
 ## 功能说明
 

@@ -1,100 +1,74 @@
-# 群头像商用端到端全矩阵 — 执行手册（不打折扣）
+# 群头像商用端到端全矩阵执行手册
 
-本文档与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md) 口径一致：**在未具备 infra 且未产出四类环境非 dry-run、可追溯 JSON 证据前，不得声明「商用端到端全矩阵完成」。**
+本文档与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md) 同源。四个 target
+未全部产出非 dry-run、可追溯证据前，结论保持 `GATE_BLOCK`。
 
-## 1. 商用声明定义（零折扣）
+## 必选矩阵
 
-下列 **四条** 必须 **全部** 满足；缺一即为 **GATE_BLOCK**。
+| 环境 | target | 必须证据 |
+|---|---|---|
+| alpha | `alpha-local` | 本地契约、probe、Android/iOS 设备报告 |
+| beta | `beta-local` | Remote 网关、probe、Android/iOS Patrol 报告 |
+| gamma | `gamma-local` | stackctl 启动的本地组合拓扑、probe、Android/iOS Patrol 报告 |
+| prod | `prod-hosted` | 同一 release/config hash 下 `gray-initial → carry-on → full` 的 probe、双端报告与回滚证据 |
 
-| 序号 | 环境 | 含义 | 证据形态 |
-|------|------|------|----------|
-| E1 | **beta** | 对接真实 beta 网关与 chat/media/user-sync；双端（Android + iOS）Patrol | `schema=chat_group_avatar_e2e`、`status=passed`、非 dry-run、`environment.env=beta` |
-| E2 | **local-gamma** | `start_local_gamma_mirror` + api_integration/user_acceptance + Patrol；与镜像拓扑一致 | `environment.env=local-gamma`（或与脚本约定等价字段） |
-| E3 | **cloud-gamma-pre** | ECS pre + API probe + self-hosted Patrol（chat-avatar matrix） | run id / artifact URL；probe + device JSON |
-| E4 | **cloud-gamma-prod-smoke** | prod 变更后 smoke：probe + self-hosted Patrol | 同上，`environment` 标明 prod-smoke |
+每条报告必须使用 `scenario=chat.group_avatar.sync_display_e2e*`、`status=passed`，
+并包含真实服务与 UI 证据。`dry-run`、synthetic device、空文件或仅有命令日志均不能替代。
 
-**共同约束**
+## 前置条件
 
-- 每条证据：`scenario=chat.group_avatar.sync_display_e2e`（或与验收脚本约定），**禁止**仅用 `--dry-run synthetic device** 冒充商用矩阵。
-- Android、iOS **各至少一台**真实模拟器或物理机（Patrol 可执行）。
-- `serviceEndpointEvidence` / `serviceEvidence` 按 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md) 最小字段集归档。
+- 环境 URL 与 target 只从
+  [`environment_topology_manifest.yaml`](../../../../../quwoquan_ops/environments/environment_topology_manifest.yaml)
+  和 stackctl 解析，不手写远端 gamma 地址。
+- Android/iOS runner 必须能执行 Flutter/Patrol；prod 证据须使用受控发布凭据。
+- gamma 仅使用 `gamma-local`；远端 gamma、ECS gamma 与 `cloud-gamma-*` 已退役。
 
-## 2. Infra 前置
-
-在启动矩阵前确认：
-
-- **GitHub**：`deploy-gamma-ecs.yml` / `app-env-device-matrix-self-hosted.yml` 所需 **secrets**（ECS SSH、测试 token 等）与 **vars**（`GAMMA_BASE_URL`、`MEDIA_AVATAR_CDN_BASE_URL`、`media_base_url` 传递链）。
-- **Self-hosted runner**：带 Android SDK + Xcode/iOS 模拟器；workflow 中 `matrix_kind: chat-avatar` 与设备变量（如 `CHAT_AVATAR_MATRIX_ALL_DEVICES`）已配置。
-- **ECS**：pre/prod 可达；与本手册 E3/E4 对齐。
-
-本地自检（不替代云上证据；脚本 `warnings` 会提示 E3/E4 无法在离线会话核验）：
+## 执行入口
 
 ```bash
-python3 quwoquan_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict
+# gamma-local 组合栈与本地聚合报告
+python3 quwoquan_ops/cli/stackctl.py up --env gamma
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gamma/run_local_gamma_avatar_e2e.py --help
+
+# 单环境 probe 与设备矩阵
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_avatar_e2e_probe.py --help
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix.py --help
 ```
 
-## 3. 执行顺序（推荐）
+四环境报告写入一个 manifest：
 
-1. **Phase L — local-gamma**（可先在无 ECS 情况下推进）：启动镜像 → healthz → `run_local_gamma_t3.py` / user_acceptance → `run_local_gamma_avatar_e2e.py` → `run_chat_avatar_device_matrix.py`（无 `--dry-run`，双端）。
-2. **Phase B — beta**：beta 网关与 seed/token 就绪 → `run_chat_avatar_e2e_probe.py` → Patrol（双端）。
-3. **Phase C — cloud**：推送或 `workflow_dispatch` 触发预发/冒烟流水线；从 Actions artifact 下载 JSON，核对四条齐全。
-4. **机器校验（必选）**：将四类报告路径写入 manifest（示例：[`artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml`](../../../../../artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml)），运行：
-   ```bash
-   COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml \
-     make verify-chat-avatar-commercial-matrix
-   ```
-   或 `python3 quwoquan_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py --manifest PATH`。退出码 **0** 才允许在 T9/本文档勾选「四条齐全」；**2** 表示 `GATE_BLOCK`（含 dry-run 混入、`status!=passed`、缺 Android/iOS 之一等）。
-5. **归档**：将 manifest 路径、校验命令、CI `run_id` 写入 [`树内任务文档`](./树内任务文档) T9 与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md)「当前执行证据」。
+```yaml
+schema: chat-avatar-commercial-matrix-manifest
+alpha_local:
+  probe: <path>
+  android: <path>
+  ios: <path>
+beta_local:
+  probe: <path>
+  android: <path>
+  ios: <path>
+gamma_local:
+  aggregate: <path>
+prod_hosted:
+  probe: <path>
+  android: <path>
+  ios: <path>
+```
 
-### 3.1 一键编排（Phase L + 可选 Phase B）
-
-仓库提供：
+机器校验：
 
 ```bash
-# 仅本机 Phase L：prereqs → 路由自检 → api_integration → run_local_gamma_avatar_e2e（非 dry-run）
-bash quwoquan_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
-
-# 先起 Docker 镜像栈
-COMMERCIAL_MATRIX_START_MIRROR=1 bash quwoquan_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
-
-# 追加 beta（需 BETA_GATEWAY_BASE_URL + token）
-BETA_GATEWAY_BASE_URL=http://127.0.0.1:18080 BETA_TEST_AUTH_TOKEN=... \
-  bash quwoquan_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
-
-# 仅对已填 manifest 做校验（不跑 Patrol）
-COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml \
-  bash quwoquan_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
-
-# Makefile
-make run-chat-avatar-commercial-matrix-local
+make verify-chat-avatar-commercial-matrix \
+  COMMERCIAL_MATRIX_MANIFEST=.qwq_output/env/repo/runs/commercial-matrix-chat-avatar/manifest.yaml
 ```
 
-E3/E4 探针与矩阵 JSON 由 [`deploy-gamma-ecs.yml`](../../../../../.github/workflows/deploy-gamma-ecs.yml) 与 self-hosted 作业产出；下载后放入 manifest 再执行校验。
+退出码 `0` 才允许更新 [`acceptance.yaml`](./acceptance.yaml) 与
+[`avatar-e2e-validation.md`](./avatar-e2e-validation.md) 的执行证据；退出码 `2`
+表示矩阵仍为 `GATE_BLOCK`。
 
-## 4. 命令备忘（仓库根目录）
+## 发布前检查
 
-路径与参数以脚本 `--help` 为准；以下为典型形态。
-
-```bash
-# Local gamma：镜像（示例）
-bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
-
-# Probe（非 dry-run 需可达 gateway）
-python3 quwoquan_ops/avatar/run_chat_avatar_e2e_probe.py --help
-
-# api_integration（含 chat）
-python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
-
-# Device 矩阵（商用必须去掉 dry-run，且具备双端设备）
-python3 quwoquan_ops/avatar/run_chat_avatar_device_matrix.py --help
-python3 quwoquan_ops/avatar/run_chat_avatar_device_matrix_ci.py --help
-```
-
-## 5. 声明检查清单（PR / 发布前）
-
-- [ ] E1 beta：Android + iOS JSON，`status=passed`
-- [ ] E2 local-gamma：同上（或 `aggregate` 报告内含 probe + deviceMatrix 均 `passed`）
-- [ ] E3 cloud-gamma-pre：CI artifact 或等价可追溯路径
-- [ ] E4 prod-smoke：同上
-- [ ] `make verify-chat-avatar-commercial-matrix COMMERCIAL_MATRIX_MANIFEST=...` 退出码 0
-- [ ] 文档：`avatar-e2e-validation.md` 与 `树内任务文档` T9 与证据一致，无「已完成」与 GATE_BLOCK 矛盾表述
+- [ ] `alpha-local`、`beta-local`、`gamma-local`、`prod-hosted` 恰好各一份。
+- [ ] Android 与 iOS 均为真实设备或受控模拟器报告，且 `status=passed`。
+- [ ] prod 三个 rollout stage 绑定同一 release/config hash，并有失败停止与回滚证据。
+- [ ] manifest 校验退出码为 `0`，文档状态与证据一致。

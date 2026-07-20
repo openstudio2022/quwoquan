@@ -1,4 +1,4 @@
-# L4 特性：location-nearby-search-gateway
+# L3 特性：location-nearby-search-gateway
 
 ## 功能说明
 - 提供 `/integration/location/nearby` 与 `/integration/location/search` 标准接口。

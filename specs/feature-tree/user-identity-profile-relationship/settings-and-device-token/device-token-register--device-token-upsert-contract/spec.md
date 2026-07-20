@@ -1,4 +1,4 @@
-# L4 特性：device-token-upsert-contract
+# L3 特性：device-token-upsert-contract
 
 ## 功能说明
 - 细化 device-token-upsert-contract 特性的功能边界与端云协同行为。

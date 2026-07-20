@@ -1,0 +1,37 @@
+domain: assistant
+aggregate_root: AssistantPreferenceFact
+object_kind: aggregate_root
+
+description: |
+  小趣助手显式偏好事实。session scope 仅作用于指定 conversation，
+  long_term scope 作用于 owner 后续会话；用户可遗忘并在受控窗口内恢复。
+
+storage_backend: mongodb
+
+capabilities:
+  - queryable
+  - owner_mutable
+
+taggable: false
+vector_enabled: false
+
+members: []
+
+business_rules:
+  - actor persona 必须等于 trusted principal，禁止请求体覆盖 userId
+  - session scope 必须绑定 owner 的 conversationId，long_term scope 禁止绑定 conversationId
+  - 同一 owner、scope、conversationId、kind 仅有一个当前事实，Set 为幂等 upsert
+  - revoked 事实不得进入 AssistantRun 上下文
+  - 非 owner 对读取、遗忘和恢复统一返回 not_found 防枚举
+  - 仅在 revocationDeadline 之前允许将 revoked 事实恢复为 active
+lifecycle:
+  states: [active, revoked]
+  optimistic_concurrency: version
+  idempotency: natural_identity
+
+ddd_layer_mapping:
+  domain_model: internal/domain/assistant/preference_fact/model
+  ports: internal/domain/assistant/preference_fact/ports
+  application: internal/application/assistant/preference_fact
+  adapter_rest: internal/adapters/http
+  infrastructure: internal/infrastructure/assistant/preference_fact/persistence

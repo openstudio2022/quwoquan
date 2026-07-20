@@ -7,7 +7,7 @@ import re
 from typing import Iterable
 
 from core.io import read_json
-from core.paths import execution_command_root
+from core.paths import execution_root
 from core.fact_coverage import FACT_COVERAGE_ALIASES, fact_covered
 from core import quality_gates as qg
 from core.template_fingerprints import template_fingerprint_issues
@@ -24,6 +24,14 @@ class ReviewIssue:
     ref: str
     severity: str
     message: str
+
+
+@dataclass(frozen=True)
+class SourceTextLoad:
+    """Source evidence read for one execution, including explicit I/O failures."""
+
+    texts: tuple[str, ...]
+    issues: tuple[str, ...]
 
 
 def _article_paths(posts_root: Path) -> list[Path]:
@@ -52,20 +60,25 @@ def _source_names_from_manifest(manifest: dict, fallback_ref: str) -> list[str]:
     return list(dict.fromkeys([name for name in names if name]))
 
 
-def _load_source_texts(task: str | None, batch: str | None, manifest: dict, fallback_ref: str) -> list[str]:
-    if not task or not batch:
-        return []
+def _load_source_texts(
+    execution_id: str | None,
+    manifest: dict,
+    fallback_ref: str,
+) -> SourceTextLoad:
+    if not execution_id:
+        return SourceTextLoad(texts=(), issues=())
     texts: list[str] = []
+    issues: list[str] = []
     for name in _source_names_from_manifest(manifest, fallback_ref):
-        source_root = execution_command_root(task, "source") / "sources" / name
+        source_root = execution_root(execution_id) / "sources" / name
         if not source_root.exists():
             continue
         for source_file in sorted(source_root.rglob("source*.md")):
             try:
                 texts.append(source_file.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-    return texts
+            except OSError as exc:
+                issues.append(f"source unreadable {source_file.name}: {exc}")
+    return SourceTextLoad(texts=tuple(texts), issues=tuple(issues))
 
 
 def check_narrative_quality(article: str, manifest: dict) -> list[str]:
@@ -101,7 +114,7 @@ def check_narrative_quality(article: str, manifest: dict) -> list[str]:
     return issues
 
 
-def check_provenance(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_provenance(article_path: Path, execution_id: str | None = None) -> list[str]:
     article = article_path.read_text(encoding="utf-8")
     manifest = _load_manifest(article_path)
     ref = article_path.parent.name
@@ -131,7 +144,7 @@ def check_provenance(article_path: Path, task: str | None = None, batch: str | N
     return issues
 
 
-def check_story_spine_integrity(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_story_spine_integrity(article_path: Path, execution_id: str | None = None) -> list[str]:
     article = article_path.read_text(encoding="utf-8")
     spine = _load_manifest(article_path).get("storySpine") or {}
     ref = article_path.parent.name
@@ -142,14 +155,17 @@ def check_story_spine_integrity(article_path: Path, task: str | None = None, bat
     return issues
 
 
-def check_source_expansion_quality(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_source_expansion_quality(
+    article_path: Path,
+    execution_id: str | None = None,
+) -> list[str]:
     ref = article_path.parent.name
     issues: list[str] = []
-    if not task or not batch:
+    if not execution_id:
         return issues
     manifest = _load_manifest(article_path)
     for name in _source_names_from_manifest(manifest, ref):
-        source_root = execution_command_root(task, "source") / "sources" / name
+        source_root = execution_root(execution_id) / "sources" / name
         related_path = source_root / "related_search.json"
         if related_path.exists():
             related = read_json(related_path)
@@ -246,14 +262,17 @@ def check_reader_experience(article_path: Path) -> list[str]:
     return issues
 
 
-def check_factual_grounding(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_factual_grounding(
+    article_path: Path,
+    execution_id: str | None = None,
+) -> list[str]:
     article = article_path.read_text(encoding="utf-8")
     ref = article_path.parent.name
     issues: list[str] = []
-    if task and batch:
+    if execution_id:
         from content.post.object_index import read_brief_object
 
-        brief = read_brief_object(task, batch, ref)
+        brief = read_brief_object(execution_id, ref)
         if brief:
             for fact in [str(x) for x in (brief.get("mustIncludeFacts") or []) if x]:
                 if not fact_covered(fact, article):
@@ -261,15 +280,15 @@ def check_factual_grounding(article_path: Path, task: str | None = None, batch: 
     return issues
 
 
-def check_source_license(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_source_license(article_path: Path, execution_id: str | None = None) -> list[str]:
     ref = article_path.parent.name
     issues: list[str] = []
-    if not task or not batch:
+    if not execution_id:
         return issues
     manifest = _load_manifest(article_path)
     names = _source_names_from_manifest(manifest, ref)
     for name in names:
-        source_root = execution_command_root(task, "source") / "sources" / name
+        source_root = execution_root(execution_id) / "sources" / name
         if not source_root.exists():
             issues.append(f"{ref}: missing download sources for {name}")
             continue
@@ -388,21 +407,25 @@ def check_generator_provenance(article_path: Path) -> list[str]:
     return issues
 
 
-def check_fact_traceability(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def check_fact_traceability(
+    article_path: Path,
+    execution_id: str | None = None,
+) -> list[str]:
     article = article_path.read_text(encoding="utf-8")
     manifest = _load_manifest(article_path)
     ref = article_path.parent.name
-    source_texts = _load_source_texts(task, batch, manifest, ref)
-    return [f"{ref}: {issue}" for issue in numeric_traceability_issues(article, source_texts)]
+    source_load = _load_source_texts(execution_id, manifest, ref)
+    issues = [*source_load.issues, *numeric_traceability_issues(article, source_load.texts)]
+    return [f"{ref}: {issue}" for issue in issues]
 
 
-def five_role_review(article_path: Path, task: str | None = None, batch: str | None = None) -> dict:
+def five_role_review(article_path: Path, execution_id: str | None = None) -> dict:
     roles = {
         "editor": check_editorial_quality(article_path),
         "qa": check_reader_experience(article_path) + check_image_asset_quality(article_path) + check_template_fingerprint(article_path),
         "reader": check_reader_experience(article_path),
-        "legal": check_provenance(article_path, task, batch) + check_source_license(article_path, task, batch) + check_publisher_boundary(article_path) + check_generator_provenance(article_path),
-        "truth": check_factual_grounding(article_path, task, batch) + check_story_spine_integrity(article_path, task, batch) + check_source_expansion_quality(article_path, task, batch) + check_fact_traceability(article_path, task, batch),
+        "legal": check_provenance(article_path, execution_id) + check_source_license(article_path, execution_id) + check_publisher_boundary(article_path) + check_generator_provenance(article_path),
+        "truth": check_factual_grounding(article_path, execution_id) + check_story_spine_integrity(article_path, execution_id) + check_source_expansion_quality(article_path, execution_id) + check_fact_traceability(article_path, execution_id),
     }
     blocking = []
     for role, issues in roles.items():

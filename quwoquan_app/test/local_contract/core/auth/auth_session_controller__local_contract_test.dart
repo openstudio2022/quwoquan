@@ -3,23 +3,17 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show accountSessionLifecycleCommandWriterProvider;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../support/runtime_failure_fixtures.dart';
 
-AuthSessionRefreshExecutor _refreshExecutor(
-  Future<AuthLoginResultDto> Function(
-    String refreshToken,
-    Future<void>? abortTrigger,
-  )
-  run,
-) {
-  return (String refreshToken, {Future<void>? abortTrigger}) =>
-      run(refreshToken, abortTrigger);
-}
+AccountSessionLifecycleCommandWriter _lifecycleWriter(
+  Future<TokenRefreshGrant> Function(RefreshTokenCommand command) refresh,
+) => _StubAccountSessionLifecycleWriter(refresh);
 
 void main() {
   test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/sub 快照', () async {
@@ -40,16 +34,16 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((refreshToken, _) async {
-            expect(refreshToken, 'old-refresh');
-            return AuthLoginResultDto.fromMap(<String, dynamic>{
-              'accessToken': 'new-access',
-              'refreshToken': 'new-refresh',
-            });
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((command) async {
+            expect(command.refreshToken, 'old-refresh');
+            return const TokenRefreshGrant(
+              accessToken: 'new-access',
+              refreshToken: 'new-refresh',
+              sessionRememberTtlSeconds: 0,
+            );
           }),
         ),
       ],
@@ -72,11 +66,10 @@ void main() {
     final store = _MemoryAuthSessionStore.authenticated();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
             throw CloudException(
               type: CloudErrorType.unauthorized,
               message: 'expired',
@@ -107,11 +100,10 @@ void main() {
     final store = _MemoryAuthSessionStore.authenticated();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
             throw CloudException(
               type: CloudErrorType.network,
               message: 'offline',
@@ -157,17 +149,15 @@ void main() {
       ),
     );
     final refreshStarted = Completer<void>();
-    final delayedResult = Completer<AuthLoginResultDto>();
+    final delayedResult = Completer<TokenRefreshGrant>();
     final cancellation = Completer<void>();
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, abortTrigger) async {
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
             refreshStarted.complete();
-            await abortTrigger;
             return delayedResult.future;
           }),
         ),
@@ -191,10 +181,11 @@ void main() {
       'old-access',
     );
     delayedResult.complete(
-      AuthLoginResultDto.fromMap(<String, dynamic>{
-        'accessToken': 'late-access',
-        'refreshToken': 'late-refresh',
-      }),
+      const TokenRefreshGrant(
+        accessToken: 'late-access',
+        refreshToken: 'late-refresh',
+        sessionRememberTtlSeconds: 0,
+      ),
     );
     await Future<void>.delayed(Duration.zero);
 
@@ -228,11 +219,16 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
-          appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
           startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
           authSessionStoreProvider.overrideWithValue(store),
-          authSessionRefreshExecutorProvider.overrideWithValue(
-            _refreshExecutor((_, _) async => AuthLoginResultDto()),
+          accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+            _lifecycleWriter(
+              (_) async => const TokenRefreshGrant(
+                accessToken: 'unused-access',
+                refreshToken: 'unused-refresh',
+                sessionRememberTtlSeconds: 0,
+              ),
+            ),
           ),
         ],
       );
@@ -276,11 +272,16 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          _refreshExecutor((_, _) async => AuthLoginResultDto()),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter(
+            (_) async => const TokenRefreshGrant(
+              accessToken: 'unused-access',
+              refreshToken: 'unused-refresh',
+              sessionRememberTtlSeconds: 0,
+            ),
+          ),
         ),
       ],
     );
@@ -302,14 +303,27 @@ void main() {
   });
 }
 
-final class _MockRemoteMode extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.remote;
-}
-
 final class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
   @override
   bool build() => true;
+}
+
+final class _StubAccountSessionLifecycleWriter
+    implements AccountSessionLifecycleCommandWriter {
+  const _StubAccountSessionLifecycleWriter(this._refresh);
+
+  final Future<TokenRefreshGrant> Function(RefreshTokenCommand command)
+  _refresh;
+
+  @override
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) {
+    return _refresh(command);
+  }
+
+  @override
+  Future<LogoutAck> logout(LogoutCommand command) async {
+    return const LogoutAck(revoked: true);
+  }
 }
 
 final class _MemoryAuthSessionStore implements AuthSessionStore {
@@ -339,8 +353,8 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   Future<StoredAuthSession> read() async => stored;
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -348,13 +362,10 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     stored = StoredAuthSession(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       ownerId: stored.ownerId,
       activeSubAccountId: stored.activeSubAccountId,
       accountState: stored.accountState,
@@ -362,6 +373,13 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       installId: stored.installId,
       lastRefreshAtEpochMs: DateTime.now().millisecondsSinceEpoch,
       lastForegroundAuthCheckAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedLoginIdentifier: stored.rememberedLoginIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+      sessionRememberTtlSeconds: result.sessionRememberTtlSeconds,
       manualLoggedOut: false,
       launchPromptDismissed: false,
     );
@@ -369,7 +387,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

@@ -149,6 +149,110 @@ func TestCircleMembershipRealMongoTransactionReplayProjectionAndStream(t *testin
 	}
 }
 
+func TestListUserCircles_QueryFiltersAndHidesPrivateForOtherViewer(
+	t *testing.T,
+) {
+	cleanCollections(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	circles := []any{
+		bson.M{
+			"_id": "circle-private-photo", "name": "私密摄影圈",
+			"description": "摄影讨论", "ownerId": "persona-owner",
+			"status": "active", "visibility": "private", "joinPolicy": "open",
+			"createdAt": now, "updatedAt": now,
+		},
+		bson.M{
+			"_id": "circle-public-photo-a", "name": "公开摄影甲",
+			"description": "摄影讨论", "ownerId": "persona-owner",
+			"status": "active", "visibility": "public", "joinPolicy": "open",
+			"createdAt": now, "updatedAt": now,
+		},
+		bson.M{
+			"_id": "circle-public-reading", "name": "公开读书圈",
+			"description": "阅读讨论", "ownerId": "persona-owner",
+			"status": "active", "visibility": "public", "joinPolicy": "open",
+			"createdAt": now, "updatedAt": now,
+		},
+		bson.M{
+			"_id": "circle-public-photo-b", "name": "公开摄影乙",
+			"description": "摄影讨论", "ownerId": "persona-owner",
+			"status": "active", "visibility": "public", "joinPolicy": "open",
+			"createdAt": now, "updatedAt": now,
+		},
+	}
+	if _, err := mongoDB.Collection("circles").InsertMany(ctx, circles); err != nil {
+		t.Fatal(err)
+	}
+	memberships := []any{
+		bson.M{
+			"_id": "membership-001", "circleId": "circle-private-photo",
+			"personaId": "persona-subject", "state": "active",
+		},
+		bson.M{
+			"_id": "membership-002", "circleId": "circle-public-photo-a",
+			"personaId": "persona-subject", "state": "active",
+		},
+		bson.M{
+			"_id": "membership-003", "circleId": "circle-public-reading",
+			"personaId": "persona-subject", "state": "active",
+		},
+		bson.M{
+			"_id": "membership-004", "circleId": "circle-public-photo-b",
+			"personaId": "persona-subject", "state": "active",
+		},
+	}
+	if _, err := mongoDB.Collection("circle_memberships").InsertMany(
+		ctx,
+		memberships,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	first := executePersonaCirclesQuery(
+		t,
+		"/personas/persona-subject/circles?query=摄影&limit=1",
+		"",
+	)
+	if first.Code != http.StatusOK {
+		t.Fatalf("public first page failed: status=%d body=%s", first.Code, first.Body.String())
+	}
+	firstBody := decodeBody(t, first)
+	firstItems := firstBody["items"].([]any)
+	if len(firstItems) != 1 ||
+		firstItems[0].(map[string]any)["circleId"] != "circle-public-photo-a" ||
+		firstBody["cursor"] != "membership-002" {
+		t.Fatalf("public first page drift: %#v", firstBody)
+	}
+
+	second := executePersonaCirclesQuery(
+		t,
+		"/personas/persona-subject/circles?query=摄影&limit=1&cursor=membership-002",
+		"persona-outsider",
+	)
+	secondBody := decodeBody(t, second)
+	secondItems := secondBody["items"].([]any)
+	if second.Code != http.StatusOK ||
+		len(secondItems) != 1 ||
+		secondItems[0].(map[string]any)["circleId"] != "circle-public-photo-b" {
+		t.Fatalf("public second page drift: status=%d body=%#v", second.Code, secondBody)
+	}
+	if _, hasCursor := secondBody["cursor"]; hasCursor {
+		t.Fatalf("terminal public page must not expose cursor: %#v", secondBody)
+	}
+
+	owner := executePersonaCirclesQuery(
+		t,
+		"/personas/persona-subject/circles?query=摄影&limit=10",
+		"persona-subject",
+	)
+	ownerBody := decodeBody(t, owner)
+	ownerItems := ownerBody["items"].([]any)
+	if owner.Code != http.StatusOK || len(ownerItems) != 3 {
+		t.Fatalf("owner must see public and private circles: status=%d body=%#v", owner.Code, ownerBody)
+	}
+}
+
 func TestCircleMembershipOwnerInvariantAndModeratorRole(t *testing.T) {
 	cleanCollections(t)
 	seedMembershipCircle(t, "circle-moderated", "persona-owner", 0)
@@ -191,15 +295,170 @@ func TestCircleMembershipOwnerInvariantAndModeratorRole(t *testing.T) {
 
 func seedMembershipCircle(t *testing.T, circleID, ownerPersonaID string, memberCount int64) {
 	t.Helper()
+	seedMembershipCircleWithPolicy(t, circleID, ownerPersonaID, memberCount, "open")
+}
+
+func seedMembershipCircleWithPolicy(t *testing.T, circleID, ownerPersonaID string, memberCount int64, joinPolicy string) {
+	t.Helper()
 	now := time.Now().UTC()
 	_, err := mongoDB.Collection("circles").InsertOne(context.Background(), bson.M{
 		"_id": circleID, "name": circleID, "ownerId": ownerPersonaID,
-		"status": "active", "joinPolicy": "open", "memberCount": memberCount,
+		"status": "active", "visibility": "public",
+		"joinPolicy": joinPolicy, "memberCount": memberCount,
 		"createdAt": now, "updatedAt": now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// GWT1（member-role-permission）：approval 圈子 Join 进 pending；
+// Approve→active 发 Joined 且 memberCount 收敛 +1；Reject→rejected 可再申请；
+// 审批命令与 pending 队列仅 owner/active admin 可达。
+func TestCircleMembershipApprovalLifecycle(t *testing.T) {
+	cleanCollections(t)
+	ctx := context.Background()
+	seedMembershipCircleWithPolicy(t, "circle-approval", "persona-owner", 0, "approval")
+
+	// approval 圈加入 → pending 建档（不计 memberCount，事件为 Requested）。
+	joinRecorder := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships", nil, "apply-key-1", "", "persona-applicant", "JoinCircle")
+	if joinRecorder.Code != http.StatusCreated {
+		t.Fatalf("approval join failed: status=%d body=%s", joinRecorder.Code, joinRecorder.Body.String())
+	}
+	applied := decodeBody(t, joinRecorder)
+	if applied["state"] != "pending" || applied["version"] != float64(1) {
+		t.Fatalf("approval join drift: %#v", applied)
+	}
+
+	// pending 队列：非 owner/admin 403，owner 可见申请。
+	outsiderQueue := executeMembershipQueryWithTemplate(t, "/circles/circle-approval/memberships/pending?limit=10", "/circles/{circleId}/memberships/pending", "persona-applicant", "ListPendingCircleMemberships")
+	if outsiderQueue.Code != http.StatusForbidden || decodeBody(t, outsiderQueue)["code"] != "CIRCLE.USER.permission_denied" {
+		t.Fatalf("pending queue must be moderator-only: status=%d body=%s", outsiderQueue.Code, outsiderQueue.Body.String())
+	}
+	ownerQueue := executeMembershipQueryWithTemplate(t, "/circles/circle-approval/memberships/pending?limit=10", "/circles/{circleId}/memberships/pending", "persona-owner", "ListPendingCircleMemberships")
+	if ownerQueue.Code != http.StatusOK {
+		t.Fatalf("owner pending queue failed: status=%d body=%s", ownerQueue.Code, ownerQueue.Body.String())
+	}
+	queueItems, queueOK := decodeBody(t, ownerQueue)["items"].([]any)
+	if !queueOK || len(queueItems) != 1 {
+		t.Fatalf("pending queue drift: %s", ownerQueue.Body.String())
+	}
+
+	// 非 moderator 审批 → 403。
+	deniedApprove := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships/persona-applicant:approve", nil, "deny-approve", "", "persona-outsider", "ApproveCircleMember")
+	if deniedApprove.Code != http.StatusForbidden || decodeBody(t, deniedApprove)["code"] != "CIRCLE.USER.permission_denied" {
+		t.Fatalf("non-moderator approve drift: status=%d body=%s", deniedApprove.Code, deniedApprove.Body.String())
+	}
+
+	// owner approve → active、version+1、发 CircleMembershipJoined。
+	approveRecorder := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships/persona-applicant:approve", nil, "approve-key-1", "", "persona-owner", "ApproveCircleMember")
+	if approveRecorder.Code != http.StatusOK {
+		t.Fatalf("approve failed: status=%d body=%s", approveRecorder.Code, approveRecorder.Body.String())
+	}
+	approvedResult := decodeBody(t, approveRecorder)
+	if approvedResult["state"] != "active" || approvedResult["version"] != float64(2) {
+		t.Fatalf("approve result drift: %#v", approvedResult)
+	}
+
+	// 重复 approve（新 Idempotency-Key）→ 状态冲突。
+	conflictApprove := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships/persona-applicant:approve", nil, "approve-key-2", "", "persona-owner", "ApproveCircleMember")
+	if conflictApprove.Code != http.StatusConflict || decodeBody(t, conflictApprove)["code"] != "CIRCLE.USER.membership_state_conflict" {
+		t.Fatalf("duplicate approve drift: status=%d body=%s", conflictApprove.Code, conflictApprove.Body.String())
+	}
+
+	// 第二位申请者被拒 → rejected 并可重新申请（回到 pending）。
+	secondJoin := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships", nil, "apply-key-2", "", "persona-second", "JoinCircle")
+	if secondJoin.Code != http.StatusCreated || decodeBody(t, secondJoin)["state"] != "pending" {
+		t.Fatalf("second apply drift: status=%d body=%s", secondJoin.Code, secondJoin.Body.String())
+	}
+	rejectRecorder := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships/persona-second:reject", nil, "reject-key-1", "", "persona-owner", "RejectCircleMember")
+	if rejectRecorder.Code != http.StatusOK || decodeBody(t, rejectRecorder)["state"] != "rejected" {
+		t.Fatalf("reject drift: status=%d body=%s", rejectRecorder.Code, rejectRecorder.Body.String())
+	}
+	reapply := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships", nil, "apply-key-3", "", "persona-second", "JoinCircle")
+	if reapply.Code != http.StatusCreated || decodeBody(t, reapply)["state"] != "pending" {
+		t.Fatalf("reapply after reject drift: status=%d body=%s", reapply.Code, reapply.Body.String())
+	}
+
+	// outbox 事件形态：Requested×3（两位申请 + 再申请）、Joined×1、Rejected×1。
+	for eventType, want := range map[string]int64{
+		"CircleMembershipRequested": 3,
+		"CircleMembershipJoined":    1,
+		"CircleMembershipRejected":  1,
+	} {
+		count, err := mongoDB.Collection("circle_membership_outbox").CountDocuments(ctx, bson.M{"eventType": eventType})
+		if err != nil || count != want {
+			t.Fatalf("outbox %s count=%d want=%d err=%v", eventType, count, want, err)
+		}
+	}
+
+	// memberCount 投影只对 Joined 收敛 +1（pending/rejected 不计数）。
+	store := membershippersistence.NewMongoAggregateStore(mongoDB)
+	countRelay := membershipapp.NewOutboxRelay(
+		store, store,
+		membershippersistence.NewMongoMemberCountProjector(mongoDB, redisRouter.Scene("general")),
+		"circle-member-count-approval-test",
+	)
+	if _, err := countRelay.Drain(ctx, 20); err != nil {
+		t.Fatalf("member-count drain err=%v", err)
+	}
+	assertCircleMemberCount(t, "circle-approval", 1)
+}
+
+func executeMembershipQueryWithTemplate(t *testing.T, path, template, personaID, operationName string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := membershipRequest(t, http.MethodGet, path, nil, "query-"+personaID, "")
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
+	}))
+	recorder := httptest.NewRecorder()
+	membershipGuard(http.MethodGet, template, operationName).ServeHTTP(recorder, request)
+	return recorder
+}
+
+func executePersonaCirclesQuery(
+	t *testing.T,
+	path string,
+	viewerPersonaID string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	request := membershipRequest(
+		t,
+		http.MethodGet,
+		path,
+		nil,
+		"persona-circles-query",
+		"",
+	)
+	if viewerPersonaID != "" {
+		request = request.WithContext(rtauth.WithPrincipal(
+			request.Context(),
+			rtauth.Principal{
+				Actor: operation.ActorContext{
+					AccountID: "account-" + viewerPersonaID,
+					PersonaID: viewerPersonaID,
+				},
+			},
+		))
+	}
+	recorder := httptest.NewRecorder()
+	rtauth.RequireGeneratedOperationAuthorizationForRoute(
+		[]rtauth.OperationSecurityDescriptor{{
+			CanonicalOperationID: "circle.circle_membership.ListPersonaCircles",
+			ContractGraphSHA256:  "circle-membership-api-integration",
+			Method:               http.MethodGet,
+			PathTemplate:         "/personas/{personaId}/circles",
+			OperationKind:        "query",
+			AuthMode:             "optional",
+			ActorRequirement:     "none",
+			Principal:            "public",
+			CommercialStatus:     "ready",
+			TimeoutMilliseconds:  1500,
+		}},
+		http.MethodGet,
+		"/personas/{personaId}/circles",
+	)(testHandler).ServeHTTP(recorder, request)
+	return recorder
 }
 
 func membershipGuard(method, pathTemplate, operationName string) http.Handler {
@@ -227,10 +486,15 @@ func executeMembershipCommand(t *testing.T, method, path string, body any, idemp
 	}))
 	recorder := httptest.NewRecorder()
 	template := "/circles/{circleId}/memberships"
-	if operationName == "LeaveCircle" {
+	switch operationName {
+	case "LeaveCircle":
 		template += "/self"
-	} else if operationName == "UpdateCircleMembershipRole" {
+	case "UpdateCircleMembershipRole":
 		template += "/{personaId}/role"
+	case "ApproveCircleMember":
+		template += "/{personaId}:approve"
+	case "RejectCircleMember":
+		template += "/{personaId}:reject"
 	}
 	membershipGuard(method, template, operationName).ServeHTTP(recorder, request)
 	return recorder

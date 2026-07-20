@@ -271,7 +271,7 @@ download_plan (checkpoint) → download_fetch
 
 ### 6.2 `content_plan` checkpoint
 
-**输入**：各实体 `1.download/source_refs.json` 指向的批次级 `sources/{sourceUnitId}/source.md`、`source.content.review.quality.json`、任务级实体主页、`task.yaml` 的 `content.quotas`。
+**输入**：各实体 `1.download/source_refs.json` 指向的 execution 级 `sources/{sourceUnitId}/source.md`、`source.content.review.quality.json`、实体主页，以及 family recipe 的内容配额契约。
 
 **输出**：`batches/{batch}/_shared/content_plan_packet.json`（每条含 `kind`/`title`/`entityRefs`/`evidenceRefs`/`mustIncludeFacts`/`rationale`）；注册 `content_object`；写入各篇 `3.compose/brief.json`。
 

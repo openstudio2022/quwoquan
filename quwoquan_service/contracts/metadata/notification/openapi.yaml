@@ -305,6 +305,45 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /notifications/incoming-calls/presentation:ack:
+        post:
+            operationId: AckIncomingCallPresentation
+            x-contract-operation-id: notification.notification_delivery_job.AckIncomingCallPresentation
+            x-object-id: notification.notification_delivery_job
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: NotificationDeliveryJobCommandFacade
+                method: ackIncomingCallPresentation
+                aggregateOwner: NotificationDeliveryJob
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AckIncomingCallPresentationCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AckIncomingCallPresentationResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
 components:
     securitySchemes:
         bearerAuth:
@@ -314,6 +353,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AckAppMessageRequest
+            x-contract-placeholder: true
+        AckIncomingCallPresentationCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AckIncomingCallPresentationCommand
+            x-contract-placeholder: true
+        AckIncomingCallPresentationResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AckIncomingCallPresentationResult
             x-contract-placeholder: true
         AppMessageDetailSlice:
             type: object

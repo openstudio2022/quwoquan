@@ -14,4 +14,13 @@ collections:
     role: append_only
     indexes:
       - { name: idx_outbound_share_outbox_event, keys: { eventId: 1 }, unique: true }
-      - { name: idx_outbound_share_outbox_replay, keys: { occurredAt: 1, eventId: 1 } }
+      - { name: idx_outbound_share_outbox_sequence, keys: { outboxSequence: 1 }, unique: true }
+  outbound_share_outbox_sequences:
+    entity: OutboundShareFact
+    role: append_only
+    description: 为 OutboundShareFact outbox transaction 分配全局单调 sequence。
+  outbound_share_projection_checkpoints:
+    entity: OutboundShareFact
+    role: projection
+    indexes:
+      - { name: idx_outbound_share_projection_checkpoint_consumer, keys: { consumer: 1 }, unique: true }

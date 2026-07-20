@@ -27,11 +27,11 @@ type objectTagEntry struct {
 }
 
 // manifest 支持三种 JSON 形态，统一抽取 object_tag_index 条目：
-//  1. {"scenarios": {"<name>": {"object_tag_index": [ ... ]}}}（contract fixture，gamma/演示同源）
+//  1. {"seedSets": {"<name>": {"object_tag_index": [ ... ]}}}（contract fixture，gamma/演示同源）
 //  2. {"object_tag_index": [ ... ]}（扁平 manifest，数据工程产出）
 //  3. [ ... ]（纯数组）
 type manifest struct {
-	Scenarios      map[string]scenarioBlock `json:"scenarios"`
+	SeedSets       map[string]scenarioBlock `json:"seedSets"`
 	ObjectTagIndex []objectTagEntry         `json:"object_tag_index"`
 }
 
@@ -49,7 +49,7 @@ func extractEntries(raw []byte) ([]objectTagEntry, error) {
 		return nil, err
 	}
 	out := append([]objectTagEntry(nil), m.ObjectTagIndex...)
-	for _, sc := range m.Scenarios {
+	for _, sc := range m.SeedSets {
 		out = append(out, sc.ObjectTagIndex...)
 	}
 	return out, nil

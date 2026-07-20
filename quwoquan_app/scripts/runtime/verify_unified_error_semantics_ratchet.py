@@ -14,18 +14,13 @@ Blocks new occurrences of:
    routes list append failures through section cards instead of footer.
 6) circular exclamation icons outside the shared inline error primitive.
 
-Uses a baseline file so existing debt is tolerated while preventing regressions.
+当前历史基线已清零，任何命中均直接阻断。
 """
 
 import argparse
 import os
 import re
 import sys
-
-BASELINE_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    ".verify_unified_error_semantics_ratchet_baseline.txt",
-)
 CANONICAL_INLINE_ERROR_ICON = (
     "quwoquan_app/lib/core/widgets/error_states/app_error_states.dart"
 )
@@ -122,24 +117,6 @@ def is_page_like(rel: str) -> bool:
     return False
 
 
-def load_baseline() -> set[str]:
-    entries: set[str] = set()
-    if os.path.isfile(BASELINE_FILE):
-        with open(BASELINE_FILE, encoding="utf-8") as handle:
-            for line in handle:
-                entry = line.strip()
-                if entry and not entry.startswith("#"):
-                    entries.add(entry)
-    return entries
-
-
-def save_baseline(entries: set[str]) -> None:
-    with open(BASELINE_FILE, "w", encoding="utf-8") as handle:
-        handle.write("# verify_unified_error_semantics_ratchet baseline: 已知存量，禁止新增\n")
-        for entry in sorted(entries):
-            handle.write(entry + "\n")
-
-
 def collect_violations(target_root: str, repo_root: str) -> list[tuple[str, int, str, str]]:
     results: list[tuple[str, int, str, str]] = []
     for dirpath, _dirnames, filenames in os.walk(target_root):
@@ -197,11 +174,6 @@ def main() -> int:
         default="quwoquan_app/lib",
         help="Path to scan (default: quwoquan_app/lib)",
     )
-    parser.add_argument(
-        "--update-baseline",
-        action="store_true",
-        help="Write current violations to baseline and exit 0",
-    )
     args = parser.parse_args()
 
     repo_root = os.path.dirname(
@@ -217,25 +189,11 @@ def main() -> int:
 
     violations = collect_violations(target_root, repo_root)
 
-    if args.update_baseline:
-        save_baseline({f"{rel}:{line_no}" for rel, line_no, _content, _hint in violations})
-        print(
-            "verify_unified_error_semantics_ratchet: "
-            f"baseline 已更新，共 {len(violations)} 条"
-        )
-        return 0
-
-    baseline = load_baseline()
-    has_new_violation = False
     for rel, line_no, line_content, hint in violations:
-        entry = f"{rel}:{line_no}"
-        if entry in baseline:
-            continue
         print(f"{rel}:{line_no}: {hint}")
         print(f"  {line_content.strip()}")
-        has_new_violation = True
 
-    if has_new_violation:
+    if violations:
         print(
             "\nverify_unified_error_semantics_ratchet: 新增粗糙错误处理已被阻断",
             file=sys.stderr,

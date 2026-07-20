@@ -53,6 +53,8 @@ gwt_acceptance:
           cases:
             - local_contract.domain.capability.story.primary
           envs: [local]
+          execution_profile: baseline
+          execution_profile: baseline
           test_object: widget
           quality_facet: functional
       supporting:
@@ -61,6 +63,7 @@ gwt_acceptance:
           cases:
             - api_integration.domain.operation.story_case
           envs: [beta, gamma]
+          execution_profile: integration
           test_object: api_operation
           quality_facet: contract
     tests:
@@ -91,6 +94,7 @@ contract_acceptance:
           cases:
             - local_contract.domain.metadata.contract
           envs: [local]
+          execution_profile: baseline
           test_object: metadata
           quality_facet: contract
       supporting: []
@@ -103,5 +107,9 @@ contract_acceptance:
 execution:
   local_gate:
     - make gate
-  full_gate:
-    - make gate-full
+  smoke_gate:
+    - make gate-smoke
+  integration_gate:
+    - make gate-integration ENV=beta
+  release_gate:
+    - make gate-release ENV=gamma

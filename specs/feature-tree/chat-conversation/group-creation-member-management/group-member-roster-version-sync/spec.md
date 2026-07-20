@@ -27,7 +27,7 @@
 - **云侧事务边界**：
   - **创建群**（单端发起的 `CreateConversation`）：单事务内完成会话文档、群主成员、初始成员、`ConversationUserState`、**首版 `membersRosterRevision`/时间戳**；对外可发 `ConversationCreated` + **一条** `ConversationRosterUpdated`（或与 Created 合并策略在设计中选定，须唯一真相）。
   - **建群后更新**（加人、踢人、改群名、管理员/规则等）：**允许多端并发**；每项变更在**独立事务**中完成持久化并 **$inc`/递增 revision**，事务提交后进入合并推送窗口。
-- **Mock**：`MockChatRepository` 必须与云契约对齐：`displayName` 为用户展示名（可与 `ChatMockData.nameFor` 等一致）、`ListMembers` 尊重 `sort`、维护 `membersRosterRevision` 与 `updatedAt`、模拟合并事件语义（至少在同一 `addMembers` 请求内合并为一次 roster 更新信号）。
+- **Alpha/test adapter**：`AlphaChatStateEngine` 必须与云契约对齐：`displayName` 来自 contract seed，`ListMembers` 尊重 `sort`、维护 `membersRosterRevision` 与 `updatedAt`、模拟合并事件语义（至少在同一 `addMembers` 请求内合并为一次 roster 更新信号）；App DTO 适配器不得持有第二份状态。
 
 ### Out of Scope
 

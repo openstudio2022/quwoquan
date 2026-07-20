@@ -194,9 +194,15 @@ def _generated_route_paths(source: str) -> dict[str, str]:
 
 def _all_dart_type_tokens() -> set[str]:
     tokens: set[str] = set()
-    for path in (APP / "lib").rglob("*.dart"):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        tokens.update(re.findall(r"\b[A-Z][A-Za-z0-9_]*\b", text))
+    # 页面可直接消费 App 类型或 pure contracts package 的 generated/typed
+    # presentation；后者仍属于 production App 编译图，不是 Mock/测试旁路。
+    for root in (
+        APP / "lib",
+        APP / "packages" / "quwoquan_cloud_contracts" / "lib",
+    ):
+        for path in root.rglob("*.dart"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            tokens.update(re.findall(r"\b[A-Z][A-Za-z0-9_]*\b", text))
     return tokens
 
 
@@ -533,7 +539,9 @@ def main() -> int:
                 elif not TYPE_NAME_RE.fullmatch(type_name):
                     errors.append(f"{page_id}: typed_presentation 必须是具名强类型: {type_name}")
                 elif type_name not in dart_tokens:
-                    errors.append(f"{page_id}: typed_presentation 在 App lib 中不存在: {type_name}")
+                    errors.append(
+                        f"{page_id}: typed_presentation 在 App/Contract Dart 中不存在: {type_name}"
+                    )
 
         auth = page.get("auth_requirement")
         if auth not in AUTH_REQUIREMENTS:

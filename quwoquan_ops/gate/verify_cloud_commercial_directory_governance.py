@@ -139,10 +139,10 @@ def validate_report_zero_compat(
     if "buildAlphaCloudOverrides" not in runner_source:
         failures.append("alpha runner does not own Cloud override composition")
     report_surfaces = {
-        "quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart": (
+        "quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_report_actions.dart": (
             "homeFeedContentReportCommandWriterProvider"
         ),
-        "quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart": (
+        "quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_engagement_actions.dart": (
             "workBrowserContentReportCommandWriterProvider"
         ),
     }
@@ -197,9 +197,13 @@ def validate_p0_fail_closed(
             "rtauth.RequireGeneratedOperationAuthorization(",
             'operationsecurity.ForDomain("ops")',
         ),
+        # platform-ops：ContractGraph 已登记 operation 走 Enforce fail-closed，
+        # 未登记的控制面对象路径由 requireControlPlanePrincipal 拒绝匿名触达
+        # （迁移期底线，随 business-object closure 收敛为全量 Require）。
         "platform_ops": (
-            "rtauth.RequireGeneratedOperationAuthorization(",
+            "rtauth.EnforceGeneratedOperationAuthorization(",
             'operationsecurity.ForDomain("ops")',
+            "requireControlPlanePrincipal(",
         ),
     }
     for service, tokens in required_tokens.items():
@@ -384,6 +388,12 @@ def main() -> int:
             (
                 _read(
                     ROOT / "quwoquan_service/services/content-service/cmd/api/main.go",
+                    failures,
+                ),
+                _read(
+                    ROOT
+                    / "quwoquan_service/services/content-service/cmd/api/"
+                    "main_http_runtime.go",
                     failures,
                 ),
                 _read(

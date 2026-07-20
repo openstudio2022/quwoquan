@@ -6,15 +6,13 @@ import (
 )
 
 type UserAuth struct {
-	UserID                string     `json:"-" db:"user_id"`
-	PasswordHash          string     `json:"-" db:"password_hash"`
-	OTPSecret             string     `json:"-" db:"otp_secret"`
-	RefreshToken          string     `json:"-" db:"refresh_token"`
-	RefreshTokenExpiresAt *time.Time `json:"-" db:"refresh_token_expires_at"`
-	LastLoginAt           *time.Time `json:"-" db:"last_login_at"`
-	LastLoginIP           string     `json:"-" db:"last_login_ip"`
-	LoginFailCount        int64      `json:"-" db:"login_fail_count"`
-	LockedUntil           *time.Time `json:"-" db:"locked_until"`
-	CreatedAt             time.Time  `json:"-" db:"created_at"`
-	UpdatedAt             time.Time  `json:"-" db:"updated_at"`
+	UserID         string     `json:"-" db:"user_id"`
+	PasswordHash   string     `json:"-" db:"password_hash"`
+	OTPSecret      string     `json:"-" db:"otp_secret"`
+	LastLoginAt    *time.Time `json:"-" db:"last_login_at"`
+	LastLoginIP    string     `json:"-" db:"last_login_ip"`
+	LoginFailCount int64      `json:"-" db:"login_fail_count"`
+	LockedUntil    *time.Time `json:"-" db:"locked_until"`
+	CreatedAt      time.Time  `json:"-" db:"created_at"`
+	UpdatedAt      time.Time  `json:"-" db:"updated_at"`
 }

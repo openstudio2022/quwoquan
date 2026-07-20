@@ -1,4 +1,4 @@
-# L3：全页面深色 / 浅色模式覆盖（dual-theme-page-coverage）
+# L3 特性：全页面深色 / 浅色模式覆盖（dual-theme-page-coverage）
 
 > **编号**：**S6**（与并行会话中的 iOS 原生壳、元数据驱动、端云一体化、统一埋点、组件复用等轨道并列；本轨道专注 **双色模式完整性**。）  
 > **层级**：L3_story（隶属 L2 `runtime-client-foundation`）  
@@ -100,7 +100,7 @@
 
 - 存在 **经评审的全页面矩阵**（无故意遗漏；新增页在 PR 中更新矩阵或门禁）。
 - **无未关闭的 P0「仅浅色」**（豁免类除外且已文档化）。
-- `spec.md` / `acceptance.yaml` / `design.md` / `树内计划文档` 与 `02_IOS_NATIVE_FRONTEND_UX_SPEC` 一致。
+- `spec.md` / `acceptance.yaml` / 上层 design 与 `02_IOS_NATIVE_FRONTEND_UX_SPEC` 一致。
 
 ## 证据分层（local_contract–user_acceptance）
 
@@ -108,7 +108,7 @@
 |----|------|
 | **local_contract** | 规格与设计文档、`page-dual-theme-matrix.md`、CR |
 | **local_contract** | `flutter analyze`、`verify_dart_semantic.py`（gate 串联）、矩阵 PR 更新 |
-| **api_integration** | 按 `树内计划文档` **slice** 域内深浅色抽检（真机/模拟器） |
+| **api_integration** | 按领域 PR 做深浅色抽检（真机/模拟器） |
 | **user_acceptance** | （可选 v2）Golden / 脚本截图对比 |
 
 ## L1 / L2 / L3 映射

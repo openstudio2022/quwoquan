@@ -2,19 +2,42 @@ package api_integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
 	"quwoquan_service/services/entity-service/internal/application"
+	homepageexternal "quwoquan_service/services/entity-service/internal/infrastructure/homepage/external"
+	"quwoquan_service/services/entity-service/internal/testsupport"
 )
+
+// trustedPersonaHandler 模拟 generated operation guard 验证通过后的可信上下文注入；
+// handler 层只信任 operation.Context，不读取任何 identity header。
+func trustedPersonaHandler(next http.Handler, personaID string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := operation.WithContext(r.Context(), operation.Context{
+			OperationID:    "api-integration-test",
+			RequestID:      "req-test",
+			IdempotencyKey: r.Header.Get("Idempotency-Key"),
+			Actor: operation.ActorContext{
+				AccountID: personaID + "-account",
+				PersonaID: personaID,
+			},
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -64,7 +87,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 		t.Fatalf("expected shell.homepage object")
 	}
 	if _, ok := shell["contentPreview"].([]any); !ok {
-		t.Fatalf("expected shell.contentPreview array")
+		t.Fatalf("expected shell.contentPreview array, got %#v", shell)
 	}
 
 	bundle := requestJSON(
@@ -81,15 +104,11 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	if got := stringField(t, bundle, "canonicalEntityId"); got == "" {
 		t.Fatalf("expected canonicalEntityId in bundle")
 	}
-	if edges := sliceField(t, bundle, "relationEdges"); len(edges) == 0 {
-		t.Fatalf("expected relationEdges in bundle")
+	if edges := sliceField(t, bundle, "relationEdges"); len(edges) != 0 {
+		t.Fatalf("candidate without relation facts must return empty relationEdges: %#v", edges)
 	}
-	assistantContext, ok := bundle["assistantContext"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected assistantContext object")
-	}
-	if assistantContext["referralSource"] != "test" {
-		t.Fatalf("expected referralSource propagated, got %v", assistantContext["referralSource"])
+	if _, exists := bundle["assistantContext"]; exists {
+		t.Fatalf("candidate without assistant projection must not synthesize assistantContext")
 	}
 	rolloutContext, ok := bundle["rolloutContext"].(map[string]any)
 	if !ok {
@@ -102,7 +121,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 
 func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -152,11 +171,11 @@ func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
 
 func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
-	const canonicalID = "entity:sight:homepage_sight_west_lake"
+	const canonicalID = "entity:sight:west_lake"
 
 	detail := requestJSON(
 		t,
@@ -200,7 +219,7 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 
 func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -276,10 +295,21 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 	var gotObjectID string
 	var gotObjectType string
 	var gotViewerID string
+	tokenConfig := entityDelegatedTokenConfig()
+	verifier, err := rtauth.NewHS256Verifier(tokenConfig)
+	if err != nil {
+		t.Fatalf("new delegated verifier: %v", err)
+	}
 	contentServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotObjectID = r.URL.Query().Get("objectId")
 		gotObjectType = r.URL.Query().Get("objectType")
-		gotViewerID = r.Header.Get("X-Client-User-Id")
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims, verifyErr := verifier.Verify(token)
+		if verifyErr != nil {
+			t.Errorf("verify delegated token: %v", verifyErr)
+		} else {
+			gotViewerID = claims.Persona
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{
@@ -339,11 +369,31 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 		})
 	}))
 	defer contentServer.Close()
-	t.Setenv("CONTENT_SERVICE_BASE_URL", contentServer.URL)
-
-	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	credentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		tokenConfig,
+		"entity-service",
+		[]string{"content.object_intersections.read"},
 	)
+	if err != nil {
+		t.Fatalf("new delegated credentials: %v", err)
+	}
+	intersectionReader, err := homepageexternal.NewContentIntersectionReader(
+		homepageexternal.ContentIntersectionConfig{
+			BaseURL:                 contentServer.URL,
+			ObjectIntersectionsPath: "/content/intersections/object",
+			Authorization:           credentials,
+		},
+	)
+	if err != nil {
+		t.Fatalf("new content intersection reader: %v", err)
+	}
+
+	server := httptest.NewServer(trustedPersonaHandler(
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageServiceWithOptions(
+			application.WithIntersectionReader(intersectionReader),
+		)).Routes(),
+		"fixture_user_current",
+	))
 	defer server.Close()
 
 	req, err := http.NewRequest(
@@ -354,7 +404,6 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("X-Client-User-Id", "fixture_user_current")
 	resp, err := server.Client().Do(req)
 	if err != nil {
 		t.Fatalf("do request: %v", err)
@@ -394,10 +443,21 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 	}
 }
 
-func TestHomepageObjectPageBundleFallbackSatisfiesStrictPrimaryContract(t *testing.T) {
-	t.Setenv("CONTENT_SERVICE_BASE_URL", "")
+func entityDelegatedTokenConfig() rtauth.TokenConfig {
+	return rtauth.TokenConfig{
+		Secret:       []byte("entity-api-integration-secret-at-least-32-bytes"),
+		Issuer:       "quwoquan-test",
+		Audience:     "quwoquan-test",
+		Type:         rtauth.TokenTypeAccess,
+		TokenVersion: 1,
+		TTL:          time.Minute,
+		ClockSkew:    time.Second,
+	}
+}
+
+func TestHomepageObjectPageBundleWithoutIntersectionDataIsHonestlyEmpty(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -410,62 +470,14 @@ func TestHomepageObjectPageBundleFallbackSatisfiesStrictPrimaryContract(t *testi
 		http.StatusOK,
 	)
 	reasons := sliceField(t, bundle, "intersectionReasons")
-	if len(reasons) == 0 {
-		t.Fatal("fallback intersection reasons must be non-empty")
-	}
-	for index, raw := range reasons {
-		reason, ok := raw.(map[string]any)
-		if !ok {
-			t.Fatalf("reason[%d] type=%T", index, raw)
-		}
-		primaryText := stringField(t, reason, "primaryText")
-		if primaryText == "" {
-			t.Fatalf("reason[%d].primaryText empty", index)
-		}
-		actionTargetID := stringField(t, reason, "actionTargetId")
-		spans := sliceField(t, reason, "primarySpans")
-		if len(spans) == 0 {
-			t.Fatalf("reason[%d].primarySpans empty", index)
-		}
-		joined := ""
-		hasBoundObject := false
-		for spanIndex, rawSpan := range spans {
-			span, ok := rawSpan.(map[string]any)
-			if !ok {
-				t.Fatalf("reason[%d].primarySpans[%d] type=%T", index, spanIndex, rawSpan)
-			}
-			joined += stringField(t, span, "text")
-			if stringField(t, span, "role") != "object" {
-				continue
-			}
-			target, ok := span["target"].(map[string]any)
-			if !ok {
-				t.Fatalf("reason[%d].primarySpans[%d].target missing", index, spanIndex)
-			}
-			if stringField(t, target, "objectType") == "" {
-				t.Fatalf("reason[%d].primarySpans[%d].target.objectType empty", index, spanIndex)
-			}
-			if stringField(t, target, "objectId") == actionTargetID {
-				hasBoundObject = true
-			}
-		}
-		if joined != primaryText {
-			t.Fatalf("reason[%d] spans=%q primaryText=%q", index, joined, primaryText)
-		}
-		if !hasBoundObject {
-			t.Fatalf("reason[%d] missing object span bound to actionTargetId", index)
-		}
-		for _, forbidden := range []string{"sourceRefs", "primaryEvidenceRef"} {
-			if _, leaked := reason[forbidden]; leaked {
-				t.Fatalf("reason[%d] leaked %s", index, forbidden)
-			}
-		}
+	if len(reasons) != 0 {
+		t.Fatalf("missing dependency data must not synthesize reasons: %#v", reasons)
 	}
 }
 
 func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -490,11 +502,10 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 		t.Fatalf("internal sourceRefs must not be exposed by introduction API")
 	}
 	sections := sliceField(t, introduction, "sections")
-	if len(sections) < 4 {
-		t.Fatalf("expected structured sections, got %d", len(sections))
+	if len(sections) == 0 || len(sections) > 2 {
+		t.Fatalf("expected only field-derived overview/keyFacts sections, got %d", len(sections))
 	}
 	kinds := map[string]bool{}
-	totalBodyLen := 0
 	for _, raw := range sections {
 		section, ok := raw.(map[string]any)
 		if !ok {
@@ -505,17 +516,16 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 			t.Fatalf("unexpected section kind %q", kind)
 		}
 		kinds[kind] = true
-		if body, ok := section["bodyMarkdown"].(string); ok {
-			totalBodyLen += len([]rune(body))
-		}
 	}
-	for _, kind := range []string{"overview", "keyFacts", "timeline", "history"} {
+	for _, kind := range []string{"overview", "keyFacts"} {
 		if !kinds[kind] {
 			t.Fatalf("expected section kind %s in %#v", kind, kinds)
 		}
 	}
-	if totalBodyLen < 800 {
-		t.Fatalf("expected 800+ rune introduction body, got %d", totalBodyLen)
+	for _, forbidden := range []string{"timeline", "history"} {
+		if kinds[forbidden] {
+			t.Fatalf("introduction must not synthesize %s", forbidden)
+		}
 	}
 	related := sliceField(t, introduction, "relatedObjects")
 	if len(related) == 0 {
@@ -525,7 +535,7 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 
 func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -606,7 +616,7 @@ func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 
 func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -621,9 +631,11 @@ func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
 }
 
 func TestHomepageGovernanceLifecycle(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
-	)
+	homepageService := testsupport.NewFixtureHomepageService()
+	server := httptest.NewServer(trustedPersonaHandler(
+		httpadapter.NewHandler(homepageService).Routes(),
+		"fixture_operator",
+	))
 	defer server.Close()
 
 	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/homepages/candidates", map[string]any{
@@ -634,6 +646,17 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		"address":      "龙井路 18 号",
 	}, http.StatusCreated)
 	homepageID := stringField(t, candidate, "homepageId")
+	candidateQueue := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/candidates?limit=20",
+		nil,
+		http.StatusOK,
+	)
+	if items := sliceField(t, candidateQueue, "items"); len(items) != 1 {
+		t.Fatalf("expected candidate governance queue item, got %#v", items)
+	}
 	requestJSON(
 		t,
 		server.Client(),
@@ -655,9 +678,29 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		},
 		http.StatusCreated,
 	)
-	claimID := stringField(t, claim, "id")
+	claimID := stringField(t, claim, "claimRequestId")
 	if got := stringField(t, claim, "status"); got != "pending_review" {
 		t.Fatalf("expected pending_review claim, got %q", got)
+	}
+	claimQueue := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepage-claim-requests?status=pending_review&limit=20",
+		nil,
+		http.StatusOK,
+	)
+	claimItems := sliceField(t, claimQueue, "items")
+	if len(claimItems) != 1 ||
+		stringField(t, claimItems[0].(map[string]any), "claimRequestId") != claimID {
+		t.Fatalf("expected pending claim in governance queue, got %#v", claimItems)
+	}
+	if err := homepageService.ApplyClaimRequestedProjection(
+		context.Background(),
+		"test-claim-requested",
+		homepageID,
+	); err != nil {
+		t.Fatalf("project claim requested: %v", err)
 	}
 
 	claimReview := requestJSON(
@@ -674,6 +717,29 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	if got := stringField(t, claimReview, "status"); got != "approved" {
 		t.Fatalf("expected approved claim review, got %q", got)
 	}
+	if err := homepageService.ApplyClaimReviewedProjection(
+		context.Background(),
+		"test-claim-reviewed",
+		homepageID,
+		"fixture_operator",
+		true,
+	); err != nil {
+		t.Fatalf("project claim reviewed: %v", err)
+	}
+
+	intruderServer := httptest.NewServer(trustedPersonaHandler(
+		httpadapter.NewHandler(homepageService).Routes(),
+		"fixture_intruder",
+	))
+	defer intruderServer.Close()
+	requestJSON(
+		t,
+		intruderServer.Client(),
+		http.MethodPatch,
+		intruderServer.URL+"/homepages/"+homepageID+"/claimed-basics",
+		map[string]any{"subtitle": "越权修改"},
+		http.StatusForbidden,
+	)
 
 	updated := requestJSON(
 		t,
@@ -701,9 +767,22 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		},
 		http.StatusCreated,
 	)
-	reportID := stringField(t, report, "id")
+	reportID := stringField(t, report, "reportId")
 	if got := stringField(t, report, "status"); got != "pending_review" {
 		t.Fatalf("expected pending_review status report, got %q", got)
+	}
+	reportQueue := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepage-status-reports?status=pending_review&limit=20",
+		nil,
+		http.StatusOK,
+	)
+	reportItems := sliceField(t, reportQueue, "items")
+	if len(reportItems) != 1 ||
+		stringField(t, reportItems[0].(map[string]any), "reportId") != reportID {
+		t.Fatalf("expected pending status report in governance queue, got %#v", reportItems)
 	}
 
 	reportReview := requestJSON(
@@ -719,6 +798,13 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	)
 	if got := stringField(t, reportReview, "status"); got != "confirmed_offline" {
 		t.Fatalf("expected confirmed_offline review, got %q", got)
+	}
+	if err := homepageService.ApplyStatusReviewedProjection(
+		context.Background(),
+		"test-status-reviewed",
+		homepageID,
+	); err != nil {
+		t.Fatalf("project status reviewed: %v", err)
 	}
 
 	offlineDetail := requestJSON(
@@ -747,7 +833,7 @@ func isAllowedIntroductionKind(kind string) bool {
 
 func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 
@@ -793,7 +879,7 @@ func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
 
 func TestHomepageRouteNotFoundUsesRuntimeNotFound(t *testing.T) {
 	server := httptest.NewServer(
-		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
 	)
 	defer server.Close()
 

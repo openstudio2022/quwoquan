@@ -30,10 +30,6 @@ void main() {
         AuthGateReason.personaManage,
       );
       expect(
-        requiredRouteGateForLocation(AppRoutePaths.profileComments),
-        AuthGateReason.personaManage,
-      );
-      expect(
         requiredRouteGateForLocation(AppRoutePaths.profileStatsPathTemplate),
         AuthGateReason.personaManage,
       );

@@ -24,7 +24,8 @@ func testToolTurn() assistant.AssistantTurn {
 
 func TestDefaultToolCoordinatorExecutesCloudToolAdapters(t *testing.T) {
 	coordinator := DefaultToolCoordinator{
-		Now: func() time.Time { return time.Date(2026, 4, 29, 5, 0, 0, 0, time.UTC) },
+		Registry: testCloudToolRegistry(),
+		Now:      func() time.Time { return time.Date(2026, 4, 29, 5, 0, 0, 0, time.UTC) },
 	}
 	for _, toolName := range []string{"web_search", "app_search"} {
 		t.Run(toolName, func(t *testing.T) {
@@ -63,7 +64,8 @@ func TestDefaultToolCoordinatorExecutesCloudToolAdapters(t *testing.T) {
 
 func TestDefaultToolCoordinatorMapsToolValidationFailures(t *testing.T) {
 	coordinator := DefaultToolCoordinator{
-		Now: func() time.Time { return time.Date(2026, 4, 29, 5, 0, 0, 0, time.UTC) },
+		Registry: testCloudToolRegistry(),
+		Now:      func() time.Time { return time.Date(2026, 4, 29, 5, 0, 0, 0, time.UTC) },
 	}
 	for _, tc := range []struct {
 		name     string

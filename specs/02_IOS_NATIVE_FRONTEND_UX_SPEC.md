@@ -277,7 +277,7 @@
 - 非全屏底部面板高度 `MUST` 由内容决定，并受统一最大高度比例约束；超过上限后仅内部内容滚动，外层面板不再继续长高。
 - 破坏性操作 `MUST` 和普通操作视觉分组。
 - 弹窗底层亮度 `MUST` 轻，由统一亮度层原地 fade 完成；不允许 route barrier 或 sheet 自绘可见蒙皮随面板滑动，也不允许过黑或过厚毛玻璃遮蔽主内容。
-- **贴底对话态 Sheet**（更多功能、Action Sheet、标准选项表）：布局、面板底色、内容水平缩进、`ConversationSheet*` 积木与 `showAppActionSheet` 封装 `MUST` 与 [`specs/ux/page-layout-semantics.md`](specs/ux/page-layout-semantics.md) **§4.4** 一致；新增贴底弹窗调用点 `MUST` 使用 `showAppBottomModal` 并登记 `scripts/chat/conversation_sheet_manifest.yaml`（由 `verify_conversation_sheet_canonical.py` 校验）。
+- **贴底对话态 Sheet**（更多功能、Action Sheet、标准选项表）：布局、面板底色、内容水平缩进、`ConversationSheet*` 积木与 `showAppActionSheet` 封装 `MUST` 与 [`ux/page-layout-semantics.md`](ux/page-layout-semantics.md) **§4.4** 一致；新增贴底弹窗调用点 `MUST` 使用 `showAppBottomModal` 并登记 `scripts/chat/conversation_sheet_manifest.yaml`（由 `verify_conversation_sheet_canonical.py` 校验）。
 
 ### 4.7 组件级响应式清单
 
@@ -486,10 +486,12 @@ cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 make gate
 ```
 
-全量交付或发布前追加：
+环境交付或发布前按证据级别追加：
 
 ```bash
-make gate-full
+make gate-smoke
+make gate-integration ENV=gamma
+make gate-release ENV=gamma
 ```
 
 门禁：

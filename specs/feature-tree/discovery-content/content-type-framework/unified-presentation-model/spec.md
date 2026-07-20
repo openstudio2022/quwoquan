@@ -113,7 +113,7 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 
 - 遵循 13-coding-discipline R04（去弱类型）/ R24（抽象克制，单一真相源）/ R03（拆超大文件）。
 - 遵循 04-dart-polymorphism：媒体类型分支用 `contentType` 契约字段，禁止对 DTO 子类 `is/as/whereType`。
-- 进入 `/dev` 前 `spec.md` / `design.md` / `acceptance.yaml` / `树内计划文档` / CR 必须同步完成。
+- 进入 `/dev` 前 `spec.md` / `acceptance.yaml` / CR 必须同步完成；设计约束引用上层 L2 design。
 
 ## 验收重点
 

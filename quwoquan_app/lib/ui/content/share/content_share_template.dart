@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/links/share_attribution.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -83,15 +84,15 @@ class ContentShareTemplateBuilder {
         landingUrl: '',
         landingPage: 'blocked',
         shareId: '',
-        title: UITextConstants.shareTo,
-        subtitle: UITextConstants.sharePrivateBlocked,
+        title: ChatText.shareTo,
+        subtitle: ChatText.sharePrivateBlocked,
         shareTitle: blockedSeed.title,
         shareSummary: blockedSeed.summary,
         coverUrl: blockedSeed.coverUrl,
         actions: const <ContentShareAction>[],
         isIdentityTemplate: enableIdentityTemplate,
         isBlocked: true,
-        notice: UITextConstants.sharePrivateBlocked,
+        notice: ChatText.sharePrivateBlocked,
       );
     }
 
@@ -134,11 +135,11 @@ class ContentShareTemplateBuilder {
         ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
         ContentShareAction(
           id: 'save_poster',
-          label: UITextConstants.shareActionSavePoster,
+          label: ChatText.shareActionSavePoster,
         ),
         ContentShareAction(
           id: 'system_share',
-          label: UITextConstants.shareActionSystemShare,
+          label: ChatText.shareActionSystemShare,
         ),
       ],
       isIdentityTemplate: enableIdentityTemplate,

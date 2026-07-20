@@ -9,6 +9,7 @@ class CircleApiMetadata {
   static const String domain = 'circle';
   static const List<String> apiPrefixes = <String>[
     '/circles/behaviors',
+    '/circles/discovery-feed',
     '/circles/search',
     '/circles/{circleId}',
     '/personas/{personaId}',
@@ -17,6 +18,7 @@ class CircleApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'ApplyJoinCircleGroup': '/circles/{circleId}/groups/{groupId}/memberships',
     'ApproveCircleGroupMember': '/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve',
+    'ApproveCircleMember': '/circles/{circleId}/memberships/{personaId}:approve',
     'ArchiveCircle': '/circles/{circleId}',
     'ArchiveCircleGroup': '/circles/{circleId}/groups/{groupId}',
     'CreateCircle': '/circles',
@@ -35,15 +37,18 @@ class CircleApiMetadata {
     'JoinCircle': '/circles/{circleId}/memberships',
     'LeaveCircle': '/circles/{circleId}/memberships/self',
     'LeaveCircleGroup': '/circles/{circleId}/groups/{groupId}/memberships/self',
+    'ListCircleDiscoveryFeed': '/circles/discovery-feed',
     'ListCircleFiles': '/circles/{circleId}/files',
     'ListCircleGroupMemberships': '/circles/{circleId}/groups/{groupId}/memberships',
     'ListCircleGroups': '/circles/{circleId}/groups',
     'ListCircleMemberships': '/circles/{circleId}/memberships',
     'ListCircles': '/circles',
+    'ListPendingCircleMemberships': '/circles/{circleId}/memberships/pending',
     'ListPersonaCircles': '/personas/{personaId}/circles',
     'PinCirclePost': '/circles/{circleId}/post-placements/{placementId}/pin',
     'PlacePostInCircle': '/circles/{circleId}/post-placements',
     'RejectCircleGroupMember': '/circles/{circleId}/groups/{groupId}/memberships/{personaId}:reject',
+    'RejectCircleMember': '/circles/{circleId}/memberships/{personaId}:reject',
     'RemoveCircleGroupMember': '/circles/{circleId}/groups/{groupId}/memberships/{personaId}',
     'RemovePostFromCircle': '/circles/{circleId}/post-placements/{placementId}',
     'ReportCircleBehavior': '/circles/behaviors',
@@ -60,6 +65,7 @@ class CircleApiMetadata {
   static const Map<String, String> operationToMethod = <String, String>{
     'ApplyJoinCircleGroup': 'POST',
     'ApproveCircleGroupMember': 'POST',
+    'ApproveCircleMember': 'POST',
     'ArchiveCircle': 'DELETE',
     'ArchiveCircleGroup': 'DELETE',
     'CreateCircle': 'POST',
@@ -78,15 +84,18 @@ class CircleApiMetadata {
     'JoinCircle': 'POST',
     'LeaveCircle': 'DELETE',
     'LeaveCircleGroup': 'DELETE',
+    'ListCircleDiscoveryFeed': 'GET',
     'ListCircleFiles': 'GET',
     'ListCircleGroupMemberships': 'GET',
     'ListCircleGroups': 'GET',
     'ListCircleMemberships': 'GET',
     'ListCircles': 'GET',
+    'ListPendingCircleMemberships': 'GET',
     'ListPersonaCircles': 'GET',
     'PinCirclePost': 'PATCH',
     'PlacePostInCircle': 'POST',
     'RejectCircleGroupMember': 'POST',
+    'RejectCircleMember': 'POST',
     'RemoveCircleGroupMember': 'DELETE',
     'RemovePostFromCircle': 'DELETE',
     'ReportCircleBehavior': 'POST',
@@ -104,6 +113,7 @@ class CircleApiMetadata {
   static const Map<String, String> operationToAuthMode = <String, String>{
     'ApplyJoinCircleGroup': 'required',
     'ApproveCircleGroupMember': 'required',
+    'ApproveCircleMember': 'required',
     'ArchiveCircle': 'required',
     'ArchiveCircleGroup': 'required',
     'CreateCircle': 'required',
@@ -112,25 +122,28 @@ class CircleApiMetadata {
     'DeleteCircleFile': 'required',
     'FeatureCirclePost': 'required',
     'GetCircle': 'optional',
-    'GetCircleFeed': 'required',
+    'GetCircleFeed': 'optional',
     'GetCircleFile': 'required',
     'GetCircleGroup': 'required',
     'GetCircleImpact': 'required',
-    'GetCircleStats': 'required',
+    'GetCircleStats': 'optional',
     'GetMyCircleGroupMembership': 'required',
     'GetMyCircleMembership': 'required',
     'JoinCircle': 'required',
     'LeaveCircle': 'required',
     'LeaveCircleGroup': 'required',
+    'ListCircleDiscoveryFeed': 'optional',
     'ListCircleFiles': 'required',
     'ListCircleGroupMemberships': 'required',
     'ListCircleGroups': 'required',
     'ListCircleMemberships': 'public',
     'ListCircles': 'optional',
-    'ListPersonaCircles': 'public',
+    'ListPendingCircleMemberships': 'required',
+    'ListPersonaCircles': 'optional',
     'PinCirclePost': 'required',
     'PlacePostInCircle': 'required',
     'RejectCircleGroupMember': 'required',
+    'RejectCircleMember': 'required',
     'RemoveCircleGroupMember': 'required',
     'RemovePostFromCircle': 'required',
     'ReportCircleBehavior': 'optional',
@@ -154,6 +167,7 @@ class CircleApiMetadata {
 
   static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
   static const String approveCircleGroupMemberOperation = 'ApproveCircleGroupMember';
+  static const String approveCircleMemberOperation = 'ApproveCircleMember';
   static const String archiveCircleOperation = 'ArchiveCircle';
   static const String archiveCircleGroupOperation = 'ArchiveCircleGroup';
   static const String createCircleOperation = 'CreateCircle';
@@ -172,15 +186,18 @@ class CircleApiMetadata {
   static const String joinCircleOperation = 'JoinCircle';
   static const String leaveCircleOperation = 'LeaveCircle';
   static const String leaveCircleGroupOperation = 'LeaveCircleGroup';
+  static const String listCircleDiscoveryFeedOperation = 'ListCircleDiscoveryFeed';
   static const String listCircleFilesOperation = 'ListCircleFiles';
   static const String listCircleGroupMembershipsOperation = 'ListCircleGroupMemberships';
   static const String listCircleGroupsOperation = 'ListCircleGroups';
   static const String listCircleMembershipsOperation = 'ListCircleMemberships';
   static const String listCirclesOperation = 'ListCircles';
+  static const String listPendingCircleMembershipsOperation = 'ListPendingCircleMemberships';
   static const String listPersonaCirclesOperation = 'ListPersonaCircles';
   static const String pinCirclePostOperation = 'PinCirclePost';
   static const String placePostInCircleOperation = 'PlacePostInCircle';
   static const String rejectCircleGroupMemberOperation = 'RejectCircleGroupMember';
+  static const String rejectCircleMemberOperation = 'RejectCircleMember';
   static const String removeCircleGroupMemberOperation = 'RemoveCircleGroupMember';
   static const String removePostFromCircleOperation = 'RemovePostFromCircle';
   static const String reportCircleBehaviorOperation = 'ReportCircleBehavior';
@@ -205,6 +222,13 @@ class CircleApiMetadata {
     return _fillPath(approveCircleGroupMemberPathTemplate, <String, String>{
       'circleId': circleId,
       'groupId': groupId,
+      'personaId': personaId,
+    });
+  }
+  static const String approveCircleMemberPathTemplate = '/circles/{circleId}/memberships/{personaId}:approve';
+  static String approveCircleMemberPath({required String circleId, required String personaId}) {
+    return _fillPath(approveCircleMemberPathTemplate, <String, String>{
+      'circleId': circleId,
       'personaId': personaId,
     });
   }
@@ -318,6 +342,7 @@ class CircleApiMetadata {
       'groupId': groupId,
     });
   }
+  static const String listCircleDiscoveryFeedPath = '/circles/discovery-feed';
   static const String listCircleFilesPathTemplate = '/circles/{circleId}/files';
   static String listCircleFilesPath({required String circleId}) {
     return _fillPath(listCircleFilesPathTemplate, <String, String>{
@@ -344,6 +369,12 @@ class CircleApiMetadata {
     });
   }
   static const String listCirclesPath = '/circles';
+  static const String listPendingCircleMembershipsPathTemplate = '/circles/{circleId}/memberships/pending';
+  static String listPendingCircleMembershipsPath({required String circleId}) {
+    return _fillPath(listPendingCircleMembershipsPathTemplate, <String, String>{
+      'circleId': circleId,
+    });
+  }
   static const String listPersonaCirclesPathTemplate = '/personas/{personaId}/circles';
   static String listPersonaCirclesPath({required String personaId}) {
     return _fillPath(listPersonaCirclesPathTemplate, <String, String>{
@@ -368,6 +399,13 @@ class CircleApiMetadata {
     return _fillPath(rejectCircleGroupMemberPathTemplate, <String, String>{
       'circleId': circleId,
       'groupId': groupId,
+      'personaId': personaId,
+    });
+  }
+  static const String rejectCircleMemberPathTemplate = '/circles/{circleId}/memberships/{personaId}:reject';
+  static String rejectCircleMemberPath({required String circleId, required String personaId}) {
+    return _fillPath(rejectCircleMemberPathTemplate, <String, String>{
+      'circleId': circleId,
       'personaId': personaId,
     });
   }

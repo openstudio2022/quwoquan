@@ -1,57 +1,65 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, BellRing, ShieldCheck, Siren } from 'lucide-react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useEffect, useState } from 'react';
+import { Activity, BellRing, Siren } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
-  fetchAlertTemplates,
+  ackAlert,
+  fetchActiveAlerts,
   fetchPlatformAudits,
   fetchPlatformTriageSummary,
   fetchPlatformProjectionSummary,
-  fetchReleases,
-  fetchSLOPolicies,
+  fetchRuntimeLogDrilldown,
+  fetchRuntimeLogSummary,
+  type ActiveAlertItem,
   type ControlPlaneBacklogCandidate,
-  type AlertTemplateItem,
   type PlatformAuditItem,
   type PlatformProjectionSummary,
   type PlatformTriageSummaryResponse,
-  type ReleaseItem,
-  type SLOPolicyItem,
+  type RuntimeLogDrilldown,
+  type RuntimeLogSummary,
 } from '../../shared/api/controlPlane.js';
 import { KpiCard } from '../../shared/components/KpiCard.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
 import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { usePortalScope } from '../../shared/layout/PortalContext.js';
 import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
+function alertTone(status: string): string {
+  if (status === 'firing') {
+    return 'danger';
+  }
+  if (status === 'acknowledged') {
+    return 'warning';
+  }
+  return 'success';
+}
+
 export function PlatformObservabilityPage() {
-  const observabilityObjects = platformControlPlane.object_types.filter((item) =>
-    ['slo_policy', 'alert_template', 'dashboard_card'].includes(item.object_type),
-  );
-  const rolloutObject = platformControlPlane.object_types.find((item) => item.object_type === 'config_release');
-  const [slos, setSlos] = useState<SLOPolicyItem[]>([]);
-  const [alerts, setAlerts] = useState<AlertTemplateItem[]>([]);
+  const { environment } = usePortalScope();
+  const [activeAlerts, setActiveAlerts] = useState<ActiveAlertItem[]>([]);
   const [audits, setAudits] = useState<PlatformAuditItem[]>([]);
-  const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<PlatformProjectionSummary | null>(null);
   const [triage, setTriage] = useState<PlatformTriageSummaryResponse | null>(null);
+  const [runtimeLogSummary, setRuntimeLogSummary] = useState<RuntimeLogSummary | null>(null);
+  const [runtimeLogDrilldown, setRuntimeLogDrilldown] = useState<RuntimeLogDrilldown | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeLogsReady, setRuntimeLogsReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
+  const [runtimeLogsError, setRuntimeLogsError] = useState<RuntimeError | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actorHashQuery, setActorHashQuery] = useState('');
+  const [messageQuery, setMessageQuery] = useState('');
 
-  useEffect(() => {
+  const loadControlPlane = () =>
     Promise.all([
-      fetchSLOPolicies(),
-      fetchAlertTemplates(),
+      fetchActiveAlerts(),
       fetchPlatformAudits(),
-      fetchReleases(),
       fetchPlatformProjectionSummary(),
-      fetchPlatformTriageSummary({ env: 'beta' }),
+      fetchPlatformTriageSummary({ env: environment }),
     ])
-      .then(([sloItems, alertItems, auditItems, releaseItems, summaryItem, triageItem]) => {
-        setSlos(sloItems);
-        setAlerts(alertItems);
+      .then(([alertItems, auditItems, summaryItem, triageItem]) => {
+        setActiveAlerts(alertItems);
         setAudits(auditItems);
-        setReleases(releaseItems);
         setSummary(summaryItem);
         setTriage(triageItem);
         setRemoteReady(true);
@@ -61,125 +69,146 @@ export function PlatformObservabilityPage() {
         setRemoteReady(false);
         setRuntimeError(coerceRuntimeError(error));
       });
+
+  useEffect(() => {
+    void loadControlPlane();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [environment]);
+
+  const loadRuntimeLogs = (filters: { actorHash?: string; messageContains?: string } = {}) => {
+    const to = new Date();
+    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+    const query = { from: from.toISOString(), to: to.toISOString() };
+    return Promise.all([
+      fetchRuntimeLogSummary(query),
+      fetchRuntimeLogDrilldown({
+        ...query,
+        limit: 12,
+        actorHash: filters.actorHash || undefined,
+        messageContains: filters.messageContains || undefined,
+      }),
+    ])
+      .then(([summaryItem, drilldownItem]) => {
+        setRuntimeLogSummary(summaryItem);
+        setRuntimeLogDrilldown(drilldownItem);
+        setRuntimeLogsReady(true);
+        setRuntimeLogsError(null);
+      })
+      .catch((error) => {
+        setRuntimeLogsReady(false);
+        setRuntimeLogsError(coerceRuntimeError(error));
+      });
+  };
+
+  useEffect(() => {
+    void loadRuntimeLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rolloutTrend = useMemo(
-    () =>
-      releases.length > 0
-        ? releases.slice(0, 4).map((item, index) => ({
-            stage: `${item.grayStages[index] ?? item.grayStages[0] ?? (index + 1) * 25}%`,
-            successRate: 99.4 - index * 0.15,
-            latency: 720 + index * 45,
-          }))
-        : [],
-    [releases],
-  );
+  const handleAck = async (fingerprint: string) => {
+    try {
+      const acked = await ackAlert(fingerprint);
+      setActionMessage(`告警 ${acked.alertName || fingerprint} 已由当前 principal 认领并落审计。`);
+      setRuntimeError(null);
+      await loadControlPlane();
+    } catch (error) {
+      setRuntimeError(coerceRuntimeError(error));
+    }
+  };
+
+  const firingAlerts = activeAlerts.filter((item) => item.status === 'firing');
   const backlogCandidates = triage?.backlogCandidates ?? [];
-  const highlightBacklog = backlogCandidates[0];
+  const runtimeSignals = Object.entries(runtimeLogSummary?.dimensions.signal ?? {})
+    .sort(([, left], [, right]) => right - left)
+    .slice(0, 6);
 
   return (
     <PageScaffold
       title="Platform Ops / 可观测与 SLO"
-      subtitle="统一观察 SLO、告警、发布阶段和审计时间线，让配置灰度与依赖健康共享一套观察与回滚语言。"
+      subtitle="活动告警来自 Alertmanager webhook 回流，运行诊断来自统一遥测链路；不展示任何合成曲线。"
       meta={
         <>
-          <span className="badge badge--neutral">observability / slo / alerts</span>
-          <span className="badge badge--success">统一 dashboard 语义</span>
+          <span className="badge badge--neutral">alerts / triage / runtime logs</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实可观测数据已接入' : '等待平台控制面连接'}
           </span>
-          <span className="badge badge--neutral">backlog={backlogCandidates.length}</span>
+          <span className={`badge ${firingAlerts.length > 0 ? 'badge--danger' : 'badge--success'}`}>
+            firing={firingAlerts.length}
+          </span>
+          <span className="badge badge--neutral">env={environment}</span>
           <RuntimeErrorBadge error={runtimeError} />
         </>
       }
-      actions={<button className="button button--primary">创建观察视图</button>}
-      footer={
-        <>
-          <button className="button">查看 error budget</button>
-          <button className="button button--primary">打开告警订阅</button>
-        </>
-      }
+      footer={actionMessage ? <span className="badge badge--warning">{actionMessage}</span> : undefined}
     >
       <div className="section-grid section-grid--cards">
         <KpiCard
-          label="SLO 达标服务"
-          value={`${slos.filter((item) => item.status === 'success').length} / ${slos.length || 1}`}
-          icon={<ShieldCheck size={20} color="#16A34A" />}
-          trendLabel={slos.some((item) => item.status === 'warning') ? '存在 burn 预警' : '全部达标'}
-          trendTone={slos.some((item) => item.status === 'warning') ? 'warning' : 'positive'}
-          description="SLO 目标、观察窗口与当前状态由平台控制面统一提供。"
-        />
-        <KpiCard
-          label="活跃告警规则"
-          value={String(alerts.length)}
-          icon={<BellRing size={20} color="#2563EB" />}
-          trendLabel={`${alerts.filter((item) => item.status === 'warning').length} 条需关注`}
-          trendTone="warning"
-          description="数据库、外部上游与发布健康共用告警模板。"
-        />
-        <KpiCard
-          label="P95 延迟"
-          value={`${rolloutTrend.at(-1)?.latency ?? 0}ms`}
-          icon={<Activity size={20} color="#2563EB" />}
-          trendLabel={rolloutTrend.length > 0 ? `最近阶段 ${rolloutTrend.at(-1)?.stage}` : '等待发布数据'}
-          trendTone="warning"
-          description="发布阶段与延迟观察统一到同一套 rollout 语义。"
+          label="活动告警"
+          value={String(summary?.activeAlerts ?? activeAlerts.filter((item) => item.status !== 'resolved').length)}
+          icon={<BellRing size={20} color="#DC2626" />}
+          trendLabel={`${firingAlerts.length} 条待认领`}
+          trendTone={firingAlerts.length > 0 ? 'negative' : 'positive'}
+          description="Alertmanager 推送的 firing/acknowledged 告警集合。"
         />
         <KpiCard
           label="审批与回滚事件"
           value={String(summary?.approvalCount ?? 0)}
           icon={<Siren size={20} color="#DC2626" />}
           trendLabel={`${summary?.auditCount ?? 0} 条审计事件`}
-          trendTone="negative"
+          trendTone="warning"
           description="高风险操作的审批与审计已统一沉淀到平台控制面。"
+        />
+        <KpiCard
+          label="24h 运行诊断"
+          value={String(runtimeLogSummary?.totalCount ?? 0)}
+          icon={<Activity size={20} color="#7C3AED" />}
+          trendLabel={runtimeLogsReady ? `${runtimeSignals.length} 个高频 signal` : '等待运行日志查询权限'}
+          trendTone={runtimeLogsError ? 'warning' : 'positive'}
+          description="端、云、数据和 Portal 统一记录的 runtime / exception 信号。"
         />
       </div>
 
-      <div className="section-grid section-grid--two">
-        <SectionCard title="统一发布健康曲线" subtitle="来自配置灰度的阶段化 SLO 观察视图">
-          <div style={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
-              <AreaChart data={rolloutTrend}>
-                <CartesianGrid stroke="rgba(17, 24, 39, 0.08)" />
-                <XAxis dataKey="stage" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Area type="monotone" dataKey="successRate" stroke="#16A34A" fill="rgba(22, 163, 74, 0.18)" />
-                <Area type="monotone" dataKey="latency" stroke="#2563EB" fill="rgba(37, 99, 235, 0.14)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="对象与下钻" subtitle="平台仪表盘对象必须可回到发布、策略与审计详情">
-          <div className="stack-list">
-            {observabilityObjects.map((item) => (
-              <div className="policy-item" key={item.object_type}>
-                <div>
-                  <p className="item-title">{item.label}</p>
-                  <p className="item-subtitle">
-                    kind={item.object_kind} · source={item.source_entity}
-                  </p>
-                </div>
-                <span className="badge badge--neutral">{item.operations.length} actions</span>
+      <SectionCard
+        title="活动告警与认领"
+        subtitle="firing → ack → resolved 状态机；每次 ack 由登录 principal 落审计，可在审计页回溯"
+      >
+        <div className="stack-list">
+          {activeAlerts.map((alert) => (
+            <div className="policy-item" key={alert.fingerprint}>
+              <div>
+                <p className="item-title">
+                  {alert.alertName || alert.fingerprint}
+                  {alert.service ? ` · ${alert.service}` : ''}
+                </p>
+                <p className="item-subtitle">
+                  severity={alert.severity || 'unknown'} · startsAt={alert.startsAt ?? '-'}
+                  {alert.ackedBy ? ` · ackedBy=${alert.ackedBy}` : ''}
+                </p>
+                {alert.annotations.summary ? <p className="item-subtitle">{alert.annotations.summary}</p> : null}
               </div>
-            ))}
-            {rolloutObject?.analytics_views?.map((view) => (
-              <div className="policy-item" key={view.view_id}>
-                <div>
-                  <p className="item-title">{view.view_id}</p>
-                  <p className="item-subtitle">
-                    widgets={view.widget_types.join(', ')} · drilldown={view.drilldown_route_id}
-                  </p>
-                </div>
-                <span className="badge badge--success">dashboard</span>
+              <div className="badge-row">
+                <span className={`badge badge--${alertTone(alert.status)}`}>{alert.status}</span>
+                {alert.status === 'firing' ? (
+                  <button className="button button--primary" onClick={() => void handleAck(alert.fingerprint)}>
+                    认领
+                  </button>
+                ) : null}
               </div>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
+            </div>
+          ))}
+          {activeAlerts.length === 0 ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">当前无活动告警</p>
+                <p className="item-subtitle">Alertmanager receiver 指向控制面 ingest 端点后，firing 告警会实时出现在这里。</p>
+              </div>
+              <span className="badge badge--success">quiet</span>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
 
-      <SectionCard title="最近审计与告警" subtitle="SLO、配置灰度和危险动作共享一条时间线">
+      <SectionCard title="最近审计" subtitle="发布、配置、告警认领等危险动作共享一条时间线">
         <div className="stack-list">
           {audits.slice(0, 6).map((event) => (
             <div className="timeline-item" key={`${event.objectType}:${event.objectId}:${event.at}`}>
@@ -202,31 +231,75 @@ export function PlatformObservabilityPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="统一告警入口" subtitle="平台告警模板与产品实时告警共享 runbook / repair / audit 处置语义">
+      <SectionCard
+        title="运行诊断统一视图"
+        subtitle="默认展示最近 24 小时聚合和三天内原始明细；关联键默认脱敏，只有持有敏感诊断权限时才可显式展开。按用户（actorHash）检索需要敏感诊断权限。"
+      >
+        <div className="toolbar-row">
+          <label className="toolbar-field">
+            <span>按用户（actorHash）</span>
+            <input
+              value={actorHashQuery}
+              placeholder="a.xxxx（敏感权限）"
+              onChange={(event) => setActorHashQuery(event.target.value)}
+            />
+          </label>
+          <label className="toolbar-field">
+            <span>日志文本</span>
+            <input
+              value={messageQuery}
+              placeholder="消息子串检索"
+              onChange={(event) => setMessageQuery(event.target.value)}
+            />
+          </label>
+          <button
+            className="button button--primary"
+            onClick={() =>
+              void loadRuntimeLogs({
+                actorHash: actorHashQuery.trim(),
+                messageContains: messageQuery.trim(),
+              })
+            }
+          >
+            检索明细
+          </button>
+        </div>
         <div className="stack-list">
-          {alerts.map((item: AlertTemplateItem) => (
-            <div className="policy-item" key={item.id}>
+          <div className="policy-item">
+            <div>
+              <p className="item-title">聚合来源：{runtimeLogSummary?.sourceKind ?? 'unavailable'}</p>
+              <p className="item-subtitle">
+                freshness={runtimeLogSummary?.freshness ?? 'unknown'} · window={runtimeLogSummary?.actualFrom ?? '-'} → {runtimeLogSummary?.actualTo ?? '-'}
+              </p>
+            </div>
+            <RuntimeErrorBadge error={runtimeLogsError} />
+          </div>
+          {runtimeSignals.map(([signal, count]) => (
+            <div className="policy-item" key={signal}>
               <div>
-                <p className="item-title">{item.title}</p>
-                <p className="item-subtitle">
-                  severity={item.severity} · status={item.status} · owner={item.owner ?? 'platform-ops'}
-                </p>
+                <p className="item-title">{signal}</p>
+                <p className="item-subtitle">跨语言登记 signal · last 24h</p>
               </div>
-              <div className="badge-row">
-                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
-                {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
-                {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
-                {(item.alertId ?? item.id) ? <span className="badge badge--neutral">alert={item.alertId ?? item.id}</span> : null}
+              <span className="badge badge--neutral">{count}</span>
+            </div>
+          ))}
+          {(runtimeLogDrilldown?.items ?? []).map((item) => (
+            <div className="timeline-item" key={item.rowKey}>
+              <div>
+                <p className="item-title">{item.severity} · {item.signal}</p>
+                <p className="item-subtitle">
+                  {item.occurredAt} · {item.resource.sourceType}/{item.resource.service} · {item.errorCode ?? 'no-error-code'}
+                </p>
+                <p className="item-subtitle">{item.message}</p>
               </div>
             </div>
           ))}
-          {alerts.length === 0 ? (
-            <div className="policy-item">
+          {runtimeSignals.length === 0 && (runtimeLogDrilldown?.items.length ?? 0) === 0 ? (
+            <div className="timeline-item">
               <div>
-                <p className="item-title">暂无平台告警模板</p>
-                <p className="item-subtitle">控制面接通后，这里会展示真实告警模板与统一处置入口。</p>
+                <p className="item-title">暂无可查询的运行诊断</p>
+                <p className="item-subtitle">先通过 alpha / beta / gamma 验收流上报已登记 signal，再在此处按 signal、错误码和指纹下钻。</p>
               </div>
-              <span className="badge badge--success">quiet</span>
             </div>
           ) : null}
         </div>
@@ -248,7 +321,6 @@ export function PlatformObservabilityPage() {
                   {item.severity}
                 </span>
                 {item.drilldownRoute ? <Link className="button" to={item.drilldownRoute}>进入 drilldown</Link> : null}
-                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
                 {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
                 {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
                 {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
@@ -260,16 +332,6 @@ export function PlatformObservabilityPage() {
               <div>
                 <p className="item-title">当前无平台待办</p>
                 <p className="item-subtitle">当 triage 发现配置漂移、磁盘回退或 ACK 不收敛时，这里会直接生成 backlog。</p>
-              </div>
-            </div>
-          ) : null}
-          {highlightBacklog ? (
-            <div className="timeline-item">
-              <div>
-                <p className="item-title">主待办</p>
-                <p className="item-subtitle">
-                  {highlightBacklog.title} · owner={highlightBacklog.owner ?? 'platform-ops'}
-                </p>
               </div>
             </div>
           ) : null}

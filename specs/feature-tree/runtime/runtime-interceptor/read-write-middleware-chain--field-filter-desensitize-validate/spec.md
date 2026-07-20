@@ -1,4 +1,4 @@
-# L4 对象任务：field-filter-desensitize-validate
+# L3 对象任务：field-filter-desensitize-validate
 
 ## 功能说明
 - **Field Filter**：根据 api_exposure（drop/readonly/readwrite）过滤返回字段，drop 字段不出现在响应中。

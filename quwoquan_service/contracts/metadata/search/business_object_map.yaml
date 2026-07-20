@@ -95,6 +95,8 @@ objects:
   invariant_refs: []
   lifecycle_refs: []
   member_bounds: {}
+  # ReportSearchFeedback 是 search.query packet 的 append 命令入口，
+  # 事实体（SearchFeedbackEvent）落 SearchFeedbackFact 对象。
   mutation_entrypoints:
   - ReportSearchFeedback
   object_kind: append_only_fact
@@ -134,6 +136,7 @@ objects:
     - createdAt
     - target
     - objectId
+    - viewerId
     authoritative_state: []
     owned_value: []
     projection: []
@@ -141,6 +144,7 @@ objects:
     - searchRequestId
     - target
     - objectId
+    - viewerId
     transport_only: []
   identity:
     fields:
@@ -149,6 +153,8 @@ objects:
   invariant_refs: []
   lifecycle_refs: []
   member_bounds: {}
+  # 写入经宿主 packet search.query 的 ReportSearchFeedback（append_only_sink）；
+  # fact 自身零公开 operation。
   mutation_entrypoints: []
   object_kind: append_only_fact
   relationships:
@@ -179,6 +185,15 @@ objects:
     - chat.Message
     - user.Persona
     - integration.Location
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: event_source
+    name: viewerPersona
+    on_delete: retain
+    reference_fields:
+    - viewerId
+    target_object: user.Persona
   source_document: search/query/fields.yaml
   source_entity: SearchFeedbackEvent
   storage_backend: mongodb

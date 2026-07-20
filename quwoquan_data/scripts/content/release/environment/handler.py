@@ -42,6 +42,7 @@ from content.release.environment.reload import (
     authorization_header_for_target as _authorization_header_for_target,
     trigger_entity_reload as _trigger_entity_reload,
 )
+from content.release.environment.readiness import require_environment_readiness
 from content.release.environment.topology import (
     EnvironmentReleaseMode,
     EnvironmentReleaseTarget,
@@ -54,10 +55,9 @@ from content.release.model import (
     DeploymentEnvironment,
     EvidenceStatus,
     ImportMode,
-    ReleaseRunKind,
-    ReleaseRunStatus,
     ReleaseKind,
 )
+from core.control_types import ReleaseRunKind, ReleaseRunStatus
 VALID_ENVS = frozenset(DEPLOYMENT_ENVIRONMENTS)
 
 
@@ -205,6 +205,12 @@ def _apply_release(args: argparse.Namespace) -> None:
         )
         run_id = str(args.run_id or f"apply-{_now_compact()}")
         run = _create_run(env, release_id, run_id, kind=ReleaseRunKind.APPLY)
+        if args.import_to_db and not args.dry_run:
+            require_environment_readiness(
+                environment=target.environment,
+                consumer=False,
+                run=run,
+            )
         write_json(run / "consistency-preflight.json", preflight)
         if target.media_sync_root is not None and not args.dry_run:
             _sync_media(release=release, destination=str(target.media_sync_root), run=run)
@@ -293,6 +299,12 @@ def _rollback_release(args: argparse.Namespace) -> None:
     )
     run_id = str(args.run_id or f"rollback-{_now_compact()}")
     run = _create_run(env, target_id, run_id, kind=ReleaseRunKind.ROLLBACK)
+    if args.import_to_db and not args.dry_run:
+        require_environment_readiness(
+            environment=target.environment,
+            consumer=False,
+            run=run,
+        )
     write_json(
         run / "rollback_ref.json",
         {
@@ -381,6 +393,11 @@ def _verify_homepages(args: argparse.Namespace) -> None:
         release_id,
         run_id,
         kind=ReleaseRunKind.VERIFY,
+    )
+    require_environment_readiness(
+        environment=target.environment,
+        consumer=True,
+        run=run,
     )
     if release_kind is ReleaseKind.EMPTY_BASELINE:
         if import_result.get("homepageVerificationCasesRef"):

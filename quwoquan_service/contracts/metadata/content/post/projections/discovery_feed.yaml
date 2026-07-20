@@ -338,6 +338,9 @@ fields:
   type: int
 - name: viewCount
   type: int
+- description: 行为投影最后成功应用的 rm_behavior_events ObjectID 十六进制水位；仅用于 $inc 幂等重放，不进入客户端 DTO
+  name: behaviorProjectionLastId
+  type: string
 - name: publishedAt
   type: timestamp
 - description: 内容首次进入系统时间（仅插入时写一次，永不变）
@@ -405,7 +408,7 @@ source_entities:
 - VisitRecord
 source_events:
 - PostPublished
-- ContentReactionActivated
-- ContentReactionRemoved
+- ContentReactionSet
+- ContentReactionCleared
 - BehaviorBatchReported
 storage_backend: mongodb

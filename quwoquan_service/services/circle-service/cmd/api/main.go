@@ -13,6 +13,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
@@ -36,7 +38,9 @@ import (
 	membershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_membership"
 	placementapp "quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
+	circleports "quwoquan_service/services/circle-service/internal/domain/circle/ports"
 	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
+	circlepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle/persistence"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_behavior_fact/persistence"
 	fileexternal "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/external"
 	filepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/persistence"
@@ -88,6 +92,12 @@ type config struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("circle-service: %v", err)
+	}
+}
+
+func run() error {
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
 		log.Fatalf("circle-service runtime identity invalid: %v", err)
@@ -107,7 +117,8 @@ func main() {
 		addr = ":18082"
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "circle-service", SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -127,6 +138,10 @@ func main() {
 
 	db := mongoClient.Database(mongoDBName)
 	circleStore := persistence.NewMongoCircleStore(db.Collection("circles"))
+	circleAggregateStore := circlepersistence.NewMongoAggregateStore(db)
+	if err := circleAggregateStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle aggregate indexes failed: %v", err)
+	}
 	fileStore := filepersistence.NewMongoAggregateStore(db)
 	if err := fileStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle file indexes failed: %v", err)
@@ -150,19 +165,15 @@ func main() {
 		log.Printf("WARN: circle-service redis ping: %v", err)
 	}
 	redisClient := router.Scene("general")
-	cachedCircleStore := cache.NewCachedCircleStore(
-		circleStore,
-		circleStore,
-		circleStore,
-		redisClient,
-	)
-	circleStorage := application.CircleStoragePorts{
-		Records: cachedCircleStore, Metrics: cachedCircleStore, Sections: cachedCircleStore,
-		IDs: persistence.ObjectIDGenerator{},
-	}
+	cachedCircleStore := cache.NewCachedCircleStore(circleStore, redisClient)
+	circleStorage := application.CircleStoragePorts{Records: cachedCircleStore}
 	log.Printf("circle-service redis cache enabled via runtime router")
 
-	feedStore := persistence.NewMongoFeedStore(db.Collection("posts"))
+	feedStore := persistence.NewMongoFeedStore(db)
+	discoveryFeedReader := persistence.NewMongoCircleDiscoveryFeedReader(db)
+	if err := discoveryFeedReader.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle discovery feed indexes failed: %v", err)
+	}
 	placementStore := placementpersistence.NewMongoAggregateStore(db)
 	if err := placementStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle post placement indexes failed: %v", err)
@@ -193,17 +204,24 @@ func main() {
 		log.Fatalf("circle-service search index build failed: %v", err)
 	}
 	if err := searchBuilt.EnsureIndex(ctx); err != nil {
-		log.Fatalf("circle-service search index ensure failed: %v", err)
+		// SearchIndexView is a derived read model. A transient ES outage must not
+		// make Circle writes unavailable; the projector retries on subsequent
+		// domain events/backfill, while healthz exposes the dependency failure.
+		log.Printf("WARN: circle-service search index ensure failed: %v", err)
 	}
 
 	// Application services
-	circleOpts := []application.CircleServiceOption{
+	circleService := application.NewCircleService(
+		circleStorage,
 		application.WithFeedStore(feedStore),
-	}
-	if searchBuilt.Projector != nil {
-		circleOpts = append(circleOpts, application.WithEventPublisher(searchBuilt.Projector))
-	}
-	circleService := application.NewCircleService(circleStorage, circleOpts...)
+		application.WithDiscoveryFeedReader(discoveryFeedReader),
+	)
+	circleCommands := application.NewCircleCommandFacade(
+		circleAggregateStore,
+		membershipRoleReaderFrom(db),
+		cachedCircleStore,
+		nil,
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
 		log.Fatalf("access token config invalid: %v", err)
@@ -230,16 +248,39 @@ func main() {
 	groupMembershipQueries := groupmembershipapp.NewQueryFacade(groupMembershipReaders, groupMembershipReaders)
 	placementCommands := placementapp.NewCommandFacade(placementStore, placementPortsFrom(placementReaders))
 	membershipCommands := membershipapp.NewCommandFacade(membershipStore, membershipReaders, membershipReaders)
-	membershipQueries := membershipapp.NewQueryFacade(membershipReaders, membershipReaders)
+	membershipQueries := membershipapp.NewQueryFacade(membershipReaders, membershipReaders, membershipReaders)
 	behaviorFactWriter := behaviorfactapp.NewWriter(behaviorFactStore, behaviorFactStore)
 	postLifecycleProjection := placementpersistence.NewMongoPostLifecycleProjection(db)
 	if err := postLifecycleProjection.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle Post lifecycle projection indexes failed: %v", err)
 	}
 	instanceID, _ := os.Hostname()
+	if strings.TrimSpace(instanceID) == "" {
+		instanceID = "circle-service"
+	}
 	contentPostConsumer := messaging.NewContentPostConsumer(
 		redisClient, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
 	)
+	accountClosedProjection := persistence.NewMongoUserAccountClosedProjection(
+		db,
+		redisClient,
+	)
+	if err := accountClosedProjection.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle UserAccountClosed projection indexes failed: %v", err)
+	}
+	accountClosedConsumer, err := messaging.NewUserAccountClosedConsumer(
+		redisClient,
+		accountClosedProjection,
+		accountClosedProjection,
+		instanceID,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("circle UserAccountClosed consumer init failed: %v", err)
+	}
+	if err := accountClosedConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("circle UserAccountClosed consumer group failed: %v", err)
+	}
 	placementCountRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
 		placementpersistence.NewMongoPostCountProjector(db, redisClient),
@@ -290,9 +331,17 @@ func main() {
 		messaging.NewCircleFileStreamPublisher(redisClient),
 		"circle-file-stream",
 	)
+	var circleSearchRelay *application.CircleOutboxRelay
+	if searchBuilt.Projector != nil {
+		circleSearchRelay = application.NewCircleOutboxRelay(
+			circleAggregateStore, circleAggregateStore,
+			application.NewCircleDomainEventSink(searchBuilt.Projector),
+			"circle-search-index",
+		)
+	}
 
 	handler := httpadapter.NewCircleHandler(
-		circleService, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
+		circleService, circleCommands, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
 		groupMembershipCommands, groupMembershipQueries,
 		membershipCommands, membershipQueries, placementCommands,
 	).Routes()
@@ -313,17 +362,20 @@ func main() {
 	)(handler)
 
 	healthChecker := rthealth.NewChecker()
+	if ping := searchBuilt.HealthPing(); ping != nil {
+		healthChecker.Register("elasticsearch", ping)
+	}
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
 		return mongoClient.Ping(hctx, nil)
 	})
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return router.PingAll(hctx)
 	})
-	if ping := searchBuilt.HealthPing(); ping != nil {
-		healthChecker.Register("search-es", ping)
-	}
 	healthChecker.Register("content-post-owner-projection", func(_ context.Context) error {
 		return contentPostConsumer.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("user-account-closed-consumer", func(_ context.Context) error {
+		return accountClosedConsumer.Healthy(10 * time.Second)
 	})
 	healthChecker.Register("circle-post-count-projection", func(_ context.Context) error {
 		return placementCountRelay.Healthy(5 * time.Second)
@@ -355,7 +407,17 @@ func main() {
 	healthChecker.Register("circle-file-stream", func(_ context.Context) error {
 		return fileStreamRelay.Healthy(5 * time.Second)
 	})
+	if circleSearchRelay != nil {
+		healthChecker.Register("circle-search-index-relay", func(_ context.Context) error {
+			return circleSearchRelay.Healthy(5 * time.Second)
+		})
+	}
 	go contentPostConsumer.Run(ctx, 250*time.Millisecond)
+	accountClosedConsumerDone := make(chan struct{})
+	go func() {
+		defer close(accountClosedConsumerDone)
+		accountClosedConsumer.Run(ctx)
+	}()
 	go func() {
 		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
 			log.Printf("circle post-count projection stopped: %v", err)
@@ -406,17 +468,39 @@ func main() {
 			log.Printf("circle file stream relay stopped: %v", err)
 		}
 	}()
+	if circleSearchRelay != nil {
+		go func() {
+			if err := circleSearchRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+				log.Printf("circle search-index relay stopped: %v", err)
+			}
+		}()
+	}
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
 	outerMux.Handle("/", generatedOperationGuard)
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("circle-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("circle-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("circle-service exception logger init failed: %v", err)
 	}
@@ -440,15 +524,41 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("circle-service listening on %s (env=%s)", addr, appEnv)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("circle-service: %v", err)
+	serverErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)
+	cancel()
+	select {
+	case <-accountClosedConsumerDone:
+	case <-time.After(5 * time.Second):
+		log.Printf("WARN: circle UserAccountClosed consumer shutdown timed out")
 	}
+	if serverErr != nil {
+		return serverErr
+	}
+	return nil
 }
 
 func placementPortsFrom(readers *placementpersistence.MongoPolicyReaders) placementports.PolicyReaders {
 	return placementports.PolicyReaders{
 		Circles: readers, Groups: readers, Posts: readers, Memberships: readers,
 	}
+}
+
+// membershipRoleReader 复用 placement policy readers 的成员角色读，
+// 适配 Circle 本体命令的权限校验端口。
+type membershipRoleReader struct {
+	readers *placementpersistence.MongoPolicyReaders
+}
+
+func membershipRoleReaderFrom(db *mongo.Database) circleports.MembershipRoleReader {
+	return membershipRoleReader{readers: placementpersistence.NewMongoPolicyReaders(db)}
+}
+
+func (reader membershipRoleReader) ReadMembershipRole(ctx context.Context, circleID, personaID string) (string, string, bool, error) {
+	slice, found, err := reader.readers.ReadMembershipRole(ctx, circleID, personaID)
+	if err != nil || !found {
+		return "", "", found, err
+	}
+	return slice.Role, slice.State, true, nil
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -507,22 +617,12 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	}
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		mergeConfigFile(&cfg, localDefault)
-		mergeConfigFile(&cfg, localEnv)
-		return cfg, nil
+	mergeConfigFile(&cfg, localDefault)
+	mergeConfigFile(&cfg, localEnv)
+	if strings.TrimSpace(configVersion) != "" {
+		mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml"))
 	}
-	return loadConfig(filepath.Join("configs", "config.yaml")), nil
-}
-
-func loadConfig(path string) config {
-	cfg := config{}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return cfg
-	}
-	yaml.Unmarshal(raw, &cfg)
-	return cfg
+	return cfg, nil
 }
 
 func mergeConfigFile(cfg *config, path string) {

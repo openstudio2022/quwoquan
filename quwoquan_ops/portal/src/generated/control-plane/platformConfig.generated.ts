@@ -11,7 +11,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.config_center.disk_fallback_enabled",
@@ -22,7 +22,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.error_message",
@@ -33,7 +33,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.gateway.rate_limit.per_user_rps",
@@ -44,7 +44,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.orchestrator.downstream.timeout_ms",
@@ -55,7 +55,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.content.mongo.max_pool_size",
@@ -66,7 +66,7 @@ export const platformConfigSchema = {
       "reload": "restart",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.assistant.otel.trace_sample_ratio",
@@ -77,7 +77,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.user.auth.success_detail_sample_ratio",
@@ -88,7 +88,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.user.auth.raw_event_retention_days",
@@ -99,7 +99,7 @@ export const platformConfigSchema = {
       "reload": "restart",
       "rollout": "progressive",
       "risk_level": "high",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.user.auth.aggregate_metric_retention_days",
@@ -110,7 +110,7 @@ export const platformConfigSchema = {
       "reload": "restart",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.content.worker.concurrency",
@@ -121,7 +121,7 @@ export const platformConfigSchema = {
       "reload": "restart",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.flush_delay_sec",
@@ -132,7 +132,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.retry_delay_sec",
@@ -143,7 +143,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "medium",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.max_batch_size",
@@ -154,7 +154,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "low",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.max_pending_age_sec",
@@ -165,7 +165,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "low",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.flush_on_foreground_resume",
@@ -176,7 +176,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "low",
-      "ui_editable": true
+      "ui_editable": false
     },
     {
       "key": "sys.client_state_sync.flush_on_network_recovered",
@@ -187,7 +187,7 @@ export const platformConfigSchema = {
       "reload": "hot",
       "rollout": "progressive",
       "risk_level": "low",
-      "ui_editable": true
+      "ui_editable": false
     }
   ]
 } as const;

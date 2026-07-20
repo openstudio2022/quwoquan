@@ -1,4 +1,4 @@
-# L4 对象任务：struct-repo-handler-migration-generation
+# L3 对象任务：struct-repo-handler-migration-generation
 
 ## 功能说明
 - **entity.go.tmpl**：根据 fields.yaml 生成 Go struct，包含 JSON tag、validation tag。

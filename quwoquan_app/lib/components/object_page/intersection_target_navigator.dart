@@ -5,9 +5,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 
 const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
   'INTERSECTION_COMMERCE_ACTIONS_ENABLED',
@@ -208,6 +211,21 @@ class IntersectionTargetNavigator {
     }
     if (attribution != null) {
       onTrack?.call(target, attribution);
+    }
+    // 圈子承接页进入来源归因：交集语境统一为 myIntersections（强关系探索意图，
+    // 区别于推荐流 organicFeed；metadata behaviors.yaml referralSource 闭集语义）。
+    var route = target.routeId.trim();
+    if (route.isEmpty) {
+      route = intersectionRouteIdForObjectKind(target.objectKind.trim());
+    }
+    if (route == 'circleDetail') {
+      router.push(
+        path,
+        extra: const CircleDetailPageRouteExtra(
+          referralSource: ReferralSource.myIntersections,
+        ),
+      );
+      return true;
     }
     router.push(path);
     return true;

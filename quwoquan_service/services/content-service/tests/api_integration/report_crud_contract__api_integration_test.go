@@ -3,8 +3,10 @@ package api_integration
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -248,6 +250,97 @@ func TestCreateReportIdempotencyReplaysWithoutDuplicatePersistence(t *testing.T)
 			reportCount,
 			outboxCount,
 		)
+	}
+}
+
+func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
+	suite := testinfra.NewSuite(t, testinfra.WithPostgres())
+	defer suite.TearDown(t)
+	suite.CleanPG(t)
+
+	_, handler := newReportTestHandler(t, suite.PG)
+	protected := newAuthenticatedReportHandler(t, handler)
+	ownerToken := newReportAccessToken(
+		t,
+		rtauth.TokenSubject{AccountID: "owner-account", PersonaID: "owner-persona"},
+	)
+	otherToken := newReportAccessToken(
+		t,
+		rtauth.TokenSubject{AccountID: "other-account", PersonaID: "other-persona"},
+	)
+	create := func(token, key, targetID string) {
+		t.Helper()
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/content/reports",
+			strings.NewReader(`{"targetType":"post","targetId":"`+targetID+`","reason":"spam"}`),
+		)
+		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", key)
+		response := httptest.NewRecorder()
+		protected.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("create %s status=%d body=%s", targetID, response.Code, response.Body.String())
+		}
+	}
+	create(ownerToken, "owner-report-1", "owner-post-1")
+	create(otherToken, "other-report", "other-post")
+	create(ownerToken, "owner-report-2", "owner-post-2")
+
+	list := func(path string) map[string]any {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Authorization", "Bearer "+ownerToken)
+		response := httptest.NewRecorder()
+		protected.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("list status=%d body=%s", response.Code, response.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode list response: %v", err)
+		}
+		return payload
+	}
+	first := list("/content/users/me/reports?limit=1")
+	firstItems, ok := first["items"].([]any)
+	if !ok || len(firstItems) != 1 {
+		t.Fatalf("unexpected first page: %#v", first)
+	}
+	firstItem, ok := firstItems[0].(map[string]any)
+	if !ok || firstItem["targetId"] == "other-post" {
+		t.Fatalf("other reporter leaked: %#v", firstItem)
+	}
+	if _, leaked := firstItem["reviewerId"]; leaked {
+		t.Fatalf("reviewerId leaked to reporter: %#v", firstItem)
+	}
+	if _, leaked := firstItem["resolution"]; leaked {
+		t.Fatalf("internal resolution leaked to reporter: %#v", firstItem)
+	}
+	cursor, ok := first["nextCursor"].(string)
+	if !ok || strings.TrimSpace(cursor) == "" {
+		t.Fatalf("first page cursor missing: %#v", first)
+	}
+	second := list(
+		"/content/users/me/reports?limit=1&cursor=" + url.QueryEscape(cursor),
+	)
+	secondItems, ok := second["items"].([]any)
+	if !ok || len(secondItems) != 1 {
+		t.Fatalf("unexpected second page: %#v", second)
+	}
+	secondItem := secondItems[0].(map[string]any)
+	if secondItem["id"] == firstItem["id"] || secondItem["targetId"] == "other-post" {
+		t.Fatalf("unstable private pagination: first=%#v second=%#v", firstItem, secondItem)
+	}
+
+	anonymous := httptest.NewRecorder()
+	protected.ServeHTTP(
+		anonymous,
+		httptest.NewRequest(http.MethodGet, "/content/users/me/reports", nil),
+	)
+	if anonymous.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous status=%d want=%d", anonymous.Code, http.StatusUnauthorized)
 	}
 }
 

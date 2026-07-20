@@ -3,11 +3,6 @@ service:
   name: user-service
   domain: user
   owner: app-foundation
-  commercial_defaults:
-    status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: USER_FOLLOWING_SUBJECT_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: GET
@@ -25,6 +20,38 @@ api_routes:
     query_params: [cursor, limit, subjectType]
     response_entity: FollowingSubjectItemView
     response_fields: [subjectId, subjectType, displayName, avatarUrl, coverUrl, subtitle, targetRouteId, targetObjectId, followedAt, lastVisitedAt, latestChangedAt, unreadChangeCount, hasUnreadChanges, latestChangeReason]
+    client_contract:
+      dart_import: ../user/following_subject_contracts.dart
+      request_type: ListFollowingSubjectsQuery
+      response_type: FollowingSubjectSlice
+      request_encoder: encodeListFollowingSubjectsQuery
+      response_decoder: decodeFollowingSubjectSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_following_subject_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
     security:
       auth_mode: required
       principal: owner

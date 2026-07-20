@@ -75,6 +75,34 @@ func TestSpecializedDtoRenderersUseCanonicalNameAsWireKey(t *testing.T) {
 	}
 }
 
+func TestRenderTypedPostDtoNestedProjectionEmitsStringKeyMapHelper(
+	t *testing.T,
+) {
+	projection := clientProjection{
+		DartClass: "ProjectedPostDto",
+		BaseClass: "PostBaseDto",
+		Fields: []projectionFieldDef{
+			{
+				Name:                  "sourceAttribution",
+				Source:                "sourceAttribution",
+				DartType:              "SourceAttributionDto",
+				Nullable:              true,
+				MapFromStringKeyClass: "SourceAttributionDto",
+			},
+		},
+	}
+
+	generated := renderTypedPostDtoDart(projection, "fixture.yaml")
+	for _, expected := range []string{
+		"SourceAttributionDto.fromMap(_parseStringKeyMap(m['sourceAttribution'])!)",
+		"Map<String, dynamic>? _parseStringKeyMap(dynamic v)",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("typed post DTO nested projection missing %q:\n%s", expected, generated)
+		}
+	}
+}
+
 func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t *testing.T) {
 	projection := clientProjection{
 		DartClass: "StrictMessageDto",
@@ -132,6 +160,7 @@ func TestRenderStandaloneDtoStrictNestedProjection(t *testing.T) {
 
 	for _, expected := range []string{
 		"card: m['card'] == null ? null : CardDto.fromMap(_parseStringKeyMap(m['card'])!)",
+		"Map<String, dynamic>? _parseStringKeyMap(dynamic v)",
 		"'card': card?.toMap()",
 		"'items': items.map((value) => value.toMap()).toList(growable: false)",
 		"m.containsKey('card') && m['card'] != null && (m['card'] is! Map",

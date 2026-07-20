@@ -129,64 +129,6 @@ _ProfilePreviewKind _normalizedPreviewKind(
       : _ProfilePreviewKind.unavailable;
 }
 
-class _VisitorFollowButton extends StatelessWidget {
-  const _VisitorFollowButton({
-    required this.width,
-    required this.following,
-    required this.isDark,
-    required this.onPressed,
-  });
-
-  final double width;
-  final bool following;
-  final bool isDark;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.30 : 0.22);
-    final background = following
-        ? AppColors.iosProfileSurface(context)
-        : AppColors.iosAccent(context);
-    final foreground = following
-        ? AppColors.iosSecondaryLabel(context)
-        : AppColors.white;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      onPressed: onPressed,
-      child: Container(
-        width: width,
-        height: AppSpacing.buttonHeightSmCompact,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-          border: Border.all(
-            color: following ? border : AppColors.transparent,
-            width: AppSpacing.hairline,
-          ),
-        ),
-        child: Text(
-          following ? UITextConstants.following : UITextConstants.follow,
-          maxLines: 1,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            fontWeight: AppTypography.regular,
-            color: foreground,
-            letterSpacing: -0.08,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 小红书式行尾内联动作小药丸：图标 + 文案，支持 active（已态）/ busy（进行中）。
 class _InteractionActionChip extends StatelessWidget {
   const _InteractionActionChip({

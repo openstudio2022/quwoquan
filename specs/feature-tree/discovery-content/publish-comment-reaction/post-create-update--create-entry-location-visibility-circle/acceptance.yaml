@@ -53,6 +53,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: location_operation_contract
         cases:
         - local_contract.discovery_content.publish_comment_reaction.location.generated_operation
@@ -60,6 +61,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: location_gamma_remote
         cases:
         - api_integration.discovery_content.publish_comment_reaction.location.gamma_remote
@@ -97,18 +99,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: location_page_widget
         cases:
         - local_contract.discovery_content.publish_comment_reaction.location.page_widget
         envs: *local_env
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: location_gamma_remote
         cases:
         - api_integration.discovery_content.publish_comment_reaction.location.gamma_remote
         envs:
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: location_error_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.location.error_journey
@@ -120,5 +125,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
-  full_gate:
+  profile_gates:
   - make gate

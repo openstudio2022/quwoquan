@@ -1,0 +1,32 @@
+object: SkillConsent
+operations:
+  - GrantSkillConsent
+  - RevokeSkillConsent
+  - ListConsents
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/assistant-service/internal/application/service_skill_consent.go
+  store:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/consent_store.go
+  outbox: []
+  reader:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/consent_store.go
+  transport:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart
+    - quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
+    - quwoquan_app/lib/cloud/services/assistant/assistant_consent_store.dart
+  page:
+    - quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/assistant-service/internal/application/consent_gate__security__local_contract_test.go
+    - quwoquan_service/services/assistant-service/internal/application/consent_fail_closed__security__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/assistant/assistant_consent_fail_closed__security__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+environments: []

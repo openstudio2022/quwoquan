@@ -21,6 +21,38 @@ api_routes:
 
     operation: ResolveTag
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.USER.tag_not_found
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_resolve
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -31,12 +63,50 @@ api_routes:
     query_params: [tagRef]
     response_entity: TagResolveView
     response_fields: [tagRef, group, label, labelEn, aliases, ancestors]
+    client_contract:
+      dart_import: ../tag/tag_catalog_contracts.dart
+      request_type: ResolveTagQuery
+      response_type: TagResolve
+      request_encoder: encodeResolveTagQuery
+      response_decoder: decodeTagResolve
 
   - method: GET
     path: /tag/children
 
     operation: ListTagChildren
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.USER.tag_not_found
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_children_list
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -47,12 +117,49 @@ api_routes:
     query_params: [parentTagRef, limit]
     response_entity: TagChildView
     response_fields: [tagRef, label, displayLabel, labelEn, parentTagRef, depth, hasChildren, releaseId, lifecycleStatus]
+    client_contract:
+      dart_import: ../tag/tag_catalog_contracts.dart
+      request_type: ListTagChildrenQuery
+      response_type: TagChildrenSlice
+      request_encoder: encodeListTagChildrenQuery
+      response_decoder: decodeTagChildrenSlice
 
   - method: GET
     path: /tag/shared-tags
 
     operation: SharedTags
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_shared_tags
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagGraphQueryFacade
@@ -69,6 +176,37 @@ api_routes:
 
     operation: InvertedObjects
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_inverted_objects
+      trace: true
+      attributes: [outcome, include_descendants]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagGraphQueryFacade
@@ -86,6 +224,36 @@ api_routes:
 
     operation: ListDimensions
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_dimensions_list
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -101,6 +269,37 @@ api_routes:
 
     operation: SuggestTags
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_suggest
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -117,6 +316,37 @@ api_routes:
 
     operation: ValidateTagRefs
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_validate_refs
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -128,6 +358,12 @@ api_routes:
     request_fields: [tagRefs]
     response_entity: TagValidationResultView
     response_fields: [valid, invalid]
+    client_contract:
+      dart_import: ../tag/tag_catalog_contracts.dart
+      request_type: ValidateTagRefsQuery
+      response_type: TagValidationResult
+      request_encoder: encodeValidateTagRefsQuery
+      response_decoder: decodeTagValidationResult
 
   # ── 推荐搜索（场景3） ──
   - method: GET
@@ -135,6 +371,37 @@ api_routes:
 
     operation: SearchTags
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_search
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -151,6 +418,37 @@ api_routes:
 
     operation: RelatedTags
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_related
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagCatalogQueryFacade
@@ -167,6 +465,37 @@ api_routes:
 
     operation: SearchByTags
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_search_by_tags
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagGraphQueryFacade
@@ -185,6 +514,37 @@ api_routes:
 
     operation: TagCooccurrence
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_cooccurrence
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagGraphQueryFacade
@@ -201,6 +561,37 @@ api_routes:
 
     operation: RelatedObjects
     actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_taxonomy_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_related_objects
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: TagGraphQueryFacade

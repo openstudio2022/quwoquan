@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -69,7 +70,17 @@ func (h *ContentHandler) handleListMyIntersections(w http.ResponseWriter, r *htt
 	})
 }
 
-// handleMarkIntersectionsVisited 推进已读水位并清零未读红点。
+// markIntersectionsVisitedAck 是 MarkIntersectionsVisited 的强类型回执
+// （contracts/metadata/content/intersection_visit_state/fields.yaml#MarkIntersectionsVisitedAck）。
+type markIntersectionsVisitedAck struct {
+	Dimensions []string `json:"dimensions"`
+	Status     string   `json:"status"`
+}
+
+// intersectionDimensions 是交集维度的封闭集合（_shared/types.yaml#IntersectionDimension）。
+var intersectionDimensions = []string{"identity", "location", "content", "interest", "relationship"}
+
+// handleMarkIntersectionsVisited 推进已读水位并清零未读红点；dimension 为空推进全部维度。
 func (h *ContentHandler) handleMarkIntersectionsVisited(w http.ResponseWriter, r *http.Request) {
 	if h.intersectionService == nil {
 		h.handleNotImplemented(w, r, "MarkIntersectionsVisited")
@@ -87,13 +98,26 @@ func (h *ContentHandler) handleMarkIntersectionsVisited(w http.ResponseWriter, r
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
-	if err := h.intersectionService.MarkVisited(r.Context(), personaID, body.Dimension); err != nil {
+	dimension := strings.TrimSpace(body.Dimension)
+	if dimension != "" && !slices.Contains(intersectionDimensions, dimension) {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"交集维度无效",
+			"dimension must be one of identity/location/content/interest/relationship",
+		))
+		return
+	}
+	if err := h.intersectionService.MarkVisited(r.Context(), personaID, dimension); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"dimension": body.Dimension,
-		"status":    "visited",
+	visited := intersectionDimensions
+	if dimension != "" {
+		visited = []string{dimension}
+	}
+	writeJSON(w, http.StatusOK, markIntersectionsVisitedAck{
+		Dimensions: visited,
+		Status:     "visited",
 	})
 }
 

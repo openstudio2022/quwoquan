@@ -11,10 +11,12 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -22,6 +24,7 @@ import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 GoRouter _buildRouter({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -77,6 +80,15 @@ GoRouter _buildRouter({
           return Text('homepage:${state.pathParameters['id']}');
         },
       ),
+      GoRoute(
+        path: AppRoutePaths.userProfilePathTemplate.replaceAll(
+          '{username}',
+          ':username',
+        ),
+        builder: (context, state) {
+          return Text('user:${state.pathParameters['username']}');
+        },
+      ),
     ],
   );
 }
@@ -85,20 +97,37 @@ Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
   ),
-  HomepageRepository? homepageRepository,
+  HomepageFacetSet? homepageRepository,
 }) {
+  final recentSearches = AlphaRecentSearchFacet();
   return ProviderScope(
     overrides: [
+      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
-      assistantRepositoryProvider.overrideWithValue(_FakeAssistantRepository()),
-      chatRepositoryProvider.overrideWithValue(MockChatRepository()),
-      if (homepageRepository != null)
-        homepageRepositoryProvider.overrideWithValue(homepageRepository),
+      searchHotQueryReaderProvider.overrideWithValue(AlphaHotQueryReader()),
+      recentSearchQueryProvider.overrideWithValue(recentSearches),
+      recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
+      searchFeedbackCommandWriterProvider.overrideWithValue(
+        AlphaSearchFeedbackWriter(),
+      ),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      assistantXiaoquSearchFacetProvider.overrideWithValue(
+        _FakeAssistantRepository(),
+      ),
+      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      homepageFacetSetProvider.overrideWithValue(
+        homepageRepository ?? MockHomepageRepository(),
+      ),
     ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
     ),
   );
+}
+
+final class _MockModeNotifier extends AppDataSourceModeNotifier {
+  @override
+  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 void _suppressImageErrors() {
@@ -115,8 +144,9 @@ void _suppressImageErrors() {
 
 void main() {
   setUp(() async {
+    // 最近搜索本地缓存清零；远端 RecentSearchState 由 typed port 承载，
+    // widget 测试经 provider override 注入替身，无进程内共享状态需要复位。
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    await const MockUserProfileRepository().clearRecentSearches();
   });
 
   testWidgets('默认页无结果 Tab 且展示搜索入口模块', (tester) async {
@@ -135,8 +165,8 @@ void main() {
     expect(find.text('视频'), findsNothing);
     expect(find.text('长文'), findsNothing);
     expect(find.text('猜你想搜'), findsOneWidget);
-    expect(find.text('热门圈子'), findsOneWidget);
-    expect(find.text('热门地点'), findsOneWidget);
+    expect(find.text('发现圈子'), findsOneWidget);
+    expect(find.text('发现地点'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
       findsOneWidget,
@@ -150,7 +180,7 @@ void main() {
 
     expect(find.text('毕业旅行'), findsOneWidget);
 
-    await tester.tap(find.text('热门圈子'));
+    await tester.tap(find.text('发现圈子'));
     await tester.pumpAndSettle();
 
     expect(
@@ -158,7 +188,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text('热门地点'));
+    await tester.tap(find.text('发现地点'));
     await tester.pumpAndSettle();
 
     expect(
@@ -285,7 +315,11 @@ void main() {
   });
 
   testWidgets('输入钱时输入框无 spinner 且东钱湖主页可直接打开', (tester) async {
-    await tester.pumpWidget(_buildApp());
+    // homepageFacetSetProvider production 装配已收口 Remote-only；widget 测试
+    // 必须显式注入 contract-seeded Mock（lite fixture 含东钱湖）。
+    await tester.pumpWidget(
+      _buildApp(homepageRepository: MockHomepageRepository()),
+    );
     await tester.pumpAndSettle();
 
     final field = find.byKey(const ValueKey<String>('global_search_field'));
@@ -434,7 +468,7 @@ void main() {
     expect(avatar.imageUrl, isNull);
   });
 
-  testWidgets('联系人没有单聊时回退到已存在讨论会话', (tester) async {
+  testWidgets('联系人没有单聊时进入联系人资料，不误开无关会话', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -451,10 +485,11 @@ void main() {
     await tester.tap(find.text('王芳').last);
     await _pumpUntil(
       tester,
-      condition: () => find.text('chat:conv_002').evaluate().isNotEmpty,
+      condition: () => find.text('user:user_wang_fang').evaluate().isNotEmpty,
     );
 
-    expect(find.text('chat:conv_002'), findsOneWidget);
+    expect(find.text('user:user_wang_fang'), findsOneWidget);
+    expect(find.text('chat:conv_002'), findsNothing);
   });
 
   testWidgets('搜索网络结果入口打开独立网络结果页', (tester) async {
@@ -547,14 +582,15 @@ class _FakeSearchRepository implements SearchRepository {
           title: '西湖景区',
           subtitle: '杭州',
           resolvedFrom: SearchResolvedFrom.remote,
-          payload: const SearchHitPayloadWireMap(<String, dynamic>{
-            'homepageId': 'homepage_west_lake',
-            'homepageType': 'place',
-            'title': '西湖景区',
-            'subtitle': '杭州西湖风景名胜区',
-            'city': '杭州',
-            'address': '浙江省杭州市西湖区',
-          }),
+          payload: const SearchHitPayloadEntityHomepage(
+            SearchEntityHomepageHitView(
+              homepageId: 'homepage_west_lake',
+              name: '西湖景区',
+              subtitle: '杭州西湖风景名胜区',
+              placeName: '杭州',
+              address: '浙江省杭州市西湖区',
+            ),
+          ),
         ),
       ];
       return SearchResponse(request: normalized, sections: _sectionsFor(hits));
@@ -575,55 +611,65 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ming',
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_ming',
-              'displayName': '李明',
-              'conversationId': 'conv_001',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_ming',
+                displayName: '李明',
+                conversationId: 'conv_001',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_xiang',
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_xiang',
-              'displayName': '李想',
-              'conversationId': 'conv_007',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_xiang',
+                displayName: '李想',
+                conversationId: 'conv_007',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_qing',
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_qing',
-              'displayName': '李青',
-              'conversationId': 'conv_008',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_qing',
+                displayName: '李青',
+                conversationId: 'conv_008',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_yue',
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_yue',
-              'displayName': '李悦',
-              'conversationId': 'conv_009',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_yue',
+                displayName: '李悦',
+                conversationId: 'conv_009',
+              ),
+            ),
           ),
           SearchHit(
             objectType: SearchObjectType.chatContact,
             objectId: 'user_li_ze',
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_li_ze',
-              'displayName': '李泽',
-              'conversationId': 'conv_010',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_li_ze',
+                displayName: '李泽',
+                conversationId: 'conv_010',
+              ),
+            ),
           ),
         ];
       case '王':
@@ -633,11 +679,12 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_wang_fang',
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'contactId': 'user_wang_fang',
-              'displayName': '王芳',
-              'conversationId': 'conv_002',
-            }),
+            payload: SearchHitPayloadChatContact(
+              ChatContactSearchItemDto(
+                contactId: 'user_wang_fang',
+                displayName: '王芳',
+              ),
+            ),
           ),
         ];
       default:
@@ -655,52 +702,60 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_002',
         title: '周末登山群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_002',
-          'type': 'group',
-          'title': '周末登山群',
-          'memberCount': 15,
-          'lastMessagePreview': '周六早上8点出发',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_002',
+            type: 'group',
+            title: '周末登山群',
+            memberCount: 15,
+            lastMessagePreview: '周六早上8点出发',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_3',
         title: '3人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_3',
-          'type': 'group',
-          'title': '3人测试群',
-          'memberCount': 3,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_3',
+            type: 'group',
+            title: '3人测试群',
+            memberCount: 3,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_4',
         title: '4人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_4',
-          'type': 'group',
-          'title': '4人测试群',
-          'memberCount': 4,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_4',
+            type: 'group',
+            title: '4人测试群',
+            memberCount: 4,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
       SearchHit(
         objectType: SearchObjectType.chatConversation,
         objectId: 'conv_grid_5',
         title: '5人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: SearchHitPayloadWireMap(<String, dynamic>{
-          'conversationId': 'conv_grid_5',
-          'type': 'group',
-          'title': '5人测试群',
-          'memberCount': 5,
-          'lastMessagePreview': '测试群聊',
-        }),
+        payload: SearchHitPayloadChatConversation(
+          ConversationSearchItemView(
+            conversationId: 'conv_grid_5',
+            type: 'group',
+            title: '5人测试群',
+            memberCount: 5,
+            lastMessagePreview: '测试群聊',
+          ),
+        ),
       ),
     ];
   }
@@ -839,54 +894,7 @@ class _DelayedHomepageRepository extends MockHomepageRepository {
   }
 }
 
-class _FakeAssistantRepository implements AssistantRepository {
-  @override
-  Future<AssistantPolicyView> getPolicySnapshot({
-    String policyVersionHint = '',
-  }) async => AssistantPolicyView(
-    version: policyVersionHint.isEmpty ? 'test' : policyVersionHint,
-    values: <String, dynamic>{'grantedScopes': const <String>[]},
-  );
-
-  @override
-  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
-    required List<InteractionEvent> events,
-  }) async => AssistantInteractionReportBatchAck(
-    accepted: true,
-    count: events.length,
-    resource: 'interaction_event_batch',
-  );
-
-  @override
-  Future<AssistantScorecardReportBatchAck> reportScorecards({
-    required List<Scorecard> scorecards,
-  }) async => AssistantScorecardReportBatchAck(
-    accepted: true,
-    count: scorecards.length,
-    resource: 'scorecard_batch',
-  );
-
-  @override
-  Future<AssistantSkillConsent> grantSkillConsent({
-    required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
-  }) async {
-    return AssistantSkillConsent(
-      skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime(2026, 3, 27),
-    );
-  }
-
-  @override
-  Future<List<AssistantSkillConsent>> listConsents() async {
-    return const <AssistantSkillConsent>[];
-  }
-
-  @override
-  Future<void> revokeSkillConsent({required String skillId}) async {}
-
+class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
@@ -909,25 +917,6 @@ class _FakeAssistantRepository implements AssistantRepository {
       ],
     );
   }
-
-  @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
-    int limit = 32,
-    String? status,
-  }) async => const <AssistantUserTaskView>[];
-
-  @override
-  Future<List<AssistantUserMemoryView>> listAssistantMemories({
-    int limit = 32,
-  }) async => const <AssistantUserMemoryView>[];
-
-  @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
-    int limit = 64,
-  }) async => const <AssistantSkillCatalogItemView>[];
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Map<String, dynamic> _historyEntry(String query) {

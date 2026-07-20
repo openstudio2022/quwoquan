@@ -33,3 +33,17 @@ events:
     channel: event_store
     payload_entity: UserAccount
     payload_fields: [userId, status]
+
+  - name: UserAccountClosed
+    description: >
+      账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。
+      有状态 recommendation-engine 由 content-service 内 accountclosure 子步骤负责；
+      无账号私有持久状态的 rec-model-service 不建立重复 consumer。
+    producer: user-service
+    consumers: [content-service, chat-service, circle-service, notification-service, search-service]
+    channel: events.user.account
+    payload_entity: UserAccountClosedPayload
+    payload_fields: [userId, personaIds, accountState, updatedAt]
+    responsibility_bindings:
+      recommendation-engine: content-service
+      rec-model-service: stateless_excluded

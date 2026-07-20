@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -189,6 +190,38 @@ func (store *MongoAggregateStore) load(ctx context.Context, filter any) (placeme
 		return placementmodel.CirclePostPlacement{}, false, err
 	}
 	return document.toModel(), true, nil
+}
+
+// RecordNoopReceipt 落"目标状态已满足"回执：不递增 version、不写 outbox。
+func (store *MongoAggregateStore) RecordNoopReceipt(ctx context.Context, noop placementports.NoopReceipt) (placementports.CommitReceipt, error) {
+	if strings.TrimSpace(noop.PlacementID) == "" ||
+		strings.TrimSpace(noop.ReceiptKey) == "" ||
+		strings.TrimSpace(noop.CommandDigest) == "" {
+		return placementports.CommitReceipt{}, placementmodel.ErrInvalidChange
+	}
+	if replay, found, err := store.findReceipt(ctx, noop.ReceiptKey, noop.CommandDigest); err != nil || found {
+		return replay, err
+	}
+	expiresAt := noop.ReceiptExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	_, err := store.receipts.InsertOne(ctx, bson.D{
+		{Key: "_id", Value: noop.ReceiptKey}, {Key: "commandDigest", Value: noop.CommandDigest},
+		{Key: "placementId", Value: noop.PlacementID}, {Key: "version", Value: noop.Version},
+		{Key: "state", Value: noop.State}, {Key: "expiresAt", Value: expiresAt},
+	})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			if replay, found, replayErr := store.findReceipt(ctx, noop.ReceiptKey, noop.CommandDigest); replayErr == nil && found {
+				return replay, nil
+			}
+		}
+		return placementports.CommitReceipt{}, err
+	}
+	return placementports.CommitReceipt{
+		PlacementID: noop.PlacementID, Version: noop.Version, State: noop.State,
+	}, nil
 }
 
 func (store *MongoAggregateStore) findReceipt(ctx context.Context, receiptKey, commandDigest string) (placementports.CommitReceipt, bool, error) {

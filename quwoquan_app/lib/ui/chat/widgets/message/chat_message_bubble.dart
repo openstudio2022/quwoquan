@@ -5,17 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/chat_mention_text.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/rtc_call_log_bubble.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
-const double chatBubbleMaxWidth = 280.0;
+const double chatBubbleMaxWidth = AppSpacing.chatBubbleMaxWidth;
 const double chatBubbleWidthFactor = 0.84;
 
 /// 聊天气泡内图片展示尺寸（语义尺寸）
-const double chatBubbleImageSize = 200.0;
+const double chatBubbleImageSize = AppSpacing.chatBubbleImageSize;
 
 class ChatMessageBubble extends StatelessWidget {
   const ChatMessageBubble({
@@ -35,6 +38,8 @@ class ChatMessageBubble extends StatelessWidget {
     this.receiptEnabled = false,
     this.memberCount = 2,
     this.messageStatus,
+    this.mentionDisplayNames = const <String, String>{},
+    this.onMentionTap,
   });
 
   final ChatMessageDisplayItem message;
@@ -64,11 +69,13 @@ class ChatMessageBubble extends StatelessWidget {
 
   /// 消息发送状态（sending / sent / failed / recalled）
   final String? messageStatus;
+  final Map<String, String> mentionDisplayNames;
+  final ValueChanged<String>? onMentionTap;
 
   @override
   Widget build(BuildContext context) {
     final viewportWidth = MediaQuery.of(context).size.width;
-    const horizontalPadding = 24.0;
+    const horizontalPadding = AppSpacing.chatBubbleHorizontalPadding;
     final effectiveMaxWidth = useFullWidth
         ? viewportWidth - 2 * horizontalPadding
         : math.max(chatBubbleMaxWidth, viewportWidth * chatBubbleWidthFactor);
@@ -105,7 +112,7 @@ class ChatMessageBubble extends StatelessWidget {
             vertical: AppSpacing.intraGroupLg,
           ),
           child: Text(
-            UITextConstants.chatPreviewRecalled,
+            ChatText.chatPreviewRecalled,
             style: TextStyle(
               fontSize: AppTypography.base,
               color: textColor.withValues(alpha: 0.72),
@@ -113,6 +120,8 @@ class ChatMessageBubble extends StatelessWidget {
           ),
         ),
       );
+    } else if (type == 'system_call_log') {
+      contentWidget = RtcCallLogBubble(card: message.card, onRedial: onTap);
     } else if (type == 'image') {
       final imageUrl = message.imageUrl.isNotEmpty
           ? message.imageUrl
@@ -144,9 +153,7 @@ class ChatMessageBubble extends StatelessWidget {
         messageStatus: message.status,
       );
     } else if (type == 'file') {
-      final title = content.isNotEmpty
-          ? content
-          : UITextConstants.chatPreviewFile;
+      final title = content.isNotEmpty ? content : ChatText.chatPreviewFile;
       contentWidget = _BubbleWithTail(
         isRight: isRight,
         color: bubbleColor.withValues(alpha: 0.92),
@@ -190,7 +197,7 @@ class ChatMessageBubble extends StatelessWidget {
                     ),
                     SizedBox(height: AppSpacing.xs),
                     Text(
-                      UITextConstants.chatPreviewFile,
+                      ChatText.chatPreviewFile,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
                         color: textColor.withValues(alpha: 0.72),
@@ -208,9 +215,7 @@ class ChatMessageBubble extends StatelessWidget {
       final previewUrl = message.thumbnailUrl.isNotEmpty
           ? message.thumbnailUrl
           : message.imageUrl;
-      final title = content.isNotEmpty
-          ? content
-          : UITextConstants.chatPreviewVideo;
+      final title = content.isNotEmpty ? content : ChatText.chatPreviewVideo;
       contentWidget = _BubbleWithTail(
         isRight: isRight,
         color: bubbleColor.withValues(alpha: 0.92),
@@ -303,7 +308,7 @@ class ChatMessageBubble extends StatelessWidget {
                       ),
                       SizedBox(height: AppSpacing.xs),
                       Text(
-                        UITextConstants.chatPreviewVideo,
+                        ChatText.chatPreviewVideo,
                         style: TextStyle(
                           fontSize: AppTypography.iosFootnote,
                           color: AppColors.white.withValues(alpha: 0.84),
@@ -321,7 +326,7 @@ class ChatMessageBubble extends StatelessWidget {
     } else if (type == 'card' && message.card != null) {
       final card = message.card!;
       final title = card.title.trim().isEmpty
-          ? UITextConstants.chatPreviewCard
+          ? ChatText.chatPreviewCard
           : card.title.trim();
       final subtitle = card.subtitle?.trim() ?? '';
       final thumbnailUrl = card.thumbnailUrl?.trim() ?? '';
@@ -422,8 +427,10 @@ class ChatMessageBubble extends StatelessWidget {
             color: bubbleColor,
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           ),
-          child: SelectableText(
-            content,
+          child: ChatMentionText(
+            content: content,
+            mentions: message.mentions,
+            displayNames: mentionDisplayNames,
             textAlign: TextAlign.left,
             style: TextStyle(
               fontSize: AppTypography.lg,
@@ -435,6 +442,19 @@ class ChatMessageBubble extends StatelessWidget {
               fontFamily: resolveAppThemeFontFamily(),
               fontFamilyFallback: resolveAppThemeFontFallbacks(),
             ),
+            mentionStyle: TextStyle(
+              fontSize: AppTypography.lg,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundInverse,
+              ),
+              height: AppTypography.bodyLineHeight,
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.underline,
+              fontFamily: resolveAppThemeFontFamily(),
+              fontFamilyFallback: resolveAppThemeFontFallbacks(),
+            ),
+            onMentionTap: onMentionTap,
           ),
         ),
       );
@@ -454,14 +474,25 @@ class ChatMessageBubble extends StatelessWidget {
             AppSpacing.containerSm + 2,
             AppSpacing.intraGroupLg,
           ),
-          child: SelectableText(
-            content,
+          child: ChatMentionText(
+            content: content,
+            mentions: message.mentions,
+            displayNames: mentionDisplayNames,
             style: TextStyle(
               fontSize: AppTypography.lg,
               color: textColor,
               fontFamily: resolveAppThemeFontFamily(),
               fontFamilyFallback: resolveAppThemeFontFallbacks(),
             ),
+            mentionStyle: TextStyle(
+              fontSize: AppTypography.lg,
+              color: isRight ? textColor : AppColors.primaryColor,
+              fontWeight: FontWeight.w700,
+              decoration: isRight ? TextDecoration.underline : null,
+              fontFamily: resolveAppThemeFontFamily(),
+              fontFamilyFallback: resolveAppThemeFontFallbacks(),
+            ),
+            onMentionTap: onMentionTap,
           ),
         ),
       );
@@ -545,8 +576,8 @@ class _BubbleWithTail extends StatelessWidget {
   final Color tailShadowColor;
   final Widget child;
 
-  static const double _radius = 12;
-  static const double _tailExtent = 8;
+  static const double _radius = AppSpacing.chatBubbleRadius;
+  static const double _tailExtent = AppSpacing.chatBubbleTailExtent;
   static const double _tailTopRatio = 0.35;
   static const double _tailBottomRatio = 0.65;
 
@@ -613,36 +644,20 @@ class _BubbleWithTail extends StatelessWidget {
       borderRadius: BorderRadius.circular(_radius),
       child: child,
     );
-    final sizedForTail = Padding(
-      padding: EdgeInsets.only(
-        left: isRight ? 0 : _tailExtent,
-        right: isRight ? _tailExtent : 0,
+    return CustomPaint(
+      painter: _BubbleTailPainter(
+        color: color,
+        isRight: isRight,
+        tailExtent: _tailExtent,
+        shadowColor: tailShadowColor,
       ),
-      child: content,
-    );
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        Opacity(opacity: 0, child: sizedForTail),
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _BubbleTailPainter(
-              color: color,
-              isRight: isRight,
-              tailExtent: _tailExtent,
-              shadowColor: tailShadowColor,
-            ),
-          ),
-        ),
-        Positioned(
+      child: Padding(
+        padding: EdgeInsets.only(
           left: isRight ? 0 : _tailExtent,
-          top: 0,
           right: isRight ? _tailExtent : 0,
-          bottom: 0,
-          child: content,
         ),
-      ],
+        child: content,
+      ),
     );
   }
 }

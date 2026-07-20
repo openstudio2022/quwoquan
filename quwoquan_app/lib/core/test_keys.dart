@@ -34,6 +34,19 @@ class TestKeys {
   static const articlePreviewBookPager = ValueKey<String>(
     'article_preview_book_pager',
   );
+
+  /// 沉浸式作品流的主垂直分页器。
+  static const worksImmersivePager = ValueKey<String>('works_immersive_pager');
+
+  /// 他人主页打招呼输入框（陌生人私信破冰）。
+  static const profileGreetingComposerField = ValueKey<String>(
+    'profile_greeting_composer_field',
+  );
+
+  /// 沉浸式作品流的尾部加载状态页。
+  static const worksLoadMoreSentinel = ValueKey<String>(
+    'works_load_more_sentinel',
+  );
   static const fullscreenModalSurface = ValueKey<String>(
     'fullscreen_modal_surface',
   );
@@ -159,7 +172,6 @@ class TestKeys {
 
   // ── Post Card ────────────────────────────────────────────────────────
   static const photoPostCard = ValueKey<String>('photo_post_card');
-  static const videoPostCard = ValueKey<String>('video_post_card');
   static const articlePostCard = ValueKey<String>('article_post_card');
   static const momentPostCard = ValueKey<String>('moment_post_card');
 
@@ -178,8 +190,11 @@ class TestKeys {
   static const commentInputCapsule = ValueKey<String>('comment_input_capsule');
   static const submitCommentButton = ValueKey<String>('submit_comment_button');
   static const commentTextField = ValueKey<String>('comment_text_field');
-  static const commentAtXiaoquButton = ValueKey<String>(
-    'comment_at_xiaoqu_button',
+  static const commentMentionButton = ValueKey<String>(
+    'comment_mention_button',
+  );
+  static const commentMentionPicker = ValueKey<String>(
+    'comment_mention_picker',
   );
   static const commentThreadView = ValueKey<String>('comment_thread_view');
   static const commentEntryConsistencyNotice = ValueKey<String>(
@@ -211,6 +226,12 @@ class TestKeys {
     'assistant_chat_input_field',
   );
   static const assistantSendButton = ValueKey<String>('assistant_send_button');
+  static const assistantHistoryButton = ValueKey<String>(
+    'assistant_history_button',
+  );
+  static const assistantStopGeneratingButton = ValueKey<String>(
+    'assistant_stop_generating_button',
+  );
   static const chatInputVoiceToggleButton = ValueKey<String>(
     'chat_input_voice_toggle_button',
   );
@@ -287,6 +308,15 @@ class TestKeys {
   );
   static const createPublishButton = ValueKey<String>('create_publish_button');
   static const createCloseButton = ValueKey<String>('create_close_button');
+  static const createPublishResultSheet = ValueKey<String>(
+    'create_publish_result_sheet',
+  );
+  static const createPublishResultViewWorkButton = ValueKey<String>(
+    'create_publish_result_view_work_button',
+  );
+  static const createPublishResultDoneButton = ValueKey<String>(
+    'create_publish_result_done_button',
+  );
   static const createTitleToggle = ValueKey<String>('create_title_toggle');
   static const createTitleInput = ValueKey<String>('create_title_input');
   static const createBodyInput = ValueKey<String>('create_body_input');

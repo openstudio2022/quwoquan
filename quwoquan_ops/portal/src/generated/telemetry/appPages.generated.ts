@@ -86,6 +86,12 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "internal_id": "circleMembershipApproval",
+      "location": "page_internal_circle_membership_approval",
+      "page_name": "circle_membership_approval"
+    },
+    {
+      "collect_page_access": true,
       "internal_id": "circleMediaPickerCamera",
       "location": "page_internal_circle_media_camera",
       "page_name": "circle_media_camera"
@@ -213,6 +219,11 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "chat",
       "route_id": "chat"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "greeting_inbox",
+      "route_id": "greetingInbox"
     },
     {
       "collect_page_access": true,
@@ -346,8 +357,43 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "blocked_users",
+      "route_id": "blockedUsers"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "settings_dark_mode",
       "route_id": "settingsDarkMode"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "settings_notifications",
+      "route_id": "settingsNotifications"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "settings_privacy",
+      "route_id": "settingsPrivacy"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "settings_calls",
+      "route_id": "settingsCalls"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "settings_account_security",
+      "route_id": "settingsAccountSecurity"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "blocked_keywords",
+      "route_id": "blockedKeywords"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "my_reports",
+      "route_id": "myReports"
     },
     {
       "collect_page_access": true,
@@ -368,11 +414,6 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "profile_personas",
       "route_id": "profilePersonas"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "profile_comments",
-      "route_id": "profileComments"
     },
     {
       "collect_page_access": true,
@@ -428,6 +469,11 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "chat_member_search",
       "route_id": "chatMemberSearch"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "chat_announcement",
+      "route_id": "chatAnnouncement"
     },
     {
       "collect_page_access": true,

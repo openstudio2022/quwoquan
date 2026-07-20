@@ -61,7 +61,6 @@ Future<void> openHomeFeedPost(
       );
 
   final rawPostsById = homeFollowingMediaViewerRaws(
-    content: ref.read(contentReadRepositoryProvider),
     viewerPosts: viewerPosts,
   );
   final postViews = viewerPosts

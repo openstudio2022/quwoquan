@@ -12,7 +12,14 @@ import (
 	"quwoquan_service/internal/metadata/validate"
 )
 
-const homepageErrorsSource = "entity/homepage/errors.yaml"
+// entityErrorSources 按对象目录聚合 entity 域全部错误码；
+// 通用命令错误定义在 homepage/errors.yaml，对象特有错误各归其目录。
+var entityErrorSources = []string{
+	"entity/homepage/errors.yaml",
+	"entity/homepage_claim_request/errors.yaml",
+	"entity/homepage_review/errors.yaml",
+	"entity/homepage_status_report/errors.yaml",
+}
 
 func main() {
 	var metadataDir string
@@ -26,20 +33,36 @@ func main() {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
 	if err := generateErrors(source, outputDir); err != nil {
-		exitErr(fmt.Errorf("generate entity homepage errors: %w", err))
+		exitErr(fmt.Errorf("generate entity errors: %w", err))
 	}
-	fmt.Printf("codegen_entity_service: wrote homepage errors under %s\n", outputDir)
+	fmt.Printf("codegen_entity_service: wrote entity errors under %s\n", outputDir)
 }
 
 func generateErrors(source *contractcodegen.Source, outputDir string) error {
-	var errorsFile contractcodegen.ErrorsFile
-	if err := source.Decode(homepageErrorsSource, &errorsFile); err != nil {
-		return fmt.Errorf("load %s: %w", homepageErrorsSource, err)
+	merged := contractcodegen.ErrorsFile{}
+	seen := map[string]string{}
+	for _, sourcePath := range entityErrorSources {
+		var errorsFile contractcodegen.ErrorsFile
+		if err := source.Decode(sourcePath, &errorsFile); err != nil {
+			return fmt.Errorf("load %s: %w", sourcePath, err)
+		}
+		for _, definition := range errorsFile.Errors {
+			if previous, duplicated := seen[definition.Code]; duplicated {
+				return fmt.Errorf(
+					"error code %s duplicated in %s and %s",
+					definition.Code,
+					previous,
+					sourcePath,
+				)
+			}
+			seen[definition.Code] = sourcePath
+			merged.Errors = append(merged.Errors, definition)
+		}
 	}
-	rendered := contractcodegen.RenderGoErrorsFile(&errorsFile, contractcodegen.GoErrorsFileOptions{
+	rendered := contractcodegen.RenderGoErrorsFile(&merged, contractcodegen.GoErrorsFileOptions{
 		Generator:    "tools/codegen_entity_service",
-		SourcePath:   homepageErrorsSource,
-		CommentLines: []string{"Entity homepage error sentinels and helpers. Transport semantics come from errors.yaml."},
+		SourcePath:   "entity/*/errors.yaml",
+		CommentLines: []string{"Entity domain error sentinels and helpers. Transport semantics come from errors.yaml."},
 	})
 	formatted, err := format.Source([]byte(rendered))
 	if err != nil {

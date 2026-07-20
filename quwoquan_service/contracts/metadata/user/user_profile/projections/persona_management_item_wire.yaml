@@ -92,12 +92,6 @@ client_projection:
       source: retiredAt
       default: "null"
 
-    - name: hasAttributedHistory
-      dart_type: bool
-      nullable: false
-      source: hasAttributedHistory
-      default: "false"
-
     - name: hasPublishedContent
       dart_type: bool
       nullable: false

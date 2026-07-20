@@ -2,10 +2,12 @@ package mediacontract
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
 	moderationmodel "quwoquan_service/services/content-service/internal/domain/moderation/model"
 	moderationports "quwoquan_service/services/content-service/internal/domain/moderation/ports"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
@@ -14,11 +16,12 @@ import (
 // ModerationStore is test-only contract infrastructure for PostModerationCase.
 // Production composition must use MongoPostModerationCaseStore.
 type ModerationStore struct {
-	mu       sync.RWMutex
-	cases    map[string]moderationmodel.Snapshot
-	receipts map[string]moderationReceipt
-	outbox   []moderationports.OutboxEvent
-	audit    []moderationports.AuditEntry
+	mu          sync.RWMutex
+	cases       map[string]moderationmodel.Snapshot
+	receipts    map[string]moderationReceipt
+	outbox      []moderationports.OutboxEvent
+	audit       []moderationports.AuditEntry
+	checkpoints map[string]string
 }
 
 type moderationReceipt struct {
@@ -30,8 +33,9 @@ type moderationReceipt struct {
 
 func NewModerationStore() *ModerationStore {
 	return &ModerationStore{
-		cases:    map[string]moderationmodel.Snapshot{},
-		receipts: map[string]moderationReceipt{},
+		cases:       map[string]moderationmodel.Snapshot{},
+		receipts:    map[string]moderationReceipt{},
+		checkpoints: map[string]string{},
 	}
 }
 
@@ -67,6 +71,45 @@ func (s *ModerationStore) LoadByPostRevision(
 		return aggregate, err == nil, err
 	}
 	return nil, false, nil
+}
+
+func (s *ModerationStore) FindCurrentByPostID(
+	_ context.Context,
+	postID string,
+) (moderationapp.PostModerationCaseOpsSlice, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var current moderationmodel.Snapshot
+	found := false
+	for _, snapshot := range s.cases {
+		if snapshot.PostID != strings.TrimSpace(postID) ||
+			snapshot.Status == moderationmodel.StatusSuperseded {
+			continue
+		}
+		if !found ||
+			snapshot.PostVersion > current.PostVersion ||
+			(snapshot.PostVersion == current.PostVersion &&
+				snapshot.UpdatedAt.After(current.UpdatedAt)) {
+			current = snapshot
+			found = true
+		}
+	}
+	if !found {
+		return moderationapp.PostModerationCaseOpsSlice{}, false, nil
+	}
+	return moderationapp.PostModerationCaseOpsSlice{
+		ID:             current.ID,
+		Version:        current.Version,
+		PostID:         current.PostID,
+		PostVersion:    current.PostVersion,
+		ContentDigest:  current.ContentDigest,
+		Status:         current.Status,
+		ReviewerID:     current.ReviewerID,
+		DecisionReason: current.DecisionReason,
+		CreatedAt:      current.CreatedAt,
+		UpdatedAt:      current.UpdatedAt,
+		DecidedAt:      cloneTime(current.DecidedAt),
+	}, true, nil
 }
 
 func (s *ModerationStore) FindReceipt(
@@ -117,7 +160,14 @@ func (s *ModerationStore) Commit(
 		snapshot: snapshot,
 		expiry:   receiptExpiry(commit.ReceiptExpiresAt),
 	}
-	s.outbox = append(s.outbox, cloneModerationOutbox(commit.Events)...)
+	events := cloneModerationOutbox(commit.Events)
+	for index := range events {
+		events[index].Checkpoint = fmt.Sprintf(
+			"%020d",
+			len(s.outbox)+index+1,
+		)
+	}
+	s.outbox = append(s.outbox, events...)
 	s.audit = append(s.audit, commit.Audit)
 	aggregate, err := moderationmodel.Restore(snapshot)
 	return moderationports.CommitResult{Aggregate: aggregate}, err
@@ -163,6 +213,67 @@ func (s *ModerationStore) OutboxEvents() []moderationports.OutboxEvent {
 	return cloneModerationOutbox(s.outbox)
 }
 
+func (s *ModerationStore) ReadModerationOutboxAfter(
+	_ context.Context,
+	checkpoint string,
+	limit int,
+) ([]moderationports.OutboxEvent, error) {
+	checkpoint = strings.TrimSpace(checkpoint)
+	if limit <= 0 {
+		limit = 100
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	start := 0
+	if checkpoint != "" {
+		found := false
+		for index, event := range s.outbox {
+			if event.Checkpoint == checkpoint {
+				start = index + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf(
+				"test moderation checkpoint %q does not exist",
+				checkpoint,
+			)
+		}
+	}
+	end := min(start+limit, len(s.outbox))
+	return cloneModerationOutbox(s.outbox[start:end]), nil
+}
+
+func (s *ModerationStore) LoadModerationCheckpoint(
+	_ context.Context,
+	consumer string,
+) (string, error) {
+	consumer = strings.TrimSpace(consumer)
+	if consumer == "" {
+		return "", fmt.Errorf("test moderation consumer is required")
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.checkpoints[consumer], nil
+}
+
+func (s *ModerationStore) SaveModerationCheckpoint(
+	_ context.Context,
+	consumer string,
+	checkpoint string,
+) error {
+	consumer = strings.TrimSpace(consumer)
+	checkpoint = strings.TrimSpace(checkpoint)
+	if consumer == "" || checkpoint == "" {
+		return fmt.Errorf("test moderation checkpoint identity is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkpoints[consumer] = checkpoint
+	return nil
+}
+
 func (s *ModerationStore) AuditEntries() []moderationports.AuditEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -205,12 +316,22 @@ func (s *ModerationStore) validateCommit(commit moderationports.Commit) error {
 			"invalid test moderation commit",
 		)
 	}
+	snapshot := commit.Aggregate.Snapshot()
 	current, exists := s.cases[commit.Aggregate.ID()]
 	if commit.ExpectedVersion == 0 {
 		if exists {
 			return contentgenerated.AppErrorFromVersionConflict(
 				"test moderation case already exists",
 			)
+		}
+		for _, existing := range s.cases {
+			if existing.PostID == snapshot.PostID &&
+				existing.PostVersion == snapshot.PostVersion &&
+				existing.ContentDigest == snapshot.ContentDigest {
+				return contentgenerated.AppErrorFromVersionConflict(
+					"test moderation case revision already exists",
+				)
+			}
 		}
 	} else if !exists || current.Version != commit.ExpectedVersion {
 		return contentgenerated.AppErrorFromVersionConflict(
@@ -241,3 +362,10 @@ func cloneModerationOutbox(
 func normalizeDigest(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
+
+var (
+	_ moderationports.AggregateStore               = (*ModerationStore)(nil)
+	_ moderationports.PublicationEligibilityReader = (*ModerationStore)(nil)
+	_ moderationports.OutboxReader                 = (*ModerationStore)(nil)
+	_ moderationports.ProjectionCheckpointStore    = (*ModerationStore)(nil)
+)

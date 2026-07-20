@@ -48,6 +48,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.gwt1_local_contract
@@ -55,6 +56,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.contract
@@ -89,11 +91,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.gwt2_local_contract
@@ -127,11 +131,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: gwt3_api_integration
         cases:
         - api_integration.runtime.runtime_client_foundation.public_content_web_entry.gwt3_api_integration
@@ -140,6 +146,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.gwt3_local_contract
@@ -176,12 +183,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt4_api_integration
         cases:
         - api_integration.runtime.runtime_client_foundation.public_content_web_entry.gwt4_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.contract
@@ -213,6 +222,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.public_content_web_entry.gwt5_local_contract
@@ -228,5 +238,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/ui/content/share/content_share_template_public_link_test.dart
   - python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/ui/content/seo/markdown_seo_html_renderer_test.dart
-  full_gate:
+  profile_gates:
   - make gate

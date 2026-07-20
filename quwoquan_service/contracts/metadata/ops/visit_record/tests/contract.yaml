@@ -1,0 +1,32 @@
+entity: VisitRecord
+
+scenarios:
+  - name: visit_recorded_with_derived_actor
+    operation: RecordVisit
+    go_func: TestVisitEventContract
+    evidence: api_integration
+    assertions:
+      - userId 由已验签主体派生；请求体携带 userId 返回 400（DisallowUnknownFields）
+      - db.visit_records 按 (userId,targetType,targetKey) 唯一 upsert
+
+  - name: visit_count_increments_across_keys
+    operation: RecordVisit
+    go_func: TestVisitEventContract
+    evidence: api_integration
+    assertions:
+      - 三次不同 Idempotency-Key 的访问 visitCount=3 且 lastSeenAt 推进
+
+  - name: visit_idempotent_replay_no_double_count
+    operation: RecordVisit
+    go_func: TestVisitEventContract
+    evidence: api_integration
+    assertions:
+      - 相同 Idempotency-Key 重放 visitCount 不重复累加
+
+  - name: visit_stats_operator_read
+    operation: GetVisitStats
+    go_func: TestVisitEventContract
+    evidence: api_integration
+    assertions:
+      - 缺 ops.visit.read scope 返回 403
+      - 按 targetType/targetKey 过滤聚合 visitCount

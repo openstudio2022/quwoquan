@@ -6,7 +6,7 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 )
 
-func TestContentReadOperationsRemainCommerciallyReady(t *testing.T) {
+func TestContentReadOperationsExposeTruthfulCommercialStatus(t *testing.T) {
 	t.Parallel()
 
 	descriptors := map[string]struct {
@@ -26,21 +26,41 @@ func TestContentReadOperationsRemainCommerciallyReady(t *testing.T) {
 		}
 	}
 
-	for operationID, want := range map[string]string{
-		"content.post.GetAppConfig":                             "public",
-		"content.post.GetFeed":                                  "optional",
-		"content.post.ListProfileInteractionActivitiesReceived": "required",
-		"content.post.ListProfileInteractionActivitiesSent":     "required",
+	for operationID, want := range map[string]struct {
+		authMode         string
+		commercialStatus string
+	}{
+		"content.post.GetAppConfig": {
+			authMode:         "public",
+			commercialStatus: "ready",
+		},
+		"content.post.GetFeed": {
+			authMode:         "optional",
+			commercialStatus: "ready",
+		},
+		"content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived": {
+			authMode:         "required",
+			commercialStatus: "blocked",
+		},
+		"content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent": {
+			authMode:         "required",
+			commercialStatus: "blocked",
+		},
 	} {
 		descriptor, ok := descriptors[operationID]
 		if !ok {
 			t.Fatalf("generated operation descriptor missing %q", operationID)
 		}
-		if descriptor.authMode != want {
-			t.Fatalf("%s auth mode = %q, want %q", operationID, descriptor.authMode, want)
+		if descriptor.authMode != want.authMode {
+			t.Fatalf("%s auth mode = %q, want %q", operationID, descriptor.authMode, want.authMode)
 		}
-		if descriptor.commercialStatus != "ready" {
-			t.Fatalf("%s commercial status = %q, want ready", operationID, descriptor.commercialStatus)
+		if descriptor.commercialStatus != want.commercialStatus {
+			t.Fatalf(
+				"%s commercial status = %q, want %q",
+				operationID,
+				descriptor.commercialStatus,
+				want.commercialStatus,
+			)
 		}
 		if descriptor.timeoutMillis <= 0 {
 			t.Fatalf("%s timeout must be generated from metadata, got %d", operationID, descriptor.timeoutMillis)

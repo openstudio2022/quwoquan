@@ -55,71 +55,19 @@ api_routes:
       feedRequestId 为服务端权威生成的归因 id：随响应 envelope 下发；客户端首刷不传，
       分页/继续加载时回显服务端下发的 feedRequestId 以保持同一 feed 会话的归因连续，
       并透传给后续行为事件（曝光/点击/停留/负反馈）。
-    query_params: [identity, type, sort, cursor, limit, subCategory, feedRequestId]
+      channelId 为首页频道路由标识（home_channels.feed_query.channel 真相源）：
+      following 走关注召回主路（FeedFollow，fail-closed，关注为空返回空列表）；
+      travel 走 travel_photography 垂类；其余频道走推荐引擎并按 channelId 归因。
+      携带 identity/type 的请求是发现页浏览流（时间线具名查询），与频道推荐主链路互斥。
+    query_params: [identity, type, sort, cursor, limit, subCategory, feedRequestId, channelId]
     response_entity: Post
-    response_fields: [items, nextCursor, cursor, feedRequestId, rankingVersion, reasonVersion]
+    response_fields: [items, nextCursor, cursor, feedRequestId, rankingVersion, reasonVersion, objectCards]
     security:
       auth_mode: optional
       principal: owner
       token_transport: bearer
       anonymous_policy: allow
       visibility: public
-
-  - method: GET
-    path: /content/posts/search
-
-    operation: SearchPosts
-    actor: persona
-    application:
-      kind: query
-      facet: PostSearchQueryFacet
-      method: searchPosts
-      reader: PostSearchReader
-      slice: PostSearchResultSlice
-    authorization:
-      principal: persona
-      ownership_policy: authenticated_search
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: none
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.invalid_argument
-      - CONTENT.SYSTEM.storage_read_failed
-      - CONTENT.SYSTEM.internal_error
-    privacy:
-      request_classification: PII
-      response_classification: INTERNAL
-      log_policy: metadata_only
-    telemetry:
-      metric: content_post_search
-      trace: true
-      attributes: [outcome, result_count]
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/post_queries.dart
-      request_type: ContentPostSearchQuery
-      response_type: ContentPostSearchResultSlice
-      request_encoder: encodeContentPostSearchQuery
-      response_decoder: decodeContentPostSearchResultSlice
-    description: 网络结果页内容搜索结果（返回内容搜索项视图，可按群组频道分类过滤）
-    query_params: [query, identity, type, categoryId, subCategory, cursor, limit]
-    response_entity: PostSearchItemView
-    response_body: PostSearchItemView
-    response_body_kind: page
-    security:
-      auth_mode: required
-      principal: persona
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
 
   - method: POST
     path: /content/posts:publish
@@ -146,9 +94,17 @@ api_routes:
       idempotency: required
     error_codes:
       - CONTENT.USER.unauthorized
+      - CONTENT.USER.forbidden_edit
       - CONTENT.USER.invalid_argument
       - CONTENT.USER.invalid_content_type
+      - CONTENT.USER.content_too_long
+      - CONTENT.USER.rate_limited
+      - CONTENT.USER.publication_rejected
+      - CONTENT.USER.media_not_found
+      - CONTENT.USER.media_not_ready
+      - CONTENT.USER.media_processing_rejected
       - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.required_dependency_unavailable
       - CONTENT.SYSTEM.storage_write_failed
       - CONTENT.SYSTEM.internal_error
     privacy:
@@ -158,7 +114,7 @@ api_routes:
     telemetry:
       metric: content_post_publication_submit
       trace: true
-      attributes: [content_type, outcome]
+      attributes: [content_type, outcome, admission_stage]
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
@@ -168,7 +124,7 @@ api_routes:
       response_type: ContentPostPublicationReceipt
       request_encoder: encodeSubmitContentPostPublicationCommand
       response_decoder: decodeContentPostPublicationReceipt
-    description: 以本地草稿唯一的一次性 PublishIntent 提交发布；服务端按意图永久去重并原子创建已发布 Post，同一意图的后续请求只返回原回执
+    description: 以本地草稿唯一的一次性 PublishIntent 提交发布；服务端按意图永久去重，依次通过长度、Persona 频控与内容安全 fail-closed 准入后原子创建已发布 Post；同一意图的后续请求只返回原回执
     request_entity: Post
     request_fields: [publishIntentId, localDraftId, contentType, contentIdentity, title, body, summary, semanticMentions, mediaAssetIds, mediaItems, articleMarkdown, markdownDialect, articleAssetManifest, articleRenderProfile, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
     writable_fields: [publishIntentId, localDraftId, contentType, contentIdentity, title, body, summary, semanticMentions, mediaAssetIds, mediaItems, articleMarkdown, markdownDialect, articleAssetManifest, articleRenderProfile, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
@@ -388,116 +344,6 @@ api_routes:
     security:
       auth_mode: required
   - method: GET
-    path: /content/sub-accounts/{subAccountId}/interactions/received
-
-    operation: ListProfileInteractionActivitiesReceived
-    actor: persona
-    application:
-      kind: query
-      facet: ProfileInteractionQueryFacet
-      method: listProfileInteractionActivitiesReceived
-      reader: ReceivedProfileInteractionReader
-      slice: ProfileInteractionPageSlice
-    authorization:
-      principal: persona
-      ownership_policy: active_persona_for_private_share_filter
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: none
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.interaction_type_invalid
-      - CONTENT.USER.interaction_cursor_invalid
-      - CONTENT.USER.interaction_owner_forbidden
-      - CONTENT.SYSTEM.storage_read_failed
-    privacy:
-      request_classification: PII
-      response_classification: PII
-      log_policy: metadata_only
-    telemetry:
-      metric: content_profile_interaction_received_list
-      trace: true
-      attributes: [actor_dimension, interaction_type, outcome]
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    description: 个人主页收到的互动活动（赞/评论/转发）；type 可选，type=share 只允许当前 owner 的 active sub-account；cursor 为 opaque keyset token（occurredAt+interactionId 倒序）
-    query_params: [type, cursor, limit]
-    response_entity: ProfileInteractionActivityView
-    # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
-    response_body: ProfileInteractionActivityWire
-    response_body_kind: page
-    security:
-      auth_mode: required
-  - method: GET
-    path: /content/sub-accounts/{subAccountId}/interactions/sent
-
-    operation: ListProfileInteractionActivitiesSent
-    actor: persona
-    application:
-      kind: query
-      facet: ProfileInteractionQueryFacet
-      method: listProfileInteractionActivitiesSent
-      reader: SentProfileInteractionReader
-      slice: ProfileInteractionPageSlice
-    authorization:
-      principal: persona
-      ownership_policy: active_persona_for_private_share_filter
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: none
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.interaction_type_invalid
-      - CONTENT.USER.interaction_cursor_invalid
-      - CONTENT.USER.interaction_owner_forbidden
-      - CONTENT.SYSTEM.storage_read_failed
-    privacy:
-      request_classification: PII
-      response_classification: PII
-      log_policy: metadata_only
-    telemetry:
-      metric: content_profile_interaction_sent_list
-      trace: true
-      attributes: [actor_dimension, interaction_type, outcome]
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    description: 个人主页发出的互动活动（赞/评论/转发）；type 可选，type=share 只允许当前 owner 的 active sub-account；cursor 为 opaque keyset token（occurredAt+interactionId 倒序）
-    query_params: [type, cursor, limit]
-    response_entity: ProfileInteractionActivityView
-    # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
-    response_body: ProfileInteractionActivityWire
-    response_body_kind: page
-    security:
-      auth_mode: required
-  - method: PATCH
-    path: /content/sub-accounts/{subAccountId}/interactions/{interactionId}/state
-
-    operation: UpdateProfileInteractionState
-    actor: persona
-    application:
-      kind: command
-      facet: ProfileInteractionCommandFacet
-      method: updateProfileInteractionState
-      aggregate_owner: Post
-      mutation_target: Post
-      invariant_target: Post
-    description: 当前 owner 对 received 互动逐条写入 seen/read 幂等状态；state 仅允许 seen/read，initiated 不接受状态写入
-    query_params: [state]
-    security:
-      auth_mode: required
-  - method: GET
     path: /content/sub-accounts/{subAccountId}/author-impact
 
     operation: GetAuthorImpact
@@ -508,6 +354,36 @@ api_routes:
       method: getAuthorImpact
       reader: AuthorImpactReader
       slice: AuthorImpactSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    commercial:
+      status: blocked
+      gap_id: CONTENT_ENTITY_WISHLIST_STATE_IMPLEMENTATION
+      block_reason: 想去状态读合同已冻结，但对象 Reader、transport 与三层测试尚未落地
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: content_author_impact_get
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 创作者影响力真实动作摘要（按 authorId 反向聚合交集转化、关系、进圈、决策、知识与传播帮助）
     query_params: [limit]
     response_entity: AuthorImpactSummary
@@ -517,6 +393,10 @@ api_routes:
     response_body_kind: object
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /content/sub-accounts/{subAccountId}/author-impact/evidence
 
@@ -528,6 +408,33 @@ api_routes:
       method: listAuthorImpactEvidence
       reader: AuthorImpactEvidenceReader
       slice: AuthorImpactEvidencePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: content_author_impact_evidence_list
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: |
       创作者单条影响（impactId）的完整证据分页明细（「我的影响力」数字下钻；R-ID03 闭合）。
       cursor 为 opaque token（occurredAt 时间游标），按 occurredAt 倒序分页 + 触底结束态；
@@ -540,6 +447,10 @@ api_routes:
     response_body_kind: object
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /config/app
 
@@ -595,7 +506,39 @@ api_routes:
       method: getCounters
       reader: PostCounterReader
       slice: PostCounterSlice
-    description: 聚合计数
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.post_not_found
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_post_counters_get
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    description: 聚合计数（likeCount/commentCount/shareCount 可重建投影读）
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: public
 
   - method: GET
     path: /content/footprint
@@ -646,6 +589,62 @@ api_routes:
     response_entity: ContentFootprintEntry
     response_body: ContentFootprintEntry
     response_body_kind: page
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /content/entity-wishlist-state
+
+    operation: GetEntityWishlistState
+    actor: persona
+    application:
+      kind: query
+      facet: EntityWishlistQueryFacet
+      method: getEntityWishlistState
+      reader: EntityWishlistStateReader
+      slice: EntityWishlistStateSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: content_entity_wishlist_state_get
+      trace: true
+      attributes: [outcome, object_kind]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../content/post_queries.dart
+      request_type: EntityWishlistStateQuery
+      response_type: EntityWishlistState
+      request_encoder: encodeEntityWishlistStateQuery
+      response_decoder: decodeEntityWishlistState
+    description: 当前登录用户对 canonical object 的显式「想去」状态；读写同源于 entity_wishlist_events
+    query_params: [objectId, objectKind]
+    response_entity: EntityWishlistState
+    response_body: EntityWishlistState
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -712,9 +711,42 @@ api_routes:
       aggregate_owner: Post
       mutation_target: Post
       invariant_target: Post
-    description: 为文章生成摘要草案（用户可编辑）
+    authorization:
+      principal: persona
+      ownership_policy: self
+    commercial:
+      status: blocked
+      gap_id: CONTENT_ARTICLE_SUMMARY_TEST_EVIDENCE
+      block_reason: 摘要生成为无副作用草案计算，合同已冻结但缺 local_contract/api_integration 测试证据
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_article_summary_generate
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    description: 为文章生成摘要草案（无副作用计算，用户可编辑后随发布提交；重放返回同输入同结果）
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
   - method: GET
     path: /content/helper-read/{contentId}
 
@@ -726,7 +758,42 @@ api_routes:
       method: getHelperRead
       reader: HelperReadReader
       slice: HelperReadSlice
-    description: 帮读摘要
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: blocked
+      gap_id: CONTENT_HELPER_READ_TEST_EVIDENCE
+      block_reason: 帮读摘要读路径合同已冻结但缺 local_contract/api_integration 测试证据
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.post_not_found
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_helper_read_get
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 帮读摘要（公开可见内容的辅助阅读投影读）
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: public
 
   - method: GET
     path: /content/intersections/summary

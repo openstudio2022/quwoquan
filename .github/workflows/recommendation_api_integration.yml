@@ -1,0 +1,69 @@
+# N2-1：推荐面 api_integration 的 CI 执行点。
+#
+# 此前 premium_pool_event_chain / post_behavior_contract 等 api_integration
+# 测试无任何 workflow 调用方（只能本地手跑）。content-service 的
+# api_integration 通过 testcontainers 自管 Mongo/Redis，GitHub-hosted runner
+# 的 Docker 即可承载，无需 self-hosted 环境。
+name: "Recommendation API Integration"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 19 * * *" # 每日 UTC 19:30（北京 03:30），错峰 ML 训练管线
+  pull_request:
+    paths:
+      - "quwoquan_service/services/content-service/**"
+      - "quwoquan_service/runtime/recommendation/**"
+      - "quwoquan_service/runtime/recpolicy/**"
+      - ".github/workflows/recommendation_api_integration.yml"
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+
+jobs:
+  content-service-api-integration:
+    name: "content-service api_integration (testcontainers)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: quwoquan_service
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: 设置 Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: 缓存 Go 模块
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-api-integration-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
+          restore-keys: |
+            go-mod-api-integration-${{ runner.os }}-
+      - name: Run content-service api_integration
+        run: |
+          go test ./services/content-service/tests/api_integration/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
+      - name: Assert recommendation-critical tests executed
+        run: |
+          # 防回归：premium 事件链与 behavior 契约必须真实执行（不是被 skip）。
+          for required in \
+            TestPremiumPoolEventChainServesAndEjectsPremiumFeed \
+            TestBehaviorBatchAssistantInterestProjectsTagInteraction \
+            TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick \
+            TestBehaviorBatchRejectsLike \
+            TestCommentStore_AuthoritativeCountsNoCache; do
+            if ! grep -q "PASS: ${required}" api_integration.log; then
+              echo "required api_integration test ${required} did not pass"
+              exit 1
+            fi
+          done
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: recommendation-api-integration-log
+          path: quwoquan_service/api_integration.log

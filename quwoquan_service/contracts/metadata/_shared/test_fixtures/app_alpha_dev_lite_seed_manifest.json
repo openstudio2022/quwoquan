@@ -88,7 +88,9 @@
       "targetStore": "alpha-dev-lite:app-fixture-json",
       "verifiedEndpoints": [
         "/user/profile",
-        "/user/following-subjects"
+        "/user/following-subjects",
+        "/user/greeting-request/inbox",
+        "/owner/contact-discovery/latest"
       ],
       "deliveryChannels": [
         "app-fixture-json"
@@ -159,6 +161,17 @@
       ]
     }
   ],
+  "mediaSeedRef": "quwoquan_ops/environments/media_delivery_manifest.json",
+  "mediaCanary": {
+    "profileRef": "quwoquan_data/reference/media_canary/video_playback.yaml",
+    "readyAssetIds": [
+      "media-canary-seek-125s",
+      "media-canary-hour-boundary-3595s"
+    ],
+    "rejectionAssetIds": [
+      "media-canary-over-limit-3605s"
+    ]
+  },
   "appAssets": {
     "alphaOnlyFixtureAllowlist": [
       "assistant/test_fixtures/scenarios/assistant_scenarios.lite.json",

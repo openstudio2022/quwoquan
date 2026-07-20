@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
 
 	"quwoquan_service/services/circle-service/internal/application"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
+	circleports "quwoquan_service/services/circle-service/internal/domain/circle/ports"
 )
 
 const (
@@ -17,41 +19,38 @@ const (
 	circleCacheTTL       = 600 * time.Second
 )
 
-// CachedCircleStore wraps the circle storage ports with a Redis caching layer.
-// Cache is invalidated on write operations per storage.yaml invalidation rules.
+// CachedCircleStore wraps the circle read ports with a Redis caching layer.
+// 写路径经 AggregateStore 提交后由 CircleCommandFacade 调用 InvalidateCircle
+// 失效缓存（storage.yaml invalidation rules）。
 type CachedCircleStore struct {
-	records  application.CircleRecordStore
-	metrics  application.CircleMetricsStore
-	sections application.CircleSectionStore
-	rdb      rtredis.Client
+	records application.CircleRecordStore
+	rdb     rtredis.Client
+	logger  *slog.Logger
 }
 
 var (
-	_ application.CircleRecordStore  = (*CachedCircleStore)(nil)
-	_ application.CircleMetricsStore = (*CachedCircleStore)(nil)
-	_ application.CircleSectionStore = (*CachedCircleStore)(nil)
+	_ application.CircleRecordStore = (*CachedCircleStore)(nil)
+	_ circleports.CacheInvalidator  = (*CachedCircleStore)(nil)
 )
 
 func NewCachedCircleStore(
 	records application.CircleRecordStore,
-	metrics application.CircleMetricsStore,
-	sections application.CircleSectionStore,
 	rdb rtredis.Client,
 ) *CachedCircleStore {
-	return &CachedCircleStore{
-		records:  records,
-		metrics:  metrics,
-		sections: sections,
-		rdb:      rdb,
-	}
+	return &CachedCircleStore{records: records, rdb: rdb, logger: slog.Default()}
 }
 
 func (s *CachedCircleStore) cacheKey(id string) string {
 	return fmt.Sprintf("%s%s", circleCacheKeyPrefix, id)
 }
 
-func (s *CachedCircleStore) invalidate(ctx context.Context, id string) {
-	_ = s.rdb.Del(ctx, s.cacheKey(id))
+// InvalidateCircle 删除详情缓存；失败结构化告警（脏缓存最长存活一个 TTL）。
+func (s *CachedCircleStore) InvalidateCircle(ctx context.Context, id string) error {
+	if err := s.rdb.Del(ctx, s.cacheKey(id)); err != nil {
+		s.logger.Warn("circle cache delete failed", "circleId", id, "error", err)
+		return err
+	}
+	return nil
 }
 
 func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Circle, bool) {
@@ -70,47 +69,13 @@ func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Cir
 	}
 
 	if encoded, err := json.Marshal(c); err == nil {
-		_ = s.rdb.SetBytes(ctx, key, encoded, circleCacheTTL)
+		if setErr := s.rdb.SetBytes(ctx, key, encoded, circleCacheTTL); setErr != nil {
+			s.logger.Warn("circle cache set failed", "circleId", id, "error", setErr)
+		}
 	}
 	return c, true
 }
 
-func (s *CachedCircleStore) Create(ctx context.Context, circle *model.Circle) error {
-	return s.records.Create(ctx, circle)
-}
-
-func (s *CachedCircleStore) Update(ctx context.Context, id string, circle *model.Circle) bool {
-	ok := s.records.Update(ctx, id, circle)
-	if ok {
-		s.invalidate(ctx, id)
-	}
-	return ok
-}
-
 func (s *CachedCircleStore) List(ctx context.Context, query application.ListCirclesQuery) ([]model.Circle, string) {
 	return s.records.List(ctx, query)
-}
-
-func (s *CachedCircleStore) Archive(ctx context.Context, id string) bool {
-	ok := s.records.Archive(ctx, id)
-	if ok {
-		s.invalidate(ctx, id)
-	}
-	return ok
-}
-
-func (s *CachedCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {
-	err := s.metrics.UpdateStorageUsed(ctx, id, deltaBytes)
-	if err == nil {
-		s.invalidate(ctx, id)
-	}
-	return err
-}
-
-func (s *CachedCircleStore) UpdateSections(ctx context.Context, id string, sections []model.CircleSectionConfig) error {
-	err := s.sections.UpdateSections(ctx, id, sections)
-	if err == nil {
-		s.invalidate(ctx, id)
-	}
-	return err
 }

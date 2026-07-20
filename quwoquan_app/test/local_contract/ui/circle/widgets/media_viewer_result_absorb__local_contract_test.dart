@@ -1,17 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 
 void main() {
   test('circle feed 吸收 viewer result 时回写完整状态与计数', () {
-    final items = <Map<String, dynamic>>[
-      {
-        'postId': 'post-1',
-        'authorId': 'author-1',
-        'likeCount': 10,
-        'likes': 10,
-        'shareCount': 3,
-      },
+    final items = <CircleHubFeedPostEntry>[
+      CircleHubFeedPostEntry.fromPost(
+        circleId: 'circle-1',
+        post: PhotoPostDto(
+          id: 'post-1',
+          type: 'image',
+          identity: 'work',
+          assistantUsePolicy: 'inherit',
+          authorId: 'author-1',
+          displayName: '测试作者',
+          avatarUrl: '',
+          authorRoleLabel: '',
+          authorIdentityTags: const <String>[],
+          authorVerified: false,
+          coverUrl: '',
+          imageUrls: const <String>[],
+          likeCount: 10,
+          commentCount: 0,
+          shareCount: 3,
+          createdAt: DateTime.utc(2026),
+        ),
+      ),
     ];
 
     final result = MediaViewerResult(
@@ -21,12 +36,12 @@ void main() {
       postSharesCount: const {'post-1': 5},
     );
 
-    final next = applyMediaViewerResultToFeedItems(items, result);
+    CircleHubFeedPostEntry.applyResultToList(items, result);
+    final next = items.single;
 
-    expect(next.single['likeCount'], 12);
-    expect(next.single['likes'], 12);
-    expect(next.single['shareCount'], 5);
-    expect(next.single['isLiked'], isTrue);
-    expect(next.single['isFollowingAuthor'], isTrue);
+    expect(next.likeCount, 12);
+    expect(next.shareCount, 5);
+    expect(next.isLiked, isTrue);
+    expect(next.isFollowingAuthor, isTrue);
   });
 }

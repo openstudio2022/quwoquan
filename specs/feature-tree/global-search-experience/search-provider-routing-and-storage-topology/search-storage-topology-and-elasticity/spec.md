@@ -77,7 +77,7 @@
 
 | Backlog | 任务 | 完成条件 | 验收证据 |
 |---|---|---|---|
-| R-S06-S-1 | 真集群/prod-sim 原生 ES/OpenSearch 容量校准 | 回填 measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格、refresh/bulk/circuit 阈值；多副本 `preference` 验证 TopN 不跳变 | `QWQ_OUTPUT_ROOT/env/repo/runs/search-load/**` 真集群报告、`search_slo.yaml` 回填、`stackctl verify --env prod --kind all --tier all` |
+| R-S06-S-1 | 真集群/prod-sim 原生 ES/OpenSearch 容量校准 | 回填 measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格、refresh/bulk/circuit 阈值；多副本 `preference` 验证 TopN 不跳变 | `QWQ_OUTPUT_ROOT/env/repo/runs/search-load/**` 真集群报告、`search_slo.yaml` 回填、`stackctl verify --env prod --kind all --profile release` |
 | R-S06-S-2 | 写时增量 + backfill 幂等长稳 | content/entity/circle/user/location publish/update/unpublish 触发索引收敛；backfill rerun count/hash 不漂移；ES restart 后恢复 SLA 达标 | api_integration soak 报告、`search_index_restart_recovery_t3.json` 扩展、projector/backfill tests |
 
 ## 容量校准（capacity calibration / R-S06-S-1）

@@ -2,8 +2,10 @@ package http
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -20,6 +22,15 @@ import (
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/testsupport"
 )
+
+type allowAllFeedViewerBlockReader struct{}
+
+func (allowAllFeedViewerBlockReader) ListBlockedPersonaIDs(
+	_ context.Context,
+	_ string,
+) ([]string, error) {
+	return []string{}, nil
+}
 
 type localPostDetailReader struct {
 	store *testsupport.PostStore
@@ -54,6 +65,9 @@ func (r localPostDetailReader) FindPostDetail(
 	if err := json.Unmarshal(normalized, &detail); err != nil {
 		return postports.PostDetailSlice{}, false, err
 	}
+	// moderationStatus 是服务端 gate，json:"-" 禁止出站，因此 test reader
+	// 必须像生产 BSON projection 一样显式填充。
+	detail.ModerationStatus = post.ModerationStatus
 	return detail, true, nil
 }
 
@@ -63,13 +77,24 @@ func newTestHandler() http.Handler {
 	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
 	source := recinfra.NewPostProjectionSource(store, store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
-	feedService := feedapp.NewFeedService(engine, testsupport.NewPostFeedReader(store))
-	postService := postapp.NewPostService(postapp.BindDataPorts(store))
+	feedService := feedapp.NewFeedService(
+		engine,
+		testsupport.NewPostFeedReader(store),
+		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+	)
+	postService := postapp.NewPostService(
+		postapp.BindDataPorts(store),
+		postapp.WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	reportStore := testsupport.NewReportStore()
 	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
 	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
 	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail: localPostDetailReader{store: store},
+		Detail:     localPostDetailReader{store: store},
+		Tombstones: store,
 	})
 	return NewContentHandler(
 		feedService,
@@ -88,13 +113,24 @@ func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
 	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
 	source := recinfra.NewPostProjectionSource(store, store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
-	feedService := feedapp.NewFeedService(engine, testsupport.NewPostFeedReader(store))
-	postService := postapp.NewPostService(postapp.BindDataPorts(store))
+	feedService := feedapp.NewFeedService(
+		engine,
+		testsupport.NewPostFeedReader(store),
+		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+	)
+	postService := postapp.NewPostService(
+		postapp.BindDataPorts(store),
+		postapp.WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	reportStore := testsupport.NewReportStore()
 	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
 	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
 	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail: localPostDetailReader{store: store},
+		Detail:     localPostDetailReader{store: store},
+		Tombstones: store,
 	})
 	return NewContentHandler(
 		feedService,
@@ -269,15 +305,48 @@ func TestSubmitPostPublicationBodyBindingAcceptsWritableFields(t *testing.T) {
 }
 
 func TestReportBehaviorsEndpoint(t *testing.T) {
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	req := httptest.NewRequest(
 		"POST",
 		"/content/behaviors",
-		bytes.NewBufferString(`{"userId":"u1","events":[{"contentId":"post_photo_001","action":"click"}]}`),
+		bytes.NewBufferString(fmt.Sprintf(
+			`{"userId":"u1","events":[{"clientEventId":"evt-handler-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
+			occurredAt,
+		)),
 	)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("unexpected behaviors status: %d", rec.Code)
+	}
+}
+
+func TestReportBehaviorsAcceptsGzipAndOccurredAt(t *testing.T) {
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
+	payload := fmt.Sprintf(
+		`{"userId":"u-gzip","events":[{"clientEventId":"evt-gzip-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
+		occurredAt,
+	)
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write([]byte(payload)); err != nil {
+		t.Fatalf("compress behavior payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		"POST",
+		"/content/behaviors",
+		bytes.NewReader(compressed.Bytes()),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("gzip behavior payload rejected: %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -372,10 +441,14 @@ func TestFeedWithSessionIdFromHeader(t *testing.T) {
 }
 
 func TestBehaviorsWithSessionIdFromHeader(t *testing.T) {
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	req := httptest.NewRequest(
 		"POST",
 		"/content/behaviors",
-		bytes.NewBufferString(`{"events":[{"contentId":"post_photo_001","action":"click"}]}`),
+		bytes.NewBufferString(fmt.Sprintf(
+			`{"events":[{"clientEventId":"evt-handler-header-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
+			occurredAt,
+		)),
 	)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
 	req.Header.Set("X-Client-User-Id", "user_123")
@@ -498,8 +571,93 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	getReq := httptest.NewRequest("GET", "/content/posts/"+postID, nil)
 	getRec := httptest.NewRecorder()
 	handler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for deleted tombstone, got %d", getRec.Code)
+	if getRec.Code != http.StatusGone {
+		t.Fatalf("expected 410 for deleted tombstone, got %d", getRec.Code)
+	}
+	var deletedFailure map[string]any
+	if err := json.Unmarshal(getRec.Body.Bytes(), &deletedFailure); err != nil {
+		t.Fatalf("decode tombstone failure: %v", err)
+	}
+	if deletedFailure["code"] != "CONTENT.USER.content_deleted" {
+		t.Fatalf("tombstone read must map content_deleted, got %v", deletedFailure)
+	}
+}
+
+// TestGetPostTombstoneReturnsGone 锁定墓碑 410 契约：聚合文档消失后（保留期内）
+// 读取仍按持久墓碑返回 content_deleted，而不是 404。
+func TestGetPostTombstoneReturnsGone(t *testing.T) {
+	redis := testsupport.NewFakeRedis()
+	hotPath := rtrec.NewHotPath(redis)
+	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+	source := recinfra.NewPostProjectionSource(store, store)
+	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
+	feedService := feedapp.NewFeedService(
+		engine,
+		testsupport.NewPostFeedReader(store),
+		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+	)
+	postService := postapp.NewPostService(
+		postapp.BindDataPorts(store),
+		postapp.WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
+	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail:     localPostDetailReader{store: store},
+		Tombstones: store,
+	})
+	handler := NewContentHandler(
+		feedService,
+		postapp.BindFacades(postService),
+		postQueryService,
+		nil,
+		nil,
+		nil,
+		behaviorService,
+	).Routes()
+
+	createReq := httptest.NewRequest(
+		"POST",
+		"/content/posts:publish",
+		bytes.NewBufferString(`{"publishIntentId":"intent-gone","localDraftId":"draft-gone","contentType":"micro","body":"tombstone body","visibility":"public"}`),
+	)
+	setActorHeaders(createReq, "u_gone", "u_gone")
+	createReq.Header.Set("Idempotency-Key", "intent-gone")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusAccepted {
+		t.Fatalf("create failed: %d", createRec.Code)
+	}
+	var created map[string]any
+	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
+	postID, _ := created["postId"].(string)
+
+	delReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
+	setActorHeaders(delReq, "u_gone", "u_gone")
+	delRec := httptest.NewRecorder()
+	handler.ServeHTTP(delRec, delReq)
+	if delRec.Code != http.StatusOK {
+		t.Fatalf("delete failed: %d", delRec.Code)
+	}
+
+	// 模拟保留期内聚合文档已被清理（隐私硬删/TTL 前置）：墓碑仍是持久事实。
+	store.RemovePostDocumentForTest(postID)
+
+	getReq := httptest.NewRequest("GET", "/content/posts/"+postID, nil)
+	getRec := httptest.NewRecorder()
+	handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusGone {
+		t.Fatalf("tombstone-only read must return 410, got %d", getRec.Code)
+	}
+
+	// 不存在也无墓碑的 postId 仍回 404。
+	missReq := httptest.NewRequest("GET", "/content/posts/never-existed", nil)
+	missRec := httptest.NewRecorder()
+	handler.ServeHTTP(missRec, missReq)
+	if missRec.Code != http.StatusNotFound {
+		t.Fatalf("missing post without tombstone must return 404, got %d", missRec.Code)
 	}
 }
 

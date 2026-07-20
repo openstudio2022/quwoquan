@@ -1,0 +1,158 @@
+version: 1
+node:
+  id: image-commercial-scale-closure
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-data-engineering/image-commercial-scale-closure
+  title: image commercial scale closure
+  parent_domain_service: runtime
+  parent_business_capability: runtime-data-engineering
+scope:
+  summary: 浙江、四川旅行图片逐资产权利、去重、H10K 真实发布与 H100K evaluate-only。
+  in_scope:
+  - 分层来源准入与逐资产 rights/provenance
+  - SHA-256、pHash、视觉相似度与无水印门
+  - Canary/H200/H1000/H10K authoritative execution and release evidence
+  - Gamma import/API/App UAT/rollback/replay
+  out_of_scope:
+  - 绕过登录、DRM、robots 或反爬
+  - 去除水印
+  - 100,000/日实际生产
+gwt_acceptance:
+  GWT1:
+    title: every publishable image has asset-level rights and provenance
+    given:
+    - 来源 registry 区分 fetchable、crawlAllowed、publicationAdmission 与 rightsPolicy。
+    when:
+    - 图片候选从 discovery 进入 source unit、review 与 canonical promotion。
+    then:
+    - 每张图记录原始落地页、原图 URL、作者、license/terms 或 authorization proof、usage scope 与 collectedAt。
+    - watermark/OCR、对象匹配、model/property release 均有显式结论。
+    - Pinterest 的 attribution_no_watermark 只能按风险归因策略裁决，不得标成 commercially-cleared。
+    done_when:
+    - 缺任一权利字段的资产都保持 blocked，无法进入 release。
+    edge_cases:
+    - fetchable=false 或 crawlAllowed=false 只允许 discovery/reference。
+    contract_refs:
+    - quwoquan_data/verticals/travel/sources/source_registry.yaml
+    - quwoquan_data/verticals/travel/rights/license_policy.yaml
+    - quwoquan_data/schema/release/asset_rights_closure.schema.json
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/governance/test_image_rights_asset_level__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/core/test_image_provider_compliance__behavior__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: image_asset_rights
+        cases:
+        - local_contract.runtime.runtime_data_engineering.image_commercial_scale_closure.gwt1.rights
+        envs: [local]
+  GWT2:
+    title: image identity and user-visible copy stay unique and attributable
+    given:
+    - 逐资产权利已准入，author/reviewer 模型与预算已冻结。
+    when:
+    - 图片通过下载、安全检测、Agent 配文、独立 review 与对象事务。
+    then:
+    - SHA-256、pHash 与视觉相似度阻止跨 URL、尺寸和批次重复。
+    - 用户可见标题与配文具备真实 AgentResultEnvelope，不泄露内部 source slug。
+    - 作者、来源与权利结论进入 canonical 属性和 App 消费合同。
+    done_when:
+    - 重复发布为 0，missing object 为 0，用户可见 copy 与 attribution 可复验。
+    edge_cases:
+    - 仅改裁剪、压缩或文件名不得产生新的 canonical 图片身份。
+    contract_refs:
+    - quwoquan_data/scripts/content/post/image
+    - quwoquan_data/schema/content/agent_result_envelope.schema.json
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/post/test_image_post_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_review_image_gate__behavior__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: image_identity_copy
+        cases:
+        - local_contract.runtime.runtime_data_engineering.image_commercial_scale_closure.gwt2.identity
+        envs: [local]
+  GWT3:
+    title: Canary through H10K closes with authoritative cost and release evidence
+    given:
+    - 当前 source digest、resolved model、pricing revision 与 spend cap 已冻结。
+    when:
+    - 依次执行 Canary、H200、H1000 与 H10K。
+    then:
+    - 每档 execution succeeded、canonical object transaction、immutable release active、Gamma 幂等 import、API/App UAT、rollback/replay 全部通过。
+    - H10K 每省 5,000、共 10,000 张 unique accepted 图片在 24 小时内完成，accepted throughput 不低于 416.67/h。
+    - TokenLedger 记录真实 usage、billed cost、retry cost、firstPassRate 与 unitPassedCost。
+    done_when:
+    - H10K 的来源漏斗、权利漏斗、去重漏斗、成本和下游消费证据落盘且可复验。
+    edge_cases:
+    - estimated usage、costUsd=0、未知价格、assembled/dry-run 均保持 NO_GO。
+    contract_refs:
+    - quwoquan_data/scripts/content/release/canonical/rollout_attestation.py
+    - quwoquan_data/verticals/travel/coverage/two_province_homepage_rollout.yaml
+    performance_points:
+    - H10K accepted throughput >= 416.67/h，窗口 <= 24h。
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/execution/test_image_scale_proof__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_rollout_milestone__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: image_h10k_release
+        cases:
+        - api_integration.runtime.runtime_data_engineering.image_commercial_scale_closure.gwt3.release
+        envs: [gamma]
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: image_scale_contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.image_commercial_scale_closure.gwt3.scale
+        envs: [local]
+  GWT4:
+    title: H100K remains evidence-based capacity and budget extrapolation
+    given:
+    - H10K 真实批次及 24h soak 已通过。
+    when:
+    - 评估 100,000/日。
+    then:
+    - 只使用 H10K p50/p95、firstPassRate、unitPassedCost、source-ready capacity、queue lag、存储与 CDN 指标外推 4,166.67/h。
+    - 容量计划保留至少 20% 余量，并输出 GO/NO_GO、预算 cap 与 Prod 三阶段灰度/回滚条件。
+    done_when:
+    - 外推不包含任何虚构 accepted 产量，缺证据时结论为 NO_GO。
+    edge_cases:
+    - 单源集中度、授权撤回或 CDN 成本越界必须下调可发布容量。
+    contract_refs:
+    - quwoquan_data/scripts/core/throughput_plan.py
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/execution/test_image_scale_proof__behavior__functional__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: image_h100k_evaluation
+        cases:
+        - local_contract.runtime.runtime_data_engineering.image_commercial_scale_closure.gwt4.capacity
+        envs: [local]
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

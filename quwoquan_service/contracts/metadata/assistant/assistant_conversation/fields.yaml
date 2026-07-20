@@ -68,3 +68,24 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  AssistantConversationListView:
+    description: ListAssistantConversations 响应体（owner 会话 keyset 分页切片）
+    fields:
+      - name: items
+        source: items
+        type: "[]AssistantConversation"
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: nextCursor
+        source: nextCursor
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 不透明 keyset 游标；空表示无更多数据

@@ -7,12 +7,19 @@ import (
 
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/testsupport"
 )
 
 func TestSubmitPostPublicationReplayReturnsOriginalPost(t *testing.T) {
 	store := testsupport.NewPostStore(nil)
-	service := NewPostService(BindDataPorts(store))
+	service := NewPostService(
+		BindDataPorts(store),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := testPublicationCommand("intent-replay", "draft-replay")
 
 	first, err := service.SubmitPostPublication(
@@ -46,7 +53,13 @@ func TestSubmitPostPublicationReplayReturnsOriginalPost(t *testing.T) {
 
 func TestSubmitPostPublicationNewIntentForPublishedDraftIsIgnored(t *testing.T) {
 	store := testsupport.NewPostStore(nil)
-	service := NewPostService(BindDataPorts(store))
+	service := NewPostService(
+		BindDataPorts(store),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	first, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "intent-original"),
 		testPublicationCommand("intent-original", "draft-once"),
@@ -71,7 +84,13 @@ func TestSubmitPostPublicationNewIntentForPublishedDraftIsIgnored(t *testing.T) 
 
 func TestSubmitPostPublicationConcurrentReplayCreatesOnePost(t *testing.T) {
 	store := testsupport.NewPostStore(nil)
-	service := NewPostService(BindDataPorts(store))
+	service := NewPostService(
+		BindDataPorts(store),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := testPublicationCommand("intent-concurrent", "draft-concurrent")
 
 	const workers = 16
@@ -132,7 +151,13 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 		},
 	}
 	ports := WithMediaAssetBindingReader(BindDataPorts(store), media)
-	service := NewPostService(ports)
+	service := NewPostService(
+		ports,
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
 	command := SubmitPostPublicationCommand{
 		PublishIntentID: "intent-media",
 		LocalDraftID:    "draft-media",
@@ -155,6 +180,72 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 		stored.MediaUrls[0] != "media/image/public/asset-image" ||
 		media.materializeCalls != 1 {
 		t.Fatalf("media publication was not atomically projected: post=%+v media=%+v", stored, media)
+	}
+}
+
+func TestSubmitPostPublicationDistinguishesProcessingFromRejectedMedia(t *testing.T) {
+	for _, testCase := range []struct {
+		name         string
+		processing   string
+		expectedCode string
+	}{
+		{
+			name:         "processing remains retryable",
+			processing:   "processing",
+			expectedCode: contentgenerated.ErrMediaNotReady.Error(),
+		},
+		{
+			name:         "rejected requires replacement",
+			processing:   "rejected",
+			expectedCode: contentgenerated.ErrMediaProcessingRejected.Error(),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			store := testsupport.NewPostStore(nil)
+			media := &publicationMediaReader{
+				assets: map[string]MediaAssetBindingSlice{
+					"asset-image": {
+						AssetID:          "asset-image",
+						OwnerID:          "persona-media",
+						ProcessingStatus: testCase.processing,
+						MediaType:        "image",
+					},
+				},
+			}
+			service := NewPostService(
+				WithMediaAssetBindingReader(BindDataPorts(store), media),
+				WithPublicationAdmission(
+					testsupport.AllowPublicationRateGate{},
+					testsupport.FixedPublicationSafetyGate{},
+				),
+			)
+			command := SubmitPostPublicationCommand{
+				PublishIntentID: "intent-media-" + testCase.processing,
+				LocalDraftID:    "draft-media-" + testCase.processing,
+				AuthorID:        "persona-media",
+				Content: postmodel.Post{
+					ContentType:   "image",
+					MediaAssetIds: []string{"asset-image"},
+					Visibility:    "public",
+				},
+			}
+
+			_, err := service.SubmitPostPublication(
+				commandmeta.WithIdempotencyKey(
+					context.Background(),
+					command.PublishIntentID,
+				),
+				command,
+			)
+
+			requirePublicationErrorCode(t, err, testCase.expectedCode)
+			if posts, _ := store.ListAll(context.Background()); len(posts) != 0 {
+				t.Fatalf("media precondition failure persisted a Post: %+v", posts)
+			}
+			if media.materializeCalls != 0 {
+				t.Fatalf("non-ready media was materialized")
+			}
+		})
 	}
 }
 

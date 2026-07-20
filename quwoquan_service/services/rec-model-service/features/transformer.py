@@ -1,6 +1,10 @@
 """
-Feature transformer aligned with feature_registry v2.
-Maps request payload to a feature matrix for scoring.
+Feature transformer aligned with feature_registry (current version, see
+scripts/feature_registry.yaml). Maps request payload to a feature matrix for
+scoring. Intersection features (W7): candidate-level fact strength/freshness
+and the advisory affinity channel flow through to models/content_feed.py
+_extract_feature_vector; the affinity score only counts when
+intersectionConfidenceLabel is present (same semantics as Go ranking fusion).
 """
 from __future__ import annotations
 
@@ -10,7 +14,7 @@ from generated.models.request_response import ModelScoreRequest
 
 
 def build_candidate_features(req: ModelScoreRequest) -> list[dict[str, Any]]:
-    """Build per-candidate feature dicts for scoring, aligned with feature_registry v2."""
+    """Build per-candidate feature dicts for scoring, aligned with feature_registry."""
     rows = []
     for c in req.candidates:
         tags = c.tagRefs or []
@@ -25,12 +29,21 @@ def build_candidate_features(req: ModelScoreRequest) -> list[dict[str, Any]]:
             "likeCount": c.likeCount or 0,
             "commentCount": c.commentCount or 0,
             "shareCount": c.shareCount or 0,
-            "bodyLength": getattr(c, "bodyLength", 0) or 0,
-            "hasCover": bool(getattr(c, "hasCover", False)),
+            # N3-3：bodyLength/hasCover/aspectRatio 已退役（在线召回投影不携带，
+            # 恒 0 造成训练-在线偏斜；registry 同步移除，S1 投影补齐后再启用）。
             "tagCount": len(tags),
             "qualityScore": getattr(c, "qualityScore", 0.0) or 0.0,
+            # publishHour 由 Go 侧从 publishedAt 派生随请求下发（-1 表缺失）。
             "publishHour": getattr(c, "publishHour", 0) or 0,
             "recallPath": c.recallPath or "",
+            # Intersection features (W7, registry v5): candidate-level fact
+            # channel + advisory affinity（confidenceLabel 缺失时抽取器归零）。
+            "intersectionFactStrength": getattr(c, "intersectionFactStrength", 0.0) or 0.0,
+            "intersectionFreshness": getattr(c, "intersectionFreshness", 0.0) or 0.0,
+            "affinityIntersectionScore": getattr(c, "affinityIntersectionScore", 0.0) or 0.0,
+            "intersectionSourceRefTop": getattr(c, "intersectionSourceRefTop", "") or "",
+            "intersectionConfidenceLabel": getattr(c, "intersectionConfidenceLabel", "") or "",
+            "intersectionClass": getattr(c, "intersectionClass", "") or "",
         })
     return rows
 
@@ -46,6 +59,18 @@ def transform_user_features(raw: dict[str, Any] | None) -> dict[str, Any]:
         "totalLikes": int(raw.get("totalLikes", 0)),
         "totalShares": int(raw.get("totalShares", 0)),
         "totalEvents": int(raw.get("totalEvents", 0)),
+        # Intersection features (W7, registry v5): viewer-level fact counts
+        # derived by Go FeatureStore（kindCounts 直方图派生），wire 单点注入。
+        "sharedFolloweesCount": int(raw.get("sharedFolloweesCount", 0) or 0),
+        "sharedCircleCount": int(raw.get("sharedCircleCount", 0) or 0),
+        "coCommentedCount": int(raw.get("coCommentedCount", 0) or 0),
+        "coVisitedEntityCount": int(raw.get("coVisitedEntityCount", 0) or 0),
+        "followeeInObjectActive": int(raw.get("followeeInObjectActive", 0) or 0),
+        "followeeViewingActive": int(raw.get("followeeViewingActive", 0) or 0),
+        "affinityIntersectionScore": float(
+            raw.get("affinityIntersectionScore", 0.0) or 0.0
+        ),
+        "intersectionSourceRefTop": raw.get("intersectionSourceRefTop", "") or "",
     }
 
 

@@ -98,6 +98,17 @@ type MediaUploadSessionStore interface {
 	) (CompleteUploadResult, error)
 }
 
+// MediaAssetNoopReceipt 是目标状态已满足的命名 set（如 access policy 已一致）
+// 的持久化回执：不递增 aggregate version、不产生 outbox 事实，但相同 key 的
+// 后续重试只重放本次结果。
+type MediaAssetNoopReceipt struct {
+	Aggregate        *mediamodel.MediaAsset
+	IdempotencyKey   string
+	CommandName      string
+	CommandDigest    string
+	ReceiptExpiresAt time.Time
+}
+
 // MediaAssetStore is the object-specific write port for durable assets.
 type MediaAssetStore interface {
 	LoadMediaAsset(
@@ -110,6 +121,10 @@ type MediaAssetStore interface {
 		commandName string,
 		commandDigest string,
 	) (MediaAssetCommitResult, bool, error)
+	RecordMediaAssetNoopReceipt(
+		ctx context.Context,
+		receipt MediaAssetNoopReceipt,
+	) (MediaAssetCommitResult, error)
 	CommitMediaAsset(
 		ctx context.Context,
 		commit MediaAssetCommit,

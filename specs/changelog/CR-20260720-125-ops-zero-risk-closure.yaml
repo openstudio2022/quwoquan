@@ -1,0 +1,44 @@
+id: CR-20260720-125-ops-zero-risk-closure
+title: 运维运营平台商用风险与技术债清零
+slug: ops-zero-risk-closure
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/platform-ops-governance
+  - specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure
+  - specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness
+
+entries:
+  - timestamp: "2026-07-20T14:40:00+08:00"
+    summary: |
+      用户要求运维运营平台以零风险、零技术债作为生产准入原则。新增 L2
+      commercial-readiness-risk-closure 与 L3 zero-risk-production-readiness，
+      将现有 R-OPS 风险收敛为 RP1-RP7：遥测日志、身份双签、供应链、灰度回滚、
+      观测灾备、配置真实数据与验收诚信。冻结统一设计：外部前置条件缺失不是
+      “已接受风险”，而是 production release 的 fail-closed blocker；仓内可修复
+      断点必须当轮实现并以三层测试与 stackctl 证据关闭。
+    reason: |
+      上一轮已补齐 IaC 配置快照、四维灰度策略、日志查询、基础设施 exporter、
+      每接口 RED、增长总览与页面体验，但 backlog 仍有 17 个 R-OPS 项未关闭，
+      并存在 GitHub entitlement、真实 IdP、法务主体与 prod-hosted 凭据等外部
+      前置条件。若没有单一风险清零状态机，仓内实现完成与生产可发布会继续混淆。
+    change_type:
+      - specification
+      - design
+      - acceptance
+    changed_documents:
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md
+        sections: [目标, 范围, 统一设计决策, 任务包, 完成定义]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/design.md
+        sections: [总体架构, 身份权限, 原子双签, 遥测日志, 供应链, 发布, 灾备, 配置]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/acceptance.yaml
+        sections: [SIT1-SIT7]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness/acceptance.yaml
+        sections: [GWT1-GWT2]
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+          - quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh

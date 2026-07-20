@@ -16,6 +16,7 @@ import (
 
 	"quwoquan_service/internal/platform/reliabletaskmongo"
 	runtimemedia "quwoquan_service/runtime/media"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
 	chathttp "quwoquan_service/services/chat-service/internal/adapters/http"
@@ -208,7 +209,24 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	if syncPublisher == nil {
 		syncPublisher = userSyncService
 	}
-	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
+	eventPublisher := mq.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
+			members, err := chatStore.ListMembers(
+				ctx,
+				conversationID,
+				application.ListMembersQuery{Limit: 512, Sort: application.MemberListSortJoinedAsc},
+			)
+			if err != nil {
+				return nil, err
+			}
+			ids := make([]string, 0, len(members))
+			for _, member := range members {
+				ids = append(ids, member.UserId)
+			}
+			return ids, nil
+		}),
+	)
 	catalog, err := reliabletask.LoadCatalog(testReliableTaskCatalogPath())
 	if err != nil {
 		t.Fatalf("load reliable task catalog: %v", err)
@@ -276,6 +294,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		media,
 		syncPublisher,
 		scheduler,
+		application.WithRelationshipGate(application.AllowRelationshipGateForTest()),
 	)
 	messageSvc := application.NewMessageService(
 		chatStorage,
@@ -309,6 +328,9 @@ func doHandlerJSON(
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("X-Client-User-Id", userID)
+	if method != http.MethodGet && method != http.MethodHead {
+		req = commandOperationContext(req, path, userID)
+	}
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != expectedStatus {
@@ -322,7 +344,7 @@ func doHandlerJSON(
 func TestGroupAvatar_CreateConversationReturnsCreatorAvatarBeforeAsyncAvatarReady(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	handler, syncService := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 250 * time.Millisecond}, nil)
+	handler, syncService := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 500 * time.Millisecond}, nil)
 	start := time.Now()
 	created := doHandlerJSON(
 		t,
@@ -333,7 +355,7 @@ func TestGroupAvatar_CreateConversationReturnsCreatorAvatarBeforeAsyncAvatarRead
 		"user_test_001",
 		http.StatusCreated,
 	)
-	if elapsed := time.Since(start); elapsed >= 200*time.Millisecond {
+	if elapsed := time.Since(start); elapsed >= 400*time.Millisecond {
 		t.Fatalf("expected create conversation to return before async recompute, elapsed=%s", elapsed)
 	}
 	if got, want := strings.TrimSpace(created["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
@@ -412,7 +434,13 @@ func TestGroupAvatar_RecomputeCoalescesEarlyMemberAdds(t *testing.T) {
 	assetizer := &countingGroupAvatarAssetizer{
 		delegate: newGroupAvatarMediaForContractTest(),
 	}
-	handler, _ := newGroupAvatarTestHandler(t, assetizer, nil)
+	handler, _ := newGroupAvatarTestHandlerWithStore(
+		t,
+		assetizer,
+		nil,
+		reliabletaskmongo.New(mongoDB),
+		application.WithReliableGroupAvatarDelay(300*time.Millisecond),
+	)
 	created := doHandlerJSON(
 		t,
 		handler,
@@ -461,7 +489,7 @@ func TestGroupAvatar_AddMembersFailureDoesNotBlockOrCorruptExistingAvatar(t *tes
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	beforeSeq := latestSyncSeq(t, syncService, "user_test_001")
 
-	handler, _ := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 250 * time.Millisecond}, nil)
+	handler, _ := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 500 * time.Millisecond}, nil)
 	start := time.Now()
 	doHandlerJSON(
 		t,
@@ -473,7 +501,7 @@ func TestGroupAvatar_AddMembersFailureDoesNotBlockOrCorruptExistingAvatar(t *tes
 		http.StatusOK,
 	)
 	elapsed := time.Since(start)
-	if elapsed >= 200*time.Millisecond {
+	if elapsed >= 400*time.Millisecond {
 		t.Fatalf("expected add members to return before async recompute, elapsed=%s", elapsed)
 	}
 
@@ -507,7 +535,7 @@ func TestGroupAvatar_RemoveMemberFailureDoesNotBlockOrCorruptExistingAvatar(t *t
 	syncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	beforeSeq := latestSyncSeq(t, syncService, "user_test_001")
 
-	handler, _ := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 250 * time.Millisecond}, nil)
+	handler, _ := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 500 * time.Millisecond}, nil)
 	start := time.Now()
 	doHandlerJSON(
 		t,
@@ -519,7 +547,7 @@ func TestGroupAvatar_RemoveMemberFailureDoesNotBlockOrCorruptExistingAvatar(t *t
 		http.StatusOK,
 	)
 	elapsed := time.Since(start)
-	if elapsed >= 200*time.Millisecond {
+	if elapsed >= 400*time.Millisecond {
 		t.Fatalf("expected remove member to return before async recompute, elapsed=%s", elapsed)
 	}
 
@@ -871,7 +899,7 @@ func TestGroupAvatar_CreateConversationRollsBackWhenOutboxFails(t *testing.T) {
 		nil,
 		failingGroupAvatarScheduler{},
 	)
-	_, err := conversationSvc.CreateConversation(context.Background(), application.CreateConversationRequest{
+	_, err := conversationSvc.CreateConversation(commandOperationTestContext(), application.CreateConversationRequest{
 		Type:      "group",
 		Title:     "rollback create",
 		CreatorId: "user_test_001",
@@ -900,7 +928,7 @@ func TestGroupAvatar_AddMembersRollsBackWhenOutboxFails(t *testing.T) {
 		nil,
 		failingGroupAvatarScheduler{},
 	)
-	err := memberSvc.AddMembers(context.Background(), application.AddMembersRequest{
+	err := memberSvc.AddMembers(commandOperationTestContext(), application.AddMembersRequest{
 		ConversationId: convID,
 		UserIds:        []string{"user_test_009"},
 		InvitedBy:      "user_test_001",
@@ -931,7 +959,19 @@ func TestGroupAvatar_RemoveMemberRollsBackWhenOutboxFails(t *testing.T) {
 		nil,
 		failingGroupAvatarScheduler{},
 	)
-	err := memberSvc.RemoveMember(context.Background(), convID, "user_test_002")
+	removeCtx := operation.WithContext(context.Background(), operation.Context{
+		OperationID:    "api_integration.remove_member_rollback",
+		IdempotencyKey: "group-avatar-remove-rollback-1",
+		Actor: operation.ActorContext{
+			AccountID: "user_test_001",
+			PersonaID: "user_test_001",
+		},
+	})
+	err := memberSvc.RemoveMember(removeCtx, application.RemoveMemberRequest{
+		ConversationId: convID,
+		UserId:         "user_test_002",
+		OperatorId:     "user_test_001",
+	})
 	if err == nil {
 		t.Fatal("expected remove member to fail when outbox write fails")
 	}
@@ -1077,7 +1117,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 	)
 	addURL := strings.TrimSpace(addDetail["avatarUrl"].(string))
 	addVersion := int(addDetail["groupAvatarVersion"].(float64))
-	if !strings.Contains(addURL, "/media/avatar/conversation/"+convID+"/") {
+	if !strings.Contains(addURL, "/media/avatar/s/conversation/"+convID+"/") {
 		t.Fatalf("expected derived group avatar url after add, got %q", addURL)
 	}
 	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003", "user_test_004"} {

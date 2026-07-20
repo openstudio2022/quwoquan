@@ -35,7 +35,19 @@ REPO_ROOT = os.path.dirname(
 # 每个客户端可见域：cloud errors.yaml（一个或多个）-> 生成的客户端枚举文件。
 CLIENT_DOMAINS = {
     "content": {
-        "cloud": ["quwoquan_service/contracts/metadata/content/post/errors.yaml"],
+        "cloud": [
+            "quwoquan_service/contracts/metadata/content/post/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/comment/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/content_reaction/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/deleted_post_tombstone/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/filter_catalog_release/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_asset/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_original_access_fact/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_upload_session/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/outbound_share_fact/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/post_moderation_case/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/report/errors.yaml",
+        ],
         "dart": "quwoquan_app/lib/cloud/content/generated/content_errors.g.dart",
     },
     "chat": {
@@ -45,10 +57,17 @@ CLIENT_DOMAINS = {
     "user": {
         "cloud": [
             "quwoquan_service/contracts/metadata/user/user_profile/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/account_session/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/authentication_challenge/errors.yaml",
             "quwoquan_service/contracts/metadata/user/contact_discovery/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/credential_binding/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/device_registration/errors.yaml",
             "quwoquan_service/contracts/metadata/user/greeting_request/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/invite_record/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/persona/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/persona_relationship/errors.yaml",
             "quwoquan_service/contracts/metadata/user/profile_update_proposal/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/subject_follow/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/user_settings/errors.yaml",
         ],
         "dart": "quwoquan_app/lib/cloud/runtime/generated/user/user_errors.g.dart",
     },
@@ -69,7 +88,12 @@ CLIENT_DOMAINS = {
         "dart": "quwoquan_app/lib/cloud/circle/generated/circle_errors.g.dart",
     },
     "entity": {
-        "cloud": ["quwoquan_service/contracts/metadata/entity/homepage/errors.yaml"],
+        "cloud": [
+            "quwoquan_service/contracts/metadata/entity/homepage/errors.yaml",
+            "quwoquan_service/contracts/metadata/entity/homepage_claim_request/errors.yaml",
+            "quwoquan_service/contracts/metadata/entity/homepage_review/errors.yaml",
+            "quwoquan_service/contracts/metadata/entity/homepage_status_report/errors.yaml",
+        ],
         "dart": "quwoquan_app/lib/cloud/entity/generated/entity_errors.g.dart",
     },
 }

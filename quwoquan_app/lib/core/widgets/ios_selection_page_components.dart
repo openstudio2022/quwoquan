@@ -184,6 +184,101 @@ class IosSelectionSection extends StatelessWidget {
   }
 }
 
+/// iOS 分组表单中的标准字段行。
+///
+/// 标签、字段间距与水平内边距统一由设计系统提供，页面只负责传入业务字段。
+class IosSelectionFormFieldRow extends StatelessWidget {
+  const IosSelectionFormFieldRow({
+    super.key,
+    required this.label,
+    required this.child,
+    this.validationMessage,
+  });
+
+  final String label;
+  final Widget child;
+  final String? validationMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = (validationMessage ?? '').trim();
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.containerSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          child,
+          if (message.isNotEmpty) ...<Widget>[
+            SizedBox(height: AppSpacing.intraGroupXs),
+            AppInlineFieldError(message: message),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// iOS 分组表单中的无边框文本输入。
+class IosSelectionTextField extends StatelessWidget {
+  const IosSelectionTextField({
+    super.key,
+    required this.controller,
+    required this.placeholder,
+    this.enabled = true,
+    this.maxLines = 1,
+    this.keyboardType,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final bool enabled;
+  final int maxLines;
+  final TextInputType? keyboardType;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return CupertinoTextField(
+      controller: controller,
+      enabled: enabled,
+      maxLines: maxLines,
+      minLines: maxLines,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerXs,
+        vertical: maxLines > 1
+            ? AppSpacing.intraGroupSm
+            : AppSpacing.intraGroupXs,
+      ),
+      style: TextStyle(
+        fontSize: AppTypography.iosBody,
+        color: AppColors.iosLabel(context),
+      ),
+      placeholder: placeholder,
+      placeholderStyle: TextStyle(
+        fontSize: AppTypography.iosBody,
+        color: SettingsSemanticConstants.createInputHintColor(isDark),
+      ),
+      decoration: const BoxDecoration(),
+      cursorColor: AppColors.iosAccent(context),
+    );
+  }
+}
+
 class IosSelectionOptionTile extends StatefulWidget {
   const IosSelectionOptionTile({
     super.key,

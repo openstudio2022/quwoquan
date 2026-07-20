@@ -110,6 +110,9 @@ func (s *PostStore) ListPublished(_ context.Context, limit int, cursor string) [
 		if !strings.EqualFold(strings.TrimSpace(p.Visibility), "public") {
 			continue
 		}
+		if !strings.EqualFold(strings.TrimSpace(p.ModerationStatus), "approved") {
+			continue
+		}
 		all = append(all, p)
 	}
 	sort.Slice(all, func(i, j int) bool {
@@ -151,7 +154,9 @@ func (s *PostStore) ListByAuthor(_ context.Context, authorID string, limit int, 
 	}
 	all := make([]postmodel.Post, 0)
 	for _, p := range s.posts {
-		if p.AuthorId != authorID || !strings.EqualFold(strings.TrimSpace(p.Status), "published") {
+		if p.AuthorId != authorID ||
+			!strings.EqualFold(strings.TrimSpace(p.Status), "published") ||
+			!strings.EqualFold(strings.TrimSpace(p.ModerationStatus), "approved") {
 			continue
 		}
 		all = append(all, p)

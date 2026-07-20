@@ -8,25 +8,28 @@ class RealtimeApiMetadata {
 
   static const String domain = 'realtime';
   static const List<String> apiPrefixes = <String>[
-    '/channel/{channelType}',
     '/config/realtime',
+    '/internal/realtime',
     '/realtime/poll',
+    '/realtime/tickets',
     '/realtime/ws',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'ChannelWebhook': '/channel/{channelType}/webhook',
+    'GetPersonaPresence': '/internal/realtime/personas/{personaId}/presence',
     'GetRealtimeConfig': '/config/realtime',
     'HealthCheck': '/healthz',
+    'IssueConnectionTicket': '/realtime/tickets',
     'LongPoll': '/realtime/poll',
     'Metrics': '/metrics',
     'WebSocketUpgrade': '/realtime/ws',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'ChannelWebhook': 'POST',
+    'GetPersonaPresence': 'GET',
     'GetRealtimeConfig': 'GET',
     'HealthCheck': 'GET',
+    'IssueConnectionTicket': 'POST',
     'LongPoll': 'GET',
     'Metrics': 'GET',
     'WebSocketUpgrade': 'GET',
@@ -34,9 +37,10 @@ class RealtimeApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'ChannelWebhook': 'required',
+    'GetPersonaPresence': 'required',
     'GetRealtimeConfig': 'required',
     'HealthCheck': 'required',
+    'IssueConnectionTicket': 'required',
     'LongPoll': 'required',
     'Metrics': 'required',
     'WebSocketUpgrade': 'required',
@@ -48,23 +52,27 @@ class RealtimeApiMetadata {
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'GetPersonaPresence': 'object',
+    'IssueConnectionTicket': 'object',
   };
 
-  static const String channelWebhookOperation = 'ChannelWebhook';
+  static const String getPersonaPresenceOperation = 'GetPersonaPresence';
   static const String getRealtimeConfigOperation = 'GetRealtimeConfig';
   static const String healthCheckOperation = 'HealthCheck';
+  static const String issueConnectionTicketOperation = 'IssueConnectionTicket';
   static const String longPollOperation = 'LongPoll';
   static const String metricsOperation = 'Metrics';
   static const String webSocketUpgradeOperation = 'WebSocketUpgrade';
 
-  static const String channelWebhookPathTemplate = '/channel/{channelType}/webhook';
-  static String channelWebhookPath({required String channelType}) {
-    return _fillPath(channelWebhookPathTemplate, <String, String>{
-      'channelType': channelType,
+  static const String getPersonaPresencePathTemplate = '/internal/realtime/personas/{personaId}/presence';
+  static String getPersonaPresencePath({required String personaId}) {
+    return _fillPath(getPersonaPresencePathTemplate, <String, String>{
+      'personaId': personaId,
     });
   }
   static const String getRealtimeConfigPath = '/config/realtime';
   static const String healthCheckPath = '/healthz';
+  static const String issueConnectionTicketPath = '/realtime/tickets';
   static const String longPollPath = '/realtime/poll';
   static const String metricsPath = '/metrics';
   static const String webSocketUpgradePath = '/realtime/ws';

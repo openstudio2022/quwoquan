@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 
@@ -103,6 +104,35 @@ void main() {
     expect(runtime.deadlineElapsedSinceProcessStart, isA<Duration>());
   });
 
+  test('每个 Dart 启动 attempt 记录环境摘要与脱敏缺失键', () async {
+    final events = <Map<String, dynamic>>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_startupTimingsChannel, (call) async {
+          if (call.method == 'recordStartupEvent') {
+            events.add(
+              Map<String, dynamic>.from(
+                jsonDecode(call.arguments! as String) as Map<String, dynamic>,
+              ),
+            );
+          }
+          return null;
+        });
+
+    runtime.markBootstrapStarted();
+    await Future<void>.delayed(Duration.zero);
+
+    final attempt = events.singleWhere(
+      (event) => event['eventName'] == 'startup_attempt_started',
+    );
+    final summary = CloudRuntimeConfig.runtimeDefineSummary;
+    expect(attempt['attemptId'], matches(RegExp(r'^[A-Za-z0-9_-]{16,128}$')));
+    expect(attempt['runtimeEnv'], summary['runtimeEnv']);
+    expect(attempt['launchMode'], summary['launchMode']);
+    expect(attempt['configurationState'], summary['configurationState']);
+    expect(attempt['missingDefineKeys'] ?? '', summary['missingKeys']);
+    expect(attempt.containsKey('CLOUD_GATEWAY_BASE_URL'), isFalse);
+  });
+
   test('安全终态首帧会通知平台 watchdog，而欢迎首帧不会提前取消', () async {
     final events = <Map<String, dynamic>>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -130,10 +160,11 @@ void main() {
         .where((event) => event['eventName'] == 'startup_safe_terminal')
         .toList(growable: false);
     expect(safeTerminalEvents, hasLength(1));
-    expect(safeTerminalEvents.single, <String, dynamic>{
-      'eventName': 'startup_safe_terminal',
-      'surface': 'router_shell',
-    });
+    final safeTerminalEvent = safeTerminalEvents.single;
+    expect(safeTerminalEvent['eventName'], 'startup_safe_terminal');
+    expect(safeTerminalEvent['surface'], 'router_shell');
+    expect(safeTerminalEvent['elapsedMs'], isA<int>());
+    expect(safeTerminalEvent['elapsedMs'] as int, greaterThanOrEqualTo(0));
   });
 
   test('首页内容首帧与欢迎遮罩移除必须同时成立才记录真实可用', () {

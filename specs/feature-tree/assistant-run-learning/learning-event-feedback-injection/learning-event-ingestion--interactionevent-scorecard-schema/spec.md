@@ -1,4 +1,4 @@
-# L4 特性：interactionevent-scorecard-schema
+# L3 特性：interactionevent-scorecard-schema
 
 ## 功能说明
 

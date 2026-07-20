@@ -145,46 +145,8 @@ class MockCircleRepository implements CircleRepository {
     return CircleDetailPayload.fromWire(_mockCircleDetailWireFromDto(match));
   }
 
-  @override
-  Future<CircleDto> createCircle(CircleCreateWireDto data) async {
-    final merge = data.toMockMergeMap();
-    final circleId = (merge['id']?.toString().trim().isNotEmpty ?? false)
-        ? merge['id'].toString().trim()
-        : 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final created = CircleContractSeedHelpers.normalizedCircle(
-      merge,
-      circleId: circleId,
-    );
-    final dto = CircleDto.fromMap(created);
-    _circles.removeWhere((circle) => circle.id == circleId);
-    _circles.insert(0, dto);
-    return dto;
-  }
 
-  @override
-  Future<CircleDto> updateCircle(
-    String circleId,
-    CircleUpdateWireDto data,
-  ) async {
-    final existing = (await getCircle(circleId)).repositoryMergeBase();
-    final updatedAt = DateTime.now().toIso8601String();
-    final merged = CircleContractSeedHelpers.normalizedCircle(
-      <String, dynamic>{...existing, ...data.toMap(), 'updatedAt': updatedAt},
-      circleId: circleId,
-      fallbackUpdatedAt: updatedAt,
-    );
-    final dto = CircleDto.fromMap(merged);
-    final index = _circles.indexWhere((circle) => circle.id == circleId);
-    if (index >= 0) {
-      _circles[index] = dto;
-    } else {
-      _circles.insert(0, dto);
-    }
-    return dto;
-  }
 
-  @override
-  Future<void> archiveCircle(String circleId) async {}
 
   @override
   Future<List<PostBaseDto>> getCircleFeed(
@@ -364,64 +326,17 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<void> updateSections(
-    String circleId,
-    List<CircleSectionConfigDto> sections,
-  ) async {}
-
-  @override
   Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
-    final contractRows = CircleContractSeedHelpers.homeFeedRows();
-    if (contractRows.isNotEmpty) {
-      return contractRows
-          .take(limit)
-          .map(
-            (row) =>
-                contentPostDtoFromReadModelMap(Map<String, dynamic>.from(row)),
-          )
-          .toList(growable: false);
+    final circles = await listCircles(limit: limit);
+    final out = <PostBaseDto>[];
+    for (final circle in circles) {
+      if (out.length >= limit) break;
+      final remaining = limit - out.length;
+      final feed = await getCircleFeed(circle.id, limit: remaining);
+      out.addAll(feed);
     }
-    return CircleMockData.catalogCircleFeedPostDtos
-        .take(limit)
-        .toList(growable: false);
-  }
-
-  @override
-  List<CircleDto> publishFlowRecommendedCircles() {
-    final now = DateTime.now().toUtc();
-    return <CircleDto>[
-      CircleDto(
-        id: 'rec-city',
-        name: '城市探索',
-        coverUrl:
-            'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
-        ownerId: 'embedded_owner',
-        memberCount: 890,
-        postCount: 126,
-        createdAt: now,
-        updatedAt: now,
-      ),
-      CircleDto(
-        id: 'rec-run',
-        name: '跑步日记',
-        coverUrl:
-            'media/image/s/mock/seed/p_1486218119243-13883505764c/v1/image.jpg',
-        ownerId: 'embedded_owner',
-        memberCount: 312,
-        postCount: 58,
-        createdAt: now,
-        updatedAt: now,
-      ),
-    ];
-  }
-
-  @override
-  Future<Map<String, CircleCategoryTabConfigDto>>
-  getCircleCategoryConfig() async {
-    return Map<String, CircleCategoryTabConfigDto>.from(
-      CircleCategoryTabDefaults.remoteStyleFallback,
-    );
+    return out.take(limit).toList(growable: false);
   }
 }

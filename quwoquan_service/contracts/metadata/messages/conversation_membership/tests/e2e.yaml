@@ -1,0 +1,15 @@
+aggregate: ConversationMembership
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: group_member_lifecycle
+    steps:
+      - owner creates a group with initial members
+      - owner adds one more member
+      - owner removes that member
+    assertions:
+      - member_count_consistent_across_group_home_and_member_list
+      - removed_member_loses_conversation_access

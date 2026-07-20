@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"quwoquan_service/runtime/reliabletask"
@@ -63,22 +62,4 @@ func (s *NotificationDeliveryService) ProcessOne(ctx context.Context) (bool, err
 		Policy:  s.policy,
 	}
 	return worker.ProcessOne(ctx, s.adapter.Deliver)
-}
-
-func isNilDependency(value any) bool {
-	if value == nil {
-		return true
-	}
-	reflected := reflect.ValueOf(value)
-	switch reflected.Kind() {
-	case reflect.Chan,
-		reflect.Func,
-		reflect.Interface,
-		reflect.Map,
-		reflect.Pointer,
-		reflect.Slice:
-		return reflected.IsNil()
-	default:
-		return false
-	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -24,18 +25,29 @@ const (
 )
 
 type ReportService struct {
-	data DataPorts
-	now  func() time.Time
+	data     DataPorts
+	now      func() time.Time
+	observer LifecycleObserver
 }
 
-func NewReportService(data DataPorts) *ReportService {
-	if data.Aggregate == nil || data.Detail == nil || data.Queue == nil {
-		panic("ReportService requires aggregate, detail and queue data ports")
+func NewReportService(
+	data DataPorts,
+	options ...ReportServiceOption,
+) *ReportService {
+	if data.Aggregate == nil ||
+		data.Detail == nil ||
+		data.Queue == nil ||
+		data.MyReports == nil {
+		panic("ReportService requires aggregate, detail, queue and reporter data ports")
 	}
-	return &ReportService{
+	service := &ReportService{
 		data: data,
 		now:  time.Now,
 	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
 
 func (s *ReportService) CreateReport(
@@ -63,7 +75,7 @@ func (s *ReportService) CreateReport(
 	if err != nil {
 		return ReportCommandResult{}, mapDomainError(err)
 	}
-	return s.commit(
+	result, err := s.commit(
 		ctx,
 		aggregate,
 		0,
@@ -85,6 +97,10 @@ func (s *ReportService) CreateReport(
 		},
 		now,
 	)
+	if err == nil && s.observer != nil {
+		s.observer.ReportCreated(ctx)
+	}
+	return result, err
 }
 
 func (s *ReportService) BeginReview(
@@ -106,11 +122,19 @@ func (s *ReportService) BeginReview(
 	if !found {
 		return ReportCommandResult{}, reportNotFound(command.ReportID)
 	}
+	// 目标状态已满足（同一 reviewer 已开始审核）：持久化 no-op receipt，
+	// 不递增版本、不制造伪 review_started 事实。
+	if snapshot := aggregate.Snapshot(); snapshot.Status == reportmodel.StatusReviewing &&
+		snapshot.ReviewerID == strings.TrimSpace(command.ReviewerID) {
+		return s.recordNoopReceipt(ctx, aggregate, "BeginReviewReport", commandDigest)
+	}
 	expectedVersion := aggregate.Version()
 	now := s.now().UTC()
 	if err := aggregate.BeginReview(command.ReviewerID, now); err != nil {
 		return ReportCommandResult{}, mapDomainError(err)
 	}
+	// BeginReview 不是关闭事件：ReportClosed 观测只在 Resolve/Dismiss 发射
+	// （那里 snapshot 在 commit 前捕获，本方法无 closed 语义）。
 	return s.commit(
 		ctx,
 		aggregate,
@@ -148,6 +172,13 @@ func (s *ReportService) Resolve(
 	if !found {
 		return ReportCommandResult{}, reportNotFound(command.ReportID)
 	}
+	// 目标状态已满足（同一 reviewer 已用同一 resolution 结案）：持久化
+	// no-op receipt，不递增版本、不重复投递 resolved 事实。
+	if snapshot := aggregate.Snapshot(); snapshot.Status == reportmodel.StatusResolved &&
+		snapshot.ReviewerID == strings.TrimSpace(command.ReviewerID) &&
+		snapshot.Resolution == command.Resolution {
+		return s.recordNoopReceipt(ctx, aggregate, "ResolveReport", commandDigest)
+	}
 	expectedVersion := aggregate.Version()
 	now := s.now().UTC()
 	if err := aggregate.Resolve(
@@ -157,7 +188,8 @@ func (s *ReportService) Resolve(
 	); err != nil {
 		return ReportCommandResult{}, mapDomainError(err)
 	}
-	return s.commit(
+	snapshot := aggregate.Snapshot()
+	result, err := s.commit(
 		ctx,
 		aggregate,
 		expectedVersion,
@@ -166,15 +198,30 @@ func (s *ReportService) Resolve(
 		"content.report.resolved",
 		struct {
 			ReportID   string                 `json:"reportId"`
+			ReporterID string                 `json:"reporterId"`
+			TargetType reportmodel.TargetType `json:"targetType"`
+			TargetID   string                 `json:"targetId"`
 			ReviewerID string                 `json:"reviewerId"`
 			Resolution reportmodel.Resolution `json:"resolution"`
 		}{
 			ReportID:   aggregate.ID(),
+			ReporterID: snapshot.ReporterID,
+			TargetType: snapshot.TargetType,
+			TargetID:   snapshot.TargetID,
 			ReviewerID: strings.TrimSpace(command.ReviewerID),
 			Resolution: command.Resolution,
 		},
 		now,
 	)
+	if err == nil && s.observer != nil {
+		s.observer.ReportClosed(
+			ctx,
+			string(reportmodel.StatusResolved),
+			snapshot.CreatedAt,
+			now,
+		)
+	}
+	return result, err
 }
 
 func (s *ReportService) Dismiss(
@@ -201,7 +248,8 @@ func (s *ReportService) Dismiss(
 	if err := aggregate.Dismiss(command.ReviewerID, now); err != nil {
 		return ReportCommandResult{}, mapDomainError(err)
 	}
-	return s.commit(
+	snapshot := aggregate.Snapshot()
+	result, err := s.commit(
 		ctx,
 		aggregate,
 		expectedVersion,
@@ -209,14 +257,29 @@ func (s *ReportService) Dismiss(
 		commandDigest,
 		"content.report.dismissed",
 		struct {
-			ReportID   string `json:"reportId"`
-			ReviewerID string `json:"reviewerId"`
+			ReportID   string                 `json:"reportId"`
+			ReporterID string                 `json:"reporterId"`
+			TargetType reportmodel.TargetType `json:"targetType"`
+			TargetID   string                 `json:"targetId"`
+			ReviewerID string                 `json:"reviewerId"`
 		}{
 			ReportID:   aggregate.ID(),
+			ReporterID: snapshot.ReporterID,
+			TargetType: snapshot.TargetType,
+			TargetID:   snapshot.TargetID,
 			ReviewerID: strings.TrimSpace(command.ReviewerID),
 		},
 		now,
 	)
+	if err == nil && s.observer != nil {
+		s.observer.ReportClosed(
+			ctx,
+			string(reportmodel.StatusDismissed),
+			snapshot.CreatedAt,
+			now,
+		)
+	}
+	return result, err
 }
 
 func (s *ReportService) GetReport(
@@ -249,6 +312,76 @@ func (s *ReportService) ListReports(
 		return ReportQueueSlice{}, unavailable(err)
 	}
 	return slice, nil
+}
+
+func (s *ReportService) ListMyReports(
+	ctx context.Context,
+	query ListMyReportsQuery,
+) (MyReportPageSlice, error) {
+	reporterID := strings.TrimSpace(query.ReporterID)
+	if reporterID == "" {
+		return MyReportPageSlice{}, contentgenerated.AppErrorFromUnauthorized(
+			"ListMyReports requires a verified persona",
+		)
+	}
+	limit := query.Limit
+	if limit <= 0 || limit > maxReportListSize {
+		limit = 20
+	}
+	cursor, err := decodeMyReportCursor(query.Cursor)
+	if err != nil {
+		return MyReportPageSlice{}, contentgenerated.AppErrorFromInvalidArgument(
+			"ListMyReports cursor is invalid",
+		)
+	}
+	items, err := s.data.MyReports.ListByReporter(
+		ctx,
+		reporterID,
+		cursor,
+		limit+1,
+	)
+	if err != nil {
+		return MyReportPageSlice{}, unavailable(err)
+	}
+	page := MyReportPageSlice{Items: items}
+	if len(items) > limit {
+		page.Items = items[:limit]
+		last := page.Items[len(page.Items)-1]
+		page.NextCursor = encodeMyReportCursor(MyReportCursor{
+			CreatedAt: last.CreatedAt,
+			ID:        last.ID,
+		})
+	}
+	return page, nil
+}
+
+func encodeMyReportCursor(cursor MyReportCursor) string {
+	payload := cursor.CreatedAt.UTC().Format(time.RFC3339Nano) + "\n" +
+		strings.TrimSpace(cursor.ID)
+	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func decodeMyReportCursor(raw string) (*MyReportCursor, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(string(payload), "\n")
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+		return nil, errors.New("invalid report cursor payload")
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return nil, err
+	}
+	return &MyReportCursor{
+		CreatedAt: createdAt.UTC(),
+		ID:        strings.TrimSpace(parts[1]),
+	}, nil
 }
 
 func (s *ReportService) load(
@@ -303,6 +436,40 @@ func (s *ReportService) replay(
 		Status:   result.Aggregate.Status(),
 		Replayed: true,
 	}, true, nil
+}
+
+// recordNoopReceipt 处理"目标状态已满足"的命名迁移：持久化幂等回执供后续重放，
+// 不递增聚合版本、不投递伪事实事件。
+func (s *ReportService) recordNoopReceipt(
+	ctx context.Context,
+	aggregate *reportmodel.Report,
+	commandName string,
+	commandDigest string,
+) (ReportCommandResult, error) {
+	idempotencyKey := strings.TrimSpace(commandmeta.IdempotencyKey(ctx))
+	if idempotencyKey == "" {
+		return ReportCommandResult{}, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"idempotencyKey 必填",
+			"report command requires idempotencyKey",
+		)
+	}
+	result, err := s.data.Aggregate.RecordNoopReceipt(ctx, reportports.NoopReceipt{
+		Aggregate:        aggregate,
+		IdempotencyKey:   idempotencyKey,
+		CommandName:      commandName,
+		CommandDigest:    commandDigest,
+		ReceiptExpiresAt: s.now().UTC().Add(reportReceiptTTL),
+	})
+	if err != nil {
+		return ReportCommandResult{}, unavailable(err)
+	}
+	return ReportCommandResult{
+		ID:       result.Aggregate.ID(),
+		Version:  result.Aggregate.Version(),
+		Status:   result.Aggregate.Status(),
+		Replayed: result.Replayed,
+	}, nil
 }
 
 func (s *ReportService) commit(

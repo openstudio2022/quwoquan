@@ -111,6 +111,32 @@ func TestSearchEndpointNativeFallbackWhenESDisabled(t *testing.T) {
 	}
 }
 
+func TestSearchEndpointRecallsUserProfileObject(t *testing.T) {
+	native := rtsearch.NewSliceBackend([]rtsearch.Document{{
+		ObjectType:   rtsearch.ObjectTypeUserProfile,
+		ObjectID:     "user_photographer",
+		Title:        "林摄影",
+		Summary:      "旅行与街头摄影创作者",
+		Visibility:   "public",
+		SourceDomain: "user",
+	}})
+	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
+
+	rec, parsed := postSearch(t, handler, `{"query":"摄影","objectTypes":["user"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	hits, _ := parsed["hits"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("expected one user hit, got %d: %s", len(hits), rec.Body.String())
+	}
+	hit, _ := hits[0].(map[string]any)
+	if toString(hit["target"]) != string(rtsearch.TargetUser) ||
+		toString(hit["objectId"]) != "user_photographer" {
+		t.Fatalf("unexpected user hit: %#v", hit)
+	}
+}
+
 func TestSearchEndpointESDownDegradesToNativeFallback(t *testing.T) {
 	// Production topology: ES primary + native fallback. ES is unroutable, so the
 	// FallbackBackend must transparently serve native results (no 5xx, no break).

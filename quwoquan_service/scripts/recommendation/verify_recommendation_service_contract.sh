@@ -36,6 +36,13 @@ for kw in "VALID_APP_ENVS" "EXPECTED_SERVICE_NAME" "APP_ENV" "SERVICE_NAME" "CON
   fi
 done
 
+# 行为 metadata、Go HotPath 与 Dart wire enum 必须同轨。
+python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_behavior_action_consistency.py"
+
+# 推荐/搜索只允许共享 runtime hash 分桶；未绑定线上流量的 Product Ops
+# ExperimentAssignmentFact 必须保持 default-deny 且不进入 Portal。
+python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_experiment_single_track.py"
+
 # 交集 kind 注册表单一真相源（Phase 0 §20d）：注册表结构 + Go evidenceKindRank 对齐。
 if command -v python3 >/dev/null 2>&1; then
   python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py" || exit 1

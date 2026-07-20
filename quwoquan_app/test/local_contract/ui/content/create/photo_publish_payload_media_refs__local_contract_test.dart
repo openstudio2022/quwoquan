@@ -1,4 +1,6 @@
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
@@ -26,16 +28,22 @@ void main() {
 
       final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
-        fileStorageGateway: fileStorage,
         state: state,
-        uploadObject:
+        sourceReader: _MemoryContentMediaSourceReader(fileStorage.bytesByPath),
+        uploadStream:
             (
               uri,
               bytes, {
+              required contentLength,
               required contentType,
               required expectedSha256,
+              abortTrigger,
             }) async {
-              uploads.add(_UploadCall(uri, bytes, contentType));
+              final uploadedBytes = await bytes
+                  .expand((chunk) => chunk)
+                  .toList();
+              expect(uploadedBytes.length, contentLength);
+              uploads.add(_UploadCall(uri, uploadedBytes, contentType));
             },
       );
 
@@ -92,14 +100,18 @@ void main() {
       await expectLater(
         buildPostPublicationPayloadWithRemoteMedia(
           media: media,
-          fileStorageGateway: fileStorage,
           state: state,
-          uploadObject:
+          sourceReader: _MemoryContentMediaSourceReader(
+            fileStorage.bytesByPath,
+          ),
+          uploadStream:
               (
                 uri,
                 bytes, {
+                required contentLength,
                 required contentType,
                 required expectedSha256,
+                abortTrigger,
               }) async {
                 throw StateError('upload failed');
               },
@@ -119,6 +131,22 @@ class _UploadCall {
   final Uri uri;
   final List<int> bytes;
   final String contentType;
+}
+
+class _MemoryContentMediaSourceReader implements ContentMediaSourceReader {
+  const _MemoryContentMediaSourceReader(this.bytesByPath);
+
+  final Map<String, List<int>> bytesByPath;
+
+  @override
+  Future<PreparedContentMediaSource> prepare(String localPath) async {
+    final bytes = bytesByPath[localPath]!;
+    return PreparedContentMediaSource(
+      fileSize: bytes.length,
+      sha256Digest: sha256.convert(bytes).toString(),
+      openRead: () => Stream<List<int>>.value(bytes),
+    );
+  }
 }
 
 class _MemoryFileStorageGateway implements FileStorageGateway {

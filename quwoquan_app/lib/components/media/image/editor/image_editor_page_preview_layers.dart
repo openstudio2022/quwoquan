@@ -153,6 +153,10 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     );
   }
 
+  Widget _buildMiddleImage(Color fgSecondary) {
+    return _buildMiddleImageForPath(_currentPath, fgSecondary);
+  }
+
   Widget _buildMiddleImageForPath(String path, Color fgSecondary) {
     if (path.isEmpty) {
       return Center(
@@ -193,19 +197,28 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
       );
     }
     imageWidget = _wrapWithFilterAdjustments(imageWidget);
-    imageWidget = _wrapWithProAdjustments(
-      imageWidget,
-      includeLocal: !_isEditingLocal,
-    );
+    imageWidget = _wrapWithProAdjustments(imageWidget);
     final previewWidget = _selectedToolIndex == kImageEditorToolRotate
         ? _buildRotatePreview(imageWidget)
         : imageWidget;
     final isHslEditing = _isEditingHsl;
     final isBwEditing = _isEditingBwLevels;
     final isLocalEditing = _isEditingLocal;
+    final isCurveEditing = _isEditingCurve;
+    final isWbEditing = _isEditingWhiteBalance;
+    final isMosaicEditing = _isEditingMosaic;
+    final isTextEditing = _isEditingText;
+    final usesSessionLayer =
+        isHslEditing ||
+        isBwEditing ||
+        isLocalEditing ||
+        isCurveEditing ||
+        isWbEditing ||
+        isMosaicEditing ||
+        isTextEditing;
     final content = _selectedToolIndex == kImageEditorToolCrop
         ? _buildCropImageLayer(previewWidget)
-        : (isHslEditing || isBwEditing || isLocalEditing)
+        : usesSessionLayer
         ? Center(child: previewWidget)
         : InteractiveViewer(
             minScale: 0.5,
@@ -224,90 +237,17 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
         children: [content, _buildRotateGridOverlay()],
       );
     }
-    if (isHslEditing) {
-      return _buildHslSessionImageLayer(content);
+    if (isCurveEditing) {
+      return _buildCurveSessionImageLayer(content);
     }
-    if (isBwEditing) {
-      return _buildBwSessionImageLayer(content);
+    if (isWbEditing) {
+      return _buildWbSessionImageLayer(content);
     }
-    if (isLocalEditing) {
-      return _buildLocalSessionImageLayer(content);
+    if (isMosaicEditing) {
+      return _buildMosaicSessionImageLayer(content);
     }
-    return content;
-  }
-
-  Widget _buildMiddleImage(Color fgSecondary) {
-    if (_currentPath.isEmpty) {
-      return Center(
-        child: Text(
-          UITextConstants.loadFailed,
-          style: TextStyle(color: fgSecondary),
-        ),
-      );
-    }
-    final isFile =
-        _currentPath.startsWith('/') ||
-        (_currentPath.length > 1 && _currentPath[1] == ':');
-    Widget imageWidget;
-    if (isFile && File(_currentPath).existsSync()) {
-      imageWidget = Image.file(
-        File(_currentPath),
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.broken_image_outlined,
-          size: AppSpacing.largeAvatarSize,
-          color: fgSecondary,
-        ),
-      );
-    } else if (!isFile) {
-      imageWidget = AppCachedNetworkImage(
-        imageUrl: _currentPath,
-        fit: BoxFit.contain,
-        cdnPreset: CdnImagePreset.full,
-        errorWidget: Icon(
-          Icons.broken_image_outlined,
-          size: AppSpacing.largeAvatarSize,
-          color: fgSecondary,
-        ),
-      );
-    } else {
-      imageWidget = Icon(
-        Icons.broken_image_outlined,
-        size: AppSpacing.largeAvatarSize,
-        color: fgSecondary,
-      );
-    }
-    imageWidget = _wrapWithFilterAdjustments(imageWidget);
-    imageWidget = _wrapWithProAdjustments(
-      imageWidget,
-      includeLocal: !_isEditingLocal,
-    );
-    final previewWidget = _selectedToolIndex == kImageEditorToolRotate
-        ? _buildRotatePreview(imageWidget)
-        : imageWidget;
-    final isHslEditing = _isEditingHsl;
-    final isBwEditing = _isEditingBwLevels;
-    final isLocalEditing = _isEditingLocal;
-    final content = _selectedToolIndex == kImageEditorToolCrop
-        ? _buildCropImageLayer(previewWidget)
-        : (isHslEditing || isBwEditing || isLocalEditing)
-        ? Center(child: previewWidget)
-        : InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 4,
-            child: Center(child: previewWidget),
-          );
-    if (_selectedToolIndex == kImageEditorToolCrop) {
-      return Stack(
-        alignment: Alignment.center,
-        children: [content, _buildCropOverlay()],
-      );
-    }
-    if (_selectedToolIndex == kImageEditorToolRotate) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [content, _buildRotateGridOverlay()],
-      );
+    if (isTextEditing) {
+      return _buildTextSessionImageLayer(content);
     }
     if (isHslEditing) {
       return _buildHslSessionImageLayer(content);
@@ -423,6 +363,11 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
         ),
       ],
     );
+  }
+
+  /// 白平衡编辑层：矩阵预览已在 _wrapWithProAdjustments 中生效，仅叠加对比条。
+  Widget _buildWbSessionImageLayer(Widget content) {
+    return _buildBwSessionImageLayer(content);
   }
 
   Widget _buildLocalSessionImageLayer(Widget content) {

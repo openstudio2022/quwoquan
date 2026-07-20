@@ -137,11 +137,15 @@ entities:
       - name: mentions
         source: mentions
         type: "[]string"
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_ITEMS_50]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+        description: |
+          群消息提及的稳定成员 userId；`assistant` 仅在助手已入群时合法，
+          `__all__` 仅 owner/admin 可用。服务端去空去重并验证目标为当前活跃成员，
+          禁止客户端仅凭正文中的 `@显示名` 产生提醒。
 
       - name: status
         source: status

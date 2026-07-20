@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
-import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/cloud_services/content/content_mock_data.dart';
 
 void main() {
-  group('discovery_wire_lookup', () {
+  group('discovery_wire_lookup（test/support 迁移后）', () {
     test('findDiscoveryWireRowByPostId resolves postId key', () {
       final rows = aggregateDiscoveryWireSlices(
         photo: ContentMockData.discoveryPhotoData,
@@ -23,21 +23,8 @@ void main() {
       expect(row!['id'], 'm1');
     });
 
-    test('mockDiscoveryWireFallback mirrors remote when not mock', () {
-      final canonical = ContentMockData.discoveryPhotoData;
-      expect(mockDiscoveryWireFallback(false, canonical), isEmpty);
-      final mapped = mockDiscoveryWireFallback(true, canonical);
-      expect(mapped, isNotEmpty);
-      expect(mapped.first['id'], canonical.first.id);
-    });
-
-    test(
-      'prototypeDiscoveryWireRowForMock only when mock and non-empty id',
-      () {
-        expect(prototypeDiscoveryWireRowForMock(false, 'd1'), isNull);
-        expect(prototypeDiscoveryWireRowForMock(true, ''), isNull);
-        expect(prototypeDiscoveryWireRowForMock(true, 'd1'), isNotNull);
-      },
-    );
+    // 契约单轨：mockDiscoveryWireFallback / prototypeDiscoveryWireRowForMock
+    // UI mock 桥已随 lib 侧 mock 本体删除（生产组合根 Remote-only），
+    // 不再保留对应正向断言。
   });
 }

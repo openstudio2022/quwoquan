@@ -1,0 +1,117 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: prod
+    plane: service
+
+rule_files:
+  - /etc/prometheus/rules/quwoquan_alerts.yaml
+  - /etc/prometheus/rules/content_contract/*.yaml
+  - /etc/prometheus/rules/content_report_lifecycle.yaml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # prod-hosted service plane（rootless compose，与 prod_plane_access_isolation.yaml
+  # rootlessGovernedComposeServices 一致）。seed-box 目标保留给聚合进程形态主机。
+  - job_name: quwoquan-service-plane
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - seed-box:18080
+          - content-service:18080
+          - chat-service:18081
+          - user-service:18082
+          - assistant-service:18087
+          - product-ops-service:18086
+          - platform-ops-service:18088
+          - tag-service:18092
+          - entity-service:18084
+        labels:
+          plane: service
+
+  # 独立部署的业务进程（process_domain_mapping prod 段）。
+  - job_name: quwoquan-standalone-processes
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - search-service:18095
+          - rtc-service:18083
+          - realtime-gateway:18090
+        labels:
+          plane: service
+
+  - job_name: livekit-sfu
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - livekit-sfu:6789
+        labels:
+          plane: media
+
+  - job_name: recommendation-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - recommendation-service:8000
+        labels:
+          plane: service
+
+  - job_name: otel-collector
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - otel-collector:8889
+        labels:
+          plane: observability
+
+  # ===== 基础设施 exporter 家族（主机 / 容器 / 数据面） =====
+  - job_name: node-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - node-exporter:9100
+        labels:
+          plane: infrastructure
+          infra: host
+
+  - job_name: podman-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - podman-exporter:9882
+        labels:
+          plane: infrastructure
+          infra: container
+
+  - job_name: mongodb-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - mongodb-exporter:9216
+        labels:
+          plane: infrastructure
+          infra: mongodb
+
+  - job_name: postgres-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+        labels:
+          plane: infrastructure
+          infra: postgres
+
+  - job_name: redis-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+        labels:
+          plane: infrastructure
+          infra: redis

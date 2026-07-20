@@ -2,6 +2,7 @@ package learning
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -96,6 +97,9 @@ func (s *MongoSink) FlushEvents(
 	documents := make([]interface{}, len(events))
 	for index, event := range events {
 		documents[index] = bson.M{
+			// 确定性 eventId 作为 _id 承载 dedupe（rec_model/storage.yaml）：
+			// 重放写入被唯一约束拒绝后按已存在处理，事实不重复。
+			"_id":     event.EventID,
 			"eventId": event.EventID, "eventType": event.EventType,
 			"scenario": event.Scenario, "occurredAt": event.OccurredAt,
 			"userId": event.UserID, "personaId": event.PersonaID,
@@ -104,15 +108,34 @@ func (s *MongoSink) FlushEvents(
 			"labels": event.Labels, "context": event.Context, "createdAt": now,
 		}
 	}
-	_, err := s.events.InsertMany(ctx, documents)
-	if err != nil {
+	_, err := s.events.InsertMany(ctx, documents, options.InsertMany().SetOrdered(false))
+	if err != nil && !allDuplicateKeyErrors(err) {
 		s.logger.Error(
 			"learning events flush failed",
 			slog.String("error", err.Error()),
 			slog.Int("count", len(events)),
 		)
+		return err
 	}
-	return err
+	return nil
+}
+
+// allDuplicateKeyErrors 判断批量写失败是否全部由 _id dedupe 拒绝构成
+// （重放收敛路径，不是故障）。
+func allDuplicateKeyErrors(err error) bool {
+	var bulkErr mongo.BulkWriteException
+	if !errors.As(err, &bulkErr) {
+		return false
+	}
+	if bulkErr.WriteConcernError != nil || len(bulkErr.WriteErrors) == 0 {
+		return false
+	}
+	for _, writeError := range bulkErr.WriteErrors {
+		if !mongo.IsDuplicateKeyError(writeError.WriteError) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *MongoSink) FlushScorecards(

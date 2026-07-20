@@ -30,13 +30,6 @@ type mediaOriginalAccessReceiptDocument struct {
 	Fact          mediaOriginalAccessFactDocument `bson:"fact"`
 }
 
-type mediaOriginalAccessOutboxDocument struct {
-	EventID    string    `bson:"_id"`
-	EventType  string    `bson:"eventType"`
-	Payload    []byte    `bson:"payload"`
-	OccurredAt time.Time `bson:"occurredAt"`
-}
-
 func (s *MongoMediaStore) AppendMediaOriginalAccess(
 	ctx context.Context,
 	request mediaports.MediaOriginalAccessAppendRequest,
@@ -44,11 +37,10 @@ func (s *MongoMediaStore) AppendMediaOriginalAccess(
 	if err := request.Fact.Validate(); err != nil {
 		return mediaports.MediaOriginalAccessAppendResult{}, err
 	}
-	if strings.TrimSpace(request.CommandDigest) == "" ||
-		request.Event.EventID != request.Fact.AuditID ||
-		strings.TrimSpace(request.Event.EventType) == "" ||
-		request.Event.OccurredAt.IsZero() {
-		return mediaports.MediaOriginalAccessAppendResult{}, errors.New("media original access append requires matching command digest and event")
+	if strings.TrimSpace(request.CommandDigest) == "" {
+		return mediaports.MediaOriginalAccessAppendResult{}, errors.New(
+			"media original access append requires command digest",
+		)
 	}
 	if replayed, found, err := s.findMediaOriginalAccessReceipt(ctx, request.Fact.IdempotencyKey, request.CommandDigest); err != nil || found {
 		return replayed, err
@@ -68,12 +60,6 @@ func (s *MongoMediaStore) AppendMediaOriginalAccess(
 		}
 		factDocument := mediaOriginalAccessFactDocumentFrom(request.Fact)
 		if _, insertErr := s.originalAccessFacts.InsertOne(txCtx, factDocument); insertErr != nil {
-			return nil, insertErr
-		}
-		if _, insertErr := s.originalAccessOutbox.InsertOne(txCtx, mediaOriginalAccessOutboxDocument{
-			EventID: request.Event.EventID, EventType: request.Event.EventType,
-			Payload: append([]byte(nil), request.Event.Payload...), OccurredAt: request.Event.OccurredAt.UTC(),
-		}); insertErr != nil {
 			return nil, insertErr
 		}
 		_, insertErr := s.originalAccessReceipts.InsertOne(txCtx, mediaOriginalAccessReceiptDocument{

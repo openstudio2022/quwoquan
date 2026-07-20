@@ -21,7 +21,7 @@ func (f fixedResponseRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 
 func TestFallbackEndpointName(t *testing.T) {
 	got := fallbackEndpointName("chat-service", http.MethodGet, "/chat/conversations/{conversationId}/messages")
-	expect := "chat.get.v1_chat_conversations_id_messages"
+	expect := "chat.get.chat_conversations_id_messages"
 	if got != expect {
 		t.Fatalf("fallback endpoint mismatch, got=%s expect=%s", got, expect)
 	}
@@ -49,7 +49,7 @@ func TestNewOrchestratorClient_UsesMappedEndpoint(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	logs, err := parseDelimitedLogs(standard.String())
+	logs, err := parseRuntimeLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse logs failed: %v", err)
 	}

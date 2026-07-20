@@ -71,6 +71,7 @@ class GeneratedPostRuntimeMetadata {
     'limit',
     'subCategory',
     'feedRequestId',
+    'channelId',
   ];
 
   static const List<String> publicationWritableFields = <String>[

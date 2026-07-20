@@ -23,6 +23,10 @@ class WorkBrowserItemDto {
   final List<String> imageUrls;
   final String? videoUrl;
   final int? durationMs;
+  final String? mediaAssetId;
+  final int? mediaAssetVersion;
+  final String? previewTrackManifestUrl;
+  final int? previewTrackVersion;
   final int? width;
   final int? height;
   final List<WorkBrowserMediaItemDto> mediaItems;
@@ -54,6 +58,10 @@ class WorkBrowserItemDto {
     this.imageUrls = const <String>[],
     this.videoUrl,
     this.durationMs,
+    this.mediaAssetId,
+    this.mediaAssetVersion,
+    this.previewTrackManifestUrl,
+    this.previewTrackVersion,
     this.width,
     this.height,
     this.mediaItems = const <WorkBrowserMediaItemDto>[],
@@ -87,6 +95,10 @@ class WorkBrowserItemDto {
       imageUrls: _parseStringList(m['imageUrls']) ?? <String>[],
       videoUrl: m['videoUrl']?.toString() ?? null,
       durationMs: (m['durationMs'] as num?)?.toInt() ?? null,
+      mediaAssetId: m['mediaAssetId']?.toString() ?? null,
+      mediaAssetVersion: (m['mediaAssetVersion'] as num?)?.toInt() ?? null,
+      previewTrackManifestUrl: m['previewTrackManifestUrl']?.toString() ?? null,
+      previewTrackVersion: (m['previewTrackVersion'] as num?)?.toInt() ?? null,
       width: (m['width'] as num?)?.toInt() ?? null,
       height: (m['height'] as num?)?.toInt() ?? null,
       mediaItems: _parseProjectionDtoList(m['mediaItems'], WorkBrowserMediaItemDto.fromMap),
@@ -121,6 +133,10 @@ class WorkBrowserItemDto {
       'imageUrls': source['mediaUrls'],
       'videoUrl': source['videoUrl'],
       'durationMs': source['durationMs'],
+      'mediaAssetId': source['mediaAssetId'],
+      'mediaAssetVersion': source['mediaAssetVersion'],
+      'previewTrackManifestUrl': source['previewTrackManifestUrl'],
+      'previewTrackVersion': source['previewTrackVersion'],
       'width': source['width'],
       'height': source['height'],
       'mediaItems': source['mediaItems'],
@@ -155,6 +171,10 @@ class WorkBrowserItemDto {
       'imageUrls': imageUrls,
       'videoUrl': videoUrl,
       'durationMs': durationMs,
+      'mediaAssetId': mediaAssetId,
+      'mediaAssetVersion': mediaAssetVersion,
+      'previewTrackManifestUrl': previewTrackManifestUrl,
+      'previewTrackVersion': previewTrackVersion,
       'width': width,
       'height': height,
       'mediaItems': mediaItems,
@@ -188,6 +208,10 @@ class WorkBrowserItemDto {
     List<String>? imageUrls,
     String? videoUrl,
     int? durationMs,
+    String? mediaAssetId,
+    int? mediaAssetVersion,
+    String? previewTrackManifestUrl,
+    int? previewTrackVersion,
     int? width,
     int? height,
     List<WorkBrowserMediaItemDto>? mediaItems,
@@ -219,6 +243,10 @@ class WorkBrowserItemDto {
       imageUrls: imageUrls ?? this.imageUrls,
       videoUrl: videoUrl ?? this.videoUrl,
       durationMs: durationMs ?? this.durationMs,
+      mediaAssetId: mediaAssetId ?? this.mediaAssetId,
+      mediaAssetVersion: mediaAssetVersion ?? this.mediaAssetVersion,
+      previewTrackManifestUrl: previewTrackManifestUrl ?? this.previewTrackManifestUrl,
+      previewTrackVersion: previewTrackVersion ?? this.previewTrackVersion,
       width: width ?? this.width,
       height: height ?? this.height,
       mediaItems: mediaItems ?? this.mediaItems,
@@ -257,6 +285,10 @@ class WorkBrowserItemDto {
     ? thumbnailUrl
     : (coverUrl.isEmpty ? null : coverUrl),
     durationMs: durationMs,
+    mediaAssetId: mediaAssetId,
+    mediaAssetVersion: mediaAssetVersion,
+    previewTrackManifestUrl: previewTrackManifestUrl,
+    previewTrackVersion: previewTrackVersion,
     width: width,
     height: height,
     title: null,

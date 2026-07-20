@@ -285,16 +285,6 @@ entities:
         ops_exposure: read
         description: 最近一次资料同步来源
 
-      - name: inviteCount
-        source: inviteCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 该子账号发起的邀请转化数（冗余计数）
-
       - name: updatedAt
         source: updatedAt
         type: timestamp

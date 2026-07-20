@@ -162,12 +162,27 @@ func main() {
 		log.Fatalf("chat-service content dependency invalid: %v", err)
 	}
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("chat-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("chat-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("chat-service exception logger init failed: %v", err)
 	}
@@ -175,7 +190,7 @@ func main() {
 	router := buildRedisRouter(cfg)
 	defer router.Close()
 
-	ctx := context.Background()
+	ctx, cancelRuntime := context.WithCancel(context.Background())
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "chat-service", SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -184,24 +199,104 @@ func main() {
 		log.Fatalf("chat-service redis dependency unavailable: %v", err)
 	}
 	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "chat-service")
-	defer func() { _ = mongoClient.Disconnect(ctx) }()
+	defer func() {
+		cancelRuntime()
+		disconnectCtx, cancelDisconnect := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancelDisconnect()
+		_ = mongoClient.Disconnect(disconnectCtx)
+	}()
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	if err := chatStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("chat-service aggregate indexes unavailable: %v", err)
 	}
+	conversationCommands := persistence.NewMongoAggregateCommandStore(
+		mongoDB, "conversations_command_receipts", "conversations_outbox",
+	)
+	membershipCommands := persistence.NewMongoAggregateCommandStore(
+		mongoDB, "conversation_memberships_command_receipts", "conversation_memberships_outbox",
+	)
+	userStateCommands := persistence.NewMongoAggregateCommandStore(
+		mongoDB, "conversation_user_states_command_receipts", "conversation_user_states_outbox",
+	)
+	for _, commands := range []*persistence.MongoAggregateCommandStore{
+		conversationCommands, membershipCommands, userStateCommands,
+	} {
+		if err := commands.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("chat-service aggregate command indexes unavailable: %v", err)
+		}
+	}
+	userAccountClosedProjection := persistence.NewMongoUserAccountClosedProjection(
+		mongoDB,
+		router.Scene("general"),
+	)
+	if err := userAccountClosedProjection.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service UserAccountClosed indexes unavailable: %v", err)
+	}
+	userAccountClosedConsumer, err := mq.NewUserAccountClosedConsumer(
+		router.Scene("general"),
+		userAccountClosedProjection,
+		userAccountClosedProjection,
+		"chat-user-account-closed:"+instanceID,
+		logger,
+		mq.DefaultUserAccountClosedConsumerConfig(),
+	)
+	if err != nil {
+		log.Fatalf("chat-service UserAccountClosed consumer invalid: %v", err)
+	}
+	if err := userAccountClosedConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("chat-service UserAccountClosed consumer group unavailable: %v", err)
+	}
+	projectionCheckpoints := persistence.NewMongoProjectionCheckpointStore(mongoDB)
 	chatStorage := application.ChatStoragePorts{
-		Transactions:      chatStore,
-		Conversations:     chatStore,
-		Messages:          chatStore,
-		MessageProjection: chatStore,
-		Members:           chatStore,
-		UserStates:        chatStore,
-		Receipts:          chatStore,
+		Transactions:         chatStore,
+		Conversations:        chatStore,
+		Messages:             chatStore,
+		MessageProjection:    chatStore,
+		Members:              chatStore,
+		UserStates:           chatStore,
+		Receipts:             chatStore,
+		ConversationCommands: conversationCommands,
+		MembershipCommands:   membershipCommands,
+		UserStateCommands:    userStateCommands,
 	}
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
-	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
+	// 实时扇出接收者必须分页拉全量成员：单页上限截断会让大群
+	// （maxGroupSize 默认 1000 > 单页 512）静默漏推实时事件。
+	recipientResolver := mq.NewMemberRecipientResolver(
+		func(ctx context.Context, conversationID string) ([]string, error) {
+			const fanoutPageSize = 512
+			ids := make([]string, 0, fanoutPageSize)
+			cursor := ""
+			for {
+				members, err := chatStore.ListMembers(
+					ctx,
+					conversationID,
+					application.ListMembersQuery{
+						Limit:  fanoutPageSize,
+						Cursor: cursor,
+						Sort:   application.MemberListSortJoinedAsc,
+					},
+				)
+				if err != nil {
+					return nil, err
+				}
+				for _, member := range members {
+					ids = append(ids, member.UserId)
+				}
+				if len(members) < fanoutPageSize {
+					return ids, nil
+				}
+				last := members[len(members)-1]
+				cursor = persistence.EncodeMemberListNextCursorJoined(last.JoinedAt, last.ID)
+			}
+		},
+	)
+	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"), recipientResolver)
 	messageOutboxRelay := application.NewMessageOutboxRelay(
 		chatStore,
 		chatStore,
@@ -212,6 +307,50 @@ func main() {
 	go func() {
 		if err := messageOutboxRelay.Run(ctx, 100*time.Millisecond); err != nil {
 			logger.Error("chat message outbox relay stopped", "err", err)
+		}
+	}()
+	// 三个非 Message 聚合共享 relay 骨架，各自 outbox 独立 checkpoint；
+	// 保留 relay 引用供 /healthz 与 Prometheus 检测停滞，而不是只在 goroutine
+	// 退出时留一条不可告警的日志。
+	aggregateOutboxRelays := map[string]*application.AggregateOutboxRelay{}
+	for _, spec := range []struct {
+		healthName string
+		consumer   string
+		source     *persistence.MongoAggregateCommandStore
+	}{
+		{
+			healthName: "conversation_outbox_relay",
+			consumer:   "chat-conversation-outbox-fanout",
+			source:     conversationCommands,
+		},
+		{
+			healthName: "membership_outbox_relay",
+			consumer:   "chat-membership-outbox-fanout",
+			source:     membershipCommands,
+		},
+		{
+			healthName: "user_state_outbox_relay",
+			consumer:   "chat-user-state-outbox-fanout",
+			source:     userStateCommands,
+		},
+	} {
+		relay := application.NewAggregateOutboxRelay(
+			spec.source, projectionCheckpoints, eventPublisher, spec.consumer,
+		)
+		aggregateOutboxRelays[spec.healthName] = relay
+		go func(name string, relay *application.AggregateOutboxRelay) {
+			if err := relay.Run(ctx, 100*time.Millisecond); err != nil {
+				logger.Error("chat aggregate outbox relay stopped", "consumer", name, "err", err)
+			}
+		}(spec.consumer, relay)
+	}
+	// ChatInbox 未读/排序投影：独立 checkpoint 消费 Message outbox。
+	inboxProjector := application.NewInboxProjector(
+		chatStore, projectionCheckpoints, chatStore, chatStore,
+	)
+	go func() {
+		if err := inboxProjector.Run(ctx, 200*time.Millisecond); err != nil {
+			logger.Error("chat inbox projector stopped", "err", err)
 		}
 	}()
 	localMediaRoot := strings.TrimSpace(cfg.Runtime.Media.GroupAvatarLocalMediaRoot)
@@ -331,6 +470,26 @@ func main() {
 		relationshipGate,
 		mediaAssetReader,
 	)
+	// 公告即触达：公告命令发布成功后经消息主线写 system_announcement 消息。
+	conversationSvc.SetAnnouncementMessageSender(messageSvc)
+	rtcCallLogConsumer := mq.NewRtcCallEndedConsumer(
+		router.Scene("realtime"),
+		messageSvc,
+		instanceID,
+	)
+	go func() {
+		for {
+			if err := rtcCallLogConsumer.Run(ctx); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Error("chat rtc CallEnded consumer stopped", "error", err)
+				time.Sleep(time.Second)
+				continue
+			}
+			return
+		}
+	}()
 	memberSvc := application.NewMemberService(
 		chatStorage,
 		convCache,
@@ -356,6 +515,19 @@ func main() {
 	if err := userAvatarConsumer.Start(ctx); err != nil {
 		log.Fatalf("chat-service user avatar consumer start failed: %v", err)
 	}
+	userAccountClosedStopped := make(chan struct{})
+	go func() {
+		defer close(userAccountClosedStopped)
+		userAccountClosedConsumer.Run(ctx)
+	}()
+	defer func() {
+		cancelRuntime()
+		select {
+		case <-userAccountClosedStopped:
+		case <-time.After(5 * time.Second):
+			logger.Error("chat UserAccountClosed consumer shutdown timed out")
+		}
+	}()
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return router.PingAll(hctx)
@@ -365,6 +537,18 @@ func main() {
 	})
 	healthChecker.Register("message_outbox_relay", func(context.Context) error {
 		return messageOutboxRelay.Healthy(5 * time.Second)
+	})
+	for name, aggregateRelay := range aggregateOutboxRelays {
+		relay := aggregateRelay
+		healthChecker.Register(name, func(context.Context) error {
+			return relay.Healthy(5 * time.Second)
+		})
+	}
+	healthChecker.Register("inbox_projection", func(context.Context) error {
+		return inboxProjector.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("user_account_closed_consumer", func(context.Context) error {
+		return userAccountClosedConsumer.Healthy(15 * time.Second)
 	})
 
 	chatRoutes := httpadapter.NewChatHandler(
@@ -523,28 +707,16 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := mergeConfigFile(&cfg, versionFile); err != nil {
-					return config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
+	if err := mergeConfigFile(&cfg, localDefault); err != nil {
+		return config{}, fmt.Errorf("read local default config: %w", err)
 	}
-
-	currentPath := filepath.Join("configs", "config.yaml")
-	if _, err := os.Stat(currentPath); err == nil {
-		if err := mergeConfigFile(&cfg, currentPath); err != nil {
-			return config{}, fmt.Errorf("read current config: %w", err)
+	if err := mergeConfigFile(&cfg, localEnv); err != nil {
+		return config{}, fmt.Errorf("read local env config: %w", err)
+	}
+	if strings.TrimSpace(configVersion) != "" {
+		versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
+		if err := mergeConfigFile(&cfg, versionFile); err != nil {
+			return config{}, fmt.Errorf("read local version config: %w", err)
 		}
 	}
 	return cfg, nil

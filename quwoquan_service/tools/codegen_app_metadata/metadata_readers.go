@@ -191,6 +191,27 @@ func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
 	return readMergedErrors(paths)
 }
 
+// contentDomainErrorsPaths 是 content 域错误码的固定合并顺序：
+// post（域共享 + Post 自有）在前，随后按对象目录字典序。
+// 与 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py 及
+// quwoquan_service/scripts/verify/verify_error_recovery_alignment.py 的列表保持一致。
+func contentDomainErrorsPaths(metadataDir string) []string {
+	contentDir := filepath.Join(metadataDir, "content")
+	return []string{
+		filepath.Join(contentDir, "post", "errors.yaml"),
+		filepath.Join(contentDir, "comment", "errors.yaml"),
+		filepath.Join(contentDir, "content_reaction", "errors.yaml"),
+		filepath.Join(contentDir, "deleted_post_tombstone", "errors.yaml"),
+		filepath.Join(contentDir, "filter_catalog_release", "errors.yaml"),
+		filepath.Join(contentDir, "media_asset", "errors.yaml"),
+		filepath.Join(contentDir, "media_original_access_fact", "errors.yaml"),
+		filepath.Join(contentDir, "media_upload_session", "errors.yaml"),
+		filepath.Join(contentDir, "outbound_share_fact", "errors.yaml"),
+		filepath.Join(contentDir, "post_moderation_case", "errors.yaml"),
+		filepath.Join(contentDir, "report", "errors.yaml"),
+	}
+}
+
 func readBehaviors(path string) (*behaviorsFile, error) {
 	var parsed behaviorsFile
 	return &parsed, decodeMetadataDocument(path, &parsed)
@@ -204,6 +225,65 @@ func readPrivacy(path string) (*privacyFile, error) {
 func readUIConfig(path string) (*uiConfigFile, error) {
 	var parsed uiConfigFile
 	return &parsed, decodeMetadataDocument(path, &parsed)
+}
+
+func readContentPublicationPolicy(
+	path string,
+) (*contentPublicationPolicyFile, error) {
+	var parsed contentPublicationPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_post_publication_policy" {
+		return nil, fmt.Errorf("publication policy schema must be content_post_publication_policy")
+	}
+	limits := parsed.TextLimits
+	if limits.TitleMaxRunes <= 0 ||
+		limits.MicroBodyMaxRunes <= 0 ||
+		limits.ArticleMarkdownMaxRunes <= 0 ||
+		limits.SummaryMaxRunes <= 0 ||
+		limits.SemanticMentionsMaxItems <= 0 {
+		return nil, fmt.Errorf("publication policy text limits must be positive")
+	}
+	if parsed.RateLimit.PersonaWindowSeconds <= 0 ||
+		parsed.RateLimit.PersonaMaxPublications <= 0 ||
+		parsed.RateLimit.DependencyFailure != "fail_closed" {
+		return nil, fmt.Errorf("publication rate limit must be positive and fail_closed")
+	}
+	if !parsed.Safety.Required ||
+		parsed.Safety.DependencyFailure != "fail_closed" ||
+		parsed.Safety.UnavailableAction != "review" ||
+		len(parsed.Safety.Decisions) != 4 {
+		return nil, fmt.Errorf("publication safety gate must be required and fail_closed")
+	}
+	return &parsed, nil
+}
+
+func readContentMediaUploadPolicy(
+	path string,
+) (*contentMediaUploadPolicyFile, error) {
+	var parsed contentMediaUploadPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_media_upload_policy" {
+		return nil, fmt.Errorf("media upload policy schema must be content_media_upload_policy")
+	}
+	if !parsed.StreamingRequired {
+		return nil, fmt.Errorf("media upload policy must require streaming")
+	}
+	for _, mediaType := range []string{"image", "video", "audio", "file"} {
+		definition, ok := parsed.MediaTypes[mediaType]
+		if !ok ||
+			definition.MaxFileSizeBytes <= 0 ||
+			len(definition.AllowedContentTypes) == 0 {
+			return nil, fmt.Errorf("media upload policy %s limits and content types are required", mediaType)
+		}
+	}
+	if parsed.Errors.FileTooLarge == "" || parsed.Errors.UnsupportedType == "" {
+		return nil, fmt.Errorf("media upload policy error codes are required")
+	}
+	return &parsed, nil
 }
 
 func readRequestContext(path string) (*requestContextFile, error) {

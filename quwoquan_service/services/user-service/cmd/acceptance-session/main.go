@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -32,6 +33,14 @@ func main() {
 	}
 	ownerID := requiredEnv("QWQ_ACCEPTANCE_OWNER_ID")
 	personaID := requiredEnv("QWQ_ACCEPTANCE_PERSONA_ID")
+	subject, err := acceptanceSubject(
+		strings.TrimSpace(os.Getenv("QWQ_ACCEPTANCE_PROFILE")),
+		ownerID,
+		personaID,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 	config, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
 		log.Fatal("load access token config")
@@ -40,7 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatal("create access token signer")
 	}
-	token, err := signer.Sign(rtauth.TokenSubject{AccountID: ownerID, PersonaID: personaID})
+	token, err := signer.Sign(subject)
 	if err != nil {
 		log.Fatal("issue access token")
 	}
@@ -48,6 +57,40 @@ func main() {
 		OwnerID: ownerID, PersonaID: personaID, AccessToken: token,
 	}); err != nil {
 		log.Fatal("encode acceptance session")
+	}
+}
+
+func acceptanceSubject(
+	profile string,
+	ownerID string,
+	personaID string,
+) (rtauth.TokenSubject, error) {
+	switch profile {
+	case "", "persona":
+		return rtauth.TokenSubject{
+			AccountID: ownerID,
+			PersonaID: personaID,
+		}, nil
+	case "content-report-operator":
+		return rtauth.TokenSubject{
+			AccountID: ownerID,
+			PersonaID: personaID,
+			Scopes: []string{
+				"ops.case.read",
+				"ops.case.write",
+			},
+			Permissions: []string{
+				"content.report.read",
+				"content.report.review",
+				"content.report.resolve",
+			},
+			Roles: []string{"operator"},
+		}, nil
+	default:
+		return rtauth.TokenSubject{}, fmt.Errorf(
+			"unsupported local acceptance profile %q",
+			profile,
+		)
 	}
 }
 

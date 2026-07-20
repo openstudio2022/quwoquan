@@ -3,7 +3,24 @@ aggregate: Homepage
 description: |
   Homepage 对象页端侧 UI 配置。
   codegen 从本文件生成 Dart HomepageUIConfig（DO NOT EDIT），
-  端侧实体主页通过 HomepageUIConfig 消费一级 Tab 与记录流二级过滤配置，消除页面内硬编码。
+  端侧实体主页通过 HomepageUIConfig 消费一级 Tab、记录流二级过滤配置与
+  适用「想去」意图的主页类型，消除页面内硬编码。
+
+# 「想去」只适用于可实际到访的地点对象；vehicle / university / travel_photo
+# 不复用地点意图，避免把不同业务语义压成同一个行为事实。
+homepage_wishlist_types:
+  - hotel
+  - restaurant
+  - sight
+  - museum
+  - heritage_site
+  - ancient_town
+  - religious_site
+  - check_in_spot
+  - natural_landscape
+  - park
+  - hot_spring
+  - theme_park
 
 homepage_tabs:
   - id: content

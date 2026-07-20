@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -13,7 +13,9 @@ import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
@@ -67,9 +69,26 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     if (_controlsVisible) _startControlsHideTimer();
   }
 
+  CallParticipantPickerRouteExtra _invitePickerExtra(
+    CallSessionState session,
+    int observedParticipantCount,
+  ) {
+    final declaredCount = session.session?.participantCount ?? 0;
+    final currentParticipantCount = declaredCount > observedParticipantCount
+        ? declaredCount
+        : observedParticipantCount;
+    return CallParticipantPickerRouteExtra.existingCallInvite(
+      callId: widget.callId,
+      currentParticipantCount: currentParticipantCount,
+      maxParticipants: session.session?.maxParticipants ?? 32,
+      conversationId: session.session?.conversationId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(callSessionProvider);
+    final participantState = ref.watch(callParticipantsProvider);
 
     ref.listen<CallSessionState>(callSessionProvider, (_, next) {
       if (!mounted) return;
@@ -83,7 +102,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
       }
     });
 
-    final participants = session.session?.participants ?? [];
+    final participants = participantState.participants;
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final stageGradient = CallStageChrome.backgroundGradient(isDark);
 
@@ -121,7 +140,11 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                       SizedBox(height: AppSpacing.xl),
                       const CallDurationBadge(),
                       SizedBox(height: AppSpacing.md),
-                      const CallStageBanner(),
+                      CallStageBanner(
+                        onRetry: () => ref
+                            .read(callSessionProvider.notifier)
+                            .retryCurrentCall(),
+                      ),
                       SizedBox(height: AppSpacing.md),
                       Expanded(
                         child: Center(
@@ -154,15 +177,10 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                                         }
                                         context.push(
                                           AppRoutePaths.rtcPickParticipants,
-                                          extra:
-                                              CallParticipantPickerRouteExtra(
-                                                callId: widget.callId,
-                                                maxParticipants:
-                                                    session
-                                                        .session
-                                                        ?.maxParticipants ??
-                                                    32,
-                                              ),
+                                          extra: _invitePickerExtra(
+                                            session,
+                                            participants.length,
+                                          ),
                                         );
                                       },
                                     ),
@@ -189,17 +207,20 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                         child: CallControlsBar(
                           callType: CallType.audio,
                           autoHide: false,
-                          onHangup: () {
-                            ref.read(callSessionProvider.notifier).hangupCall();
-                            ref.read(callTimerProvider.notifier).reset();
+                          onHangup: () async {
+                            final result = await ref
+                                .read(callSessionProvider.notifier)
+                                .hangupCall();
+                            if (result.succeeded) {
+                              ref.read(callTimerProvider.notifier).reset();
+                            }
                           },
                           onInvite: () {
                             context.push(
                               AppRoutePaths.rtcPickParticipants,
-                              extra: CallParticipantPickerRouteExtra(
-                                callId: widget.callId,
-                                maxParticipants:
-                                    session.session?.maxParticipants ?? 32,
+                              extra: _invitePickerExtra(
+                                session,
+                                participants.length,
                               ),
                             );
                           },
@@ -216,7 +237,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     );
   }
 
-  Widget _buildParticipantAvatars(List<CallParticipantDto> participants) {
+  Widget _buildParticipantAvatars(List<CallParticipant> participants) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final mutedFg = AppColorsFunctional.getColor(
       isDark,
@@ -240,7 +261,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     }
 
     final remoteParticipants = participants
-        .where((p) => p.role != 'initiator')
+        .where((participant) => !participant.isLocal)
         .toList();
 
     if (remoteParticipants.isEmpty) {
@@ -252,25 +273,31 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     }
 
     if (remoteParticipants.length == 1) {
-      final userId = remoteParticipants.first.userId;
+      final participant = remoteParticipants.first;
+      final displayName = participant.displayName;
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           CircleAvatar(
             radius: AppSpacing.oneHundred / 2,
             backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-            child: Text(
-              userId.isNotEmpty ? userId[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: onAccent,
-                fontSize: AppTypography.xxxl,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
+            backgroundImage: participant.avatarUrl == null
+                ? null
+                : NetworkImage(participant.avatarUrl!),
+            child: participant.avatarUrl == null
+                ? Text(
+                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: onAccent,
+                      fontSize: AppTypography.xxxl,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  )
+                : null,
           ),
           SizedBox(height: AppSpacing.md),
           Text(
-            userId,
+            displayName,
             style: TextStyle(
               color: nameFg,
               fontSize: AppTypography.lg,
@@ -281,24 +308,50 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
       );
     }
 
+    final overflow = callParticipantOverflowCount(remoteParticipants.length);
+    final visibleParticipants = remoteParticipants.take(
+      callParticipantSummaryLimit,
+    );
     return Wrap(
       alignment: WrapAlignment.center,
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      children: remoteParticipants.take(6).map((p) {
-        return CircleAvatar(
-          radius: AppSpacing.xl,
-          backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
-          child: Text(
-            p.userId.isNotEmpty ? p.userId[0].toUpperCase() : '?',
-            style: TextStyle(
-              color: onAccent,
-              fontSize: AppTypography.lg,
-              fontWeight: AppTypography.semiBold,
+      children: <Widget>[
+        ...visibleParticipants.map((participant) {
+          return CircleAvatar(
+            radius: AppSpacing.xl,
+            backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
+            backgroundImage: participant.avatarUrl == null
+                ? null
+                : NetworkImage(participant.avatarUrl!),
+            child: participant.avatarUrl == null
+                ? Text(
+                    participant.displayName.isNotEmpty
+                        ? participant.displayName[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                      color: onAccent,
+                      fontSize: AppTypography.lg,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  )
+                : null,
+          );
+        }),
+        if (overflow > 0)
+          CircleAvatar(
+            radius: AppSpacing.xl,
+            backgroundColor: AppColors.overlayMedium,
+            child: Text(
+              UITextConstants.callAdditionalParticipants(overflow),
+              style: TextStyle(
+                color: onAccent,
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.semiBold,
+              ),
             ),
           ),
-        );
-      }).toList(),
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -22,10 +23,12 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 enum BehaviorAction {
   impression('impression'),
   click('click'),
+  intersectionExpand('intersection_expand'),
   dwell('dwell'),
   like('like'),
   share('share'),
   dislike('dislike'),
+  undoDislike('undo_dislike'),
   hideAuthor('hide_author'),
   hideContentType('hide_content_type'),
   report('report'),
@@ -36,6 +39,7 @@ enum BehaviorAction {
   entityPageView('entity_page_view'),
   tagClick('tag_click'),
   playProgress('play_progress'),
+  effectivePlay('effective_play'),
   contentDepth('content_depth'),
   // 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact，
   // 独立 BehaviorAction 以拆分交集转化漏斗。
@@ -43,6 +47,9 @@ enum BehaviorAction {
   addContact('add_contact'),
   // 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
   assistantInterest('assistant_interest'),
+  // 新用户首启兴趣采集（W11 interest-onboarding-prior）：四维标签选择写入
+  // 推荐先验，payload 仅带 tagRefs，不绑定具体 post。
+  onboardingInterest('onboarding_interest'),
   // 交集条目负反馈（F 推荐与交集配对差异化）：不绑定具体 post，
   // subjectId 为交集主体对象、feedbackKind ∈ registry.feedbackKinds 闭集
   // （notInterested/dismiss/rejectGreeting/leaveCircle），驱动云侧 rec:ineg 冷却过滤。
@@ -77,6 +84,7 @@ enum ReferralSource {
   pushNotification,
   deepLink,
   myIntersections,
+  publishResult,
 }
 
 extension ReferralSourceExt on ReferralSource {
@@ -102,6 +110,8 @@ extension ReferralSourceExt on ReferralSource {
         return 'deep_link';
       case ReferralSource.myIntersections:
         return 'my_intersections';
+      case ReferralSource.publishResult:
+        return 'publish_result';
     }
   }
 }
@@ -125,10 +135,11 @@ ReferralSource referralSourceForObjectType(String objectType) {
 
 /// Behavior event for recommendation pipeline.
 class BehaviorEvent {
-  const BehaviorEvent({
+  BehaviorEvent({
     required this.contentId,
     required this.action,
     this.clientEventId,
+    DateTime? occurredAt,
     this.state,
     this.contentType,
     this.objectId,
@@ -151,6 +162,8 @@ class BehaviorEvent {
     this.engagementDepth,
     this.consumedRatio,
     this.totalUnits,
+    this.effectivePlayMs,
+    this.sessionId,
     this.entityRefs,
     this.pageVisitId,
     this.intersectionDimension,
@@ -166,13 +179,16 @@ class BehaviorEvent {
     this.settleMs,
     this.reducedMotion,
     this.committed,
-  });
+  }) : occurredAt = (occurredAt ?? DateTime.now()).toUtc();
 
   final String contentId;
   final BehaviorAction action;
 
   /// Client-generated idempotency key. Remote service de-duplicates by this id.
   final String? clientEventId;
+
+  /// 客户端事实发生时间；离线补传必须保留该时间，禁止由服务端接收时间代替。
+  final DateTime occurredAt;
 
   /// Closed feedback state: visible/impressed/click/dwell/interaction/negative.
   final String? state;
@@ -240,6 +256,12 @@ class BehaviorEvent {
   /// Total units of content (pages, images, duration in seconds)
   final int? totalUnits;
 
+  /// 前台、可见、非 buffering/seek 的实际播放累计候选。
+  final int? effectivePlayMs;
+
+  /// 播放器会话标识；有效播放按 session + contentId 幂等。
+  final String? sessionId;
+
   /// Entity references from the content (for interest propagation)
   final List<String>? entityRefs;
 
@@ -282,66 +304,80 @@ class BehaviorEvent {
   final bool? reducedMotion;
   final bool? committed;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'contentId': contentId,
-    'action': action.wireValue,
-    if (clientEventId != null && clientEventId!.isNotEmpty)
-      'clientEventId': clientEventId,
-    if (state != null && state!.isNotEmpty) 'state': state,
-    if (contentType != null && contentType!.isNotEmpty)
-      'contentType': contentType,
-    if (objectId != null && objectId!.isNotEmpty) 'objectId': objectId,
-    if (objectKind != null && objectKind!.isNotEmpty) 'objectKind': objectKind,
-    if (displayName != null && displayName!.isNotEmpty)
-      'displayName': displayName,
-    if (sourceSurface != null && sourceSurface!.isNotEmpty)
-      'sourceSurface': sourceSurface,
-    if (tags != null && tags!.isNotEmpty) 'tagRefs': tags,
-    if (duration != null && duration! > 0) 'duration': duration,
-    if (feedRequestId != null) 'feedRequestId': feedRequestId,
-    if (position != null) 'position': position,
-    if (channelId != null && channelId!.isNotEmpty) 'channelId': channelId,
-    if (rankingVersion != null && rankingVersion!.isNotEmpty)
-      'rankingVersion': rankingVersion,
-    if (reasonVersion != null && reasonVersion!.isNotEmpty)
-      'reasonVersion': reasonVersion,
-    if (recallPath != null && recallPath!.isNotEmpty) 'recallPath': recallPath,
-    if (contentVertical != null && contentVertical!.isNotEmpty)
-      'contentVertical': contentVertical,
-    if (supplySource != null && supplySource!.isNotEmpty)
-      'supplySource': supplySource,
-    if (commentLength != null) 'commentLength': commentLength,
-    if (authorId != null && authorId!.isNotEmpty) 'authorId': authorId,
-    if (referralSource != null) 'referralSource': referralSource!.value,
-    if (engagementDepth != null) 'engagementDepth': engagementDepth,
-    if (consumedRatio != null) 'consumedRatio': consumedRatio,
-    if (totalUnits != null) 'totalUnits': totalUnits,
-    if (entityRefs != null && entityRefs!.isNotEmpty) 'entityRefs': entityRefs,
-    if (pageVisitId != null && pageVisitId!.isNotEmpty)
-      'pageVisitId': pageVisitId,
-    if (intersectionDimension != null && intersectionDimension!.isNotEmpty)
-      'intersectionDimension': intersectionDimension,
-    if (intersectionSourceRef != null && intersectionSourceRef!.isNotEmpty)
-      'intersectionSourceRef': intersectionSourceRef,
-    if (intersectionTagRefs != null && intersectionTagRefs!.isNotEmpty)
-      'intersectionTagRefs': intersectionTagRefs,
-    if (intersectionId != null && intersectionId!.isNotEmpty)
-      'intersectionId': intersectionId,
-    if (intersectionClass != null && intersectionClass!.isNotEmpty)
-      'intersectionClass': intersectionClass,
-    if (intersectionEvidenceId != null && intersectionEvidenceId!.isNotEmpty)
-      'intersectionEvidenceId': intersectionEvidenceId,
-    if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
-    if (feedbackKind != null && feedbackKind!.isNotEmpty)
-      'feedbackKind': feedbackKind,
-    if (motionDirection != null && motionDirection!.isNotEmpty)
-      'direction': motionDirection,
-    if (motionProfile != null && motionProfile!.isNotEmpty)
-      'motionProfile': motionProfile,
-    if (settleMs != null) 'settleMs': settleMs,
-    if (reducedMotion != null) 'reducedMotion': reducedMotion,
-    if (committed != null) 'committed': committed,
-  };
+  Map<String, dynamic> toJson() {
+    final payload = <String, dynamic>{
+      'contentId': contentId,
+      'action': action.wireValue,
+      if (state != null && state!.isNotEmpty) 'state': state,
+      if (contentType != null && contentType!.isNotEmpty)
+        'contentType': contentType,
+      if (objectId != null && objectId!.isNotEmpty) 'objectId': objectId,
+      if (objectKind != null && objectKind!.isNotEmpty)
+        'objectKind': objectKind,
+      if (displayName != null && displayName!.isNotEmpty)
+        'displayName': displayName,
+      if (sourceSurface != null && sourceSurface!.isNotEmpty)
+        'sourceSurface': sourceSurface,
+      if (tags != null && tags!.isNotEmpty) 'tagRefs': tags,
+      if (duration != null && duration! > 0) 'duration': duration,
+      if (feedRequestId != null) 'feedRequestId': feedRequestId,
+      if (position != null) 'position': position,
+      if (channelId != null && channelId!.isNotEmpty) 'channelId': channelId,
+      if (rankingVersion != null && rankingVersion!.isNotEmpty)
+        'rankingVersion': rankingVersion,
+      if (reasonVersion != null && reasonVersion!.isNotEmpty)
+        'reasonVersion': reasonVersion,
+      if (recallPath != null && recallPath!.isNotEmpty)
+        'recallPath': recallPath,
+      if (contentVertical != null && contentVertical!.isNotEmpty)
+        'contentVertical': contentVertical,
+      if (supplySource != null && supplySource!.isNotEmpty)
+        'supplySource': supplySource,
+      if (commentLength != null) 'commentLength': commentLength,
+      if (authorId != null && authorId!.isNotEmpty) 'authorId': authorId,
+      if (referralSource != null) 'referralSource': referralSource!.value,
+      if (engagementDepth != null) 'engagementDepth': engagementDepth,
+      if (consumedRatio != null) 'consumedRatio': consumedRatio,
+      if (totalUnits != null) 'totalUnits': totalUnits,
+      if (effectivePlayMs != null) 'effectivePlayMs': effectivePlayMs,
+      if (sessionId != null && sessionId!.isNotEmpty) 'sessionId': sessionId,
+      if (entityRefs != null && entityRefs!.isNotEmpty)
+        'entityRefs': entityRefs,
+      if (pageVisitId != null && pageVisitId!.isNotEmpty)
+        'pageVisitId': pageVisitId,
+      if (intersectionDimension != null && intersectionDimension!.isNotEmpty)
+        'intersectionDimension': intersectionDimension,
+      if (intersectionSourceRef != null && intersectionSourceRef!.isNotEmpty)
+        'intersectionSourceRef': intersectionSourceRef,
+      if (intersectionTagRefs != null && intersectionTagRefs!.isNotEmpty)
+        'intersectionTagRefs': intersectionTagRefs,
+      if (intersectionId != null && intersectionId!.isNotEmpty)
+        'intersectionId': intersectionId,
+      if (intersectionClass != null && intersectionClass!.isNotEmpty)
+        'intersectionClass': intersectionClass,
+      if (intersectionEvidenceId != null && intersectionEvidenceId!.isNotEmpty)
+        'intersectionEvidenceId': intersectionEvidenceId,
+      if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
+      if (feedbackKind != null && feedbackKind!.isNotEmpty)
+        'feedbackKind': feedbackKind,
+      if (motionDirection != null && motionDirection!.isNotEmpty)
+        'direction': motionDirection,
+      if (motionProfile != null && motionProfile!.isNotEmpty)
+        'motionProfile': motionProfile,
+      if (settleMs != null) 'settleMs': settleMs,
+      if (reducedMotion != null) 'reducedMotion': reducedMotion,
+      if (committed != null) 'committed': committed,
+      'occurredAt': occurredAt.toIso8601String(),
+    };
+    final explicitID = clientEventId?.trim() ?? '';
+    payload['clientEventId'] = explicitID.isNotEmpty
+        ? explicitID
+        : _derivedClientEventId(payload);
+    return payload;
+  }
+
+  String _derivedClientEventId(Map<String, dynamic> payload) =>
+      'evt_${sha256.convert(utf8.encode(jsonEncode(payload))).toString()}';
 }
 
 /// 推荐反馈唯一网络出口。Tracker 只依赖本端口，不直接依赖存储/HTTP Repository。
@@ -527,7 +563,6 @@ class RemoteBehaviorRepository extends BehaviorRepository
       );
       await _enqueue(events);
     }
-
   }
 
   Future<void> _flushPending() async {
@@ -727,16 +762,29 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
   BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {
     final contentId = (json['contentId'] ?? '').toString().trim();
+    final clientEventId = (json['clientEventId'] ?? '').toString().trim();
+    final occurredAt = DateTime.tryParse(
+      (json['occurredAt'] ?? '').toString(),
+    )?.toUtc();
     final action = BehaviorAction.fromWireValue(
       (json['action'] ?? '').toString(),
     );
-    if (contentId.isEmpty || action == null) {
+    final actionIsContentless =
+        action == BehaviorAction.assistantInterest ||
+        action == BehaviorAction.intersectionFeedback ||
+        action == BehaviorAction.wishlistAdd ||
+        action == BehaviorAction.wishlistRemove;
+    if ((contentId.isEmpty && !actionIsContentless) ||
+        action == null ||
+        clientEventId.isEmpty ||
+        occurredAt == null) {
       throw const FormatException('invalid behavior queue event');
     }
     return BehaviorEvent(
       contentId: contentId,
       action: action,
-      clientEventId: json['clientEventId'] as String?,
+      clientEventId: clientEventId,
+      occurredAt: occurredAt,
       state: json['state'] as String?,
       contentType: json['contentType'] as String?,
       objectId: json['objectId'] as String?,
@@ -755,6 +803,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
       engagementDepth: (json['engagementDepth'] as num?)?.toInt(),
       consumedRatio: (json['consumedRatio'] as num?)?.toDouble(),
       totalUnits: (json['totalUnits'] as num?)?.toInt(),
+      effectivePlayMs: (json['effectivePlayMs'] as num?)?.toInt(),
+      sessionId: json['sessionId'] as String?,
       entityRefs: (json['entityRefs'] as List?)
           ?.map((item) => item.toString())
           .toList(),

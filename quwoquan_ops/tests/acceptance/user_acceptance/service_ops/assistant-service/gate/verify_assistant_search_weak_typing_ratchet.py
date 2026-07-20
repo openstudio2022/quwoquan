@@ -161,6 +161,11 @@ def regressions(
                 msgs.append(
                     f"{key}.{metric}: baseline={b[metric]} current={c[metric]} (regression +{c[metric] - b[metric]})"
                 )
+            elif c[metric] < b[metric]:
+                msgs.append(
+                    f"{key}.{metric}: baseline={b[metric]} current={c[metric]} "
+                    f"(stale budget -{b[metric] - c[metric]})"
+                )
     return msgs
 
 
@@ -227,7 +232,7 @@ def main() -> int:
 
     bad = regressions(baseline, current)
     if bad:
-        print("assistant/search weak typing RATCHET FAIL (metrics increased):", file=sys.stderr)
+        print("assistant/search weak typing RATCHET FAIL (baseline drift):", file=sys.stderr)
         for line in bad:
             print(f"  {line}", file=sys.stderr)
         print(

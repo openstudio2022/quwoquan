@@ -108,6 +108,28 @@ void main() {
       expect(event.clientEventId, isNotEmpty);
     });
 
+    test('onboarding_interest 回流去重后的路径制 tagRefs（N2-4/W11）', () async {
+      tracker.trackOnboardingInterest(<String>[
+        'Topic/旅行',
+        ' Topic/旅行 ',
+        'Topic/摄影',
+        '',
+      ]);
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.onboardingInterest);
+      expect(event.state, 'interaction');
+      expect(event.contentId, isEmpty, reason: '兴趣先验不绑定具体 post');
+      expect(event.tags, equals(<String>['Topic/旅行', 'Topic/摄影']));
+    });
+
+    test('onboarding_interest 空标签不产生事件', () async {
+      tracker.trackOnboardingInterest(<String>['', '  ']);
+      await tracker.flush();
+      expect(repo.recorded, isEmpty);
+    });
+
     test('dwell < 1s 不上报', () async {
       tracker.trackDwell('post_1', durationSeconds: 0.5);
       await tracker.flush();
@@ -122,6 +144,26 @@ void main() {
       expect(repo.recorded.first.action, BehaviorAction.dwell);
       expect(repo.recorded.first.state, equals('dwell'));
       expect(repo.recorded.first.duration, equals(3.5));
+    });
+
+    test('effective_play 仅上报实际播放证据并携带播放会话', () async {
+      tracker.trackEffectivePlayback(
+        'post_video_1',
+        playbackSessionId: 'video-session-1',
+        effectivePlayMs: 8000,
+        consumedRatio: 0.064,
+        totalUnits: 125,
+        contentType: 'video',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.effectivePlay);
+      expect(event.state, 'foreground_visible_playing');
+      expect(event.sessionId, 'video-session-1');
+      expect(event.effectivePlayMs, 8000);
+      expect(event.toJson()['effectivePlayMs'], 8000);
+      expect(event.toJson()['sessionId'], 'video-session-1');
     });
 
     test('works_image_pageflip_motion 上报舒适度 motion 字段', () async {
@@ -185,6 +227,18 @@ void main() {
       expect(repo.recorded.first.contentId, equals('post_1'));
       expect(repo.recorded.first.contentType, equals('photo'));
       expect(repo.recorded.first.authorId, equals('author_1'));
+    });
+
+    test('undo_dislike 作为中性补偿事件上报', () async {
+      tracker.trackUndoDislike(
+        'post_1',
+        contentType: 'photo',
+        authorId: 'author_1',
+      );
+      await tracker.flush();
+      expect(repo.recorded.first.action, BehaviorAction.undoDislike);
+      expect(repo.recorded.first.state, 'interaction');
+      expect(repo.recorded.first.contentId, 'post_1');
     });
 
     test('hide_author 事件上报 contentId + authorId + contentType', () async {
@@ -458,7 +512,7 @@ void main() {
 
     // ── S6 修复：BehaviorEvent JSON roundtrip 不得丢失交集归因（入队重试场景）──
     test('BehaviorEvent toJson 携带交集字段', () {
-      const event = BehaviorEvent(
+      final event = BehaviorEvent(
         contentId: 'circle_9',
         action: BehaviorAction.joinCircle,
         intersectionDimension: 'identity',

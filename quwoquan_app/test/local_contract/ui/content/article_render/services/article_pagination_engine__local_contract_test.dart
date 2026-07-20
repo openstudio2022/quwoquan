@@ -7,7 +7,13 @@ void main() {
   group('ArticlePaginationEngine', () {
     test('paginateSnapshot forwards contentHeightOverride to paginate', () {
       final doc = ArticleDocumentData(
-        body: List<String>.filled(1200, '行').join('\n'),
+        nodes: <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'paragraph_0',
+            type: ArticleDocumentNodeType.paragraph,
+            text: List<String>.filled(1200, '行').join('\n'),
+          ),
+        ],
       );
       final loose = ArticlePaginationEngine.paginateSnapshot(
         document: doc,
@@ -22,31 +28,39 @@ void main() {
       expect(tight.length, greaterThanOrEqualTo(loose.length));
     });
 
-    test('fullWidth image after long body lands on a page after text pages', () {
-      final body = List<String>.filled(800, '文').join();
-      const assetId = 'tail_image';
-      final doc = ArticleDocumentData(
-        body: body,
-        assets: <ArticleDocumentAsset>[
-          ArticleDocumentAsset(
-            id: assetId,
-            offset: body.length,
-            imageUrl: 'file:///placeholder.jpg',
-            imageLayout: 'fullWidth',
-          ),
-        ],
-      );
-      final pages = ArticlePaginationEngine.paginateSnapshot(
-        document: doc,
-        stageWidth: 320,
-        contentHeightOverride: 160,
-      );
-      expect(pages.length, greaterThan(1));
-      final imagePageIndex = pages.indexWhere((ArticlePageData p) {
-        final ids = p.binding?.resolvedAssetIds ?? const <String>[];
-        return p.binding?.assetId == assetId || ids.contains(assetId);
-      });
-      expect(imagePageIndex, greaterThan(0));
-    });
+    test(
+      'fullWidth image after long body lands on a page after text pages',
+      () {
+        final body = List<String>.filled(800, '文').join();
+        const assetId = 'tail_image';
+        final doc = ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'paragraph_0',
+              type: ArticleDocumentNodeType.paragraph,
+              text: body,
+            ),
+            const ArticleDocumentNode(
+              id: assetId,
+              type: ArticleDocumentNodeType.figure,
+              assetId: assetId,
+              imageUrl: 'file:///placeholder.jpg',
+              imageLayout: 'fullWidth',
+            ),
+          ],
+        );
+        final pages = ArticlePaginationEngine.paginateSnapshot(
+          document: doc,
+          stageWidth: 320,
+          contentHeightOverride: 160,
+        );
+        expect(pages.length, greaterThan(1));
+        final imagePageIndex = pages.indexWhere((ArticlePageData p) {
+          final ids = p.binding?.resolvedAssetIds ?? const <String>[];
+          return p.binding?.assetId == assetId || ids.contains(assetId);
+        });
+        expect(imagePageIndex, greaterThan(0));
+      },
+    );
   });
 }

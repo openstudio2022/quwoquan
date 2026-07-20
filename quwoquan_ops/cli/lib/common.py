@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.output_paths import env_run_dir
+from quwoquan_ops.cli.lib.output_paths import env_run_dir, repo_run_dir
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -243,4 +243,6 @@ def artifact_run_dir(
     if output_root is not None:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         return output_root / env_name / f"{stamp}-{command_name}-{target}"
+    if env_name == "repo":
+        return repo_run_dir(command_name, target=target or "repo")
     return env_run_dir(env_name, command_name, target=target)

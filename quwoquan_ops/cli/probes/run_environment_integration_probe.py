@@ -46,6 +46,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retry-attempts", type=int, default=2)
     parser.add_argument("--retry-sleep-seconds", type=float, default=2.0)
     parser.add_argument(
+        "--only-check",
+        action="append",
+        default=[],
+        help="Run only the named check; repeat for multiple checks (for example global_search).",
+    )
+    parser.add_argument(
         "--require-non-empty-content-feed",
         action="store_true",
         help="Fail when content_feed returns an empty [] / {} / {\"items\": []} payload.",
@@ -70,8 +76,8 @@ def _resolve_test_auth_token(env_name: str, explicit_token: str) -> str:
     if token:
         return token
     token_envs = {
-        "alpha": ("ALPHA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN", "GAMMA_TEST_AUTH_TOKEN"),
-        "beta": ("BETA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN", "GAMMA_TEST_AUTH_TOKEN"),
+        "alpha": ("ALPHA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
+        "beta": ("BETA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
         "gamma": ("GAMMA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
         "prod": ("PROD_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
     }
@@ -144,7 +150,6 @@ def _temporary_host_resolution(url: str, resolve_host: str):
 def _common_headers(test_auth_token: str) -> dict[str, str]:
     headers = {
         "Accept": "application/json",
-        "X-Test-Local-Gamma": "true",
     }
     token = test_auth_token.strip()
     if token:
@@ -192,6 +197,17 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
             "method": "GET",
             "url": f"{base}/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
             "headers": _common_headers(args.test_auth_token),
+            "expected_statuses": [200],
+        },
+        {
+            "name": "global_search",
+            "method": "POST",
+            "url": f"{base}/search",
+            "headers": _json_headers(args.test_auth_token),
+            "body": json.dumps(
+                {"query": "西湖", "mode": "result", "limit": 1},
+                ensure_ascii=False,
+            ).encode("utf-8"),
             "expected_statuses": [200],
         },
     ]
@@ -254,6 +270,28 @@ def _content_feed_semantic_issue(payload: str) -> tuple[str | None, int | None]:
     return None, None
 
 
+def _search_semantic_issue(payload: str) -> tuple[str | None, int | None]:
+    body = payload.strip()
+    if not body:
+        return "response body is empty", None
+    try:
+        decoded = json.loads(body)
+    except json.JSONDecodeError as exc:
+        return f"response body is not valid JSON: {exc.msg}", None
+    if not isinstance(decoded, dict):
+        return "response payload must be a JSON object", None
+    request_id = decoded.get("requestId")
+    if not isinstance(request_id, str) or not request_id.strip():
+        return 'response payload is missing non-empty "requestId"', None
+    ranking_version = decoded.get("rankingVersion")
+    if not isinstance(ranking_version, str) or not ranking_version.strip():
+        return 'response payload is missing non-empty "rankingVersion"', None
+    hits = decoded.get("hits")
+    if not isinstance(hits, list):
+        return 'response payload is missing array "hits"', None
+    return None, len(hits)
+
+
 def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     findings: list[str] = []
@@ -262,7 +300,24 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         findings.append(
             "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
         )
-    for check in build_checks(args):
+    available_checks = build_checks(args)
+    only_checks = {
+        str(value).strip()
+        for value in getattr(args, "only_check", [])
+        if str(value).strip()
+    }
+    available_names = {check["name"] for check in available_checks}
+    unknown_checks = sorted(only_checks - available_names)
+    if unknown_checks:
+        findings.append(
+            "GATE_BLOCK: unknown integration check(s): " + ", ".join(unknown_checks)
+        )
+    selected_checks = [
+        check
+        for check in available_checks
+        if not only_checks or check["name"] in only_checks
+    ]
+    for check in selected_checks:
         ok, status_code, payload = request(
             check["method"],
             check["url"],
@@ -296,6 +351,14 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 matched = False
                 entry["ok"] = False
                 entry["semanticError"] = semantic_issue
+        if matched and check["name"] == "global_search":
+            semantic_issue, hit_count = _search_semantic_issue(payload)
+            if hit_count is not None:
+                entry["searchHitCount"] = hit_count
+            if semantic_issue:
+                matched = False
+                entry["ok"] = False
+                entry["semanticError"] = semantic_issue
         results.append(entry)
         if not matched:
             detail = entry.get("semanticError")
@@ -317,6 +380,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "requestTimeoutSeconds": args.request_timeout_seconds,
         "retryAttempts": args.retry_attempts,
         "retrySleepSeconds": args.retry_sleep_seconds,
+        "onlyChecks": sorted(only_checks),
         "requireNonEmptyContentFeed": args.require_non_empty_content_feed,
         "checks": results,
         "findings": findings,

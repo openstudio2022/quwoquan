@@ -15,6 +15,13 @@ paths:
                 facet: TagTaxonomyReleaseCommandFacade
                 method: stage
                 aggregateOwner: TagTaxonomyRelease
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -51,6 +58,12 @@ paths:
                 - name: releaseId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -99,6 +112,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/dimensions:
         get:
             operationId: ListDimensions
@@ -124,6 +140,49 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
+    /tag/feedback:
+        post:
+            operationId: ReportTagFeedback
+            x-contract-operation-id: tag.tag_feedback.ReportTagFeedback
+            x-object-id: tag.tag_feedback
+            x-actor: persona_or_device
+            x-application:
+                kind: command
+                facet: TagFeedbackAppendFacet
+                method: appendTagFeedback
+                appendSink: TagFeedback
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TagFeedbackRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TagFeedbackResultView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/graph/cooccurrence:
         get:
             operationId: TagCooccurrence
@@ -149,6 +208,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/inverted:
         get:
             operationId: InvertedObjects
@@ -174,6 +236,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/related:
         get:
             operationId: RelatedTags
@@ -199,6 +264,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/related-objects:
         get:
             operationId: RelatedObjects
@@ -224,6 +292,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/resolve:
         get:
             operationId: ResolveTag
@@ -249,6 +320,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/search:
         get:
             operationId: SearchTags
@@ -274,6 +348,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/search-by-tags:
         post:
             operationId: SearchByTags
@@ -286,6 +363,13 @@ paths:
                 method: searchObjectsByTags
                 reader: TagObjectSearchReader
                 slice: TagObjectMatchesSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -305,6 +389,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/shared-tags:
         get:
             operationId: SharedTags
@@ -330,6 +417,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/suggest:
         get:
             operationId: SuggestTags
@@ -355,6 +445,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /tag/validate:
         post:
             operationId: ValidateTagRefs
@@ -367,6 +460,13 @@ paths:
                 method: validateRefs
                 reader: TagValidationReader
                 slice: TagValidationSlice
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -386,6 +486,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
 components:
     securitySchemes:
         bearerAuth:
@@ -440,6 +543,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TagDimensionView
+            x-contract-placeholder: true
+        TagFeedbackRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: TagFeedbackRequest
+            x-contract-placeholder: true
+        TagFeedbackResultView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: TagFeedbackResultView
             x-contract-placeholder: true
         TagObjectMatchView:
             type: object

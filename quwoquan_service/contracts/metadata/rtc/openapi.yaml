@@ -4,40 +4,6 @@ info:
     title: quwoquan rtc API
     version: v1
 paths:
-    /rtc/call-recordings/{recordingId}:stop:
-        post:
-            operationId: StopCallRecording
-            x-contract-operation-id: rtc.call_recording.StopCallRecording
-            x-object-id: rtc.call_recording
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: CallRecordingCommandFacade
-                method: stop
-                aggregateOwner: CallRecording
-            parameters:
-                - name: recordingId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/StopCallRecordingRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /rtc/calls:
         get:
             operationId: ListCalls
@@ -75,6 +41,13 @@ paths:
                 facet: CallLifecycleCommandFacet
                 method: initiateCall
                 aggregateOwner: CallSession
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -142,6 +115,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -174,6 +153,12 @@ paths:
                 - name: callId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -210,12 +195,58 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/CancelCallRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /rtc/calls/{callId}/connected:
+        post:
+            operationId: ReportMediaConnected
+            x-contract-operation-id: rtc.call_session.ReportMediaConnected
+            x-object-id: rtc.call_session
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: CallParticipantCommandFacet
+                method: reportMediaConnected
+                aggregateOwner: CallSession
+            parameters:
+                - name: callId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReportMediaConnectedRequest'
             responses:
                 "204":
                     description: No Content
@@ -242,6 +273,12 @@ paths:
                 - name: callId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -278,6 +315,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -310,6 +353,12 @@ paths:
                 - name: callId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -346,6 +395,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -380,38 +435,10 @@ paths:
                   required: true
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ToggleMuteRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /rtc/calls/{callId}/recordings:
-        post:
-            operationId: StartCallRecording
-            x-contract-operation-id: rtc.call_recording.StartCallRecording
-            x-object-id: rtc.call_recording
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: CallRecordingCommandFacade
-                method: start
-                aggregateOwner: CallRecording
-            parameters:
-                - name: callId
-                  in: path
+                - name: Idempotency-Key
+                  in: header
                   required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -419,7 +446,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/StartCallRecordingRequest'
+                            $ref: '#/components/schemas/ToggleMuteRequest'
             responses:
                 "204":
                     description: No Content
@@ -446,6 +473,12 @@ paths:
                 - name: callId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -482,6 +515,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -514,6 +553,12 @@ paths:
                 - name: callId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -583,20 +628,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RejectCallRequest
             x-contract-placeholder: true
-        StartCallRecordingRequest:
+        ReportMediaConnectedRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: StartCallRecordingRequest
+            x-contract-entity: ReportMediaConnectedRequest
             x-contract-placeholder: true
         StartScreenShareRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: StartScreenShareRequest
-            x-contract-placeholder: true
-        StopCallRecordingRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: StopCallRecordingRequest
             x-contract-placeholder: true
         StopScreenShareRequest:
             type: object

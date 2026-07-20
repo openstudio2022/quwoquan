@@ -1,0 +1,47 @@
+aggregate: NotificationDeliveryJob
+
+scenarios:
+  - name: delivery_job_transactional_lifecycle
+    operation: RecoverNotificationDeliveryJob
+    go_func: TestNotificationDeliveryMongoIntegrationReliability
+    evidence: api_integration
+    assertions:
+      - Notification 与 NotificationDeliveryJob 同一 Mongo transaction 创建
+      - lease 与终态迁移使用乐观 version 递增
+      - created/dispatched/dead-lettered/recovered 事件按 aggregate version 去重
+
+  - name: delivery_job_idempotent_recovery
+    operation: RecoverNotificationDeliveryJob
+    go_func: TestNotificationDeliveryJobIdempotentRecovery
+    evidence: api_integration
+    assertions:
+      - 缺 Idempotency-Key 拒绝
+      - 相同 key 重放返回持久化结果且 replayed=true
+      - 相同 key 绑定其它 job 返回 NOTIFICATION.USER.idempotency_conflict
+      - 非 dead job 不可恢复
+
+  - name: incoming_call_delivery_coordination
+    operation: AckIncomingCallPresentation
+    go_func: TestIncomingCallCoordinatorOnlineAckNoAckOfflineExpiryAndCancellation
+    test_file: quwoquan_service/services/notification-service/tests/local_contract/incoming_call_delivery_coordinator__reliability__local_contract_test.go
+    evidence: local_contract
+    assertions:
+      - durable CallRinging replay 只创建每 targetPersonaId+endpointRef 一个 Job
+      - 在线设备先 realtime_dispatched，同 deliveryKey 在 750ms ACK 后 realtime_presented 且不 push
+      - 未 ACK 在 grace 后 push_queued，离线设备立即 push_queued
+      - 过期事件/Job 不外送，迟到 ACK 只记录 race
+      - CallAnswered/CallEnded 取消同 callId 其它未完成 endpoint Job
+      - cancellation stream 重放不重复发布关闭 UI 帧
+      - 已 realtime 展示或 ring push 已提交/租赁的 endpoint 可靠提交同 deliveryKey cancel push
+      - cancel push 失败可由 cancellation stream replay 重试，成功后同一 endpoint 不重复提交
+
+  - name: incoming_call_real_storage_stream
+    operation: AckIncomingCallPresentation
+    go_func: TestRTCIncomingCallCoordinationWithRealMongoAndRedis
+    test_file: quwoquan_service/services/notification-service/tests/api_integration/rtc_incoming_call_coordination__reliability__api_integration_test.go
+    evidence: api_integration
+    assertions:
+      - 使用真实 MongoDB transaction/index 与真实 Redis Stream/Hash/PubSub，不 mock store
+      - user/presence/integration 跨服务 HTTP 可 fake，但请求 path/auth/payload 必须按 metadata
+      - ExternalInteraction 202 后仅写 sent_unconfirmed
+      - CallRinging 与 cancellation stream 重放均保持存储和 realtime 副作用幂等

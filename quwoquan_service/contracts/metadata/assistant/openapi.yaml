@@ -32,6 +32,32 @@ paths:
             security:
                 - bearerAuth: []
     /assistant/conversations:
+        get:
+            operationId: ListAssistantConversations
+            x-contract-operation-id: assistant.assistant_conversation.ListAssistantConversations
+            x-object-id: assistant.assistant_conversation
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: AssistantConversationQueryFacade
+                method: listConversations
+                reader: AssistantConversationReader
+                slice: AssistantConversationListView
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantConversationListView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
         post:
             operationId: CreateAssistantConversation
             x-contract-operation-id: assistant.assistant_conversation.CreateAssistantConversation
@@ -42,6 +68,13 @@ paths:
                 facet: AssistantConversationCommandFacade
                 method: createConversation
                 aggregateOwner: AssistantConversation
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -113,6 +146,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -134,6 +173,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /assistant/conversations/{conversationId}/turns:
+        get:
+            operationId: ListConversationTurns
+            x-contract-operation-id: assistant.assistant_run.ListConversationTurns
+            x-object-id: assistant.assistant_run
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: AssistantTurnQueryFacade
+                method: listConversationTurns
+                reader: AssistantRunReader
+                slice: AssistantTurnListView
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantTurnListView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /assistant/learning/events:
         post:
             operationId: ReportInteractionEvent
@@ -145,6 +217,13 @@ paths:
                 facet: AssistantInteractionEventAppendSink
                 method: append
                 appendSink: AssistantInteractionEvent
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -154,33 +233,6 @@ paths:
             responses:
                 "204":
                     description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /assistant/memories:
-        get:
-            operationId: ListAssistantMemories
-            x-contract-operation-id: assistant.assistant_run.ListAssistantMemories
-            x-object-id: assistant.assistant_run
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: AssistantPersonalDataQueryFacade
-                method: listMemories
-                reader: AssistantMemoryReader
-                slice: AssistantUserMemoryListView
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AssistantUserMemoryListView'
                 default:
                     description: Runtime failure
                     content:
@@ -227,6 +279,13 @@ paths:
                 facet: AssistantContextCommandFacade
                 method: reportPageContext
                 aggregateOwner: AssistantRun
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -300,6 +359,140 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    /assistant/preferences:
+        get:
+            operationId: ListAssistantPreferences
+            x-contract-operation-id: assistant.assistant_preference_fact.ListAssistantPreferences
+            x-object-id: assistant.assistant_preference_fact
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: AssistantPreferenceFactQueryFacade
+                method: listPreferences
+                reader: AssistantPreferenceFactReader
+                slice: AssistantPreferenceFactListView
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPreferenceFactListView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        post:
+            operationId: SetAssistantPreference
+            x-contract-operation-id: assistant.assistant_preference_fact.SetAssistantPreference
+            x-object-id: assistant.assistant_preference_fact
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: AssistantPreferenceFactCommandFacade
+                method: setPreference
+                aggregateOwner: AssistantPreferenceFact
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SetAssistantPreferenceRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPreferenceFact'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/preferences/{preferenceId}/restore:
+        post:
+            operationId: RestoreAssistantPreference
+            x-contract-operation-id: assistant.assistant_preference_fact.RestoreAssistantPreference
+            x-object-id: assistant.assistant_preference_fact
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: AssistantPreferenceFactCommandFacade
+                method: restorePreference
+                aggregateOwner: AssistantPreferenceFact
+            parameters:
+                - name: preferenceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RestoreAssistantPreferenceRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPreferenceFact'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/preferences/{preferenceId}/revoke:
+        post:
+            operationId: RevokeAssistantPreference
+            x-contract-operation-id: assistant.assistant_preference_fact.RevokeAssistantPreference
+            x-object-id: assistant.assistant_preference_fact
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: AssistantPreferenceFactCommandFacade
+                method: revokePreference
+                aggregateOwner: AssistantPreferenceFact
+            parameters:
+                - name: preferenceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeAssistantPreferenceRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantPreferenceFact'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /assistant/runs/{runId}:
         get:
             operationId: GetAssistantRun
@@ -318,6 +511,44 @@ paths:
                   required: true
                   schema:
                     type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantTurnEnvelope'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/runs/{runId}/cancel:
+        post:
+            operationId: CancelAssistantRun
+            x-contract-operation-id: assistant.assistant_run.CancelAssistantRun
+            x-object-id: assistant.assistant_run
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: AssistantRunCommandFacade
+                method: cancelRun
+                aggregateOwner: AssistantRun
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CancelAssistantRunRequest'
             responses:
                 "200":
                     description: OK
@@ -436,6 +667,13 @@ paths:
                 facet: SkillSubscriptionCommandFacade
                 method: createSubscription
                 aggregateOwner: SkillSubscription
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -507,6 +745,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -570,6 +814,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -601,6 +851,12 @@ paths:
                 - name: skillId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             responses:
@@ -712,6 +968,13 @@ paths:
                 facet: AssistantScorecardFactAppendSink
                 method: append
                 appendSink: AssistantScorecardFact
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -740,6 +1003,13 @@ paths:
                 facet: SkillSubscriptionCommandFacade
                 method: acquireDueLeases
                 aggregateOwner: SkillSubscription
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -771,6 +1041,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantConversation
             x-contract-placeholder: true
+        AssistantConversationListView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantConversationListView
+            x-contract-placeholder: true
         AssistantCreationSuggestRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -795,6 +1070,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantPolicyView
+            x-contract-placeholder: true
+        AssistantPreferenceFact:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantPreferenceFact
+            x-contract-placeholder: true
+        AssistantPreferenceFactListView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantPreferenceFactListView
             x-contract-placeholder: true
         AssistantReportPageContextRequestWire:
             type: object
@@ -826,15 +1111,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantTurnEnvelope
             x-contract-placeholder: true
-        AssistantUserMemoryListView:
+        AssistantTurnListView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantUserMemoryListView
+            x-contract-entity: AssistantTurnListView
             x-contract-placeholder: true
         AssistantUserTaskListView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantUserTaskListView
+            x-contract-placeholder: true
+        CancelAssistantRunRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CancelAssistantRunRequest
             x-contract-placeholder: true
         CreateAssistantConversationRequest:
             type: object
@@ -866,10 +1156,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PageContextAck
             x-contract-placeholder: true
+        RestoreAssistantPreferenceRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RestoreAssistantPreferenceRequest
+            x-contract-placeholder: true
+        RevokeAssistantPreferenceRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RevokeAssistantPreferenceRequest
+            x-contract-placeholder: true
         Scorecard:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: Scorecard
+            x-contract-placeholder: true
+        SetAssistantPreferenceRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SetAssistantPreferenceRequest
             x-contract-placeholder: true
         SkillSubscription:
             type: object

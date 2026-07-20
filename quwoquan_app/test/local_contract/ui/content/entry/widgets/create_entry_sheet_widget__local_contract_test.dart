@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
@@ -73,10 +74,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
-    expect(
-      find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
       find.text(UITextConstants.createActionAddContactShort),
       findsOneWidget,
@@ -149,15 +147,11 @@ void main() {
           .getCenter(find.text(UITextConstants.createActionAddContactShort))
           .dy,
       lessThan(
-        tester
-            .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
-            .dy,
+        tester.getCenter(find.text(ChatText.createActionCreateGroupShort)).dy,
       ),
     );
     expect(
-      tester
-          .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
-          .dy,
+      tester.getCenter(find.text(ChatText.createActionCreateGroupShort)).dy,
       lessThan(
         tester
             .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
@@ -244,7 +238,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionCreateGroupShort),
+          find.text(ChatText.createActionCreateGroupShort),
           findsOneWidget,
         );
         expect(
@@ -339,10 +333,7 @@ void main() {
         .getCenter(find.text(UITextConstants.createActionPostVideoShort))
         .dy;
     expect(galleryY, lessThan(cameraY));
-    expect(
-      find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
   });
 
   testWidgets('移动端加号面板渲染社交动作并触发回调', (tester) async {
@@ -380,10 +371,7 @@ void main() {
       find.text(UITextConstants.createActionAddContactShort),
       findsOneWidget,
     );
-    expect(
-      find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
-    );
+    expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
       find.text(UITextConstants.createActionInterestMatchShort),
       findsOneWidget,

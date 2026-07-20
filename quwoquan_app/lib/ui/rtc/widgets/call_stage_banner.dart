@@ -4,6 +4,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
@@ -14,7 +15,9 @@ import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
 /// 过程态由 [resolveCallStage] 单一派生，本组件只负责把 [CallStage] 映射为
 /// 文案与样式（R24：不在页面里各自拼接过程态）。
 class CallStageBanner extends ConsumerWidget {
-  const CallStageBanner({super.key});
+  const CallStageBanner({super.key, this.onRetry});
+
+  final VoidCallback? onRetry;
 
   /// [CallStage] -> 用户可见文案（统一来自 [UITextConstants]）。
   static String messageFor(CallStage stage) {
@@ -39,6 +42,58 @@ class CallStageBanner extends ConsumerWidget {
     final session = ref.watch(callSessionProvider);
     final participants = ref.watch(callParticipantsProvider);
     final quality = ref.watch(callQualityProvider);
+    final failure = session.failure;
+
+    if (failure != null) {
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                runtimeFailureDisplayMessage(failure),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+            if (onRetry != null) ...[
+              SizedBox(width: AppSpacing.sm),
+              CupertinoButton(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                minimumSize: const Size(
+                  AppSpacing.minInteractiveSize,
+                  AppSpacing.minInteractiveSize,
+                ),
+                onPressed: onRetry,
+                child: Text(
+                  UITextConstants.retry,
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
 
     final connectedPeerCount = participants.connectedParticipants
         .where((p) => !p.isLocal)

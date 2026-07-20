@@ -40,6 +40,8 @@ api_routes:
     error_codes:
       - CONTENT.USER.unauthorized
       - CONTENT.USER.invalid_argument
+      - CONTENT.USER.media_file_too_large
+      - CONTENT.USER.media_type_unsupported
       - CONTENT.USER.idempotency_conflict
       - CONTENT.SYSTEM.storage_write_failed
     privacy:
@@ -223,7 +225,7 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    response_fields: [sessionId, version, objectKey, mediaType, contentType, fileSize, status, createdAt, updatedAt, expiresAt]
+    response_fields: [sessionId, version, assetId, objectKey, mediaType, contentType, fileSize, status, createdAt, updatedAt, expiresAt]
     client_contract:
       dart_import: ../content/media_contracts.dart
       request_type: GetContentMediaUploadSessionQuery

@@ -1,15 +1,87 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
 START_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
+T3_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_t3.py"
 
 
 class LocalGammaContentServiceConfigTest(unittest.TestCase):
+    def test_t3_runtime_setup_applies_manifest_moment_channel_supplement(self) -> None:
+        spec = importlib.util.spec_from_file_location("local_gamma_t3_seed_test", T3_SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with (
+            mock.patch.object(
+                module,
+                "setup_comment_thread",
+                return_value={
+                    "status": "passed",
+                    "parentCommentId": "parent",
+                    "replyCommentId": "reply",
+                },
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_moment_channel",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_social_graph",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_object_cards",
+                return_value={"status": "passed"},
+            ),
+        ):
+            result = module.setup_runtime_fixtures(
+                "https://gamma.invalid",
+                "viewer",
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["momentChannelSeed"], {"status": "passed"})
+
+        with (
+            mock.patch.object(
+                module,
+                "setup_comment_thread",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_moment_channel",
+                return_value={"status": "failed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_social_graph",
+                return_value={"status": "passed"},
+            ),
+            mock.patch.object(
+                module,
+                "seed_content_object_cards",
+                return_value={"status": "passed"},
+            ),
+        ):
+            failed = module.setup_runtime_fixtures(
+                "https://gamma.invalid",
+                "viewer",
+            )
+        self.assertEqual(failed["status"], "failed")
+
     def test_content_service_declares_all_required_runtime_bindings(self) -> None:
         content = COMPOSE_FILE.read_text(encoding="utf-8")
         service_block = content.split("  content-service:\n", 1)[1].split("\n  chat-service:\n", 1)[0]
@@ -68,6 +140,31 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "ALIYUN_DYPNS_ACCESS_KEY_SECRET",
         ):
             self.assertNotIn(f"{credential}:", service_block)
+
+    def test_assistant_service_uses_gamma_provider_config_and_forwards_real_secret(self) -> None:
+        content = COMPOSE_FILE.read_text(encoding="utf-8")
+        service_block = content.split("  assistant-service:\n", 1)[1].split(
+            "\n  product-ops-service:\n", 1
+        )[0]
+        start_script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-}"', service_block)
+        self.assertIn(
+            'PERSONAL_ASSISTANT_MIMO_API_KEY: "${PERSONAL_ASSISTANT_MIMO_API_KEY:-}"',
+            service_block,
+        )
+        self.assertNotIn(
+            'ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-deterministic}"',
+            service_block,
+        )
+        self.assertIn(
+            'ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"',
+            start_script,
+        )
+        self.assertNotIn(
+            'ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-deterministic}"',
+            start_script,
+        )
 
     def test_entity_service_receives_the_shared_access_token_contract(self) -> None:
         compose = COMPOSE_FILE.read_text(encoding="utf-8")

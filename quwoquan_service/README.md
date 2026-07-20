@@ -37,5 +37,5 @@ python3 scripts/verify/verify_service_layout.py
 
 ```bash
 python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind runtime --include-services
-python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --profile smoke
 ```

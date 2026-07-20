@@ -35,6 +35,26 @@ entities:
         recommend_feature: true
         search_field: true
 
+      - name: rulesText
+        source: rulesText
+        type: string
+        constraints: [NULLABLE, MAX_LENGTH_2000]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 圈规正文；由圈主或管理员维护，加入前后均可查看
+
+      - name: welcomeMessage
+        source: welcomeMessage
+        type: string
+        constraints: [NULLABLE, MAX_LENGTH_500]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 成员首次加入成功后的圈子欢迎引导
+
       - name: coverUrl
         source: coverUrl
         type: string
@@ -137,6 +157,16 @@ entities:
         ops_exposure: read
         recommend_feature: true
         description: 周活跃成员数（超前）
+
+      - name: version
+        source: version
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 聚合乐观并发版本；服务端内部 CAS，公开请求不接收调用方版本字段
 
       - name: status
         source: status
@@ -324,6 +354,69 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+  CircleCommandReceipt:
+    description: Circle 聚合 actor-scoped idempotency receipt。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: commandDigest, type: string, constraints: [NOT_NULL] }
+      - { name: circleId, type: string, constraints: [NOT_NULL] }
+      - { name: version, type: int64, constraints: [NOT_NULL] }
+      - { name: status, type: enum, enum_ref: CircleStatus, constraints: [NOT_NULL] }
+      - { name: expiresAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleOutbox:
+    description: 与 Circle aggregate/version/receipt 同事务提交的不可变事实。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: outboxSequence, type: int64, constraints: [NOT_NULL] }
+      - { name: eventType, type: string, constraints: [NOT_NULL] }
+      - { name: aggregateId, type: string, constraints: [NOT_NULL] }
+      - { name: aggregateVersion, type: int64, constraints: [NOT_NULL] }
+      - { name: payloadJson, type: string, constraints: [NOT_NULL] }
+      - { name: occurredAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleOutboxSequence:
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: sequence, type: int64, constraints: [NOT_NULL] }
+
+  CircleCommandResult:
+    description: Circle 聚合命令的稳定提交回执。
+    fields:
+      - name: circleId
+        source: circleId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: version
+        source: version
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        source: status
+        type: enum
+        enum_ref: CircleStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: boolean
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
   CircleSectionConfig:
     description: 圈子主页板块配置项（嵌入文档，非独立集合）
     embedded: true
@@ -337,7 +430,7 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 板块类型（works/chat/storage/interaction/custom）
+        description: 板块类型（works/members/chat/storage/custom）
 
       - name: visible
         source: visible
@@ -593,3 +686,50 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  CircleFeedItemView:
+    description: 圈子动态流强类型读投影；由已发布 Post 与 CirclePostPlacement 展示位事实组成
+    fields:
+      - { name: circleId, source: circleId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: placementId, source: placementId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: postId, source: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: contentIdentity, source: contentIdentity, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: assistantUsePolicy, source: assistantUsePolicy, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorId, source: authorId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorDisplayName, source: authorDisplayName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorAvatarUrl, source: authorAvatarUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorBackgroundUrl, source: authorBackgroundUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorRoleLabel, source: authorRoleLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorIdentityTags, source: authorIdentityTags, type: "[]string", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: authorVerified, source: authorVerified, type: boolean, constraints: [NOT_NULL, DEFAULT_FALSE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: title, source: title, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: body, source: body, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: summary, source: summary, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: coverUrl, source: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: imageUrls, source: imageUrls, type: "[]string", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: videoUrl, source: videoUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: thumbnailUrl, source: thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: width, source: width, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: height, source: height, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: durationMs, source: durationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: likeCount, source: likeCount, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: commentCount, source: commentCount, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: shareCount, source: shareCount, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: createdAt, source: createdAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: updatedAt, source: updatedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: publishedAt, source: publishedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: contentVertical, source: contentVertical, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: recallPath, source: recallPath, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: supplySource, source: supplySource, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: pinned, source: pinned, type: boolean, constraints: [NOT_NULL, DEFAULT_FALSE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: featured, source: featured, type: boolean, constraints: [NOT_NULL, DEFAULT_FALSE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: pinnedAt, source: pinnedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: featuredAt, source: featuredAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+
+  CircleDiscoveryFeedView:
+    description: 圈子频道聚合读切片；圈子卡片与帖子均已按 category/subCategory/scope 在服务端过滤
+    fields:
+      - { name: circles, source: circles, type: "[]Circle", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: items, source: items, type: "[]CircleFeedItemView", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }

@@ -18,16 +18,21 @@ api_routes:
     path: /search
 
     operation: SearchQuery
-    actor: persona_or_device
+    actor: none
+    commercial:
+      status: ready
     authorization:
       principal: public
-      ownership_policy: authenticated_persona_or_derived_device_actor
+      ownership_policy: public_search_discovery
     reliability:
       timeout_ms: 6000
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
-      idempotency: none
+      idempotency: optional
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.MIDDLEWARE.unavailable
     privacy:
       request_classification: SENSITIVE
       response_classification: PUBLIC
@@ -51,15 +56,75 @@ api_routes:
       method: search
       reader: ObjectSearchReader
       slice: SearchResponseView
+    client_contract:
+      dart_import: ../search/search_query_contracts.dart
+      request_type: CanonicalSearchQuery
+      response_type: CanonicalSearchResult
+      request_encoder: encodeCanonicalSearchQuery
+      response_decoder: decodeCanonicalSearchResult
     description: 统一对象检索（mode=suggest|result）；query 为主输入，objectTypes/filters 为受控收窄条件
     request_entity: SearchQuery
     writable_fields: [query, mode, objectTypes, limit]
     response_entity: SearchResponseView
+  - method: GET
+    path: /search/hot-queries
+
+    operation: ListHotQueries
+    actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_search_discovery
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.MIDDLEWARE.unavailable
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: search_hot_queries
+      trace: true
+      attributes: [outcome, result_count]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    application:
+      kind: query
+      facet: SearchHotQueryFacade
+      method: listHotQueries
+      reader: TermHeatReader
+      slice: HotQuerySlice
+    description: 返回 search term-heat 读模型中全局 relevance 最高的搜索词，供默认页「猜你想搜」展示
+    query_params: [limit]
+    response_entity: HotQueryView
+    response_fields: [query, relevance]
+    client_contract:
+      dart_import: ../search/hot_query_contracts.dart
+      request_type: ListHotQueriesQuery
+      response_type: HotQuerySlice
+      request_encoder: encodeListHotQueriesQuery
+      response_decoder: decodeHotQuerySlice
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
   - method: POST
     path: /search/feedback
 
     operation: ReportSearchFeedback
     actor: persona_or_device
+    commercial:
+      status: ready
     application:
       kind: command
       facet: SearchFeedbackCommandFacade
@@ -67,11 +132,48 @@ api_routes:
       append_sink: SearchQuery
       mutation_target: SearchQuery
       invariant_target: SearchQuery
-    description: 上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade），驱动排序信号与 relevance 评测
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.USER.feedback_conflict
+      - SEARCH.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: search_feedback_report
+      trace: true
+      attributes: [event_type, target, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    description: |
+      上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade），
+      驱动排序信号与 relevance 评测。事实按 (searchRequestId, eventType, objectId)
+      语义键去重：重放安全，重复追加返回首次结果，不视为用户失败。
     request_entity: SearchFeedbackEvent
     writable_fields: [searchRequestId, eventType, objectId, target, rankPosition, referralSource, feedRequestId, dwellMs]
+    client_contract:
+      dart_import: ../search/search_feedback_contracts.dart
+      request_type: ReportSearchFeedbackCommand
+      response_type: SearchFeedbackAck
+      request_encoder: encodeReportSearchFeedbackCommand
+      response_decoder: decodeSearchFeedbackAck
     security:
       auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 consumers:
   - name: app
     capabilities: [search, suggest, report_feedback]

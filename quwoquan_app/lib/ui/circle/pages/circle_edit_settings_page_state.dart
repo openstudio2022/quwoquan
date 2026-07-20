@@ -16,6 +16,8 @@ class _CircleEditSettingsPageState
 
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _rulesController;
+  late final TextEditingController _welcomeMessageController;
   late final TextEditingController _tagsController;
   late final CircleDto _seedCircle;
   late CircleEditSettingsTab _activeTab;
@@ -31,14 +33,24 @@ class _CircleEditSettingsPageState
 
   bool get _isCreateMode => widget.isCreateMode;
 
+  // R20 管理工具页曝光/停留：无推荐反馈语义，走 product_action journey 通道。
+  // dispose 阶段禁止再解析 ref，进入时缓存 tracker。
+  late final DateTime _pageEnteredAt;
+  JourneyEventTracker? _journeyTracker;
+
   @override
   void initState() {
     super.initState();
+    _pageEnteredAt = DateTime.now();
     final circle = widget.initialCircle ?? _buildDraftCircle();
     _seedCircle = circle;
     _nameController = TextEditingController(text: circle.name);
     _descriptionController = TextEditingController(
       text: circle.description ?? '',
+    );
+    _rulesController = TextEditingController(text: circle.rulesText ?? '');
+    _welcomeMessageController = TextEditingController(
+      text: circle.welcomeMessage ?? '',
     );
     _tagsController = TextEditingController(text: circle.tags.join(' '));
     _activeTab = widget.initialTab;
@@ -47,6 +59,7 @@ class _CircleEditSettingsPageState
     _categoryId =
         circle.category ?? (_isCreateMode ? _categoryIds.first : null);
     _autoSyncChat = circle.autoSyncChat;
+    // 默认板块与 metadata ui_config circle_sections 闭集一致（works/members/chat/storage）。
     _sections = circle.sectionConfig.isNotEmpty
         ? (circle.sectionConfig
               .map((section) => section.copyWith())
@@ -59,7 +72,7 @@ class _CircleEditSettingsPageState
               order: 0,
             ),
             CircleSectionConfigDto(
-              sectionType: 'interaction',
+              sectionType: 'members',
               visible: true,
               order: 1,
             ),
@@ -74,31 +87,52 @@ class _CircleEditSettingsPageState
               order: 3,
             ),
           ].toList(growable: true);
-    unawaited(_loadCategoryLabelsFromRepo());
-  }
-
-  Future<void> _loadCategoryLabelsFromRepo() async {
-    try {
-      final cfg = await ref
-          .read(circleRepositoryProvider)
-          .getCircleCategoryConfig();
+    // 分类标签的唯一真相源是 metadata 投影的 generated 常量。
+    _categoryLabelsFromRepo = Map<String, CircleCategoryTabConfigDto>.from(
+      CircleCategoryTabDefaults.remoteStyleFallback,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _categoryLabelsFromRepo = Map<String, CircleCategoryTabConfigDto>.from(
-          cfg,
-        );
-      });
-    } catch (_) {
-      /* best-effort: 拉取圈子分类标签失败时沿用内置默认分类，不影响编辑表单其余字段 */
-    }
+      _journeyTracker = ref.read(journeyEventTrackerProvider);
+      unawaited(
+        _journeyTracker!.trackAction(
+          journey: 'circle_manage',
+          action: 'page_enter',
+          pageName: 'circle_edit_settings',
+          targetType: 'circle',
+          targetKey: widget.circleId ?? '',
+          payload: {'mode': _isCreateMode ? 'create' : 'edit'},
+        ),
+      );
+    });
   }
 
   @override
   void dispose() {
+    final tracker = _journeyTracker;
+    if (tracker != null) {
+      unawaited(
+        tracker.trackAction(
+          journey: 'circle_manage',
+          action: 'page_exit',
+          pageName: 'circle_edit_settings',
+          targetType: 'circle',
+          targetKey: widget.circleId ?? '',
+          payload: {
+            'mode': _isCreateMode ? 'create' : 'edit',
+            'durationMs': DateTime.now()
+                .difference(_pageEnteredAt)
+                .inMilliseconds,
+          },
+        ),
+      );
+    }
     _nameController.dispose();
     _descriptionController.dispose();
+    _rulesController.dispose();
+    _welcomeMessageController.dispose();
     _tagsController.dispose();
     super.dispose();
   }
@@ -117,7 +151,7 @@ class _CircleEditSettingsPageState
       sectionConfig: const [
         CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
         CircleSectionConfigDto(
-          sectionType: 'interaction',
+          sectionType: 'members',
           visible: true,
           order: 1,
         ),
@@ -168,6 +202,8 @@ class _CircleEditSettingsPageState
     return CircleEditSubmitPayload(
       name: name,
       description: _descriptionController.text.trim(),
+      rulesText: _rulesController.text.trim(),
+      welcomeMessage: _welcomeMessageController.text.trim(),
       tags: _normalizedTags(),
       visibility: _visibility,
       joinPolicy: _joinPolicy,
@@ -287,20 +323,23 @@ class _CircleEditSettingsPageState
 
     setState(() => _isSaving = true);
     final payload = _submitPayload(name);
-    final wire = payload.toWire();
-    final wireDto = CircleCreateWireDto.fromMap(wire);
     bool success = false;
     String? createdCircleId;
     Object? actionError;
     if (_isCreateMode) {
       try {
         await ref.read(activePersonaContextProvider.future);
-        final repo = ref.read(circleRepositoryProvider);
-        final created = await repo.createCircle(wireDto);
-        final merged = mergeCreateCircleWireWithCreated(wireDto, created);
-        createdCircleId = CircleDto.fromMap(merged).id;
+        final result = await ref
+            .read(circlesListCircleLifecycleCommandWriterProvider)
+            .createCircle(payload.toCreateCommand());
+        createdCircleId = result.circleId;
         success = createdCircleId.isNotEmpty;
         if (success) {
+          await ref
+              .read(circleDetailCircleConfigurationCommandWriterProvider)
+              .updateCircleSections(
+                payload.toSectionsCommand(createdCircleId),
+              );
           ref.read(circleDirectoryRefreshProvider.notifier).bump();
         }
       } catch (error) {
@@ -311,7 +350,10 @@ class _CircleEditSettingsPageState
       final circleCtrl = ref.read(
         circleStateProvider(widget.circleId!).notifier,
       );
-      success = await circleCtrl.updateCircleDetails(payload.toUpdateWireDto());
+      success = await circleCtrl.updateCircleDetails(
+        payload.toUpdateCommand(widget.circleId!),
+        payload.toSectionsCommand(widget.circleId!),
+      );
     }
     if (!mounted) {
       return;
@@ -470,6 +512,29 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
+                        label: UITextConstants.circleRulesLabel,
+                        controller: _rulesController,
+                        placeholder: UITextConstants.circleRulesPlaceholder,
+                        fill: fill,
+                        fg: fg,
+                        fgSecondary: fgSecondary,
+                        maxLines: 6,
+                        maxLength: 2000,
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      _buildField(
+                        label: UITextConstants.circleWelcomeMessageLabel,
+                        controller: _welcomeMessageController,
+                        placeholder:
+                            UITextConstants.circleWelcomeMessagePlaceholder,
+                        fill: fill,
+                        fg: fg,
+                        fgSecondary: fgSecondary,
+                        maxLines: 4,
+                        maxLength: 500,
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      _buildField(
                         label: UITextConstants.circleTagsLabel,
                         controller: _tagsController,
                         placeholder: UITextConstants.circleTagsPlaceholder,
@@ -570,7 +635,9 @@ class _CircleEditSettingsPageState
                   cardBg: cardBg,
                   child: Column(
                     children: [
-                      _buildSwitchTile(
+                      _CircleEditSettingsPageStateHelpers(
+                        this,
+                      )._buildSwitchTile(
                         icon: CupertinoIcons.chat_bubble_2_fill,
                         title: UITextConstants.circleAutoSyncChatLabel,
                         subtitle: UITextConstants.circleAutoSyncChatHint,
@@ -600,21 +667,24 @@ class _CircleEditSettingsPageState
                                 ? 0
                                 : AppSpacing.sm,
                           ),
-                          child: _buildSwitchTile(
-                            icon: circleSectionIcon(entry.value.sectionType),
-                            title: _sectionTitle(entry.value.sectionType),
-                            subtitle: UITextConstants.circleSectionVisible,
-                            value: entry.value.visible,
-                            onChanged: (value) {
-                              setState(() {
-                                _sections[entry.key] = entry.value.copyWith(
-                                  visible: value,
-                                );
-                              });
-                            },
-                            fg: fg,
-                            fgSecondary: fgSecondary,
-                          ),
+                          child: _CircleEditSettingsPageStateHelpers(this)
+                              ._buildSwitchTile(
+                                icon: circleSectionIcon(
+                                  entry.value.sectionType,
+                                ),
+                                title: _sectionTitle(entry.value.sectionType),
+                                subtitle: UITextConstants.circleSectionVisible,
+                                value: entry.value.visible,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _sections[entry.key] = entry.value.copyWith(
+                                      visible: value,
+                                    );
+                                  });
+                                },
+                                fg: fg,
+                                fgSecondary: fgSecondary,
+                              ),
                         ),
                       ),
                     ],
@@ -868,6 +938,7 @@ class _CircleEditSettingsPageState
     required Color fg,
     required Color fgSecondary,
     required int maxLines,
+    int? maxLength,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,6 +948,7 @@ class _CircleEditSettingsPageState
         CupertinoTextField(
           controller: controller,
           maxLines: maxLines,
+          maxLength: maxLength,
           style: TextStyle(color: fg, fontSize: AppTypography.base),
           placeholder: placeholder,
           placeholderStyle: TextStyle(color: fgSecondary),
@@ -924,70 +996,6 @@ class _CircleEditSettingsPageState
         thumbColor: AppColors.primaryColor.withValues(alpha: 0.12),
         children: children,
         onValueChanged: onValueChanged,
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required Color fg,
-    required Color fgSecondary,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: fgSecondary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: AppSpacing.buttonHeight,
-            height: AppSpacing.buttonHeight,
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-            ),
-            child: Icon(
-              icon,
-              color: AppColors.primaryColor,
-              size: AppSpacing.iconMedium,
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: AppTypography.base,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs / 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: fgSecondary,
-                    fontSize: AppTypography.sm,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          CupertinoSwitch(
-            value: value,
-            activeTrackColor: AppColors.primaryColor,
-            onChanged: onChanged,
-          ),
-        ],
       ),
     );
   }

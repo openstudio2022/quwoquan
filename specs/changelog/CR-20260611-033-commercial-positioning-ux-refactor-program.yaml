@@ -205,7 +205,7 @@ dev_log:
       - cd quwoquan_service/services/entity-service && go test ./internal/application
       - cd quwoquan_service/services/circle-service && go test ./internal/infrastructure/cache ./internal/application
     notes:
-      - `flutter analyze` 若把 `search_network_results_page.dart` 纳入同批，会暴露 5 个既有 unused private loader warning；本轮未扩大搜索页重构面，关键改动文件分析为 0 issue。
+      - "`flutter analyze` 若把 `search_network_results_page.dart` 纳入同批，会暴露 5 个既有 unused private loader warning；本轮未扩大搜索页重构面，关键改动文件分析为 0 issue。"
       - C5 的 GHA/gamma 7/7 healthy、T3/T4 真实旅程、全量 gate --scope all 仍需在环境恢复后串行执行。
   - date: "2026-06-12"
     change: |

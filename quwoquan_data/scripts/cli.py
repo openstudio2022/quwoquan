@@ -22,14 +22,20 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     from content.execution.handler import register_parser as register_task
+    from content.filter_catalog.handler import (
+        register_parser as register_filter_catalog,
+    )
     from content.release.canonical.handler import register_parser as register_release
     from content.release.environment.cli import register_parser as register_ship
+    from content.templates.handler import register_parser as register_template
     from governance.handler import register_parser as register_governance
     from verify.handler import register_parser as register_verify
 
     register_task(subparsers)
+    register_filter_catalog(subparsers)
     register_release(subparsers)
     register_ship(subparsers)
+    register_template(subparsers)
     register_governance(subparsers)
     register_verify(subparsers)
 

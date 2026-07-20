@@ -16,6 +16,8 @@ final class ContentPostProjection {
     this.body,
     this.summary,
     this.coverUrl,
+    this.articleTemplate,
+    this.articleFontPreset,
     Iterable<String> imageUrls = const <String>[],
     this.videoUrl,
     this.thumbnailUrl,
@@ -55,6 +57,8 @@ final class ContentPostProjection {
   final String? body;
   final String? summary;
   final String? coverUrl;
+  final String? articleTemplate;
+  final String? articleFontPreset;
   final List<String> imageUrls;
   final String? videoUrl;
   final String? thumbnailUrl;
@@ -189,6 +193,8 @@ final class ContentPostDetailSlice {
         const <ContentPostEntityMention>[],
     this.coverUrl,
     Iterable<String>? tagRefs,
+    this.status = 'published',
+    this.moderationStatus,
     this.visibility,
   }) : mediaItems = List<ContentPostMediaItem>.unmodifiable(mediaItems),
        entityMentions = List<ContentPostEntityMention>.unmodifiable(
@@ -213,6 +219,8 @@ final class ContentPostDetailSlice {
   final List<ContentPostEntityMention> entityMentions;
   final String? coverUrl;
   final List<String>? tagRefs;
+  final String status;
+  final String? moderationStatus;
   final String? visibility;
 }
 

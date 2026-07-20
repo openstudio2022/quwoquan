@@ -6,17 +6,34 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AppendCircleBehaviorFactCommand, CircleBehaviorFactWriter;
+
+class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
+  @override
+  Future<void> append(AppendCircleBehaviorFactCommand command) async {}
+}
 
 Widget _scopedApp({CircleRepository? mock}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
-    overrides: [circleRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      circleRepositoryProvider.overrideWithValue(repo),
+      // 游客态：对象行为信号守卫短路；页面遥测走 Mock 上报，
+      // 不触发 Remote-only 装配链（APP_RUNTIME_ENV 由真机 runner 提供）。
+      resolvedOwnerUserIdProvider.overrideWithValue(''),
+      circleDetailBehaviorFactWriterProvider.overrideWithValue(
+        _NoopCircleBehaviorFactWriter(),
+      ),
+      behaviorRepositoryProvider.overrideWithValue(MockBehaviorRepository()),
+    ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/circles',

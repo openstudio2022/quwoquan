@@ -51,6 +51,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt1_local_contract
@@ -58,6 +59,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt1_api_integration
@@ -81,7 +83,7 @@ gwt_acceptance:
     - application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
     - API integration 证明 response/outbox 不泄露验证码，provider 只在请求前于内存中解封。
     contract_refs:
-    - quwoquan_service/services/user-service/internal/application/otp_challenge__local_contract_test.go
+    - quwoquan_service/services/user-service/internal/application/account/authentication_challenge/command_facade__local_contract_test.go
     - quwoquan_service/services/user-service/tests/api_integration/helpers.go
     - quwoquan_service/services/integration-service/tests/api_integration/external_interaction_mongo_provider__reliability__api_integration_test.go
     - quwoquan_service/services/user-service/internal/infrastructure/integration/service_mtls_client__local_contract_test.go
@@ -89,19 +91,21 @@ gwt_acceptance:
     - OTP 投递不引入绕过校验或响应泄露。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/internal/application/otp_challenge__local_contract_test.go
+      - file: quwoquan_service/services/user-service/internal/application/account/authentication_challenge/command_facade__local_contract_test.go
       recorded:
-      - file: quwoquan_service/services/user-service/internal/application/otp_challenge__local_contract_test.go
+      - file: quwoquan_service/services/user-service/internal/application/account/authentication_challenge/command_facade__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt2_local_contract
@@ -136,12 +140,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt3_local_contract
@@ -177,12 +183,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt4_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt4_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt4_local_contract
@@ -214,21 +222,23 @@ gwt_acceptance:
     - 登录页错误恢复必须就近完成，不造成页面重建死循环或重复弹窗。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt5_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt5_local_contract
@@ -252,21 +262,23 @@ contract_acceptance:
     - SendOtp、手机号、微信、QQ、支付宝、一键登录和 hint 的 commercial/security/privacy/reliability/telemetry/SLO 均由 ContractGraph 生成；缺生产证据的 provider 必须保持 blocked。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: contract1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract1_api_integration
@@ -290,12 +302,14 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: contract2_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract2_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract2_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract2_local_contract
@@ -318,12 +332,14 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract3_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract3_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: contract3_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract3_api_integration
@@ -351,6 +367,7 @@ uat_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.e2e_journey
@@ -358,11 +375,13 @@ uat_acceptance:
         - gamma_local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: uat1_local_contract
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.uat1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: uat1_api_integration
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.uat1_api_integration
@@ -383,5 +402,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   - make verify-app-login-entry-loop-contract
-  full_gate:
+  profile_gates:
   - make gate

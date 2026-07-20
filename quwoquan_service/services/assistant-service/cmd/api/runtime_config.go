@@ -8,7 +8,6 @@ type config = runtimeconfig.Config
 type userProfileCfg = runtimeconfig.UserProfileConfig
 type serviceEgressCfg = runtimeconfig.ServiceEgressConfig
 type providerCfg = runtimeconfig.ProviderConfig
-type contentSearchCfg = runtimeconfig.ContentSearchConfig
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
 	return runtimeconfig.ResolveRuntimeIdentity()

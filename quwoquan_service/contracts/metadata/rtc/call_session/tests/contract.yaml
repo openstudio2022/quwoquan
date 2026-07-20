@@ -1,0 +1,99 @@
+entity: CallSession
+
+scenarios:
+  - name: call_lifecycle_server_owned_cas
+    operation: InitiateCall
+    go_func: TestCallLifecycleServerOwnedCas
+    evidence: api_integration
+    assertions:
+      - call_sessions、call_session_command_receipts、call_session_outbox 在同一 Mongo transaction 提交
+      - request 不携带版本字段，纯 CAS 冲突由服务端重载聚合并重放意图
+      - InitiateCall 按 actor 活跃通话唯一约束防止并发双呼
+
+  - name: call_command_noop_receipt
+    operation: ToggleMute
+    go_func: TestCallCommandNoopReceipt
+    evidence: api_integration
+    assertions:
+      - 目标状态已满足的命名意图持久化 no-op receipt 且不递增 aggregate version
+      - 相同 Idempotency-Key 重放返回首次结果
+      - 状态推进后同 key 仍重放原始 no-op 结果
+
+  - name: call_answer_reject_state_machine
+    operation: AnswerCall
+    go_func: TestCallAnswerRejectStateMachine
+    evidence: api_integration
+    assertions:
+      - initiated/ringing 才可 answer；ended 返回 RTC.USER.call_ended
+      - reject/cancel/hangup 写入对应 endReason 且 ended 为终态
+      - 每次成功状态迁移产生一条 version 对齐的 outbox 事实
+
+  - name: call_participant_bola
+    operation: GetCall
+    go_func: TestCallParticipantBola
+    evidence: api_integration
+    assertions:
+      - 非参与者 GetCall 返回 not_participant 或防枚举 not_found
+      - 非参与者命令一律 fail closed 且不产生状态变化
+      - operation guard 与 auth 中间件在链（不使用绕过门禁的裸 handler）
+
+  - name: call_group_join_leave_limit
+    operation: JoinCall
+    go_func: TestCallGroupJoinLeaveLimit
+    evidence: api_integration
+    assertions:
+      - 32 人上限第 33 人返回 call_full
+      - leave 保持会话对其他参与者可用；最后一人 leave 结束通话（endReason=last_leave）
+
+  - name: call_events_realtime_channel
+    operation: HangupCall
+    go_func: TestCallRingingUsesDurableStreamWithoutUserAliasPubSub
+    test_file: quwoquan_service/services/rtc-service/internal/adapters/mq/event_publisher__local_contract_test.go
+    evidence: local_contract
+    assertions:
+      - CallRinging 只进入 events.rtc.call_ringing durable stream，不直接发布 Pub/Sub
+      - 其余在线事件只发布到 rt:rtc:persona:{participantPersonaId}，不存在 user/account alias
+      - CallAnswered 与 CallEnded 进入 durable cancellation stream
+      - CallEnded 携带 durationMs 与 endReason 供 chat system_call_log 消费
+
+  - name: call_ringing_durable_delivery_contract
+    operation: InitiateCall
+    go_func: TestCallRingingOutboxPayloadIsDurableAndStable
+    test_file: quwoquan_service/services/rtc-service/internal/application/call_ringing_contract__local_contract_test.go
+    evidence: local_contract
+    assertions:
+      - 每个 targetPersonaId 独立产生同事务 outbox 事实
+      - payload 必含 eventId/callId/targetPersonaId/callType/callerName/callerAvatarUrl/sourceLabel/trustRelation/expiresAt/deliveryKey
+      - deliveryKey 为 callId+targetPersonaId 派生的稳定 SHA256
+      - 1v1 expiresAt=createdAt+30s，群通话 expiresAt=createdAt+60s
+      - callId 保持 RFC4122 UUID
+
+  - name: report_media_connected_state_machine
+    operation: ReportMediaConnected
+    go_func: TestReportMediaConnected_TransitionsToInCall
+    test_file: quwoquan_service/services/rtc-service/tests/api_integration/call_timeout_and_connected_contract__api_integration_test.go
+    evidence: api_integration
+    assertions:
+      - 首个 connecting 参与者上报后会话保持 connecting
+      - 至少两个参与者 connected 后会话进入 in_call 且 startedAt 只写一次
+      - 目标参与者已 connected 时新幂等 key 写 no-op receipt，不递增 version、不重复产生 CallConnected
+
+  - name: ringing_timeout_system_command
+    operation: InitiateCall
+    go_func: TestRingTimeoutSweep_NoAnswerEndsCall
+    test_file: quwoquan_service/services/rtc-service/tests/api_integration/call_timeout_and_connected_contract__api_integration_test.go
+    evidence: api_integration
+    assertions:
+      - 1v1 在 30 秒、群通话在 60 秒边界到期，connecting/in_call 不被收割
+      - sweeper 通过确定性 system actor/idempotency 与共享 CAS/receipt/outbox 管道提交
+      - Mongo CallSession 进入 ended/no_answer，outbox wire type 为 call.ended
+
+  - name: call_history_storage_filter_cursor
+    operation: ListCalls
+    go_func: TestCallHistoryStorageFacetFiltersBeforeCursorPagination
+    test_file: quwoquan_service/services/rtc-service/tests/api_integration/call_history_storage__data_consistency__api_integration_test.go
+    evidence: api_integration
+    assertions:
+      - status/missed 在 MongoDB 查询内过滤后再应用 limit
+      - cursor 按 createdAt DESC 与 _id DESC 连续翻页且终页 nextCursor 为空
+      - EnsureIndexes 创建 storage.yaml 声明的全部 CallSession/receipt/outbox 索引

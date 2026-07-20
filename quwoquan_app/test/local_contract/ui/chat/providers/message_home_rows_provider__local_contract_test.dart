@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 
@@ -10,7 +10,7 @@ void main() {
     test('透传 filter 并映射 conversation 行', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -29,7 +29,7 @@ void main() {
     test('notification 行生成 notification id，不当作会话', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -47,7 +47,7 @@ void main() {
     test('未读角标数汇总 unread filter 的 unreadCount', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -60,7 +60,7 @@ void main() {
     test('会话已读刷新会失效所有 MessageHome filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -94,7 +94,7 @@ void main() {
     test('远端失败时用本机最近聊天兜底并标记 copyKey', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 

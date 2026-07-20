@@ -1,0 +1,24 @@
+entity: DeletedPostTombstone
+layer: e2e
+
+description: 端云集成场景：删除 → 墓碑持久化（重启存活）→ 读取 410 → TTL 清理。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  real_engines:
+    mongodb: testcontainer
+
+scenarios:
+  - name: tombstone_survives_restart
+    test_type: api_contract
+    actors:
+      service: content-service DeletePost + GetPost
+      storage: MongoDB deleted_post_tombstones（TTL 索引）
+    steps:
+      - 发布并删除一条内容
+      - 服务重启（或新进程读同一存储）
+      - 再次读取该 postId
+    assertions:
+      - 重启后仍返回 410 content_deleted（墓碑为持久事实，非进程内存）
+      - 级联投影（feed/搜索）不再返回该内容

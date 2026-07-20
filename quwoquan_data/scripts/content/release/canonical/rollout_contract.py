@@ -49,6 +49,8 @@ class CapacityContract:
     maximum_probe_job_p95_seconds: float
     minimum_approved_homepages_per_hour: float
     maximum_homepage_object_p95_seconds: float
+    minimum_h10k_accepted_objects_per_hour: float
+    maximum_h10k_window_hours: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +242,14 @@ def load_rollout_contract(path: Path = ROLLOUT_PATH) -> RolloutContract:
         maximum_homepage_object_p95_seconds=_positive_number(
             raw_capacity.get("maximumHomepageObjectP95Seconds"),
             label="capacity.maximumHomepageObjectP95Seconds",
+        ),
+        minimum_h10k_accepted_objects_per_hour=_positive_number(
+            raw_capacity.get("minimumH10KAcceptedObjectsPerHour"),
+            label="capacity.minimumH10KAcceptedObjectsPerHour",
+        ),
+        maximum_h10k_window_hours=_positive_number(
+            raw_capacity.get("maximumH10KWindowHours"),
+            label="capacity.maximumH10KWindowHours",
         ),
     )
 

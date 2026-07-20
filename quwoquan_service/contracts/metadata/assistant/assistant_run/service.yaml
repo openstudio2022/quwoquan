@@ -26,6 +26,31 @@ api_routes:
     request_entity: AssistantSearchXiaoquRequestWire
     request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch, contextSnapshot]
     response_entity: AssistantSearchResultView
+    reliability:
+      timeout_ms: 15000
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.MIDDLEWARE.upstream_timeout
+      - ASSISTANT.SYSTEM.stream_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_search_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 8000
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -48,6 +73,33 @@ api_routes:
     description: 统一启动助手执行；流式结果是该 Run 的 transport，不存在 CreateTurn/StreamTurn 第二主线
     request_fields: [skillId, domainId, input, trigger, clientRequestId]
     response_entity: AssistantTurnEnvelope
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.conversation_not_found
+      - ASSISTANT.USER.run_idempotency_conflict
+      - ASSISTANT.USER.skill_consent_required
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.run_storage_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_run_command
+      trace: true
+      attributes: [operation, outcome, error_code, replayed]
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
     security:
       auth_mode: required
       principal: owner
@@ -68,6 +120,121 @@ api_routes:
       slice: AssistantTurnEnvelope
     description: 读取已启动助手 Run 的当前信封与恢复状态。
     response_entity: AssistantTurnEnvelope
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_not_found
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.run_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_run_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: run_owner
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /assistant/conversations/{conversationId}/turns
+
+    operation: ListConversationTurns
+    actor: persona
+    application:
+      kind: query
+      facet: AssistantTurnQueryFacade
+      method: listConversationTurns
+      reader: AssistantRunReader
+      slice: AssistantTurnListView
+    description: owner 会话内终态轮次摘要列表；createdAt desc keyset 分页，是 transcript 恢复与续聊的唯一数据源。
+    query_params: [limit, cursor]
+    response_entity: AssistantTurnListView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.conversation_not_found
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.run_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_run_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /assistant/runs/{runId}/cancel
+
+    operation: CancelAssistantRun
+    actor: persona
+    application:
+      kind: command
+      facet: AssistantRunCommandFacade
+      method: cancelRun
+      aggregate_owner: AssistantRun
+      mutation_target: AssistantRun
+      invariant_target: AssistantRun
+    description: 取消运行中的助手 Run（running→cancelled CAS 并中断执行）；已终态取消幂等返回当前信封，不报错。
+    response_entity: AssistantTurnEnvelope
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_not_found
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.run_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_run_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: run_owner
     security:
       auth_mode: required
       principal: owner
@@ -87,8 +254,35 @@ api_routes:
       reader: AssistantRunEventReader
       slice: AssistantStreamEvent
     description: 已启动助手 Run 的只读 SSE 事件 transport；不是第二条创建或执行主线。
+    query_params: [resumeToken]
     response_entity: AssistantStreamEvent
     transport: sse
+    reliability:
+      timeout_ms: 190000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 3
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_not_found
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.SYSTEM.stream_unavailable
+      - ASSISTANT.SYSTEM.run_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_run_stream
+      trace: true
+      attributes: [operation, outcome, error_code, resumed]
+    slo:
+      latency_p95_ms: 2000
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: run_owner
     security:
       auth_mode: required
       principal: owner
@@ -112,6 +306,29 @@ api_routes:
     request_entity: AssistantReportPageContextRequestWire
     request_fields: [pageType, businessObjects, contextSnapshot, userAction, userActions, subAccountId, personaContextVersion]
     response_entity: PageContextAck
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.unauthorized
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_context_command
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -133,6 +350,28 @@ api_routes:
     description: 私助半屏入口的欢迎语、chips 与建议行云下发
     query_params: [source, pageType, tab, dimension, objectId, objectType, experienceLevel]
     response_entity: AssistantEntryPersonalizationView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.unauthorized
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_personalization_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -154,6 +393,28 @@ api_routes:
     description: 获取当前页面建议操作
     query_params: [pageType, objectId]
     response_entity: SuggestedActionListView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.unauthorized
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_personalization_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -174,6 +435,24 @@ api_routes:
       slice: AssistantPolicyView
     description: 策略拉取
     response_entity: AssistantPolicyView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ASSISTANT.SYSTEM.run_storage_unavailable]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_policy_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
 
   - method: GET
     path: /assistant/skills
@@ -189,6 +468,24 @@ api_routes:
     description: 可用 Skill 列表（技能目录）
     query_params: [limit]
     response_entity: AssistantSkillCatalogListView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [ASSISTANT.SYSTEM.run_storage_unavailable]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_skill_catalog_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
 
   - method: POST
     path: /assistant/skills/creation-suggest
@@ -207,6 +504,31 @@ api_routes:
     request_entity: AssistantCreationSuggestRequest
     request_fields: [draftTitle, draftSummary, bodyDigest, boundCircleIds, primaryHomepageId]
     response_entity: AssistantCreationSuggestResponse
+    reliability:
+      timeout_ms: 10000
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.run_invalid_argument
+      - ASSISTANT.USER.skill_consent_required
+      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.MIDDLEWARE.upstream_timeout
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_creation_suggest_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 5000
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -228,27 +550,28 @@ api_routes:
     description: 用户助手任务/待办列表（日程 tab 等）
     query_params: [limit, status]
     response_entity: AssistantUserTaskListView
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /assistant/memories
-
-    operation: ListAssistantMemories
-    actor: persona
-    application:
-      kind: query
-      facet: AssistantPersonalDataQueryFacade
-      method: listMemories
-      reader: AssistantMemoryReader
-      slice: AssistantUserMemoryListView
-    description: 用户助手记忆条目列表（摘要级）
-    query_params: [limit]
-    response_entity: AssistantUserMemoryListView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.unauthorized
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_personal_data_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
     security:
       auth_mode: required
       principal: owner
@@ -269,6 +592,28 @@ api_routes:
       slice: AssistantLearningOpsSummaryView
     description: 运营侧读取指定用户的学习画像摘要与低分指标下钻摘要
     response_entity: AssistantLearningOpsSummaryView
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.unauthorized
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_learning_ops_query
+      trace: true
+      attributes: [operation, outcome, error_code]
+    slo:
+      latency_p95_ms: 1000
+      availability_percent: 99.5
+    authorization:
+      principal: operator
+      ownership_policy: operator_scope
     security:
       auth_mode: required
       principal: operator
@@ -326,10 +671,10 @@ contract_test:
         mongodb: testcontainers (mongo:7)
         redis: miniredis/v2
       spy_targets: [event_publisher]
-      mock_targets: [llm_client, embedding_client, cross_service_clients]
+      mock_targets: [llm_client, cross_service_clients]
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "DeleteMany for assistant_runs, interaction_events"
+        cleanup: "DeleteMany for assistant_runs, assistant_interaction_events"
         redis_cleanup: miniredis.FlushAll()
       scenarios:
         - name: page_context_to_redis
@@ -339,17 +684,24 @@ contract_test:
             - "miniredis.HGetAll('page_ctx:{userId}') → contains pageType + objects"
             - "miniredis.TTL('page_ctx:{userId}') → ~300s"
 
+        - name: run_persisted_and_replayable
+          command: StartAssistantRun (stable clientRequestId replayed)
+          seed: [fixture.NewAssistantConversation()]
+          assertions:
+            - "db.assistant_runs.FindOne({_id: runId}) → status streaming/completed"
+            - "replay same clientRequestId → same runId, no second run"
+            - "restart service → GET /assistant/runs/{runId} still returns envelope"
+
         - name: feedback_learning_loop
           command: ReportInteractionEvent (feedback)
           seed: [fixture.NewAssistantRun()]
           assertions:
-            - "db.interaction_events.FindOne({runId}) → feedbackType + score correct"
-            - "db.assistant_runs.FindOne({_id}).satisfactionScore → updated"
-            - "db.assistant_runs.FindOne({_id}).sessionPreferenceFacts or longTermPreferenceFacts → appendable"
+            - "db.assistant_interaction_events.FindOne({runId}) → feedbackType + score correct"
+            - "learning profile projection updated"
             - "eventSpy.AssertPublished('AssistantFeedbackReceived')"
 
   coverage_requirements:
     - all page types covered in page_context scenarios
     - skill consent enforcement verified
     - learning feedback loop end-to-end
-    - intent graph / aggregation state / process timeline v2 covered
+    - run persistence and idempotent replay covered

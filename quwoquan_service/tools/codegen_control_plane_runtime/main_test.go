@@ -42,7 +42,7 @@ object_type_schema:
   optional_fields: [object_kind]
 operation_schema:
   required_fields: [operation, method, path, scopes]
-  optional_fields: [danger_level, approval_mode]
+  optional_fields: [danger_level, approval_mode, idempotency]
 http_methods: [GET, POST]
 scope_patterns: [ops.*, platform_ops.*]
 deployment_profiles:
@@ -161,6 +161,7 @@ object_types:
         scopes: [ops.platform.config.write]
         danger_level: high
         approval_mode: dual
+        idempotency: required
 `)
 	writeFixture(t, filepath.Join(metadataDir, "_control_plane", "platform", "config_schema.yaml"), `
 version: 1
@@ -193,6 +194,7 @@ configs:
 		"portal_menu.go",
 		"domain_onboarding_schema.go",
 		"domain_onboarding_domains.go",
+		"operation_security.go",
 		"platform_control_plane.go",
 		"platform_config_schema.go",
 	}
@@ -232,6 +234,22 @@ configs:
 	}
 	if !strings.Contains(string(goText), "MustLoadPlatformControlPlane") || !strings.Contains(string(goText), `\"object_kind\": \"policy\"`) {
 		t.Fatalf("generated go file missing expected content: %s", string(goText))
+	}
+
+	securityText, err := os.ReadFile(filepath.Join(goOutDir, "operation_security.go"))
+	if err != nil {
+		t.Fatalf("read generated operation security module: %v", err)
+	}
+	for _, expected := range []string{
+		"PlatformOperationSecurityDescriptors",
+		`CanonicalOperationID: "control_plane.platform.service_config.UpdateServiceConfig"`,
+		`PathTemplate:         "/control-plane/platform/configs/{configKey}:update"`,
+		`Scopes:               []string{"ops.platform.config.write"}`,
+		`Idempotency:          "required"`,
+	} {
+		if !strings.Contains(string(securityText), expected) {
+			t.Fatalf("generated operation security file missing %q: %s", expected, string(securityText))
+		}
 	}
 
 	pyText, err := os.ReadFile(filepath.Join(pythonOutDir, "platform_control_plane.py"))

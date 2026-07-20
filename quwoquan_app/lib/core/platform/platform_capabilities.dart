@@ -63,8 +63,8 @@ class PlatformCapabilities {
 
   /// Web Push + Service Worker 后台来电通知能力。
   ///
-  /// 仅 web 为 true：后台经 Web Push 通知点击进会；前台走站内弹窗。
-  /// 原生端为 false（用 [incomingCallUi]）。业务只读能力位决定唤醒通道与降级。
+  /// 当前所有平台均为 false：Web RTC 只支持前台 realtime 站内来电，不伪装已具备
+  /// Service Worker 后台接听链。原生端使用 [incomingCallUi]。
   final bool webPushIncomingCall;
 
   /// Native video trim/mute/export via platform channel.
@@ -221,7 +221,7 @@ class CapabilityProfile {
     contacts: false,
     realtimeCommunication: true,
     incomingCallUi: false,
-    webPushIncomingCall: true,
+    webPushIncomingCall: false,
     nativeVideoEditing: false,
     secureStorage: false,
     backgroundAudio: false,
@@ -299,6 +299,9 @@ PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
       return CapabilityProfile.mobile.copyWith(
         appleNativeLogin: false,
         wechatTargetedShare: true,
+        // 当前 video_editing MethodChannel 仅有 iOS 实现；Android 必须隐藏
+        // trim/mute/export 入口，不能让用户点击后才收到 UnsupportedError。
+        nativeVideoEditing: false,
       );
     case AppPlatform.ios:
       return CapabilityProfile.mobile;

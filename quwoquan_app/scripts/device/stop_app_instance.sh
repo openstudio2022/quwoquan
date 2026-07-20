@@ -13,7 +13,7 @@ STOP_ALL=0
 usage() {
   cat <<EOF
 Usage:
-  scripts/stop_app_instance.sh [options]
+  quwoquan_app/scripts/device/stop_app_instance.sh [options]
 
 Options:
   --env <alpha|beta|gamma|prod>   Stop matching env instances.

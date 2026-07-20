@@ -1,0 +1,30 @@
+object: SkillSubscription
+operations:
+  - ListSkillSubscriptions
+  - CreateSkillSubscription
+  - GetSkillSubscription
+  - UpdateSkillSubscriptionStatus
+  - TickSkillSubscriptionCron
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service.go
+  store:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/mongo_skill_subscription_store.go
+  outbox: []
+  reader:
+    - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/mongo_skill_subscription_store.go
+  transport:
+    - quwoquan_service/services/assistant-service/internal/adapters/http/handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart
+    - quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
+  page:
+    - quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
+    - quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
+  user_acceptance: []
+environments: []

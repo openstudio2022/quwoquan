@@ -2,22 +2,43 @@ package local_contract
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	rtredis "quwoquan_service/runtime/redis"
+	rtsearch "quwoquan_service/runtime/search"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/adapters/http"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 )
+
+type fixedSearchReader struct{}
+
+func (fixedSearchReader) Retrieve(
+	context.Context,
+	string,
+	[]string,
+	int,
+) (rtsearch.RetrieveResponse, error) {
+	return rtsearch.RetrieveResponse{
+		Citations: []rtsearch.Citation{
+			{CitationID: "citation-article", ObjectType: "article", ObjectID: "post-1", Title: "四川露营路线", Snippet: "露营攻略", SourceDomain: "content", Score: 0.95},
+			{CitationID: "citation-entity", ObjectType: "entity", ObjectID: "homepage-1", Title: "四川露营地", Snippet: "地点主页", SourceDomain: "entity", Score: 0.92},
+			{CitationID: "citation-web", ObjectType: "web", ObjectID: "web-1", Title: "公开露营信息", URL: "https://example.test/camping", SourceDomain: "web", Score: 0.88},
+		},
+		Provenance: rtsearch.Provenance{Provider: "search-service"},
+	}, nil
+}
 
 func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	service := application.NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithXiaoquSearchReader(fixedSearchReader{}),
 	)
 	handler := assistanthttp.NewHandler(service).Routes()
 
@@ -98,7 +119,7 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 			if stringField(citation, "url") == "" {
 				t.Fatalf("web citation missing url: %#v", citation)
 			}
-			if stringField(citation, "recallSource") != "web_supplement" {
+			if stringField(citation, "recallSource") != "search-service" {
 				t.Fatalf("web citation recallSource mismatch: %#v", citation)
 			}
 		} else {

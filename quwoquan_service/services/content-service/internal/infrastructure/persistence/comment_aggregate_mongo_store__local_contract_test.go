@@ -55,6 +55,12 @@ func TestCommentMongoIndexesMatchDedicatedStorageContract(t *testing.T) {
 	)
 	assertMongoIndexNames(
 		t,
+		"comment_author_rate_limit_locks",
+		storage.Collections["comment_author_rate_limit_locks"].Indexes,
+		commentRateLockMongoIndexes(),
+	)
+	assertMongoIndexNames(
+		t,
 		"comment_outbox",
 		storage.Collections["comment_outbox"].Indexes,
 		commentOutboxMongoIndexes(),
@@ -74,6 +80,14 @@ func TestCommentMongoIndexesEnforceCASReceiptExpiryAndOutboxVersion(t *testing.T
 	)
 	if receiptExpiry.ExpireAfterSeconds == nil || *receiptExpiry.ExpireAfterSeconds != 0 {
 		t.Fatal("Comment command receipts must use Mongo TTL expiry from expiresAt")
+	}
+	rateLockExpiry := mongoIndexOptionsByName(
+		t,
+		commentRateLockMongoIndexes(),
+		"idx_comment_author_rate_limit_locks_expire",
+	)
+	if rateLockExpiry.ExpireAfterSeconds == nil || *rateLockExpiry.ExpireAfterSeconds != 0 {
+		t.Fatal("Comment author rate-limit locks must use Mongo TTL expiry from expiresAt")
 	}
 
 	outboxVersion := mongoIndexOptionsByName(
@@ -169,6 +183,37 @@ func TestCommentMongoCommitRequiresFactAtCommittedVersion(t *testing.T) {
 	}}
 	if err := validateCommentCommit(commit); err == nil {
 		t.Fatal("outbox fact with another aggregate version must be rejected")
+	}
+}
+
+func TestCommentMongoDocumentRoundTripsHiddenAt(t *testing.T) {
+	now := time.Now().UTC()
+	aggregate, err := commentmodel.Create(commentmodel.CreateParams{
+		ID:       "comment-mongo-hidden",
+		PostID:   "post-mongo-hidden",
+		AuthorID: "persona-mongo-hidden",
+		Content:  "hidden snapshot",
+		Now:      now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := aggregate.Hide("operator-mongo-hidden", now.Add(time.Second)); err != nil {
+		t.Fatalf("hide Comment aggregate: %v", err)
+	}
+	document := commentAggregateDocumentFromSnapshot(aggregate.Snapshot())
+	if document.Status != string(commentmodel.StatusHidden) || document.HiddenAt == nil {
+		t.Fatalf("hiddenAt was not persisted into Mongo document: %+v", document)
+	}
+	restored, err := document.aggregate()
+	if err != nil {
+		t.Fatalf("restore hidden Comment from Mongo document: %v", err)
+	}
+	snapshot := restored.Snapshot()
+	if snapshot.Status != commentmodel.StatusHidden ||
+		snapshot.HiddenAt == nil ||
+		!snapshot.HiddenAt.Equal(now.Add(time.Second)) {
+		t.Fatalf("hidden Comment Mongo round trip drifted: %+v", snapshot)
 	}
 }
 

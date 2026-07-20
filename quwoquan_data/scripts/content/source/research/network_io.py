@@ -95,6 +95,47 @@ def curl_json(url: str, *, timeout: int) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def post_form_json(
+    url: str,
+    *,
+    fields: dict[str, str],
+    timeout: int,
+) -> dict[str, Any]:
+    """POST form fields once and decode JSON; the source adapter owns retries."""
+    if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
+        return {}
+    command = [
+        "curl",
+        "-sS",
+        "-L",
+        "-f",
+        "-A",
+        _USER_AGENT,
+        "--retry",
+        "0",
+        "--retry-delay",
+        str(_CURL_RETRY_DELAY_SECONDS),
+        "--retry-all-errors",
+        "--max-time",
+        str(max(1, int(timeout))),
+    ]
+    for key, value in fields.items():
+        command.extend(["--data-urlencode", f"{key}={value}"])
+    command.append(url)
+    proc = subprocess.run(command, capture_output=True, check=False)
+    if proc.returncode == 0:
+        network_breaker.BREAKER.record_success(url)
+    elif proc.returncode in network_breaker.NETWORK_CURL_EXIT_CODES:
+        network_breaker.BREAKER.record_network_failure(url)
+    if proc.returncode != 0:
+        return {}
+    try:
+        payload = json.loads(proc.stdout.decode("utf-8", errors="replace") or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def curl_text(url: str, *, timeout: int) -> str:
     response = fetch_http(url, timeout=timeout)
     if not response.ok:

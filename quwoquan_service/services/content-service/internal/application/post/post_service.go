@@ -6,13 +6,11 @@ import (
 	messaging "quwoquan_service/runtime/messaging"
 	rtrec "quwoquan_service/runtime/recommendation"
 	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
-	postdomain "quwoquan_service/services/content-service/internal/domain/post"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
-	reactionports "quwoquan_service/services/content-service/internal/domain/reaction/ports"
 	"strings"
 	"sync"
-	"time"
 )
 
 type SemanticMentionReprojectionReport struct {
@@ -36,21 +34,17 @@ type StoryRuntimeConfig struct {
 }
 
 type PostService struct {
-	store                  postDataAccess
-	mediaAssetBindings     MediaAssetBindingReader
-	signaler               rtrec.SignalProcessor
-	publisher              messaging.EventPublisher
-	logger                 *slog.Logger
-	mu                     sync.RWMutex
-	tombstones             map[string]time.Time // postID -> deletedAt
-	commentCounts          commentports.CountReader
-	commentAuthorPage      commentports.AuthorCommentPageReader
-	commentReceivedPage    commentports.ReceivedCommentPageReader
-	shareInteractionStore  postdomain.ShareInteractionStore
-	reactionActivityReader reactionports.ProfileActivityReader
-	commentReactionValues  reactionports.CommentReactionValueReader
-	storyRuntime           StoryRuntimeConfig
-	ipResolver             IPLocationResolver // 评论属地解析（默认确定性 stub，生产注入 GeoIP）
+	store                 postDataAccess
+	mediaAssetBindings    MediaAssetBindingReader
+	signaler              rtrec.SignalProcessor
+	publisher             messaging.EventPublisher
+	logger                *slog.Logger
+	mu                    sync.RWMutex
+	tombstoneReader       postports.TombstoneReader
+	commentCounts         commentports.CountReader
+	publicationRateGate   postports.PublicationRateGate
+	publicationSafetyGate postports.PublicationSafetyGate
+	storyRuntime          StoryRuntimeConfig
 }
 
 func NewPostService(dataPorts DataPorts, opts ...PostServiceOption) *PostService {
@@ -61,11 +55,13 @@ func NewPostService(dataPorts DataPorts, opts ...PostServiceOption) *PostService
 	s := &PostService{
 		store:        postDataAccess{ports: dataPorts},
 		logger:       slog.Default(),
-		tombstones:   map[string]time.Time{},
 		storyRuntime: defaultStoryRuntimeConfig(),
-		ipResolver:   newDeterministicProvinceResolver(),
 	}
 	s.mediaAssetBindings = dataPorts.MediaAssets
+	// 与 Aggregate/Detail 同一 adapter 通常同时实现持久墓碑读端口。
+	if reader, ok := dataPorts.Aggregate.(postports.TombstoneReader); ok {
+		s.tombstoneReader = reader
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -84,47 +80,25 @@ func WithEventPublisher(pub messaging.EventPublisher) PostServiceOption {
 	return func(s *PostService) { s.publisher = pub }
 }
 
-// WithCommentReaders 注入 Profile/Post 投影所需的 Comment 具名只读端口。
+// WithCommentReaders 注入 Post 计数所需的 Comment 具名只读端口。
 // Comment 写模型和命令 Facade 不得回流到 PostService。
 func WithCommentReaders(readers interface {
 	commentports.CountReader
-	commentports.AuthorCommentPageReader
-	commentports.ReceivedCommentPageReader
 }) PostServiceOption {
 	return func(s *PostService) {
 		if readers != nil {
 			s.commentCounts = readers
-			s.commentAuthorPage = readers
-			s.commentReceivedPage = readers
 		}
 	}
 }
 
-func WithProfileCommentReactionValueReader(
-	reader reactionports.CommentReactionValueReader,
+func WithPublicationAdmission(
+	rateGate postports.PublicationRateGate,
+	safetyGate postports.PublicationSafetyGate,
 ) PostServiceOption {
 	return func(s *PostService) {
-		if reader != nil {
-			s.commentReactionValues = reader
-		}
-	}
-}
-
-// WithShareInteractionStore 注入转发互动不可变事件读模型。
-func WithShareInteractionStore(store postdomain.ShareInteractionStore) PostServiceOption {
-	return func(s *PostService) {
-		if store != nil {
-			s.shareInteractionStore = store
-		}
-	}
-}
-
-// WithProfileReactionActivityReader 注入 ContentReaction 的公开 persona 活动读模型。
-func WithProfileReactionActivityReader(reader reactionports.ProfileActivityReader) PostServiceOption {
-	return func(s *PostService) {
-		if reader != nil {
-			s.reactionActivityReader = reader
-		}
+		s.publicationRateGate = rateGate
+		s.publicationSafetyGate = safetyGate
 	}
 }
 

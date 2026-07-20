@@ -52,7 +52,6 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_cover_priority__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/video_feed_cover_playback__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_cover_priority__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/media/media_playback_failure__local_contract_test.dart
@@ -63,12 +62,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: video_display_cover_priority
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.thumbnail_before_cover
         envs: &id001
         - local
       - layer: user_acceptance
+        execution_profile: release
         suite: video_feed_cover_playback
         cases:
         - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.feed_cover_to_playback
@@ -100,18 +101,19 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_state_sync__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/gamma/video_feed_state_roundtrip__api_integration_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_state_sync__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: video_display_state_sync
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.state_sync_across_feed_viewer_profile
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: video_feed_state_roundtrip
         cases:
         - api_integration.discovery_content.content_display_journey_consistency.video_display_journey.video_feed_state_roundtrip
@@ -119,6 +121,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: video_feed_cover_playback
         cases:
         - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.viewer_profile_return_state_sync
@@ -149,19 +152,19 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_imported_uploaded_parity__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/gamma/video_import_feed_cover_roundtrip__api_integration_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/video_imported_uploaded_display_parity__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/video_display_imported_uploaded_parity__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: video_display_imported_uploaded_parity
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.imported_and_uploaded_video_cover_parity
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: video_import_feed_cover_roundtrip
         cases:
         - api_integration.discovery_content.content_display_journey_consistency.video_display_journey.imported_video_feed_cover_roundtrip
@@ -169,6 +172,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: video_feed_cover_playback
         cases:
         - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.imported_uploaded_display_parity
@@ -177,21 +181,25 @@ gwt_acceptance:
     notes:
     - 2026-06-22 已通过 local_contract 证明导入视频与用户上传视频在 DTO/display mapper 上共享同一封面展示合同；gamma import feed roundtrip 与 UAT 尚未落盘，状态保持 pending。
   GWT4:
-    title: 两种视频 profile 共享会话状态、四级时间轴与受控拖动预览
+    title: 两种视频 profile 共享会话状态、P0 时间轴与独立拖动增强
     given:
-    - Feed 中存在已发布且处理状态为 ready 的视频 post，其 descriptor 含 verifiedDurationMs；视频集额外可含 previewTrack。
+    - Feed 中存在已发布且处理状态为 ready 的视频 post，其 descriptor 含 verifiedDurationMs；P1-A 视频可额外含 previewTrack，P1-B 视频可额外含 ABR descriptor。
     - 首页内嵌视频和同一 post 的 WorkBrowser 均由同一个 VideoPlaybackSession 命令/快照合同驱动。
     when:
     - 用户自动播放、手动暂停/续播、拖动时间轴、切集、离屏或前后台切换。
     then:
-    - feedInline 的进度轨贴视频底边，真实总时长在首帧实际呈现后显示 5 秒并淡出，且不使用黑色时长胶囊。
-    - immersiveWorkBrowser 的时间轴位于底部互动工具栏上方并与 caption rail 对齐；首次进入详情不显示时间，视频集在首帧、恢复或切集后 transient 显示 5 秒。
-    - paused 使用 4dp 轨道和 8dp 当前位置，中央显示半透明播放按钮；scrubbing 使用 6dp 轨道和 12dp 当前位置，显示目标时间/有效总时长与服务端 storyboard 预览。
+    - feedInline 的被动进度轨始终贴视频底边并保持可见，真实总时长常驻轨道右上方；不显示左侧播放按钮，不使用黑色时长胶囊，也不因 44dp 语义热区抬高视觉轨道。
+    - immersiveWorkBrowser 的时间轴视觉轨紧贴底部互动工具栏上沿并与 caption rail 对齐；控制层只包含轨道与轨道上方的短暂总时长 overlay，不显示左侧播放按钮，正常播放时轨道保持可见。
+    - 标题、正文与交集说明组成同一文本区并始终位于总时长/时间轴之上；总时长仅在首次进入或切集完成后最多显示 5 秒，不为它单独占据一行。若文本区实际 RenderParagraph 字形矩形与总时长 RenderBox 无法保持最小安全间距，则只隐藏视觉总时长；短文本未占满右侧时不得按整条 rail 误判。轨道与无障碍 current/total 语义必须保留。
+    - paused 使用 4dp 轨道和 8dp 当前位置，中央只显示无背景、无边框、三个角圆润的放大播放三角；scrubbing 使用 6dp 轨道和 12dp 当前位置，P0 以更大等宽数字显示目标时间/有效总时长，P1-A 才在其上方追加服务端 storyboard 预览。
     - 拖动仅改变虚拟 target，释放时只提交一次 seek；取消回到原位置；原本暂停或 manualPause 不会因 seek、自动播放、前后台、焦点或切集而自行续播。
-    - 缺少 previewTrack、能力受限、节流或预览失败时只显示时间浮标；未知时长禁用拖动，buffering、ended、failure 不伪装为正常播放。
+    - 缺少 previewTrack、能力受限、节流或预览失败时只显示时间浮标；P1-A/P1-B 可分别关闭且不影响 P0；未知时长禁用拖动，buffering、ended、failure 不伪装为正常播放。
     - 页面、控件、焦点协调器不得直接调用原生 controller 的 play/pause/seek；过期 generation 回调不得影响当前作品。
+    - 当前视频会话按 viewport epoch、post、media delivery identity 与 episode index 原子绑定；评论分屏、过滤移除/恢复和 mediaItems 重排恢复同一媒体时不得回到第 1 集或复用已失效会话，普通重建/重排不得重启五秒窗口，真实 1→2→1 切集则每次开启新窗口。
+    - Android 不按品牌或具体机型维护播放分支；最低支持 API、低内存、低算力、软件 decoder 与能力缺失必须通过统一 platform capability 和结构化降级覆盖。
     done_when:
     - 两种 profile 的控制层只消费 PlaybackSnapshot，并由 local_contract、受控视觉 UAT 和真实设备 seek/首帧证据共同证明。
+    - local_contract 覆盖三档视口安全轨、真实字形碰撞正反例、动态文字缩放、暂停/拖动态贴栏、评论重绑、过滤移除/恢复、1→2→1 与 mediaItems identity 重排。
     edge_cases:
     - Web 有声自动播放被拒绝时进入 awaitingUserGesture，用户点击后恢复；该受限状态不是播放 RuntimeFailure。
     - 作品/分集切换、离屏、后台或音频永久失焦时暂停旧会话并释放资源；最后一集结束停在末帧显示 replay，不循环或自动跳下一集。
@@ -204,19 +212,27 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_controls.dart
     - specs/feature-tree/runtime/runtime-media/design.md
     performance_points:
-    - 首帧实际呈现到控件 transient 显示的时序必须可测；controller initialize 不作为 TTFF。
+    - 首帧实际呈现的时序必须可测；controller initialize 不作为 TTFF。
     - 控件 position 更新只重建局部控件，不重建整个 feed 或 WorkBrowser。
+    - 拖动 move 不触发原生 seek；触控到 thumb/time 更新 P95 <= 50ms，>2x vsync 的 jank frame < 1%。
+    - release seek settle P95 为 Wi-Fi <= 1000ms、蜂窝网络 <= 2000ms，失败率 < 0.5%；只统计原生 settle 事件。
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/components/media/video/player/video_playback_session__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/ui/discovery/video_playback_controls__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/patrol/video/video_playback_profiles__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_timeline__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/components/media/video/player/video_playback_session__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_session_seek__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_timeline__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
     status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: video_playback_session
         cases:
         - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.manual_pause_precedence
@@ -225,6 +241,7 @@ gwt_acceptance:
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: video_playback_profiles
         cases:
         - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.feed_inline_timeline
@@ -234,11 +251,13 @@ gwt_acceptance:
         - prod
         rollout_stages:
         - gray_initial
+        - carry_on
+        - full
     notes:
-    - 2026-07-18：仅 session 初始命令优先级 local_contract 已执行；首帧、seek settle、storyboard、音频焦点、Web/OHOS 降级与 beta/gamma/prod 真机证据均未取得，保持 partial 且不得解除 runtime-media GATE_BLOCK。
+    - 2026-07-19：高保真合同覆盖旧“轨道左上/transient/圆形背景”约定，冻结为首页贴底且总时长常驻轨道右上方、WorkBrowser 轨道贴工具栏且总时长仅在首次进入/切集后最多显示 5 秒；文本先完成真实几何测量，无安全间距时总时长首帧即保持透明并立即隐藏，隐藏不移动文本或轨道，无背景圆角播放三角保持。P0 时间浮标与 P1-A storyboard/P1-B ABR 独立准入。Android 已有 prepare-to-rendered-frame 的 first-frame、seek discontinuity 后 rendered-frame 的 settle、掉帧/audio underrun 和同步队列/decoder fallback 证据链，且不含品牌/型号分支；controller initialize 和 seekTo Future 不得替代该证据。早期/低端物理机、音频焦点、Web/OHOS 降级与 beta/gamma/prod 非 dry-run 证据仍未齐，保持 partial，不得解除 runtime-media GATE_BLOCK。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

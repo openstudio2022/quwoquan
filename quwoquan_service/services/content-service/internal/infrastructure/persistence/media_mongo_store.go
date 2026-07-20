@@ -13,7 +13,7 @@ type MongoMediaStore struct {
 	assetOutbox            *mongo.Collection
 	originalAccessFacts    *mongo.Collection
 	originalAccessReceipts *mongo.Collection
-	originalAccessOutbox   *mongo.Collection
+	checkpoints            *mongo.Collection
 }
 
 func NewMongoMediaStore(uploadSessions *mongo.Collection) *MongoMediaStore {
@@ -30,6 +30,6 @@ func NewMongoMediaStore(uploadSessions *mongo.Collection) *MongoMediaStore {
 		assetOutbox:            db.Collection("media_asset_outbox"),
 		originalAccessFacts:    db.Collection("media_original_access_facts"),
 		originalAccessReceipts: db.Collection("media_original_access_receipts"),
-		originalAccessOutbox:   db.Collection("media_original_access_outbox"),
+		checkpoints:            db.Collection("media_projection_checkpoints"),
 	}
 }

@@ -13,7 +13,7 @@
 | P0 | assistant | `assistant_scenarios.json` + `MockAssistantRepository` 内置数据 | `contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json` | 找私助流式问答、技能订阅 seed | 已启动 |
 | P1 | content/discovery | `ContentMockData`、`PrototypeMockData.discovery*` | `contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json` | 发现流 photo/video/article/moment、详情 hydration、搜索 | 迁移中 |
 | P1 | circle | `CircleMockData` | `contracts/metadata/social/circle/test_fixtures/scenarios/circle_scenarios.json` | 圈子列表、详情、默认群、成员、文件 | 迁移中 |
-| P1 | chat | `ChatMockData` | `contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json` | inbox、会话详情、成员、消息、联系人 | 迁移中 |
+| P1 | chat | generated `AlphaFixtureBundle` + `AlphaChatStateEngine` | `contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json` | inbox、会话详情、成员、消息、联系人 | 已完成（2026-07-20，production Mock/Data 已删除） |
 | P2 | user/entity | `UserProfileMockData`、`HomepageMockData` | `contracts/metadata/user/**/test_fixtures`、`contracts/metadata/entity/**/test_fixtures` | 主页、关系态、作品/生活记录 | 待迁移 |
 | P2 | notification | `notification/test_fixtures/scenarios/notification_scenarios.json` | generated `AlphaFixtureBundle` + typed `AlphaAppMessage*` Facet | AppMessage 列表、未读数、读取状态 | 已完成（2026-07-14，旧 Repository/DTO 已删除） |
 | P3 | rtc/realtime/integration/ops | 各 `Mock*Repository` 内存数据 | 对应域 `test_fixtures` | 协议最小样例、状态切换 | 待迁移 |

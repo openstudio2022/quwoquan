@@ -26,8 +26,10 @@ class RealtimeConfig {
     this.reconnectMaxDelayMs = 30000,
   });
 
-  factory RealtimeConfig.fromGateway() {
-    final base = CloudRuntimeConfig.gatewayBaseUrl;
+  factory RealtimeConfig.fromGateway({
+    String gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
+  }) {
+    final base = gatewayBaseUrl;
     final wsBase = base
         .replaceFirst('https://', 'wss://')
         .replaceFirst('http://', 'ws://');

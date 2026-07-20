@@ -7,45 +7,73 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: media-processing-helper-read
 scope:
-  summary: media processing helper read 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 视频从上传完成事实到 ready/rejected 终态、可发布切片与可预览读取的商用闭环。
+  in_scope:
+  - MediaAsset 状态机、outbox worker、checkpoint、FFmpeg/FFprobe、对象存储派生物、健康与指标。
+  - 真实 MinIO + MongoDB + FFmpeg 的数据一致性证据。
+  out_of_scope:
+  - 文章摘要生成由 helper-read-summary 独立 Story 验收。
+  - HLS/DASH ABR 在 feature flag 关闭时不属于首发交付。
 sit_acceptance:
   SIT1:
-    title: media processing helper read 能力 SIT
-    story_refs: []
+    title: 视频媒体处理、恢复与读取能力 SIT
+    story_refs:
+    - media-processing-helper-read/media-status-pipeline
+    - media-processing-helper-read/media-failure-recovery
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - completed 上传产生耐久事实，worker 以 checkpoint 至少一次消费并把资产推进到 ready 或 rejected。
+    - 带音轨视频完成 H.264/AAC 归一，无音轨视频注入 AAC 静音轨；二者均满足 fast-start 与关键帧约束。
+    - 非媒体字节稳定进入 rejected，不生成可发布 slice。
+    - checkpoint 保存失败可重放，重复事实不重复处理已终态资产。
+    - Worker 健康、单任务耗时、结果和连续满批可被 Prometheus 与 health endpoint 读取。
+    performance_points:
+    - 单个 2 秒样例视频在本地集成环境 30 秒内进入终态。
+    - Worker 空闲扫描间隔 2 秒，批量上限 10，连续满批 15 分钟触发积压告警。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_service/services/content-service/tests/local_contract/media/media_processing_worker__reliability__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_pipeline__data_consistency__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_checkpoint__data_consistency__api_integration_test.go
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
-        suite: sit1_local_contract
+        execution_profile: baseline
+        suite: media_processing_worker_reliability
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.sit1.sit1_local_contract
+        - local_contract.content.media.processing_worker.replay_and_checkpoint
+        - local_contract.content.media.processing_worker.observability
         envs: &id001
         - local
+        test_object: application_service
+        quality_facet: reliability
       - layer: api_integration
-        suite: sit1_api_integration
+        execution_profile: integration
+        suite: media_processing_data_consistency
         cases:
-        - api_integration.discovery_content.media_processing_helper_read.sit1.sit1_api_integration
+        - api_integration.content.media.video_processing_ready
+        - api_integration.content.media.invalid_bytes_rejected
+        - api_integration.content.media.checkpoint_replay
         envs:
         - beta
         - gamma
+        test_object: workflow
+        quality_facet: data_consistency
       supporting:
       - layer: local_contract
-        suite: sit1_local_contract
+        execution_profile: baseline
+        suite: media_processing_contract
         cases:
-        - local_contract.discovery_content.media_processing_helper_read.sit1.sit1_local_contract
+        - local_contract.content.media.ready_descriptor_invariants
         envs: *id001
+        test_object: domain_rule
+        quality_facet: contract
     notes: []
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

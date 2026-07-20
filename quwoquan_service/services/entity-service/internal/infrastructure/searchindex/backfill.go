@@ -13,7 +13,11 @@ const defaultBackfillBatchSize = 500
 // HomepageLister enumerates every homepage for cold-start backfill. The live
 // HomepageService satisfies it via ListHomepagesForIndex.
 type HomepageLister interface {
-	ListHomepagesForIndex(ctx context.Context) []application.Homepage
+	ScanHomepagesForIndex(
+		ctx context.Context,
+		cursor string,
+		limit int,
+	) ([]application.Homepage, string, error)
 }
 
 // BulkIndexer is the subset of the ES client backfill needs: ensure the index
@@ -48,8 +52,6 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister HomepageLister, b
 		return report, err
 	}
 
-	homepages := lister.ListHomepagesForIndex(ctx)
-	report.TotalHomepages = len(homepages)
 	batch := make([]es.ChangeEvent, 0, batchSize)
 	flush := func() error {
 		if len(batch) == 0 {
@@ -63,19 +65,31 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister HomepageLister, b
 		return nil
 	}
 
-	for i := range homepages {
-		if !application.HomepageSearchEligible(homepages[i]) {
-			report.SkippedHomepages++
-			continue
+	cursor := ""
+	for {
+		homepages, nextCursor, err := lister.ScanHomepagesForIndex(ctx, cursor, batchSize)
+		if err != nil {
+			return report, err
 		}
-		doc := application.ProjectHomepageToSearchDocument(homepages[i])
-		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: doc})
-		report.IndexedHomepages++
-		if len(batch) >= batchSize {
-			if err := flush(); err != nil {
-				return report, err
+		report.TotalHomepages += len(homepages)
+		for i := range homepages {
+			if !application.HomepageSearchEligible(homepages[i]) {
+				report.SkippedHomepages++
+				continue
+			}
+			doc := application.ProjectHomepageToSearchDocument(homepages[i])
+			batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: doc})
+			report.IndexedHomepages++
+			if len(batch) >= batchSize {
+				if err := flush(); err != nil {
+					return report, err
+				}
 			}
 		}
+		if nextCursor == "" {
+			break
+		}
+		cursor = nextCursor
 	}
 	if err := flush(); err != nil {
 		return report, err

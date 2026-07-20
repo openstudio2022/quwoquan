@@ -97,6 +97,22 @@ func TestCommentStore_AuthoritativeCountsNoCache(t *testing.T) {
 	if page.Total != authoritative || numberAsInt64(counters["comment"]) != authoritative {
 		t.Fatalf("authoritative Comment count mismatch: mongo=%d page=%d counters=%+v", authoritative, page.Total, counters)
 	}
+	var feedProjection struct {
+		CommentCount int64 `bson:"commentCount"`
+	}
+	if err := mongoDB.Collection("rm_discovery_feed").FindOne(
+		context.Background(),
+		bson.M{"postId": postID},
+	).Decode(&feedProjection); err != nil {
+		t.Fatalf("read DiscoveryFeed Comment count projection: %v", err)
+	}
+	if feedProjection.CommentCount != authoritative {
+		t.Fatalf(
+			"DiscoveryFeed Comment count stale: mongo=%d feed=%d",
+			authoritative,
+			feedProjection.CommentCount,
+		)
+	}
 }
 
 func TestCommentCountReconciliation_HighConcurrency(t *testing.T) {

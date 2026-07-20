@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
+	"quwoquan_service/services/content-service/internal/application/iplocation"
 	reactionapp "quwoquan_service/services/content-service/internal/application/reaction"
 	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
 	reactiondomain "quwoquan_service/services/content-service/internal/domain/reaction"
@@ -40,7 +42,13 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		writeHTTPError(w, r, err)
 		return
 	}
-	result, err := h.commentService.CreateComment(r.Context(), commentapp.CreateCommentCommand{
+	// 属地快照：从受信代理头解析客户端 IP 注入 context，创建路径一次解析落库。
+	ctx := iplocation.WithClientIP(r.Context(), iplocation.ParseTrustedClientIP(
+		r.Header.Get("X-Forwarded-For"),
+		r.Header.Get("X-Real-IP"),
+		r.RemoteAddr,
+	))
+	result, err := h.commentService.CreateComment(ctx, commentapp.CreateCommentCommand{
 		PostID:                    postID,
 		ActorID:                   actorID,
 		AuthorDisplayNameSnapshot: body.AuthorDisplayNameSnapshot,
@@ -71,6 +79,7 @@ func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Reque
 		ActorID: optionalCommentPersona(r),
 		Cursor:  cursor,
 		Limit:   limit,
+		Sort:    strings.TrimSpace(r.URL.Query().Get("sort")),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -277,4 +286,114 @@ func (h *ContentHandler) handleListCommentsForPostAuthor(w http.ResponseWriter, 
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *ContentHandler) handleHideComment(
+	w http.ResponseWriter,
+	r *http.Request,
+	commentID string,
+) {
+	h.handleModerateComment(w, r, commentID, true)
+}
+
+func (h *ContentHandler) handleRestoreComment(
+	w http.ResponseWriter,
+	r *http.Request,
+	commentID string,
+) {
+	h.handleModerateComment(w, r, commentID, false)
+}
+
+func (h *ContentHandler) handleModerateComment(
+	w http.ResponseWriter,
+	r *http.Request,
+	commentID string,
+	hide bool,
+) {
+	if h.commentService == nil {
+		writeHTTPError(
+			w,
+			r,
+			contentgenerated.AppErrorFromStorageWriteFailed(
+				"Comment command facades are not configured",
+			),
+		)
+		return
+	}
+	commentID = strings.TrimSpace(commentID)
+	if commentID == "" {
+		writeHTTPError(
+			w,
+			r,
+			contentgenerated.AppErrorFromInvalidArgument(
+				"Comment moderation requires commentId",
+			),
+		)
+		return
+	}
+	operatorID, ok := verifiedCommentOperatorAccountID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeRequiredJSONBody(r, &body); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	var (
+		result commentapp.CommentCommandResult
+		err    error
+	)
+	if hide {
+		result, err = h.commentService.HideComment(
+			r.Context(),
+			commentapp.HideCommentCommand{
+				CommentID:  commentID,
+				OperatorID: operatorID,
+				Reason:     body.Reason,
+			},
+		)
+	} else {
+		result, err = h.commentService.RestoreComment(
+			r.Context(),
+			commentapp.RestoreCommentCommand{
+				CommentID:  commentID,
+				OperatorID: operatorID,
+				Reason:     body.Reason,
+			},
+		)
+	}
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func verifiedCommentOperatorAccountID(
+	w http.ResponseWriter,
+	r *http.Request,
+) (string, bool) {
+	principal, principalOK := rtauth.PrincipalFromContext(r.Context())
+	descriptor, descriptorOK := rtauth.OperationDescriptorFromContext(r.Context())
+	accountID := strings.TrimSpace(principal.Actor.AccountID)
+	if principalOK &&
+		accountID != "" &&
+		descriptorOK &&
+		descriptor.Principal == "operator" &&
+		descriptor.CommercialStatus == "ready" &&
+		(descriptor.CanonicalOperationID == "content.comment.HideComment" ||
+			descriptor.CanonicalOperationID == "content.comment.RestoreComment") {
+		return accountID, true
+	}
+	writeHTTPError(
+		w,
+		r,
+		contentgenerated.AppErrorFromCommentModerationForbidden(
+			"verified ready operator operation principal is required for Comment moderation",
+		),
+	)
+	return "", false
 }

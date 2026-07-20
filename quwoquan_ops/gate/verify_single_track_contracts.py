@@ -283,7 +283,8 @@ def _is_rejection_context(lines: list[str], line_number: int) -> bool:
     return bool(
         re.search(
             r"reject|拒绝|forbidden|不得|禁止|retired|退休|must not|must be rejected|"
-            r"invalid|bad request|unknown field|fails closed",
+            r"invalid|bad request|unknown field|fails closed|"
+            r"not in |isdisjoint|does not contain|must not contain|never accepts",
             context,
             re.I,
         )

@@ -1,4 +1,4 @@
-# L4 特性：landing-bootstrap-context
+# L3 特性：landing-bootstrap-context
 
 ## 功能说明
 - 细化 landing-bootstrap-context 特性的功能边界与端云协同行为。

@@ -8,7 +8,7 @@ lib/ui 内 `Map<String, dynamic>` 字面量出现次数预算（防回退）。
 当前计数 > 预算 → exit 1。
 
 更新预算（刻意放宽时）：
-  python3 scripts/verify_ui_map_literal_budget.py --write-baseline
+  python3 quwoquan_app/scripts/runtime/verify_ui_map_literal_budget.py --write-baseline
 """
 
 from __future__ import annotations

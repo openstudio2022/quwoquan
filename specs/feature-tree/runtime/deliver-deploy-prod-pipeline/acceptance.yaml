@@ -37,12 +37,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.runtime.deliver_deploy_prod_pipeline.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.runtime.deliver_deploy_prod_pipeline.sit1.sit1_api_integration
@@ -51,11 +53,13 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.runtime.deliver_deploy_prod_pipeline.sit1.sit1_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.sit1.end_to_end_journey
@@ -97,22 +101,26 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.runtime.deliver_deploy_prod_pipeline.sit2.sit2_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.runtime.deliver_deploy_prod_pipeline.sit2.sit2_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: sit2_api_integration
         cases:
         - api_integration.runtime.deliver_deploy_prod_pipeline.sit2.sit2_api_integration
         envs: *id002
       - layer: user_acceptance
+        execution_profile: release
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.sit2.end_to_end_journey
@@ -138,5 +146,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

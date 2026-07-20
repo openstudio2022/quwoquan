@@ -1002,7 +1002,7 @@ flowchart LR
 
 ### 14.4 当前实现的特别校正项
 
-当前 app 侧 [quwoquan_app/lib/components/object_page/evidence_group.dart](quwoquan_app/lib/components/object_page/evidence_group.dart) 仍把 `kind` 折叠成 `dimension`。
+历史 app 侧 `EvidenceGroup` 本地折叠实现已退役；当前实现不得再把 `kind` 折叠成 `dimension`。
 
 后续实现必须保证：
 

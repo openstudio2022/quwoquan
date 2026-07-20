@@ -30,6 +30,7 @@ type MongoAggregateStore struct {
 	outbox      *mongo.Collection
 	sequences   *mongo.Collection
 	checkpoints *mongo.Collection
+	circles     *mongo.Collection
 }
 
 func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
@@ -42,7 +43,28 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 		outbox:      database.Collection(membershipOutboxCollection),
 		sequences:   database.Collection(membershipSequenceCollection),
 		checkpoints: database.Collection(membershipCheckpointCollection),
+		circles:     database.Collection("circles"),
 	}
+}
+
+// circleOwnerPersonaID 在提交事务内读取圈主，用于事件 payload 自包含通知
+// 接收者；圈子缺失时返回空串，由通知投影按无接收者跳过。
+func (store *MongoAggregateStore) circleOwnerPersonaID(ctx context.Context, circleID string) (string, error) {
+	var document struct {
+		OwnerID string `bson:"ownerId"`
+	}
+	err := store.circles.FindOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(circleID)},
+		options.FindOne().SetProjection(bson.D{{Key: "ownerId", Value: 1}}),
+	).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(document.OwnerID), nil
 }
 
 func (store *MongoAggregateStore) EnsureIndexes(ctx context.Context) error {
@@ -133,7 +155,11 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request membership
 			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&sequence); sequenceErr != nil {
 			return nil, sequenceErr
 		}
-		payloadJSON, marshalErr := json.Marshal(membershipEventPayload(next))
+		circleOwnerID, ownerErr := store.circleOwnerPersonaID(txCtx, next.CircleID)
+		if ownerErr != nil {
+			return nil, ownerErr
+		}
+		payloadJSON, marshalErr := json.Marshal(membershipEventPayload(next, circleOwnerID))
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
@@ -247,14 +273,17 @@ func (document membershipDocument) toModel() membershipmodel.CircleMembership {
 	return value
 }
 
-func membershipEventPayload(value membershipmodel.CircleMembership) map[string]any {
+func membershipEventPayload(value membershipmodel.CircleMembership, circleOwnerPersonaID string) map[string]any {
 	payload := map[string]any{
-		"_id": value.ID, "version": value.Version, "circleId": value.CircleID,
+		"id": value.ID, "version": value.Version, "circleId": value.CircleID,
 		"personaId": value.PersonaID, "role": value.Role, "state": value.State,
 		"joinedAt": value.JoinedAt.UTC(), "createdAt": value.CreatedAt.UTC(), "updatedAt": value.UpdatedAt.UTC(),
 	}
 	if !value.LeftAt.IsZero() {
 		payload["leftAt"] = value.LeftAt.UTC()
+	}
+	if circleOwnerPersonaID != "" {
+		payload["circleOwnerPersonaId"] = circleOwnerPersonaID
 	}
 	return payload
 }

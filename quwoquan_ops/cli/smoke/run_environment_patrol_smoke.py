@@ -46,6 +46,9 @@ from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
     ANDROID_DEVICE_INVENTORY_ENV,
     REAL_FLUTTER_ENV,
 )
+from quwoquan_ops.cli.lib.video_playback_evidence import (
+    read_native_video_playback_evidence,
+)
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -95,6 +98,14 @@ def _runtime_env_for_alias(alias: str) -> str:
 
 def _data_source_for_runtime(runtime_env: str) -> str:
     return "mock" if runtime_env == "alpha" else "remote"
+
+
+def _requires_native_video_playback_signals(device: dict[str, Any]) -> bool:
+    return str(device.get("targetPlatform") or "").lower().startswith("android")
+
+
+def _read_video_playback_evidence(patrol_log: Path) -> dict[str, bool]:
+    return read_native_video_playback_evidence(patrol_log)
 
 
 def _local_target_for_environment_alias(env_name: str) -> str:
@@ -360,12 +371,12 @@ def _prepare_android_local_port_reverse(
     ports: set[int] = set()
     for value in base_urls.values():
         parsed = urllib.parse.urlsplit(value)
-        if parsed.scheme != "https" or not parsed.hostname:
+        if parsed.scheme not in {"https", "wss"} or not parsed.hostname:
             continue
         ports.add(parsed.port or 443)
     if not ports:
         raise RuntimeError(
-            "GATE_BLOCK: no HTTPS local target ports are available for Android Patrol",
+            "GATE_BLOCK: no secure HTTP/WebSocket local target ports are available for Android Patrol",
         )
     mappings: list[dict[str, int]] = []
     for port in sorted(ports):
@@ -513,6 +524,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", default=DEFAULT_TARGET)
     parser.add_argument("--timeout-seconds", type=int, default=1200)
     parser.add_argument("--env-name", "--environment-alias", dest="env_name", default="local-gamma")
+    parser.add_argument(
+        "--rollout-stage",
+        choices=("gray-initial", "carry-on", "full"),
+        default="",
+        help="Prod rollout stage; it is evidence metadata, never a fifth environment.",
+    )
     parser.add_argument("--runtime-env", default="")
     parser.add_argument("--api-contract-env", default="")
     parser.add_argument("--data-source", choices=("mock", "remote"), default="")
@@ -976,6 +993,12 @@ def patrol_command(
         "-d",
         str(device["id"]),
         "--dart-define=RUN_T4_PATROL=true",
+        "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS="
+        + (
+            "true"
+            if _requires_native_video_playback_signals(device)
+            else "false"
+        ),
         f"--dart-define=APP_RUNTIME_ENV={runtime_env}",
         f"--dart-define=APP_DATA_SOURCE={data_source}",
         f"--dart-define=API_CONTRACT_ENV={api_contract_env}",
@@ -1114,6 +1137,7 @@ def main() -> int:
         "startedAt": utc_now(),
         "endedAt": "",
         "environmentAlias": args.env_name,
+        "rolloutStage": getattr(args, "rollout_stage", ""),
         "runtimeEnv": runtime_env,
         "apiContractEnv": api_contract_env,
         "dataSource": data_source,
@@ -1402,6 +1426,9 @@ def main() -> int:
             "deviceManifestPath": device_manifest_path,
             "commandPath": command_path,
             "rawLogPath": result.get("logPath", ""),
+            "videoPlayback": _read_video_playback_evidence(
+                run_dir / "patrol.log",
+            ),
             "beforeScreenshot": before_screenshot,
             "afterScreenshot": after_screenshot,
             "failureScreenshot": failure_screenshot,

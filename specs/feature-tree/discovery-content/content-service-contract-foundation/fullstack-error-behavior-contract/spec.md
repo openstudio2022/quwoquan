@@ -1,4 +1,4 @@
-# L3：fullstack-error-behavior-contract
+# L3 特性：fullstack-error-behavior-contract
 
 ## 功能说明
 

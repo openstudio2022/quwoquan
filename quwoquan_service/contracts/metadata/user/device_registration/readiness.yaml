@@ -1,0 +1,40 @@
+object: DeviceRegistration
+# 五个 M2 operation 均由同一聚合、owned endpoint Store 与 transport packet 承载。
+operations:
+  - InvalidateDevicePushEndpoint
+  - RemoveDevicePushEndpoint
+  - ResolveIncomingCallPushDestinations
+  - ResolvePushEndpointSecret
+  - UpsertDevicePushEndpoint
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/domain/account/device_registration/model/device_registration.go
+    - quwoquan_service/services/user-service/internal/domain/account/device_registration/model/device_push_endpoint.go
+    - quwoquan_service/services/user-service/internal/domain/account/device_registration/ports/device_registration_ports.go
+    - quwoquan_service/services/user-service/internal/application/account/device_registration/commands.go
+    - quwoquan_service/services/user-service/internal/application/account/device_registration/registrar.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence/postgres_store.go
+    - quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence/token_cipher.go
+    - quwoquan_service/services/user-service/internal/infrastructure/migration/028_device_push_endpoints.up.sql
+  outbox: []
+  reader:
+    - quwoquan_service/services/user-service/internal/application/account/device_registration/queries.go
+    - quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence/postgres_store.go
+    - quwoquan_service/services/user-service/internal/domain/user/ports/persona_ports.go
+    - quwoquan_service/services/user-service/internal/infrastructure/user/persistence/pg_persona_store_ext.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/device_registration_handler.go
+    - quwoquan_service/services/user-service/internal/generated/device_registration_metadata.go
+  app_client: []
+  page: []
+tests:
+  local_contract:
+    - quwoquan_service/services/user-service/tests/local_contract/internal/application/account/device_registration/device_registration_registrar__security_reliability__local_contract_test.go
+    - quwoquan_service/services/user-service/tests/local_contract/internal/application/account/device_registration/device_registration_readers__security__local_contract_test.go
+    - quwoquan_service/services/user-service/tests/local_contract/internal/domain/account/device_registration/device_registration_model__functional__local_contract_test.go
+    - quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/account/device_registration/device_registration_cipher__security__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/device_credential_packet__api_integration_test.go
+  user_acceptance: []
+environments: []

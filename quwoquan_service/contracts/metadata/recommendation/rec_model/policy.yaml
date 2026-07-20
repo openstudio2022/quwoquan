@@ -22,10 +22,15 @@ experiments:
   enabled: true
   id: rec_scoring_weights
 - buckets:
+  # S0 冷启动期 LTR 维持 shadow-only（W9/B11 阶段门）：rule 100% 主打，模型分
+  # 经 engine 异步 shadow 常开采样留档（训练样本 + replay 对比证据），不影响
+  # 线上排序。爬坡触发条件（S1）：challenger shadow 样本量达
+  # abAdmission.minSamplesPerBucket 统计功效门槛后，按 promote_gate +
+  # online_guardrail 证据推进 model 桶 20% -> 50% -> 默认；不按时间表强推。
   - name: rule
-    weightPct: 80
+    weightPct: 100
   - name: model
-    weightPct: 20
+    weightPct: 0
   eligibleSegments: []
   enabled: true
   id: rec_model_vs_rule
@@ -129,6 +134,26 @@ intersection:
     maxHopCount: 2
     maxPathNodesPerSurface: 3
     secondarySpreadEnabled: false
+objectCards:
+  # 首页混合对象卡（S0 插卡模式，B4）：实体主页卡由独立召回器产出，按 everyN
+  # 间隔混排进内容流。S0 默认关闭（alpha/gamma 灰度开启验证后再放量）；
+  # user_card/circle_card 为 S1 触发开启（需社交图密度达标）。
+  enabled: false
+  everyN: 8
+  maxCards: 3
+  allowedKinds:
+  - entity_homepage
+recallFusion:
+  # 轻量融合（W9/B10，S0 反过度设计）：policy 权重表 + 源配额，不做 RRF。
+  # sourceQuotaPct 限制单源候选占召回池比例（防单源霸屏）；sourceBoost 做
+  # 源间精排分校准（默认全 1.0 中性起步，运营按 replay 证据调参）。
+  enabled: true
+  sourceQuotaPct:
+    collab_i2i: 15
+    collab_u2i: 15
+    vector_recall: 20
+    explore_recall: 20
+  sourceBoost: {}
 opsIntervention:
   enabled: false
   interventions: []

@@ -2,7 +2,7 @@ aggregate: Conversation
 layer: service_side
 
 description: |
-  云侧契约测试场景（真实 MongoDB + Redis）。
+  Conversation 聚合云侧契约测试场景（真实 MongoDB + Redis）。
   执行：go test ./services/chat-service/...
 
 real_engines:
@@ -13,24 +13,37 @@ spy_targets: [event_publisher]
 mock_targets: [cross_service_clients, push_notification_client]
 
 scenarios:
-  - name: send_message
-    command: SendMessage
+  - name: create_direct_conversation_unique
+    command: CreateConversation
     assertions:
-      - db_message_exists
-      - conversation_last_message_updated
-      - event_MessageSent_published
+      - duplicate_direct_participants_return_existing_conversation
+      - state_receipt_outbox_committed_in_one_transaction
 
-  - name: send_message_rate_limit
-    command: SendMessage > rate limit
+  - name: create_group_conversation_idempotent
+    command: CreateConversation
     assertions:
-      - error_CHAT.USER.rate_limited
+      - same_idempotency_key_replays_first_conversation
+      - different_command_same_key_returns_idempotency_conflict
 
-  - name: mark_messages_read
-    command: MarkRead
+  - name: update_title_governance_and_noop
+    command: UpdateConversationTitle
     assertions:
-      - unread_count_decremented
-      - redis_unread_key_updated
-      - message_home_all_group_direct_unread_filters_reflect_read_state
+      - non_owner_or_admin_rejected_with_group_governance_forbidden
+      - unchanged_title_persists_noop_receipt_without_new_outbox_event
+
+  - name: dissolve_conversation_noop_replay
+    command: DissolveConversation
+    assertions:
+      - owner_only
+      - archived_state_receipt_outbox_same_transaction
+      - repeat_dissolve_replays_original_receipt
+
+  - name: conversation_events_via_outbox
+    command: CreateConversation / UpdateConversationTitle
+    assertions:
+      - events_written_to_conversations_outbox_in_commit_transaction
+      - relay_publishes_and_marks_dispatched
+      - no_direct_goroutine_publish
 
   - name: commercial_message_home_projection
     command: ListMessageHome
@@ -57,3 +70,10 @@ scenarios:
       - source_entity_and_circle_are_projected
       - capabilities_include_album_file_event_member
       - can_dissolve_depends_on_binding_and_role
+
+  - name: inbox_projection_from_outbox
+    command: ListInbox
+    assertions:
+      - message_sent_event_advances_inbox_unread_and_last_message
+      - read_watermark_event_clears_unread
+      - projection_checkpoint_is_replayable

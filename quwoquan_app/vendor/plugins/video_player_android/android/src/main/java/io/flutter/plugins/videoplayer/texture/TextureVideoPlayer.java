@@ -68,7 +68,13 @@ public final class TextureVideoPlayer extends VideoPlayer implements SurfaceProd
       @NonNull MediaItem mediaItem,
       @NonNull VideoPlayerOptions options,
       @NonNull ExoPlayerProvider exoPlayerProvider) {
-    super(events, mediaItem, options, surfaceProducer, exoPlayerProvider);
+    super(
+        events,
+        mediaItem,
+        options,
+        surfaceProducer,
+        exoPlayerProvider,
+        /* rendererMode= */ "texture_view");
 
     surfaceProducer.setCallback(this);
 

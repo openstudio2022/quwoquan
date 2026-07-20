@@ -23,6 +23,7 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	}
 	const videoSlice = "media/video/s/asset/mas_video_001/v3/source.mp4"
 	const coverSlice = "media/video/s/asset/mas_video_001/v3/cover.jpg"
+	const coverDeliveryReference = coverSlice + "?variant=thumb"
 	assets := map[string]MediaAssetBindingSlice{
 		"mas_video_001": {
 			AssetID:                      "mas_video_001",
@@ -49,7 +50,7 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	if post.VideoUrl != videoSlice {
 		t.Fatalf("video URL must be a canonical public slice: %q", post.VideoUrl)
 	}
-	if post.CoverUrl != coverSlice {
+	if post.CoverUrl != coverDeliveryReference {
 		t.Fatalf("cover URL must be the verified VOD cover slice: %q", post.CoverUrl)
 	}
 	items, ok := post.MediaItems.([]map[string]any)
@@ -73,5 +74,60 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	}
 	if _, found := item["unexpected"]; found {
 		t.Fatalf("unapproved client metadata must not survive projection: %#v", item)
+	}
+}
+
+func TestProjectBoundMediaAssetsBindsDraftManualCoverAfterBothAssetsReady(t *testing.T) {
+	post := &postmodel.Post{
+		ContentType: "video",
+		MediaItems: []map[string]any{
+			{
+				"mediaId":       "mas_video_002",
+				"coverAssetId":  "mas_cover_002",
+				"coverStrategy": "manual",
+			},
+		},
+	}
+	const videoSlice = "media/video/s/asset/mas_video_002/v2/source.mp4"
+	const coverSlice = "media/image/s/asset/mas_cover_002/v2/source.jpg"
+	assets := map[string]MediaAssetBindingSlice{
+		"mas_video_002": {
+			AssetID:             "mas_video_002",
+			Ready:               true,
+			ProcessingStatus:    "ready",
+			MediaType:           "video",
+			PublicSliceKey:      videoSlice,
+			VideoPublicSliceKey: videoSlice,
+			VerifiedDurationMs:  8_000,
+			VideoWidth:          1080,
+			VideoHeight:         1920,
+		},
+		"mas_cover_002": {
+			AssetID:          "mas_cover_002",
+			Ready:            true,
+			ProcessingStatus: "ready",
+			MediaType:        "image",
+			PublicSliceKey:   coverSlice,
+		},
+	}
+
+	if err := projectBoundMediaAssets(
+		post,
+		assets,
+		[]string{"mas_video_002", "mas_cover_002"},
+	); err != nil {
+		t.Fatalf("project bound video and manual cover: %v", err)
+	}
+
+	if post.VideoUrl != videoSlice || post.CoverUrl != coverSlice ||
+		post.ThumbnailUrl != coverSlice {
+		t.Fatalf("manual cover did not use canonical image slice: %+v", post)
+	}
+	if len(post.MediaUrls) != 1 || post.MediaUrls[0] != videoSlice {
+		t.Fatalf("cover-only image leaked into post media list: %+v", post.MediaUrls)
+	}
+	items, ok := post.MediaItems.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["coverUrl"] != coverSlice {
+		t.Fatalf("manual cover projection mismatch: %#v", post.MediaItems)
 	}
 }

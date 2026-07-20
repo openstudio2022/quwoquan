@@ -1,0 +1,22 @@
+read_model: FilterCatalogSlice
+description: |
+  App 公开读取的完整 active 滤镜目录。只暴露渲染目录所需字段，
+  不包含 sourceOwner、version、command receipt 或发布审计信息。
+source_entities:
+  - FilterCatalogRelease
+consumers:
+  - app
+client_projection:
+  dart_class: FilterCatalogSnapshot
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart
+fields:
+  - releaseId
+  - canonicalDigest
+  - status
+  - categoryCount
+  - presetCount
+  - categories
+  - presets
+  - recommendedFallbackPresetIds
+  - importedAt
+  - activatedAt

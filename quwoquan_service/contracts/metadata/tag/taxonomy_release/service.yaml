@@ -2,10 +2,13 @@ service:
   name: tag-service
   domain: tag
   owner: taxonomy-platform
-  description: TagTaxonomyRelease 只接受 Data publish Facade 的版本化导入与激活命令。
+  description: |
+    TagTaxonomyRelease 只接受 Data publish Facade 的版本化导入与激活命令。
+    离线导入器（cmd/import）是唯一节点写入口：导入完成后经 Stage 落不可变
+    release 记录（canonicalDigest 幂等），再经 Activate 做单 active CAS 切换。
   commercial_defaults:
     status: blocked
-    block_reason: Data publish Facade、Mongo Store/outbox 与投影 checkpoint 尚未完成生产装配
+    block_reason: internal 命令面向 Data publish 管道；beta/gamma 正式导入 pipeline 证据未取得
     gap_id: TAG_TAXONOMY_RELEASE_WIRING
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
@@ -14,6 +17,8 @@ api_routes:
 
     operation: StageTagTaxonomyRelease
     actor: account
+    commercial:
+      status: ready
     application:
       kind: command
       facet: TagTaxonomyReleaseCommandFacade
@@ -21,15 +26,48 @@ api_routes:
       aggregate_owner: TagTaxonomyRelease
       mutation_target: TagTaxonomyRelease
       invariant_target: TagTaxonomyRelease
-    request_fields: [releaseId, sourceOwner, canonicalDigest, nodeCount, idempotencyKey]
+    authorization:
+      principal: service
+      ownership_policy: internal_publish_plane
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - TAG.USER.release_invalid_argument
+      - TAG.USER.release_idempotency_conflict
+      - TAG.SYSTEM.release_storage_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_taxonomy_release_stage
+      trace: true
+      attributes: [outcome, replayed]
+    slo:
+      latency_p95_ms: 1000
+      availability_percent: 99.9
+    description: |
+      落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/nodeCount）。
+      canonicalDigest 唯一约束承载幂等：同 digest 重复 Stage 返回首次记录。
+    request_fields: [releaseId, sourceOwner, canonicalDigest, nodeCount]
     response_entity: TagTaxonomyRelease
     security:
       auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
   - method: POST
     path: /internal/tag/taxonomy-releases/{releaseId}:activate
 
     operation: ActivateTagTaxonomyRelease
     actor: account
+    commercial:
+      status: ready
     application:
       kind: command
       facet: TagTaxonomyReleaseCommandFacade
@@ -37,7 +75,60 @@ api_routes:
       aggregate_owner: TagTaxonomyRelease
       mutation_target: TagTaxonomyRelease
       invariant_target: TagTaxonomyRelease
-    request_fields: [idempotencyKey]
+    authorization:
+      principal: service
+      ownership_policy: internal_publish_plane
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - TAG.USER.release_not_found
+      - TAG.USER.release_invalid_transition
+      - TAG.USER.release_version_conflict
+      - TAG.USER.release_idempotency_conflict
+      - TAG.SYSTEM.release_storage_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_taxonomy_release_activate
+      trace: true
+      attributes: [outcome, replayed]
+    slo:
+      latency_p95_ms: 1000
+      availability_percent: 99.9
+    description: |
+      激活 staged release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。
+      目标已 active 时按 no-op receipt 重放安全；公开请求不携带版本字段。
     response_entity: TagTaxonomyRelease
     security:
       auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+
+consumers:
+  - name: data-publish-pipeline
+    capabilities: [stage_taxonomy_release, activate_taxonomy_release]
+
+contract_test:
+  mock_strategy:
+    service_side:
+      description: 真实 Mongo 验证 digest 幂等、单 active CAS 切换与状态机
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      scenarios:
+        - name: stage_digest_idempotent
+          route: POST /internal/tag/taxonomy-releases
+          assertions:
+            - "同 canonicalDigest 重复 Stage 返回首次记录，不落第二条"
+        - name: activate_single_active_cas
+          route: POST /internal/tag/taxonomy-releases/{releaseId}:activate
+          assertions:
+            - "激活后旧 active release 变 retired，同一时刻只有一个 active"
+            - "重复激活 no-op 重放安全"

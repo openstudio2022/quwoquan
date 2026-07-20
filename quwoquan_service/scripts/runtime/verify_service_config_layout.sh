@@ -44,6 +44,13 @@ for svc_path in "$services_dir"/*; do
   beta_file="$cfg_root/beta/config.yaml"
   gamma_file="$cfg_root/gamma/config.yaml"
   prod_file="$cfg_root/prod/config.yaml"
+  legacy_file="$cfg_root/config.yaml"
+
+  if [[ -e "$legacy_file" ]]; then
+    echo "[verify] FAIL: $svc retains retired configs/config.yaml; use default + environment config only" >&2
+    failures=$((failures + 1))
+    continue
+  fi
 
   if [[ -f "$default_file" && -f "$alpha_file" && -f "$beta_file" && -f "$gamma_file" && -f "$prod_file" ]]; then
     echo "[verify] OK: $svc config layout complete (default/alpha/beta/gamma/prod)"

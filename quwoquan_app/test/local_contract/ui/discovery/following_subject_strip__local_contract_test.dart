@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
 
 class _FakeFollowingSubjectRepository implements FollowingSubjectRepository {
@@ -37,6 +38,26 @@ class _FakeFollowingSubjectRepository implements FollowingSubjectRepository {
       lastVisitedAt: DateTime(2026).toIso8601String(),
       hasUnreadChanges: false,
     );
+  }
+}
+
+class _FailingFollowingSubjectRepository implements FollowingSubjectRepository {
+  @override
+  Future<List<FollowingSubjectItem>> listFollowingSubjects({
+    String? cursor,
+    int limit = 20,
+    FollowingSubjectType? subjectType,
+  }) {
+    throw StateError('following subject query failed');
+  }
+
+  @override
+  Future<FollowingSubjectVisitResult> markFollowingSubjectVisited({
+    required FollowingSubjectItem subject,
+    DateTime? visitedAt,
+    String? clientRequestId,
+  }) {
+    throw StateError('unreachable');
   }
 }
 
@@ -152,5 +173,24 @@ void main() {
       find.text(UITextConstants.followingSubjectEmptySubtitle),
       findsOneWidget,
     );
+  });
+
+  testWidgets('query failure renders retryable error instead of empty state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          followingSubjectRepositoryProvider.overrideWithValue(
+            _FailingFollowingSubjectRepository(),
+          ),
+        ],
+        child: const CupertinoApp(home: FollowingSubjectStrip(isDark: false)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(UITextConstants.followingSubjectEmptyTitle), findsNothing);
+    expect(find.byType(AppSectionErrorState), findsOneWidget);
   });
 }

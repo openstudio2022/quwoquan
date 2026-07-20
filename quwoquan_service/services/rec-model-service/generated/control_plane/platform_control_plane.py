@@ -46,16 +46,6 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "scopes": [
             "ops.platform.catalog.read"
           ]
-        },
-        {
-          "approval_mode": "dual",
-          "danger_level": "high",
-          "method": "POST",
-          "operation": "UpdatePlaneBinding",
-          "path": "/control-plane/platform/topology/planes/{bindingId}:update",
-          "scopes": [
-            "ops.platform.catalog.write"
-          ]
         }
       ],
       "risk_level": "high",
@@ -63,9 +53,28 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "view_model": "PlaneBinding"
     },
     {
+      "deployment_profile": "audit_heavy",
+      "label": "领域接入状态",
+      "object_kind": "snapshot",
+      "object_type": "onboarding_domain",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListOnboardingDomains",
+          "path": "/control-plane/platform/onboarding/domains",
+          "scopes": [
+            "ops.platform.catalog.read"
+          ]
+        }
+      ],
+      "risk_level": "low",
+      "source_entity": "DomainOnboarding",
+      "view_model": "DomainOnboardingStatus"
+    },
+    {
       "analytics_views": [
         {
-          "drilldown_route_id": "/platform/config/layers",
+          "drilldown_route_id": "/platform/config/drift",
           "view_id": "config-risk-overview",
           "widget_types": [
             "risk_distribution",
@@ -74,8 +83,8 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         }
       ],
       "deployment_profile": "latency_sensitive",
-      "label": "服务配置",
-      "object_kind": "policy",
+      "label": "配置只读快照（IaC）",
+      "object_kind": "snapshot",
       "object_type": "service_config",
       "operations": [
         {
@@ -88,37 +97,6 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
-          "approval_mode": "single",
-          "contract_operation_id": "ops.config_layer.UpdateServiceConfig",
-          "danger_level": "high",
-          "method": "POST",
-          "operation": "UpdateServiceConfig",
-          "path": "/control-plane/platform/configs/{configKey}:update",
-          "scopes": [
-            "ops.platform.config.write"
-          ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "RuntimeConfig",
-      "view_model": "ServiceConfig"
-    },
-    {
-      "deployment_profile": "latency_sensitive",
-      "label": "配置层值",
-      "object_kind": "policy",
-      "object_type": "config_layer_value",
-      "operations": [
-        {
-          "contract_operation_id": "ops.config_layer.ListConfigLayers",
-          "method": "GET",
-          "operation": "ListConfigLayers",
-          "path": "/control-plane/platform/configs/layers",
-          "scopes": [
-            "ops.platform.config.read"
-          ]
-        },
-        {
           "contract_operation_id": "ops.config_layer.ResolveEffectiveConfig",
           "method": "GET",
           "operation": "ResolveEffectiveConfig",
@@ -126,30 +104,29 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           "scopes": [
             "ops.platform.config.read"
           ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "ConfigLayer",
-      "view_model": "ConfigLayerValue"
-    },
-    {
-      "deployment_profile": "batch_heavy",
-      "label": "配置包",
-      "object_kind": "release",
-      "object_type": "config_package",
-      "operations": [
+        },
         {
+          "contract_operation_id": "ops.config_layer.GetConfigSnapshot",
           "method": "GET",
-          "operation": "ListConfigPackages",
-          "path": "/control-plane/platform/configs/packages",
+          "operation": "GetConfigSnapshot",
+          "path": "/control-plane/platform/configs/snapshot",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        },
+        {
+          "contract_operation_id": "ops.config_layer.ListConfigDomains",
+          "method": "GET",
+          "operation": "ListConfigDomains",
+          "path": "/control-plane/platform/configs/domains",
           "scopes": [
             "ops.platform.config.read"
           ]
         }
       ],
-      "risk_level": "critical",
-      "source_entity": "ConfigPackage",
-      "view_model": "ConfigPackage"
+      "risk_level": "high",
+      "source_entity": "ConfigSnapshot",
+      "view_model": "ConfigSnapshotView"
     },
     {
       "deployment_profile": "audit_heavy",
@@ -179,54 +156,6 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "view_model": "ConfigInstanceReport"
     },
     {
-      "deployment_profile": "latency_sensitive",
-      "label": "治理策略模板",
-      "object_kind": "policy",
-      "object_type": "governance_policy_template",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListGovernancePolicyTemplates",
-          "path": "/control-plane/platform/governance/templates",
-          "scopes": [
-            "ops.platform.governance.read"
-          ]
-        }
-      ],
-      "risk_level": "medium",
-      "source_entity": "GovernancePolicy",
-      "view_model": "GovernancePolicyTemplate"
-    },
-    {
-      "deployment_profile": "latency_sensitive",
-      "label": "治理策略绑定",
-      "object_kind": "policy",
-      "object_type": "governance_policy_binding",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListGovernancePolicyBindings",
-          "path": "/control-plane/platform/governance/bindings",
-          "scopes": [
-            "ops.platform.governance.read"
-          ]
-        },
-        {
-          "approval_mode": "single",
-          "danger_level": "high",
-          "method": "POST",
-          "operation": "UpdateGovernancePolicyBinding",
-          "path": "/control-plane/platform/governance/bindings/{bindingId}:update",
-          "scopes": [
-            "ops.platform.governance.write"
-          ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "GovernancePolicyBinding",
-      "view_model": "GovernancePolicyBinding"
-    },
-    {
       "analytics_views": [
         {
           "drilldown_route_id": "/platform/rollout",
@@ -252,23 +181,11 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
-          "approval_mode": "dual",
-          "danger_level": "critical",
-          "method": "POST",
-          "operation": "ApplyConfigRelease",
-          "path": "/control-plane/platform/releases/{releaseId}:apply",
+          "method": "GET",
+          "operation": "GetGrayRoutingPolicy",
+          "path": "/control-plane/platform/rollout/routing-policy",
           "scopes": [
-            "ops.platform.rollout.write"
-          ]
-        },
-        {
-          "approval_mode": "dual",
-          "danger_level": "critical",
-          "method": "POST",
-          "operation": "RollbackConfigRelease",
-          "path": "/control-plane/platform/releases/{releaseId}:rollback",
-          "scopes": [
-            "ops.platform.rollout.write"
+            "ops.platform.rollout.read"
           ]
         }
       ],
@@ -353,176 +270,84 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "view_model": "RuntimeInstance"
     },
     {
-      "deployment_profile": "audit_heavy",
-      "label": "依赖画像",
-      "object_kind": "snapshot",
-      "object_type": "dependency_profile",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListDependencyProfiles",
-          "path": "/control-plane/platform/topology/dependencies",
-          "scopes": [
-            "ops.platform.dependency.read"
-          ]
-        }
-      ],
-      "risk_level": "medium",
-      "source_entity": "DependencyProfile",
-      "view_model": "DependencyProfile"
-    },
-    {
-      "deployment_profile": "batch_heavy",
-      "label": "容量画像",
-      "object_kind": "snapshot",
-      "object_type": "capacity_profile",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListCapacityProfiles",
-          "path": "/control-plane/platform/topology/capacity",
-          "scopes": [
-            "ops.platform.dependency.read"
-          ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "CapacityProfile",
-      "view_model": "CapacityProfile"
-    },
-    {
       "deployment_profile": "latency_sensitive",
-      "label": "SLO 策略",
-      "object_kind": "policy",
-      "object_type": "slo_policy",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListSLOPolicies",
-          "path": "/control-plane/platform/observability/slos",
-          "scopes": [
-            "ops.platform.observability.read"
-          ]
-        }
-      ],
-      "risk_level": "medium",
-      "source_entity": "SLOPolicy",
-      "view_model": "SLOPolicy"
-    },
-    {
-      "deployment_profile": "latency_sensitive",
-      "label": "告警模板",
-      "object_kind": "policy",
-      "object_type": "alert_template",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListAlertTemplates",
-          "path": "/control-plane/platform/observability/alerts",
-          "scopes": [
-            "ops.platform.observability.read"
-          ]
-        }
-      ],
-      "risk_level": "medium",
-      "source_entity": "AlertTemplate",
-      "view_model": "AlertTemplate"
-    },
-    {
-      "deployment_profile": "audit_heavy",
-      "label": "仪表盘卡片",
-      "object_kind": "dashboard",
-      "object_type": "dashboard_card",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListDashboardCards",
-          "path": "/control-plane/platform/observability/dashboards/cards",
-          "scopes": [
-            "ops.platform.observability.read"
-          ]
-        }
-      ],
-      "risk_level": "low",
-      "source_entity": "DashboardCard",
-      "view_model": "DashboardCard"
-    },
-    {
-      "deployment_profile": "batch_heavy",
-      "label": "Runbook",
+      "label": "活动告警",
       "object_kind": "workflow_case",
-      "object_type": "runbook",
+      "object_type": "active_alert",
       "operations": [
         {
-          "method": "GET",
-          "operation": "ListRunbooks",
-          "path": "/control-plane/platform/runbooks",
+          "method": "POST",
+          "operation": "IngestAlertmanagerWebhook",
+          "path": "/control-plane/platform/alerts/ingest",
           "scopes": [
-            "ops.platform.runbook.read"
+            "ops.platform.observability.write"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "ListActiveAlerts",
+          "path": "/control-plane/platform/alerts/active",
+          "scopes": [
+            "ops.platform.observability.read"
           ]
         },
         {
           "approval_mode": "single",
           "danger_level": "medium",
           "method": "POST",
-          "operation": "RunDrill",
-          "path": "/control-plane/platform/runbooks/{runbookId}:runDrill",
+          "operation": "AcknowledgeAlert",
+          "path": "/control-plane/platform/alerts/{fingerprint}:ack",
           "scopes": [
-            "ops.platform.runbook.write"
+            "ops.platform.observability.write"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "AlertTemplate",
+      "view_model": "ActiveAlert"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "平台控制面审计与处置投影",
+      "object_kind": "audit",
+      "object_type": "platform_control_plane_journal",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListPlatformAudits",
+          "path": "/control-plane/platform/audits",
+          "scopes": [
+            "ops.platform.rollout.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "ListPlatformApprovals",
+          "path": "/control-plane/platform/approvals",
+          "scopes": [
+            "ops.platform.rollout.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetPlatformProjectionSummary",
+          "path": "/control-plane/platform/projections/summary",
+          "scopes": [
+            "ops.platform.observability.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "GetPlatformTriageSummary",
+          "path": "/control-plane/platform/triage/summary",
+          "scopes": [
+            "ops.platform.observability.read"
           ]
         }
       ],
       "risk_level": "medium",
-      "source_entity": "Runbook",
-      "view_model": "Runbook"
-    },
-    {
-      "deployment_profile": "latency_sensitive",
-      "label": "门禁规则",
-      "object_kind": "policy",
-      "object_type": "gate_rule",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListGateRules",
-          "path": "/control-plane/platform/gates",
-          "scopes": [
-            "ops.platform.gate.read"
-          ]
-        },
-        {
-          "approval_mode": "dual",
-          "danger_level": "high",
-          "method": "POST",
-          "operation": "OverrideGateRule",
-          "path": "/control-plane/platform/gates/{gateId}:override",
-          "scopes": [
-            "ops.platform.gate.write"
-          ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "GateRule",
-      "view_model": "GateRule"
-    },
-    {
-      "deployment_profile": "audit_heavy",
-      "label": "Prod 平面访问隔离映射",
-      "object_kind": "snapshot",
-      "object_type": "prod_plane_access_isolation",
-      "operations": [
-        {
-          "method": "GET",
-          "operation": "ListProdPlaneAccessIsolation",
-          "path": "/control-plane/platform/topology/prod-plane-access-isolation",
-          "scopes": [
-            "ops.platform.dependency.read"
-          ]
-        }
-      ],
-      "risk_level": "high",
-      "source_entity": "ProdPlaneAccessIsolation",
-      "view_model": "ProdPlaneAccessIsolation"
+      "source_entity": "ControlPlaneJournal",
+      "view_model": "PlatformControlPlaneJournal"
     }
   ],
   "plane": "platform-control-plane"

@@ -3,7 +3,8 @@ layer: e2e
 
 description: |
   端云集成测试场景。app → gateway → content-service → MongoDB/Redis 全链路。
-  执行环境：staging。
+  执行环境：gamma；业务对象只由环境 seed manifest 预置，测试禁止调用退役
+  POST /content/posts 自建数据。
   CI 策略：advisory（不阻塞 PR 合入，但发布前必须全绿）。
 
   # 分层说明
@@ -12,7 +13,7 @@ description: |
   # 两类场景在同一文件声明，由 CI pipeline 按 test_type 路由到不同执行器。
 
 execution:
-  environment: staging
+  environment: gamma
   ci_strategy: advisory
   trigger: daily + pre-release
   runners:
@@ -110,6 +111,8 @@ scenarios:
     description: 帖子不存在错误 → 端侧空状态 Widget 正确渲染
     test_type: ui_journey
     patrol_flow: test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart
+    status: partial
+    block_reason: 现有 Patrol 只守护首页壳；待可控 404 seed/route 注入后补真实 post_not_found 页面断言
     # 补充 L3 error_state_displayed_correctly 中无法通过 HTTP 验证的 UI 渲染层
     actors:
       app: lib/ui/content/pages/work_browser_entry_page.dart

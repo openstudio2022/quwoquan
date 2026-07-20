@@ -18,9 +18,9 @@ type UserRelationshipGate struct {
 }
 
 type relationshipCapabilityResponse struct {
-	IsMutual      bool `json:"isMutual"`
-	IsBlocked     bool `json:"isBlocked"`
-	IsBlockedBy   bool `json:"isBlockedBy"`
+	IsMutual      bool   `json:"isMutual"`
+	IsBlocked     bool   `json:"isBlocked"`
+	IsBlockedBy   bool   `json:"isBlockedBy"`
 	RelationState string `json:"relationState"`
 }
 

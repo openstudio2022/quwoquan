@@ -1,51 +1,28 @@
-import 'dart:io';
-
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-File _repoFile(String path) {
-  final direct = File(path);
-  if (direct.existsSync()) {
-    return direct;
-  }
-  return File('../$path');
-}
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/user/pages/phone_contacts_page.dart';
 
 void main() {
-  test('addContactPhone page coverage evidence is declared', () {
-    const surfaceId = 'addContactPhone';
-    const owner = 'user';
-    const routeId = 'addContactPhone';
-    const sourceEvidence = <String>[
-    'quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart',
-    'quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart',
-  ];
-    const apiEvidence = <String>[
-    'quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go',
-    'quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go',
-  ];
-    const requiredCaseIds = <String>[
-    'user_acceptance.page.addContactPhone.load_success',
-    'user_acceptance.page.addContactPhone.empty_permission_error',
-    'user_acceptance.page.addContactPhone.primary_cta',
-    'user_acceptance.page.addContactPhone.trace_context',
-    'user_acceptance.page.addContactPhone.request_wait_recovery',
-  ];
+  testWidgets('通讯录页真实呈现能力不可用终态且不请求系统权限', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
+        ],
+        child: const CupertinoApp(home: PhoneContactsPage()),
+      ),
+    );
+    await tester.pump();
 
-    expect(surfaceId, isNotEmpty);
-    expect(owner, isNotEmpty);
-    expect(routeId, isNotEmpty);
-    expect(sourceEvidence, isNotEmpty);
-    expect(apiEvidence, isNotEmpty);
-    expect(requiredCaseIds, containsAll(<String>[
-      'user_acceptance.page.$surfaceId.load_success',
-      'user_acceptance.page.$surfaceId.empty_permission_error',
-      'user_acceptance.page.$surfaceId.primary_cta',
-      'user_acceptance.page.$surfaceId.trace_context',
-      'user_acceptance.page.$surfaceId.request_wait_recovery',
-    ]));
-
-    for (final path in <String>[...sourceEvidence, ...apiEvidence]) {
-      expect(_repoFile(path).existsSync(), isTrue, reason: path);
-    }
+    expect(
+      find.text(UITextConstants.addContactPhoneEntryTitle),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.phoneContactsUnavailable), findsOneWidget);
+    expect(find.text(UITextConstants.phoneContactsPermissionCta), findsNothing);
   });
 }

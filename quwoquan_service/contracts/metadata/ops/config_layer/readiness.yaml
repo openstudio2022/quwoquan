@@ -1,0 +1,25 @@
+object: ConfigSnapshot
+operations:
+  - ListServiceConfigs
+  - ResolveEffectiveConfig
+  - GetConfigSnapshot
+  - ListConfigDomains
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer/facade.go
+  store: []
+  outbox: []
+  transport:
+    - quwoquan_service/services/platform-ops-service/internal/adapters/http/config_layer/handler.go
+  reader:
+    - quwoquan_service/services/platform-ops-service/internal/application/platform_ops/config_layer/snapshot_source.go
+  app_client: []
+  page:
+    - quwoquan_ops/portal/src/domains/platform/PlatformConfigPage.tsx
+tests:
+  local_contract:
+    - quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
+  api_integration:
+    - quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
+  user_acceptance: []
+environments: []

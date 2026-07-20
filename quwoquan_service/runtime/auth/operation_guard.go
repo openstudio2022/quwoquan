@@ -293,7 +293,7 @@ func authorizeGeneratedOperation(
 			writeOperationRequestError(
 				w,
 				r,
-				"quoted positive If-Match aggregate version is required",
+				"quoted non-negative If-Match aggregate version is required",
 			)
 			return
 		}
@@ -330,12 +330,19 @@ func authorizeGeneratedOperation(
 	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
+// validIfMatchVersion 校验带引号的非负十进制聚合版本。
+// `"0"` 表示「期望目标尚不存在」（首次创建，如 ConfigLayer 的 lazy create）；
+// 正整数表示快照覆盖所基于的版本。是否允许 0 由各对象 handler 按语义收紧
+// （如 UpdateExperimentRollout 要求 >0）。
 func validIfMatchVersion(value string) bool {
 	if len(value) < 3 || value[0] != '"' || value[len(value)-1] != '"' {
 		return false
 	}
 	digits := value[1 : len(value)-1]
-	if digits == "" || digits[0] == '0' {
+	if digits == "" {
+		return false
+	}
+	if digits != "0" && digits[0] == '0' {
 		return false
 	}
 	for _, digit := range digits {

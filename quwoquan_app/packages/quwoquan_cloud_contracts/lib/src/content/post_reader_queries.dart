@@ -85,6 +85,8 @@ ContentPostDetailSlice decodeContentPostDetailSlice(Object? response) {
     entityMentions: _decodeEntityMentions(root['entityMentions']),
     coverUrl: _optionalText(root['coverUrl']),
     tagRefs: _optionalStringList(root['tagRefs'], 'tagRefs'),
+    status: _requiredText(root['status'], 'status'),
+    moderationStatus: _optionalText(root['moderationStatus']),
     visibility: _optionalText(root['visibility']),
   );
 }
@@ -124,6 +126,12 @@ ContentAuthorPostPageSlice decodeContentAuthorPostPageSlice(Object? response) {
   );
 }
 
+ContentPostProjection decodeContentPostProjection(Object? response) {
+  return _decodeContentPostProjection(
+    _expectObject(response, 'Content post projection'),
+  );
+}
+
 ContentPostProjection _decodeContentPostProjection(Map<Object?, Object?> item) {
   final rawReasons = item['intersectionReasons'];
   return ContentPostProjection(
@@ -147,6 +155,8 @@ ContentPostProjection _decodeContentPostProjection(Map<Object?, Object?> item) {
     body: _optionalText(item['body']),
     summary: _optionalText(item['summary']),
     coverUrl: _optionalText(item['coverUrl']),
+    articleTemplate: _optionalText(item['articleTemplate']),
+    articleFontPreset: _optionalText(item['articleFontPreset']),
     imageUrls:
         _optionalStringList(item['imageUrls'], 'content post image URLs') ??
         const <String>[],

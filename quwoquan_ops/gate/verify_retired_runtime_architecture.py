@@ -291,7 +291,12 @@ def collect_issues(root: Path = ROOT) -> list[str]:
 
     for path in _active_instruction_files(root):
         relative = _relative(path, root)
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except FileNotFoundError:
+            # 并行批次可能在扫描 glob 与读取之间原子迁移/删除文档；消失的文件
+            # 不构成“退役节点恢复”，下一轮扫描会以最新磁盘集合重新判定。
+            continue
         issues.extend(scan_instruction_text(relative, text))
 
     for relative, tokens in REQUIRED_TOKENS.items():

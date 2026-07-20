@@ -1,0 +1,81 @@
+id: CR-20260720-129-assistant-conversation-lifecycle-closure
+title: 小趣会话生命周期商用收口（查询面 + 取消 + 历史抽屉 + 本地双模型删除）
+slug: assistant-conversation-lifecycle-closure
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/assistant-run-learning/run-stream-policy
+  - specs/feature-tree/assistant-run-learning/assistant-runtime-foundation
+  - specs/feature-tree/runtime/runtime-assistant
+
+entries:
+  - timestamp: "2026-07-20T15:30:00+08:00"
+    summary: |
+      按「小趣助手商用化规划」阶段 0/1/5 收口会话生命周期（R-ASSIST-001）：
+
+      规格与树：补建 journey_scenario_registry 引用但磁盘缺失的 4 个 story
+      （runtime-assistant/context-grounded-answering、assistant-mentioned-consumer、
+      proactive-subscription-delivery；chat-conversation/.../assistant-in-conversation），
+      既有测试回填 recorded 证据；收敛 4 个 design 占位（L1 assistant-run-learning、
+      run-stream-policy、learning-event-feedback-injection、profile-proposal-apply-loop）；
+      backlog 登记 R-ASSIST-001~004。
+
+      metadata：新增 ListAssistantConversations（owner keyset 分页）、
+      ListConversationTurns（终态轮次摘要分页）、CancelAssistantRun（幂等取消）
+      三个 operation 与 AssistantConversationListView / AssistantTurnSummaryView /
+      AssistantTurnListView 实体；readiness/ui_surfaces（personalAssistantDialog、
+      assistantHistory、assistantSkills）/page_object_contract 同步；
+      commercial validate + 全仓 codegen（Go/Dart）通过。
+
+      服务端：ConversationRunStore 补 ListConversations/ListTurns keyset 分页
+      （Mongo + Memory 同契约）；CancelRun 命令 = Store running→cancelled CAS +
+      进程内 cancel registry 中断 agent loop；run 状态机补 cancelled 终态，
+      SSE 补 assistant.turn.cancelled 事件与终态重放；三条新 HTTP 路由。
+      商用指标 emit：assistant_first_visible_response_ms histogram、
+      assistant_grounding_total counter 对、投递目的地防错发校验 +
+      assistant_wrong_destination_incidents_total。
+
+      端侧：Facet 扩 3 方法（8 方法上限内）+ Remote 实现；删除本地会话双模型
+      （AssistantSessionManager/Store/projection/summary/transcript service、
+      assistant_session_wire、recent_dialogue_rounds、gateway_ui_views 共 10 文件），
+      历史恢复改 CloudAssistantHistoryLoader（云端查询面唯一数据源，历史绑定
+      conversationId 供续聊）；对话页新增历史抽屉（AppBottomModalSurface +
+      conversation sheet 语义，manifest 登记）、停止生成按钮、重新生成接线
+      （regenerated 学习事实上报）；技能中心「最近会话」改云端会话列表且可点击续聊；
+      controller 新增 switchConversation/startNewConversation/stopGeneration/
+      regenerateLastAnswer 与 cancelled 事件投影。
+
+      观测：quwoquan_alerts.yaml 落地 spec 声明的 4 条业务告警
+      （DLQ/grounding/首响 p95/wrong-destination）+ grounding success rate
+      recording rule（promtool 140 规则通过）；event_catalog 登记
+      assistant_turn_quality 事件（turnAction 枚举）。
+
+      测试：服务端 conversation_lifecycle local_contract 5 用例 +
+      api_integration 生命周期用例（真实 Mongo：分页/终态过滤/cancel CAS/
+      重启后读取）全绿；端侧 stream controller 合同扩至 24 用例全绿
+      （stop/cancelled 投影/switch/new/regenerate/历史绑定）；
+      history UAT 与 skill center 测试重写为云端数据源驱动。
+    verification:
+      - cd quwoquan_service && go test ./services/assistant-service/internal/application/ -count=1
+      - cd quwoquan_service && go test ./services/assistant-service/tests/api_integration/ -count=1 -run TestAssistantConversationLifecycleQueryAndCancel
+      - cd quwoquan_app && flutter test test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart --dart-define=APP_RUNTIME_ENV=alpha
+      - promtool check rules quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+    remaining:
+      - assistant_turn_quality 端侧 reporter 接线与 first_answer/stream_failure 打点（随 token 级流式一并）
+      - token 级流式与 SSE 断线续传（R-ASSIST-004，依赖模型网关 stream 能力验证）
+      - 假工具收敛与 CreationSuggestGrounding（R-ASSIST-002，阶段 2）
+      - stream 事件双命名（final_answer vs assistant.answer.final）与技能状态/分类/反馈
+        类型 wire 字符串的 codegen 枚举收敛（阶段 4；涉及 schema 枚举正式化与
+        服务端/mock/端侧三方一致，须独立轮次）
+      - commercial_defaults blocked 解除待 generated transport 生产装配完成
+        （block_reason 未全部满足，本轮诚实保持 blocked）
+      - gamma api_integration / Patrol 真机 / prod gray 证据（阶段 6）
+  - timestamp: "2026-07-20T16:10:00+08:00"
+    summary: |
+      阶段 2 增量：模型请求/响应日志按 log_policy metadata_only 脱敏——
+      emitAssistantModel{Request,Response,Error}Log 默认只输出长度 + sha256 摘要 +
+      耗时元信息，全文 dump 需显式 ASSISTANT_MODEL_DEBUG_LOG=true（装配层 env
+      调试开关，先例 ALLOW_DETERMINISTIC_BETA）；cmd/api 测试绿。

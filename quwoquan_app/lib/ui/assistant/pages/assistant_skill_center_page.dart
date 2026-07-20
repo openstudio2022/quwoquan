@@ -1,19 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart';
 
 part 'assistant_skill_center_models.dart';
+part 'assistant_skill_center_sections.dart';
 
-// settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
+// settings-canonical-exception: Skill Center 能力仪表板布局 CR-20260719-122
 
 /// Skill Center 仪表板（能力入口与统计）
 ///
@@ -35,27 +42,28 @@ class AssistantSkillCenterPage extends ConsumerStatefulWidget {
 
 class _AssistantSkillCenterPageState
     extends ConsumerState<AssistantSkillCenterPage> {
-  bool _simpleMode = false;
+  static const int _recentSessionPreviewLimit = 3;
+
   bool _updating = false;
-  bool _loadingSessions = false;
-  bool _lowRiskAutoRun = true;
-  bool _mediumRiskNeedConfirm = true;
-  bool _highRiskNeedDoubleConfirm = true;
-
-  final Map<String, bool> _sceneGates = <String, bool>{
-    'discovery': true,
-    'circle': true,
-    'chat': true,
-    'system': true,
-  };
-
-  List<AssistantLocalSessionSummaryView> _recentSessions =
-      const <AssistantLocalSessionSummaryView>[];
+  bool _recentSessionsExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadRecentSessions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.embedded) {
+        return;
+      }
+      // 页面曝光（R20）：与既有 skill_center_action 事件同一 pageAccess 通道。
+      unawaited(
+        writeAppPageAccessOpen(
+          location: AppRoutePaths.assistantSkills,
+          pageVisitId: AppTraceContextStore.instance.newPageVisitId(),
+          visitRecorder: ref.read(visitRecorderServiceProvider),
+          telemetryReporter: ref.read(appTelemetryReporterProvider),
+        ),
+      );
+    });
   }
 
   @override
@@ -79,111 +87,96 @@ class _AssistantSkillCenterPageState
       ColorType.backgroundSecondary,
     );
     final skillsAsync = ref.watch(assistantSkillCenterProvider);
+    final tasksAsync = ref.watch(assistantScheduleTasksProvider);
+    final sessionsAsync = ref.watch(assistantRecentSessionsProvider);
 
     final content = Stack(
       children: [
         SafeArea(
           child: CustomScrollView(
             slivers: [
-              CupertinoSliverRefreshControl(
-                onRefresh: () async {
-                  ref.invalidate(assistantSkillCenterProvider);
-                  await _loadRecentSessions();
-                },
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.containerMd),
-                  child: _buildDefaultSubscriptionCard(
-                    l10n: l10n,
-                    blockBg: blockBg,
-                    fgPrimary: fgPrimary,
-                    fgSecondary: fgSecondary,
-                  ),
-                ),
-              ),
+              CupertinoSliverRefreshControl(onRefresh: _refreshAllSections),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: AppSpacing.containerMd,
+                    vertical: AppSpacing.interGroupMd,
                   ),
-                  child: skillsAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Center(child: CupertinoActivityIndicator()),
-                    ),
-                    error: (error, _) => Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppSpacing.interGroupMd,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTasksSection(
+                        tasksAsync: tasksAsync,
+                        fgPrimary: fgPrimary,
+                        fgSecondary: fgSecondary,
+                        blockBg: blockBg,
                       ),
-                      child: AppSectionErrorCard(
-                        semantic: runtimeErrorSemantic(
-                          context,
-                          error: error,
-                          category: UiErrorCategory.sectionLoad,
-                          scope: UiErrorScope.section,
-                        ),
-                        onAction: (action) async {
-                          if (action.type == UiErrorActionType.retry ||
-                              action.type == UiErrorActionType.resubmit) {
-                            ref.invalidate(assistantSkillCenterProvider);
-                            await _loadRecentSessions();
-                          }
-                        },
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildSessionsSection(
+                        l10n: l10n,
+                        sessionsAsync: sessionsAsync,
+                        fgPrimary: fgPrimary,
+                        fgSecondary: fgSecondary,
+                        blockBg: blockBg,
                       ),
-                    ),
-                    data: (skills) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildPackageSection(
-                          l10n: l10n,
-                          skills: skills,
-                          fgPrimary: fgPrimary,
-                          fgSecondary: fgSecondary,
-                          blockBg: blockBg,
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
-                        _buildRiskPolicySection(
-                          l10n: l10n,
-                          fgPrimary: fgPrimary,
-                          fgSecondary: fgSecondary,
-                          blockBg: blockBg,
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
-                        _buildSceneGatesSection(
-                          l10n: l10n,
-                          fgPrimary: fgPrimary,
-                          fgSecondary: fgSecondary,
-                          blockBg: blockBg,
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
-                        _buildSessionsSection(
-                          l10n: l10n,
-                          fgPrimary: fgPrimary,
-                          fgSecondary: fgSecondary,
-                          blockBg: blockBg,
-                        ),
-                        SizedBox(height: AppSpacing.interGroupMd),
-                        Text(
-                          l10n.assistantSkillCenterAllSkillsTitle,
-                          style: TextStyle(
-                            fontSize: AppTypography.base,
-                            fontWeight: AppTypography.semiBold,
-                            color: fgPrimary,
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      skillsAsync.when(
+                        loading: () => Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.buttonHeight,
+                          ),
+                          child: const Center(
+                            child: CupertinoActivityIndicator(),
                           ),
                         ),
-                        SizedBox(height: AppSpacing.intraGroupSm),
-                        ...skills.map(
-                          (skill) => _buildSkillRow(
-                            skill: skill,
-                            fgPrimary: fgPrimary,
-                            fgSecondary: fgSecondary,
-                            blockBg: blockBg,
+                        error: (error, _) => AppSectionErrorCard(
+                          margin: EdgeInsets.zero,
+                          semantic: runtimeErrorSemantic(
+                            context,
+                            error: error,
+                            category: UiErrorCategory.sectionLoad,
+                            scope: UiErrorScope.section,
                           ),
+                          onAction: (action) async {
+                            if (action.type == UiErrorActionType.retry ||
+                                action.type == UiErrorActionType.resubmit) {
+                              ref.invalidate(assistantSkillCenterProvider);
+                            }
+                          },
                         ),
-                        SizedBox(height: AppSpacing.interGroupLg),
-                      ],
-                    ),
+                        data: (skills) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildPackageSection(
+                              l10n: l10n,
+                              skills: skills,
+                              fgPrimary: fgPrimary,
+                              fgSecondary: fgSecondary,
+                              blockBg: blockBg,
+                            ),
+                            SizedBox(height: AppSpacing.interGroupMd),
+                            Text(
+                              l10n.assistantSkillCenterAllSkillsTitle,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                fontWeight: AppTypography.semiBold,
+                                color: fgPrimary,
+                              ),
+                            ),
+                            SizedBox(height: AppSpacing.intraGroupSm),
+                            ...skills.map(
+                              (skill) => _buildSkillRow(
+                                skill: skill,
+                                fgPrimary: fgPrimary,
+                                fgSecondary: fgSecondary,
+                                blockBg: blockBg,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.interGroupLg),
+                    ],
                   ),
                 ),
               ),
@@ -220,487 +213,23 @@ class _AssistantSkillCenterPageState
     );
   }
 
-  Widget _buildDefaultSubscriptionCard({
-    required AppLocalizations l10n,
-    required Color blockBg,
-    required Color fgPrimary,
-    required Color fgSecondary,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                CupertinoIcons.sparkles,
-                size: AppSpacing.iconSmall,
-                color: AppColors.assistantMarkColor,
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Text(
-                l10n.assistantSkillCenterDefaultAllSubscribedTitle,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  fontWeight: AppTypography.semiBold,
-                  color: fgPrimary,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          Text(
-            l10n.assistantSkillCenterDefaultAllSubscribedDesc,
-            style: TextStyle(
-              fontSize: AppTypography.sm,
-              color: fgSecondary,
-              height: AppTypography.bodyLineHeight,
-            ),
-          ),
-          SizedBox(height: AppSpacing.interGroupSm),
-          Row(
-            children: [
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _enableAllSkills,
-                child: Text(
-                  l10n.assistantSkillCenterRestoreDefaultAll,
-                  style: TextStyle(
-                    color: AppColors.primaryColor,
-                    fontSize: AppTypography.sm,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                l10n.assistantSkillCenterSimpleMode,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: fgSecondary,
-                ),
-              ),
-              CupertinoSwitch(
-                value: _simpleMode,
-                activeTrackColor:
-                    SettingsSemanticConstants.switchActiveTrackColor,
-                onChanged: (value) {
-                  setState(() => _simpleMode = value);
-                  unawaited(_logSkillCenterSimpleMode(value));
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPackageSection({
-    required AppLocalizations l10n,
-    required List<AssistantSkillCenterItem> skills,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blockBg,
-  }) {
-    final packages = <String, List<AssistantSkillCenterItem>>{
-      l10n.assistantSkillCenterPackageLife: skills
-          .where((s) => _packageOf(s) == 'life')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageWork: skills
-          .where((s) => _packageOf(s) == 'work')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageKnowledge: skills
-          .where((s) => _packageOf(s) == 'knowledge')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageCompanion: skills
-          .where((s) => _packageOf(s) == 'companion')
-          .toList(growable: false),
-    };
-
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.assistantSkillCenterPackagesTitle,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.semiBold,
-              color: fgPrimary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          ...packages.entries.map((entry) {
-            final list = entry.value;
-            final enabled = list.isNotEmpty && list.every((s) => s.enabled);
-            return _buildSwitchRow(
-              label: entry.key,
-              desc: list.isEmpty
-                  ? l10n.assistantSkillCenterNoMappedSkills
-                  : l10n.assistantSkillCenterContainsCount(list.length),
-              value: enabled,
-              onChanged: list.isEmpty ? (_) {} : (v) => _togglePackage(list, v),
-              fgPrimary: fgPrimary,
-              fgSecondary: fgSecondary,
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRiskPolicySection({
-    required AppLocalizations l10n,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blockBg,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.assistantSkillCenterRiskPolicyTitle,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.semiBold,
-              color: fgPrimary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterLowRiskAuto,
-            desc: l10n.assistantSkillCenterLowRiskDesc,
-            value: _lowRiskAutoRun,
-            onChanged: (value) => setState(() => _lowRiskAutoRun = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterMediumRiskConfirm,
-            desc: l10n.assistantSkillCenterMediumRiskDesc,
-            value: _mediumRiskNeedConfirm,
-            onChanged: (value) =>
-                setState(() => _mediumRiskNeedConfirm = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterHighRiskDoubleConfirm,
-            desc: l10n.assistantSkillCenterHighRiskDesc,
-            value: _highRiskNeedDoubleConfirm,
-            onChanged: (value) async {
-              if (!value) {
-                await showAppCupertinoDialog<void>(
-                  context: context,
-                  builder: (context) => CupertinoAlertDialog(
-                    title: Text(l10n.cancel),
-                    content: Text(l10n.assistantSkillCenterHighRiskRequired),
-                    actions: [
-                      CupertinoDialogAction(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(l10n.confirm),
-                      ),
-                    ],
-                  ),
-                );
-                return;
-              }
-              setState(() => _highRiskNeedDoubleConfirm = value);
-            },
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSceneGatesSection({
-    required AppLocalizations l10n,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blockBg,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.assistantSkillCenterSceneGateTitle,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.semiBold,
-              color: fgPrimary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterSceneDiscovery,
-            desc: l10n.assistantSkillCenterSceneDiscoveryDesc,
-            value: _sceneGates['discovery'] ?? false,
-            onChanged: (value) =>
-                setState(() => _sceneGates['discovery'] = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterSceneCircle,
-            desc: l10n.assistantSkillCenterSceneCircleDesc,
-            value: _sceneGates['circle'] ?? false,
-            onChanged: (value) => setState(() => _sceneGates['circle'] = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterSceneChat,
-            desc: l10n.assistantSkillCenterSceneChatDesc,
-            value: _sceneGates['chat'] ?? false,
-            onChanged: (value) => setState(() => _sceneGates['chat'] = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-          _buildSwitchRow(
-            label: l10n.assistantSkillCenterSceneSystem,
-            desc: l10n.assistantSkillCenterSceneSystemDesc,
-            value: _sceneGates['system'] ?? false,
-            onChanged: (value) => setState(() => _sceneGates['system'] = value),
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSessionsSection({
-    required AppLocalizations l10n,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blockBg,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.assistantSkillCenterRecentSessionsTitle,
-            style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.semiBold,
-              color: fgPrimary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          if (_loadingSessions)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: CupertinoActivityIndicator(),
-            )
-          else if (_recentSessions.isEmpty)
-            Text(
-              l10n.assistantSkillCenterNoRecentSessions,
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-            )
-          else
-            ..._recentSessions.map((item) {
-              final sessionId = item.sessionId;
-              final messageCount = item.messageCount;
-              final lastMessage = item.lastMessage;
-              return Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${sessionId.isEmpty ? l10n.unknown : sessionId} · ${l10n.assistantSkillCenterMessagesCount(messageCount)}',
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: fgPrimary,
-                            ),
-                          ),
-                          Text(
-                            lastMessage.isEmpty
-                                ? l10n.assistantSkillCenterNoLastMessage
-                                : lastMessage,
-                            style: TextStyle(
-                              fontSize: AppTypography.xs,
-                              color: fgSecondary,
-                              height: AppTypography.lineHeightCompact,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(20, 20),
-                      onPressed: () {},
-                      child: Text(
-                        l10n.seeMore,
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: AppColors.primaryColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSkillRow({
-    required AssistantSkillCenterItem skill,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required Color blockBg,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-      decoration: BoxDecoration(
-        color: blockBg,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.intraGroupSm),
-        child: Row(
-          children: [
-            Icon(
-              CupertinoIcons.cube_box,
-              size: AppSpacing.iconSmall,
-              color: skill.enabled ? AppColors.primaryColor : fgSecondary,
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    skill.catalog.displayName,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      color: fgPrimary,
-                    ),
-                  ),
-                  Text(
-                    '${skill.catalog.category ?? 'assistant'} · ${skill.statusLabel} · ${skill.skillId}',
-                    style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: fgSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            CupertinoSwitch(
-              value: skill.enabled,
-              activeTrackColor:
-                  SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor:
-                  SettingsSemanticConstants.switchInactiveTrackColor(
-                    ref.watch(isDarkProvider),
-                  ),
-              onChanged: (v) => _toggleSkill(skill, v),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchRow({
-    required String label,
-    required String desc,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required Color fgPrimary,
-    required Color fgSecondary,
-  }) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: fgPrimary,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs / 2),
-                Text(
-                  desc,
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    color: fgSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          CupertinoSwitch(
-            value: value,
-            activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-            inactiveTrackColor:
-                SettingsSemanticConstants.switchInactiveTrackColor(
-                  ref.watch(isDarkProvider),
-                ),
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
+  void _toggleRecentSessionsExpanded() {
+    setState(() {
+      _recentSessionsExpanded = !_recentSessionsExpanded;
+    });
   }
 
   String _packageOf(AssistantSkillCenterItem skill) {
-    final id = skill.skillId;
-    final category = skill.catalog.category ?? '';
-    if (id == 'daily_assistant' || category == 'life') return 'life';
-    if (id == 'assistant_navigation' || category == 'productivity') {
+    final category = (skill.catalog.category ?? '').trim().toLowerCase();
+    if (category == 'life' || category == 'travel') {
+      return 'life';
+    }
+    if (category == 'productivity' ||
+        category == 'work' ||
+        category == 'content_creation') {
       return 'work';
     }
-    if (id == 'news_briefing' ||
-        id == 'stock_sentinel' ||
-        id == 'knowledge_qa' ||
-        category == 'knowledge' ||
+    if (category == 'knowledge' ||
         category == 'content' ||
         category == 'finance') {
       return 'knowledge';
@@ -708,99 +237,140 @@ class _AssistantSkillCenterPageState
     return 'companion';
   }
 
-  List<String> _tagRefsForSkill(AssistantSkillCenterItem skill) {
-    final category = skill.catalog.category?.trim();
+  String _skillCategoryLabel(AssistantSkillCenterItem skill) {
+    return switch ((skill.catalog.category ?? '').trim().toLowerCase()) {
+      'life' || 'travel' => AssistantText.assistantSkillCategoryLife,
+      'work' || 'productivity' => AssistantText.assistantSkillCategoryWork,
+      'knowledge' ||
+      'content' ||
+      'finance' => AssistantText.assistantSkillCategoryKnowledge,
+      'content_creation' => AssistantText.assistantSkillCategoryCreation,
+      'companion' || 'social' => AssistantText.assistantSkillCategoryCompanion,
+      _ => AssistantText.assistantSkillCategoryOther,
+    };
+  }
+
+  String _skillStatusLabel(AssistantSkillCenterItem skill) {
+    final subscription = skill.subscription;
+    if (subscription == null) {
+      return skill.catalog.requiresConsent
+          ? AssistantText.assistantSkillConsentRequired
+          : AssistantText.assistantSkillSubscriptionUnavailable;
+    }
+    return switch (subscription.status.trim().toLowerCase()) {
+      'active' => AssistantText.assistantSkillSubscribed,
+      'paused' => AssistantText.assistantSkillPaused,
+      _ => AssistantText.assistantSkillStatusPendingSync,
+    };
+  }
+
+  bool _isOngoingTask(AssistantUserTaskView task) {
+    return switch (task.status.trim().toLowerCase()) {
+      'done' || 'completed' || 'cancelled' || 'canceled' => false,
+      _ => true,
+    };
+  }
+
+  String _taskDetailLabel(AssistantUserTaskView task) {
+    final description = task.description?.trim() ?? '';
+    final dueAt = _formattedTaskDueAt(task.dueAt);
     return <String>[
-      if (category != null && category.isNotEmpty) category,
-      skill.skillId,
-    ];
+      _taskStatusLabel(task.status),
+      if (description.isNotEmpty) description,
+      if (dueAt.isNotEmpty) context.l10n.assistantTaskDueAt(dueAt),
+    ].join(' · ');
   }
 
-  List<String> _queriesForSkill(AssistantSkillCenterItem skill) {
-    switch (skill.skillId) {
-      case 'stock_sentinel':
-        return const <String>['比亚迪 重大消息', '新能源车 行情'];
-      case 'travel_journey_manager':
-        return const <String>['杭州 西湖 天气', '杭州 景区拥堵', '高铁出行提醒'];
-      case 'news_briefing':
-        return const <String>['人工智能新闻', '半导体产业'];
-      case 'daily_assistant':
-        return const <String>['今日待办', '会议安排', '学习计划'];
-      default:
-        return <String>[skill.catalog.displayName];
-    }
+  String _taskStatusLabel(String status) {
+    return switch (status.trim().toLowerCase()) {
+      'in_progress' ||
+      'active' ||
+      'running' => AssistantText.assistantTaskStatusInProgress,
+      'done' || 'completed' => AssistantText.assistantTaskStatusCompleted,
+      'cancelled' || 'canceled' => AssistantText.assistantTaskStatusCancelled,
+      _ => AssistantText.assistantTaskStatusPending,
+    };
   }
 
-  String _rawTextForSkill(AssistantSkillCenterItem skill) {
-    switch (skill.skillId) {
-      case 'stock_sentinel':
-        return '每天开盘前提醒我关注的股票重大消息';
-      case 'travel_journey_manager':
-        return '每天出发前提醒我行程天气、路况和景点拥堵';
-      case 'news_briefing':
-        return '每天早上给我人工智能和半导体新闻摘要';
-      case 'daily_assistant':
-        return '每天早上提醒我今天的生活、工作和学习计划';
-      default:
-        final description = skill.catalog.description?.trim();
-        return description == null || description.isEmpty
-            ? '订阅 ${skill.catalog.displayName}'
-            : description;
+  String _formattedTaskDueAt(String? raw) {
+    final parsed = DateTime.tryParse(raw?.trim() ?? '');
+    if (parsed == null) {
+      return '';
     }
+    final local = parsed.toLocal();
+    final date = context.l10n.monthDayTemplate(local.month, local.day);
+    final time = TimeOfDay.fromDateTime(local).format(context);
+    return '$date $time';
   }
 
-  String _cronForSkill(AssistantSkillCenterItem skill) {
-    switch (skill.skillId) {
-      case 'stock_sentinel':
-        return '0 9 * * *';
-      case 'travel_journey_manager':
-        return '0 7 * * *';
-      default:
-        return '0 8 * * *';
-    }
+  Future<void> _refreshAllSections() async {
+    ref.invalidate(assistantSkillCenterProvider);
+    ref.invalidate(assistantScheduleTasksProvider);
+    ref.invalidate(assistantRecentSessionsProvider);
+    await Future.wait<void>(<Future<void>>[
+      ref.read(assistantSkillCenterProvider.future).then((_) {}),
+      ref.read(assistantScheduleTasksProvider.future).then((_) {}),
+      ref.read(assistantRecentSessionsProvider.future).then((_) {}),
+    ]);
   }
 
-  Future<void> _enableAllSkills() async {
-    final cached = ref
-        .read(assistantSkillCenterProvider)
-        .maybeWhen<List<AssistantSkillCenterItem>?>(
-          data: (items) => items,
-          orElse: () => null,
-        );
-    var skills = cached ?? const <AssistantSkillCenterItem>[];
-    if (cached == null) {
-      skills = await ref.refresh(assistantSkillCenterProvider.future);
+  Future<void> _showSubscriptionUnavailable() {
+    return AppActionErrorFeedback.show(
+      context,
+      semantic: const UiErrorSemantic(
+        category: UiErrorCategory.validation,
+        scope: UiErrorScope.global,
+        title: AssistantText.assistantSkillSubscriptionUnavailableTitle,
+        message: AssistantText.assistantSkillSubscriptionUnavailableMessage,
+        primaryAction: UiErrorAction(
+          type: UiErrorActionType.dismiss,
+          label: UITextConstants.gotIt,
+        ),
+        dismissible: true,
+        presentation: UiErrorPresentation.actionDialog,
+        tone: UiErrorTone.info,
+      ),
+    );
+  }
+
+  Future<void> _showSkillMutationError(Object error) async {
+    if (!mounted) {
+      return;
     }
-    await _setUpdating(true);
-    try {
-      for (final skill in skills) {
-        if (!skill.enabled) {
-          await _setSkillEnabled(skill, true);
-        }
-      }
-      ref.invalidate(assistantSkillCenterProvider);
-      await _logSkillCenterRestoreDefault(skills.length);
-    } finally {
-      await _setUpdating(false);
-    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      ),
+    );
   }
 
   Future<void> _togglePackage(
     List<AssistantSkillCenterItem> skills,
     bool enabled,
   ) async {
+    Object? mutationError;
     await _setUpdating(true);
     try {
       for (final skill in skills) {
-        await _setSkillEnabled(skill, enabled);
+        await _setExistingSkillEnabled(skill, enabled);
       }
       ref.invalidate(assistantSkillCenterProvider);
       await _logSkillCenterPackageToggle(
         enabled: enabled,
         skillCount: skills.length,
       );
+    } catch (error) {
+      ref.invalidate(assistantSkillCenterProvider);
+      mutationError = error;
     } finally {
       await _setUpdating(false);
+    }
+    if (mutationError != null) {
+      await _showSkillMutationError(mutationError);
     }
   }
 
@@ -808,120 +378,49 @@ class _AssistantSkillCenterPageState
     AssistantSkillCenterItem skill,
     bool enabled,
   ) async {
+    if (!skill.hasSubscription) {
+      await _showSubscriptionUnavailable();
+      ref.invalidate(assistantSkillCenterProvider);
+      return;
+    }
+    Object? mutationError;
     await _setUpdating(true);
     try {
-      await _setSkillEnabled(skill, enabled);
+      await _setExistingSkillEnabled(skill, enabled);
       ref.invalidate(assistantSkillCenterProvider);
       await _logSkillCenterSingleSkillToggle(
         skillId: skill.skillId,
         enabled: enabled,
       );
+    } catch (error) {
+      ref.invalidate(assistantSkillCenterProvider);
+      mutationError = error;
     } finally {
       await _setUpdating(false);
     }
+    if (mutationError != null) {
+      await _showSkillMutationError(mutationError);
+    }
   }
 
-  Future<void> _setSkillEnabled(
+  Future<void> _setExistingSkillEnabled(
     AssistantSkillCenterItem skill,
     bool enabled,
   ) async {
-    final repo = ref.read(assistantRepositoryProvider);
+    final repo = ref.read(assistantSkillSubscriptionFacetProvider);
     final subscription = skill.subscription;
-    if (enabled) {
-      if (subscription == null) {
-        await repo.createSkillSubscription(
-          skillId: skill.skillId,
-          domainId: skill.catalog.category ?? 'assistant',
-          tagRefs: _tagRefsForSkill(skill),
-          rawText: _rawTextForSkill(skill),
-          queries: _queriesForSkill(skill),
-          cron: _cronForSkill(skill),
-        );
-        return;
-      }
-      await repo.updateSkillSubscriptionStatus(
-        subscriptionId: subscription.subscriptionId,
-        status: 'active',
-      );
-      return;
+    if (subscription == null) {
+      throw StateError('skill subscription is required for status updates');
     }
-    if (subscription != null) {
-      await repo.updateSkillSubscriptionStatus(
-        subscriptionId: subscription.subscriptionId,
-        status: 'paused',
-      );
-    }
-  }
-
-  Future<void> _loadRecentSessions() async {
-    if (!mounted) return;
-    setState(() => _loadingSessions = true);
-    try {
-      final manager = AssistantSessionManager();
-      await manager.load();
-      final sessions = manager.listSessionDescriptors();
-      if (!mounted) return;
-      setState(() {
-        _recentSessions = sessions
-            .take(5)
-            .map(AssistantLocalSessionSummaryView.fromDescriptor)
-            .toList(growable: false);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _recentSessions = const <AssistantLocalSessionSummaryView>[];
-      });
-    } finally {
-      if (mounted) setState(() => _loadingSessions = false);
-    }
+    await repo.updateSkillSubscriptionStatus(
+      subscriptionId: subscription.subscriptionId,
+      status: enabled ? 'active' : 'paused',
+    );
   }
 
   Future<void> _setUpdating(bool value) async {
     if (!mounted) return;
     setState(() => _updating = value);
-  }
-
-  Future<void> _logSkillCenterSimpleMode(bool enabled) async {
-    final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-      ),
-      payload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'simple_mode_toggle',
-        'enabled': enabled,
-      },
-      summaryPayload: const <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'simple_mode_toggle',
-      },
-    );
-  }
-
-  Future<void> _logSkillCenterRestoreDefault(int skillCount) async {
-    final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-      ),
-      payload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'restore_default_all',
-        'skillCount': skillCount,
-      },
-      summaryPayload: const <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'restore_default_all',
-      },
-    );
   }
 
   Future<void> _logSkillCenterPackageToggle({

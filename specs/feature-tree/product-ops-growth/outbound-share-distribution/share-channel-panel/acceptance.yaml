@@ -43,6 +43,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt1_local_contract
@@ -50,6 +51,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt1_local_contract
@@ -80,6 +82,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt2_local_contract
@@ -109,12 +112,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt3_local_contract
@@ -154,17 +159,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: post_internal_distribution
         cases:
         - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.post_internal_distribution
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: circle_post_placement
         cases:
         - api_integration.product_ops_growth.outbound_share_distribution.share_channel_panel.place_post_in_circle
         envs: [beta, gamma]
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: forward_share_journey
         cases:
         - user_acceptance.product_ops_growth.outbound_share_distribution.share_channel_panel.forward_share_journey
@@ -175,5 +183,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

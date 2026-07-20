@@ -1,0 +1,23 @@
+object: SearchIndexView
+operations: []
+implementation:
+  domain_behavior:
+    - quwoquan_service/runtime/search/analyze.go
+  reader:
+    - quwoquan_service/services/search-service/internal/infrastructure/searchbackend/assembly.go
+  transport:
+    - quwoquan_service/services/search-service/internal/adapters/http/handler.go
+  # 共享派生 ES 索引 quwoquan_objects：writer = 各业务服务 searchindex projector，
+  # reader = search-service Retrieve。projection 无公开命令。
+  store: []
+  outbox: []
+  app_client: []
+  page: []
+tests:
+  local_contract: []
+  api_integration:
+    - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
+  user_acceptance: []
+environments:
+  - name: gamma
+    artifact: specs/changelog/CR-20260719-120-business-object-batch-rollout.yaml

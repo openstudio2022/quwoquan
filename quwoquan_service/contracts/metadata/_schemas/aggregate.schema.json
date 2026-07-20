@@ -60,6 +60,29 @@
     "vector_enabled": {
       "type": "boolean"
     },
+    "deferred_operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "operations"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
     "members": {
       "type": "array",
       "items": {

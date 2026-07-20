@@ -1,7 +1,5 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
-import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
@@ -366,13 +364,7 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
   };
 }
 
-typedef CreateMediaObjectUploader =
-    Future<void> Function(
-      Uri uploadUri,
-      List<int> bytes, {
-      required String contentType,
-      required String expectedSha256,
-    });
+typedef PostMediaUploadProgressCallback = void Function(double progress);
 
 class PreparedPostPublicationPayload {
   const PreparedPostPublicationPayload({
@@ -387,9 +379,12 @@ class PreparedPostPublicationPayload {
 Future<PreparedPostPublicationPayload>
 buildPostPublicationPayloadWithRemoteMedia({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
-  CreateMediaObjectUploader? uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  PostMediaUploadProgressCallback? onUploadProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
 }) async {
   final basePayload = Map<String, Object?>.from(
     buildPostPublicationPayloadMap(state),
@@ -410,10 +405,13 @@ buildPostPublicationPayloadWithRemoteMedia({
   if (state.hasVideo) {
     return _buildPostPublicationPayloadWithRemoteVideoMedia(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       state: state,
       basePayload: basePayload,
-      uploadObject: uploadObject ?? _defaultUploadMediaObject,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onUploadProgress: onUploadProgress,
+      cancellationSignal: cancellationSignal,
     );
   }
   if (state.imagePaths.isEmpty) {
@@ -423,15 +421,23 @@ buildPostPublicationPayloadWithRemoteMedia({
     );
   }
 
-  final uploader = uploadObject ?? _defaultUploadMediaObject;
   final assetIds = <String>[];
-  for (final path in state.imagePaths) {
+  for (var index = 0; index < state.imagePaths.length; index++) {
+    final path = state.imagePaths[index];
     final resolved = await _resolveMediaReference(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       localOrRemotePath: path,
       mediaType: ContentMediaType.image,
-      uploadObject: uploader,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onProgress: (uploadedBytes, totalBytes) {
+        final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+        onUploadProgress?.call(
+          (index + itemProgress) / state.imagePaths.length,
+        );
+      },
+      cancellationSignal: cancellationSignal,
     );
     if (resolved.assetId.isNotEmpty) {
       assetIds.add(resolved.assetId);
@@ -452,17 +458,27 @@ buildPostPublicationPayloadWithRemoteMedia({
 Future<PreparedPostPublicationPayload>
 _buildPostPublicationPayloadWithRemoteVideoMedia({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
   required Map<String, Object?> basePayload,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  PostMediaUploadProgressCallback? onUploadProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
 }) async {
+  final itemCount = state.videoThumbnail.trim().isEmpty ? 1 : 2;
   final video = await _resolveMediaReference(
     media: media,
-    fileStorageGateway: fileStorageGateway,
     localOrRemotePath: state.videoPath,
     mediaType: ContentMediaType.video,
-    uploadObject: uploadObject,
+    sourceReader: sourceReader,
+    uploadStream: uploadStream,
+    telemetry: telemetry,
+    onProgress: (uploadedBytes, totalBytes) {
+      final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+      onUploadProgress?.call(itemProgress / itemCount);
+    },
+    cancellationSignal: cancellationSignal,
   );
   if (video.assetId.isEmpty) {
     throw StateError('video publish requires an uploaded MediaAsset id');
@@ -471,12 +487,15 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
 
   final cover = await _resolveRemoteVideoCover(
     media: media,
-    fileStorageGateway: fileStorageGateway,
-    videoAssetId: video.assetId,
     localOrRemoteCoverPath: state.videoThumbnail,
-    coverStrategy: _videoCoverStrategyForPayload(state),
-    coverFrameTimeMs: state.videoCoverTimeMs,
-    uploadObject: uploadObject,
+    sourceReader: sourceReader,
+    uploadStream: uploadStream,
+    telemetry: telemetry,
+    onProgress: (uploadedBytes, totalBytes) {
+      final itemProgress = totalBytes == 0 ? 0 : uploadedBytes / totalBytes;
+      onUploadProgress?.call((1 + itemProgress) / itemCount);
+    },
+    cancellationSignal: cancellationSignal,
   );
   if (cover.assetId.isNotEmpty) {
     assetIds.add(cover.assetId);
@@ -530,11 +549,15 @@ class _ResolvedVideoCoverReference {
 
 Future<_ResolvedMediaReference> _resolveMediaReference({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
   required String localOrRemotePath,
   required ContentMediaType mediaType,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  ContentMediaUploadProgressCallback? onProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
 }) async {
+  cancellationSignal?.throwIfCancelled();
   final path = localOrRemotePath.trim();
   if (path.isEmpty) {
     throw StateError('empty media path');
@@ -546,13 +569,23 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
         'media publish requires a MediaAsset reference, not a delivery URL',
       );
     }
+    onProgress?.call(1, 1);
     return _ResolvedMediaReference(assetId: assetId);
   }
-  final uploaded = await ContentMediaUploadCoordinator(
+  final coordinator = ContentMediaUploadCoordinator(
     media: media,
-    fileStorage: fileStorageGateway,
-    uploadObject: uploadObject,
-  ).uploadLocalPath(localPath: path, mediaType: mediaType);
+    telemetry: telemetry,
+  );
+  final source = await sourceReader.prepare(path);
+  cancellationSignal?.throwIfCancelled();
+  final uploaded = await coordinator.uploadPreparedSource(
+    source: source,
+    mediaType: mediaType,
+    contentType: contentMediaTypeForPath(path, mediaType),
+    uploadStream: uploadStream,
+    onProgress: onProgress,
+    cancellationSignal: cancellationSignal,
+  );
   final assetId = uploaded.assetId.trim();
   if (assetId.isEmpty) {
     throw StateError('uploaded media is missing its MediaAsset id');
@@ -562,58 +595,36 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
 
 Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
   required ContentMediaFacet media,
-  required FileStorageGateway fileStorageGateway,
-  required String videoAssetId,
   required String localOrRemoteCoverPath,
-  required String coverStrategy,
-  required int coverFrameTimeMs,
-  required CreateMediaObjectUploader uploadObject,
+  required ContentMediaSourceReader sourceReader,
+  required ContentMediaStreamObjectUpload uploadStream,
+  AppTelemetryRecorder? telemetry,
+  ContentMediaUploadProgressCallback? onProgress,
+  ContentMediaUploadCancellationSignal? cancellationSignal,
 }) async {
+  cancellationSignal?.throwIfCancelled();
   final coverPath = localOrRemoteCoverPath.trim();
   if (coverPath.isNotEmpty) {
     final cover = await _resolveMediaReference(
       media: media,
-      fileStorageGateway: fileStorageGateway,
       localOrRemotePath: coverPath,
       mediaType: ContentMediaType.image,
-      uploadObject: uploadObject,
+      sourceReader: sourceReader,
+      uploadStream: uploadStream,
+      telemetry: telemetry,
+      onProgress: onProgress,
+      cancellationSignal: cancellationSignal,
     );
-    var resolvedStrategy = coverStrategy == 'manual' ? 'manual' : 'first_frame';
-    if (videoAssetId.isNotEmpty && cover.assetId.isNotEmpty) {
-      final selected = await media.selectManualCover(
-        SelectManualContentMediaCoverCommand(
-          mediaId: videoAssetId,
-          coverAssetId: cover.assetId,
-        ),
-      );
-      resolvedStrategy = selected.coverStrategy.trim().isNotEmpty
-          ? selected.coverStrategy.trim()
-          : resolvedStrategy;
-    }
     return _ResolvedVideoCoverReference(
-      coverStrategy: resolvedStrategy,
+      // 发布绑定会在视频与封面都 ready 后原子解析 coverAssetId。这里不提前
+      // 变更仍处于 processing 的视频聚合，避免与转码结果发生版本竞争。
+      coverStrategy: 'manual',
       assetId: cover.assetId,
     );
   }
 
-  if (videoAssetId.isEmpty) {
-    throw StateError('video cover is missing');
-  }
-  final selected = coverStrategy == 'manual'
-      ? await media.selectManualCover(
-          SelectManualContentMediaCoverCommand(
-            mediaId: videoAssetId,
-            coverFrameTimeMs: coverFrameTimeMs,
-          ),
-        )
-      : await media.selectAutoCover(
-          SelectAutoContentMediaCoverCommand(mediaId: videoAssetId),
-        );
-  return _ResolvedVideoCoverReference(
-    coverStrategy: selected.coverStrategy.trim().isNotEmpty
-        ? selected.coverStrategy.trim()
-        : 'first_frame',
-  );
+  onProgress?.call(1, 1);
+  return const _ResolvedVideoCoverReference(coverStrategy: 'first_frame');
 }
 
 bool _isRemoteMediaReference(String value) {
@@ -641,31 +652,6 @@ String _videoCoverStrategyForPayload(CreateEditorState state) {
     return 'manual';
   }
   return state.videoCoverTimeMs > 0 ? 'manual' : 'first_frame';
-}
-
-Future<void> _defaultUploadMediaObject(
-  Uri uploadUri,
-  List<int> bytes, {
-  required String contentType,
-  required String expectedSha256,
-}) async {
-  final client = http.Client();
-  try {
-    final uploadHeaders = ContentAddressedUploadHeaders(
-      contentType: contentType,
-      expectedSha256: expectedSha256,
-    );
-    final response = await client.put(
-      uploadUri,
-      headers: uploadHeaders.toHttpHeaders(),
-      body: bytes,
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('media object upload failed: ${response.statusCode}');
-    }
-  } finally {
-    client.close();
-  }
 }
 
 List<CreateDraft> decodeCreateDraftsList(Object? decoded) {

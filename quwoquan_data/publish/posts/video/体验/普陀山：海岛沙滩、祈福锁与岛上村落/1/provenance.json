@@ -1,0 +1,35 @@
+{
+  "executionId": "20260719--travel-video-cold-start--cn-zhejiang--canary-001",
+  "agentRunId": "run-af42b100-d3c1-4624-9451-7d4e848b6192",
+  "agentModel": "composer",
+  "renderStrategy": "rights_cleared_image_sequence",
+  "sources": [
+    {
+      "assetRef": "sources/普陀山__image_collection__fb9fcc04/assets/001_普陀山_1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:20090606_Putuoshan_8879.jpg",
+      "rightsRef": "sources/普陀山__image_collection__fb9fcc04/assets/index.json#001_001",
+      "creator": "Jakub Hałun",
+      "license": "CC BY-SA 3.0",
+      "basis": "rights_cleared",
+      "sha256": "sha256:27349002fd69773377445fadcc983f34063130c0b84edd1d62db1fb47acb8896"
+    },
+    {
+      "assetRef": "sources/普陀山__image_collection__f3628864/assets/001_普陀山_2.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Love_locks,_Putuo_shan,_Zhejiang,_China_-_%E6%99%AE%E9%99%80%E5%B1%B1%EF%BC%8C%E6%B5%99%E6%B1%9F%EF%BC%8C%E4%B8%AD%E5%9B%BD_(10225598814).jpg",
+      "rightsRef": "sources/普陀山__image_collection__f3628864/assets/index.json#002_001",
+      "creator": "Romain Pontida",
+      "license": "CC BY-SA 2.0",
+      "basis": "rights_cleared",
+      "sha256": "sha256:77ce4920b059509153fe63fa044eb506eb0a86f3f17259eb75c6ad3fe5c0ae00"
+    },
+    {
+      "assetRef": "sources/普陀山__image_collection__83f49df3/assets/001_普陀山_3.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Putuo_20090606_8825.jpg",
+      "rightsRef": "sources/普陀山__image_collection__83f49df3/assets/index.json#003_001",
+      "creator": "Jakub Hałun",
+      "license": "CC BY-SA 4.0",
+      "basis": "rights_cleared",
+      "sha256": "sha256:67c9d93849f30ca4ac279658caded9fc65e10480af2ea4fe07de5d8c1311ada1"
+    }
+  ]
+}

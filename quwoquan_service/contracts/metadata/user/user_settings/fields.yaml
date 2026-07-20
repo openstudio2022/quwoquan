@@ -193,9 +193,49 @@ entities:
         ops_exposure: read
         description: 用户级内容屏蔽词（命中过滤，不参与公开画像）
 
+      - name: version
+        source: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: UserSettings 聚合内部 CAS 版本，仅响应读取，不进入公开写请求
+
       - name: updatedAt
         source: updatedAt
         type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  UserSettingsCommandResult:
+    description: 通知/隐私/通话设置命令的稳定提交回执；读投影是设置页单一真相源。
+    fields:
+      - name: userId
+        source: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: version
+        source: version
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: boolean
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow

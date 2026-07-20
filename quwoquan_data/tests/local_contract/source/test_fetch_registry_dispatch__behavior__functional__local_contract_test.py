@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-import json
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 TESTS_ROOT = DATA_ROOT / "tests"
@@ -100,14 +99,12 @@ def test_extract_page_text_dispatches_by_registry_extractor():
         fetch_mod._static_official_plaintext = orig_official
 
 
-def test_baidu_baike_openapi_adapter_fetches_structured_text(monkeypatch):
-    body = json.dumps(
-        {
-            "title": "嵊州越剧小镇",
-            "abstract": "嵊州越剧小镇位于浙江省嵊州市，是越剧文化旅游目的地。",
-            "card": [{"name": "位置", "value": ["浙江省嵊州市"]}],
-        },
-        ensure_ascii=False,
+def test_baidu_baike_html_adapter_fetches_public_entry_text(monkeypatch):
+    body = (
+        "<html><head><title>嵊州越剧小镇_百度百科</title></head>"
+        "<body><h1>嵊州越剧小镇</h1>"
+        "<p>嵊州越剧小镇位于浙江省嵊州市，是越剧文化旅游目的地。</p>"
+        "<dl><dt>位置</dt><dd>浙江省嵊州市</dd></dl></body></html>"
     ).encode("utf-8")
     requested_urls: list[str] = []
 
@@ -123,17 +120,15 @@ def test_baidu_baike_openapi_adapter_fetches_structured_text(monkeypatch):
         source={
             "sourceKind": "baidu_baike",
             "sourceTitle": "嵊州越剧小镇",
-            "extractor": "baidu_baike_openapi",
+            "extractor": "baidu_baike_html",
         },
     )
 
-    assert result["runtime"]["rawFormat"] == "baidu_baike_openapi_json"
-    assert result["runtime"]["resolvedTitle"] == "嵊州越剧小镇"
-    assert "位置：浙江省嵊州市" in result["text"]
+    assert result["runtime"]["rawFormat"] == "baidu_baike_html"
+    assert "嵊州越剧小镇位于浙江省嵊州市" in result["text"]
+    assert "位置" in result["text"] and "浙江省嵊州市" in result["text"]
     assert len(requested_urls) == 1
-    assert requested_urls[0].startswith(
-        "https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?"
-    )
+    assert requested_urls[0].startswith("https://baike.baidu.com/item/")
 
 
 def test_generic_html_extractor_preserves_inline_images_as_figures():

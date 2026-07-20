@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+from test_directory_inventory_lib import recorded_file_is_canonical
+
 
 ROOT = Path(__file__).resolve().parents[3]
 FEATURE_TREE = ROOT / "specs" / "feature-tree"
@@ -22,6 +24,15 @@ ALLOWED_ENVS_BY_LAYER = {
     "user_acceptance": {"gamma_local", "prod"},
 }
 ALLOWED_ROLLOUT_STAGES = {"gray_initial", "carry_on", "full"}
+ALLOWED_EXECUTION_PROFILES = {"baseline", "smoke", "integration", "release"}
+ALLOWED_ENVS_BY_PROFILE = {
+    # `envs: alpha` may describe an alpha configuration fixture while the
+    # local-contract runner itself remains environment-free.
+    "baseline": {"local", "alpha"},
+    "smoke": {"alpha"},
+    "integration": {"beta", "gamma"},
+    "release": {"gamma", "gamma_local", "prod"},
+}
 ALLOWED_QUALITY_FACETS = {
     "functional",
     "contract",
@@ -236,6 +247,12 @@ def validate_evidence_entry(path: Path, item_id: str, entry: Any, failures: Fail
         failures.add(f"{path.relative_to(ROOT)} {item_id} invalid layer {layer!r}")
         return
 
+    profile = entry.get("execution_profile")
+    if profile is None:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} missing execution_profile")
+    elif str(profile) not in ALLOWED_EXECUTION_PROFILES:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} invalid execution_profile {profile!r}")
+
     suite = entry.get("suite")
     if not isinstance(suite, str) or not suite.strip():
         failures.add(f"{path.relative_to(ROOT)} {item_id} missing suite")
@@ -277,6 +294,17 @@ def validate_evidence_entry(path: Path, item_id: str, entry: Any, failures: Fail
             failures.add(
                 f"{path.relative_to(ROOT)} {item_id} layer {layer!r} uses disallowed envs {unexpected_envs}; allowed={allowed}"
             )
+        if profile in ALLOWED_EXECUTION_PROFILES:
+            disallowed = [
+                env
+                for env in normalized_envs
+                if env not in ALLOWED_ENVS_BY_PROFILE[str(profile)]
+            ]
+            if disallowed:
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} execution_profile {profile!r} "
+                    f"does not permit envs {disallowed}"
+                )
     validate_rollout_stages(path, item_id, entry, normalized_envs, failures)
 
 
@@ -361,14 +389,35 @@ def validate_test_ref(
         command = record.get("command")
         artifact = record.get("artifact")
         if file_path:
-            if bucket_name == "recorded" and not evidence_path_exists(str(file_path)):
-                failures.add(f"{path.relative_to(ROOT)} {item_id} recorded file missing: {file_path}")
+            file_text = str(file_path)
+            if not evidence_path_exists(file_text):
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} {bucket_name} file missing: {file_text}"
+                )
+            elif bucket_name == "recorded" and not recorded_file_is_canonical(file_text):
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} {bucket_name} file is not canonical: {file_text}"
+                )
             return
         if artifact:
-            if bucket_name == "recorded" and str(artifact).startswith(".qwq_output/env/repo/runs/") and not evidence_path_exists(str(artifact)):
-                failures.add(f"{path.relative_to(ROOT)} {item_id} recorded artifact missing: {artifact}")
+            artifact_text = str(artifact)
+            if bucket_name == "planned":
+                return
+            if not artifact_text.startswith(".qwq_output/env/repo/runs/tests/"):
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} recorded artifact must be under "
+                    f".qwq_output/env/repo/runs/tests/: {artifact_text}"
+                )
+            elif not evidence_path_exists(artifact_text):
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} recorded artifact missing: {artifact_text}"
+                )
             return
-        if command or artifact:
+        if command:
+            if bucket_name == "recorded":
+                failures.add(
+                    f"{path.relative_to(ROOT)} {item_id} tests.recorded command is retired: {command}"
+                )
             return
         failures.add(
             f"{path.relative_to(ROOT)} {item_id} tests.{bucket_name} mapping needs file, command, or artifact"
@@ -376,17 +425,51 @@ def validate_test_ref(
         return
 
     record_text = str(record)
-    if record_text.startswith(("command:", "artifact:", "file:")):
+    if record_text.startswith("file:"):
+        validate_test_ref(
+            path,
+            item_id,
+            {"file": record_text.split(":", 1)[1].strip()},
+            failures,
+            bucket_name=bucket_name,
+        )
+        return
+    if record_text.startswith("artifact:"):
+        validate_test_ref(
+            path,
+            item_id,
+            {"artifact": record_text.split(":", 1)[1].strip()},
+            failures,
+            bucket_name=bucket_name,
+        )
+        return
+    if record_text.startswith("command:"):
+        validate_test_ref(
+            path,
+            item_id,
+            {"command": record_text.split(":", 1)[1].strip()},
+            failures,
+            bucket_name=bucket_name,
+        )
         return
     if any(record_text.startswith(prefix) for prefix in COMMAND_PREFIXES):
+        if bucket_name == "recorded":
+            failures.add(
+                f"{path.relative_to(ROOT)} {item_id} tests.recorded command is retired: {record_text}"
+            )
         return
     if any(ch.isspace() for ch in record_text):
         failures.add(
             f"{path.relative_to(ROOT)} {item_id} tests.{bucket_name} must be structured; free-text entry {record_text!r}"
         )
         return
-    if bucket_name == "recorded" and not evidence_path_exists(record_text):
-        failures.add(f"{path.relative_to(ROOT)} {item_id} recorded path missing: {record_text}")
+    validate_test_ref(
+        path,
+        item_id,
+        {"file": record_text},
+        failures,
+        bucket_name=bucket_name,
+    )
 
 
 def evidence_path_exists(record_text: str) -> bool:

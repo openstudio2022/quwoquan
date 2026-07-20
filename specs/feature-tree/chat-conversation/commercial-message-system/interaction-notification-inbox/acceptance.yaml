@@ -1,0 +1,160 @@
+version: 2
+node:
+  id: interaction-notification-inbox
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox
+  title: 互动通知收件箱
+  parent_domain_service: chat-conversation
+  parent_business_capability: commercial-message-system
+scope:
+  summary: 七个业务事件源经 durable 流驱动生成持久化 AppMessage，消息页通知维度真实渲染、跳转、已读与未读徽标一致。
+  journey_scenarios:
+  - message-direct-and-greeting-upgrade
+  out_of_scope:
+  - push 外送（APNs/FCM、token 注册、投递回执，显式降级站内信）
+  - 通知聚合折叠
+  - 聊天消息未读（conversation read watermark 承载）
+gwt_acceptance:
+  GWT1:
+    title: 七源业务事件一次且仅一次生成 AppMessage
+    given:
+    - content/user/circle 三个服务的评论、点赞、引用、关注、打招呼、圈子成员、群申请审批事件经 durable Redis Stream 发布。
+    - notification-service 事件消费 adapter 以 consumer group + Mongo inbox 幂等消费。
+    when:
+    - 业务事件首次到达、重复投递或消费者崩溃后重新认领。
+    then:
+    - 每个事件按七源触发矩阵生成一条 AppMessage，幂等键 notify:{eventType}:{eventId} 保证重放不重复。
+    - 自互动、取关、reaction 清除、打招呼未开启 allowStrangerGreeting 时不生成通知。
+    - 消费失败进入失败计数与 DLQ，不阻塞后续事件。
+    done_when:
+    - 真实 Redis Stream + Mongo 链路验证一次且仅一次、过滤规则与 DLQ 行为。
+    edge_cases:
+    - 事件重放与乱序
+    - 接收者与行动者同人
+    - 事件 payload 缺接收者字段时结构化失败进 DLQ 而非伪造
+    platform_variants:
+      iOS: []
+      Android: []
+    contract_refs:
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/content/comment/events.yaml
+    - quwoquan_service/contracts/metadata/content/content_reaction/events.yaml
+    - quwoquan_service/contracts/metadata/content/post/events.yaml
+    - quwoquan_service/contracts/metadata/user/persona_relationship/events.yaml
+    - quwoquan_service/contracts/metadata/user/greeting_request/events.yaml
+    - quwoquan_service/contracts/metadata/social/circle_membership/events.yaml
+    - quwoquan_service/contracts/metadata/social/circle_group_membership/events.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_projection__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_consumer__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.interaction_notification_inbox.projection_rules
+        envs: &id001
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.interaction_notification_inbox.stream_to_inbox
+        envs: &id002
+        - beta
+        - gamma
+      supporting: []
+    notes: []
+  GWT2:
+    title: 消息页通知维度真实渲染、跳转、已读与未读徽标一致
+    given:
+    - 用户在消息页，云端 inbox 存在未读互动通知。
+    when:
+    - 用户切换到通知维度、点击通知行、返回消息页。
+    then:
+    - 通知行只来自 ListAppMessages，渲染 title/summary/时间/已读态；点击按 target 真实路由跳转并调用 ReadAppMessage。
+    - 消息 tab 徽标未读数来自 GetAppMessageUnreadCount，已读后同步刷新。
+    - 无通知时展示独立空态，不回退拼接；目标对象已删除时跳转进入结构化空态。
+    done_when:
+    - 通知维度曝光/点击/已读埋点接入，行为与未读一致性由测试证明。
+    edge_cases:
+    - 无通知空态
+    - 通知目标对象已删除
+    - 已读后跨维度未读数一致
+    platform_variants:
+      iOS: []
+      Android: []
+    contract_refs:
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/notification/notification/tests/e2e.yaml
+    performance_points:
+    - GetAppMessageUnreadCount p95 300ms（service.yaml SLO）
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/chat/message_home_notification_dimension__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/notification_inbox_read__user_acceptance_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.interaction_notification_inbox.notification_dimension_widget
+        envs: *id001
+      - layer: user_acceptance
+        execution_profile: release
+        suite: gwt2_user_acceptance
+        cases:
+        - user_acceptance.chat_conversation.commercial_message_system.interaction_notification_inbox.inbox_read_journey
+        envs:
+        - gamma_local
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.interaction_notification_inbox.unread_count_consistency
+        envs: *id002
+    notes: []
+contract_acceptance:
+  CONTRACT1:
+    title: 七源触发矩阵与通知契约来源唯一
+    metadata_refs:
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/notification/business_object_map.yaml
+    - quwoquan_service/contracts/metadata/event_catalog.yaml
+    done_when:
+    - 七源事件的 consumers 声明、payload 接收者字段与 business_object_map event_consumers 登记一致。
+    - messageType 只使用既有 NotificationType 五大类，细分经 source 字段；无第二触发矩阵真相源。
+    - push 外送保持 deferred：notification_delivery_job 三条路由 blocked 且 block_reason 说明降级口径。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/internal/metadata/graph/contract_graph__compile_validate__contract__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_projection__local_contract_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: contract1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.interaction_notification_inbox.metadata_consistency
+        envs: *id001
+      supporting: []
+    notes:
+    - 2026-07-19 七源 durable 链路（含 comment/reaction 新 stream、greeting durable 化、circle owner 富化）与消息页通知维度已落地；gamma 运行制品验证受环境可用性制约，环境级证据 partial。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

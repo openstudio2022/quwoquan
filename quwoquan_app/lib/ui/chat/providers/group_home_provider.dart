@@ -6,6 +6,6 @@ final groupHomeProvider = FutureProvider.family<GroupHomeDto, String>((
   ref,
   conversationId,
 ) async {
-  final repo = ref.watch(chatRepositoryProvider);
+  final repo = ref.watch(chatGroupAdminRepositoryProvider);
   return repo.getGroupHome(conversationId);
 });

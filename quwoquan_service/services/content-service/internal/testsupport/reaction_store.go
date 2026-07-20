@@ -203,8 +203,20 @@ func (s *ReactionStore) ReadContentReactionState(
 	}, nil
 }
 
-func (s *ReactionStore) ReactionTargetExists(_ context.Context, target reactiondomain.Target) (bool, error) {
-	return strings.TrimSpace(target.ID) != "", target.Validate()
+func (s *ReactionStore) FindReactionTarget(
+	_ context.Context,
+	target reactiondomain.Target,
+) (reactionapp.ReactionTargetSlice, error) {
+	if err := target.Validate(); err != nil {
+		return reactionapp.ReactionTargetSlice{}, err
+	}
+	if strings.TrimSpace(target.ID) == "" {
+		return reactionapp.ReactionTargetSlice{}, nil
+	}
+	return reactionapp.ReactionTargetSlice{
+		Exists:   true,
+		AuthorID: "author-" + strings.TrimSpace(target.ID),
+	}, nil
 }
 
 func (s *ReactionStore) CountCommentReactions(
@@ -289,6 +301,32 @@ func (s *ReactionStore) ReadCommentReactionValues(
 		}
 	}
 	return values, nil
+}
+
+func (s *ReactionStore) ReadAuthorLikedFlags(
+	ctx context.Context,
+	commentIDsByPostAuthor map[string][]string,
+) (map[string]bool, error) {
+	flags := map[string]bool{}
+	for postAuthorID, commentIDs := range commentIDsByPostAuthor {
+		actor, err := reactiondomain.NewActor(
+			reactiondomain.ActorDimensionPersona,
+			strings.TrimSpace(postAuthorID),
+		)
+		if err != nil {
+			return nil, err
+		}
+		values, err := s.ReadCommentReactionValues(ctx, actor, commentIDs)
+		if err != nil {
+			return nil, err
+		}
+		for commentID, value := range values {
+			if value == reactiondomain.ValueLike {
+				flags[commentID] = true
+			}
+		}
+	}
+	return flags, nil
 }
 
 func (s *ReactionStore) CountActiveReactions(

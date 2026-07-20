@@ -2,7 +2,9 @@ package httpadapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -13,9 +15,22 @@ import (
 	"quwoquan_service/services/integration-service/internal/generated"
 )
 
-const (
-	externalRequestsPath = "/integrations/external-requests"
-)
+// submitExternalRequestWire 是 SubmitExternalInteractionRequest 的强类型
+// wire 契约（ExternalInteractionRequest entity），未知字段 fail closed。
+type submitExternalRequestWire struct {
+	RequestID      string            `json:"requestId"`
+	Operation      string            `json:"operation"`
+	Tenant         string            `json:"tenant"`
+	Env            string            `json:"env"`
+	IdempotencyKey string            `json:"idempotencyKey"`
+	CallbackURL    string            `json:"callbackUrl"`
+	CallbackEvent  string            `json:"callbackEvent"`
+	PayloadRef     string            `json:"payloadRef"`
+	PayloadDigest  string            `json:"payloadDigest"`
+	Sensitivity    string            `json:"sensitivity"`
+	ExpiresAt      string            `json:"expiresAt"`
+	Payload        map[string]string `json:"payload"`
+}
 
 func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -34,37 +49,67 @@ func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Req
 		)
 		return
 	}
-	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var body submitExternalRequestWire
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
 		rerrors.WriteHTTPError(
 			w,
-			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "请求体格式错误", err.Error()),
+			generated.AppErrorFromInvalidExternalRequest("request body must be a typed external interaction request: "+err.Error()),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("request body contains trailing JSON"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	operation := strings.TrimSpace(body.Operation)
+	requestID := strings.TrimSpace(body.RequestID)
+	idempotencyKey := strings.TrimSpace(body.IdempotencyKey)
+	if operation == "" || requestID == "" || idempotencyKey == "" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("operation, requestId and idempotencyKey are required"),
 			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
 	}
 	expiresAt := time.Now().UTC().Add(5 * time.Minute)
-	if raw := strings.TrimSpace(anyString(body["expiresAt"])); raw != "" {
-		if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
-			expiresAt = parsed.UTC()
+	if raw := strings.TrimSpace(body.ExpiresAt); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			rerrors.WriteHTTPError(
+				w,
+				generated.AppErrorFromInvalidExternalRequest("expiresAt must be RFC3339"),
+				rerrors.HTTPWriteOptionsFromRequest(r),
+			)
+			return
+		}
+		expiresAt = parsed.UTC()
+	}
+	payload := make(map[string]string, len(body.Payload))
+	for key, value := range body.Payload {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			payload[key] = trimmed
 		}
 	}
-	requestID := strings.TrimSpace(anyString(body["requestId"]))
-	if requestID == "" {
-		requestID = "ext-" + time.Now().UTC().Format("20060102150405.000000000")
-	}
-	payload := stringMap(body["payload"])
 	request := reliabletask.ExternalInteractionRequest{
 		RequestID:      requestID,
-		Operation:      strings.TrimSpace(anyString(body["operation"])),
-		Tenant:         nonEmpty(anyString(body["tenant"]), "quwoquan"),
-		Env:            nonEmpty(anyString(body["env"]), "alpha"),
-		IdempotencyKey: nonEmpty(anyString(body["idempotencyKey"]), requestID),
-		CallbackURL:    strings.TrimSpace(anyString(body["callbackUrl"])),
-		CallbackEvent:  strings.TrimSpace(anyString(body["callbackEvent"])),
-		PayloadRef:     strings.TrimSpace(anyString(body["payloadRef"])),
-		PayloadDigest:  strings.TrimSpace(anyString(body["payloadDigest"])),
-		Sensitivity:    nonEmpty(anyString(body["sensitivity"]), "private"),
+		Operation:      operation,
+		Tenant:         nonEmpty(body.Tenant, "quwoquan"),
+		Env:            nonEmpty(body.Env, "alpha"),
+		IdempotencyKey: idempotencyKey,
+		CallbackURL:    strings.TrimSpace(body.CallbackURL),
+		CallbackEvent:  strings.TrimSpace(body.CallbackEvent),
+		PayloadRef:     strings.TrimSpace(body.PayloadRef),
+		PayloadDigest:  strings.TrimSpace(body.PayloadDigest),
+		Sensitivity:    nonEmpty(body.Sensitivity, "private"),
 		ExpiresAt:      expiresAt,
 		Payload:        payload,
 	}
@@ -72,7 +117,7 @@ func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		rerrors.WriteHTTPError(
 			w,
-			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "外部请求参数不完整", err.Error()),
+			mapExternalSubmitError(err),
 			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
@@ -82,6 +127,46 @@ func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Req
 		"status":     accepted.Status,
 		"acceptedAt": accepted.AcceptedAt.Format(time.RFC3339),
 	})
+}
+
+// mapExternalSubmitError 把应用层受理失败映射为稳定错误码：不支持的
+// operation 与参数问题分别对应 unsupported_operation / invalid_external_request。
+func mapExternalSubmitError(err error) error {
+	var appError *rerrors.AppError
+	if errors.As(err, &appError) {
+		return appError
+	}
+	message := err.Error()
+	if strings.Contains(message, "disabled") || strings.Contains(message, "not supported") {
+		return generated.AppErrorFromUnsupportedOperation(message)
+	}
+	return generated.AppErrorFromInvalidExternalRequest(message)
+}
+
+func (h *Handler) handleGetExternalRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "方法不支持", "only GET"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	requestID := strings.TrimPrefix(r.URL.Path, generated.ExternalRequestsPath+"/")
+	state, found, err := h.external.GetRequest(r.Context(), requestID)
+	if err != nil {
+		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+		return
+	}
+	if !found {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("external interaction request not found"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
 }
 
 func (h *Handler) handleExternalAttempts(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +253,7 @@ func (h *Handler) handleExternalMetricsSnapshot(w http.ResponseWriter, r *http.R
 }
 
 func requestIDFromAttemptsPath(path string) string {
-	trimmed := strings.TrimPrefix(path, externalRequestsPath+"/")
+	trimmed := strings.TrimPrefix(path, generated.ExternalRequestsPath+"/")
 	return strings.TrimSuffix(trimmed, "/attempts")
 }
 

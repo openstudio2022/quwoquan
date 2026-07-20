@@ -96,10 +96,9 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     try {
       final bytes = await _loadImageBytes(path);
       if (bytes.isEmpty) return;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final ratio = frame.image.width / frame.image.height;
-      frame.image.dispose();
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      final ratio = image.width / image.height;
+      image.dispose();
       if (!mounted) return;
       _setEditorState(() => _imageAspectRatio = ratio);
     } catch (_) {
@@ -127,14 +126,27 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     return false;
   }
 
+  Future<String?> _writeImageToTemp(ui.Image image, String prefix) async {
+    try {
+      final data = await ImageEditorExportEngine.encodePng(image);
+      if (data == null) return null;
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+        '${tempDir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(data);
+      return file.path;
+    } finally {
+      image.dispose();
+    }
+  }
+
   Future<String?> _applyCropToCurrentImage() async {
     if (_currentPath.isEmpty) return null;
     try {
       final bytes = await _loadImageBytes(_currentPath);
       if (bytes.isEmpty) return null;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       final baseRect = _cropImageRect == Rect.zero
           ? _resolveImageRect(_cropLayoutSize)
           : _cropImageRect;
@@ -150,24 +162,12 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         cropRect.width * scaleX,
         cropRect.height * scaleY,
       );
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final dstRect = Rect.fromLTWH(0, 0, srcRect.width, srcRect.height);
-      canvas.drawImageRect(image, srcRect, dstRect, Paint());
-      final croppedImage = await recorder.endRecording().toImage(
-        srcRect.width.round(),
-        srcRect.height.round(),
+      final croppedImage = await ImageEditorExportEngine.cropImage(
+        image,
+        srcRect,
       );
-      final data = await croppedImage.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      if (data == null) return null;
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/crop_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(data.buffer.asUint8List());
-      return file.path;
+      image.dispose();
+      return _writeImageToTemp(croppedImage, 'crop');
     } catch (e) {
       return null;
     }
@@ -182,86 +182,24 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       }
       final bytes = await _loadImageBytes(_currentPath);
       if (bytes.isEmpty) return null;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final radians = totalDegrees * math.pi / 180;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       // 旋转确认时导出“范围框内”结果，而非整张旋转包围盒。
       // 这里保持输出分辨率与原图一致，仅变换并裁切可见范围。
       final scale = RotateGeometry.scaleToFill(
         image.width.toDouble(),
         image.height.toDouble(),
-        radians,
+        totalDegrees * math.pi / 180,
       );
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final outputWidth = image.width.toDouble();
-      final outputHeight = image.height.toDouble();
-      canvas.translate(outputWidth / 2, outputHeight / 2);
-      canvas.rotate(radians);
-      canvas.scale(
-        _flipHorizontal ? -scale : scale,
-        _flipVertical ? -scale : scale,
+      final rotatedImage = await ImageEditorExportEngine.rotateAndFlip(
+        image,
+        totalDegrees: totalDegrees,
+        scaleToFill: scale,
+        flipHorizontal: _flipHorizontal,
+        flipVertical: _flipVertical,
       );
-      canvas.translate(-image.width / 2, -image.height / 2);
-      canvas.drawImage(image, Offset.zero, Paint());
-      final rotatedImage = await recorder.endRecording().toImage(
-        outputWidth.round(),
-        outputHeight.round(),
-      );
-      final data = await rotatedImage.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      if (data == null) return null;
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/rotate_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(data.buffer.asUint8List());
-      return file.path;
+      image.dispose();
+      return _writeImageToTemp(rotatedImage, 'rotate');
     } catch (e) {
-      return null;
-    }
-  }
-
-  Future<String?> _applyProAdjustmentsToCurrentImage() async {
-    if (_currentPath.isEmpty ||
-        (!_hasProBaseAdjustments &&
-            !_hasProHslAdjustments &&
-            !_hasBwLevelsAdjustments &&
-            !_hasLocalAdjustments)) {
-      return _currentPath;
-    }
-    try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final dstRect = Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
-      );
-      final paint = Paint()
-        ..colorFilter = ColorFilter.matrix(_buildCombinedProColorMatrix());
-      canvas.drawImageRect(image, dstRect, dstRect, paint);
-      final adjusted = await recorder.endRecording().toImage(
-        image.width,
-        image.height,
-      );
-      final data = await adjusted.toByteData(format: ui.ImageByteFormat.png);
-      if (data == null) return null;
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/pro_adjust_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(data.buffer.asUint8List());
-      return file.path;
-    } catch (_) {
       return null;
     }
   }
@@ -276,34 +214,49 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     try {
       final bytes = await _loadImageBytes(_currentPath);
       if (bytes.isEmpty) return null;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final rect = Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      final adjusted = await ImageEditorExportEngine.applyColorMatrix(
+        image,
+        _buildFilterColorMatrix(preset, strength.toDouble()),
       );
-      final paint = Paint()
-        ..colorFilter = ColorFilter.matrix(
-          _buildFilterColorMatrix(preset, strength.toDouble()),
-        );
-      canvas.drawImageRect(image, rect, rect, paint);
-      final adjusted = await recorder.endRecording().toImage(
-        image.width,
-        image.height,
+      image.dispose();
+      return _writeImageToTemp(adjusted, 'filter');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 马赛克烘焙：全尺寸合成笔画。
+  Future<String?> _applyMosaicToCurrentImage() async {
+    if (_currentPath.isEmpty || _mosaicStrokes.isEmpty) return _currentPath;
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty) return null;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      final composed = await ImageEditorExportEngine.applyMosaicStrokes(
+        image,
+        List<ImageEditorMosaicStroke>.of(_mosaicStrokes),
       );
-      final data = await adjusted.toByteData(format: ui.ImageByteFormat.png);
-      if (data == null) return null;
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/filter_${DateTime.now().millisecondsSinceEpoch}.png',
+      image.dispose();
+      return _writeImageToTemp(composed, 'mosaic');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 文字烘焙：全尺寸合成文字项。
+  Future<String?> _applyTextToCurrentImage() async {
+    if (_currentPath.isEmpty || _textItems.isEmpty) return _currentPath;
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty) return null;
+      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
+      final composed = await ImageEditorExportEngine.applyTextItems(
+        image,
+        List<ImageEditorTextItem>.of(_textItems),
       );
-      await file.writeAsBytes(data.buffer.asUint8List());
-      return file.path;
+      image.dispose();
+      return _writeImageToTemp(composed, 'text');
     } catch (_) {
       return null;
     }
@@ -321,82 +274,135 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     return data.buffer.asUint8List();
   }
 
+  /// 提交一个已烘焙步骤：写入路径槽位、记录快照、上报工具使用。
+  void _commitBakedStep({
+    required ImageEditorStepPayload payload,
+    required String beforePath,
+    required String afterPath,
+  }) {
+    _paths[_currentIndex] = afterPath;
+    _loadImageAspectRatio(afterPath);
+    _clearFilterPreviewCache();
+    _pushStep(
+      ImageEditorStep(
+        payload: payload,
+        imageIndex: _currentIndex,
+        beforePath: beforePath,
+        afterPath: afterPath,
+      ),
+    );
+  }
+
   Future<void> _confirmToolPanel() async {
     if (_selectedToolIndex == null) return;
     final toolIndex = _selectedToolIndex!;
-    final type = kImageEditorToolTypes[toolIndex];
-    final params = imageEditorToolConfirmParamsBase(toolIndex);
+    final beforePath = _currentPath;
     if (toolIndex == kImageEditorToolRotate) {
       if (!_isRotateEdited) {
         _setEditorState(() => _selectedToolIndex = null);
         return;
       }
       final rotatedPath = await _applyRotateToCurrentImage();
-      if (rotatedPath != null) {
-        _paths[_currentIndex] = rotatedPath;
-        _loadImageAspectRatio(rotatedPath);
-        _clearFilterPreviewCache();
-        params['degrees'] = _rotateDegrees;
-        params['fineDegrees'] = _rotateFineDegrees;
-        params['flipHorizontal'] = _flipHorizontal;
-        params['flipVertical'] = _flipVertical;
-        params['path'] = rotatedPath;
-        _resetRotateState();
-      } else {
-        await _showEditorActionFailure(title: '旋转未保存');
+      if (rotatedPath == null) {
+        await _showEditorActionFailure(
+          title: UITextConstants.imageEditorRotate,
+        );
         return;
       }
+      _commitBakedStep(
+        payload: ImageEditorRotateStepPayload(
+          degrees: _rotateDegrees,
+          fineDegrees: _rotateFineDegrees,
+          flipHorizontal: _flipHorizontal,
+          flipVertical: _flipVertical,
+        ),
+        beforePath: beforePath,
+        afterPath: rotatedPath,
+      );
+      _resetRotateState();
     }
     if (toolIndex == kImageEditorToolCrop) {
       final croppedPath = await _applyCropToCurrentImage();
-      if (croppedPath != null) {
-        _paths[_currentIndex] = croppedPath;
-        _loadImageAspectRatio(croppedPath);
-        _clearFilterPreviewCache();
-        _prepareCropSnapshot();
-        params['ratio'] = _cropRatio;
-        params['path'] = croppedPath;
-      } else {
-        await _showEditorActionFailure(title: '裁剪未保存');
+      if (croppedPath == null) {
+        await _showEditorActionFailure(title: UITextConstants.imageEditorCrop);
         return;
       }
+      _commitBakedStep(
+        payload: ImageEditorCropStepPayload(ratio: _cropRatio),
+        beforePath: beforePath,
+        afterPath: croppedPath,
+      );
+      _prepareCropSnapshot();
     }
     if (toolIndex == kImageEditorToolFilter) {
       final preset = _selectedFilterPreset;
       if (preset != null && _hasFilterAdjustments) {
         final filteredPath = await _applyFilterToCurrentImage();
         if (filteredPath == null) {
-          await _showEditorActionFailure(title: '滤镜未保存');
+          await _showEditorActionFailure(
+            title: UITextConstants.imageEditorFilter,
+          );
           return;
         }
-        _paths[_currentIndex] = filteredPath;
-        _loadImageAspectRatio(filteredPath);
-        _clearFilterPreviewCache();
-        params['path'] = filteredPath;
-        params['category'] = _filterCategoryIndex;
-        params['presetId'] = preset.id;
-        params['presetName'] = preset.name;
-        params['intensity'] = _filterIntensity;
+        _commitBakedStep(
+          payload: ImageEditorFilterStepPayload(
+            presetId: preset.id,
+            presetName: preset.name,
+            intensity: _filterIntensity,
+          ),
+          beforePath: beforePath,
+          afterPath: filteredPath,
+        );
         await _filterRepository.savePresetUseStats(preset.id);
         await _rebuildFilterData();
-      } else {
-        params['category'] = _filterCategoryIndex;
-        params['presetId'] = null;
-        params['intensity'] = 0;
       }
     }
     if (toolIndex == kImageEditorToolMosaic) {
-      params['type'] = _mosaicTypeIndex;
-      params['size'] = _mosaicBrushSize;
-    }
-    if (toolIndex == kImageEditorToolFrame) {
-      params['template'] = _frameTemplateIndex;
+      if (_mosaicStrokes.isNotEmpty) {
+        final mosaicPath = await _applyMosaicToCurrentImage();
+        if (mosaicPath == null) {
+          await _showEditorActionFailure(
+            title: UITextConstants.imageEditorMosaic,
+          );
+          return;
+        }
+        _commitBakedStep(
+          payload: ImageEditorMosaicStepPayload(
+            strokes: List<ImageEditorMosaicStroke>.of(_mosaicStrokes),
+          ),
+          beforePath: beforePath,
+          afterPath: mosaicPath,
+        );
+      }
+      _setEditorState(() {
+        _mosaicStrokes.clear();
+        _activeMosaicStroke = null;
+      });
+      _disposeMosaicSessionResources();
     }
     if (toolIndex == kImageEditorToolText) {
-      params['style'] = _textStyleIndex;
-      params['color'] = _textColorIndex;
+      if (_textItems.isNotEmpty) {
+        final textPath = await _applyTextToCurrentImage();
+        if (textPath == null) {
+          await _showEditorActionFailure(
+            title: UITextConstants.imageEditorText,
+          );
+          return;
+        }
+        _commitBakedStep(
+          payload: ImageEditorTextStepPayload(
+            items: List<ImageEditorTextItem>.of(_textItems),
+          ),
+          beforePath: beforePath,
+          afterPath: textPath,
+        );
+      }
+      _setEditorState(() {
+        _textItems.clear();
+        _selectedTextItemId = null;
+      });
     }
-    _pushStep(ImageEditorStep(type: type, params: params));
+    if (!mounted) return;
     _setEditorState(() {
       if (toolIndex == kImageEditorToolFilter) {
         _selectedFilterPresetId = null;
@@ -422,21 +428,18 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
   /// 剪裁顶栏完成 / 底部 ✓：应用剪裁并仅退出剪裁面板，返回图片编辑器（不退出整个编辑器）。
   Future<void> _confirmCropAndExit() async {
     if (_selectedToolIndex != kImageEditorToolCrop) return;
+    final beforePath = _currentPath;
     final croppedPath = await _applyCropToCurrentImage();
     if (croppedPath == null) {
-      await _showEditorActionFailure(title: '裁剪未保存');
+      await _showEditorActionFailure(title: UITextConstants.imageEditorCrop);
       return;
     }
-    _paths[_currentIndex] = croppedPath;
-    _loadImageAspectRatio(croppedPath);
-    _clearFilterPreviewCache();
-    _prepareCropSnapshot();
-    _pushStep(
-      ImageEditorStep(
-        type: 'crop',
-        params: {'ratio': _cropRatio, 'path': croppedPath},
-      ),
+    _commitBakedStep(
+      payload: ImageEditorCropStepPayload(ratio: _cropRatio),
+      beforePath: beforePath,
+      afterPath: croppedPath,
     );
+    _prepareCropSnapshot();
     if (!mounted) return;
     _setEditorState(() => _selectedToolIndex = null);
   }

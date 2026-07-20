@@ -356,12 +356,14 @@ def _managed_checkpoint_interruption_is_resumable(
     marker = state.managed_checkpoint_interruption
     if isinstance(marker, Mapping) and str(marker.get("stage") or "") == stage:
         return bool(marker.get("resumable"))
-    last_run = state.last_agent_run
-    if not isinstance(last_run, Mapping):
-        return False
-    return (
-        str(last_run.get("stage") or "") == stage
-        and str(last_run.get("status") or "") == "interrupted"
+    from content.execution.agent.history import last_managed_agent_run
+    from core.control_types import ManagedAgentCheckpointStatus
+
+    last_run = last_managed_agent_run(state)
+    return bool(
+        last_run
+        and last_run.stage.value == stage
+        and last_run.status is ManagedAgentCheckpointStatus.INTERRUPTED
     )
 
 @contextmanager

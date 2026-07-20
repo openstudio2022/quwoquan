@@ -228,6 +228,20 @@ func (r *Report) Status() Status {
 	return r.status
 }
 
+func (r *Report) ReviewerID() string {
+	if r == nil {
+		return ""
+	}
+	return r.reviewerID
+}
+
+func (r *Report) Resolution() Resolution {
+	if r == nil {
+		return ""
+	}
+	return r.resolution
+}
+
 func (r *Report) Snapshot() Snapshot {
 	if r == nil {
 		return Snapshot{}

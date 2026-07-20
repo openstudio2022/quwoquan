@@ -55,6 +55,7 @@ fields:
   - { name: primaryHomepageType }
   - { name: primaryHomepageSnapshot }
   - { name: status }
+  - { name: moderationStatus }
   - { name: visibility }
   - { name: likeCount }
   - { name: commentCount }

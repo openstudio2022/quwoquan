@@ -2,12 +2,19 @@ import 'package:livekit_client/livekit_client.dart' show VideoTrack;
 import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 
+const int callParticipantSummaryLimit = 6;
+
+int callParticipantOverflowCount(int participantCount) =>
+    participantCount > callParticipantSummaryLimit
+    ? participantCount - callParticipantSummaryLimit
+    : 0;
+
 /// UI-oriented view model wrapping CallParticipantDto with derived properties.
 ///
-/// [videoTrack] is the live LiveKit subscribed camera track when available; it
-/// is intentionally excluded from `==`/`hashCode` (tracks are identity-stable
-/// media objects, equality is keyed on userId + observable state). [isLocal]
-/// marks the local participant so the tile can mirror/decorate accordingly.
+/// [videoTrack] 与 [screenShareTrack] 分别承载 LiveKit camera 与
+/// screen-share-video 订阅轨道。轨道按 identity 参与相等性，避免轨道替换后
+/// Riverpod 误判状态未变化；hashCode 只使用稳定展示事实，允许非相等对象同 hash。
+/// [isLocal] 标记本地参与者，供画面镜像与装饰使用。
 class CallParticipant {
   final String userId;
   final String displayName;
@@ -21,16 +28,11 @@ class CallParticipant {
   final DateTime? joinedAt;
   final DateTime? leftAt;
   final VideoTrack? videoTrack;
+  final VideoTrack? screenShareTrack;
   final bool isLocal;
 
   /// 信任关系（known=可信；possiblyUnknown=提示注意隐私）。
   final TrustRelation trustRelation;
-
-  /// 来源标签（如「当前会话」「联系人」「其他群」），用于加人/入会信任提示。
-  final String? sourceLabel;
-
-  /// 媒体连接质量（端侧弱网指示来源之一），可空表示未知。
-  final ConnectionQuality? connectionQuality;
 
   const CallParticipant({
     required this.userId,
@@ -45,33 +47,33 @@ class CallParticipant {
     this.joinedAt,
     this.leftAt,
     this.videoTrack,
+    this.screenShareTrack,
     this.isLocal = false,
     this.trustRelation = TrustRelation.possiblyUnknown,
-    this.sourceLabel,
-    this.connectionQuality,
   });
 
   bool get hasVideoTrack => videoTrack != null;
+  bool get hasScreenShareTrack => screenShareTrack != null;
 
+  /// CallParticipantDto 精简后只承载参与状态；展示名/头像/关系上下文由
+  /// 调用方经联系人/成员快照注入，未注入时回退 userId 与保守信任提示。
   factory CallParticipant.fromDto(
     CallParticipantDto dto, {
     String? displayName,
     String? avatarUrl,
+    TrustRelation trustRelation = TrustRelation.possiblyUnknown,
   }) {
     return CallParticipant(
       userId: dto.userId,
-      displayName: displayName ?? dto.displayName ?? dto.userId,
-      avatarUrl: avatarUrl ?? dto.avatarUrl,
+      displayName: displayName ?? dto.userId,
+      avatarUrl: avatarUrl,
       role: ParticipantRole.fromString(dto.role),
       status: ParticipantStatus.fromString(dto.status),
       isMuted: dto.isMuted,
       isCameraOn: dto.isCameraOn,
-      isSpeaking: dto.isSpeaking,
       joinedAt: dto.joinedAt,
       leftAt: dto.leftAt,
-      trustRelation: TrustRelation.fromString(dto.trustRelation),
-      sourceLabel: dto.sourceLabel,
-      connectionQuality: ConnectionQuality.fromString(dto.connectionQuality),
+      trustRelation: trustRelation,
     );
   }
 
@@ -96,10 +98,10 @@ class CallParticipant {
     DateTime? leftAt,
     VideoTrack? videoTrack,
     bool clearVideoTrack = false,
+    VideoTrack? screenShareTrack,
+    bool clearScreenShareTrack = false,
     bool? isLocal,
     TrustRelation? trustRelation,
-    String? sourceLabel,
-    ConnectionQuality? connectionQuality,
   }) {
     return CallParticipant(
       userId: userId ?? this.userId,
@@ -114,10 +116,11 @@ class CallParticipant {
       joinedAt: joinedAt ?? this.joinedAt,
       leftAt: leftAt ?? this.leftAt,
       videoTrack: clearVideoTrack ? null : (videoTrack ?? this.videoTrack),
+      screenShareTrack: clearScreenShareTrack
+          ? null
+          : (screenShareTrack ?? this.screenShareTrack),
       isLocal: isLocal ?? this.isLocal,
       trustRelation: trustRelation ?? this.trustRelation,
-      sourceLabel: sourceLabel ?? this.sourceLabel,
-      connectionQuality: connectionQuality ?? this.connectionQuality,
     );
   }
 
@@ -132,19 +135,18 @@ class CallParticipant {
           isCameraOn == other.isCameraOn &&
           isSpeaking == other.isSpeaking &&
           identical(videoTrack, other.videoTrack) &&
+          identical(screenShareTrack, other.screenShareTrack) &&
           isLocal == other.isLocal &&
-          trustRelation == other.trustRelation &&
-          connectionQuality == other.connectionQuality;
+          trustRelation == other.trustRelation;
 
   @override
   int get hashCode => Object.hash(
-        userId,
-        status,
-        isMuted,
-        isCameraOn,
-        isSpeaking,
-        isLocal,
-        trustRelation,
-        connectionQuality,
-      );
+    userId,
+    status,
+    isMuted,
+    isCameraOn,
+    isSpeaking,
+    isLocal,
+    trustRelation,
+  );
 }

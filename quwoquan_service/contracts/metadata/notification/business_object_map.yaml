@@ -19,7 +19,16 @@ objects:
     queries: named_reader
   bounded_context: Notification
   canonical_object: Notification
-  event_consumers: []
+  event_consumers:
+  - content.CommentCreated
+  - content.ContentReactionSet
+  - content.PostPublished
+  - user.PersonaFollowStateChanged
+  - user.GreetingRequestSent
+  - circle.CircleMembershipJoined
+  - circle.CircleGroupMembershipRequested
+  - circle.CircleGroupMembershipActivated
+  - circle.CircleGroupMembershipRejected
   field_roles:
     append_only_fact: []
     authoritative_state:
@@ -80,16 +89,48 @@ objects:
     queries: named_reader
   bounded_context: Notification
   canonical_object: NotificationDeliveryJob
-  event_consumers: []
+  event_consumers:
+  - rtc.CallRinging
+  - rtc.CallAnswered
+  - rtc.CallEnded
   field_roles:
     append_only_fact: []
     authoritative_state:
     - id
+    - dedupeKey
     - channel
     - destinationRef
     - status
     - attemptCount
     - nextAttemptAt
+    - eventId
+    - callId
+    - targetPersonaId
+    - deviceId
+    - deliveryKey
+    - callType
+    - callerName
+    - callerAvatarUrl
+    - sourceLabel
+    - trustRelation
+    - expiresAt
+    - ackDeadlineAt
+    - version
+    - realtimeDispatchedAt
+    - presentedAt
+    - pushQueuedAt
+    - sentUnconfirmedAt
+    - cancelledAt
+    - cancellationEventId
+    - cancellationEventType
+    - cancellationActorId
+    - cancellationOccurredAt
+    - cancellationRealtimeDispatchedAt
+    - cancellationPushRequired
+    - cancellationExternalInteractionId
+    - cancellationPushSubmittedAt
+    - ackRaceCount
+    - lastAckRaceAt
     - createdAt
     - updatedAt
     - notificationId
@@ -99,6 +140,10 @@ objects:
     reference:
     - notificationId
     - externalInteractionId
+    - callId
+    - targetPersonaId
+    - cancellationActorId
+    - cancellationExternalInteractionId
     transport_only: []
   identity:
     fields:
@@ -110,6 +155,7 @@ objects:
   - notification/notification_delivery_job/entity.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
+  - AckIncomingCallPresentation
   - RecoverNotificationDeliveryJob
   object_kind: aggregate_root
   relationships:
@@ -131,7 +177,47 @@ objects:
     reference_fields:
     - externalInteractionId
     target_object: integration.ExternalInteraction
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: callSession
+    on_delete: retain
+    reference_fields:
+    - callId
+    target_object: rtc.CallSession
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: targetPersona
+    on_delete: retain
+    reference_fields:
+    - targetPersonaId
+    target_object: user.Persona
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: cancellationActor
+    on_delete: retain
+    reference_fields:
+    - cancellationActorId
+    target_object: user.Persona
+  - access: command_facade
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: cancellationExternalDelivery
+    on_delete: retain
+    reference_fields:
+    - cancellationExternalInteractionId
+    target_object: integration.ExternalInteraction
   source_document: notification/notification_delivery_job/fields.yaml
   source_entity: NotificationDeliveryJob
   storage_backend: mongodb
   storage_role: authoritative
+  local_identity_reasons:
+    cancellationEventId: immutable RTC terminal-event correlation key, not a standalone aggregate identity
+    deviceId: delivery routing key scoped to one NotificationDeliveryJob; authoritative device lifecycle remains in user.DeviceRegistration
+    eventId: immutable source-event correlation key, not a standalone aggregate identity

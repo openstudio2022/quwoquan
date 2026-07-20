@@ -39,9 +39,6 @@ type DefaultToolCoordinator struct {
 func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (ToolExecution, error) {
 	now := c.now()
 	toolName := strings.TrimSpace(req.ToolName)
-	if toolName == "" {
-		toolName = "mock_search"
-	}
 	toolUseID, err := rtid.Generate(rtid.PrefixToolUse)
 	if err != nil {
 		return ToolExecution{}, err
@@ -71,7 +68,7 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	}
 	registry := c.Registry
 	if registry.IsZero() {
-		registry = toolpkg.DefaultRegistry()
+		registry = toolpkg.BaseRegistry()
 	}
 	meta, ok := registry.Metadata(toolName)
 	if !ok {

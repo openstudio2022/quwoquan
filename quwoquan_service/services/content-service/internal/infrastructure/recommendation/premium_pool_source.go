@@ -138,6 +138,7 @@ func GatePremiumStreamSource(source rtrec.CandidateSource) rtrec.CandidateSource
 
 func (s premiumStreamGateSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	if premiumPoolRoute(req) && !s.allowPremium {
+		rtrec.RecordFeedGateFiltered("premium_stream", 1)
 		return nil, nil
 	}
 	return s.source.Recall(ctx, req)

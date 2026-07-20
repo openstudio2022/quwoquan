@@ -12,6 +12,11 @@ import (
 
 func TestTelemetryMetricsUseOnlyBoundedNonSensitiveLabels(t *testing.T) {
 	recordTelemetryIngestMetrics("accepted", 2, 10*time.Millisecond)
+	detected := "detected"
+	recordAppExperienceEvents([]application.EventRecordInput{{
+		EventType: "app_anr_outcome",
+		Result:    &detected,
+	}})
 	store := instrumentEventLogStore(persistence.NewMemoryTelemetryStore())
 	_, _ = store.GetEventSummary(context.Background(), application.EventSummaryQuery{
 		From: time.Now().Add(-time.Hour),
@@ -22,14 +27,17 @@ func TestTelemetryMetricsUseOnlyBoundedNonSensitiveLabels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gather telemetry metrics: %v", err)
 	}
-	allowed := map[string]bool{"result": true, "operation": true}
+	allowed := map[string]bool{
+		"result": true, "operation": true, "event_type": true,
+	}
 	found := map[string]bool{}
 	for _, family := range families {
 		name := family.GetName()
 		if name != "ops_telemetry_ingest_batches_total" &&
 			name != "ops_telemetry_ingest_events_total" &&
 			name != "ops_telemetry_ingest_duration_seconds" &&
-			name != "ops_telemetry_logstore_operation_duration_seconds" {
+			name != "ops_telemetry_logstore_operation_duration_seconds" &&
+			name != "ops_app_experience_events_total" {
 			continue
 		}
 		found[name] = true
@@ -41,7 +49,7 @@ func TestTelemetryMetricsUseOnlyBoundedNonSensitiveLabels(t *testing.T) {
 			}
 		}
 	}
-	if len(found) != 4 {
+	if len(found) != 5 {
 		t.Fatalf("missing telemetry metric families: %+v", found)
 	}
 }

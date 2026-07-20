@@ -31,7 +31,7 @@ alwaysApply: true
 - **R-XP2 平台判断单一真相源**：业务层禁止裸用 `Platform.isAndroid/isIOS/...`、`Platform.operatingSystem`、`kIsWeb`。平台判断只允许出现在 `lib/core/platform/**`（用于装配与 observability）。
 - **R-XP3 dart:io 收口**：业务层禁止**新增** `import 'dart:io'`；文件/路径/目录能力走 `FileStorageGateway`。存量 32 处进 allowlist 基线，**只减不增**。
 - **R-XP4 原生能力走防腐接口**：业务层禁止**新增**裸 `MethodChannel` / `EventChannel` / `BasicMessageChannel`。必须经 `NativeBridge` 抽象；未实现平台返回结构化「不可用」（`PlatformCapabilityUnavailableException.runtimeFailure`，对齐 [10-runtime-error-cutover](10-runtime-error-cutover.mdc)），禁止 crash。
-- **R-XP5 缺失即一致降级**：任何平台特有能力（相机、相册、RTC、来电、视频编辑、安全存储、后台音频）必须有 capability 探测 + 降级路径；降级的权限/错误/提示语义跨平台同源（对齐 [07-error-permission-semantics](../quwoquan_app/.cursor/rules/07-error-permission-semantics.mdc)）。禁止「仅某平台可用」的硬编码直连。
+- **R-XP5 缺失即一致降级**：任何平台特有能力（相机、相册、RTC、来电、视频编辑、安全存储、后台音频）必须有 capability 探测 + 降级路径；降级的权限/错误/提示语义跨平台同源（对齐 [10-runtime-error-cutover](10-runtime-error-cutover.mdc)）。禁止「仅某平台可用」的硬编码直连。
 
 ## 2. 必守（PR_WARN / 评审拦截）
 

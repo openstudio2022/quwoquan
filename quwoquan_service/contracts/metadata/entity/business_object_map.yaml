@@ -24,10 +24,12 @@ objects:
     append_only_fact: []
     authoritative_state:
     - homepageId
+    - version
     - title
     - subtitle
     - homepageType
     - canonicalEntityId
+    - lookupAliases
     - objectPageTemplate
     - status
     - sourceType
@@ -67,19 +69,18 @@ objects:
   identity:
     fields:
     - homepageId
-    version_source: store_commit
+    version_field: version
+    version_source: field
   invariant_refs:
   - entity/homepage/aggregate.yaml#business_rules
   lifecycle_refs:
   - entity/homepage/aggregate.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
-  - FollowHomepage
   - IntakeHomepageCandidate
   - PublishHomepageCandidate
   - ReloadHomepageState
   - SuggestHomepageCandidate
-  - UnfollowHomepage
   - UpdateClaimedHomepageBasics
   object_kind: aggregate_root
   relationships:
@@ -113,7 +114,7 @@ objects:
   field_roles:
     append_only_fact: []
     authoritative_state:
-    - _id
+    - claimRequestId
     - version
     - claimTier
     - businessLicenseUrl
@@ -125,6 +126,7 @@ objects:
     - reviewNote
     - createdAt
     - reviewedAt
+    - updatedAt
     - homepageId
     - requesterPersonaId
     - reviewerAccountId
@@ -137,7 +139,7 @@ objects:
     transport_only: []
   identity:
     fields:
-    - _id
+    - claimRequestId
     version_field: version
     version_source: field
   invariant_refs:
@@ -191,7 +193,7 @@ objects:
   field_roles:
     append_only_fact: []
     authoritative_state:
-    - _id
+    - reviewId
     - rating
     - body
     - tagRefs
@@ -201,6 +203,8 @@ objects:
     - updatedAt
     - homepageId
     - authorPersonaId
+    - authorDisplayNameSnapshot
+    - authorAvatarUrlSnapshot
     owned_value: []
     projection: []
     reference:
@@ -209,7 +213,7 @@ objects:
     transport_only: []
   identity:
     fields:
-    - _id
+    - reviewId
     version_field: version
     version_source: field
   invariant_refs:
@@ -255,7 +259,7 @@ objects:
   field_roles:
     append_only_fact: []
     authoritative_state:
-    - _id
+    - reportId
     - version
     - reason
     - description
@@ -263,6 +267,7 @@ objects:
     - status
     - reviewNote
     - createdAt
+    - updatedAt
     - reviewedAt
     - homepageId
     - reporterPersonaId
@@ -276,7 +281,7 @@ objects:
     transport_only: []
   identity:
     fields:
-    - _id
+    - reportId
     version_field: version
     version_source: field
   invariant_refs:

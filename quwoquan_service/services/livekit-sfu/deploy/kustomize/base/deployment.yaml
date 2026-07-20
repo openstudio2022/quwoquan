@@ -19,6 +19,7 @@ spec:
         - name: livekit-sfu
           image: livekit/livekit-server:v1.7.2@sha256:27d72fa264baa4db4e635b3b6df12d185b4a95fee5f2ddce03e06d150d599e0e
           imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/livekit/livekit.yaml"]
           ports:
             - name: http
               containerPort: 7880
@@ -29,12 +30,19 @@ spec:
             - name: rtc-udp
               containerPort: 7882
               protocol: UDP
+            - name: metrics
+              containerPort: 6789
+              protocol: TCP
           env:
             - name: LIVEKIT_KEYS
               valueFrom:
                 secretKeyRef:
                   name: livekit-sfu-secrets
                   key: LIVEKIT_KEYS
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -54,3 +62,7 @@ spec:
             limits:
               cpu: "4"
               memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: livekit-sfu-config

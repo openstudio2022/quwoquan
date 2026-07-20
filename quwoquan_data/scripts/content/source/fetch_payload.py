@@ -11,13 +11,10 @@ from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_text import (
     _USER_AGENT,
+    _baidu_baike_layout_and_text,
     _toutiao_baike_layout_and_text,
     extract_page_text,
     extract_page_text_with_inline_images,
-)
-from content.source.research.baidu_baike import (
-    baidu_baike_api_url,
-    decode_baidu_baike_payload,
 )
 from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url
 from core.data_issue import (
@@ -101,36 +98,6 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
     if source_extractor:
         runtime = {**runtime, "extractor": source_extractor, "sourceExtractorOverride": True}
     extractor = str(runtime.get("extractor") or "generic_html")
-    if extractor == "baidu_baike_openapi":
-        parsed = urllib.parse.urlparse(url)
-        source_title = str((source or {}).get("sourceTitle") or "").strip()
-        if not source_title:
-            source_title = urllib.parse.unquote(parsed.path.rsplit("/", 1)[-1]).strip()
-        if not source_title:
-            raise RuntimeError("Baidu Baike API adapter requires a resolved source title")
-        api_url = baidu_baike_api_url(source_title)
-        status, body, _ = _http_get_bytes(
-            api_url,
-            timeout=_SOURCE_FETCH_TIMEOUT_SECONDS,
-        )
-        if status != 200 or not body:
-            raise RuntimeError(f"fetch failed for {url} (status={status})")
-        page = decode_baidu_baike_payload(body)
-        if page is None:
-            raise RuntimeError("Baidu Baike API returned no readable exact page")
-        return {
-            "url": url,
-            "statusCode": status,
-            "htmlBytes": body,
-            "text": page.text,
-            "inlineImages": [],
-            "sha256": hashlib.sha256(body).hexdigest(),
-            "runtime": {
-                **runtime,
-                "rawFormat": "baidu_baike_openapi_json",
-                "resolvedTitle": page.title,
-            },
-        }
     if extractor == "wikipedia_api":
         bundle = fetch_mediawiki_page_bundle_for_url(url)
         if bundle is None or not bundle.rendered_text or not bundle.wikitext:
@@ -202,6 +169,18 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
     )
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
+    if extractor == "baidu_baike_html":
+        text, layout = _baidu_baike_layout_and_text(body, url)
+        return {
+            "url": url,
+            "statusCode": status,
+            "htmlBytes": body,
+            "text": text,
+            "inlineImages": [],
+            "layout": layout,
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "runtime": {**runtime, "rawFormat": "baidu_baike_html"},
+        }
     if extractor == "toutiao_baike_html":
         text, layout = _toutiao_baike_layout_and_text(body, url)
         return {

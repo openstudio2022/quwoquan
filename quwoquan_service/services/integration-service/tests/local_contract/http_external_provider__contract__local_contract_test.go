@@ -65,31 +65,35 @@ func smsOTPDependencies(t *testing.T, requestID, challengeID string, expiresAt t
 	return sealer, store
 }
 
-func TestHTTPExternalProviderNormalizesAcceptedResponse(t *testing.T) {
+func TestHTTPExternalProviderNormalizesAcceptedSMSResponse(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Minute)
+	sealer, references := smsOTPDependencies(t, "sms-request-001", "challenge-001", expiresAt)
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer provider-token" {
 			http.Error(w, "missing provider authorization", http.StatusUnauthorized)
 			return
 		}
-		if r.Header.Get("Idempotency-Key") != "push-idempotency-001" {
+		if r.Header.Get("Idempotency-Key") != "sms-idempotency-001" {
 			http.Error(w, "missing idempotency key", http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"messageId": "provider-push-001",
+			"messageId": "provider-sms-001",
 			"status":    "queued",
 		})
 	}))
 	t.Cleanup(upstream.Close)
 	externalProvider, err := provider.NewHTTPExternalProvider(
 		provider.HTTPExternalProviderConfig{
-			Name:        "vendor_push",
-			Operation:   reliabletask.ExternalInteractionOperationPush,
-			Endpoint:    upstream.URL,
-			BearerToken: "provider-token",
-			Timeout:     time.Second,
+			Name:              "aliyun_sms",
+			Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
+			Endpoint:          upstream.URL,
+			BearerToken:       "provider-token",
+			Timeout:           time.Second,
+			OTPCodeSealer:     sealer,
+			OTPCodeReferences: references,
 		},
 		upstream.Client(),
 	)
@@ -99,18 +103,18 @@ func TestHTTPExternalProviderNormalizesAcceptedResponse(t *testing.T) {
 	result, err := externalProvider.Send(
 		context.Background(),
 		reliabletask.ExternalInteractionRequest{
-			RequestID:      "push-request-001",
-			Operation:      reliabletask.ExternalInteractionOperationPush,
+			RequestID:      "sms-request-001",
+			Operation:      reliabletask.ExternalInteractionOperationSmsOTP,
 			Tenant:         "quwoquan",
 			Env:            "gamma",
-			IdempotencyKey: "push-idempotency-001",
-			PayloadRef:     "notification:001",
+			IdempotencyKey: "sms-idempotency-001",
+			PayloadRef:     "challenge:001",
 			PayloadDigest:  "sha256:digest",
-			Sensitivity:    "private",
-			ExpiresAt:      time.Now().UTC().Add(time.Minute),
+			Sensitivity:    "secret",
+			ExpiresAt:      expiresAt,
 			Payload: map[string]string{
-				"notificationId": "notification-001",
-				"recipientId":    "user-001",
+				"challengeId": "challenge-001",
+				"templateId":  "sms_otp_login",
 			},
 		},
 		reliabletask.ReliableAsyncTask{TaskID: "task-001"},
@@ -118,8 +122,8 @@ func TestHTTPExternalProviderNormalizesAcceptedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("send HTTP provider request: %v", err)
 	}
-	if result.Provider != "vendor_push" ||
-		result.ProviderRequestID != "provider-push-001" ||
+	if result.Provider != "aliyun_sms" ||
+		result.ProviderRequestID != "provider-sms-001" ||
 		result.Status != reliabletask.ExternalInteractionStatusSentUnconfirmed {
 		t.Fatalf("unexpected normalized result: %+v", result)
 	}
@@ -182,15 +186,31 @@ func TestHTTPExternalProviderNormalizesRemoteFailure(t *testing.T) {
 func TestHTTPExternalProviderFailsClosedWithoutCredentials(t *testing.T) {
 	_, err := provider.NewHTTPExternalProvider(
 		provider.HTTPExternalProviderConfig{
-			Name:      "vendor_push",
-			Operation: reliabletask.ExternalInteractionOperationPush,
-			Endpoint:  "https://push.example.invalid/send",
+			Name:      "aliyun_sms",
+			Operation: reliabletask.ExternalInteractionOperationSmsOTP,
+			Endpoint:  "https://sms.example.invalid/send",
 			Timeout:   time.Second,
 		},
 		http.DefaultClient,
 	)
 	if err == nil {
 		t.Fatal("missing provider token must fail closed")
+	}
+}
+
+func TestHTTPExternalProviderDoesNotImplementPushDelivery(t *testing.T) {
+	_, err := provider.NewHTTPExternalProvider(
+		provider.HTTPExternalProviderConfig{
+			Name:        "fcm",
+			Operation:   reliabletask.ExternalInteractionOperationPush,
+			Endpoint:    "https://fcm.googleapis.com/v1/projects/test/messages:send",
+			BearerToken: "must-not-enable-generic-push",
+			Timeout:     time.Second,
+		},
+		http.DefaultClient,
+	)
+	if err == nil {
+		t.Fatal("generic bearer-token HTTP provider must not implement push delivery")
 	}
 }
 

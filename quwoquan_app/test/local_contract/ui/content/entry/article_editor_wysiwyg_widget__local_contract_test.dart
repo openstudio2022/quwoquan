@@ -112,15 +112,31 @@ Finder _activeSlotInputs() {
 }
 
 /// 构建带有 nodes 的 ArticleDocumentData。
-ArticleDocumentData _buildDocument({
-  String title = '',
-  String body = '',
-  List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
-}) {
-  return createDefaultArticleDocument(
-    title: title,
-    body: body,
-    imagePaths: assets.map((a) => a.imageUrl).toList(),
+ArticleDocumentData _buildDocument({String title = '', String body = ''}) {
+  final paragraphs = body
+      .split('\n')
+      .where((line) => line.trim().isNotEmpty)
+      .toList(growable: false);
+  return ArticleDocumentData(
+    nodes: <ArticleDocumentNode>[
+      if (title.trim().isNotEmpty)
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: title,
+        ),
+      for (final entry in paragraphs.indexed)
+        ArticleDocumentNode(
+          id: 'paragraph_${entry.$1}',
+          type: ArticleDocumentNodeType.paragraph,
+          text: entry.$2,
+        ),
+      if (paragraphs.isEmpty && title.trim().isEmpty)
+        const ArticleDocumentNode(
+          id: 'paragraph_0',
+          type: ArticleDocumentNodeType.paragraph,
+        ),
+    ],
   );
 }
 
@@ -175,17 +191,22 @@ class _EditorHarnessState extends State<_EditorHarness> {
 
   void _applyDocument(ArticleDocumentData document, {String? activeBlockId}) {
     final pages = buildArticlePagesSnapshotFromDocument(document);
-    final blocks = buildArticleBlocksFromDocument(document);
+    final fallbackNodeId = document.nodes.isEmpty
+        ? null
+        : document.nodes
+              .firstWhere(
+                (node) => !node.isDocumentTitle && !node.isFigure,
+                orElse: () => document.nodes.first,
+              )
+              .id;
     state = state.copyWith(
       title: document.title,
       body: document.body,
       imagePaths: extractArticleImagePathsFromDocument(document),
       articleDocument: document,
       articlePages: pages,
-      articleBlocks: blocks,
       activeArticlePageId: pages.isNotEmpty ? pages.first.id : null,
-      activeArticleBlockId:
-          activeBlockId ?? (blocks.isNotEmpty ? blocks.first.id : null),
+      activeArticleBlockId: activeBlockId ?? fallbackNodeId,
     );
   }
 
@@ -333,7 +354,14 @@ class _EditorHarnessState extends State<_EditorHarness> {
 
     final document = widget.seedDocument ?? _buildDocument();
     final pages = buildArticlePagesSnapshotFromDocument(document);
-    final blocks = buildArticleBlocksFromDocument(document);
+    final fallbackNodeId = document.nodes.isEmpty
+        ? null
+        : document.nodes
+              .firstWhere(
+                (node) => !node.isDocumentTitle && !node.isFigure,
+                orElse: () => document.nodes.first,
+              )
+              .id;
     state = CreateEditorState(
       editorKind: CreateEditorKind.text,
       draftFlowKind: CreateDraftFlowKind.article,
@@ -358,9 +386,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
       articlePaperTexture: ArticlePaperTexture.darkPaper,
       articleFontPreset: ArticleFontPreset.clean,
       articlePages: pages,
-      articleBlocks: blocks,
       activeArticlePageId: pages.isNotEmpty ? pages.first.id : null,
-      activeArticleBlockId: blocks.isNotEmpty ? blocks.first.id : null,
+      activeArticleBlockId: fallbackNodeId,
       articleCoverImagePath: '',
       titlePresentation: TitlePresentation.collapsed,
       titleHintDismissed: false,
@@ -559,7 +586,7 @@ void main() {
     expect(find.byKey(TestKeys.createAccessoryEmojiButton), findsOneWidget);
     expect(find.byKey(TestKeys.createAccessoryStructureButton), findsOneWidget);
     expect(find.byKey(TestKeys.createAccessoryMentionButton), findsOneWidget);
-    // 空文档时显示占位正文输入框
+    // 主正文测试键绑定 canonical 首个 paragraph node，不是第二份正文状态。
     expect(find.byKey(TestKeys.createMomentInput), findsOneWidget);
   });
 
@@ -626,10 +653,10 @@ void main() {
 
     expect(find.byKey(TestKeys.createStructurePanel), findsOneWidget);
 
-    // 第一行：大标题 / 小标题 / 引用
+    // 第一行：大标题 / 小标题。文档模型没有 quote node，入口不得展示无效按钮。
     expect(find.text('大标题'), findsOneWidget);
     expect(find.text('小标题'), findsOneWidget);
-    expect(find.text('引用'), findsOneWidget);
+    expect(find.text('引用'), findsNothing);
 
     // 第三行：行内样式
     expect(find.text('加粗'), findsOneWidget);
@@ -668,14 +695,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('有正文内容时不显示占位输入框', (tester) async {
+  testWidgets('有正文内容时复用 canonical 主正文输入框', (tester) async {
     final doc = _buildDocument(body: '第一段正文内容');
     await tester.pumpWidget(_EditorHarness(seedDocument: doc));
     await tester.pumpAndSettle();
 
-    // 占位输入框不应出现
-    expect(find.byKey(TestKeys.createMomentInput), findsNothing);
-    // 正文内容应在 node 级 TextField 中
+    expect(find.byKey(TestKeys.createMomentInput), findsOneWidget);
     expect(find.text('第一段正文内容'), findsOneWidget);
   });
 
@@ -1158,7 +1183,7 @@ void main() {
     expect(find.text('第一段正文'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('第二段正文'), findsOneWidget);
-    expect(find.byKey(TestKeys.createMomentInput), findsNothing);
+    expect(find.byKey(TestKeys.createMomentInput), findsOneWidget);
   });
 
   // ── 阶段 1 回归测试：wrap 无界约束止血 ──
@@ -1355,10 +1380,10 @@ void main() {
       expect(find.text('加粗'), findsOneWidget);
       expect(find.text('斜体'), findsOneWidget);
 
-      // 验证标题和引用按钮存在
+      // 验证标题按钮存在，未实现的引用结构不得回归为空操作。
       expect(find.text('大标题'), findsOneWidget);
       expect(find.text('小标题'), findsOneWidget);
-      expect(find.text('引用'), findsOneWidget);
+      expect(find.text('引用'), findsNothing);
 
       // 点击加粗按钮不崩溃
       await tester.tap(find.text('加粗'));
@@ -1389,8 +1414,8 @@ void main() {
       await tester.tap(structureButton);
       await tester.pumpAndSettle();
 
-      // 样式面板中应有序号相关选项
-      expect(find.text('引用'), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.list_bullet), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.list_number), findsOneWidget);
     }
   });
 

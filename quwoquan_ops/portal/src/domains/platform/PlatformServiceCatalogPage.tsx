@@ -40,18 +40,10 @@ export function PlatformServiceCatalogPage() {
       meta={
         <>
           <span className="badge badge--neutral">catalog / plane binding</span>
-          <span className="badge badge--success">支持独立扩缩容演进</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
-            {remoteReady ? '真实目录服务已接入' : '当前展示回退到门户样例'}
+            {remoteReady ? '真实目录服务已接入' : '等待平台控制面连接'}
           </span>
           <RuntimeErrorBadge error={runtimeError} />
-        </>
-      }
-      actions={<button className="button button--primary">新增领域接入评审</button>}
-      footer={
-        <>
-          <button className="button">查看拓扑 diff</button>
-          <button className="button button--primary">导出责任边界</button>
         </>
       }
     >

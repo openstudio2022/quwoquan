@@ -1,0 +1,225 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+groups:
+  - name: quwoquan_content_contract_comment
+    rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/comments/[^/]+/media:bind$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.BindMediaAssetsToComment"
+          contract_metric: "content_comment_attachments_bind"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/comments/[^/]+/media:bind$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.BindMediaAssetsToComment"
+          contract_metric: "content_comment_attachments_bind"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/posts/[^/]+/comments$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.CreateComment"
+          contract_metric: "content_comment_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/posts/[^/]+/comments$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.CreateComment"
+          contract_metric: "content_comment_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="DELETE",route=~"^/content/posts/[^/]+/comments/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.DeleteComment"
+          contract_metric: "content_comment_delete"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="DELETE",route=~"^/content/posts/[^/]+/comments/[^/]+$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.DeleteComment"
+          contract_metric: "content_comment_delete"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/internal/content/comments/[^/]+:hide$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.HideComment"
+          contract_metric: "content_comment_hide"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/internal/content/comments/[^/]+:hide$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.HideComment"
+          contract_metric: "content_comment_hide"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/posts/[^/]+/comments/[^/]+/replies$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentReplies"
+          contract_metric: "content_comment_reply_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/content/posts/[^/]+/comments/[^/]+/replies$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentReplies"
+          contract_metric: "content_comment_reply_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/posts/[^/]+/comments$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListComments"
+          contract_metric: "content_comment_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route=~"^/content/posts/[^/]+/comments$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListComments"
+          contract_metric: "content_comment_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/users/me/comments"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentsByAuthor"
+          contract_metric: "content_comment_author_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/users/me/comments"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentsByAuthor"
+          contract_metric: "content_comment_author_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/users/me/received-comments"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentsForPostAuthor"
+          contract_metric: "content_comment_received_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/users/me/received-comments"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.ListCommentsForPostAuthor"
+          contract_metric: "content_comment_received_page_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/posts/[^/]+/comments/[^/]+/pin$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.PinComment"
+          contract_metric: "content_comment_pin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/posts/[^/]+/comments/[^/]+/pin$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.PinComment"
+          contract_metric: "content_comment_pin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/internal/content/comments/[^/]+:restore$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.RestoreComment"
+          contract_metric: "content_comment_restore"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/internal/content/comments/[^/]+:restore$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.RestoreComment"
+          contract_metric: "content_comment_restore"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="DELETE",route=~"^/content/posts/[^/]+/comments/[^/]+/pin$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.UnpinComment"
+          contract_metric: "content_comment_unpin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="DELETE",route=~"^/content/posts/[^/]+/comments/[^/]+/pin$"})
+        labels:
+          service: "content-service"
+          operation: "content.comment.UnpinComment"
+          contract_metric: "content_comment_unpin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

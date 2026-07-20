@@ -1,0 +1,16 @@
+aggregate: Persona
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: create_switch_and_edit_persona
+    steps:
+      - user creates a second persona
+      - user activates the new persona
+      - user edits profile under the new persona
+    assertions:
+      - exactly_one_active_persona
+      - profile_edit_attributed_to_active_persona

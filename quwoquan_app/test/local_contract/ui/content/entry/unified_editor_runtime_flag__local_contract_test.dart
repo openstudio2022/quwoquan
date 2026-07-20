@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   setUp(() {

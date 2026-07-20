@@ -52,3 +52,19 @@ func DefaultMetadata(toolName string) Metadata {
 		},
 	}
 }
+
+func WebSearchMetadata() Metadata {
+	meta := DefaultMetadata("web_search")
+	meta.DisplayName = "网络搜索"
+	meta.Description = "检索公开网络信息并返回可核验引用。"
+	meta.RequiredOutputKeys = []string{"provider", "summary", "references"}
+	return meta
+}
+
+func AppSearchMetadata() Metadata {
+	meta := DefaultMetadata("app_search")
+	meta.DisplayName = "应用信息检索"
+	meta.Description = "通过 search-service 检索趣我圈站内公开对象并返回可核验引用。"
+	meta.RequiredOutputKeys = []string{"provider", "summary", "results", "citations", "provenance"}
+	return meta
+}

@@ -276,6 +276,7 @@ def _run_homepage_independent_reviews(
     """Run one read-only Cursor reviewer per finalized homepage when evidence is pending."""
     from content.execution.agent.agent_runner import _redact_managed_secret
     from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+    from content.execution.agent.outcome import AgentRunOutcome
     from content.execution.controller.homepage_authoring import _homepage_independent_review_issues
     from governance.coverage.entity_extract import entity_ref
     from core.prompt_render import render as render_prompt
@@ -314,8 +315,8 @@ def _run_homepage_independent_reviews(
             return False
         return True
 
-    def _payload_from_outcome(outcome: Mapping[str, Any], *, object_ref: str) -> dict[str, Any] | None:
-        text = str(outcome.get("result") or "").strip()
+    def _payload_from_outcome(outcome: AgentRunOutcome, *, object_ref: str) -> dict[str, Any] | None:
+        text = outcome.result_text.strip()
         candidates = [text]
         fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
         if fenced:
@@ -380,6 +381,9 @@ def _run_homepage_independent_reviews(
             model=review_model,
             agent_provider=ctx.agent_provider,
             release_only=ctx.release_only,
+            agent_usage_scope="content_object",
+            agent_content_object_ref=object_ref,
+            agent_execution_stage="independent_review",
         )
 
         def _complete(path: Path = output_path) -> bool:
@@ -397,18 +401,16 @@ def _run_homepage_independent_reviews(
         # shortcut used by non-attested helper stages.
         outcome = _default_managed_agent_runner_isolated(review_ctx, prompt)
         payload: dict[str, Any] | None = read_json(output_path) if _complete() else None
-        if payload is None and str(outcome.get("status") or "") == "finished":
+        if payload is None and outcome.succeeded:
             payload = _payload_from_outcome(outcome, object_ref=object_ref)
             if payload is not None:
                 write_json(output_path, payload)
-        if str(outcome.get("status") or "") != "finished" or payload is None:
-            outcome_status = str(outcome.get("status") or "error")
-            error_text = _redact_managed_secret(
-                str(outcome.get("error") or "invalid reviewer output")
-            )
+        if not outcome.succeeded or payload is None:
+            outcome_status = outcome.status.value
+            error_text = _redact_managed_secret(outcome.message or "invalid reviewer output")
             issue_code = (
                 DataIssueCode.AGENT_REVIEW_INVALID
-                if outcome_status == "finished"
+                if outcome.succeeded
                 else DataIssueCode.AGENT_REVIEW_UNAVAILABLE
             )
             review_issue = data_issue(
@@ -426,7 +428,7 @@ def _run_homepage_independent_reviews(
                     "model": review_model,
                     "modelFamily": review_model_family,
                     "outcomeStatus": outcome_status,
-                    "errorCode": str(outcome.get("errorCode") or ""),
+                    "errorCode": outcome.error_code,
                 },
             )
             failure_root = (
@@ -447,13 +449,13 @@ def _run_homepage_independent_reviews(
                     "modelFamily": review_model_family,
                     "status": outcome_status,
                     "issue": review_issue.as_dict(),
-                    "runId": str(outcome.get("runId") or ""),
-                    "agentId": str(outcome.get("agentId") or ""),
-                    "requestId": str(outcome.get("requestId") or ""),
-                    "durationMs": outcome.get("durationMs"),
-                    "errorCode": str(outcome.get("errorCode") or ""),
+                    "runId": outcome.run_id,
+                    "agentId": outcome.agent_id,
+                    "requestId": outcome.request_id,
+                    "durationMs": outcome.duration_ms,
+                    "errorCode": outcome.error_code,
                     "error": error_text,
-                    "result": _redact_managed_secret(str(outcome.get("result") or ""))[:4000],
+                    "result": _redact_managed_secret(outcome.result_text)[:4000],
                     "recordedAt": store.now_iso(),
                 },
             )
@@ -466,7 +468,7 @@ def _run_homepage_independent_reviews(
             provider="cursor_sdk",
             model=review_model,
             model_family=review_model_family,
-            run_id=str(outcome.get("runId") or ""),
+            run_id=outcome.run_id,
             result_payload=payload,
         )
         issues.extend(f"{name}: {item}" for item in bound)

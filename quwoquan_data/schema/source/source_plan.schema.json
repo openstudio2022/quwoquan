@@ -61,7 +61,7 @@
                 {
                   "properties": {
                     "sourceKind": { "const": "baidu_baike" },
-                    "extractor": { "const": "baidu_baike_openapi" }
+                    "extractor": { "const": "baidu_baike_html" }
                   }
                 },
                 {

@@ -134,17 +134,23 @@ def audit_execution_readiness(
             "infrastructureRetryCounts": dict(state.infrastructure_retry_counts),
             "failedObjects": list(state.failed_objects),
         },
-        "lastAgentRun": {
-            key: (state.last_agent_run or {}).get(key)
-            for key in (
-                "stage",
-                "jobCount",
-                "startedCount",
-                "finishedCount",
-                "infrastructureFailures",
-                "finishedAt",
-            )
-        },
+        "lastAgentRun": _last_agent_run_summary(state),
+    }
+
+
+def _last_agent_run_summary(state: ExecutionStateTransition) -> dict[str, object]:
+    from content.execution.agent.history import last_managed_agent_run
+
+    record = last_managed_agent_run(state)
+    if record is None:
+        return {}
+    return {
+        "stage": record.stage.value,
+        "jobCount": record.job_count,
+        "startedCount": record.started_count,
+        "finishedCount": record.finished_count,
+        "infrastructureFailures": record.infrastructure_failures,
+        "finishedAt": record.finished_at,
     }
 
 

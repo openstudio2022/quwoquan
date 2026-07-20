@@ -13,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
 
 from core.article_package import compute_document_sha256  # noqa: E402
 from content.execution.runtime_contract import canonical_sha256  # noqa: E402
+from content.execution.production_contracts import build_token_ledger_entry  # noqa: E402
 from verify import verify_execution_readiness as gate  # noqa: E402
 
 
@@ -80,6 +81,61 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
                     "model": "gpt-5.5",
                     "cacheHit": False,
                 },
+            },
+        },
+    )
+    token_entries = [
+        build_token_ledger_entry(
+            execution_id=EXECUTION_ID,
+            job_id="author-run-001",
+            run_id="author-run-001",
+            creator_profile_id="creator-author",
+            content_type="homepage",
+            budget_tokens=100,
+            used_tokens=10,
+            input_tokens=8,
+            output_tokens=2,
+            cost_usd=0.01,
+            cost_budget_usd=1,
+            provider="cursor_sdk",
+            model="composer",
+            cost_source="sdk_billed",
+            pricing_revision="test-pricing",
+            content_object_ref=OBJECT_REF,
+            passed=True,
+        ),
+        build_token_ledger_entry(
+            execution_id=EXECUTION_ID,
+            job_id="review-run-001",
+            run_id="review-run-001",
+            creator_profile_id="creator-reviewer",
+            content_type="homepage",
+            budget_tokens=100,
+            used_tokens=10,
+            input_tokens=8,
+            output_tokens=2,
+            cost_usd=0.02,
+            cost_budget_usd=1,
+            provider="cursor_sdk",
+            model="gpt-5.5",
+            cost_source="sdk_billed",
+            pricing_revision="test-pricing",
+            content_object_ref=OBJECT_REF,
+            passed=True,
+        ),
+    ]
+    _write(
+        root / "_shared/token_ledger.json",
+        {
+            "schema": "quwoquan.token_ledger_batch",
+            "executionId": EXECUTION_ID,
+            "measurementMode": "cursor_sdk_result_usage",
+            "entries": token_entries,
+            "summary": {
+                "costUsd": 0.03,
+                "unitPassedCostUsd": 0.03,
+                "unknownCostEntryCount": 0,
+                "budgetExceededCount": 0,
             },
         },
     )

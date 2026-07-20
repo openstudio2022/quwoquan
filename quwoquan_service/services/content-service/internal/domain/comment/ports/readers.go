@@ -7,8 +7,11 @@ import (
 )
 
 type PageRequest struct {
-	Cursor string
-	Limit  int
+	Cursor            string
+	Limit             int
+	ExcludedAuthorIDs []string
+	// Sort 仅对一级评论列表生效；零值按 SortHot 处理。回复/作者/收到列表忽略。
+	Sort commentmodel.SortMode
 }
 
 // CommentPageReader 持有具名一级评论 CommentPage 读切片。
@@ -37,6 +40,7 @@ type ReplySummaryReader interface {
 		ctx context.Context,
 		parentCommentIDs []string,
 		previewLimit int,
+		excludedAuthorIDs []string,
 	) (map[string]commentmodel.ReplySummary, error)
 }
 

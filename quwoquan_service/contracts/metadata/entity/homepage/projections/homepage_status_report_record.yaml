@@ -26,10 +26,10 @@ client_projection:
       source: homepageId
       default: "''"
 
-    - name: reporterUserId
+    - name: reporterPersonaId
       dart_type: String
       nullable: false
-      source: reporterUserId
+      source: reporterPersonaId
       default: "''"
 
     - name: reason

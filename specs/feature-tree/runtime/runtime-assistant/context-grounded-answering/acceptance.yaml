@@ -1,0 +1,56 @@
+version: 2
+node:
+  id: context-grounded-answering
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering
+  title: context grounded answering
+  parent_domain_service: runtime
+  parent_business_capability: runtime-assistant
+scope:
+  summary: 页面上下文感知问答 grounding 验收范围。
+  in_scope:
+  - ReportPageContext 上报与 Redis TTL 缓存
+  - grounding 注入 run prompt 与引用回溯
+  out_of_scope:
+  - 搜索 handoff（归 assistant-search-handoff-and-grounding）
+gwt_acceptance:
+  GWT1:
+    title: 页面上下文注入回答
+    given:
+    - 用户在内容详情页上报了结构化 page context。
+    when:
+    - 用户在小趣发起提问。
+    then:
+    - 回答 prompt 注入 page context；引用可回溯到源对象。
+    done_when:
+    - 上下文过期/缺失时降级为通用回答且不伪造事实。
+    edge_cases:
+    - page context TTL 过期
+    - businessObjects 为空
+    contract_refs:
+    - quwoquan_service/contracts/metadata/assistant/assistant_run/service.yaml
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/adapters/http/handler__local_contract_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_assistant.context_grounded_answering.contract
+        envs: &id001
+        - local
+      supporting: []
+    notes:
+    - 2026-07-20 补建 story 目录以修复 journey_scenario_registry 引用漂移；grounding 现状证据来自 ReportPageContext/GetSuggestedActions 合同测试。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

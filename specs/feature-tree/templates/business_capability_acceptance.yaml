@@ -50,6 +50,7 @@ sit_acceptance:
           cases:
             - api_integration.domain.capability.primary_flow
           envs: [beta, gamma]
+          execution_profile: integration
           test_object: api_operation
           quality_facet: functional
       supporting:
@@ -58,6 +59,7 @@ sit_acceptance:
           cases:
             - local_contract.domain.capability.state_machine
           envs: [local]
+          execution_profile: baseline
           test_object: application_service
           quality_facet: reliability
     tests:
@@ -69,5 +71,9 @@ sit_acceptance:
 execution:
   local_gate:
     - make gate
-  full_gate:
-    - make gate-full
+  smoke_gate:
+    - make gate-smoke
+  integration_gate:
+    - make gate-integration ENV=beta
+  release_gate:
+    - make gate-release ENV=gamma

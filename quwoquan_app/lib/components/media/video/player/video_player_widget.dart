@@ -1,87 +1,28 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
+import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/core/platform/video_native_playback_signals.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/components/media/video/player/video_playback_failure_overlay.dart';
 import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
+import 'package:quwoquan_app/components/media/video/player/video_playback_timeline.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_support.dart';
+import 'package:quwoquan_app/components/media/video/player/video_player_surface_builder.dart';
 
-/// Surface-specific playback chrome. It intentionally excludes command handling:
-/// commands always go through [VideoPlaybackSession].
-enum VideoPlaybackOverlayMode { none, inlineFeed }
-
-/// 视频播放器组件
-/// 继承自侵入式媒体浏览器，支持视频播放功能
-class VideoPlayerWidget extends ConsumerStatefulWidget {
-  /// 已在 mapper/边界验证的公开媒体交付引用；播放器不再解析业务 object key。
-  final MediaDeliveryReference deliveryReference;
-  final MediaDeliveryReference? thumbnailReference;
-  final bool initialize;
-  final bool autoPlay;
-  final bool showControls;
-  final VoidCallback? onTap;
-  final VoidCallback? onFullScreen;
-  final Function(VideoPlayerController)? onControllerCreated;
-  final VideoPlaybackSession? playbackSession;
-  final ValueChanged<VideoPlaybackSession>? onPlaybackSessionCreated;
-  final VideoPlaybackOverlayMode overlayMode;
-  final Duration? verifiedDuration;
-  final double? aspectRatio;
-
-  /// 任务 B · 播放启动成功回调：startupLatency 为从初始化到可播放的耗时，
-  /// candidateIndex 为命中的候选源序号（用于自动播放启动时延度量）。
-  final void Function(Duration startupLatency, int candidateIndex)?
-  onPlaybackStarted;
-
-  /// 播放失败回调：只暴露确定性的脱敏失败结果。
-  final void Function(MediaPlaybackFailure failure)? onPlaybackFailed;
-
-  const VideoPlayerWidget({
-    super.key,
-    required this.deliveryReference,
-    this.thumbnailReference,
-    this.initialize = true,
-    this.autoPlay = false,
-    this.showControls = true,
-    this.onTap,
-    this.onFullScreen,
-    this.onControllerCreated,
-    this.playbackSession,
-    this.onPlaybackSessionCreated,
-    this.overlayMode = VideoPlaybackOverlayMode.none,
-    this.verifiedDuration,
-    this.aspectRatio,
-    this.onPlaybackStarted,
-    this.onPlaybackFailed,
-  });
-
-  @override
-  ConsumerState<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
-
-  /// 测试钩子：暴露当前并发控制器槽占用数。
-  @visibleForTesting
-  static int get debugActiveControllerCount =>
-      _VideoPlayerWidgetState._activeControllerCount;
-
-  @visibleForTesting
-  static void debugResetControllerSlots() {
-    _VideoPlayerWidgetState._activeControllerCount = 0;
-  }
-}
+part 'video_player_widget_api.dart';
 
 class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     with WidgetsBindingObserver {
@@ -93,18 +34,27 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
 
   VideoPlayerController? _controller;
   ChewieController? _chewieController;
+  late final AppTelemetryRecorder _telemetryRecorder;
   bool _isInitialized = false;
   bool _hasError = false;
   bool _isDeferredWaitingForSlot = false;
   bool _isRetrying = false;
   MediaPlaybackFailure? _playbackFailure;
   int _videoInitGeneration = 0;
+  int _automaticPlaybackSyncGeneration = 0;
+  int _controllerLifecycleSyncGeneration = 0;
   bool _holdingControllerSlot = false;
+  int _nextControllerSlotLeaseId = 0;
+  int? _controllerSlotLeaseId;
   VoidCallback? _controllerErrorListener;
   int? _reportedNativeErrorGeneration;
   bool _qoeReportedForController = false;
   bool _appIsForeground = true;
+  Stream<VideoNativePlaybackSignal>? _nativePlaybackSignals;
   late final VideoPlaybackSession _ownedPlaybackSession;
+  VideoPlayerController? _initializingController;
+  VideoPlayerController? _disposingController;
+  Future<void>? _controllerDisposalFuture;
 
   VideoPlaybackSession get _playbackSession =>
       widget.playbackSession ?? _ownedPlaybackSession;
@@ -112,7 +62,12 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   @override
   void initState() {
     super.initState();
-    _ownedPlaybackSession = VideoPlaybackSession();
+    _telemetryRecorder = ref.read(appTelemetryReporterProvider);
+    _ownedPlaybackSession = VideoPlaybackSession(
+      onNativeSignal: ref
+          .read(runtimeDiagnosticsProvider)
+          .recordNativeMediaSignal,
+    );
     _playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);
     WidgetsBinding.instance.addObserver(this);
     if (widget.initialize) {
@@ -130,9 +85,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         _playbackSession.attach(
           controller,
           verifiedDuration: widget.verifiedDuration,
+          nativeSignals: _nativePlaybackSignals,
         );
       }
-      _playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);
+      _scheduleAutomaticPlaybackEligibilitySync();
       widget.onPlaybackSessionCreated?.call(_playbackSession);
     }
     if (widget.verifiedDuration != oldWidget.verifiedDuration) {
@@ -140,63 +96,156 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     }
     if (widget.deliveryReference.cacheIdentity !=
         oldWidget.deliveryReference.cacheIdentity) {
-      if (widget.initialize) {
-        _replaceVideoController();
-      } else {
-        _disposeActiveControllers();
-        setState(() {
-          _isInitialized = false;
-          _hasError = false;
-          _playbackFailure = null;
-        });
-      }
+      _scheduleControllerLifecycleSync(sourceChanged: true);
       return;
     }
     if (widget.initialize != oldWidget.initialize) {
-      if (widget.initialize) {
-        _initializeVideo();
-      } else {
-        _disposeActiveControllers();
-        setState(() {
-          _isInitialized = false;
-          _hasError = false;
-          _playbackFailure = null;
-        });
-      }
+      _scheduleControllerLifecycleSync(sourceChanged: false);
       return;
     }
     if (widget.autoPlay != oldWidget.autoPlay) {
-      _playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);
+      _scheduleAutomaticPlaybackEligibilitySync();
     }
+  }
+
+  void _scheduleAutomaticPlaybackEligibilitySync() {
+    final generation = ++_automaticPlaybackSyncGeneration;
+    final session = _playbackSession;
+    final eligible = widget.autoPlay;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _automaticPlaybackSyncGeneration ||
+          !identical(session, _playbackSession)) {
+        return;
+      }
+      // setAutomaticPlaybackEligible 可能同步 pause/play 并通知监听者；
+      // didUpdateWidget 正处于 build 阶段，必须等当前帧结束后再触发。
+      session.setAutomaticPlaybackEligible(eligible);
+    });
+  }
+
+  void _scheduleControllerLifecycleSync({required bool sourceChanged}) {
+    final generation = ++_controllerLifecycleSyncGeneration;
+    final expectedIdentity = widget.deliveryReference.cacheIdentity;
+    final shouldInitialize = widget.initialize;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _controllerLifecycleSyncGeneration ||
+          expectedIdentity != widget.deliveryReference.cacheIdentity ||
+          shouldInitialize != widget.initialize) {
+        return;
+      }
+      // attach/detach 会同步通知 PlaybackSession 的 AnimatedBuilder；
+      // didUpdateWidget 的 build 阶段不能直接释放或重建 controller。
+      if (shouldInitialize) {
+        if (sourceChanged) {
+          unawaited(_replaceVideoController());
+        } else {
+          unawaited(_initializeVideo());
+        }
+        return;
+      }
+      _invalidateVideoInitialization();
+      unawaited(_disposeActiveControllers());
+      setState(() {
+        _isInitialized = false;
+        _hasError = false;
+        _playbackFailure = null;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _videoInitGeneration += 1;
+    _invalidateVideoInitialization();
+    _automaticPlaybackSyncGeneration += 1;
+    _controllerLifecycleSyncGeneration += 1;
     WidgetsBinding.instance.removeObserver(this);
-    _disposeActiveControllers();
+    unawaited(_disposeActiveControllers());
     _ownedPlaybackSession.dispose();
     super.dispose();
   }
 
-  void _disposeActiveControllers({
+  void _invalidateVideoInitialization() {
+    _videoInitGeneration += 1;
+  }
+
+  Future<void> _disposeActiveControllers({
     String qoeResult = 'success',
     String? qoeFailureCode,
   }) {
     _detachControllerErrorListener();
-    final controller = _controller;
-    if (controller != null) {
+    final activeController = _controller;
+    final controller = activeController ?? _initializingController;
+    final slotLeaseId = _controllerSlotLeaseId;
+    if (activeController != null) {
+      final effectiveEvidence = _playbackSession
+          .takeEffectivePlaybackEvidence();
+      if (effectiveEvidence.qualifies) {
+        widget.onEffectivePlayback?.call(effectiveEvidence);
+      }
       _reportPlaybackQoe(result: qoeResult, failReasonCode: qoeFailureCode);
-      _playbackSession.detach(controller);
+      _playbackSession.detach(activeController);
     }
     _chewieController?.dispose();
     _chewieController = null;
-    _controller?.dispose();
     _controller = null;
+    if (identical(_initializingController, controller)) {
+      _initializingController = null;
+    }
+    _nativePlaybackSignals = null;
     _isInitialized = false;
     _isDeferredWaitingForSlot = false;
     _isRetrying = false;
-    _releaseControllerSlot();
+    if (controller == null) {
+      final pendingDisposal = _controllerDisposalFuture;
+      if (_disposingController != null && pendingDisposal != null) {
+        return pendingDisposal;
+      }
+      // source lookup 尚未触及原生 decoder，取消时可立即归还该代际的槽位；
+      // 初始化任务 finally 携带同一 lease，不能误释放后续新控制器的槽位。
+      _releaseControllerSlot(leaseId: slotLeaseId);
+      return Future<void>.value();
+    }
+    return _disposeControllerAndReleaseSlot(
+      controller,
+      slotLeaseId: slotLeaseId,
+    );
+  }
+
+  Future<void> _disposeControllerAndReleaseSlot(
+    VideoPlayerController controller, {
+    bool releaseSlot = true,
+    int? slotLeaseId,
+  }) {
+    final pending = _controllerDisposalFuture;
+    if (identical(_disposingController, controller) && pending != null) {
+      return pending;
+    }
+    _disposingController = controller;
+    late final Future<void> disposal;
+    disposal = Future<void>.sync(() async {
+      try {
+        await controller.dispose();
+      } catch (error, stackTrace) {
+        developer.log(
+          'video controller disposal failed',
+          name: 'VideoPlayerWidget',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      } finally {
+        if (identical(_disposingController, controller)) {
+          _disposingController = null;
+          _controllerDisposalFuture = null;
+        }
+        if (releaseSlot) {
+          _releaseControllerSlot(leaseId: slotLeaseId);
+        }
+      }
+    });
+    _controllerDisposalFuture = disposal;
+    return disposal;
   }
 
   @override
@@ -212,21 +261,24 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
 
   bool _acquireControllerSlot() {
     if (_holdingControllerSlot) {
-      return true;
+      return false;
     }
     if (_activeControllerCount >= _maxConcurrentControllers) {
       return false;
     }
     _activeControllerCount += 1;
     _holdingControllerSlot = true;
+    _controllerSlotLeaseId = ++_nextControllerSlotLeaseId;
     return true;
   }
 
-  void _releaseControllerSlot() {
-    if (!_holdingControllerSlot) {
+  void _releaseControllerSlot({int? leaseId}) {
+    if (!_holdingControllerSlot ||
+        (leaseId != null && _controllerSlotLeaseId != leaseId)) {
       return;
     }
     _holdingControllerSlot = false;
+    _controllerSlotLeaseId = null;
     if (_activeControllerCount > 0) {
       _activeControllerCount -= 1;
     }
@@ -236,13 +288,14 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     final deadline = DateTime.now().add(_slotWaitTimeout);
     while (mounted && generation == _videoInitGeneration) {
       if (_acquireControllerSlot()) {
+        final slotLeaseId = _controllerSlotLeaseId;
         if (mounted && generation == _videoInitGeneration) {
           setState(() {
             _isDeferredWaitingForSlot = false;
           });
-          await _initializeVideoWithHeldSlot(generation);
+          await _initializeVideoWithHeldSlot(generation, slotLeaseId);
         } else {
-          _releaseControllerSlot();
+          _releaseControllerSlot(leaseId: slotLeaseId);
         }
         return;
       }
@@ -265,7 +318,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   /// Slot already acquired; continue initialization without re-acquiring.
-  Future<void> _initializeVideoWithHeldSlot(int generation) async {
+  Future<void> _initializeVideoWithHeldSlot(
+    int generation,
+    int? slotLeaseId,
+  ) async {
     final candidates = <String>[widget.deliveryReference.url];
     final startupStopwatch = Stopwatch()..start();
     final observedFailures = <MediaCandidateFailureKind>[];
@@ -277,6 +333,9 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         try {
           sources = await _playableSourcesForCandidate(candidate);
         } catch (error, stackTrace) {
+          if (!mounted || generation != _videoInitGeneration) {
+            return;
+          }
           final kind = _classifyPlaybackFailure(error, candidate);
           observedFailures.add(kind);
           _logCandidateFailure(
@@ -299,11 +358,21 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         for (final source in sources) {
           VideoPlayerController? controller;
           ChewieController? chewieController;
+          Stream<VideoNativePlaybackSignal>? nativePlaybackSignals;
           try {
-            controller = source.createController();
+            final controllerHandle = source.createController();
+            controller = controllerHandle.controller;
+            nativePlaybackSignals = controllerHandle.nativePlaybackSignals;
+            _initializingController = controller;
             await controller.initialize();
             if (!mounted || generation != _videoInitGeneration) {
-              await controller.dispose();
+              await _disposeControllerAndReleaseSlot(
+                controller,
+                slotLeaseId: slotLeaseId,
+              );
+              if (identical(_initializingController, controller)) {
+                _initializingController = null;
+              }
               return;
             }
             chewieController = ChewieController(
@@ -323,7 +392,19 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
             );
           } catch (error, stackTrace) {
             chewieController?.dispose();
-            await controller?.dispose();
+            if (controller != null) {
+              await _disposeControllerAndReleaseSlot(
+                controller,
+                releaseSlot: false,
+                slotLeaseId: slotLeaseId,
+              );
+            }
+            if (identical(_initializingController, controller)) {
+              _initializingController = null;
+            }
+            if (!mounted || generation != _videoInitGeneration) {
+              return;
+            }
             final kind = _classifyPlaybackFailure(error, candidate);
             observedFailures.add(kind);
             _logCandidateFailure(
@@ -337,8 +418,12 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
             continue;
           }
 
+          if (identical(_initializingController, controller)) {
+            _initializingController = null;
+          }
           _controller = controller;
           _chewieController = chewieController;
+          _nativePlaybackSignals = nativePlaybackSignals;
           retainControllerSlot = true;
           _attachControllerErrorListener(
             controller,
@@ -357,6 +442,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
             controller,
             verifiedDuration: widget.verifiedDuration,
             readyMs: startupStopwatch.elapsedMilliseconds,
+            nativeSignals: nativePlaybackSignals,
           );
           _qoeReportedForController = false;
           _playbackSession.setAutomaticPlaybackEligible(widget.autoPlay);
@@ -407,8 +493,8 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       }
     } finally {
       startupStopwatch.stop();
-      if (!retainControllerSlot) {
-        _releaseControllerSlot();
+      if (!retainControllerSlot && _disposingController == null) {
+        _releaseControllerSlot(leaseId: slotLeaseId);
       }
     }
   }
@@ -518,7 +604,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       error: error,
       stackTrace: stackTrace,
     );
-    _disposeActiveControllers(qoeResult: 'failure', qoeFailureCode: kind.name);
+    await _disposeActiveControllers(
+      qoeResult: 'failure',
+      qoeFailureCode: kind.name,
+    );
     if (!mounted || generation != _videoInitGeneration) {
       return;
     }
@@ -565,7 +654,13 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
                 readyMs: 0,
                 rebufferCount: 0,
                 rebufferMs: 0,
+                effectivePlaybackMs: 0,
                 seekCount: 0,
+                seekFailureCount: 0,
+                seekCommandMaxMs: 0,
+                seekSettleMaxMs: 0,
+                seekEvidenceSource: 'controller_command_completion',
+                devicePlatform: platformWireName(currentAppPlatform),
                 playbackMode: widget.autoPlay ? 'autoplay' : 'manual',
                 result: 'failure',
                 failReasonCode: failure.kind.name,
@@ -590,32 +685,50 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       failReasonCode: failReasonCode,
     );
     unawaited(
-      ref
-          .read(appTelemetryReporterProvider)
-          .record(
-            AppTelemetryPayload.videoPlaybackQoe(
-              readyMs: summary.readyMs,
-              rebufferCount: summary.rebufferCount,
-              rebufferMs: summary.rebufferMs,
-              seekCount: summary.seekCount,
-              playbackMode: summary.playbackMode,
-              declaredDurationMs: summary.declaredDurationMs,
-              observedDurationMs: summary.observedDurationMs,
-              durationMismatch: summary.durationMismatch,
-              result: summary.result,
-              failReasonCode: summary.failReasonCode,
-            ),
-          ),
+      _telemetryRecorder.record(
+        AppTelemetryPayload.videoPlaybackQoe(
+          readyMs: summary.readyMs,
+          rebufferCount: summary.rebufferCount,
+          rebufferMs: summary.rebufferMs,
+          effectivePlaybackMs: summary.effectivePlaybackMs,
+          seekCount: summary.seekCount,
+          seekFailureCount: summary.seekFailureCount,
+          seekCommandMaxMs: summary.seekCommandMaxMs,
+          seekSettleMaxMs: summary.seekSettleMaxMs,
+          seekEvidenceSource: summary.seekEvidenceSource,
+          devicePlatform: platformWireName(currentAppPlatform),
+          playbackMode: summary.playbackMode,
+          ttffMs: summary.ttffMs,
+          droppedFrames: summary.droppedFrames,
+          processedVideoFrames: summary.processedVideoFrames,
+          audioUnderrunCount: summary.audioUnderrunCount,
+          rendererMode: summary.rendererMode,
+          decoderQueueMode: summary.decoderQueueMode,
+          decoderFallbackEnabled: summary.decoderFallbackEnabled,
+          declaredDurationMs: summary.declaredDurationMs,
+          observedDurationMs: summary.observedDurationMs,
+          durationMismatch: summary.durationMismatch,
+          result: summary.result,
+          failReasonCode: summary.failReasonCode,
+        ),
+      ),
     );
   }
 
   Future<void> _replaceVideoController() async {
-    _disposeActiveControllers();
-    setState(() {
-      _isInitialized = false;
-      _hasError = false;
-      _playbackFailure = null;
-    });
+    _invalidateVideoInitialization();
+    final disposal = _disposeActiveControllers();
+    if (mounted) {
+      setState(() {
+        _isInitialized = false;
+        _hasError = false;
+        _playbackFailure = null;
+      });
+    }
+    await disposal;
+    if (!mounted || !widget.initialize) {
+      return;
+    }
     await _initializeVideo();
   }
 
@@ -684,7 +797,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     if (mounted && generation == _videoInitGeneration) {
       _isDeferredWaitingForSlot = false;
     }
-    await _initializeVideoWithHeldSlot(generation);
+    await _initializeVideoWithHeldSlot(generation, _controllerSlotLeaseId);
   }
 
   Future<List<PlayableVideoSource>> _playableSourcesForCandidate(
@@ -696,9 +809,19 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     }
     final sources = <PlayableVideoSource>[];
     final seen = <String>{};
-    final cachedPath = await ref
-        .read(mediaDownloadCacheProvider)
-        .getCachedFilePath(normalized);
+    String? cachedPath;
+    try {
+      cachedPath = await ref
+          .read(mediaDownloadCacheProvider)
+          .getCachedFilePath(normalized);
+    } catch (error, stackTrace) {
+      developer.log(
+        'cached video source lookup failed; continue with delivery URI',
+        name: 'VideoPlayerWidget',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     if (cachedPath != null && seen.add('cache:$cachedPath')) {
       sources.add(PlayableVideoSource.cachedFile(cachedPath));
     }
@@ -725,76 +848,15 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   Widget _buildVideoPlaceholder() {
-    final thumbnailUrl = widget.thumbnailReference?.url ?? '';
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: AppColors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (thumbnailUrl.isNotEmpty)
-            Positioned.fill(
-              child: AppCachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                imageUrlCandidates: <String>[thumbnailUrl],
-                cdnPreset: CdnImagePreset.cover,
-                fit: BoxFit.cover,
-                placeholder: const SizedBox.shrink(),
-                errorWidget: const SizedBox.shrink(),
-              ),
-            ),
-          ColoredBox(color: AppColors.black.withValues(alpha: 0.22)),
-          // 聚焦自动播放（autoPlay）时显示加载转圈，避免与卡片层叠出第二个
-          // 「播放三角」按钮；未自动播放时仍用播放三角作为点按查看提示。
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (widget.autoPlay)
-                CupertinoActivityIndicator(
-                  color: AppColors.white,
-                  radius: AppSpacing.iconMedium / 2,
-                )
-              else
-                Icon(
-                  Icons.play_circle_outline,
-                  size: (AppSpacing.avatarSize * 2).sp,
-                  color: AppColors.white,
-                ),
-              SizedBox(height: AppSpacing.sm.h),
-              Text(
-                UITextConstants.loading,
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontSize: AppTypography.sm.sp,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return VideoPlayerSurfaceBuilder.buildPlaceholder(
+      thumbnailReference: widget.thumbnailReference,
+      autoPlay: widget.autoPlay,
     );
   }
 
   Widget _buildDeferredWidget() {
-    final thumbnailUrl = widget.thumbnailReference?.url ?? '';
-    return ColoredBox(
-      color: AppColors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (thumbnailUrl.isNotEmpty)
-            AppCachedNetworkImage(
-              imageUrl: thumbnailUrl,
-              imageUrlCandidates: <String>[thumbnailUrl],
-              cdnPreset: CdnImagePreset.cover,
-              fit: BoxFit.cover,
-              placeholder: const SizedBox.shrink(),
-              errorWidget: const SizedBox.shrink(),
-            ),
-          ColoredBox(color: AppColors.black.withValues(alpha: 0.16)),
-        ],
-      ),
+    return VideoPlayerSurfaceBuilder.buildDeferred(
+      thumbnailReference: widget.thumbnailReference,
     );
   }
 
@@ -802,7 +864,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     final failure =
         _playbackFailure ??
         MediaPlaybackFailure.fromKind(MediaCandidateFailureKind.other);
-    return VideoPlaybackFailureOverlay(
+    return VideoPlayerSurfaceBuilder.buildFailure(
       failure: failure,
       thumbnailReference: widget.thumbnailReference,
       retrying: _isRetrying,
@@ -827,11 +889,9 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   Widget _buildCenteredVideoFrame(Widget child) {
-    return ColoredBox(
-      color: AppColors.black,
-      child: Center(
-        child: AspectRatio(aspectRatio: _resolvedAspectRatio, child: child),
-      ),
+    return VideoPlayerSurfaceBuilder.buildCenteredFrame(
+      aspectRatio: _resolvedAspectRatio,
+      child: child,
     );
   }
 
@@ -865,9 +925,41 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         : player;
     return KeyedSubtree(
       key: const ValueKey<String>('video-player-ready'),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: _buildCenteredVideoFrame(surface),
+      child: AnimatedBuilder(
+        animation: _playbackSession,
+        builder: (context, child) {
+          final nativeSeekSettledTarget =
+              _playbackSession.nativeSeekSettledTarget;
+          return Stack(
+            fit: StackFit.passthrough,
+            children: [
+              child!,
+              if (_playbackSession.hasNativeFirstFrameEvidence)
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: SizedBox(
+                      key: ValueKey<String>('video-player-native-first-frame'),
+                    ),
+                  ),
+                ),
+              if (nativeSeekSettledTarget != null)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: SizedBox(
+                      key: ValueKey<String>(
+                        'video-player-native-seek-settled-'
+                        '${nativeSeekSettledTarget.inMilliseconds}',
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: _buildCenteredVideoFrame(surface),
+        ),
       ),
     );
   }

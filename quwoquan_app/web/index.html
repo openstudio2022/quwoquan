@@ -158,6 +158,10 @@
     window.__qwqRecordStartupEvent = function (rawEvent) {
       try {
         const event = JSON.parse(rawEvent);
+        event.attemptId = event.attemptId || window.__qwqStartupAttemptId;
+        event.elapsedMs = event.elapsedMs == null
+          ? Math.round(window.__qwqStartupElapsedMs())
+          : event.elapsedMs;
         window.__qwqStartupEvents.push(event);
         if (event.eventName === 'flutter_first_frame') {
           window.__qwqFlutterFirstFrameConfirmed = true;
@@ -179,6 +183,11 @@
               recovery && recovery.parentNode) {
             recovery.parentNode.removeChild(recovery);
             window.__qwqStartupRecoveryShown = false;
+            window.__qwqStartupEvents.push({
+              eventName: 'web_startup_safe_terminal_race_dismissed',
+              attemptId: window.__qwqStartupAttemptId,
+              elapsedMs: Math.round(window.__qwqStartupElapsedMs()),
+            });
           }
         }
         const report = JSON.stringify(window.__qwqStartupEvents);

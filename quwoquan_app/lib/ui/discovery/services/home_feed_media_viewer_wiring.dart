@@ -1,19 +1,15 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 
-/// 关注 Tab 沉浸查看器：由 [ContentReadRepository] 提供可选 wire 扩展并与 DTO 合并。
+/// 关注 Tab 沉浸查看器：canonical [PostBaseDto] 是唯一输入，不再向
+/// Repository 查询 alpha-only 展示扩展。
 Map<String, MediaViewerPostWireRow> homeFollowingMediaViewerRaws({
-  required ContentReadRepository content,
   required List<PostBaseDto> viewerPosts,
 }) {
   return <String, MediaViewerPostWireRow>{
     for (final item in viewerPosts)
       item.id: MediaViewerPostWireRow.fromDynamicMap(
-        Map<String, dynamic>.from(
-          content.discoveryPresentationWireForPost(item.id)?.toWireMap() ??
-              item.toMap(),
-        ),
+        Map<String, dynamic>.from(item.toMap()),
       ),
   };
 }

@@ -8,17 +8,20 @@ import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 final class AppTelemetryStaticContext {
   const AppTelemetryStaticContext({
     required this.deviceManufacturer,
     required this.deviceModel,
     required this.appVersion,
+    required this.devicePlatform,
   });
 
   final String deviceManufacturer;
   final String deviceModel;
   final String appVersion;
+  final String devicePlatform;
 }
 
 typedef AppTelemetryStaticContextLoader =
@@ -106,6 +109,8 @@ final class AppTelemetryContextProvider with WidgetsBindingObserver {
 
   String get networkClass => _networkClass;
 
+  String get devicePlatform => staticContext.devicePlatform;
+
   Stream<String> get networkChanges => _networkChanges.stream;
 
   String get pageName => _pageContextStore.pageName;
@@ -116,6 +121,7 @@ final class AppTelemetryContextProvider with WidgetsBindingObserver {
       deviceManufacturer: 'unknown',
       deviceModel: 'unknown',
       appVersion: appVersion,
+      devicePlatform: platformWireName(currentAppPlatform),
     );
   }
 
@@ -228,6 +234,7 @@ final class AppTelemetryContextProvider with WidgetsBindingObserver {
       appVersion: build.isEmpty
           ? package.version.trim()
           : '${package.version.trim()}+$build',
+      devicePlatform: platformWireName(currentAppPlatform),
     );
   }
 

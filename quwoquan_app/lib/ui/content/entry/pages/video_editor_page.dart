@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/media/local_video_file_readiness.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';

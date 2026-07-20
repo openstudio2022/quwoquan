@@ -42,8 +42,8 @@ type SocialInterestVector struct {
 
 // SocialInterestMiner computes the SocialInterestVector for a user.
 type SocialInterestMiner struct {
-	provider           SocialGraphProvider
-	circleDecay        float64 // default 0.3
+	provider             SocialGraphProvider
+	circleDecay          float64 // default 0.3
 	friendIntersectDecay float64 // default 0.5
 }
 

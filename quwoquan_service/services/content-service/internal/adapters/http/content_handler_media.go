@@ -168,11 +168,19 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 		Processing                   mediamodel.ProcessingStatus `json:"processingStatus"`
 		FailureReason                string                      `json:"failureReason"`
 		ProcessorProfile             string                      `json:"processorProfile"`
+		ImageWidth                   int                         `json:"imageWidth"`
+		ImageHeight                  int                         `json:"imageHeight"`
+		ImageDeliveryContentType     string                      `json:"imageDeliveryContentType"`
+		ImageNormalizedObjectKey     string                      `json:"imageNormalizedObjectKey"`
+		ImagePublicSliceKey          string                      `json:"imagePublicSliceKey"`
 		VerifiedDurationMs           int64                       `json:"verifiedDurationMs"`
 		VideoWidth                   int                         `json:"videoWidth"`
 		VideoHeight                  int                         `json:"videoHeight"`
 		VideoCodec                   string                      `json:"videoCodec"`
 		VideoContainer               string                      `json:"videoContainer"`
+		VideoAudioCodec              string                      `json:"videoAudioCodec"`
+		VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs"`
+		VideoFastStart               bool                        `json:"videoFastStart"`
 		VideoPublicSliceKey          string                      `json:"videoPublicSliceKey"`
 		CoverPublicSliceKey          string                      `json:"coverPublicSliceKey"`
 		PreviewTrackVersion          int                         `json:"previewTrackVersion"`
@@ -182,20 +190,52 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
-	result, err := h.mediaService.RecordMediaProcessingResult(r.Context(), mediaapp.RecordMediaProcessingResultCommand{
-		AssetID: mediaID, Processing: body.Processing, FailureReason: body.FailureReason,
-		Descriptor: mediamodel.VideoProcessingDescriptor{
+	descriptor := mediamodel.MediaProcessingDescriptor{}
+	if body.ImageWidth != 0 ||
+		body.ImageHeight != 0 ||
+		strings.TrimSpace(body.ImageDeliveryContentType) != "" ||
+		strings.TrimSpace(body.ImageNormalizedObjectKey) != "" ||
+		strings.TrimSpace(body.ImagePublicSliceKey) != "" {
+		descriptor.Image = mediamodel.ImageProcessingDescriptor{
+			ProcessorProfile:         body.ProcessorProfile,
+			ImageWidth:               body.ImageWidth,
+			ImageHeight:              body.ImageHeight,
+			ImageDeliveryContentType: body.ImageDeliveryContentType,
+			ImageNormalizedObjectKey: body.ImageNormalizedObjectKey,
+			ImagePublicSliceKey:      body.ImagePublicSliceKey,
+		}
+	}
+	if body.VerifiedDurationMs != 0 ||
+		body.VideoWidth != 0 ||
+		body.VideoHeight != 0 ||
+		strings.TrimSpace(body.VideoCodec) != "" ||
+		strings.TrimSpace(body.VideoContainer) != "" ||
+		strings.TrimSpace(body.VideoAudioCodec) != "" ||
+		body.VideoKeyframeIntervalMs != 0 ||
+		body.VideoFastStart ||
+		strings.TrimSpace(body.VideoPublicSliceKey) != "" ||
+		strings.TrimSpace(body.CoverPublicSliceKey) != "" ||
+		body.PreviewTrackVersion != 0 ||
+		strings.TrimSpace(body.PreviewTrackManifestSliceKey) != "" {
+		descriptor.Video = mediamodel.VideoProcessingDescriptor{
 			ProcessorProfile:             body.ProcessorProfile,
 			VerifiedDurationMs:           body.VerifiedDurationMs,
 			VideoWidth:                   body.VideoWidth,
 			VideoHeight:                  body.VideoHeight,
 			VideoCodec:                   body.VideoCodec,
 			VideoContainer:               body.VideoContainer,
+			VideoAudioCodec:              body.VideoAudioCodec,
+			VideoKeyframeIntervalMs:      body.VideoKeyframeIntervalMs,
+			VideoFastStart:               body.VideoFastStart,
 			VideoPublicSliceKey:          body.VideoPublicSliceKey,
 			CoverPublicSliceKey:          body.CoverPublicSliceKey,
 			PreviewTrackVersion:          body.PreviewTrackVersion,
 			PreviewTrackManifestSliceKey: body.PreviewTrackManifestSliceKey,
-		},
+		}
+	}
+	result, err := h.mediaService.RecordMediaProcessingResult(r.Context(), mediaapp.RecordMediaProcessingResultCommand{
+		AssetID: mediaID, Processing: body.Processing, FailureReason: body.FailureReason,
+		Descriptor: descriptor,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)

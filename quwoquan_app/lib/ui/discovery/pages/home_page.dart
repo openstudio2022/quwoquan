@@ -459,6 +459,6 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
       visitTarget: target,
       experienceLevel: service.getExperience(target),
     );
-    AssistantHalfSheet.show(context, ctx);
+    unawaited(AssistantHalfSheet.show(context, ctx));
   }
 }

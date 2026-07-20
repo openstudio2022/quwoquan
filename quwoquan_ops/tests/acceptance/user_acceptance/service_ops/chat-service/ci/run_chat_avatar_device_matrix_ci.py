@@ -80,7 +80,7 @@ def parse_gateway_port(raw_url: str) -> int:
 def main() -> int:
     args = parse_args()
     env_name = os.environ.get("API_CONTRACT_ENV", "").strip()
-    if env_name not in {"alpha", "beta", "gamma", "local-gamma"}:
+    if env_name not in {"alpha", "beta", "gamma", "prod"}:
         print(f"::error::API_CONTRACT_ENV={env_name!r} 不支持 chat avatar 矩阵", file=sys.stderr)
         return 2
     all_devices = os.environ.get("CHAT_AVATAR_MATRIX_ALL_DEVICES", "").lower() in {
@@ -98,7 +98,7 @@ def main() -> int:
     if not device_ids:
         print(f"::error::未发现可用 {args.platform} 设备", file=sys.stderr)
         return 2
-    report_env = "gamma" if env_name == "local-gamma" else env_name
+    report_env = env_name
     command = [
         sys.executable,
         str(REPO_ROOT / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix.py"),
@@ -114,14 +114,18 @@ def main() -> int:
     )
     for device_id in device_ids:
         command.extend(["--device-id", device_id])
-    base_url = (
-        os.environ.get("GAMMA_BASE_URL", "").strip()
-        if env_name == "gamma"
-        else os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL", "").strip()
-    )
+    if env_name == "gamma":
+        base_url = os.environ.get("GAMMA_BASE_URL", "").strip()
+    elif env_name == "prod":
+        base_url = os.environ.get("PROD_GATEWAY_BASE_URL", "").strip()
+    else:
+        base_url = os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL", "").strip()
     if base_url:
         command.extend(["--gateway-base-url", base_url])
-    media_url = os.environ.get("MEDIA_AVATAR_CDN_BASE_URL", "").strip()
+    media_url = os.environ.get(
+        "PROD_MEDIA_BASE_URL" if env_name == "prod" else "MEDIA_AVATAR_CDN_BASE_URL",
+        "",
+    ).strip()
     if media_url:
         command.extend(["--media-base-url", media_url])
     if env_name == "beta" and not base_url:
@@ -140,7 +144,10 @@ def main() -> int:
                     ).strip(),
                 ]
             )
-    token = os.environ.get("GAMMA_TEST_AUTH_TOKEN", "").strip()
+    token = os.environ.get(
+        "PROD_TEST_AUTH_TOKEN" if env_name == "prod" else "GAMMA_TEST_AUTH_TOKEN",
+        "",
+    ).strip()
     if token:
         command.extend(["--test-auth-token", token])
     code = subprocess.call(command, cwd=str(REPO_ROOT))

@@ -7,45 +7,81 @@ node:
   parent_domain_service: shared-homepage-network
   parent_business_capability: homepage-claim-maintain-and-offline-journey
 scope:
-  summary: claimed homepage basic maintenance 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 认领 owner 维护主页基础资料（UpdateClaimedHomepageBasics）。
+  in_scope:
+  - homepageMaintenance 页编辑副标题/地址/封面等基础字段并提交。
+  - 仅 claimed owner persona 可写（claimed_homepage_owner ownership policy）。
+  - CAS 版本冲突的结构化恢复（version_conflict → refresh）。
+  out_of_scope:
+  - 认领审批流本身（homepage-claim-request-and-review）。
+  - canonical identity/homepageType 修改（创建后不可变）。
 gwt_acceptance:
   GWT1:
-    title: claimed homepage basic maintenance GWT
+    title: 认领 owner 更新基础资料且非 owner 被拒
     given:
-    - 前置条件明确。
+    - 主页 claimStatus=claimed 且当前 persona 为 owner。
     when:
-    - 用户或系统动作发生。
+    - owner 提交基础资料变更；非 owner persona 尝试提交。
     then:
-    - 可观察结果符合预期。
+    - owner 提交成功并回详情页刷新；非 owner 得到结构化 permission_denied(403)。
+    - 版本冲突返回 version_conflict(409) 且页面给出刷新恢复动作。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - UpdateClaimedHomepageBasics per-op ready 且权限/冲突负例齐备。
+    edge_cases:
+    - 主页被下线后维护入口禁用。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    - quwoquan_service/contracts/metadata/entity/homepage/errors.yaml
+    performance_points:
+    - 命令 p95 800ms（service.yaml slo 同源）。
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_maintenance/homepage_maintenance_page__user_acceptance_test.dart
+      recorded:
+      - quwoquan_service/services/entity-service/tests/local_contract/homepage_facade__data_consistency__local_contract_test.go
+      - quwoquan_service/services/entity-service/tests/api_integration/homepage_mongo_store__data_consistency__api_integration_test.go
+      - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+      - quwoquan_app/test/user_acceptance/pages/entity/homepage_maintenance/homepage_maintenance_page__user_acceptance_test.dart
+    status: completed
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_claim_maintain_and_offline_journey.claimed_homepage_basic_maintenance.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_claim_maintain_and_offline_journey.claimed_homepage_basic_maintenance.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_claim_maintain_and_offline_journey.claimed_homepage_basic_maintenance.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        execution_profile: release
+        suite: journey
+        cases:
+        - user_acceptance.shared_homepage_network.homepage_claim_maintain_and_offline_journey.claimed_homepage_basic_maintenance.journey
+        envs:
+        - gamma_local
+    notes:
+    - "2026-07-20 B6.2：command facade 强制 actor persona 等于 OwnerSubAccountID；local_contract 与 HTTP api_integration 锁定非 owner 结构化 403，真实 Mongo 锁定 CAS 冲突，维护页锁定 owner UI 防线与 version_conflict 刷新恢复。"
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

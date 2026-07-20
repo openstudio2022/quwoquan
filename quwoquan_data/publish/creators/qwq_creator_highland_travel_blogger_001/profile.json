@@ -1,0 +1,15 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "userId": "qwq_creator_highland_travel_blogger_001",
+  "authorId": "builtin_highland_travel_blogger",
+  "displayName": "高原慢旅笔记",
+  "userHandle": "highland_slow_travel",
+  "headline": "专写高原采风、自然风光与在地体验的旅行博主",
+  "bio": "关注海拔季节窗口、山地人文与拍摄机位，只写长期跟踪的高原旅行主题。",
+  "creatorArchetype": "travel_blogger",
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

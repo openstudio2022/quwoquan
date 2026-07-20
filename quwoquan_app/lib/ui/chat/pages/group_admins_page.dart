@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
@@ -53,7 +54,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
           showAppCupertinoDialog<void>(
             context: context,
             builder: (_) => CupertinoAlertDialog(
-              content: Text(UITextConstants.maxAdminsReached),
+              content: Text(ChatText.maxAdminsReached),
               actions: [
                 CupertinoDialogAction(
                   child: Text(UITextConstants.confirm),
@@ -88,7 +89,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       final semantic = UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: '管理员更新未完成',
+        title: ChatText.groupAdminsUpdateIncompleteTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
@@ -143,7 +144,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.selectGroupMembers,
+      title: ChatText.selectGroupMembers,
       onBack: () => context.pop(),
       trailing: AppNavigationBarTextAction(
         label: '${UITextConstants.done}(${_selectedIds.length})',

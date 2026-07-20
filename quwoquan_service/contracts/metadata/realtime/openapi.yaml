@@ -4,38 +4,6 @@ info:
     title: quwoquan realtime API
     version: v1
 paths:
-    /channel/{channelType}/webhook:
-        post:
-            operationId: ChannelWebhook
-            x-contract-operation-id: realtime.channel_ingress_receipt.ChannelWebhook
-            x-object-id: realtime.channel_ingress_receipt
-            x-actor: none
-            x-application:
-                kind: command
-                facet: ChannelIngressReceiptCommandFacet
-                method: appendVerifiedReceipt
-                appendSink: ChannelIngressReceipt
-            parameters:
-                - name: channelType
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ChannelWebhookRequest'
-            responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
     /config/realtime:
         get:
             operationId: GetRealtimeConfig
@@ -61,12 +29,45 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    /internal/realtime/personas/{personaId}/presence:
+        get:
+            operationId: GetPersonaPresence
+            x-contract-operation-id: realtime.connection.GetPersonaPresence
+            x-object-id: realtime.connection
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PresenceViewQueryFacet
+                method: getPersonaPresence
+                reader: PresenceViewReader
+                slice: PresenceView
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PresenceView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /realtime/poll:
         get:
             operationId: LongPoll
             x-contract-operation-id: realtime.connection.LongPoll
             x-object-id: realtime.connection
-            x-actor: account
+            x-actor: persona
             x-application:
                 kind: query
                 facet: ConnectionQueryFacet
@@ -88,12 +89,38 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /realtime/tickets:
+        post:
+            operationId: IssueConnectionTicket
+            x-contract-operation-id: realtime.connection.IssueConnectionTicket
+            x-object-id: realtime.connection
+            x-actor: persona
+            x-application:
+                kind: session
+                facet: ConnectionSessionFacet
+                method: issueTicket
+                sessionOwner: Connection
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectionTicket'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /realtime/ws:
         get:
             operationId: WebSocketUpgrade
             x-contract-operation-id: realtime.connection.WebSocketUpgrade
             x-object-id: realtime.connection
-            x-actor: account
+            x-actor: persona
             x-application:
                 kind: session
                 facet: ConnectionSessionFacet
@@ -119,10 +146,10 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        ChannelWebhookRequest:
+        ConnectionTicket:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChannelWebhookRequest
+            x-contract-entity: ConnectionTicket
             x-contract-placeholder: true
         GetRealtimeConfigResponse:
             type: object
@@ -133,6 +160,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: LongPollResponse
+            x-contract-placeholder: true
+        PresenceView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PresenceView
             x-contract-placeholder: true
         WebSocketUpgradeResponse:
             type: object

@@ -38,32 +38,16 @@ final class HomepageSearchSlice {
   final String? nextCursor;
 }
 
-final class HomepageReviewDimensionProjection {
-  const HomepageReviewDimensionProjection({
-    required this.label,
-    required this.score,
-  });
-
-  final String label;
-  final double score;
-}
-
 final class HomepageReviewSummaryProjection {
   HomepageReviewSummaryProjection({
     this.averageRating,
     this.ratingCount = 0,
     Iterable<String> highlightTags = const <String>[],
-    Iterable<HomepageReviewDimensionProjection> dimensionScores =
-        const <HomepageReviewDimensionProjection>[],
-  }) : highlightTags = List<String>.unmodifiable(highlightTags),
-       dimensionScores = List<HomepageReviewDimensionProjection>.unmodifiable(
-         dimensionScores,
-       );
+  }) : highlightTags = List<String>.unmodifiable(highlightTags);
 
   final double? averageRating;
   final int ratingCount;
   final List<String> highlightTags;
-  final List<HomepageReviewDimensionProjection> dimensionScores;
 }
 
 final class HomepageRelatedGroupProjection {

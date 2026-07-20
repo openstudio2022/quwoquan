@@ -5,7 +5,7 @@ service:
   description: CircleBehaviorFact typed append sink。
   commercial_defaults:
     status: blocked
-    block_reason: App typed Facet、Recommendation consumer 与 Gamma Journey 尚未闭环
+    block_reason: 新增 operation 需按 B4 商用水位补齐三层证据后逐个翻牌
     gap_id: CIRCLE_BEHAVIOR_FACT_COMMERCIAL_CLOSURE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
@@ -13,6 +13,8 @@ api_routes:
     path: /circles/behaviors
 
     operation: ReportCircleBehavior
+    commercial:
+      status: ready
     actor: persona_or_device
     security:
       auth_mode: optional

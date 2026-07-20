@@ -1,8 +1,5 @@
 entity: RecentSearchState
-events:
-  - name: RecentSearchStateChanged
-    producer: search-service
-    consumers: []
-    channel: event_store
-    payload_entity: RecentSearchState
-    payload_fields: [id, personaId, scope, entries, version, updatedAt]
+# RecentSearchState 是单 Persona 私有状态，无跨服务/投影消费者：
+# 不声明领域事件，也不建无消费者的 outbox（按不过度设计三问裁剪）。
+# 若未来出现真实消费者（如搜索个性化投影），先在此登记事件与通道再实现。
+events: []

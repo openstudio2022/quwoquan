@@ -10,7 +10,7 @@
 
 | 维度 | 评审结论 |
 |------|---------|
-| spec.md | F1~F11 功能范围清晰，边界（O1~O8）明确 |
+| spec.md | V5 F1~F14 功能范围清晰，边界（O1~O8）明确 |
 | acceptance.yaml | A1~A12 覆盖全部功能点，每条均有测试层映射 |
 | 阻断项 | **无**。metadata `fields.yaml` 已有 `followerCount/followingCount/postCount`，缺少 `circleCount/likeCount` 需补充；`ui_config.yaml` 缺少 `profileTabs` 需新建 |
 
@@ -50,9 +50,8 @@ ProfileShell(mode: ProfileMode.mine, userId: ...)
   ├── _ProfileTabNavigation（一级 Tab + SliverAppBar 吸顶）
   └── _ProfileTabContent（TabBarView）
        ├── ProfileCreationsTab（SubTab + 可见性过滤）
-       ├── ProfileCirclesTab（圈子卡片列表）
-       ├── ProfileInteractionTab（赞/评论 + 方向）
-       └── ProfileLifestyleTab（生活子分类）
+       ├── ProfileInteractionTab（赞/评论/转发/浏览 + 方向）
+       └── ProfileFootprintTab（浏览历史，mine-only）
 ```
 
 **优点**：
@@ -129,7 +128,7 @@ ProfileBuilder(
 **理由**：
 1. 当前只有 mine/other 两种模式，5 个差异点（操作按钮、顶栏、可见性、交集文案、内容可见范围），组合模式足以收敛
 2. Flutter 官方推荐组合优于继承
-3. Tab 内容组件（Creations/Circles/Interaction/Lifestyle）独立提取后，每个可独立 Widget 测试
+3. Tab 内容组件（Creations/Interaction/Footprint）独立提取后，每个可独立 Widget 测试
 4. `CenteredScrollableTabBar` 已在发现页验证，直接复用
 5. Provider 注入天然隔离数据（`profileStateProvider` family 按 userId 区分）
 
@@ -144,7 +143,7 @@ ProfileShell (ConsumerStatefulWidget, TickerProviderStateMixin)
 │
 ├── 状态管理
 │   ├── ScrollController _scrollController
-│   ├── TabController _mainTabController (length: 4)
+│   ├── TabController _mainTabController (length: metadata profile_tabs)
 │   └── Provider: profileStateProvider(userId) → ProfileState
 │
 ├── build()
@@ -164,9 +163,8 @@ ProfileShell (ConsumerStatefulWidget, TickerProviderStateMixin)
 │               │       └── CenteredScrollableTabBar (一级 Tab)
 │               └── body: TabBarView
 │                   ├── ProfileCreationsTab(mode, userId)
-│                   ├── ProfileCirclesTab(mode, userId)
 │                   ├── ProfileInteractionTab(mode, userId)
-│                   └── ProfileLifestyleTab(mode, userId)
+│                   └── ProfileFootprintTab(userId)（mine-only）
 │
 ├── _ProfileHeader (独立 Widget)
 │   └── Stack
@@ -185,44 +183,24 @@ ProfileShell (ConsumerStatefulWidget, TickerProviderStateMixin)
 
 ---
 
-### KD2: 一级 Tab 枚举与 contentType 对齐
+### KD2: metadata 驱动的一级 Tab 与 contentType
 
-```dart
-enum ProfileTab {
-  creations,    // 创作（含微趣+图片+视频+文字）
-  circles,      // 圈子
-  interaction,  // 互动
-  lifestyle,    // 生活
-}
+一级 Tab 不维护手写 `ProfileTab` 枚举，唯一真相源是
+`user/user_profile/ui_config.yaml.profile_tabs`，经 codegen 产出
+`UserProfileUIConfig.profileTabs`。当前固定为 `[creations, interaction, footprint]`
+（展示文案 `[记录, 互动, 足迹]`）；`footprint` 仅 `mine` 可见，圈子通过统计详情页承载。
 
-enum CreationSubTab {
-  all,       // 全部
-  micro,     // 微趣 — 对齐 discoveryTabs contentType: micro
-  image,     // 图片 — 对齐 discoveryTabs contentType: image
-  video,     // 视频 — 对齐 discoveryTabs contentType: video
-  article,   // 文字 — 对齐 discoveryTabs contentType: article
-}
+创作二级筛选同样消费 codegen 配置，闭集为 `[all, photo, video, article]`：
 
-enum CreationVisibility {
-  all,       // 全部
-  public_,   // 公开
-  private_,  // 私密（仅 mine 可见）
-}
-```
+| SubTab id | contentType | 展示文案 |
+|---|---|---|
+| all | — | 全部 |
+| photo | image | 图片 |
+| video | video | 视频 |
+| article | article | 文字 |
 
-**一级 Tab label 来源**：`UITextConstants` 新增 `profileTabCreations / profileTabCircles / profileTabInteraction / profileTabLifestyle`。
-
-**SubTab label 来源**：`UITextConstants` 新增或复用 `creationSubAll / creationSubMicro / creationSubImage / creationSubVideo / creationSubArticle`。
-
-**contentType 语义对齐表**：
-
-| 创作 SubTab | discoveryTabs id | contentType | label |
-|------------|------------------|-------------|-------|
-| all | — | — | 全部 |
-| micro | moment | micro | 微趣 |
-| image | photo | image | 图片 |
-| video | video | video | 视频 |
-| article | article | article | 文字 |
+profile 不消费 discovery 的 `moment/micro`，也不恢复 `circles/lifestyle` 一级 Tab。
+可见性状态仅保留 `all/public/private`，其中 `private` 只在 mine 模式可选。
 
 ---
 
@@ -250,66 +228,34 @@ showMenu / OverlayEntry 弹出定位在 Tab 下方
 
 ---
 
-### KD4: 圈子 Tab 数据源
+### KD4: 统计详情与对象级 typed 读面
 
-**当前状态**：
-- `CircleRepository` 有 `listCircles({category, domainId})` 但无 `listUserCircles(userId)` 方法
-- `UserProfileRepository` 有 `listUserPosts / listUserWorks / listUserLifeItems` 但无圈子相关方法
+主页不再创建跨对象 `UserProfileRepository`。各数据按对象所有权拆分：
 
-**设计决策**：在 `UserProfileRepository` 新增 `listUserCircles(userId)` 方法，而非在 `CircleRepository` 添加。原因：
-1. 「用户已加入的圈子」属于用户档案视图，归 UserProfile 域
-2. 端侧 Repository 归属清晰：用户主页所有数据通过 `userProfileRepositoryProvider` 获取
-3. 云侧可通过 user-service 查询 membership 表关联 circle，或调用 circle-service 内部 API
+- 身份、主页 bundle、统计、影响力：`ProfileQuery`。
+- 粉丝/关注列表：`PersonaRelationshipQuery`，Remote 只调用 generated operation client。
+- 圈子统计详情：contracts 包的 `CircleMembershipQuery.listPersonaCircles`，返回
+  `PersonaCirclePage/CircleDto`。
+- 作品：content 域作者作品 Reader；足迹：content 域 `ContentFootprintEntry` Reader。
 
-**数据结构**：
-
-```dart
-// UserProfileRepository 接口扩展
-abstract class UserProfileRepository {
-  // 现有
-  Future<List<Map<String, dynamic>>> listUserPosts(String userId, {int limit = 20});
-  Future<List<Map<String, dynamic>>> listUserWorks(String userId);
-  Future<List<Map<String, dynamic>>> listUserLifeItems(String userId);
-
-  // 新增
-  Future<List<Map<String, dynamic>>> listUserCircles(String userId, {int limit = 50});
-  Future<Map<String, dynamic>> getUserStats(String userId);
-}
-```
-
-圈子卡片 DTO（Map 字段）：`id, name, coverUrl, memberCount`。
+UI 仅注入所需 typed capability，不传 operationId/path/header/decoder，也不使用
+`Map<String, dynamic>` DTO。`UserLifeItem/UserWork` 因无 operation 与消费者已从对象图
+退役，不进入 profile 数据链。
 
 ---
 
 ### KD5: ProfileState Provider 设计
 
-```dart
-@freezed
-class ProfileState with _$ProfileState {
-  factory ProfileState({
-    required String userId,
-    required ProfileMode mode,
-    @Default(ProfileTab.creations) ProfileTab activeTab,
-    @Default(CreationSubTab.all) CreationSubTab activeSubTab,
-    @Default(CreationVisibility.all) CreationVisibility activeVisibility,
-    @Default(AsyncValue.loading()) AsyncValue<Map<String, dynamic>> userProfile,
-    @Default(AsyncValue.loading()) AsyncValue<List<Map<String, dynamic>>> creations,
-    @Default(AsyncValue.loading()) AsyncValue<List<Map<String, dynamic>>> circles,
-    @Default(AsyncValue.loading()) AsyncValue<Map<String, dynamic>> stats,
-    @Default(false) bool isFollowing,
-  }) = _ProfileState;
-}
-
-// Family Provider，按 userId 隔离
-final profileStateProvider = StateNotifierProvider.family<ProfileNotifier, ProfileState, String>(
-  (ref, userId) => ProfileNotifier(ref, userId),
-);
-```
+`profileStateProvider(userId)` 使用 Riverpod `NotifierProvider.family` 隔离 subject。
+状态字段全部为强类型：`SubAccountProfileViewData`、`PostBaseDto`、`CircleDto`、
+`RelationshipCapabilityDto` 与 `RuntimeFailureBase`；禁止弱类型 Map 穿透。关系按钮以
+服务端 capability 为真相，pending outbox 只作为短时 optimistic override，回执后必须
+与远端状态收敛。
 
 **数据加载策略**：
 - `userProfile` + `stats`：进入页面时立即加载
 - `creations`：默认 Tab，立即加载
-- `circles`：切换到圈子 Tab 时懒加载（`_onTabChanged`）
+- `interaction/footprint`：切换到对应一级 Tab 时由各自 Provider 懒加载
 - 下拉刷新：RefreshIndicator 绑定到 NestedScrollView body
 
 ---
@@ -320,12 +266,13 @@ final profileStateProvider = StateNotifierProvider.family<ProfileNotifier, Profi
 |------|------|-------|
 | 顶栏左侧 | 无（或身份切换） | 返回按钮 |
 | 顶栏右侧 | 设置 icon | 更多 icon（拉黑/举报/分享） |
-| 操作按钮 | [编辑资料, 管理人设]（等宽双按钮） | [关注/已关注, 私信]（等宽双按钮，与 mine 布局一致） |
-| 交集卡片文案 | 「本周有 N 位趣友与你有交集」 | 「你们有 N 个交集点」 |
+| 操作按钮 | [管理分身, 编辑资料]（等宽双按钮） | [关注/已关注, 私信]（等宽双按钮，与 mine 布局一致） |
+| 交集模块文案 | 「我的连接」 | 「我与TA的交集」 |
 | 创作可见性 | [全部, 公开, 私密] | [全部, 公开] |
 | 私密作品 | 可见（带锁标） | 不可见 |
 | 互动方向 | [收到, 发出] | 仅 Ta 收到（公开部分） |
-| 圈子范围 | 全部已加入 | 仅公开可见圈子 |
+| 足迹 Tab | 可见，仅消费本人私有浏览历史 | 不构建、不请求 |
+| 圈子统计详情 | 全部已加入 | 仅公开可见圈子 |
 
 ---
 
@@ -345,7 +292,7 @@ lib/ui/user/
 │   ├── profile_action_bar.dart     # 操作按钮行
 │   ├── profile_stats_row.dart      # 统计行
 │   ├── profile_creations_tab.dart  # 创作 Tab 内容（SubTab + 过滤）（profile_resonance_card.dart 已按 F13 删除，交集统一 ObjectIntersectionCard）
-│   ├── profile_circles_tab.dart    # 圈子 Tab 内容
+│   ├── profile_circles_tab.dart    # 统计详情页复用的圈子列表内容（非一级 Tab）
 │   ├── profile_interaction_tab.dart # 互动 Tab 内容
 │   ├── profile_footprint_tab.dart  # 足迹 Tab 内容（浏览历史，mine-only；生活 Tab 已按 V5 废止）
 │   ├── creation_visibility_popup.dart # 可见性过滤 popup
@@ -355,8 +302,7 @@ lib/ui/user/
 │   └── profile_creations_provider.dart # 创作内容 Provider（SubTab + Visibility 过滤）
 └── models/
     ├── profile_mode.dart           # ProfileMode enum
-    ├── profile_tab.dart            # ProfileTab / CreationSubTab / CreationVisibility enum
-    └── profile_state.dart          # ProfileState freezed model
+    └── profile_tab.dart            # CreationSubTab / CreationVisibility / Interaction 状态
 ```
 
 ---
@@ -387,20 +333,13 @@ lib/ui/user/
 
 ### KD9: 端云 DTO 对齐方案
 
-**当前状态**：`lib/cloud/runtime/generated/user/` 目录不存在，无 codegen 产物。
+当前 ContractGraph 已从 `user/user_profile/{fields,service,ui_config}.yaml` 生成用户 DTO、
+operation descriptor、`UserProfileUIConfig` 与 pure Dart typed contracts。Remote adapter
+仅做 generated result → ViewData 映射；profile 页面不拼 URI、不手写 decoder context。
 
-**目标**：
-1. 补充 `contracts/metadata/user/user_profile/fields.yaml`：新增 `circleCount`、`likeCount` 字段
-2. 新建 `contracts/metadata/content/post/ui_config.yaml` 中追加 `profile_tabs` 配置节
-3. `make codegen-app` 生成 `user_profile_dto.g.dart`（含统计字段）
-
-**metadata 变更清单**：
-
-| 文件 | 变更 | 说明 |
-|------|------|------|
-| `user/user_profile/fields.yaml` | 新增 `circleCount: int`、`likeCount: int` | 统计字段补齐 |
-| `content/post/ui_config.yaml` | 新增 `profile_tabs` 节 | 主页 Tab 配置元数据化 |
-| `social/circle/service.yaml` | 新增 `GET /user/{userId}/circles` | 用户已加入圈子 API 声明 |
+圈子数据由 circle metadata 的 membership operation 和 `CircleMembershipQuery` 承担，
+不在 user profile metadata 复制第二条 API。对象图已移除无 operation 的
+`UserLifeItem/UserWork`。
 
 ---
 
@@ -413,7 +352,7 @@ lib/ui/user/
 | S1: metadata + codegen 基线 | fields.yaml / ui_config / service.yaml + codegen | A6 | local_contract(契约) |
 | S2: ProfileShell 核心框架 | ProfileShell + Header + ActionBar + StatsRow | A1, A11, A12 | local_contract+local_contract+user_acceptance |
 | S3: 创作 Tab（SubTab + Visibility） | ProfileCreationsTab + popup | A3 | local_contract+local_contract+user_acceptance |
-| S4: 圈子 Tab | ProfileCirclesTab + CircleCard + Repository | A4 | local_contract+local_contract |
+| S4: 圈子统计详情 | ProfileStatsPage + CircleMembershipQuery | A4 | local_contract+api_integration |
 | S5: 互动 Tab + 足迹 Tab | Interaction + Footprint（浏览历史，mine-only） | A9, A10 | local_contract |
 | S6: 一级 Tab 导航 | CenteredScrollableTabBar 集成 + 默认选中 | A2 | local_contract+local_contract+user_acceptance |
 | S7: 目录迁移 | features/profile/ → ui/user/ + router 更新 | A5 | local_contract+user_acceptance |
@@ -437,27 +376,28 @@ lib/ui/user/
 ### 约束与局限性
 
 - `NestedScrollView` 内层 `TabBarView` 在快速滑动时可能有滚动冲突，需要 `physics: NeverScrollableScrollPhysics()` 配合
-- 圈子 Tab 目前走 Mock，Remote 实现依赖云侧 user-service API 就绪
-- `ProfileState` freezed model 需要 build_runner 生成，增加构建时间
-- 私密作品过滤依赖端侧 `listUserPosts` 的 `visibility` 参数，云侧 API 需支持
+- production composition 仅装配 generated client + Remote typed facet；alpha fixture 只可经
+  独立 runner Provider override 注入，页面与 production 可达图不得引用 Mock。
+- 私密作品过滤必须由 content 服务端权限与查询条件共同保证，端侧筛选不构成安全边界。
 
 ---
 
 ## 未来演进
 
-### E1: 真实 API 对接
+### E1: typed operation 扩展
 
-当云侧 user-service 就绪后，Remote 实现替换 Mock：
-- 触发条件：user-service API 全部部署到 integration 环境
-- 变更范围：`RemoteUserProfileRepository` 实现
-- 风险：无，架构预留了 Mock/Remote 切换
+新增主页能力时先在对象 metadata 声明 operation/reader/slice/client_contract，再生成
+纯 Dart contract 与 operation client，最后增加对象级 Remote adapter。禁止恢复聚合
+`UserProfileRepository` 或运行时 Mock/Remote 开关。
 
 ### E2: 足迹 Tab 浏览历史能力增强
 
 V5 足迹 Tab 复用既有浏览历史（`GET /content/footprint`）。未来可演进：
 - 触发条件：浏览历史需支持按内容形态/时间窗筛选或去重聚合。
 - 变更范围：footprint 浏览历史 Provider + 端侧过滤逻辑（不引入 `UserLifeItem`）。
-- 说明：历史「生活 Tab（书影音/味蕾/爱物，基于 `UserLifeItem`）」在 V5 已废止为 profile 一级 Tab；`UserLifeItem` 域保留为独立后端能力，演进不在本主页范围。
+- 说明：历史「生活 Tab（书影音/味蕾/爱物）」及其空壳
+  `UserLifeItem/UserWork` 已退役；若未来重新立项，必须重新完成 metadata、生命周期、
+  operation 与三层测试，不复活旧对象。
 
 ### E3: 更多个人主页模式
 
@@ -498,7 +438,7 @@ V5 足迹 Tab 复用既有浏览历史（`GET /content/footprint`）。未来可
 │  │ 2/3   │  bio text...       ← 名字下方   │
 │  └───────┘                                 │
 │  [交集卡片]                                 │
-│  [统计行: 关注 圈子 粉丝 赞]                 │
+│  [统计行: 粉丝 关注 获赞 圈子]                 │
 │  [操作栏: 等宽双按钮]                        │
 └────────────────────────────────────────────┘
 ```
@@ -597,7 +537,7 @@ double _springDampedOffset(double raw, double maxPull) {
 │  collapsedHeight: kToolbarHeight             │
 │  title: (collapsed时) 小头像 + 名字          │
 ├── SliverPersistentHeader (pinned: true) ────┤
-│  一级 Tab: [创作 | 圈子 | 互动 | 生活]       │
+│  一级 Tab: [记录 | 互动 | 足迹]              │
 └─────────────────────────────────────────────┘
 ```
 
@@ -647,7 +587,7 @@ ProfileInteractionTab
   -> ProfileSecondaryTabBar(trailing: direction switch)
   -> ShareInteractionList(direction)
   -> shareInteractionProvider(subAccountId, direction)
-  -> UserProfileRepository(existing received/sent operation, type=share)
+  -> ContentProfileInteractionQueryFacet(received/sent, type=share)
   -> durable ShareInteractionOccurrence read model
 ```
 
@@ -683,6 +623,6 @@ ProfileInteractionTab
 
 ---
 
-## 存量带规划任务
+## 剩余风险
 
-见 树内任务文档 「搁置任务」和「未来演进任务」章节。
+长期遗留仅登记在 `docs/outstanding_risks_backlog.md`；本节点不维护第二套任务清单。

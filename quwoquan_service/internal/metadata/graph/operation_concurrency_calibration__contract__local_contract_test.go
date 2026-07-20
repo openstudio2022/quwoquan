@@ -33,7 +33,6 @@ func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
 	want := []string{
 		"circle.circle_file.UpdateCircleFile",
 		"circle.circle_group.UpdateCircleGroup",
-		"ops.config_layer.UpdateServiceConfig",
 		"ops.experiment.UpdateExperimentRollout",
 	}
 	if !slices.Equal(got, want) {

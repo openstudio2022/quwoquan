@@ -1,0 +1,34 @@
+object: ConversationUserState
+operations:
+  - MarkAsRead
+  - UpdateConversationSettings
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/chat-service/internal/application/message_service.go
+    - quwoquan_service/services/chat-service/internal/application/conversation_service.go
+  store:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_user_state_store.go
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_aggregate_command_store.go
+  outbox:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_aggregate_command_store.go
+    - quwoquan_service/services/chat-service/internal/application/aggregate_outbox_relay.go
+  reader:
+    - quwoquan_service/services/chat-service/internal/infrastructure/persistence/mongo_user_state_store.go
+  transport:
+    - quwoquan_service/services/chat-service/internal/adapters/http/chat_handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart
+    - quwoquan_app/lib/cloud/services/chat/remote/chat_repository_remote.dart
+  page:
+    - quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/chat-service/internal/application/aggregate_command_contract__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/chat/dto/contract/user_state_dto_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/chat-service/tests/api_integration/conversation_settings_contract__api_integration_test.go
+    - quwoquan_service/services/chat-service/tests/api_integration/inbox_projection_contract__api_integration_test.go
+    - quwoquan_service/services/chat-service/tests/api_integration/message_unread_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/chat/chat_conversation_list_journey__user_acceptance_test.dart
+environments: []

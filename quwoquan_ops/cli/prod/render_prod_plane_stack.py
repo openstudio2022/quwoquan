@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -38,14 +39,38 @@ EXTERNAL_POSTGRES_PORT = 19400
 EXTERNAL_MONGO_PORT = 19410
 EXTERNAL_REDIS_PORT = 19420
 EXTERNAL_MONGO_URI = f"mongodb://{EXTERNAL_DATA_HOST}:{EXTERNAL_MONGO_PORT}/?directConnection=true"
+PROD_CADDY_IMAGE = (
+    "docker.io/library/caddy:2.8.4-alpine@"
+    "sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17"
+)
+RUNTIME_LOG_EXPORT_SERVICES = {
+    "assistant-service",
+    "chat-service",
+    "circle-service",
+    "content-service",
+    "entity-service",
+    "integration-service",
+    "notification-service",
+    "platform-ops-service",
+    "realtime-gateway",
+    "rtc-service",
+    "search-service",
+    "tag-service",
+    "user-service",
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Render prod plane rootless stack from truth sources.",
     )
-    parser.add_argument("--plane", default="service", choices=["service"])
+    parser.add_argument("--plane", default="service", choices=["service", "edge"])
     parser.add_argument("--instance", default="prod", choices=["gray", "prod"])
+    parser.add_argument(
+        "--rollout-stage",
+        default="full",
+        choices=["gray-initial", "carry-on", "full"],
+    )
     parser.add_argument("--config-version", required=True)
     parser.add_argument("--image-version", default=os.environ.get("IMAGE_VERSION", "0.0.1"))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_ROOT / "service"))
@@ -145,6 +170,7 @@ def _rewrite_volume_with_layout(
     config_root: str,
     media_root: str,
     legal_root: str,
+    portal_root: str,
     caddyfile_path: str,
     model_cache_root: str,
 ) -> str:
@@ -153,6 +179,7 @@ def _rewrite_volume_with_layout(
         "/srv/media": media_root,
         "/var/lib/quwoquan/chat-media": media_root,
         "/srv/legal": legal_root,
+        "/srv/portal": portal_root,
         "/etc/caddy/Caddyfile": caddyfile_path,
         "/app/cache": model_cache_root,
     }
@@ -177,24 +204,69 @@ def _rewrite_service(
     spec: dict[str, Any],
     selected: set[str],
     *,
+    image_version: str,
+    versioned_image: bool,
+    instance: str,
     config_root: str,
     media_root: str,
     legal_root: str,
+    portal_root: str,
     caddyfile_path: str,
     model_cache_root: str,
+    credentials_root: str = "",
+    runtime_credentials: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     updated = copy.deepcopy(spec)
     updated.pop("build", None)
+    if versioned_image:
+        if not image_version or image_version == "latest":
+            raise SystemExit(f"FAIL: immutable image version required for {name}")
+        updated["image"] = f"localhost/quwoquan_service_{name}:{image_version}"
+    # prod 渲染面按 rootlessGovernedComposeServices 显式选择服务，
+    # gamma-local 的 compose profile 开关不进入生产 compose。
+    updated.pop("profiles", None)
+    if name == "gamma-proxy":
+        updated["image"] = PROD_CADDY_IMAGE
+        updated["ports"] = (
+            ["80:80", "443:443", "127.0.0.1:12019:2019"]
+            if instance == "prod"
+            else ["29000:80", "127.0.0.1:22019:2019"]
+        )
     if isinstance(updated.get("depends_on"), dict):
         updated["depends_on"] = {
             dep: dep_spec
             for dep, dep_spec in updated["depends_on"].items()
             if dep in selected
         }
+        if not updated["depends_on"]:
+            updated.pop("depends_on")
     environment = updated.get("environment")
     if isinstance(environment, dict) and environment.get("APP_ENV") == "gamma":
         environment["APP_ENV"] = "prod"
     if isinstance(environment, dict):
+        environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
+            "${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}"
+        )
+        if name in RUNTIME_LOG_EXPORT_SERVICES:
+            # 云侧服务日志上云：stdout 镜像批量推送到 product-ops 内部
+            # runtime log ingest（机器凭据）并先写持久 spool；
+            # product-ops 自身直写 SLS。
+            if "product-ops-service" in selected:
+                environment["RUNTIME_LOG_INGEST_URL"] = (
+                    "http://product-ops-service:18086/ops/internal/runtime-logs:ingest"
+                )
+            else:
+                environment["RUNTIME_LOG_INGEST_URL"] = (
+                    f"http://{EXTERNAL_DATA_HOST}:"
+                    "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:?product ops port is required}"
+                    "/ops/internal/runtime-logs:ingest"
+                )
+            environment["RUNTIME_LOG_INGEST_TOKEN"] = (
+                "${RUNTIME_LOG_INGEST_TOKEN:?RUNTIME_LOG_INGEST_TOKEN is required}"
+            )
+            environment["RUNTIME_LOG_SPOOL_DIR"] = (
+                f"/var/lib/quwoquan/runtime-log-spool/{name}"
+            )
         if name == "rec-model-service":
             environment["MONGODB_URI"] = EXTERNAL_MONGO_URI
         if name == "content-service":
@@ -226,22 +298,147 @@ def _rewrite_service(
             environment["MONGO_URI"] = EXTERNAL_MONGO_URI
             environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            environment["PROMETHEUS_URL"] = "${PRODUCT_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
+            # config_sync 循环从平台控制面拉取有效配置并回报 ACK；
+            # prod 缺该地址时 config_sync 会 fail-fast，禁止静默跳过。
+            environment["PLATFORM_OPS_BASE_URL"] = "http://platform-ops-service:18088"
+            # 云侧服务日志上云内部通道的服务端校验密钥（fail-closed）。
+            environment["RUNTIME_LOG_INGEST_TOKEN"] = (
+                "${RUNTIME_LOG_INGEST_TOKEN:?RUNTIME_LOG_INGEST_TOKEN is required}"
+            )
+            environment["OPS_OIDC_ISSUER"] = (
+                "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
+            )
+            environment["OPS_OIDC_AUDIENCE"] = (
+                "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
+            )
+            environment["OPS_OIDC_JWKS_URL"] = (
+                "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
+            )
+        if name == "platform-ops-service":
+            environment["POSTGRES_DSN"] = (
+                f"postgres://quwoquan:quwoquan@{EXTERNAL_DATA_HOST}:{EXTERNAL_POSTGRES_PORT}/"
+                "quwoquan?sslmode=disable"
+            )
+            environment["PROMETHEUS_URL"] = "${PLATFORM_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
+            # Alertmanager 告警回流 ingest 的机器凭据；缺失时服务端 fail-closed。
+            environment["ALERT_INGEST_TOKEN"] = "${ALERT_INGEST_TOKEN:?ALERT_INGEST_TOKEN is required}"
+            environment["OPS_OIDC_ISSUER"] = (
+                "${OPS_OIDC_ISSUER:?OPS_OIDC_ISSUER is required}"
+            )
+            environment["OPS_OIDC_AUDIENCE"] = (
+                "${OPS_OIDC_AUDIENCE:?OPS_OIDC_AUDIENCE is required}"
+            )
+            environment["OPS_OIDC_JWKS_URL"] = (
+                "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
+            )
         if name == "tag-service":
             environment["REDIS_ADDR"] = f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             environment["TAG_MONGO_URI"] = EXTERNAL_MONGO_URI
         if name == "entity-service":
             environment["ENTITY_MONGO_URI"] = EXTERNAL_MONGO_URI
             # prod-hosted 首波 service plane 不含 elasticsearch（search-service 未迁入），
-            # 关闭 write-time 索引投影；主页读写主链路（Mongo homepage_state）不受影响。
+            # 关闭 write-time 索引投影；主页读写主链路（Mongo homepages 权威集合）不受影响。
             environment["SEARCH_ES_ENABLED"] = "false"
             environment.pop("SEARCH_ES_ENDPOINTS", None)
+        if name == "integration-service":
+            environment["INTEGRATION_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["INTEGRATION_PUSH_ENABLED"] = "true"
+            environment["INTEGRATION_PUSH_MODE"] = "real"
+            environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = (
+                "http://user-service:18082"
+            )
+            environment["INTEGRATION_PUSH_APNS_ENVIRONMENT"] = "production"
+            environment["INTEGRATION_PUSH_APNS_KEY_FILE"] = (
+                "/run/secrets/quwoquan/integration/apns-auth-key.p8"
+            )
+            environment["INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"] = (
+                "/run/secrets/quwoquan/integration/fcm-service-account.json"
+            )
+        if name == "notification-service":
+            environment["NOTIFICATION_MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["NOTIFICATION_REDIS_ADDR"] = (
+                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            )
+            environment["NOTIFICATION_REALTIME_BASE_URL"] = (
+                f"http://{EXTERNAL_DATA_HOST}:"
+                "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
+            )
+        if name == "realtime-gateway":
+            environment["REALTIME_REDIS_ADDR"] = (
+                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            )
+        if name == "rtc-service":
+            environment["MONGO_URI"] = EXTERNAL_MONGO_URI
+            environment["REDIS_ADDR"] = (
+                f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
+            )
+            environment["LIVEKIT_URL"] = (
+                "${PROD_LIVEKIT_PUBLIC_URL:?PROD_LIVEKIT_PUBLIC_URL is required}"
+            )
+            environment["LIVEKIT_API_KEY"] = (
+                "${PROD_LIVEKIT_API_KEY:?PROD_LIVEKIT_API_KEY is required}"
+            )
+            environment["LIVEKIT_API_SECRET"] = (
+                "${PROD_LIVEKIT_API_SECRET:?PROD_LIVEKIT_API_SECRET is required}"
+            )
     if name != "gamma-proxy":
         extra_hosts = list(updated.get("extra_hosts") or [])
         if f"{EXTERNAL_DATA_HOST}:host-gateway" not in extra_hosts:
             extra_hosts.append(f"{EXTERNAL_DATA_HOST}:host-gateway")
         updated["extra_hosts"] = extra_hosts
-    volumes = updated.get("volumes")
-    if isinstance(volumes, list):
+    volumes = list(updated.get("volumes") or [])
+    credential_spec = (runtime_credentials or {}).get(name)
+    if credential_spec is not None:
+        if not credentials_root or not Path(credentials_root).is_absolute():
+            raise SystemExit(
+                f"FAIL: absolute credentialsPath required for runtime credentials: {name}"
+            )
+        env_file = _runtime_credential_source(
+            credentials_root,
+            credential_spec.get("envFile"),
+            label=f"{name}.envFile",
+        )
+        updated["env_file"] = [env_file]
+        credential_files = credential_spec.get("files") or {}
+        if name == "integration-service":
+            apns_key = _runtime_credential_source(
+                credentials_root,
+                credential_files.get("apnsKey"),
+                label=f"{name}.files.apnsKey",
+            )
+            fcm_account = _runtime_credential_source(
+                credentials_root,
+                credential_files.get("fcmServiceAccount"),
+                label=f"{name}.files.fcmServiceAccount",
+            )
+            volumes.extend(
+                [
+                    (
+                        f"{apns_key}:"
+                        "/run/secrets/quwoquan/integration/apns-auth-key.p8:ro"
+                    ),
+                    (
+                        f"{fcm_account}:"
+                        "/run/secrets/quwoquan/integration/"
+                        "fcm-service-account.json:ro"
+                    ),
+                ]
+            )
+    if name in RUNTIME_LOG_EXPORT_SERVICES:
+        spool_mount = "runtime-log-spool:/var/lib/quwoquan/runtime-log-spool"
+        if spool_mount not in volumes:
+            volumes.append(spool_mount)
+    if name == "platform-ops-service":
+        environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
+            "/var/lib/quwoquan/release-state"
+        )
+        ledger_mount = (
+            "./release-ledger:/var/lib/quwoquan/release-state:ro"
+        )
+        if ledger_mount not in volumes:
+            volumes.append(ledger_mount)
+    if volumes:
         updated["volumes"] = [
             (
                 _rewrite_volume_with_layout(
@@ -249,6 +446,7 @@ def _rewrite_service(
                     config_root=config_root,
                     media_root=media_root,
                     legal_root=legal_root,
+                    portal_root=portal_root,
                     caddyfile_path=caddyfile_path,
                     model_cache_root=model_cache_root,
                 )
@@ -258,6 +456,21 @@ def _rewrite_service(
             for item in volumes
         ]
     return updated
+
+
+def _runtime_credential_source(
+    credentials_root: str,
+    relative_source: Any,
+    *,
+    label: str,
+) -> str:
+    normalized = str(relative_source or "").strip()
+    relative = Path(normalized)
+    if not normalized or relative.is_absolute() or ".." in relative.parts:
+        raise SystemExit(
+            f"FAIL: {label} must be a non-empty credentialsPath-relative path"
+        )
+    return str(Path(credentials_root) / relative)
 
 
 def _filter_top_level_volumes(services: dict[str, Any], top_level: dict[str, Any]) -> dict[str, Any]:
@@ -388,31 +601,131 @@ def _write_config_tree(
         release_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(release_src, release_target)
         sources[service]["releaseConfigDigest"] = _sha256(release_src)
+
+    # IaC 只读配置快照的另外两个域：端侧 App 发布配置与数据工程共享 catalog。
+    # platform-ops 生产容器只挂 config-root，不含仓库树，必须在渲染期落盘。
+    app_config_src = ROOT / "quwoquan_app" / "configs" / "prod"
+    if not app_config_src.is_dir():
+        raise SystemExit(f"FAIL: missing app prod config tree: {app_config_src}")
+    app_target = config_root / "configs" / "app" / "prod"
+    app_target.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(app_config_src.iterdir()):
+        if entry.is_file() and entry.suffix in {".yaml", ".yml", ".json"}:
+            shutil.copy2(entry, app_target / entry.name)
+    sources["app"] = {"package": str(app_config_src)}
+
+    data_catalog_src = ROOT / "quwoquan_data" / "control_plane" / "_shared" / "catalogs"
+    if not data_catalog_src.is_dir():
+        raise SystemExit(f"FAIL: missing data catalogs tree: {data_catalog_src}")
+    data_target = config_root / "data-catalogs"
+    data_target.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(data_catalog_src.iterdir()):
+        if entry.is_file() and entry.suffix in {".yaml", ".yml"}:
+            shutil.copy2(entry, data_target / entry.name)
+    sources["data"] = {"package": str(data_catalog_src)}
+
+    # 灰度路由策略（IaC）：编译进 Caddyfile 的同时落进 config-root，
+    # 供 platform-ops 生产容器只读展示（Portal 灰度页）。
+    routing_policy_src = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
+    if not routing_policy_src.is_file():
+        raise SystemExit(f"FAIL: missing gray routing policy: {routing_policy_src}")
+    routing_target = config_root / "gray-routing" / "policy.yaml"
+    routing_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(routing_policy_src, routing_target)
+    sources["gray-routing"] = {
+        "package": str(routing_policy_src),
+        "policyDigest": _sha256(routing_policy_src),
+    }
     return sources
 
 
-def _prod_public_edge_ip() -> str:
-    """从环境拓扑真相源解析 prod-hosted 公网 edge IP。
-
-    topology publicBases 以 IP 声明公共基址，而 Caddy 站点按域名 SNI 匹配；
-    IP 直连（无 SNI）必须由 IP 站点别名承接，否则 health/media URL 结构性不可达。
-    """
+def _prod_public_hosts() -> dict[str, str]:
+    """从环境拓扑真相源解析生产域名，禁止生产 Caddy 回退本地域名或 IP。"""
     from urllib.parse import urlparse
 
     topology = _load_yaml(TOPOLOGY_MANIFEST)
-    api_base = str(
-        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases", {}).get("api", "")
+    public_bases = (
+        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases")
+        or {}
     )
-    host = urlparse(api_base).hostname
-    if not host:
-        raise SystemExit("FAIL: topology prod-hosted publicBases.api missing/unparsable")
-    return host
+    hosts: dict[str, str] = {}
+    for key in ("api", "realtime", "productOps", "mediaImage", "mediaUpload"):
+        host = urlparse(str(public_bases.get(key) or "")).hostname or ""
+        if (
+            not host
+            or host.endswith((".test", ".example"))
+            or re.fullmatch(r"\d+(?:\.\d+){3}", host)
+        ):
+            raise SystemExit(f"FAIL: prod-hosted publicBases.{key} must use a public DNS name")
+        hosts[key] = host
+    return hosts
 
 
-def _write_caddyfile(output_root: Path) -> None:
+def _render_gray_routing_block(rollout_stage: str) -> str:
+    """把灰度路由策略（IaC 真相源）编译为 Caddy named matcher + handle 块。
+
+    仅 prod 实例栈注入：命中任一启用维度的请求被转发到 gray 栈 edge，
+    未命中继续走本栈稳定服务。gray 栈自身不注入（防转发环）。
+    """
+    policy_path = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
+    policy = (_load_yaml(policy_path).get("policy") or {}) if policy_path.is_file() else {}
+    if not policy.get("enabled"):
+        return ""
+    stage_dimensions = policy.get("stageDimensions") or {}
+    dimensions = stage_dimensions.get(rollout_stage) or {}
+    upstream = str(policy.get("grayUpstream") or "").strip()
+    if not upstream:
+        raise SystemExit("FAIL: gray routing enabled but grayUpstream is empty")
+    skip_verify = bool(policy.get("grayUpstreamTlsInsecureSkipVerify"))
+    header_by_dimension = {
+        "appVersions": "X-Client-App-Version",
+        "userIds": "X-Client-User-Id",
+        "provinces": "X-Client-Region-Code",
+        "carriers": "X-Client-Carrier",
+    }
+    transport_lines = ""
+    if upstream.startswith("https://") and skip_verify:
+        transport_lines = (
+            "\t\ttransport http {\n"
+            "\t\t\ttls_insecure_skip_verify\n"
+            "\t\t}\n"
+        )
+    blocks: list[str] = []
+    for dimension, header_name in header_by_dimension.items():
+        values = [str(item).strip() for item in (dimensions.get(dimension) or []) if str(item).strip()]
+        if not values:
+            continue
+        matcher = f"@gray_{dimension.lower()}"
+        header_lines = "".join(
+            f"\t\theader {header_name} {value}\n" for value in values
+        )
+        blocks.append(
+            f"\t{matcher} {{\n"
+            f"{header_lines}"
+            f"\t}}\n"
+            f"\thandle {matcher} {{\n"
+            f"\t\treverse_proxy {upstream} {{\n"
+            f"\t\t\theader_up Host {{host}}\n"
+            f"{transport_lines}"
+            f"\t\t}}\n"
+            f"\t}}\n"
+        )
+    return "".join(blocks)
+
+
+def _write_caddyfile(
+    output_root: Path,
+    instance: str,
+    rollout_stage: str = "full",
+) -> None:
     target = output_root / "runtime" / "Caddyfile"
     target.parent.mkdir(parents=True, exist_ok=True)
-    edge_ip = _prod_public_edge_ip()
+    public_hosts = _prod_public_hosts()
+    gray_routing_block = (
+        _render_gray_routing_block(rollout_stage)
+        if instance == "prod" and rollout_stage != "full"
+        else ""
+    )
     caddy_text = """{
 \tadmin 0.0.0.0:2019
 \tlocal_certs
@@ -510,8 +823,23 @@ prod-product-ops.quwoquan-env.test {
 \thandle /ops/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
+\thandle /control-plane/product/* {
+\t\treverse_proxy product-ops-service:18086
+\t}
+\thandle /control-plane/platform/* {
+\t\treverse_proxy platform-ops-service:18088
+\t}
+\t# 运维运营 Portal SPA（同源静态站点：API 与前端共享 ops 域名，避免 CORS）。
 \thandle {
-\t\trespond "prod-hosted product-ops route is not ready for this path" 404
+\t\theader {
+\t\t\tX-Content-Type-Options "nosniff"
+\t\t\tX-Frame-Options "DENY"
+\t\t\tReferrer-Policy "no-referrer"
+\t\t\tContent-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; frame-ancestors 'none'"
+\t\t}
+\t\troot * /srv/portal
+\t\ttry_files {path} /index.html
+\t\tfile_server
 \t}
 }
 
@@ -589,16 +917,72 @@ prod-upload.quwoquan-env.test {
 \t}
 }
 """
-    # topology publicBases 以 IP 声明；给 api 站点追加 IP 地址别名，并用 default_sni
-    # 把无 SNI 的 IP 直连归位到该站点，否则 TLS 握手无匹配证书（alert internal error）。
-    caddy_text = caddy_text.replace(
-        "prod-api.quwoquan-env.test {",
-        f"prod-api.quwoquan-env.test, {edge_ip} {{",
-    )
-    caddy_text = caddy_text.replace(
-        "\tlocal_certs",
-        f"\tlocal_certs\n\tdefault_sni {edge_ip}",
-    )
+    if instance == "gray":
+        direct_http = caddy_text.rfind("\n:80 {")
+        if direct_http < 0:
+            raise SystemExit("FAIL: gray Caddy HTTP route block is missing")
+        caddy_text = "{\n\tadmin 0.0.0.0:2019\n}\n" + caddy_text[direct_http + 1 :]
+    else:
+        caddy_text = caddy_text.replace(
+            "{\n\tadmin 0.0.0.0:2019\n\tlocal_certs\n}",
+            "{\n\tadmin 0.0.0.0:2019\n}",
+            1,
+        )
+        caddy_text = caddy_text.replace(
+            "\n(local_gamma_tls) {\n\ttls internal\n}\n",
+            "",
+            1,
+        ).replace("\timport local_gamma_tls\n", "")
+        api_sites = f"{public_hosts['api']}, {public_hosts['realtime']} {{"
+        caddy_text = caddy_text.replace(
+            "prod-api.quwoquan-env.test {",
+            api_sites,
+            1,
+        )
+        caddy_text = caddy_text.replace(
+            "prod-product-ops.quwoquan-env.test {",
+            f"{public_hosts['productOps']} {{",
+            1,
+        )
+        caddy_text = caddy_text.replace(
+            "prod-avatar.quwoquan-env.test,\n"
+            "prod-image.quwoquan-env.test,\n"
+            "prod-video.quwoquan-env.test,\n"
+            "prod-upload.quwoquan-env.test {",
+            f"{public_hosts['mediaImage']}, {public_hosts['mediaUpload']} {{",
+            1,
+        )
+        security_snippet = """
+(prod_security) {
+\theader {
+\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+\t\tX-Content-Type-Options "nosniff"
+\t\tX-Frame-Options "DENY"
+\t\tReferrer-Policy "strict-origin-when-cross-origin"
+\t}
+}
+"""
+        global_end = caddy_text.index("}\n") + 2
+        caddy_text = caddy_text[:global_end] + security_snippet + caddy_text[global_end:]
+        for site in (
+            api_sites,
+            f"{public_hosts['productOps']} {{",
+            f"{public_hosts['mediaImage']}, {public_hosts['mediaUpload']} {{",
+        ):
+            caddy_text = caddy_text.replace(site, site + "\n\timport prod_security", 1)
+        direct_http = caddy_text.rfind("\n:80 {")
+        if direct_http < 0:
+            raise SystemExit("FAIL: prod Caddy direct HTTP fallback block is missing")
+        caddy_text = caddy_text[:direct_http].rstrip() + "\n"
+    if gray_routing_block:
+        # 灰度路由 matcher 必须在 API handle 之前：命中维度的请求整体转发到
+        # gray 栈 edge；未命中继续走本栈稳定服务。
+        caddy_text = caddy_text.replace(
+            "\thandle /healthz {\n\t\treverse_proxy content-service:18080\n\t}",
+            gray_routing_block
+            + "\thandle /healthz {\n\t\treverse_proxy content-service:18080\n\t}",
+            1,
+        )
     target.write_text(caddy_text, encoding="utf-8")
 
 
@@ -611,7 +995,15 @@ def _write_env_file(
     lines = [
         f"LOCAL_GAMMA_CONFIG_VERSION={config_version}",
         f"LOCAL_GAMMA_IMAGE_VERSION={image_version}",
-        "LOCAL_GAMMA_TLS_MODE=internal",
+        (
+            "LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE="
+            f"localhost/quwoquan_service_realtime-gateway:{image_version}"
+        ),
+        (
+            "LOCAL_GAMMA_RTC_SERVICE_IMAGE="
+            f"localhost/quwoquan_service_rtc-service:{image_version}"
+        ),
+        f"LOCAL_GAMMA_TLS_MODE={'internal' if instance == 'gray' else 'automatic'}",
     ]
     if instance == "gray":
         lines.extend(
@@ -629,6 +1021,10 @@ def _write_env_file(
                 "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT=29250",
                 "LOCAL_GAMMA_TAG_PORT=29270",
                 "LOCAL_GAMMA_ENTITY_PORT=29290",
+                "LOCAL_GAMMA_INTEGRATION_PORT=29310",
+                "LOCAL_GAMMA_NOTIFICATION_PORT=29320",
+                "LOCAL_GAMMA_REALTIME_PORT=29340",
+                "LOCAL_GAMMA_RTC_PORT=29350",
                 "LOCAL_GAMMA_POSTGRES_PORT=29400",
                 "LOCAL_GAMMA_MONGO_PORT=29410",
                 "LOCAL_GAMMA_REDIS_PORT=29420",
@@ -650,6 +1046,10 @@ def _write_env_file(
                 "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT=19250",
                 "LOCAL_GAMMA_TAG_PORT=19270",
                 "LOCAL_GAMMA_ENTITY_PORT=19290",
+                "LOCAL_GAMMA_INTEGRATION_PORT=19310",
+                "LOCAL_GAMMA_NOTIFICATION_PORT=19320",
+                "LOCAL_GAMMA_REALTIME_PORT=19340",
+                "LOCAL_GAMMA_RTC_PORT=19350",
                 "LOCAL_GAMMA_POSTGRES_PORT=19400",
                 "LOCAL_GAMMA_MONGO_PORT=19410",
                 "LOCAL_GAMMA_REDIS_PORT=19420",
@@ -668,6 +1068,8 @@ def main() -> int:
     governed = [str(item) for item in plane.get("rootlessGovernedComposeServices") or []]
     support = [str(item) for item in plane.get("rootlessSupportComposeServices") or []]
     config_services = [str(item) for item in plane.get("rootlessConfigServices") or []]
+    credentials_root = str(plane.get("credentialsPath") or "").strip()
+    runtime_credentials = dict(plane.get("rootlessRuntimeCredentials") or {})
     selected = governed + support
     if not selected:
         raise SystemExit(f"FAIL: plane {args.plane} missing rootless compose service list")
@@ -683,6 +1085,7 @@ def main() -> int:
         raise SystemExit("FAIL: rootlessRuntimeLayout.mediaStateRef must be a safe state-relative path")
     media_root = str((resolve_target_local_dir("prod-hosted") / media_ref_path).resolve())
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
+    portal_root = str(layout.get("portalStaticRoot") or "runtime/portal")
     model_cache_root = str(layout.get("modelCacheRoot") or "runtime/model-cache")
     if Path(config_root).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.configRoot must remain relative")
@@ -690,6 +1093,8 @@ def main() -> int:
         raise SystemExit("FAIL: rootlessRuntimeLayout.caddyfile must remain relative")
     if Path(legal_root).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.legalStaticRoot must remain relative")
+    if Path(portal_root).is_absolute():
+        raise SystemExit("FAIL: rootlessRuntimeLayout.portalStaticRoot must remain relative")
     if Path(model_cache_root).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
@@ -714,12 +1119,31 @@ def main() -> int:
         shutil.copytree(legal_package_public, legal_output_root)
     else:
         legal_output_root.mkdir(parents=True, exist_ok=True)
+    # 运维运营 Portal 静态站点：只消费 build_portal_release.py 发布的不可变
+    # release 产物；缺失时保留空目录（Caddy 返回 404，不回退 dev server）。
+    portal_release_dist = (
+        resolve_output_root()
+        / "env"
+        / "prod"
+        / "release"
+        / "ops-portal"
+        / "current"
+        / "dist"
+    )
+    portal_output_root = output_root / portal_root
+    if portal_output_root.exists():
+        shutil.rmtree(portal_output_root)
+    if portal_release_dist.is_dir():
+        shutil.copytree(portal_release_dist, portal_output_root)
+    else:
+        portal_output_root.mkdir(parents=True, exist_ok=True)
     (output_root / model_cache_root).mkdir(parents=True, exist_ok=True)
 
     template = _load_yaml(compose_template)
     services = template.get("services") or {}
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
+    governed_names = set(governed)
     for service_name in selected:
         raw = services.get(service_name)
         if raw is None:
@@ -730,19 +1154,26 @@ def main() -> int:
             service_name,
             raw,
             selected_names,
+            image_version=args.image_version,
+            versioned_image=service_name in governed_names,
+            instance=args.instance,
             config_root=config_root,
             media_root=media_root,
             legal_root=legal_root,
+            portal_root=portal_root,
             caddyfile_path=caddyfile_path,
             model_cache_root=model_cache_root,
+            credentials_root=credentials_root,
+            runtime_credentials=runtime_credentials,
         )
 
     compose_payload: dict[str, Any] = {"services": rendered_services}
-    top_level_volumes = template.get("volumes")
-    if isinstance(top_level_volumes, dict):
-        filtered = _filter_top_level_volumes(rendered_services, top_level_volumes)
-        if filtered:
-            compose_payload["volumes"] = filtered
+    top_level_volumes = dict(template.get("volumes") or {})
+    if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
+        top_level_volumes.setdefault("runtime-log-spool", {})
+    filtered = _filter_top_level_volumes(rendered_services, top_level_volumes)
+    if filtered:
+        compose_payload["volumes"] = filtered
 
     compose_file_name = (
         ((plane.get("rootlessRuntimeLayout") or {}).get("composeFile"))
@@ -759,7 +1190,7 @@ def main() -> int:
         config_version=args.config_version,
         output_root=output_root,
     )
-    _write_caddyfile(output_root)
+    _write_caddyfile(output_root, args.instance, args.rollout_stage)
     _write_env_file(output_root, args.config_version, args.image_version, args.instance)
 
     report = {
@@ -779,6 +1210,8 @@ def main() -> int:
         "mediaRoot": media_root,
         "legalStaticRoot": legal_root,
         "legalStaticSource": str(legal_package_public),
+        "portalStaticRoot": portal_root,
+        "portalStaticSource": str(portal_release_dist),
     }
     (output_root / "provenance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",

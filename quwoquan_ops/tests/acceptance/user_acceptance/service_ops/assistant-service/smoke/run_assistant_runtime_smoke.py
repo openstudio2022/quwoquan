@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
         "--env",
         default=os.environ.get("API_CONTRACT_ENV")
         or os.environ.get("APP_RUNTIME_ENV")
-        or "gamma-pr",
+        or "gamma",
     )
     parser.add_argument(
         "--base-url",
@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--user-id", default="assistant_pr_smoke_user")
     parser.add_argument(
         "--report",
-        default=".qwq_output/env/gamma/runs/assistant-runtime-smoke/gamma-pr/assistant_runtime_smoke.json",
+        default=".qwq_output/env/gamma/runs/assistant-runtime-smoke/gamma-local/assistant_runtime_smoke.json",
     )
     parser.add_argument("--timeout-seconds", type=int, default=75)
     parser.add_argument("--stall-timeout-seconds", type=int, default=12)
@@ -97,10 +97,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def normalize_env(raw: str) -> str:
-    text = (raw or "").strip()
-    if text in ("cloud-gamma", "cloud-gamma-pre", "gamma-pr"):
-        return "gamma"
-    return text or "gamma"
+    text = (raw or "").strip() or "gamma"
+    supported = {"alpha", "beta", "gamma", "prod"}
+    if text not in supported:
+        raise SystemExit(
+            f"unsupported environment {text!r}; expected one of {sorted(supported)}"
+        )
+    return text
 
 
 def add_step(report: Dict[str, Any], name: str, status: str, **extra: Any) -> None:
@@ -158,7 +161,6 @@ def build_surface_headers(
         "X-Client-App-Version": CLIENT_APP_VERSION,
         "X-Trace-Id": trace_id,
         "X-Request-Id": request_id,
-        "X-Test-Local-Gamma": "true",
     }
     if test_auth_token:
         headers["Authorization"] = "Bearer " + test_auth_token
@@ -258,7 +260,6 @@ def healthz_ok(base_url: str, test_auth_token: str, timeout_seconds: int) -> boo
             "Accept": "application/json",
             "Accept-Encoding": "identity",
             "X-Client-User-Id": "assistant_pr_smoke_health",
-            "X-Test-Local-Gamma": "true",
             **(
                 {"Authorization": "Bearer " + test_auth_token, "X-Test-Auth-Token": test_auth_token}
                 if test_auth_token
@@ -555,7 +556,7 @@ def report_template(args: argparse.Namespace, scenario: Dict[str, Any]) -> Dict[
         "endedAt": "",
         "environment": {
             "env": normalize_env(args.env),
-            "runtimeKind": "cloud-gamma-protocol-smoke",
+            "runtimeKind": f"{normalize_env(args.env)}-environment-protocol-smoke",
             "gatewayBaseUrl": args.base_url.rstrip("/"),
             "commitSha": os.environ.get("GITHUB_SHA", ""),
             "githubRunId": os.environ.get("GITHUB_RUN_ID", ""),

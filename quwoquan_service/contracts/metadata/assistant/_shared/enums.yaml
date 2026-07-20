@@ -567,3 +567,43 @@ enums:
         wire: fresh_topic
       - name: unknown
         wire: ''
+
+  - name: AssistantPreferenceScope
+    values:
+      - name: session
+        wire: session
+      - name: longTerm
+        wire: long_term
+      - name: unknown
+        wire: ''
+
+  - name: AssistantPreferenceKind
+    values:
+      - name: responseStyle
+        wire: response_style
+      - name: replyLength
+        wire: reply_length
+      - name: tone
+        wire: tone
+      - name: language
+        wire: language
+      - name: unknown
+        wire: ''
+
+  - name: AssistantPreferenceSourceType
+    values:
+      - name: explicitRewrite
+        wire: explicit_rewrite
+      - name: management
+        wire: management
+      - name: unknown
+        wire: ''
+
+  - name: AssistantPreferenceStatus
+    values:
+      - name: active
+        wire: active
+      - name: revoked
+        wire: revoked
+      - name: unknown
+        wire: ''

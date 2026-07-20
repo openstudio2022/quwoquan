@@ -6,3 +6,64 @@ fields:
   - { name: entries, type: array, constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read }
   - { name: version, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
   - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+
+entities:
+  RecentSearchEntryView:
+    description: 最近搜索条目视图（entryId 由服务端从 scope+facet+normalized query 语义键派生）
+    fields:
+      - name: entryId
+        source: entryId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: query
+        source: query
+        type: string
+        constraints: [NOT_NULL]
+        classification: PII
+        log_policy: deny
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: scope
+        source: scope
+        type: enum
+        enum_ref: SearchScope
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: facet
+        source: facet
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  RecentSearchReceipt:
+    description: 最近搜索命令幂等回执；personaId 仅用于账号注销时定向擦除私有查询快照
+    fields:
+      - { name: receiptKey, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: personaId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: commandDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: entry, type: object, constraints: [NULLABLE], classification: PII, log_policy: metadata_only, api_exposure: drop, ops_exposure: read }
+      - { name: stateVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }

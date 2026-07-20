@@ -514,7 +514,7 @@ def test_gate_download_blocks_homepage_source_without_base_draft_facts():
         platform="百度百科",
         source_category="encyclopedia",
         source_kind="baidu_baike",
-        extractor="baidu_baike_openapi",
+        extractor="baidu_baike_html",
         policy_revision="encyclopedia-primary",
         research_lane="homepage",
         source_use_mode="factual_reference_only",

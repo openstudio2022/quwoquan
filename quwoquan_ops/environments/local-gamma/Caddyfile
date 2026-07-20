@@ -70,6 +70,14 @@ https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	handle @api_circle {
 		reverse_proxy circle-service:18082
 	}
+	@api_rtc path /rtc*
+	handle @api_rtc {
+		reverse_proxy rtc-service:18083
+	}
+	@api_realtime path /realtime* /config/realtime
+	handle @api_realtime {
+		reverse_proxy realtime-gateway:18090
+	}
 	handle /ops/* {
 		reverse_proxy product-ops-service:18086
 	}
@@ -100,6 +108,12 @@ https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	}
 }
 
+https://gamma-rtc.quwoquan-env.test:{$LOCAL_GAMMA_HTTP_PORT:19000},
+https://gamma-rtc.localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
+	import local_gamma_tls
+	reverse_proxy livekit-sfu:7880
+}
+
 https://gamma-product-ops.quwoquan-env.test:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
 https://gamma-product-ops.localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
 https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
@@ -110,8 +124,22 @@ https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	handle /ops/* {
 		reverse_proxy product-ops-service:18086
 	}
+	handle /control-plane/product/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /control-plane/platform/* {
+		reverse_proxy platform-ops-service:18088
+	}
+	# 运维运营 Portal SPA（与 prod 渲染面同构：静态站点 + 同源控制面 API）。
 	handle {
-		respond "local-gamma product-ops route is not ready for this path" 404
+		header {
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "no-referrer"
+		}
+		root * /srv/portal
+		try_files {path} /index.html
+		file_server
 	}
 }
 
@@ -127,15 +155,6 @@ https://localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 	handle /healthz {
 		respond "ok" 200
 	}
-	root * /srv/media
-	file_server
-}
-
-https://gamma-upload.quwoquan-env.test:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130},
-https://gamma-upload.localhost:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130},
-https://localhost:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:19130} {
-	import local_gamma_tls
-	import media_cors
 	root * /srv/media
 	file_server
 }

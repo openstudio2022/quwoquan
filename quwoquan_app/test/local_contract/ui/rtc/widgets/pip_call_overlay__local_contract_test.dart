@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -274,6 +275,20 @@ void main() {
       final gestureDetectors = find.byType(GestureDetector);
       expect(gestureDetectors, findsWidgets);
     });
+
+    testWidgets('长按确认后触发真实挂断回调', (tester) async {
+      var hangupCount = 0;
+      await tester.pumpWidget(_buildOverlay(onHangup: () => hangupCount += 1));
+      await tester.pump();
+
+      await tester.longPress(find.byType(GestureDetector).first);
+      await tester.pumpAndSettle();
+      expect(find.text(UITextConstants.callHangupConfirmTitle), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.callHangup));
+      await tester.pumpAndSettle();
+      expect(hangupCount, 1);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -311,6 +326,23 @@ void main() {
 
       expect(find.byType(PipCallOverlay), findsOneWidget);
       expect(find.text('Alice'), findsOneWidget);
+    });
+
+    testWidgets('activeSpeaker 摄像头开启但尚无轨道时回退头像摘要', (tester) async {
+      await tester.pumpWidget(
+        _buildOverlay(
+          activeSpeaker: const CallParticipant(
+            userId: 'user_002',
+            displayName: 'Bob',
+            status: ParticipantStatus.connected,
+            isCameraOn: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Bob'), findsOneWidget);
+      expect(find.byType(CircleAvatar), findsOneWidget);
     });
   });
 }

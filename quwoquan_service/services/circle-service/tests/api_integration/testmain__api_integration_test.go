@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
@@ -26,6 +28,7 @@ import (
 	fileports "quwoquan_service/services/circle-service/internal/domain/circle/circle_file/ports"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
+	circlepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle/persistence"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_behavior_fact/persistence"
 	filepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/persistence"
 	grouppersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_group/persistence"
@@ -44,10 +47,27 @@ var (
 	integrationRedis *testinfra.RealRedis
 	redisRouter      *rtredis.Router
 	fileStreamRelay  *fileapp.OutboxRelay
+	circleEventRelay *application.CircleOutboxRelay
 )
+
+// placementRoleReaderAdapter 复用 placement policy readers 的成员角色读，
+// 适配 Circle 本体命令权限端口。
+type placementRoleReaderAdapter struct {
+	readers *placementpersistence.MongoPolicyReaders
+}
+
+func (adapter placementRoleReaderAdapter) ReadMembershipRole(ctx context.Context, circleID, personaID string) (string, string, bool, error) {
+	slice, found, err := adapter.readers.ReadMembershipRole(ctx, circleID, personaID)
+	if err != nil || !found {
+		return "", "", found, err
+	}
+	return slice.Role, slice.State, true, nil
+}
 
 type readyMediaAssetReader struct{}
 
+// ReadOwnedReadyAsset 返回权威 MediaAsset 视图；`asset-bytes-<n>` 形式的
+// asset id 把 n 作为权威尺寸，供配额约束测试驱动。
 func (readyMediaAssetReader) ReadOwnedReadyAsset(
 	_ context.Context,
 	assetID string,
@@ -56,9 +76,15 @@ func (readyMediaAssetReader) ReadOwnedReadyAsset(
 	if assetID == "" || ownerPersonaID == "" {
 		return fileports.MediaAssetOwnerSlice{}, false, nil
 	}
+	fileSize := int64(1024)
+	if rest, ok := strings.CutPrefix(assetID, "asset-bytes-"); ok {
+		if parsed, err := strconv.ParseInt(rest, 10, 64); err == nil {
+			fileSize = parsed
+		}
+	}
 	return fileports.MediaAssetOwnerSlice{
 		AssetID: assetID, OwnerPersonaID: ownerPersonaID, ProcessingStatus: "ready",
-		ContentType: "application/pdf", FileSize: 1024,
+		ContentType: "application/pdf", FileSize: fileSize,
 	}, true, nil
 }
 
@@ -129,13 +155,18 @@ func TestMain(m *testing.M) {
 
 	// Cache contract crosses a real Redis network boundary.
 	rdb := redisRouter.Scene("general")
-	cachedCircleStore := cache.NewCachedCircleStore(circleStore, circleStore, circleStore, rdb)
-	circleStorage := application.CircleStoragePorts{
-		Records: cachedCircleStore, Metrics: cachedCircleStore, Sections: cachedCircleStore,
-		IDs: persistence.ObjectIDGenerator{},
+	cachedCircleStore := cache.NewCachedCircleStore(circleStore, rdb)
+	circleStorage := application.CircleStoragePorts{Records: cachedCircleStore}
+	circleAggregateStore := circlepersistence.NewMongoAggregateStore(mongoDB)
+	if err := circleAggregateStore.EnsureIndexes(ctx); err != nil {
+		panic("ensure Circle aggregate indexes: " + err.Error())
 	}
 
-	feedStore := persistence.NewMongoFeedStore(mongoDB.Collection("posts"))
+	feedStore := persistence.NewMongoFeedStore(mongoDB)
+	discoveryFeedReader := persistence.NewMongoCircleDiscoveryFeedReader(mongoDB)
+	if err := discoveryFeedReader.EnsureIndexes(ctx); err != nil {
+		panic("ensure circle discovery feed indexes: " + err.Error())
+	}
 	placementStore := placementpersistence.NewMongoAggregateStore(mongoDB)
 	if err := placementStore.EnsureIndexes(ctx); err != nil {
 		panic("ensure placement indexes: " + err.Error())
@@ -156,8 +187,19 @@ func TestMain(m *testing.M) {
 
 	circleService := application.NewCircleService(
 		circleStorage,
-		application.WithEventPublisher(eventSpy),
 		application.WithFeedStore(feedStore),
+		application.WithDiscoveryFeedReader(discoveryFeedReader),
+	)
+	circleCommands := application.NewCircleCommandFacade(
+		circleAggregateStore,
+		placementRoleReaderAdapter{readers: placementReaders},
+		cachedCircleStore,
+		nil,
+	)
+	circleEventRelay = application.NewCircleOutboxRelay(
+		circleAggregateStore, circleAggregateStore,
+		application.NewCircleDomainEventSink(eventSpy),
+		"circle-event-spy",
 	)
 	fileCommands := fileapp.NewCommandFacade(fileStore, fileReaders, readyMediaAssetReader{})
 	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
@@ -169,7 +211,7 @@ func TestMain(m *testing.M) {
 		Posts: placementReaders, Memberships: placementReaders,
 	})
 	membershipCommands := membershipapp.NewCommandFacade(membershipStore, membershipReaders, membershipReaders)
-	membershipQueries := membershipapp.NewQueryFacade(membershipReaders, membershipReaders)
+	membershipQueries := membershipapp.NewQueryFacade(membershipReaders, membershipReaders, membershipReaders)
 	behaviorFactWriter := behaviorfactapp.NewWriter(behaviorFactStore, behaviorFactStore)
 	groupCommands := groupapp.NewCommandFacade(groupStore, groupReaders)
 	groupQueries := groupapp.NewQueryFacade(groupReaders, groupReaders)
@@ -179,7 +221,7 @@ func TestMain(m *testing.M) {
 	groupMembershipQueries := groupmembershipapp.NewQueryFacade(groupMembershipReaders, groupMembershipReaders)
 
 	testHandler = httpadapter.NewCircleHandler(
-		circleService, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
+		circleService, circleCommands, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
 		groupMembershipCommands, groupMembershipQueries,
 		membershipCommands, membershipQueries, placementCommands,
 	).Routes()
@@ -229,6 +271,10 @@ func cleanCollections(t *testing.T) {
 		"circle_content_post_failures",
 		"circle_files_command_receipts", "circle_files_outbox", "circle_files_outbox_sequences",
 		"circle_files_projection_checkpoints", "circle_files_quota_locks",
+		"circle_command_receipts", "circle_outbox", "circle_outbox_sequences",
+		"circle_projection_checkpoints",
+		"circle_user_account_closed_inbox", "circle_user_account_closed_failures",
+		"circle_closed_account_subjects",
 	} {
 		mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{})
 	}

@@ -6,10 +6,10 @@ events:
     consumers: [platform-ops]
     channel: event_store
     payload_entity: HomepageStatusReport
-    payload_fields: [_id, homepageId, reporterPersonaId, reason, status, createdAt, version]
+    payload_fields: [reportId, homepageId, reporterPersonaId, reason, status, createdAt, version]
   - name: HomepageStatusReportReviewed
     producer: entity-service
     consumers: [platform-ops, homepage-projection, search-service]
     channel: event_store
     payload_entity: HomepageStatusReport
-    payload_fields: [_id, homepageId, status, reviewerAccountId, reviewedAt, version]
+    payload_fields: [reportId, homepageId, status, reviewerAccountId, reviewedAt, version]

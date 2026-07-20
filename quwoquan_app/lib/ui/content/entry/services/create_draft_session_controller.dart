@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 typedef DraftSessionFlushCallback = Future<void> Function(String reason);
+typedef DraftSessionFlushFailureCallback =
+    void Function(Object error, StackTrace stackTrace, String reason);
 
 enum CreateDraftSaveStatus { idle, dirty, saving, saved, failed }
 
@@ -10,10 +12,12 @@ enum CreateDraftSaveStatus { idle, dirty, saving, saved, failed }
 class CreateDraftSessionController {
   CreateDraftSessionController({
     required this._onFlushDirty,
+    this.onFlushFailure,
     this._interval = const Duration(seconds: 10),
   });
 
   final DraftSessionFlushCallback _onFlushDirty;
+  final DraftSessionFlushFailureCallback? onFlushFailure;
   final Duration _interval;
 
   Timer? _timer;
@@ -101,8 +105,9 @@ class CreateDraftSessionController {
       if (!_suppressed && snapshotVersion == _dirtyVersion) {
         markSaved();
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
       markFailed();
+      onFlushFailure?.call(error, stackTrace, reason);
     } finally {
       _isFlushing = false;
     }

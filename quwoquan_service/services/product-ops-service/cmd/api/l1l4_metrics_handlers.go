@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,21 +20,19 @@ type l1l4MetricsScope struct {
 }
 
 type l1l4MetricAlertState struct {
-	ID           string  `json:"id"`
-	Level        string  `json:"level"`
-	Metric       string  `json:"metric"`
-	State        string  `json:"state"`
-	Severity     string  `json:"severity"`
-	Summary      string  `json:"summary"`
-	Value        float64 `json:"value"`
-	Threshold    float64 `json:"threshold"`
-	Source       string  `json:"source"`
-	Owner        string  `json:"owner,omitempty"`
-	RunbookID    string  `json:"runbookId,omitempty"`
-	RunbookRoute string  `json:"runbookRoute,omitempty"`
-	RepairEntry  string  `json:"repairEntry,omitempty"`
-	AlertID      string  `json:"alertId,omitempty"`
-	AuditRoute   string  `json:"auditRoute,omitempty"`
+	ID          string  `json:"id"`
+	Level       string  `json:"level"`
+	Metric      string  `json:"metric"`
+	State       string  `json:"state"`
+	Severity    string  `json:"severity"`
+	Summary     string  `json:"summary"`
+	Value       float64 `json:"value"`
+	Threshold   float64 `json:"threshold"`
+	Source      string  `json:"source"`
+	Owner       string  `json:"owner,omitempty"`
+	RepairEntry string  `json:"repairEntry,omitempty"`
+	AlertID     string  `json:"alertId,omitempty"`
+	AuditRoute  string  `json:"auditRoute,omitempty"`
 }
 
 type l1l4MetricsResponse struct {
@@ -96,8 +96,29 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 		}
 		return out[i].Level < out[j].Level
 	})
+	if len(out) == 0 {
+		for _, candidate := range canonicalL1L4MetricSnapshots(scope) {
+			if levelFilter != "" && candidate.Level != levelFilter {
+				continue
+			}
+			if scope.Cluster != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Cluster != scope.Cluster {
+				continue
+			}
+			if scope.Service != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Service != scope.Service {
+				continue
+			}
+			if scope.InstanceID != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.InstanceID != scope.InstanceID {
+				continue
+			}
+			out = append(out, candidate)
+		}
+	}
 
 	telemetrySnapshot, err := s.telemetry.SnapshotEvents(ctx, application.EventSummaryQuery{}, 1000)
+	if err != nil {
+		return l1l4MetricsResponse{}, err
+	}
+	prometheusValues, err := s.queryL3L4Metrics(ctx, scope)
 	if err != nil {
 		return l1l4MetricsResponse{}, err
 	}
@@ -112,7 +133,7 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 	derivedCount := 0
 	alerts := make([]l1l4MetricAlertState, 0, len(out))
 	for i := range out {
-		if derived, ok := deriveL1L4MetricState(out[i], telemetrySnapshot); ok {
+		if derived, ok := deriveL1L4MetricState(out[i], telemetrySnapshot, prometheusValues); ok {
 			out[i].Value = derived.Value
 			if derived.Unit != "" {
 				out[i].Unit = derived.Unit
@@ -185,7 +206,111 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 	}, nil
 }
 
-func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot application.EventTelemetrySnapshot) (l1l4DerivedMetricState, bool) {
+func canonicalL1L4MetricSnapshots(scope l1l4MetricsScope) []metricSnapshot {
+	environment := strings.TrimSpace(scope.Environment)
+	if environment == "" {
+		environment = "prod"
+	}
+	return []metricSnapshot{
+		{
+			ID:          "L1:" + environment,
+			Level:       "L1",
+			Environment: environment,
+			Label:       "主旅程完成率",
+			Metric:      "five_tab_journey_completion_rate",
+			Unit:        "%",
+			Trend:       "live",
+			Description: "page_open 到 page_return 的产品旅程完成率。",
+		},
+		{
+			ID:          "L2:" + environment,
+			Level:       "L2",
+			Environment: environment,
+			Label:       "推荐 CTR",
+			Metric:      "core_business_ctr",
+			Unit:        "%",
+			Trend:       "live",
+			Description: "recommendation impression/click 的实时转化率。",
+		},
+		{
+			ID:          "L3:" + environment + ":" + scope.Service,
+			Level:       "L3",
+			Environment: environment,
+			Service:     strings.TrimSpace(scope.Service),
+			Label:       "HTTP 请求 P95",
+			Metric:      "http_request_p95_ms",
+			Unit:        "ms",
+			Trend:       "live",
+			Description: "HTTP server duration histogram 的 P95。",
+		},
+		{
+			ID:          "L3-error:" + environment + ":" + scope.Service,
+			Level:       "L3",
+			Environment: environment,
+			Service:     strings.TrimSpace(scope.Service),
+			Label:       "HTTP 5xx 错误率",
+			Metric:      "http_error_rate",
+			Unit:        "%",
+			Trend:       "live",
+			Description: "HTTP server request counter 的 5xx 比率。",
+		},
+		{
+			ID:          "L4:" + environment,
+			Level:       "L4",
+			Environment: environment,
+			Label:       "服务平面可用性",
+			Metric:      "service_plane_up",
+			Unit:        "%",
+			Trend:       "live",
+			Description: "Prometheus up 指标的服务平面可用性。",
+		},
+	}
+}
+
+func (s *productService) queryL3L4Metrics(
+	ctx context.Context,
+	scope l1l4MetricsScope,
+) (map[string]float64, error) {
+	values := map[string]float64{}
+	if s.prometheus == nil {
+		return values, nil
+	}
+	serviceMatcher := prometheusLabelSelector(scope.Service, "")
+	errorMatcher := prometheusLabelSelector(scope.Service, `status=~"5.."`)
+	queries := map[string]string{
+		"http_request_p95_ms": `histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket` +
+			serviceMatcher + `[5m])) by (le)) * 1000`,
+		"http_error_rate": `100 * sum(rate(http_server_requests_total` + errorMatcher +
+			`[5m])) / (sum(rate(http_server_requests_total` + serviceMatcher + `[5m])) + 0.001)`,
+		"core_business_ctr": `100 * sum(rate(recommendation_feed_click_total[5m])) / (sum(rate(recommendation_feed_impressed_total[5m])) + 0.001)`,
+		"service_plane_up":  `100 * min(up{job=~"quwoquan-service-plane|recommendation-service"})`,
+	}
+	for metric, query := range queries {
+		value, err := s.prometheus.Query(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("query prometheus metric %s: %w", metric, err)
+		}
+		values[metric] = value
+	}
+	return values, nil
+}
+
+func prometheusLabelSelector(service, extra string) string {
+	labels := make([]string, 0, 2)
+	if service = strings.TrimSpace(service); service != "" {
+		labels = append(labels, "service="+strconv.Quote(service))
+	}
+	if extra = strings.TrimSpace(extra); extra != "" {
+		labels = append(labels, extra)
+	}
+	return "{" + strings.Join(labels, ",") + "}"
+}
+
+func deriveL1L4MetricState(
+	snapshot metricSnapshot,
+	telemetrySnapshot application.EventTelemetrySnapshot,
+	prometheusValues map[string]float64,
+) (l1l4DerivedMetricState, bool) {
 	switch snapshot.Metric {
 	case "five_tab_journey_completion_rate":
 		openCount := countEventTypes(telemetrySnapshot.Summary, "page_open")
@@ -211,34 +336,37 @@ func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot applicatio
 			Trend:  "live",
 			Source: "telemetry",
 			Alert: &l1l4MetricAlertState{
-				ID:           "L1JourneyCompletionRateLow",
-				Level:        snapshot.Level,
-				Metric:       snapshot.Metric,
-				State:        state,
-				Severity:     severity,
-				Summary:      "L1 旅程完成率正在由 page_open/page_return 事件实时计算",
-				Value:        value,
-				Threshold:    90,
-				Source:       "telemetry",
-				Owner:        "product-ops",
-				RunbookID:    "cfg-rollback-drill",
-				RunbookRoute: "/platform/runbook",
-				RepairEntry:  "/product/dashboard",
-				AlertID:      "L1JourneyCompletionRateLow",
-				AuditRoute:   "/audit",
+				ID:        "L1JourneyCompletionRateLow",
+				Level:     snapshot.Level,
+				Metric:    snapshot.Metric,
+				State:     state,
+				Severity:  severity,
+				Summary:   "L1 旅程完成率正在由 page_open/page_return 事件实时计算",
+				Value:     value,
+				Threshold: 90,
+				Source:    "telemetry",
+				Owner:     "product-ops",
+
+				RepairEntry: "/product/dashboard",
+				AlertID:     "L1JourneyCompletionRateLow",
+				AuditRoute:  "/audit",
 			},
 			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
 		}, true
 	case "core_business_ctr":
 		// 推荐曝光/点击只允许来自 content-service 的 BehaviorSignal 与
 		// recommendation Prometheus 指标，不能再伪装成 Ops event。
-		return l1l4DerivedMetricState{}, false
-	case "http_request_p95_ms":
-		samples := collectLatencySamples(telemetrySnapshot.Drilldown.Items)
-		if len(samples) == 0 {
+		value, ok := prometheusValues["core_business_ctr"]
+		if !ok {
 			return l1l4DerivedMetricState{}, false
 		}
-		value := percentile(samples, 0.95)
+		return prometheusMetricState(snapshot, value, "%", 3, "L2 推荐曝光/点击 CTR 由 recommendation Prometheus 计数器计算"), true
+	case "http_request_p95_ms":
+		value, ok := prometheusValues["http_request_p95_ms"]
+		if !ok {
+			return l1l4DerivedMetricState{}, false
+		}
+		// 告警结构沿用统一派生模型，但数值来自 Prometheus，而非产品事件。
 		state := "quiet"
 		severity := "info"
 		if value > 1200 {
@@ -254,33 +382,31 @@ func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot applicatio
 			Unit:   "ms",
 			Status: mapMetricStatus(state),
 			Trend:  "live",
-			Source: "telemetry",
+			Source: "prometheus",
 			Alert: &l1l4MetricAlertState{
-				ID:           "L3HttpRequestP95High",
-				Level:        snapshot.Level,
-				Metric:       snapshot.Metric,
-				State:        state,
-				Severity:     severity,
-				Summary:      "L3 请求 P95 由 page_return_perf / durationMs 实时计算",
-				Value:        value,
-				Threshold:    800,
-				Source:       "telemetry",
-				Owner:        "app-observability",
-				RunbookID:    "cfg-rollback-drill",
-				RunbookRoute: "/platform/runbook",
-				RepairEntry:  "/product/l1-l4/environment",
-				AlertID:      "HighP95Latency",
-				AuditRoute:   "/audit",
+				ID:        "L3HttpRequestP95High",
+				Level:     snapshot.Level,
+				Metric:    snapshot.Metric,
+				State:     state,
+				Severity:  severity,
+				Summary:   "L3 请求 P95 由 http_server_duration_seconds Prometheus histogram 计算",
+				Value:     value,
+				Threshold: 800,
+				Source:    "prometheus",
+				Owner:     "app-observability",
+
+				RepairEntry: "/product/l1-l4/environment",
+				AlertID:     "HighP95Latency",
+				AuditRoute:  "/audit",
 			},
-			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
+			ObservedAt: time.Now().UTC(),
 		}, true
 	case "http_error_rate":
-		total := telemetrySnapshot.Summary.TotalCount
-		if total == 0 {
+		value, ok := prometheusValues["http_error_rate"]
+		if !ok {
 			return l1l4DerivedMetricState{}, false
 		}
-		errorCount := countDimensionValues(telemetrySnapshot.Summary, "errorCode")
-		value := float64(errorCount) / float64(total) * 100
+		// 错误率由 HTTP RED 计数器计算，不能从 App 错误事件总量推导。
 		state := "quiet"
 		severity := "info"
 		if value > 1 {
@@ -293,28 +419,103 @@ func deriveL1L4MetricState(snapshot metricSnapshot, telemetrySnapshot applicatio
 			Unit:   "%",
 			Status: mapMetricStatus(state),
 			Trend:  "live",
-			Source: "telemetry",
+			Source: "prometheus",
 			Alert: &l1l4MetricAlertState{
-				ID:           "L3HttpErrorRateHigh",
-				Level:        snapshot.Level,
-				Metric:       snapshot.Metric,
-				State:        state,
-				Severity:     severity,
-				Summary:      "L3 错误率由 errorCode 维度实时计算",
-				Value:        value,
-				Threshold:    1,
-				Source:       "telemetry",
-				Owner:        "app-observability",
-				RunbookID:    "cfg-rollback-drill",
-				RunbookRoute: "/platform/runbook",
-				RepairEntry:  "/product/dashboard",
-				AlertID:      "HighErrorRate",
-				AuditRoute:   "/audit",
+				ID:        "L3HttpErrorRateHigh",
+				Level:     snapshot.Level,
+				Metric:    snapshot.Metric,
+				State:     state,
+				Severity:  severity,
+				Summary:   "L3 HTTP 5xx 错误率由 http_server_requests_total Prometheus 计数器计算",
+				Value:     value,
+				Threshold: 1,
+				Source:    "prometheus",
+				Owner:     "app-observability",
+
+				RepairEntry: "/product/dashboard",
+				AlertID:     "HighErrorRate",
+				AuditRoute:  "/audit",
 			},
-			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
+			ObservedAt: time.Now().UTC(),
 		}, true
+	case "service_plane_up":
+		value, ok := prometheusValues["service_plane_up"]
+		if !ok {
+			return l1l4DerivedMetricState{}, false
+		}
+		return prometheusMetricState(snapshot, value, "%", 100, "L4 服务平面可用性由 Prometheus up 指标计算"), true
 	default:
 		return l1l4DerivedMetricState{}, false
+	}
+}
+
+func prometheusMetricState(
+	snapshot metricSnapshot,
+	value float64,
+	unit string,
+	threshold float64,
+	summary string,
+) l1l4DerivedMetricState {
+	state := "quiet"
+	severity := "info"
+	switch snapshot.Metric {
+	case "core_business_ctr":
+		if value < 1 {
+			state = "firing"
+			severity = "critical"
+		} else if value < threshold {
+			state = "warning"
+			severity = "warning"
+		}
+	case "http_request_p95_ms":
+		if value > 1200 {
+			state = "firing"
+			severity = "critical"
+		} else if value > threshold {
+			state = "warning"
+			severity = "warning"
+		}
+	case "http_error_rate":
+		if value > 5 {
+			state = "firing"
+			severity = "critical"
+		} else if value > threshold {
+			state = "warning"
+			severity = "warning"
+		}
+	case "service_plane_up":
+		if value < 90 {
+			state = "firing"
+			severity = "critical"
+		} else if value < threshold {
+			state = "warning"
+			severity = "warning"
+		}
+	}
+	return l1l4DerivedMetricState{
+		Metric: snapshot.Metric,
+		Value:  value,
+		Unit:   unit,
+		Status: mapMetricStatus(state),
+		Trend:  "live",
+		Source: "prometheus",
+		Alert: &l1l4MetricAlertState{
+			ID:        snapshot.Metric + "PrometheusAlert",
+			Level:     snapshot.Level,
+			Metric:    snapshot.Metric,
+			State:     state,
+			Severity:  severity,
+			Summary:   summary,
+			Value:     value,
+			Threshold: threshold,
+			Source:    "prometheus",
+			Owner:     "platform-observability",
+
+			RepairEntry: "/product/l1-l4/environment",
+			AlertID:     snapshot.Metric + "PrometheusAlert",
+			AuditRoute:  "/audit",
+		},
+		ObservedAt: time.Now().UTC(),
 	}
 }
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -73,15 +74,15 @@ DOMAIN_TESTS = {
             "/user/sub-accounts/{subAccountId}/homepage-bundle",
         ],
     },
-    # entity 域收敛到与 gamma 同一 promote→ship→import 通道（homepage_state 快照），
+    # entity 域收敛到与 gamma 同一 promote→ship→import 通道（homepages 权威集合），
     # 此处 harness 验证 fixture 主页可经真实 handler 写入并读回。
     "entity": {
         "cwd": SERVICE_ROOT / "services" / "entity-service",
         "pattern": "TestContractFixtureSeed_EntityReadsViaHandler",
         "seedRefs": ["entity_homepage_core"],
-        "resetScope": "homepage_state snapshot in quwoquan_entity (ship/import sync+tombstone)",
-        "targetStore": "mongodb:quwoquan_entity.homepage_state",
-        "insertedCount": 30,
+        "resetScope": "homepages authoritative collection in quwoquan_entity (ship/import sync+offline-stale)",
+        "targetStore": "mongodb:quwoquan_entity.homepages",
+        "insertedCountPattern": r"entity homepage import inserted=(\d+)",
         "verifiedEndpoints": [
             "/homepages/search",
             "/homepages/{homepageId}/object-page-bundle",
@@ -104,7 +105,15 @@ def manifest_domains(manifest: dict[str, object]) -> dict[str, dict[str, object]
 
 
 def run_go_test(domain: str, spec: dict[str, object], mongo_uri: str) -> str:
-    cmd = ["go", "test", "./tests", "-run", str(spec["pattern"]), "-count=1", "-v"]
+    cmd = [
+        "go",
+        "test",
+        "./tests/api_integration",
+        "-run",
+        str(spec["pattern"]),
+        "-count=1",
+        "-v",
+    ]
     env = os.environ.copy()
     env["TEST_MONGO_URI"] = mongo_uri
     result = subprocess.run(
@@ -121,6 +130,18 @@ def run_go_test(domain: str, spec: dict[str, object], mongo_uri: str) -> str:
     if "[L2] WARN: Docker unavailable" in result.stdout:
         raise RuntimeError(f"{domain} beta seed validation was skipped instead of using Mongo:\n{result.stdout}")
     return result.stdout
+
+
+def resolve_inserted_count(spec: dict[str, object], output: str) -> int:
+    pattern = str(spec.get("insertedCountPattern", "")).strip()
+    if pattern:
+        match = re.search(pattern, output)
+        if match is None:
+            raise RuntimeError(
+                f"beta seed validation output is missing count marker: {pattern}"
+            )
+        return int(match.group(1))
+    return int(spec["insertedCount"])
 
 
 def main() -> int:
@@ -143,6 +164,12 @@ def main() -> int:
         ),
         help="Mongo URI used by service handler harnesses.",
     )
+    parser.add_argument(
+        "--domain",
+        action="append",
+        choices=sorted(DOMAIN_TESTS),
+        help="Run one or more domain harnesses; default runs every domain.",
+    )
     args = parser.parse_args()
 
     manifest = load_beta_manifest()
@@ -150,11 +177,18 @@ def main() -> int:
         print("app beta seed manifest environment must be beta", file=sys.stderr)
         return 1
     manifest_by_domain = manifest_domains(manifest)
+    selected_domains = args.domain or list(DOMAIN_TESTS)
 
     logs: dict[str, str] = {}
+    inserted_counts: dict[str, int] = {}
     try:
-        for domain, spec in DOMAIN_TESTS.items():
+        for domain in selected_domains:
+            spec = DOMAIN_TESTS[domain]
             logs[domain] = run_go_test(domain, spec, args.mongo_uri)
+            inserted_counts[domain] = resolve_inserted_count(
+                spec,
+                logs[domain],
+            )
     except RuntimeError as exc:
         report_path = ROOT / args.report
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -184,10 +218,11 @@ def main() -> int:
                 "seedRefs": manifest_by_domain.get(domain, {}).get("refs", spec["seedRefs"]),
                 "resetScope": manifest_by_domain.get(domain, {}).get("resetScope", spec["resetScope"]),
                 "targetStore": manifest_by_domain.get(domain, {}).get("targetStore", spec["targetStore"]),
-                "insertedCount": spec["insertedCount"],
+                "insertedCount": inserted_counts[domain],
                 "verifiedEndpoints": manifest_by_domain.get(domain, {}).get("verifiedEndpoints", spec["verifiedEndpoints"]),
             }
             for domain, spec in DOMAIN_TESTS.items()
+            if domain in selected_domains
         },
         "manifestOnlyDomains": {
             domain: {
@@ -213,8 +248,17 @@ def main() -> int:
         ],
         "runner": {
             "mode": "local-beta-handler-harness",
+            "scopeDomains": selected_domains,
+            "notRunDomains": [
+                domain
+                for domain in DOMAIN_TESTS
+                if domain not in selected_domains
+            ],
             "note": "The runner executes real Go handlers backed by Mongo test stores seeded from contract fixtures; no Dart mock repositories are used.",
-            "goTests": {domain: spec["pattern"] for domain, spec in DOMAIN_TESTS.items()},
+            "goTests": {
+                domain: DOMAIN_TESTS[domain]["pattern"]
+                for domain in selected_domains
+            },
             "manifest": str(BETA_MANIFEST.relative_to(ROOT)),
         },
     }

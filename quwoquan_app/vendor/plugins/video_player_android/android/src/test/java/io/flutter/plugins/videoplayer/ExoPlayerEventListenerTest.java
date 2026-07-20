@@ -5,6 +5,8 @@
 package io.flutter.plugins.videoplayer;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -111,5 +113,32 @@ public final class ExoPlayerEventListenerTest {
 
     eventListener.onIsPlayingChanged(false);
     verify(mockCallbacks).onIsPlayingStateUpdate(false);
+  }
+
+  @Test
+  public void firstRenderedFrameAndSeekSettleRequireNativeEvidence() {
+    eventListener.onRenderedFirstFrame();
+    verify(mockCallbacks).onRenderedFirstFrame(anyLong());
+
+    eventListener.markSeekRequested(1250);
+    eventListener.onPositionDiscontinuity(
+        null,
+        null,
+        Player.DISCONTINUITY_REASON_SEEK);
+    org.mockito.Mockito.when(mockExoPlayer.getCurrentPosition()).thenReturn(1250L);
+    eventListener.onRenderedFirstFrame();
+
+    verify(mockCallbacks).onSeekSettled(eq(1250L), eq(1250L), anyLong());
+  }
+
+  @Test
+  public void analyticsCountersForwardActualRendererEvidence() {
+    eventListener.onDroppedVideoFrames(null, 3, 250L);
+    eventListener.onAudioUnderrun(null, 1024, 24L, 12L);
+    eventListener.onVideoFrameProcessingOffset(null, 1500L, 50);
+
+    verify(mockCallbacks).onDroppedVideoFrames(3, 250L);
+    verify(mockCallbacks).onAudioUnderrun(1024, 24L, 12L);
+    verify(mockCallbacks).onVideoFrameProcessing(50);
   }
 }

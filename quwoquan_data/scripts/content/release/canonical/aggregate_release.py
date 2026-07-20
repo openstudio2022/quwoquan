@@ -64,7 +64,11 @@ def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
     return refs
 
 
-def _execution_publish_closure(root: Path) -> ExecutionPublishClosure:
+def _execution_publish_closure(
+    root: Path,
+    *,
+    publish_root: Path,
+) -> ExecutionPublishClosure:
     manifest = _read_json(root / "execution_manifest.json")
     execution_id = _execution_id(str(manifest.get("executionId") or ""))
     if root.name != execution_id:
@@ -93,6 +97,12 @@ def _execution_publish_closure(root: Path) -> ExecutionPublishClosure:
         raise ObjectTransactionError(f"{execution_id}: homepage execution published posts")
     if identity.content_type is not ContentType.HOMEPAGE and entity_refs:
         raise ObjectTransactionError(f"{execution_id}: post execution published entities")
+    if identity.content_type is not ContentType.HOMEPAGE:
+        actual_mix = _post_content_mix(publish_root, set(post_refs))
+        if set(actual_mix) != {identity.content_type}:
+            raise ObjectTransactionError(
+                f"{execution_id}: published post contentType does not match execution identity"
+            )
     if not entity_refs and not post_refs:
         raise ObjectTransactionError(f"{execution_id}: publish_ref has no canonical objects")
     try:
@@ -170,6 +180,17 @@ def _reference_closure(
     return sorted(creator_refs), sorted(tag_refs)
 
 
+def _post_content_mix(publish_root: Path, post_refs: set[str]) -> Counter[ContentType]:
+    actual_mix: Counter[ContentType] = Counter()
+    for ref in sorted(post_refs):
+        manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
+        try:
+            actual_mix[ContentType(str(manifest.get("contentType") or ""))] += 1
+        except ValueError as exc:
+            raise ObjectTransactionError(f"post contentType invalid: {ref}") from exc
+    return actual_mix
+
+
 def _assert_launch_contract(
     publish_root: Path,
     *,
@@ -188,13 +209,7 @@ def _assert_launch_contract(
             "launch post closure does not match cold-start policy: "
             f"actual={len(post_refs)} expected={policy.expected_post_count}"
         )
-    actual_mix: Counter[ContentType] = Counter()
-    for ref in sorted(post_refs):
-        manifest = _read_json(_object_root(publish_root, "posts", ref) / "manifest.json")
-        try:
-            actual_mix[ContentType(str(manifest.get("contentType") or ""))] += 1
-        except ValueError as exc:
-            raise ObjectTransactionError(f"post contentType invalid: {ref}") from exc
+    actual_mix = _post_content_mix(publish_root, post_refs)
     target_count = len(policy.targets)
     expected_mix = {
         ContentType.ARTICLE: target_count * policy.content_mix.article,
@@ -204,6 +219,48 @@ def _assert_launch_contract(
     if dict(actual_mix) != expected_mix:
         raise ObjectTransactionError(
             f"launch post content mix mismatch: actual={dict(actual_mix)} expected={expected_mix}"
+        )
+
+
+def _assert_canary_supply_contract(
+    publish_root: Path,
+    *,
+    entity_refs: set[str],
+    post_refs: set[str],
+) -> None:
+    """canary release = 全部金丝雀主页 + 每个金丝雀实体 article/image/video 各一篇。"""
+    from content.release.canonical.rollout_contract import load_rollout_contract
+
+    contract = load_rollout_contract()
+    expected_entities = {
+        ref
+        for province in contract.provinces
+        for ref in province.canary_entity_refs
+    }
+    if entity_refs != expected_entities:
+        raise ObjectTransactionError(
+            "canary entity closure must exactly equal the rollout canary targets: "
+            f"actual={sorted(entity_refs)} expected={sorted(expected_entities)}"
+        )
+    policy = load_cold_start_supply_policy()
+    canary_target_count = sum(
+        len(province.canary_targets) for province in contract.provinces
+    )
+    expected_total = canary_target_count * policy.content_mix.total_per_entity
+    if len(post_refs) != expected_total:
+        raise ObjectTransactionError(
+            "canary post closure does not match the canary cold-start supply: "
+            f"actual={len(post_refs)} expected={expected_total}"
+        )
+    actual_mix = _post_content_mix(publish_root, post_refs)
+    expected_mix = {
+        ContentType.ARTICLE: canary_target_count * policy.content_mix.article,
+        ContentType.IMAGE: canary_target_count * policy.content_mix.image,
+        ContentType.VIDEO: canary_target_count * policy.content_mix.video,
+    }
+    if dict(actual_mix) != expected_mix:
+        raise ObjectTransactionError(
+            f"canary post content mix mismatch: actual={dict(actual_mix)} expected={expected_mix}"
         )
 
 
@@ -231,7 +288,10 @@ def build_aggregate_release(
         raise ObjectTransactionError("rolloutMilestone is invalid") from exc
     if milestone not in CONTENT_MILESTONES:
         raise ObjectTransactionError("rolloutMilestone is not a content milestone")
-    closures = tuple(_execution_publish_closure(root) for root in execution_roots)
+    closures = tuple(
+        _execution_publish_closure(root, publish_root=publish_root)
+        for root in execution_roots
+    )
     execution_ids = sorted({closure.execution_id for closure in closures})
     if len(execution_ids) != len(closures):
         raise ObjectTransactionError("aggregate execution roots are duplicated")
@@ -245,12 +305,14 @@ def build_aggregate_release(
         )
     entity_refs = {ref for closure in closures for ref in closure.entity_refs}
     post_refs = {ref for closure in closures for ref in closure.post_refs}
-    if not entity_refs:
-        raise ObjectTransactionError("aggregate release has no canonical entity")
+    if not entity_refs and not post_refs:
+        raise ObjectTransactionError("aggregate release has no canonical object")
     if milestone is RolloutMilestone.LAUNCH:
         _assert_launch_contract(publish_root, entity_refs=entity_refs, post_refs=post_refs)
-    elif post_refs:
-        raise ObjectTransactionError("homepage rollout release must not include cold-start posts")
+    elif milestone is RolloutMilestone.CANARY:
+        _assert_canary_supply_contract(
+            publish_root, entity_refs=entity_refs, post_refs=post_refs
+        )
 
     canonical_closure = validate_canonical_publish(publish_root)
     if canonical_closure["status"] != "passed":

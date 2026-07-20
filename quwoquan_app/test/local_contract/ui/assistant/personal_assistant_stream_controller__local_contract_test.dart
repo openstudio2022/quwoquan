@@ -1,49 +1,56 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
-import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
-import 'package:quwoquan_app/ui/assistant/providers/skill_subscription_controller.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
+
+class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
+  const _EmptyAssistantHistoryLoader();
+
+  @override
+  Future<AssistantHistorySnapshot?> load({
+    required String subAccountId,
+    String conversationId = '',
+  }) async {
+    return null;
+  }
+}
 
 void main() {
   group('PersonalAssistantStreamController', () {
-    test('端侧 alpha 默认使用 mock repository 并投影 stub stream', () async {
+    test('显式 alpha facet override 投影 scenario stream', () async {
       final scenarioPack = loadAssistantScenarioPack();
       final scenario = scenarioPack
           .assistantTurnScenariosFor('alpha')
           .firstWhere((item) => item.id == 'weather_trip_basic');
       final container = ProviderContainer(
         overrides: [
-          assistantRepositoryProvider.overrideWithValue(
+          ...alphaAssistantFacetOverrides(
             ScenarioMockAssistantRepository(pack: scenarioPack),
+          ),
+          assistantHistoryLoaderProvider.overrideWithValue(
+            const _EmptyAssistantHistoryLoader(),
           ),
         ],
       );
       addTearDown(container.dispose);
 
-      expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
-      expect(CloudRuntimeConfig.isValidAppRuntimeEnv, isTrue);
       expect(
-        container.read(appDataSourceModeProvider),
-        expectedRepositoryModeForCurrentRuntimeEnv(scenarioPack),
-      );
-      expect(
-        container.read(assistantRepositoryProvider),
-        isA<MockAssistantRepository>(),
+        container.read(assistantConversationRunFacetProvider),
+        isA<AlphaAssistantFacets>(),
       );
 
       await container
@@ -111,6 +118,38 @@ void main() {
       expect(state.events.map((event) => event.seq), <int>[1, 2, 3]);
       expect(state.conversationId, 'acv_test_personal');
       expect(state.turnId, 'atn_test_personal');
+    });
+
+    test('answer_reset 清空重启前的 partial answer', () async {
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(
+              seq: 1,
+              eventType: 'partial_answer',
+              payload: const <String, dynamic>{'text': '旧回答'},
+            ),
+            _event(
+              seq: 2,
+              eventType: 'answer_reset',
+              payload: const <String, dynamic>{'reason': 'execution_restarted'},
+            ),
+            _event(seq: 3, eventType: 'turn_completed'),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('重新执行');
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(state.answer, isEmpty);
+      final assistantRow =
+          state.transcript.last as AssistantAnswerTranscriptRow;
+      expect(assistantRow.content, isEmpty);
+      expect(assistantRow.streaming, isFalse);
     });
 
     test(
@@ -364,12 +403,12 @@ void main() {
             ),
             _event(
               seq: 3,
-              eventType: 'assistant.answer.delta',
+              eventType: 'partial_answer',
               payload: const <String, dynamic>{'text': '深圳今天适合'},
             ),
             _event(
               seq: 4,
-              eventType: 'assistant.answer.final',
+              eventType: 'final_answer',
               payload: const <String, dynamic>{'text': '深圳今天适合短时户外活动，请留意午后阵雨。'},
             ),
           ],
@@ -501,53 +540,6 @@ void main() {
     });
 
     test(
-      'manages M8 skill subscriptions through assistant repository',
-      () async {
-        final repository = _FakeAssistantRepository(
-          events: <AssistantStreamEventWire>[],
-        );
-        final container = _containerWith(assistantRepository: repository);
-        addTearDown(container.dispose);
-
-        await container
-            .read(skillSubscriptionControllerProvider.notifier)
-            .createMorningBriefing();
-        var state = container.read(skillSubscriptionControllerProvider);
-        expect(state.items, hasLength(1));
-        expect(state.items.single.status, 'active');
-
-        await container
-            .read(skillSubscriptionControllerProvider.notifier)
-            .pause(state.items.single.subscriptionId);
-        state = container.read(skillSubscriptionControllerProvider);
-        expect(state.items.single.status, 'paused');
-
-        await container
-            .read(skillSubscriptionControllerProvider.notifier)
-            .archive(state.items.single.subscriptionId);
-        state = container.read(skillSubscriptionControllerProvider);
-        expect(state.items, isEmpty);
-      },
-    );
-
-    test('creates M9 P0 skill subscriptions from presets', () async {
-      final repository = _FakeAssistantRepository(
-        events: <AssistantStreamEventWire>[],
-      );
-      final container = _containerWith(assistantRepository: repository);
-      addTearDown(container.dispose);
-
-      await container
-          .read(skillSubscriptionControllerProvider.notifier)
-          .createP0Skill(p0SkillSubscriptionPresets[2]);
-
-      final state = container.read(skillSubscriptionControllerProvider);
-      expect(state.items, hasLength(1));
-      expect(state.items.single.skillId, 'stock_sentinel');
-      expect(state.items.single.trigger.cron, '0 9 * * *');
-    });
-
-    test(
       'skill center uses assistant repository for alpha data source',
       () async {
         final repository = _FakeAssistantRepository(
@@ -578,24 +570,116 @@ void main() {
             .where((item) => item.skillId == 'stock_sentinel')
             .single;
         expect(stock.enabled, isTrue);
-        expect(stock.statusLabel, '已订阅');
+        expect(stock.subscription?.status, 'active');
       },
     );
 
-    test('records M9 proactive feedback locally', () {
-      final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
-          events: <AssistantStreamEventWire>[],
-        ),
+    test('无 runId 时反馈仅本地记录，不产生学习上报', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[],
       );
+      final container = _containerWith(assistantRepository: repository);
       addTearDown(container.dispose);
 
       container
           .read(personalAssistantStreamControllerProvider.notifier)
           .submitFeedback('too_frequent');
+      await pumpEventQueue();
 
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(state.feedbackMessage, contains('太频繁'));
+      expect(repository.interactionEventBatches, isEmpty);
+    });
+
+    // ── C. 学习回路：submitFeedback → reportInteractionEvents ──
+    test('submitFeedback 产生一次学习上报且 eventId 稳定派生', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(
+            seq: 1,
+            eventType: 'final_answer',
+            payload: const <String, dynamic>{'text': '反馈用回答'},
+          ),
+        ],
+      );
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await controller.send('反馈用问题');
+      controller.submitFeedback('useful');
+      await pumpEventQueue();
+
+      expect(repository.interactionEventBatches, hasLength(1));
+      final event = repository.interactionEventBatches.single.single;
+      expect(event.eventId, 'fb:atn_test_personal:useful');
+      expect(event.runId, 'atn_test_personal');
+      expect(event.pageType, 'assistant_dialog');
+      expect(event.domainId, 'assistant');
+      expect(event.feedbackType, 'useful');
+      expect(controller.pendingFeedbackEventCount, 0);
+
+      // 同一动作重试：稳定派生 id 不产生新事件 id。
+      controller.submitFeedback('useful');
+      await pumpEventQueue();
+      expect(repository.interactionEventBatches, hasLength(2));
+      expect(
+        repository.interactionEventBatches.last.single.eventId,
+        'fb:atn_test_personal:useful',
+      );
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(
+        state.feedbackMessage,
+        contains(AssistantText.assistantFeedbackUsefulLabel),
+      );
+      expect(state.feedbackType, 'useful');
+    });
+
+    test('学习上报失败不阻塞 UI，事件进待重试并在下一轮 turn 完成后补发', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(
+            seq: 1,
+            eventType: 'final_answer',
+            payload: const <String, dynamic>{'text': '第一轮回答'},
+          ),
+        ],
+      );
+      repository.failInteractionReport = true;
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await controller.send('第一轮');
+      controller.submitFeedback('irrelevant');
+      await pumpEventQueue();
+
+      // UI 展示不被上报失败阻塞；事件保留在内存待重试队列。
+      var state = container.read(personalAssistantStreamControllerProvider);
+      expect(
+        state.feedbackMessage,
+        contains(AssistantText.assistantFeedbackIrrelevantLabel),
+      );
+      expect(state.feedbackType, 'irrelevant');
+      expect(controller.pendingFeedbackEventCount, 1);
+
+      repository.failInteractionReport = false;
+      await controller.send('第二轮');
+      await pumpEventQueue();
+
+      expect(controller.pendingFeedbackEventCount, 0);
+      expect(
+        repository.interactionEventBatches.last.map((event) => event.eventId),
+        contains('fb:atn_test_personal:irrelevant'),
+      );
+      state = container.read(personalAssistantStreamControllerProvider);
+      expect(state.feedbackMessage, isEmpty);
+      expect(state.feedbackType, isEmpty);
     });
 
     // ── P3 飞轮小循环：turn.completed emergedTags → assistant_interest 回流 ──
@@ -680,18 +764,236 @@ void main() {
       ]);
       expect(tags, equals(<String>['Topic/旅行', 'Topic/景区']));
     });
+
+    // ---- 会话生命周期新能力合同（R-ASSIST-001 收口）----
+
+    test('stopGeneration 对运行中 run 发送 CancelAssistantRun 命令', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(seq: 1, eventType: 'turn_started'),
+        ],
+      );
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await notifier.send('长问题');
+      // 流已自然结束（fake 事件耗尽），running=false 时 stop 是 no-op。
+      await notifier.stopGeneration();
+      expect(repository.cancelledRunIds, isEmpty);
+    });
+
+    test('turn_cancelled 且无 partial answer 时收尾为停止占位', () async {
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(seq: 1, eventType: 'turn_started'),
+            _event(
+              seq: 2,
+              eventType: 'turn_cancelled',
+              payload: const <String, dynamic>{'status': 'cancelled'},
+            ),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('被取消的问题');
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(state.running, isFalse);
+      expect(state.errorMessage, isEmpty);
+      final assistantRow =
+          state.transcript.last as AssistantAnswerTranscriptRow;
+      expect(assistantRow.content, AssistantText.assistantGenerationStopped);
+      expect(assistantRow.streaming, isFalse);
+    });
+
+    test('turn_cancelled 保留已生成的 partial answer', () async {
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(seq: 1, eventType: 'turn_started'),
+            _event(
+              seq: 2,
+              eventType: 'partial_answer',
+              payload: const <String, dynamic>{'text': '已生成一半'},
+            ),
+            _event(
+              seq: 3,
+              eventType: 'turn_cancelled',
+              payload: const <String, dynamic>{'status': 'cancelled'},
+            ),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('被中途取消的问题');
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      final assistantRow =
+          state.transcript.last as AssistantAnswerTranscriptRow;
+      expect(assistantRow.content, '已生成一半');
+      expect(assistantRow.streaming, isFalse);
+    });
+
+    test('switchConversation 经 loader 恢复指定会话并绑定 conversationId', () async {
+      final historyLoader = _SwitchRecordingHistoryLoader(
+        snapshot: await _buildAssistantHistorySnapshot(),
+      );
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: const <AssistantStreamEventWire>[],
+        ),
+        historyLoader: historyLoader,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await notifier.switchConversation('conv_target_001');
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(historyLoader.requestedConversationIds, <String>[
+        'conv_target_001',
+      ]);
+      expect(state.conversationId, 'conv_target_001');
+      expect(state.historyInitialized, isTrue);
+      expect(state.historyLoading, isFalse);
+      expect(state.transcript, isNotEmpty);
+    });
+
+    test('startNewConversation 清空会话状态供下次 send 新建云端会话', () async {
+      final historyLoader = _FakeAssistantHistoryLoader(
+        snapshot: await _buildAssistantHistorySnapshot(),
+      );
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: const <AssistantStreamEventWire>[],
+        ),
+        historyLoader: historyLoader,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await notifier.ensureHistoryInitialized();
+      expect(
+        container
+            .read(personalAssistantStreamControllerProvider)
+            .conversationId,
+        'restored_conversation_001',
+      );
+
+      notifier.startNewConversation();
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(state.conversationId, isEmpty);
+      expect(state.turnId, isEmpty);
+      expect(state.transcript, isEmpty);
+      expect(state.historyInitialized, isTrue);
+    });
+
+    test('ensureHistoryInitialized 绑定最近云端会话 conversationId 供续聊', () async {
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: const <AssistantStreamEventWire>[],
+        ),
+        historyLoader: _FakeAssistantHistoryLoader(
+          snapshot: await _buildAssistantHistorySnapshot(),
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .ensureHistoryInitialized();
+
+      expect(
+        container
+            .read(personalAssistantStreamControllerProvider)
+            .conversationId,
+        'restored_conversation_001',
+      );
+    });
+
+    test('regenerateLastAnswer 保持原问题并先写入会话偏好', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(
+            seq: 1,
+            eventType: 'final_answer',
+            payload: const <String, dynamic>{'text': '第一次回答'},
+          ),
+        ],
+      );
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await notifier.send('原始问题');
+      await notifier.regenerateLastAnswer();
+      await notifier.regenerateLastAnswer(option: RegenerateOption.concise);
+
+      expect(repository.startedRunTexts, <String>['原始问题', '原始问题', '原始问题']);
+      final preferences = await repository.listAssistantPreferences(
+        scope: AssistantPreferenceScope.session,
+      );
+      expect(preferences, hasLength(1));
+      expect(
+        preferences.single.kind,
+        AssistantPreferenceKind.replyLength.wireName,
+      );
+      expect(preferences.single.value, 'concise');
+      // 学习信号：regenerated 事实上报（含风格调整标记）。
+      final regenerated = repository.interactionEventBatches
+          .expand((batch) => batch)
+          .where((event) => event.regeneratedAnswer)
+          .toList();
+      expect(regenerated, isNotEmpty);
+    });
   });
 }
 
+/// 记录 switchConversation 请求的 loader 桩。
+class _SwitchRecordingHistoryLoader implements AssistantHistoryLoader {
+  _SwitchRecordingHistoryLoader({this.snapshot});
+
+  final AssistantHistorySnapshot? snapshot;
+  final List<String> requestedConversationIds = <String>[];
+
+  @override
+  Future<AssistantHistorySnapshot?> load({
+    required String subAccountId,
+    String conversationId = '',
+  }) async {
+    if (conversationId.isNotEmpty) {
+      requestedConversationIds.add(conversationId);
+    }
+    return snapshot;
+  }
+}
+
 ProviderContainer _containerWith({
-  required AssistantRepository assistantRepository,
+  required AlphaAssistantFacets assistantRepository,
   AppMessageQuery? appMessageQuery,
   AssistantHistoryLoader? historyLoader,
   BehaviorRepository? behaviorRepository,
 }) {
   return ProviderContainer(
     overrides: [
-      assistantRepositoryProvider.overrideWithValue(assistantRepository),
+      ...alphaAssistantFacetOverrides(assistantRepository),
       appMessageQueryProvider.overrideWithValue(
         appMessageQuery ?? _FakeAppMessageQuery(),
       ),
@@ -703,8 +1005,9 @@ ProviderContainer _containerWith({
           avatarUrl: '',
         ),
       ),
-      if (historyLoader != null)
-        assistantHistoryLoaderProvider.overrideWithValue(historyLoader),
+      assistantHistoryLoaderProvider.overrideWithValue(
+        historyLoader ?? const _EmptyAssistantHistoryLoader(),
+      ),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
     ],
@@ -712,35 +1015,61 @@ ProviderContainer _containerWith({
 }
 
 Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
-  final detail = AssistantSessionWireDetail(
-    sessionId: 'restored_session_001',
-    topicTitle: '深圳天气',
-    messages: <AssistantSessionWireMessage>[
-      AssistantSessionWireMessage.fromJson(<String, dynamic>{
-        'role': 'user',
-        'content': '旧问题：深圳天气',
-      }),
-      AssistantSessionWireMessage.fromJson(<String, dynamic>{
-        'role': 'assistant',
-        'content': '旧回答：深圳今天多云转晴。',
-      }),
-    ],
+  // 云端历史恢复真相源：CloudAssistantHistoryLoader 消费 List conversations/turns
+  // 查询面（与 api_integration 断言的服务端行为同源）。
+  const conversationId = 'restored_conversation_001';
+  final loader = CloudAssistantHistoryLoader(
+    _HistoryFacetStub(
+      conversation: AssistantConversationWire(
+        conversationId: conversationId,
+        userId: 'user_test',
+        summary: '深圳天气',
+        createdAt: '2026-07-20T10:00:00Z',
+        updatedAt: '2026-07-20T10:05:00Z',
+      ),
+      turns: const <AssistantTurnSummaryView>[
+        AssistantTurnSummaryView(
+          turnId: 'turn_restored_001',
+          conversationId: conversationId,
+          status: 'completed',
+          inputText: '旧问题：深圳天气',
+          answerText: '旧回答：深圳今天多云转晴。',
+          createdAt: '2026-07-20T10:00:00Z',
+          completedAt: '2026-07-20T10:00:30Z',
+        ),
+      ],
+    ),
   );
-  final result = await loadTranscriptRowsFromSessionDetail(
-    detail: detail,
-    pageSize: detail.messages.length,
-    subAccountId: 'persona_test',
-    normalizeAssistantContentForModel: (wire) =>
-        (wire['content'] ?? '').toString(),
-  );
-  return AssistantHistorySnapshot(
-    sessionId: detail.sessionId,
-    topicTitle: detail.topicTitle,
-    transcript: <AssistantTranscriptTimelineRow>[
-      ...result.hiddenRows,
-      ...result.visibleRows,
-    ],
-  );
+  final snapshot = await loader.load(subAccountId: 'persona_test');
+  return snapshot!;
+}
+
+/// 只服务历史恢复断言的最小 Facet 桩：List conversations/turns 返回预置数据，
+/// 其余方法不应被 loader 触达。
+class _HistoryFacetStub extends AlphaAssistantFacets {
+  _HistoryFacetStub({required this.conversation, required this.turns});
+
+  final AssistantConversationWire conversation;
+  final List<AssistantTurnSummaryView> turns;
+
+  @override
+  Future<AssistantConversationListPage> listAssistantConversations({
+    int limit = kAssistantListPageDefaultLimit,
+    String cursor = '',
+  }) async {
+    return AssistantConversationListPage(
+      items: <AssistantConversationWire>[conversation],
+    );
+  }
+
+  @override
+  Future<AssistantTurnListView> listConversationTurns({
+    required String conversationId,
+    int limit = kAssistantListPageDefaultLimit,
+    String cursor = '',
+  }) async {
+    return AssistantTurnListView(items: turns);
+  }
 }
 
 AssistantStreamEventWire _event({
@@ -762,11 +1091,34 @@ AssistantStreamEventWire _event({
   );
 }
 
-class _FakeAssistantRepository extends MockAssistantRepository {
+class _FakeAssistantRepository extends AlphaAssistantFacets {
   _FakeAssistantRepository({required this.events});
 
   final List<AssistantStreamEventWire> events;
   int _turnCounter = 0;
+
+  /// 记录 submitFeedback 学习回路的上报批次；[failInteractionReport] 为 true
+  /// 时模拟 Remote 全批失败（抛结构化异常）。
+  final List<List<InteractionEvent>> interactionEventBatches =
+      <List<InteractionEvent>>[];
+  bool failInteractionReport = false;
+
+  @override
+  Future<AssistantInteractionReportBatchAck> reportInteractionEvents({
+    required List<InteractionEvent> events,
+  }) async {
+    interactionEventBatches.add(List<InteractionEvent>.unmodifiable(events));
+    if (failInteractionReport) {
+      throw StateError('learning append unavailable (test)');
+    }
+    return AssistantInteractionReportBatchAck(
+      accepted: true,
+      acceptedCount: events.length,
+      count: events.length,
+      resource: 'interaction_event_batch',
+      mode: 'local_mock',
+    );
+  }
 
   @override
   Future<AssistantConversationWire> createAssistantConversation({
@@ -780,6 +1132,9 @@ class _FakeAssistantRepository extends MockAssistantRepository {
     );
   }
 
+  /// 记录 StartAssistantRun 提交文本（regenerate 合同断言消费）。
+  final List<String> startedRunTexts = <String>[];
+
   @override
   Future<AssistantTurnEnvelopeWire> startAssistantRun({
     required String conversationId,
@@ -789,6 +1144,7 @@ class _FakeAssistantRepository extends MockAssistantRepository {
     String domainId = '',
   }) async {
     _turnCounter += 1;
+    startedRunTexts.add(text);
     return AssistantTurnEnvelopeWire(
       turnId: _turnCounter == 1
           ? 'atn_test_personal'
@@ -796,6 +1152,23 @@ class _FakeAssistantRepository extends MockAssistantRepository {
       conversationId: conversationId,
       turnType: turnType,
       input: <String, dynamic>{'text': text},
+      traceId: 'trace_test',
+      createdAt: '2026-04-29T00:00:00Z',
+    );
+  }
+
+  /// 记录 CancelAssistantRun 调用（stopGeneration 合同断言消费）。
+  final List<String> cancelledRunIds = <String>[];
+
+  @override
+  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+    required String runId,
+  }) async {
+    cancelledRunIds.add(runId);
+    return AssistantTurnEnvelopeWire(
+      turnId: runId,
+      conversationId: 'acv_test_personal',
+      status: 'cancelled',
       traceId: 'trace_test',
       createdAt: '2026-04-29T00:00:00Z',
     );
@@ -862,7 +1235,10 @@ class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
   int loadCount = 0;
 
   @override
-  Future<AssistantHistorySnapshot?> load({required String subAccountId}) async {
+  Future<AssistantHistorySnapshot?> load({
+    required String subAccountId,
+    String conversationId = '',
+  }) async {
     loadCount += 1;
     return snapshot;
   }

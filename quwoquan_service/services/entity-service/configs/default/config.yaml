@@ -7,6 +7,10 @@ mongo:
   uri: ""
   database: "quwoquan_entity"
 
+content_service:
+  base_url: ""
+  object_intersections_path: "/content/intersections/object"
+
 # Unified search index — WRITE side (entity.search_index_worker).
 # entity-service is the indexing producer for the shared ES/OpenSearch index that
 # search-service reads; both target the same cluster + index. Endpoints/credentials

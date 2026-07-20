@@ -15,6 +15,7 @@ var (
 	telemetryIngestEventTotal *prometheus.CounterVec
 	telemetryIngestDuration   *prometheus.HistogramVec
 	telemetryLogstoreDuration *prometheus.HistogramVec
+	appExperienceEventTotal   *prometheus.CounterVec
 )
 
 func registerTelemetryMetrics() {
@@ -37,10 +38,15 @@ func registerTelemetryMetrics() {
 			Help:    "SLS telemetry write, confirmation and query duration.",
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.8, 1.2, 2, 5},
 		}, []string{"operation", "result"})
+		appExperienceEventTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_app_experience_events_total",
+			Help: "Accepted App experience facts used by ANR, jank, error, and startup SLOs.",
+		}, []string{"event_type", "result"})
 		registerCollector(&telemetryIngestBatchTotal)
 		registerCollector(&telemetryIngestEventTotal)
 		registerCollector(&telemetryIngestDuration)
 		registerCollector(&telemetryLogstoreDuration)
+		registerCollector(&appExperienceEventTotal)
 	})
 }
 
@@ -63,12 +69,52 @@ func recordTelemetryIngestMetrics(result string, count int, duration time.Durati
 	telemetryIngestDuration.WithLabelValues(result).Observe(duration.Seconds())
 }
 
+func recordAppExperienceEvents(records []application.EventRecordInput) {
+	registerTelemetryMetrics()
+	for _, record := range records {
+		switch record.EventType {
+		case "app_anr_outcome", "app_frame_jank_outcome", "app_startup",
+			"runtime_exception", "page_first_usable":
+			result := "observed"
+			if record.Result != nil && *record.Result != "" {
+				result = *record.Result
+			}
+			appExperienceEventTotal.WithLabelValues(record.EventType, result).Inc()
+		}
+	}
+}
+
 type instrumentedEventLogStore struct {
 	inner application.EventLogStore
 }
 
 func instrumentEventLogStore(inner application.EventLogStore) application.EventLogStore {
 	return instrumentedEventLogStore{inner: inner}
+}
+
+type instrumentedRtcMediaQoeSummaryReader struct {
+	inner application.RtcMediaQoeSummaryReader
+}
+
+func instrumentRtcMediaQoeSummaryReader(
+	inner application.RtcMediaQoeSummaryReader,
+) application.RtcMediaQoeSummaryReader {
+	return instrumentedRtcMediaQoeSummaryReader{inner: inner}
+}
+
+func (s instrumentedRtcMediaQoeSummaryReader) ReadRtcMediaQoeSummary(
+	ctx context.Context,
+	query application.RtcMediaQoeSummaryQuery,
+) (out application.RtcMediaQoeSummarySlice, err error) {
+	startedAt := time.Now()
+	defer func() {
+		instrumentedEventLogStore{}.observe(
+			"query_rtc_media_qoe_raw",
+			startedAt,
+			err,
+		)
+	}()
+	return s.inner.ReadRtcMediaQoeSummary(ctx, query)
 }
 
 func (s instrumentedEventLogStore) observe(operation string, startedAt time.Time, err error) {
@@ -116,4 +162,11 @@ func (s instrumentedEventLogStore) HasStartupDiagnosticBatch(ctx context.Context
 	return s.inner.HasStartupDiagnosticBatch(ctx, key, count)
 }
 
+func (s instrumentedEventLogStore) GetPageExperienceStats(ctx context.Context, query application.PageExperienceQuery) (out []application.PageExperienceStat, err error) {
+	startedAt := time.Now()
+	defer func() { s.observe("query_page_experience", startedAt, err) }()
+	return s.inner.GetPageExperienceStats(ctx, query)
+}
+
 var _ application.EventLogStore = instrumentedEventLogStore{}
+var _ application.RtcMediaQoeSummaryReader = instrumentedRtcMediaQoeSummaryReader{}

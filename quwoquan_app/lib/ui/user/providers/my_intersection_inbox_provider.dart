@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -217,11 +220,25 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
       );
       if (!ref.mounted) return;
       state = state.copyWith(items: items, isLoading: false);
-      await repo.markIntersectionsVisited(
-        dimension: dimension.isEmpty ? null : dimension,
-      );
-      if (!ref.mounted) return;
-      ref.read(myIntersectionSummaryProvider.notifier).load();
+      // 清红点走 IntersectionVisitState typed 写面；失败不阻断列表展示，
+      // 水位单调收敛下次进入可重放（降级容忍），异常经结构化遥测上报。
+      try {
+        await ref
+            .read(intersectionVisitWriterProvider)
+            .markIntersectionsVisited(
+              dimension: dimension.isEmpty ? null : dimension,
+            );
+        if (!ref.mounted) return;
+        ref.read(myIntersectionSummaryProvider.notifier).load();
+      } catch (visitError, stackTrace) {
+        unawaited(
+          AppExceptionTelemetryService.instance.recordGlobalException(
+            source: 'my_intersection_inbox.mark_visited',
+            exceptionText: visitError.toString(),
+            stackText: stackTrace.toString(),
+          ),
+        );
+      }
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, rawError: () => e);

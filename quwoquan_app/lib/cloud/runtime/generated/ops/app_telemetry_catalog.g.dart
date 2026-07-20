@@ -19,14 +19,53 @@ class AppTelemetryPayload {
   final String logType;
   final Map<String, Object?> extensions;
 
-  factory AppTelemetryPayload.pageOpen() {
+  factory AppTelemetryPayload.pageOpen({int? readyMs}) {
     return AppTelemetryPayload._('page_open', 'event', <String, Object?>{
+      if (readyMs != null) 'readyMs': readyMs,
     });
   }
 
   factory AppTelemetryPayload.pageReturn({required int durationMs}) {
     return AppTelemetryPayload._('page_return', 'event', <String, Object?>{
       'durationMs': durationMs,
+    });
+  }
+
+  factory AppTelemetryPayload.pageFirstUsable({required int durationMs, required String terminalState, String? surfaceId, String? failReasonCode}) {
+    return AppTelemetryPayload._('page_first_usable', 'event', <String, Object?>{
+      'durationMs': durationMs,
+      'terminalState': terminalState,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+    });
+  }
+
+  factory AppTelemetryPayload.pageErrorOutcome({required String surfaceId, required String errorCode, required String recoveryAction, required String result, String? action, int? durationMs}) {
+    return AppTelemetryPayload._('page_error_outcome', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'errorCode': errorCode,
+      'recoveryAction': recoveryAction,
+      'result': result,
+      if (action != null) 'action': action,
+      if (durationMs != null) 'durationMs': durationMs,
+    });
+  }
+
+  factory AppTelemetryPayload.appAnrOutcome({required String detectionSource, required String result, int? durationMs}) {
+    return AppTelemetryPayload._('app_anr_outcome', 'event', <String, Object?>{
+      'detectionSource': detectionSource,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+    });
+  }
+
+  factory AppTelemetryPayload.appFrameJankOutcome({required int sampledFrames, required int jankyFrames, required int worstFrameMs, required int jankThresholdMs, required String result}) {
+    return AppTelemetryPayload._('app_frame_jank_outcome', 'event', <String, Object?>{
+      'sampledFrames': sampledFrames,
+      'jankyFrames': jankyFrames,
+      'worstFrameMs': worstFrameMs,
+      'jankThresholdMs': jankThresholdMs,
+      'result': result,
     });
   }
 
@@ -49,42 +88,119 @@ class AppTelemetryPayload {
     });
   }
 
-  factory AppTelemetryPayload.productAction({required String journey, required String action, int? durationMs, String? result, String? failReasonCode}) {
+  factory AppTelemetryPayload.productAction({required String journey, required String action, String? surfaceId, String? objectType, String? objectId, String? reasonId, String? targetType, String? targetId, String? environment, int? durationMs, String? result, String? failReasonCode, String? recoveryAction, String? requestId, String? traceId}) {
     return AppTelemetryPayload._('product_action', 'event', <String, Object?>{
       'journey': journey,
       'action': action,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (objectType != null) 'objectType': objectType,
+      if (objectId != null) 'objectId': objectId,
+      if (reasonId != null) 'reasonId': reasonId,
+      if (targetType != null) 'targetType': targetType,
+      if (targetId != null) 'targetId': targetId,
+      if (environment != null) 'environment': environment,
       if (durationMs != null) 'durationMs': durationMs,
       if (result != null) 'result': result,
       if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (requestId != null) 'requestId': requestId,
+      if (traceId != null) 'traceId': traceId,
     });
   }
 
-  factory AppTelemetryPayload.performanceSample({required String operationId, required int durationMs, String? result, String? failReasonCode}) {
+  factory AppTelemetryPayload.performanceSample({required String operationId, required int durationMs, String? result, String? failReasonCode, String? recoveryAction, String? requestId, String? traceId}) {
     return AppTelemetryPayload._('performance_sample', 'event', <String, Object?>{
       'operationId': operationId,
       'durationMs': durationMs,
       if (result != null) 'result': result,
       if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (requestId != null) 'requestId': requestId,
+      if (traceId != null) 'traceId': traceId,
     });
   }
 
-  factory AppTelemetryPayload.operationResult({required String operationId, required String result, int? durationMs, String? failReasonCode}) {
+  factory AppTelemetryPayload.operationResult({required String operationId, required String result, int? durationMs, String? failReasonCode, String? recoveryAction, String? requestId, String? traceId}) {
     return AppTelemetryPayload._('operation_result', 'event', <String, Object?>{
       'operationId': operationId,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (requestId != null) 'requestId': requestId,
+      if (traceId != null) 'traceId': traceId,
+    });
+  }
+
+  factory AppTelemetryPayload.contentPublication({required String publicationStage, required String contentType, required String objectState, required String surfaceId, required String result, int? durationMs, String? failReasonCode, String? correlationHash, String? recoveryAction, String? requestId, String? traceId}) {
+    return AppTelemetryPayload._('content_publication', 'event', <String, Object?>{
+      'publicationStage': publicationStage,
+      'contentType': contentType,
+      'objectState': objectState,
+      'surfaceId': surfaceId,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (correlationHash != null) 'correlationHash': correlationHash,
+      if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (requestId != null) 'requestId': requestId,
+      if (traceId != null) 'traceId': traceId,
+    });
+  }
+
+  factory AppTelemetryPayload.rtcCallOutcome({required String callType, required String result, int? durationMs, String? failReasonCode, int? participantCount}) {
+    return AppTelemetryPayload._('rtc_call_outcome', 'event', <String, Object?>{
+      'callType': callType,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (participantCount != null) 'participantCount': participantCount,
+    });
+  }
+
+  factory AppTelemetryPayload.rtcMediaQoe({required String callType, required String result, required int connectTimeMs, required bool mediaConnected, required int reconnectCount, String? disconnectReason, String? networkQuality, int? participantCount, String? failReasonCode}) {
+    return AppTelemetryPayload._('rtc_media_qoe', 'event', <String, Object?>{
+      'callType': callType,
+      'result': result,
+      'connectTimeMs': connectTimeMs,
+      'mediaConnected': mediaConnected,
+      'reconnectCount': reconnectCount,
+      if (disconnectReason != null) 'disconnectReason': disconnectReason,
+      if (networkQuality != null) 'networkQuality': networkQuality,
+      if (participantCount != null) 'participantCount': participantCount,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+    });
+  }
+
+  factory AppTelemetryPayload.realtimeConnectResult({required String transport, required String result, int? durationMs, String? failReasonCode}) {
+    return AppTelemetryPayload._('realtime_connect_result', 'event', <String, Object?>{
+      'transport': transport,
       'result': result,
       if (durationMs != null) 'durationMs': durationMs,
       if (failReasonCode != null) 'failReasonCode': failReasonCode,
     });
   }
 
-  factory AppTelemetryPayload.videoPlaybackQoe({required int readyMs, required int rebufferCount, required int rebufferMs, required int seekCount, required String playbackMode, int? ttffMs, int? declaredDurationMs, int? observedDurationMs, bool? durationMismatch, String? result, String? failReasonCode}) {
+  factory AppTelemetryPayload.videoPlaybackQoe({required int readyMs, required int rebufferCount, required int rebufferMs, required int effectivePlaybackMs, required int seekCount, required int seekFailureCount, required int seekCommandMaxMs, required int seekSettleMaxMs, required String seekEvidenceSource, required String devicePlatform, required String playbackMode, int? ttffMs, int? droppedFrames, int? processedVideoFrames, int? audioUnderrunCount, String? rendererMode, String? decoderQueueMode, bool? decoderFallbackEnabled, int? declaredDurationMs, int? observedDurationMs, bool? durationMismatch, String? result, String? failReasonCode}) {
     return AppTelemetryPayload._('video_playback_qoe', 'event', <String, Object?>{
       'readyMs': readyMs,
       'rebufferCount': rebufferCount,
       'rebufferMs': rebufferMs,
+      'effectivePlaybackMs': effectivePlaybackMs,
       'seekCount': seekCount,
+      'seekFailureCount': seekFailureCount,
+      'seekCommandMaxMs': seekCommandMaxMs,
+      'seekSettleMaxMs': seekSettleMaxMs,
+      'seekEvidenceSource': seekEvidenceSource,
+      'devicePlatform': devicePlatform,
       'playbackMode': playbackMode,
       if (ttffMs != null) 'ttffMs': ttffMs,
+      if (droppedFrames != null) 'droppedFrames': droppedFrames,
+      if (processedVideoFrames != null) 'processedVideoFrames': processedVideoFrames,
+      if (audioUnderrunCount != null) 'audioUnderrunCount': audioUnderrunCount,
+      if (rendererMode != null) 'rendererMode': rendererMode,
+      if (decoderQueueMode != null) 'decoderQueueMode': decoderQueueMode,
+      if (decoderFallbackEnabled != null) 'decoderFallbackEnabled': decoderFallbackEnabled,
       if (declaredDurationMs != null) 'declaredDurationMs': declaredDurationMs,
       if (observedDurationMs != null) 'observedDurationMs': observedDurationMs,
       if (durationMismatch != null) 'durationMismatch': durationMismatch,
@@ -93,20 +209,96 @@ class AppTelemetryPayload {
     });
   }
 
+  factory AppTelemetryPayload.assistantTurnQuality({required String turnAction, required String result, int? durationMs, String? failReasonCode, String? operationId}) {
+    return AppTelemetryPayload._('assistant_turn_quality', 'event', <String, Object?>{
+      'turnAction': turnAction,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (operationId != null) 'operationId': operationId,
+    });
+  }
+
+  factory AppTelemetryPayload.searchQuerySubmit({required String requestId, required String surfaceId, String? action}) {
+    return AppTelemetryPayload._('search_query_submit', 'event', <String, Object?>{
+      'requestId': requestId,
+      'surfaceId': surfaceId,
+      if (action != null) 'action': action,
+    });
+  }
+
+  factory AppTelemetryPayload.searchResultImpression({required String requestId, required int resultCount, required int durationMs, String? action}) {
+    return AppTelemetryPayload._('search_result_impression', 'event', <String, Object?>{
+      'requestId': requestId,
+      'resultCount': resultCount,
+      'durationMs': durationMs,
+      if (action != null) 'action': action,
+    });
+  }
+
+  factory AppTelemetryPayload.searchResultClick({required String requestId, required String objectType, required int rankPosition, String? action}) {
+    return AppTelemetryPayload._('search_result_click', 'event', <String, Object?>{
+      'requestId': requestId,
+      'objectType': objectType,
+      'rankPosition': rankPosition,
+      if (action != null) 'action': action,
+    });
+  }
+
+  factory AppTelemetryPayload.searchRefine({required String requestId, required String action}) {
+    return AppTelemetryPayload._('search_refine', 'event', <String, Object?>{
+      'requestId': requestId,
+      'action': action,
+    });
+  }
+
+  factory AppTelemetryPayload.searchZeroResult({required String requestId, required int durationMs, String? action}) {
+    return AppTelemetryPayload._('search_zero_result', 'event', <String, Object?>{
+      'requestId': requestId,
+      'durationMs': durationMs,
+      if (action != null) 'action': action,
+    });
+  }
+
+  factory AppTelemetryPayload.searchResultDwell({required String requestId, required int durationMs, required int resultCount, String? action}) {
+    return AppTelemetryPayload._('search_result_dwell', 'event', <String, Object?>{
+      'requestId': requestId,
+      'durationMs': durationMs,
+      'resultCount': resultCount,
+      if (action != null) 'action': action,
+    });
+  }
+
 }
 
 abstract final class AppTelemetryCatalog {
   static const List<String> commonFields = <String>['logType', 'eventType', 'sessionId', 'pageName', 'occurredAt', 'deviceManufacturer', 'deviceModel', 'appVersion', 'networkClass'];
+  static const Set<String> contextExtensions = <String>{'devicePlatform'};
   static const Set<String> networkClasses = <String>{'wifi', 'ethernet', '5g', '4g', 'mobile', 'other', 'none'};
   static const Map<String, AppTelemetryEventDefinition> events = <String, AppTelemetryEventDefinition>{
-    'page_open': AppTelemetryEventDefinition(eventType: 'page_open', logType: 'event', requiredExtensions: <String>{}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'page_open': AppTelemetryEventDefinition(eventType: 'page_open', logType: 'event', requiredExtensions: <String>{}, optionalExtensions: <String>{'readyMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'page_return': AppTelemetryEventDefinition(eventType: 'page_return', logType: 'event', requiredExtensions: <String>{'durationMs'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'page_first_usable': AppTelemetryEventDefinition(eventType: 'page_first_usable', logType: 'event', requiredExtensions: <String>{'durationMs', 'terminalState'}, optionalExtensions: <String>{'surfaceId', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'page_error_outcome': AppTelemetryEventDefinition(eventType: 'page_error_outcome', logType: 'event', requiredExtensions: <String>{'surfaceId', 'errorCode', 'recoveryAction', 'result'}, optionalExtensions: <String>{'action', 'durationMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'app_anr_outcome': AppTelemetryEventDefinition(eventType: 'app_anr_outcome', logType: 'event', requiredExtensions: <String>{'detectionSource', 'result'}, optionalExtensions: <String>{'durationMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'app_frame_jank_outcome': AppTelemetryEventDefinition(eventType: 'app_frame_jank_outcome', logType: 'event', requiredExtensions: <String>{'sampledFrames', 'jankyFrames', 'worstFrameMs', 'jankThresholdMs', 'result'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'app_startup': AppTelemetryEventDefinition(eventType: 'app_startup', logType: 'event', requiredExtensions: <String>{'tClickToFirstFrameMs', 'tFirstFrameToShellMs', 'tShellToContentMs', 'tClickToContentMs', 'hasError'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 3000, internalPriority: 'critical'),
     'runtime_exception': AppTelemetryEventDefinition(eventType: 'runtime_exception', logType: 'error', requiredExtensions: <String>{'errorCode'}, optionalExtensions: <String>{'operationId', 'httpStatus', 'callStack'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'error'),
-    'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'durationMs', 'result', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
-    'performance_sample': AppTelemetryEventDefinition(eventType: 'performance_sample', logType: 'event', requiredExtensions: <String>{'operationId', 'durationMs'}, optionalExtensions: <String>{'result', 'failReasonCode'}, normalSampleRate: 0.1, slowThresholdMs: 0, internalPriority: 'normal'),
-    'operation_result': AppTelemetryEventDefinition(eventType: 'operation_result', logType: 'event', requiredExtensions: <String>{'operationId', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
-    'video_playback_qoe': AppTelemetryEventDefinition(eventType: 'video_playback_qoe', logType: 'event', requiredExtensions: <String>{'readyMs', 'rebufferCount', 'rebufferMs', 'seekCount', 'playbackMode'}, optionalExtensions: <String>{'ttffMs', 'declaredDurationMs', 'observedDurationMs', 'durationMismatch', 'result', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'reasonId', 'targetType', 'targetId', 'environment', 'durationMs', 'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'performance_sample': AppTelemetryEventDefinition(eventType: 'performance_sample', logType: 'event', requiredExtensions: <String>{'operationId', 'durationMs'}, optionalExtensions: <String>{'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 0.1, slowThresholdMs: 0, internalPriority: 'normal'),
+    'operation_result': AppTelemetryEventDefinition(eventType: 'operation_result', logType: 'event', requiredExtensions: <String>{'operationId', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'content_publication': AppTelemetryEventDefinition(eventType: 'content_publication', logType: 'event', requiredExtensions: <String>{'publicationStage', 'contentType', 'objectState', 'surfaceId', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'correlationHash', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'rtc_call_outcome': AppTelemetryEventDefinition(eventType: 'rtc_call_outcome', logType: 'event', requiredExtensions: <String>{'callType', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'participantCount'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'rtc_media_qoe': AppTelemetryEventDefinition(eventType: 'rtc_media_qoe', logType: 'event', requiredExtensions: <String>{'callType', 'result', 'connectTimeMs', 'mediaConnected', 'reconnectCount'}, optionalExtensions: <String>{'disconnectReason', 'networkQuality', 'participantCount', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'realtime_connect_result': AppTelemetryEventDefinition(eventType: 'realtime_connect_result', logType: 'event', requiredExtensions: <String>{'transport', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'video_playback_qoe': AppTelemetryEventDefinition(eventType: 'video_playback_qoe', logType: 'event', requiredExtensions: <String>{'readyMs', 'rebufferCount', 'rebufferMs', 'effectivePlaybackMs', 'seekCount', 'seekFailureCount', 'seekCommandMaxMs', 'seekSettleMaxMs', 'seekEvidenceSource', 'devicePlatform', 'playbackMode'}, optionalExtensions: <String>{'ttffMs', 'droppedFrames', 'processedVideoFrames', 'audioUnderrunCount', 'rendererMode', 'decoderQueueMode', 'decoderFallbackEnabled', 'declaredDurationMs', 'observedDurationMs', 'durationMismatch', 'result', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'assistant_turn_quality': AppTelemetryEventDefinition(eventType: 'assistant_turn_quality', logType: 'event', requiredExtensions: <String>{'turnAction', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'operationId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_query_submit': AppTelemetryEventDefinition(eventType: 'search_query_submit', logType: 'event', requiredExtensions: <String>{'requestId', 'surfaceId'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_result_impression': AppTelemetryEventDefinition(eventType: 'search_result_impression', logType: 'event', requiredExtensions: <String>{'requestId', 'resultCount', 'durationMs'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_result_click': AppTelemetryEventDefinition(eventType: 'search_result_click', logType: 'event', requiredExtensions: <String>{'requestId', 'objectType', 'rankPosition'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_refine': AppTelemetryEventDefinition(eventType: 'search_refine', logType: 'event', requiredExtensions: <String>{'requestId', 'action'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_zero_result': AppTelemetryEventDefinition(eventType: 'search_zero_result', logType: 'event', requiredExtensions: <String>{'requestId', 'durationMs'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'search_result_dwell': AppTelemetryEventDefinition(eventType: 'search_result_dwell', logType: 'event', requiredExtensions: <String>{'requestId', 'durationMs', 'resultCount'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
   };
 
   static String? validate(AppTelemetryPayload payload) {

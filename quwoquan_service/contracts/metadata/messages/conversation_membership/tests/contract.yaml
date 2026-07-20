@@ -1,0 +1,66 @@
+aggregate: ConversationMembership
+layer: service_side
+
+description: |
+  ConversationMembership 聚合云侧契约测试场景（真实 MongoDB）。
+  执行：go test ./services/chat-service/...
+
+real_engines:
+  mongodb: testcontainers (mongo:7)
+
+spy_targets: [event_publisher]
+mock_targets: [cross_service_clients]
+
+scenarios:
+  - name: add_member_updates_count
+    command: AddMembers
+    assertions:
+      - membership_documents_created
+      - member_count_projection_updated
+      - event_ConversationMemberAdded_written_to_outbox_same_transaction
+
+  - name: add_member_noop_replay
+    command: AddMembers (member already in group)
+    assertions:
+      - noop_receipt_persisted_without_new_outbox_event
+      - repeat_key_replays_original_result
+
+  - name: add_member_exceeds_max_group_size
+    command: AddMembers (total > maxGroupSize)
+    assertions:
+      - error_returned
+      - membership_count_unchanged
+
+  - name: add_member_relationship_gate
+    command: AddMembers (non-mutual or blocked target)
+    assertions:
+      - error_CHAT.USER.group_member_not_mutual_or_blocked
+      - no_state_change
+
+  - name: remove_member_governance_and_noop
+    command: RemoveMember
+    assertions:
+      - only_owner_or_admin_can_remove
+      - removed_state_receipt_outbox_same_transaction
+      - removing_absent_member_is_noop_replay
+
+  - name: transfer_ownership_cas
+    command: TransferOwnership
+    assertions:
+      - only_current_owner_can_transfer
+      - role_swap_committed_atomically_with_receipt_and_outbox
+      - transfer_to_current_owner_is_noop
+
+  - name: update_group_admins_set_semantics
+    command: UpdateGroupAdmins
+    assertions:
+      - admin_set_replaced_atomically
+      - identical_set_is_noop_receipt
+      - event_ConversationMemberRoleChanged_via_outbox
+
+  - name: assistant_invite_remove_lifecycle
+    command: InviteAssistant / RemoveAssistant
+    assertions:
+      - assistant_member_created_with_member_type_assistant
+      - duplicate_invite_is_noop
+      - remove_absent_assistant_is_noop

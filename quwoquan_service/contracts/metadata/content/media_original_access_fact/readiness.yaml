@@ -1,0 +1,23 @@
+object: MediaOriginalAccessFact
+operations:
+  - RequestOriginalImageAccess
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/content-service/internal/application/media/media_service.go
+  store:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_original_access_mongo_sink.go
+  outbox: []
+  reader: []
+  transport:
+    - quwoquan_service/services/content-service/internal/adapters/http/content_handler_media.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/media_facets.dart
+  page:
+    - quwoquan_app/lib/ui/discovery/pages/unified_media_viewer_page.dart
+tests:
+  local_contract:
+    - quwoquan_app/test/local_contract/cloud/media/contract/media_asset_dto_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/content-service/tests/api_integration/post_markdown_contract__api_integration_test.go
+  user_acceptance: []
+environments: []

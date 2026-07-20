@@ -19,7 +19,7 @@ import (
 
 func TestTelemetryServiceAcceptsStrictBatchAndMasksSession(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, nil)
+	service := application.NewTelemetryService(store, store, store)
 	now := time.Now().UTC().Add(-2 * time.Minute)
 	events := []application.EventRecordInput{
 		validEvent("page_open", "event", now),
@@ -58,7 +58,7 @@ func TestTelemetryServiceAcceptsStrictBatchAndMasksSession(t *testing.T) {
 
 func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, nil)
+	service := application.NewTelemetryService(store, store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	valid := validEvent("page_open", "event", now)
 	invalid := validEvent("page_open", "event", now)
@@ -81,7 +81,7 @@ func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 
 func TestTelemetryIngestionAcceptsCellularGenerationsAndRejectsRemovedVPNValue(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, nil)
+	service := application.NewTelemetryService(store, store, store)
 	occurredAt := time.Now().UTC().Add(-time.Minute)
 	event := application.EventRecordInput{
 		LogType:            "event",
@@ -93,6 +93,7 @@ func TestTelemetryIngestionAcceptsCellularGenerationsAndRejectsRemovedVPNValue(t
 		DeviceModel:        "iPhone",
 		AppVersion:         "1.0.0",
 		NetworkClass:       "5g",
+		DevicePlatform:     "ios",
 	}
 	if _, err := service.ReportEventBatch(
 		context.Background(),
@@ -124,6 +125,11 @@ func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations
 			event.PageName = "not_registered"
 			return event
 		}(),
+		"unknown device platform": func() application.EventRecordInput {
+			event := validEvent("page_open", "event", now)
+			event.DevicePlatform = "phone_brand"
+			return event
+		}(),
 		"invalid session": func() application.EventRecordInput {
 			event := validEvent("page_open", "event", now)
 			event.SessionID = "s.raw.user.1"
@@ -139,7 +145,7 @@ func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations
 	for name, event := range tests {
 		t.Run(name, func(t *testing.T) {
 			store := telemetrypersistence.NewMemoryTelemetryStore()
-			service := application.NewTelemetryService(store, nil)
+			service := application.NewTelemetryService(store, store, store)
 			if _, err := service.ReportEventBatch(context.Background(), digestKey(name), []application.EventRecordInput{event}); err == nil {
 				t.Fatalf("%s must be rejected", name)
 			}
@@ -149,7 +155,7 @@ func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations
 
 func TestStartupDiagnosticsUseIndependentIdempotentBatch(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, nil)
+	service := application.NewTelemetryService(store, store, store)
 	records := []application.StartupDiagnosticRecord{{
 		EventID: "attempt_000000000001_1", AttemptID: "attempt_000000000001",
 		Phase: "router_ready", Outcome: "ready", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
@@ -162,6 +168,38 @@ func TestStartupDiagnosticsUseIndependentIdempotentBatch(t *testing.T) {
 	second, err := service.ReportStartupDiagnostics(context.Background(), "proof_000000000000000001", records)
 	if err != nil || !second.DuplicateBatch {
 		t.Fatalf("duplicate startup batch=%+v err=%v", second, err)
+	}
+}
+
+func TestStartupDiagnosticsSameProofDoesNotCollapseDistinctBatch(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store, store)
+	now := time.Now().UTC().Add(-time.Minute)
+	firstRecord := application.StartupDiagnosticRecord{
+		EventID: "attempt_000000000002_1", AttemptID: "attempt_000000000002",
+		Phase: "dart_bootstrap", Outcome: "started", OccurredAt: now.Format(time.RFC3339Nano),
+		Platform: "android", RuntimeEnv: "alpha", Sequence: 1,
+	}
+	secondRecord := firstRecord
+	secondRecord.EventID = "attempt_000000000002_2"
+	secondRecord.Sequence = 2
+	secondRecord.Phase = "router_ready"
+
+	first, err := service.ReportStartupDiagnostics(
+		context.Background(),
+		"proof_shared_across_attempt_flushes",
+		[]application.StartupDiagnosticRecord{firstRecord},
+	)
+	if err != nil || first.DuplicateBatch {
+		t.Fatalf("first batch=%+v err=%v", first, err)
+	}
+	second, err := service.ReportStartupDiagnostics(
+		context.Background(),
+		"proof_shared_across_attempt_flushes",
+		[]application.StartupDiagnosticRecord{secondRecord},
+	)
+	if err != nil || second.DuplicateBatch {
+		t.Fatalf("distinct batch must not be duplicate=%+v err=%v", second, err)
 	}
 }
 
@@ -190,7 +228,7 @@ func TestSLSEventProtocolWritesOnceAndConfirmsTimeoutAfterWrite(t *testing.T) {
 	if len(raw) != 1 {
 		t.Fatalf("same sealed batch must land once, rows=%d", len(raw))
 	}
-	for _, field := range []string{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "_batchKey", "_batchIndex", "ingestedAt"} {
+	for _, field := range []string{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "devicePlatform", "_batchKey", "_batchIndex", "ingestedAt"} {
 		if raw[0][field] == "" {
 			t.Fatalf("SLS row missing %s: %+v", field, raw[0])
 		}
@@ -208,12 +246,27 @@ func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(
 	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
 	now := time.Now().UTC().Add(-time.Minute)
 	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
-	playbackMode, result := "autoplay", "success"
+	effectivePlaybackMS := 12000
+	seekFailureCount, seekCommandMaxMS, seekSettleMaxMS := 0, 80, 120
+	droppedFrames, processedVideoFrames, audioUnderrunCount := 2, 300, 0
+	rendererMode, decoderQueueMode, decoderFallbackEnabled := "platform_view", "synchronous", true
+	seekEvidenceSource, playbackMode, result := "controller_command_completion", "autoplay", "success"
 	event := validEvent("video_playback_qoe", "event", now)
 	event.ReadyMS = &readyMS
 	event.RebufferCount = &rebufferCount
 	event.RebufferMS = &rebufferMS
+	event.EffectivePlaybackMS = &effectivePlaybackMS
 	event.SeekCount = &seekCount
+	event.SeekFailureCount = &seekFailureCount
+	event.SeekCommandMaxMS = &seekCommandMaxMS
+	event.SeekSettleMaxMS = &seekSettleMaxMS
+	event.DroppedFrames = &droppedFrames
+	event.ProcessedVideoFrames = &processedVideoFrames
+	event.AudioUnderrunCount = &audioUnderrunCount
+	event.RendererMode = &rendererMode
+	event.DecoderQueueMode = &decoderQueueMode
+	event.DecoderFallbackEnabled = &decoderFallbackEnabled
+	event.SeekEvidenceSource = &seekEvidenceSource
 	event.PlaybackMode = &playbackMode
 	event.Result = &result
 
@@ -226,12 +279,24 @@ func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(
 	}
 	row := rows[0]
 	for field, expected := range map[string]string{
-		"eventType":     "video_playback_qoe",
-		"readyMs":       "420",
-		"rebufferCount": "1",
-		"rebufferMs":    "180",
-		"seekCount":     "2",
-		"playbackMode":  "autoplay",
+		"eventType":              "video_playback_qoe",
+		"readyMs":                "420",
+		"rebufferCount":          "1",
+		"rebufferMs":             "180",
+		"effectivePlaybackMs":    "12000",
+		"seekCount":              "2",
+		"seekFailureCount":       "0",
+		"seekCommandMaxMs":       "80",
+		"seekSettleMaxMs":        "120",
+		"droppedFrames":          "2",
+		"processedVideoFrames":   "300",
+		"audioUnderrunCount":     "0",
+		"rendererMode":           "platform_view",
+		"decoderQueueMode":       "synchronous",
+		"decoderFallbackEnabled": "true",
+		"seekEvidenceSource":     "controller_command_completion",
+		"devicePlatform":         "android",
+		"playbackMode":           "autoplay",
 	} {
 		if row[field] != expected {
 			t.Fatalf("qoe %s=%q, want %q; row=%+v", field, row[field], expected, row)
@@ -241,6 +306,37 @@ func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(
 		if _, ok := row[forbidden]; ok {
 			t.Fatalf("Ops QoE must not contain %s: %+v", forbidden, row)
 		}
+	}
+}
+
+func TestTelemetryServiceRejectsUnknownVideoSeekEvidenceSource(t *testing.T) {
+	client := newRecordingSLSClient()
+	config := localSLSConfig()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
+	if err != nil {
+		t.Fatalf("new SLS store: %v", err)
+	}
+	ledger := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	now := time.Now().UTC().Add(-time.Minute)
+	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
+	effectivePlaybackMS := 12000
+	seekFailureCount, seekCommandMaxMS, seekSettleMaxMS := 0, 80, 0
+	seekEvidenceSource, playbackMode := "unregistered_source", "autoplay"
+	event := validEvent("video_playback_qoe", "event", now)
+	event.ReadyMS = &readyMS
+	event.RebufferCount = &rebufferCount
+	event.RebufferMS = &rebufferMS
+	event.EffectivePlaybackMS = &effectivePlaybackMS
+	event.SeekCount = &seekCount
+	event.SeekFailureCount = &seekFailureCount
+	event.SeekCommandMaxMS = &seekCommandMaxMS
+	event.SeekSettleMaxMS = &seekSettleMaxMS
+	event.SeekEvidenceSource = &seekEvidenceSource
+	event.PlaybackMode = &playbackMode
+
+	if _, err := service.ReportEventBatch(context.Background(), digestKey("invalid-video-qoe"), []application.EventRecordInput{event}); err == nil {
+		t.Fatal("unregistered seek evidence source must be rejected")
 	}
 }
 
@@ -268,6 +364,70 @@ func TestSLSStartupDiagnosticsStayInRestrictedLogstore(t *testing.T) {
 	for _, forbidden := range []string{"sessionId", "userId", "pageName", "callStack"} {
 		if _, ok := row[forbidden]; ok {
 			t.Fatalf("restricted startup row contains %s: %+v", forbidden, row)
+		}
+	}
+}
+
+func TestSLSRuntimeDiagnosticsUseDedicatedLogstoreAndCanonicalFields(t *testing.T) {
+	client := newRecordingSLSClient()
+	config := localSLSConfig()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
+	if err != nil {
+		t.Fatalf("new SLS store: %v", err)
+	}
+	ledger := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewRuntimeLogService(store, ledger)
+	now := time.Now().UTC().Add(-time.Minute)
+	record := map[string]any{
+		"schema":     "observability.slim",
+		"recordId":   "r.sls.runtime",
+		"occurredAt": now.Format(time.RFC3339Nano),
+		"observedAt": now.Format(time.RFC3339Nano),
+		"logKind":    "exception",
+		"severity":   "ERROR",
+		"signal":     "app.exception.flutter",
+		"message":    "uncaught exception",
+		"resource": map[string]any{
+			"sourceType": "app",
+			"service":    "quwoquan_app",
+			"appVersion": "1.0.0",
+		},
+		"errorCode": "APP.RUNTIME.uncaught_exception",
+		"attributes": map[string]any{
+			"source":        "flutter",
+			"exceptionType": "StateError",
+		},
+	}
+	if _, err := service.ReportRuntimeLogBatch(
+		context.Background(),
+		digestKey("runtime-sls"),
+		[]map[string]any{record},
+	); err != nil {
+		t.Fatalf("report runtime diagnostics: %v", err)
+	}
+	if len(client.logs(config.RawLogstore)) != 0 ||
+		len(client.logs(config.RuntimeLogstore)) != 1 {
+		t.Fatalf("runtime diagnostics crossed logstore boundary")
+	}
+	row := client.logs(config.RuntimeLogstore)[0]
+	for _, required := range []string{
+		"schema",
+		"recordId",
+		"logKind",
+		"severity",
+		"signal",
+		"resourceAppVersion",
+		"errorCode",
+		"attributes",
+		"_batchKey",
+	} {
+		if row[required] == "" {
+			t.Fatalf("runtime diagnostics row misses %s: %+v", required, row)
+		}
+	}
+	for _, forbidden := range []string{"schemaVersion", "releaseId", "sessionId"} {
+		if _, ok := row[forbidden]; ok {
+			t.Fatalf("runtime diagnostics row contains forbidden %s: %+v", forbidden, row)
 		}
 	}
 }
@@ -301,6 +461,33 @@ func TestSLSDrilldownScansIngestWindowThenFiltersOccurredAt(t *testing.T) {
 		if !strings.Contains(request.Query, marker) {
 			t.Fatalf("raw query missing %q: %s", marker, request.Query)
 		}
+	}
+}
+
+func TestSLSSummaryQueriesFilterSingleRollupRowKind(t *testing.T) {
+	client := newRecordingSLSClient()
+	store, err := telemetrypersistence.NewSLSEventLogStore(client, localSLSConfig())
+	if err != nil {
+		t.Fatalf("new SLS store: %v", err)
+	}
+	now := time.Now().UTC()
+	if _, err := store.GetEventSummary(context.Background(), application.EventSummaryQuery{
+		From: now.Add(-time.Hour), To: now,
+	}); err != nil {
+		t.Fatalf("event summary: %v", err)
+	}
+	eventRequest := client.lastRequest()
+	if eventRequest == nil || !strings.Contains(eventRequest.Query, `rowKind:"event_dimensions"`) {
+		t.Fatalf("event summary must filter event_dimensions rowKind: %+v", eventRequest)
+	}
+	if _, err := store.GetRuntimeLogSummary(context.Background(), application.RuntimeLogSummaryQuery{
+		From: now.Add(-time.Hour), To: now,
+	}); err != nil {
+		t.Fatalf("runtime summary: %v", err)
+	}
+	runtimeRequest := client.lastRequest()
+	if runtimeRequest == nil || !strings.Contains(runtimeRequest.Query, `rowKind:"runtime_diagnostics"`) {
+		t.Fatalf("runtime summary must filter runtime_diagnostics rowKind: %+v", runtimeRequest)
 	}
 }
 
@@ -386,6 +573,7 @@ func localSLSConfig() telemetrypersistence.SLSConfig {
 		Region: "cn-hangzhou", Endpoint: "example.invalid", Project: "test-project",
 		RawLogstore:               "app-product-telemetry-raw",
 		StartupDiagnosticLogstore: "app-startup-diagnostic-raw",
+		RuntimeLogstore:           "runtime-diagnostics-raw",
 		AggregateLogstore:         "app-product-telemetry-hourly", Timeout: 1200 * time.Millisecond,
 	}
 }
@@ -396,7 +584,7 @@ func validEvent(eventType, logType string, occurredAt time.Time) application.Eve
 		SessionID: "s.Z3Vlc3RfdGVzdA." + strconv.FormatInt(occurredAt.UnixMilli(), 10),
 		PageName:  "home", OccurredAt: occurredAt.Format(time.RFC3339Nano),
 		DeviceManufacturer: "Apple", DeviceModel: "iPhone",
-		AppVersion: "1.0.0", NetworkClass: "wifi",
+		AppVersion: "1.0.0", NetworkClass: "wifi", DevicePlatform: "android",
 	}
 }
 

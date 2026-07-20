@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -40,6 +41,7 @@ class _ContactSearchResultPageState
   bool _loading = false;
   List<ContactCandidateVm> _results = <ContactCandidateVm>[];
   final Set<String> _pending = <String>{};
+  Object? _rawError;
 
   @override
   void initState() {
@@ -72,13 +74,17 @@ class _ContactSearchResultPageState
       setState(() {
         _results = <ContactCandidateVm>[];
         _loading = false;
+        _rawError = null;
       });
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _rawError = null;
+    });
     try {
       final items = await ref
-          .read(userProfileRepositoryProvider)
+          .read(profileQueryProvider(AppUiSurfaces.addContactSearch))
           .searchSocialRelations(query: query);
       if (!mounted || _query.trim() != query) {
         return;
@@ -87,12 +93,25 @@ class _ContactSearchResultPageState
         _results = items.map(_toCandidate).toList(growable: false);
         _loading = false;
       });
-    } catch (_) {
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'contact_discovery',
+              action: 'search_contact',
+              pageName: 'ContactSearchResultPage',
+              payload: <String, dynamic>{
+                'result': 'success',
+                'resultCount': items.length,
+              },
+            ),
+      );
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _results = <ContactCandidateVm>[];
+        _rawError = error;
         _loading = false;
       });
     }
@@ -122,8 +141,13 @@ class _ContactSearchResultPageState
     setState(() => _pending.add(candidate.subAccountId));
     try {
       await ref
-          .read(userProfileRepositoryProvider)
-          .followUser(candidate.subAccountId);
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
+            candidate.subAccountId,
+            currentFollowing: false,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactSearch,
+          );
       if (!mounted) {
         return;
       }
@@ -137,6 +161,17 @@ class _ContactSearchResultPageState
             .toList(growable: false);
       });
       AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'relationship',
+              action: 'follow_contact_from_search',
+              pageName: 'ContactSearchResultPage',
+              targetType: 'user',
+              targetKey: candidate.subAccountId,
+            ),
+      );
     } catch (error) {
       if (mounted) {
         await AppActionErrorFeedback.show(
@@ -207,6 +242,21 @@ class _ContactSearchResultPageState
   Widget _buildResults(BuildContext context) {
     if (_loading && _results.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
+    }
+    if (_rawError case final error?) {
+      return AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry) {
+            await _runSearch(_query);
+          }
+        },
+      );
     }
     if (_query.trim().isEmpty) {
       return _Hint(text: UITextConstants.addContactSearchEmptyPrompt);

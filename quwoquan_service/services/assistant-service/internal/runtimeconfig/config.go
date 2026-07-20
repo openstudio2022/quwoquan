@@ -36,11 +36,6 @@ type ProviderConfig struct {
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
-type ContentSearchConfig struct {
-	BaseURL   string `yaml:"base_url"`
-	TimeoutMs int    `yaml:"timeout_ms"`
-}
-
 type UserProfileConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	TimeoutMs int    `yaml:"timeout_ms"`
@@ -80,7 +75,9 @@ type Config struct {
 	} `yaml:"redis"`
 	ModelProvider       ProviderConfig      `yaml:"model_provider"`
 	SearchProvider      ProviderConfig      `yaml:"search_provider"`
-	ContentSearch       ContentSearchConfig `yaml:"content_search"`
+	SearchService       ServiceEgressConfig `yaml:"search_service"`
+	EntityService       ServiceEgressConfig `yaml:"entity_service"`
+	ContentService      ServiceEgressConfig `yaml:"content_service"`
 	UserProfile         UserProfileConfig   `yaml:"user_profile"`
 	ChatService         ServiceEgressConfig `yaml:"chat_service"`
 	NotificationService ServiceEgressConfig `yaml:"notification_service"`
@@ -122,26 +119,17 @@ func LoadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (C
 	}
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := MergeConfigFile(&cfg, localDefault); err != nil {
-			return Config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := MergeConfigFile(&cfg, localEnv); err != nil {
-			return Config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := MergeConfigFile(&cfg, versionFile); err != nil {
-					return Config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
+	if err := MergeConfigFile(&cfg, localDefault); err != nil {
+		return Config{}, fmt.Errorf("read local default config: %w", err)
 	}
-	current := filepath.Join("configs", "config.yaml")
-	if err := MergeConfigFile(&cfg, current); err != nil {
-		return Config{}, fmt.Errorf("read current config: %w", err)
+	if err := MergeConfigFile(&cfg, localEnv); err != nil {
+		return Config{}, fmt.Errorf("read local env config: %w", err)
+	}
+	if strings.TrimSpace(configVersion) != "" {
+		versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
+		if err := MergeConfigFile(&cfg, versionFile); err != nil {
+			return Config{}, fmt.Errorf("read local version config: %w", err)
+		}
 	}
 	return cfg, nil
 }
@@ -175,6 +163,15 @@ func ApplyEnvOverrides(cfg *Config) error {
 	}
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_NOTIFICATION_BASE_URL")); v != "" {
 		cfg.NotificationService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SEARCH_SERVICE_BASE_URL")); v != "" {
+		cfg.SearchService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_ENTITY_SERVICE_BASE_URL")); v != "" {
+		cfg.EntityService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CONTENT_SERVICE_BASE_URL")); v != "" {
+		cfg.ContentService.BaseURL = v
 	}
 	applyProviderEnvOverrides(&cfg.ModelProvider, "ASSISTANT_MODEL")
 	applyProviderEnvOverrides(&cfg.SearchProvider, "ASSISTANT_SEARCH")

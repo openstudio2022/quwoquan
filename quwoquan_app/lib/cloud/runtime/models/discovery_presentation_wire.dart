@@ -1,7 +1,7 @@
 /// 发现流展示 wire 的强类型封装。
 ///
-/// 替代 `ContentReadRepository.discoveryPresentationWireForPost` 既有的
-/// `Map<String, dynamic>?` 裸返回（R04）。对消费方暴露强类型 getter；
+/// 发现流 DTO 需要显式保留扩展展示字段时使用的强类型边界（R04）。
+/// 对消费方暴露强类型 getter；
 /// [toWireMap] 把底层 canonical wire row 透传给统一映射器
 /// [ContentSurfaceViewMapper.fromDto]（其 `tagRefs` / read-presentation 取数仍以
 /// wire map 为入参）。

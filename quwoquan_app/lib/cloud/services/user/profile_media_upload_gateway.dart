@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -22,13 +23,13 @@ abstract class ProfileMediaUploadGateway {
 }
 
 class ContentProfileMediaUploadGateway implements ProfileMediaUploadGateway {
-  ContentProfileMediaUploadGateway(this._media, {http.Client? rawClient})
-    : _rawClient = rawClient ?? http.Client(),
-      _ownsRawClient = rawClient == null;
+  ContentProfileMediaUploadGateway(this._media, {CloudHttpClient? httpClient})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _ownsHttpClient = httpClient == null;
 
   final ContentMediaFacet _media;
-  final http.Client _rawClient;
-  final bool _ownsRawClient;
+  final CloudHttpClient _httpClient;
+  final bool _ownsHttpClient;
 
   @override
   Future<ProfileMediaUploadResult> uploadImage({
@@ -70,7 +71,7 @@ class ContentProfileMediaUploadGateway implements ProfileMediaUploadGateway {
       final request = http.StreamedRequest('PUT', uploadUrl)
         ..headers.addAll(uploadHeaders.toHttpHeaders())
         ..contentLength = fileSize;
-      final responseFuture = _rawClient.send(request);
+      final responseFuture = _httpClient.send(request);
       await request.sink.addStream(file.openRead());
       await request.sink.close();
       final response = await responseFuture;
@@ -98,8 +99,8 @@ class ContentProfileMediaUploadGateway implements ProfileMediaUploadGateway {
   }
 
   void dispose() {
-    if (_ownsRawClient) {
-      _rawClient.close();
+    if (_ownsHttpClient) {
+      _httpClient.close();
     }
   }
 }

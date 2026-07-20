@@ -7,7 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lpinyin/lpinyin.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/contact_discovery_match_wire_dto.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -25,7 +26,14 @@ import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
 import 'package:quwoquan_app/ui/user/services/contact_hash_service.dart';
 import 'package:quwoquan_app/ui/user/widgets/contact_candidate_row.dart';
 
-enum _PhoneContactsStatus { initial, loading, denied, ready, unavailable }
+enum _PhoneContactsStatus {
+  initial,
+  loading,
+  denied,
+  ready,
+  unavailable,
+  error,
+}
 
 /// 手机通讯录页：权限三态 + 本机哈希匹配 + 能力位驱动添加。
 ///
@@ -45,6 +53,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
   String _query = '';
   List<ContactCandidateVm> _matches = <ContactCandidateVm>[];
   final Set<String> _pending = <String>{};
+  Object? _rawError;
 
   @override
   void initState() {
@@ -56,7 +65,10 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
   }
 
   Future<void> _requestAndLoad() async {
-    setState(() => _status = _PhoneContactsStatus.loading);
+    setState(() {
+      _rawError = null;
+      _status = _PhoneContactsStatus.loading;
+    });
     AppPermissionEnsureOutcome outcome;
     try {
       outcome = await AppPermissionCoordinator.current.ensure(
@@ -65,8 +77,14 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
         surface: AppPermissionSurface.page,
         showUiOnFailure: false,
       );
-    } catch (_) {
-      outcome = AppPermissionEnsureOutcome.denied;
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _rawError = error;
+          _status = _PhoneContactsStatus.error;
+        });
+      }
+      return;
     }
     if (!mounted) {
       return;
@@ -143,21 +161,36 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
             .toList(growable: false);
         _status = _PhoneContactsStatus.ready;
       });
-    } catch (_) {
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'contact_discovery',
+              action: 'match_phone_contacts',
+              pageName: 'PhoneContactsPage',
+              targetType: 'contact_discovery',
+              targetKey: result.id,
+              payload: <String, dynamic>{
+                'result': 'success',
+                'resultCount': result.matchCount,
+              },
+            ),
+      );
+    } catch (error) {
       if (mounted) {
         setState(() {
-          _matches = <ContactCandidateVm>[];
-          _status = _PhoneContactsStatus.ready;
+          _rawError = error;
+          _status = _PhoneContactsStatus.error;
         });
       }
     }
   }
 
   ContactCandidateVm _toCandidate(
-    ContactDiscoveryMatchWireDto match,
+    ContactDiscoveryMatchView match,
     String? localName,
   ) {
-    final cap = match.relationshipCapability ?? const <String, dynamic>{};
+    final capability = match.relationshipCapability;
     return ContactCandidateVm(
       subAccountId: match.subAccountId,
       displayName: localName?.trim().isNotEmpty == true
@@ -169,9 +202,9 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
       region: match.region,
       subtitle: match.displayName,
       addState: ContactCandidateVm.addStateFromCapability(
-        relationState: (cap['relationState'] ?? 'not_following').toString(),
-        canFollow: cap['canFollow'] == true,
-        canUnfollow: cap['canUnfollow'] == true,
+        relationState: capability.relationState,
+        canFollow: capability.canFollow,
+        canUnfollow: capability.canUnfollow,
       ),
     );
   }
@@ -183,8 +216,13 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
     setState(() => _pending.add(candidate.subAccountId));
     try {
       await ref
-          .read(userProfileRepositoryProvider)
-          .followUser(candidate.subAccountId);
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowingWithSync(
+            candidate.subAccountId,
+            currentFollowing: false,
+            shouldFollow: true,
+            sourceSurface: AppUiSurfaces.addContactPhone,
+          );
       if (!mounted) {
         return;
       }
@@ -198,6 +236,17 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
             .toList(growable: false);
       });
       AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'relationship',
+              action: 'follow_contact_from_phone',
+              pageName: 'PhoneContactsPage',
+              targetType: 'user',
+              targetKey: candidate.subAccountId,
+            ),
+      );
     } catch (error) {
       if (mounted) {
         await AppActionErrorFeedback.show(
@@ -315,6 +364,20 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
         );
       case _PhoneContactsStatus.ready:
         return _buildReady(context);
+      case _PhoneContactsStatus.error:
+        return AppPageErrorState(
+          semantic: runtimeErrorSemantic(
+            context,
+            error: _rawError!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry) {
+              await _requestAndLoad();
+            }
+          },
+        );
     }
   }
 

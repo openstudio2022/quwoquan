@@ -11,6 +11,7 @@ pages:
   - { page_name: home, route_id: circles, collect_page_access: true }
   - { page_name: interest_match, route_id: interestMatch, collect_page_access: true }
   - { page_name: chat, route_id: chat, collect_page_access: true }
+  - { page_name: greeting_inbox, route_id: greetingInbox, collect_page_access: true }
   - { page_name: start_group_chat, route_id: startGroupChat, collect_page_access: true }
   - { page_name: profile, route_id: profile, collect_page_access: true }
   - { page_name: create_entry, route_id: createEntry, collect_page_access: true }
@@ -37,12 +38,18 @@ pages:
   - { page_name: assistant_skills, route_id: assistantSkills, collect_page_access: true }
   - { page_name: settings, route_id: settings, collect_page_access: true }
   - { page_name: settings_permissions, route_id: settingsPermissions, collect_page_access: true }
+  - { page_name: blocked_users, route_id: blockedUsers, collect_page_access: true }
   - { page_name: settings_dark_mode, route_id: settingsDarkMode, collect_page_access: true }
+  - { page_name: settings_notifications, route_id: settingsNotifications, collect_page_access: true }
+  - { page_name: settings_privacy, route_id: settingsPrivacy, collect_page_access: true }
+  - { page_name: settings_calls, route_id: settingsCalls, collect_page_access: true }
+  - { page_name: settings_account_security, route_id: settingsAccountSecurity, collect_page_access: true }
+  - { page_name: blocked_keywords, route_id: blockedKeywords, collect_page_access: true }
+  - { page_name: my_reports, route_id: myReports, collect_page_access: true }
   - { page_name: settings_about, route_id: settingsAbout, collect_page_access: true }
   - { page_name: profile_edit, route_id: profileEdit, collect_page_access: true }
   - { page_name: profile_career_interests, route_id: profileCareerInterests, collect_page_access: true }
   - { page_name: profile_personas, route_id: profilePersonas, collect_page_access: true }
-  - { page_name: profile_comments, route_id: profileComments, collect_page_access: true }
   - { page_name: profile_stats, route_id: profileStats, collect_page_access: true }
   - { page_name: my_intersections, route_id: myIntersections, collect_page_access: true }
   - { page_name: object_intersections, route_id: objectIntersections, collect_page_access: true }
@@ -54,6 +61,7 @@ pages:
   - { page_name: chat_transfer_ownership, route_id: chatTransferOwnership, collect_page_access: true }
   - { page_name: chat_admins, route_id: chatAdmins, collect_page_access: true }
   - { page_name: chat_member_search, route_id: chatMemberSearch, collect_page_access: true }
+  - { page_name: chat_announcement, route_id: chatAnnouncement, collect_page_access: true }
   - { page_name: rtc_outgoing, route_id: rtcOutgoing, collect_page_access: true }
   - { page_name: rtc_incoming, route_id: rtcIncoming, collect_page_access: true }
   - { page_name: rtc_voice, route_id: rtcVoice, collect_page_access: true }
@@ -80,6 +88,7 @@ internal_pages:
   - { page_name: create_publish_circle_select, internal_id: createPagePublishCircleSelect, location: page_internal_create_publish_circle_select, collect_page_access: true }
   - { page_name: create_homepage_search, internal_id: createPageHomepageSearch, location: page_internal_create_homepage_search, collect_page_access: true }
   - { page_name: circle_edit_settings, internal_id: circleShellEditSettings, location: page_internal_circle_edit_settings, collect_page_access: true }
+  - { page_name: circle_membership_approval, internal_id: circleMembershipApproval, location: page_internal_circle_membership_approval, collect_page_access: true }
   - { page_name: circle_media_camera, internal_id: circleMediaPickerCamera, location: page_internal_circle_media_camera, collect_page_access: true }
   - { page_name: circle_media_gallery, internal_id: circleMediaPickerGallery, location: page_internal_circle_media_gallery, collect_page_access: true }
   - { page_name: profile_media_camera, internal_id: profileMediaPickerCamera, location: page_internal_profile_media_camera, collect_page_access: true }

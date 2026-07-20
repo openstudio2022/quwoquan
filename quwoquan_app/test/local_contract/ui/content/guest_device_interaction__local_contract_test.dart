@@ -4,11 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 游客（未登录）会话桩：isAuthenticated=false，但带稳定 installId。
 class _GuestAuthStore implements AuthSessionStore {
@@ -30,31 +30,34 @@ class _GuestAuthStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {}
+
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
+
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
+
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
+
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
 
   @override
   Future<void> softLogout() async {}
+
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
   @override
   Future<void> markForegroundAuthCheckNow() async {}
 }

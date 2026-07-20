@@ -6,389 +6,319 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/tag/mock/tag_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-part 'tag_repository_mock.dart';
-part 'tag_repository_remote.dart';
+// Facet 契约与 DTO 唯一真相源在 pure contracts；此处透传导出以稳定既有 import。
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        TagApiDefaults,
+        TagTaxonomyRefs,
+        TagCatalogQuery,
+        TagGraphQuery,
+        SharedTagView,
+        TagResolve,
+        TagChild,
+        TagDimension,
+        TagSuggestion,
+        TagValidationResult,
+        TagRefSuggestion,
+        TagSearchResult,
+        RelatedTag,
+        TagObjectMatch,
+        TagCooccurrence,
+        TagInvertedResult,
+        RelatedObject;
 
-/// 标签 API 默认分页常量
-class TagApiDefaults {
-  TagApiDefaults._();
-  static const int childrenLimit = 500;
-  static const int suggestLimit = 20;
-  static const int searchLimit = 50;
-  static const int relatedLimit = 20;
-  static const int graphLimit = 50;
-  static const int minCooccurCount = 1;
+/// tag 域共享 HTTP 传输基座：path / pageId 全部来自 codegen 真相源
+/// （TagApiMetadata / TagRequestPageIds），不得硬编码路径（军规 R06/R09）。
+/// 解码统一经 [CloudResponseDecoder]，直出强类型 DTO（StrictTyping，
+/// 门禁见 verify_cloud_tag_strict_typing.py）。
+abstract base class _TagRemoteTransport {
+  _TagRemoteTransport({CloudHttpClient? httpClient})
+    : _httpClient = httpClient ?? CloudHttpClient();
+
+  final CloudHttpClient _httpClient;
+
+  Uri _uri(String path, [Map<String, String>? params]) => Uri.parse(
+    '${CloudRuntimeConfig.gatewayBaseUrl}$path',
+  ).replace(queryParameters: params);
+
+  Never _fail(int statusCode, String body, String path) {
+    throw CloudErrorMapper.fromStatusCode(
+      statusCode,
+      body: body,
+      requestPath: path,
+    );
+  }
+
+  List<T> _asEntityList<T>(
+    Object? decoded,
+    T Function(CloudJsonMap) fromJson,
+    String context,
+  ) {
+    if (decoded is! List) {
+      throw CloudErrorMapper.invalidResponse(
+        message: 'Tag API expected list response at $context',
+        requestPath: context,
+        functionModule: 'tag_repository_remote',
+      );
+    }
+    final out = <T>[];
+    for (final e in decoded) {
+      if (e is Map<String, dynamic>) {
+        out.add(fromJson(e));
+      } else if (e is Map) {
+        out.add(fromJson(Map<String, dynamic>.from(e)));
+      }
+    }
+    return out;
+  }
+
+  Future<List<T>> _getList<T>(
+    String path,
+    String pageId,
+    T Function(CloudJsonMap) fromJson, [
+    Map<String, String>? params,
+  ]) async {
+    final resp = await _httpClient.get(
+      _uri(path, params),
+      headers: CloudRequestHeaders.forPage(pageId),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
+    return _asEntityList(json.decode(resp.body), fromJson, path);
+  }
+
+  Future<T> _getObject<T>(
+    String path,
+    String pageId,
+    T Function(CloudJsonMap) fromJson, [
+    Map<String, String>? params,
+  ]) async {
+    final resp = await _httpClient.get(
+      _uri(path, params),
+      headers: CloudRequestHeaders.forPage(pageId),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
+    return fromJson(
+      CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
+    );
+  }
+
+  Future<List<T>> _postList<T>(
+    String path,
+    String pageId,
+    CloudJsonMap body,
+    T Function(CloudJsonMap) fromJson,
+  ) async {
+    final resp = await _httpClient.post(
+      _uri(path),
+      headers: {
+        ...CloudRequestHeaders.forPage(pageId),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(body),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
+    return _asEntityList(json.decode(resp.body), fromJson, path);
+  }
+
+  Future<T> _postObject<T>(
+    String path,
+    String pageId,
+    CloudJsonMap body,
+    T Function(CloudJsonMap) fromJson,
+  ) async {
+    final resp = await _httpClient.post(
+      _uri(path),
+      headers: {
+        ...CloudRequestHeaders.forPage(pageId),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(body),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
+    return fromJson(
+      CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
+    );
+  }
 }
 
-class TagTaxonomyRefs {
-  TagTaxonomyRefs._();
-  static const String chinaAdminRegionRoot = 'Topic/地理/行政区/中国';
-  static const String careerOccupationRoot = 'Audience/用户/职业';
-  static const String careerInterestRoot = 'Audience/用户/兴趣偏好';
-}
+/// TagCatalogQuery 的 production Remote adapter。
+final class RemoteTagCatalogQuery extends _TagRemoteTransport
+    implements TagCatalogQuery {
+  RemoteTagCatalogQuery({super.httpClient});
 
-/// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）
-///
-/// API 定义见 contracts/metadata/tag/service.yaml
-abstract class TagRepository {
-  // ── 公共标签层级 ──────────────────────────────────────────
+  @override
   Future<List<TagChild>> listChildren(
     String parentTagRef, {
     int limit = TagApiDefaults.childrenLimit,
-  });
-  Future<TagResolve> resolveTag(String tagRef);
+  }) {
+    return _getList(
+      TagApiMetadata.listTagChildrenPath,
+      TagRequestPageIds.listTagChildren,
+      TagChild.fromJson,
+      <String, String>{'parentTagRef': parentTagRef, 'limit': '$limit'},
+    );
+  }
 
-  // ── 场景2: 内容创作 ──────────────────────────────────────────
-  Future<List<TagDimension>> listDimensions();
+  @override
+  Future<TagResolve> resolveTag(String tagRef) => _getObject(
+    TagApiMetadata.resolveTagPath,
+    TagRequestPageIds.resolveTag,
+    TagResolve.fromJson,
+    <String, String>{'tagRef': tagRef},
+  );
+
+  @override
+  Future<List<TagDimension>> listDimensions() => _getList(
+    TagApiMetadata.listDimensionsPath,
+    TagRequestPageIds.listDimensions,
+    TagDimension.fromJson,
+  );
+
+  @override
   Future<List<TagSuggestion>> suggest(
     String query, {
     String? group,
     int limit = TagApiDefaults.suggestLimit,
-  });
-  Future<TagValidationResult> validateRefs(List<String> tagRefs);
+  }) {
+    final params = <String, String>{'q': query, 'limit': '$limit'};
+    if (group != null) params['group'] = group;
+    return _getList(
+      TagApiMetadata.suggestTagsPath,
+      TagRequestPageIds.suggestTags,
+      TagSuggestion.fromJson,
+      params,
+    );
+  }
 
-  // ── 场景3: 推荐搜索 ──────────────────────────────────────────
+  @override
+  Future<TagValidationResult> validateRefs(List<String> tagRefs) => _postObject(
+    TagApiMetadata.validateTagRefsPath,
+    TagRequestPageIds.validateTagRefs,
+    <String, dynamic>{'tagRefs': tagRefs},
+    TagValidationResult.fromJson,
+  );
+
+  @override
   Future<List<TagSearchResult>> search(
     String query, {
     String? group,
     int limit = TagApiDefaults.searchLimit,
-  });
+  }) {
+    final params = <String, String>{'q': query, 'limit': '$limit'};
+    if (group != null) params['group'] = group;
+    return _getList(
+      TagApiMetadata.searchTagsPath,
+      TagRequestPageIds.searchTags,
+      TagSearchResult.fromJson,
+      params,
+    );
+  }
+
+  @override
   Future<List<RelatedTag>> related(
     String tagRef, {
     int limit = TagApiDefaults.relatedLimit,
-  });
+  }) => _getList(
+    TagApiMetadata.relatedTagsPath,
+    TagRequestPageIds.relatedTags,
+    RelatedTag.fromJson,
+    <String, String>{'tagRef': tagRef, 'limit': '$limit'},
+  );
+}
+
+/// TagGraphQuery 的 production Remote adapter。
+final class RemoteTagGraphQuery extends _TagRemoteTransport
+    implements TagGraphQuery {
+  RemoteTagGraphQuery({super.httpClient});
+
+  @override
   Future<List<TagObjectMatch>> searchByTags(
     List<String> tagRefs, {
     String? objectType,
     int limit = TagApiDefaults.searchLimit,
-  });
-  // ── 场景4: 关系图谱 ──────────────────────────────────────────
+  }) {
+    final body = <String, dynamic>{'tagRefs': tagRefs, 'limit': limit};
+    if (objectType != null) body['objectType'] = objectType;
+    return _postList(
+      TagApiMetadata.searchByTagsPath,
+      TagRequestPageIds.searchByTags,
+      body,
+      TagObjectMatch.fromJson,
+    );
+  }
+
+  @override
   Future<List<TagCooccurrence>> cooccurrence({
     String? tagRef,
     int minCount = TagApiDefaults.minCooccurCount,
     int limit = TagApiDefaults.graphLimit,
-  });
+  }) {
+    final params = <String, String>{'minCount': '$minCount', 'limit': '$limit'};
+    if (tagRef != null) params['tagRef'] = tagRef;
+    return _getList(
+      TagApiMetadata.tagCooccurrencePath,
+      TagRequestPageIds.tagCooccurrence,
+      TagCooccurrence.fromJson,
+      params,
+    );
+  }
+
+  @override
   Future<TagInvertedResult> invertedIndex(
     String tagRef, {
     String? objectType,
     int limit = TagApiDefaults.graphLimit,
-  });
+  }) {
+    final params = <String, String>{'tagRef': tagRef, 'limit': '$limit'};
+    if (objectType != null) params['objectType'] = objectType;
+    return _getObject(
+      TagApiMetadata.invertedObjectsPath,
+      TagRequestPageIds.invertedObjects,
+      TagInvertedResult.fromJson,
+      params,
+    );
+  }
+
+  @override
   Future<List<RelatedObject>> relatedObjects(
     String objectId, {
     String? objectType,
     int limit = TagApiDefaults.relatedLimit,
-  });
+  }) {
+    final params = <String, String>{'objectId': objectId, 'limit': '$limit'};
+    if (objectType != null) params['objectType'] = objectType;
+    return _getList(
+      TagApiMetadata.relatedObjectsPath,
+      TagRequestPageIds.relatedObjects,
+      RelatedObject.fromJson,
+      params,
+    );
+  }
 
-  // ── 交集核心（V3 对象页交集卡对象对直打）──────────────────────
-  /// 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）。
-  /// 对象页连接卡消费此结果（先 Mock 后真打 tag-service）。
+  @override
   Future<List<SharedTagView>> sharedTags({
     required String objectAId,
     required String objectAType,
     required String objectBId,
     required String objectBType,
     int limit = TagApiDefaults.graphLimit,
-  });
-}
-
-// ── DTO / Value Objects ──────────────────────────────────────────
-
-/// 交集锚点（tag-service /tag/shared-tags 返回项，对齐 service.yaml SharedTagView）。
-class SharedTagView {
-  final String tagRef;
-  final String label;
-  final double strength;
-  final String source;
-
-  const SharedTagView({
-    required this.tagRef,
-    required this.label,
-    this.strength = 0.0,
-    this.source = '',
-  });
-
-  factory SharedTagView.fromJson(Map<String, dynamic> json) => SharedTagView(
-    tagRef: json['tagRef'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    strength: (json['strength'] as num?)?.toDouble() ?? 0.0,
-    source: json['source'] as String? ?? '',
-  );
-}
-
-/// 标签解析结果（tag-service /tag/resolve 返回项）。
-class TagResolve {
-  final String tagRef;
-  final String group;
-  final String label;
-  final String labelEn;
-  final String aliases;
-  final String ancestors;
-
-  const TagResolve({
-    required this.tagRef,
-    required this.group,
-    required this.label,
-    this.labelEn = '',
-    this.aliases = '',
-    this.ancestors = '',
-  });
-
-  factory TagResolve.fromJson(Map<String, dynamic> json) => TagResolve(
-    tagRef: json['tagRef'] as String? ?? '',
-    group: json['group'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    labelEn: json['labelEn'] as String? ?? '',
-    aliases: json['aliases'] as String? ?? '',
-    ancestors: json['ancestors'] as String? ?? '',
-  );
-}
-
-/// 标签层级直接子节点（tag-service /tag/children 返回项）。
-class TagChild {
-  final String tagRef;
-  final String label;
-  final String displayLabel;
-  final String labelEn;
-  final String parentTagRef;
-  final int depth;
-  final bool hasChildren;
-  final String releaseId;
-  final String lifecycleStatus;
-
-  const TagChild({
-    required this.tagRef,
-    required this.label,
-    required this.displayLabel,
-    required this.labelEn,
-    required this.parentTagRef,
-    required this.depth,
-    required this.hasChildren,
-    required this.releaseId,
-    required this.lifecycleStatus,
-  });
-
-  factory TagChild.fromJson(Map<String, dynamic> json) => TagChild(
-    tagRef: json['tagRef'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    displayLabel: json['displayLabel'] as String? ?? '',
-    labelEn: json['labelEn'] as String? ?? '',
-    parentTagRef: json['parentTagRef'] as String? ?? '',
-    depth: (json['depth'] as num?)?.toInt() ?? 0,
-    hasChildren: json['hasChildren'] as bool? ?? false,
-    releaseId: json['releaseId'] as String? ?? '',
-    lifecycleStatus: json['lifecycleStatus'] as String? ?? '',
-  );
-}
-
-class TagDimension {
-  final String group;
-  final String dimensionId;
-  final String label;
-  final String labelEn;
-  final int maxDepth;
-  final String pathPolicy;
-
-  const TagDimension({
-    required this.group,
-    required this.dimensionId,
-    required this.label,
-    required this.labelEn,
-    required this.maxDepth,
-    required this.pathPolicy,
-  });
-
-  factory TagDimension.fromJson(Map<String, dynamic> json) => TagDimension(
-    group: json['group'] as String? ?? '',
-    dimensionId: json['dimensionId'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    labelEn: json['labelEn'] as String? ?? '',
-    maxDepth: json['maxDepth'] as int? ?? 3,
-    pathPolicy: json['pathPolicy'] as String? ?? 'any-depth',
-  );
-}
-
-class TagSuggestion {
-  final String tagRef;
-  final String label;
-  final String labelEn;
-  final String matchField;
-
-  const TagSuggestion({
-    required this.tagRef,
-    required this.label,
-    required this.labelEn,
-    required this.matchField,
-  });
-
-  factory TagSuggestion.fromJson(Map<String, dynamic> json) => TagSuggestion(
-    tagRef: json['tagRef'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    labelEn: json['labelEn'] as String? ?? '',
-    matchField: json['matchField'] as String? ?? '',
-  );
-}
-
-class TagValidationResult {
-  final List<String> valid;
-  final List<String> invalid;
-  final List<TagRefSuggestion> suggestions;
-
-  const TagValidationResult({
-    required this.valid,
-    required this.invalid,
-    required this.suggestions,
-  });
-
-  factory TagValidationResult.fromJson(Map<String, dynamic> json) =>
-      TagValidationResult(
-        valid: (json['valid'] as List?)?.cast<String>() ?? [],
-        invalid: (json['invalid'] as List?)?.cast<String>() ?? [],
-        suggestions:
-            (json['suggestions'] as List?)
-                ?.map(
-                  (e) => TagRefSuggestion.fromJson(e as Map<String, dynamic>),
-                )
-                .toList() ??
-            [],
-      );
-}
-
-class TagRefSuggestion {
-  final String invalid;
-  final String suggestedRef;
-  final String reason;
-
-  const TagRefSuggestion({
-    required this.invalid,
-    required this.suggestedRef,
-    required this.reason,
-  });
-
-  factory TagRefSuggestion.fromJson(Map<String, dynamic> json) =>
-      TagRefSuggestion(
-        invalid: json['invalid'] as String? ?? '',
-        suggestedRef: json['suggestedRef'] as String? ?? '',
-        reason: json['reason'] as String? ?? '',
-      );
-}
-
-class TagSearchResult {
-  final String tagRef;
-  final String label;
-  final double score;
-
-  const TagSearchResult({
-    required this.tagRef,
-    required this.label,
-    required this.score,
-  });
-
-  factory TagSearchResult.fromJson(Map<String, dynamic> json) =>
-      TagSearchResult(
-        tagRef: json['tagRef'] as String? ?? '',
-        label: json['label'] as String? ?? '',
-        score: (json['score'] as num?)?.toDouble() ?? 0.0,
-      );
-}
-
-class RelatedTag {
-  final String tagRef;
-  final String label;
-  final int cooccurCount;
-
-  const RelatedTag({
-    required this.tagRef,
-    required this.label,
-    required this.cooccurCount,
-  });
-
-  factory RelatedTag.fromJson(Map<String, dynamic> json) => RelatedTag(
-    tagRef: json['tagRef'] as String? ?? '',
-    label: json['label'] as String? ?? '',
-    cooccurCount: json['cooccurCount'] as int? ?? 0,
-  );
-}
-
-class TagObjectMatch {
-  final String objectId;
-  final String objectType;
-  final List<String> matchedTags;
-  final double score;
-
-  const TagObjectMatch({
-    required this.objectId,
-    required this.objectType,
-    required this.matchedTags,
-    required this.score,
-  });
-
-  factory TagObjectMatch.fromJson(Map<String, dynamic> json) => TagObjectMatch(
-    objectId: json['objectId'] as String? ?? '',
-    objectType: json['objectType'] as String? ?? '',
-    matchedTags: (json['matchedTags'] as List?)?.cast<String>() ?? [],
-    score: (json['score'] as num?)?.toDouble() ?? 0.0,
-  );
-}
-
-class TagCooccurrence {
-  final String tagA;
-  final String tagB;
-  final int cooccurCount;
-
-  const TagCooccurrence({
-    required this.tagA,
-    required this.tagB,
-    required this.cooccurCount,
-  });
-
-  factory TagCooccurrence.fromJson(Map<String, dynamic> json) =>
-      TagCooccurrence(
-        tagA: json['tagA'] as String? ?? '',
-        tagB: json['tagB'] as String? ?? '',
-        cooccurCount: json['cooccurCount'] as int? ?? 0,
-      );
-}
-
-class TagInvertedResult {
-  final String tag;
-  final int objectCount;
-  final List<String> objects;
-
-  const TagInvertedResult({
-    required this.tag,
-    required this.objectCount,
-    required this.objects,
-  });
-
-  factory TagInvertedResult.fromJson(Map<String, dynamic> json) =>
-      TagInvertedResult(
-        tag: json['tag'] as String? ?? '',
-        objectCount: json['objectCount'] as int? ?? 0,
-        objects: (json['objects'] as List?)?.cast<String>() ?? [],
-      );
-}
-
-class RelatedObject {
-  final String objectId;
-  final String objectType;
-  final List<String> sharedTags;
-  final int sharedCount;
-
-  const RelatedObject({
-    required this.objectId,
-    required this.objectType,
-    required this.sharedTags,
-    required this.sharedCount,
-  });
-
-  factory RelatedObject.fromJson(Map<String, dynamic> json) => RelatedObject(
-    objectId: json['objectId'] as String? ?? '',
-    objectType: json['objectType'] as String? ?? '',
-    sharedTags: (json['sharedTags'] as List?)?.cast<String>() ?? [],
-    sharedCount: json['sharedCount'] as int? ?? 0,
-  );
+  }) {
+    final params = <String, String>{
+      'objectAId': objectAId,
+      'objectAType': objectAType,
+      'objectBId': objectBId,
+      'objectBType': objectBType,
+      'limit': '$limit',
+    };
+    return _getList(
+      TagApiMetadata.sharedTagsPath,
+      TagRequestPageIds.sharedTags,
+      SharedTagView.fromJson,
+      params,
+    );
+  }
 }

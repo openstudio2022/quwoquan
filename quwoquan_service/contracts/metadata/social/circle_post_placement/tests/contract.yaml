@@ -1,0 +1,18 @@
+aggregate: CirclePostPlacement
+
+scenarios:
+  - name: placement_transaction_trusted_actor
+    operation: PlacePostInCircle
+    go_func: TestCirclePostPlacementRealMongoTransactionAndTrustedActor
+    evidence: api_integration
+    assertions:
+      - placement、receipt、outbox 同一 Mongo transaction 提交
+      - actor 只来自可信 OperationInvocationContext
+      - Remove/Pin/Feature 为命名迁移；服务端 CAS 重放且 no-op 幂等
+
+  - name: content_post_stream_projection_convergence
+    operation: PlacePostInCircle
+    go_func: TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores
+    evidence: api_integration
+    assertions:
+      - content post 生命周期流经 inbox 投影到 placement 并与 outbox 收敛

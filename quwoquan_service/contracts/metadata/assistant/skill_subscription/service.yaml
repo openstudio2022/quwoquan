@@ -10,10 +10,34 @@ api_routes:
   operation: ListSkillSubscriptions
   path: /assistant/skill-subscriptions
 
+  description: owner 自己的订阅列表。
   query_params:
   - limit
   - status
   response_entity: SkillSubscriptionListView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -32,6 +56,7 @@ api_routes:
   operation: CreateSkillSubscription
   path: /assistant/skill-subscriptions
 
+  description: 一次创建订阅；clientRequestId 为稳定 intent，重放返回首个结果。
   request_fields:
   - skillId
   - domainId
@@ -41,6 +66,31 @@ api_routes:
   - destination
   - clientRequestId
   response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.USER.subscription_idempotency_conflict
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_command
+    trace: true
+    attributes: [operation, outcome, error_code, replayed]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -58,7 +108,32 @@ api_routes:
   operation: GetSkillSubscription
   path: /assistant/skill-subscriptions/{subscriptionId}
 
+  description: 读取 owner 自己的订阅；非 owner 返回 not_found 防枚举。
   response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.subscription_not_found
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -77,10 +152,37 @@ api_routes:
   operation: UpdateSkillSubscriptionStatus
   path: /assistant/skill-subscriptions/{subscriptionId}/status
 
+  description: 命名状态迁移（active/paused/deleted）；服务端内部 CAS，目标状态已满足时持久化 no-op receipt。
   request_fields:
   - status
-  - idempotencyKey
   response_entity: SkillSubscription
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_not_found
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.USER.subscription_invalid_transition
+  - ASSISTANT.USER.subscription_idempotency_conflict
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_command
+    trace: true
+    attributes: [operation, outcome, error_code, replayed]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: subscription_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -99,11 +201,35 @@ api_routes:
   operation: TickSkillSubscriptionCron
   path: /internal/assistant/skill-subscriptions:tick
 
+  description: 领取到期订阅的调度租约（lease + TTL）；多实例并发安全，同一 tick 窗口只有一个租约持有者投递。
   request_fields:
   - now
   - leaseOwner
   - leaseDurationMs
   response_entity: SkillSubscriptionCronTickResult
+  reliability:
+    timeout_ms: 30000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.subscription_invalid_argument
+  - ASSISTANT.SYSTEM.subscription_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_subscription_cron
+    trace: true
+    attributes: [operation, outcome, error_code, leases_acquired]
+  slo:
+    latency_p95_ms: 5000
+    availability_percent: 99.5
+  authorization:
+    principal: service
+    ownership_policy: internal_service
   security:
     anonymous_policy: deny
     auth_mode: required

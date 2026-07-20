@@ -1,4 +1,4 @@
-# L4 特性：timeout-retry-circuit-rate-limit-degrade
+# L3 特性：timeout-retry-circuit-rate-limit-degrade
 
 ## 功能说明
 - 完成对象级任务落地（模型/接口/策略/存储）。

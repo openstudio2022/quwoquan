@@ -1,0 +1,58 @@
+aggregate: DeviceRegistration
+layer: service_side
+
+description: |
+  DeviceRegistration local_contract 与真实 PostgreSQL api_integration 场景。
+  执行：go test ./services/user-service/tests/local_contract/... 与
+  go test ./services/user-service/tests/api_integration/... -run DevicePushEndpoint。
+
+real_engines:
+  postgres: embedded-postgres
+
+spy_targets: []
+mock_targets: []
+
+scenarios:
+  - name: upsert_endpoint_encrypts_and_naturally_replays
+    command: UpsertDevicePushEndpoint x2 (same accountId + deviceId + endpointKind + token)
+    assertions:
+      - one_parent_and_one_owned_endpoint
+      - second_result_idempotent_replay
+      - aggregate_and_endpoint_version_unchanged_on_replay
+
+  - name: push_token_rotation_is_versioned_and_encrypted
+    command: UpsertDevicePushEndpoint with rotated token
+    assertions:
+      - AES_GCM_ciphertext_and_keyed_fingerprint_only_at_rest
+      - endpoint_and_parent_versions_increment_by_one
+      - old_fingerprint_is_replaced
+      - plaintext_absent_from_response_error_and_loggable_state
+
+  - name: dual_endpoint_kinds_share_one_parent
+    command: Upsert apns_voip and fcm for the same accountId + deviceId
+    assertions:
+      - exactly_two_owned_endpoints
+      - both_endpoint_kinds_are_active
+
+  - name: active_token_fingerprint_is_globally_unique
+    command: Upsert token already active on another endpoint identity
+    assertions:
+      - USER.DEVICE_PUSH.token_conflict
+      - conflicting_transaction_is_rolled_back
+
+  - name: remove_and_permanent_invalidation_clear_secret
+    command: RemoveDevicePushEndpoint then InvalidateDevicePushEndpoint
+    assertions:
+      - removed_endpoint_is_revoked
+      - invalidated_endpoint_is_stale
+      - token_ciphertext_and_fingerprint_are_null
+      - parent_lifecycle_matches_remaining_children
+
+  - name: persona_destination_and_secret_reader_split
+    query: ResolveIncomingCallPushDestinations then ResolvePushEndpointSecret
+    assertions:
+      - persona_owner_resolved_through_typed_reader
+      - destinations_return_only_endpointRef_deviceId_endpointKind
+      - secret_reader_requires_service_principal_and_exact_scope
+      - secret_response_is_no_store
+      - inactive_endpoint_secret_is_rejected

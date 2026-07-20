@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260719--travel-video-cold-start--cn-zhejiang--canary-001",
+  "executionBinding": "frozen",
+  "objectRef": "东钱湖_video",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:a63e8b502a71d79b58fe98153ea2b55bac96304bbf1bbc835d0b81233f89d67d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:9e1b237fdc374e9910418e1b51d3d8c39e125af270d310823ce913e7ba03118d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:b498677f805bbfe8f2761328a7c5e51e076d01581af4e554b39216a37ec33afc"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:e3735e7adf466f094e3e395c5109b16c147c340ca2fc761e0a887f94ec33f274"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:9e89a0f207acf970448daab6b714163e2b0c4450f8d23cb2d0bd442745c24afc"
+    }
+  ]
+}

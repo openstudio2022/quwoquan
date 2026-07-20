@@ -5,7 +5,7 @@ import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
 void main() {
   group('ContentCommentFacet', () {
-    test('列表只有 pinned-first + createdAt 单一顺序', () async {
+    test('列表按 hot/latest 服务端同构顺序且始终 pinned-first', () async {
       final facet = TestContentCommentFacet(
         items: <ContentCommentListItem>[
           testCommentItem(
@@ -15,18 +15,35 @@ void main() {
           testCommentItem(
             id: 'pinned',
             isPinned: true,
+            pinnedAt: DateTime.utc(2026, 7, 14, 8),
             createdAt: DateTime.utc(2026, 7, 14, 8),
           ),
           testCommentItem(id: 'older', createdAt: DateTime.utc(2026, 7, 14, 9)),
+          testCommentItem(
+            id: 'popular',
+            createdAt: DateTime.utc(2026, 7, 14, 7),
+            likeCount: 20,
+          ),
         ],
       );
 
-      final page = await facet.listComments(postId: 'post_1');
+      final hot = await facet.listComments(postId: 'post_1');
+      final latest = await facet.listComments(
+        postId: 'post_1',
+        sort: ContentCommentSort.latest,
+      );
 
-      expect(page.items.map((item) => item.id), <String>[
+      expect(hot.items.map((item) => item.id), <String>[
+        'pinned',
+        'popular',
+        'latest',
+        'older',
+      ]);
+      expect(latest.items.map((item) => item.id), <String>[
         'pinned',
         'latest',
         'older',
+        'popular',
       ]);
     });
 
@@ -59,8 +76,14 @@ void main() {
         authorId: 'author',
         createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
       );
+      final earlierReply = testCommentItem(
+        id: 'reply-earlier',
+        postId: 'post_1',
+        parentCommentId: 'root',
+        createdAt: DateTime.utc(2026, 7, 14, 7),
+      );
       final facet = TestContentCommentFacet(
-        items: <ContentCommentListItem>[root],
+        items: <ContentCommentListItem>[root, earlierReply],
       );
       final replyResult = await facet.createComment(
         CreateContentCommentCommand(
@@ -73,8 +96,11 @@ void main() {
         postId: 'post_1',
         commentId: 'root',
       );
-      expect(replies.items.single.id, replyResult.id);
-      expect(replies.items.single.parentCommentId, 'root');
+      expect(replies.items.map((item) => item.id), <String>[
+        'reply-earlier',
+        replyResult.id,
+      ]);
+      expect(replies.items.last.parentCommentId, 'root');
 
       final reaction = await facet.reactToComment(
         ReactToContentCommentCommand(

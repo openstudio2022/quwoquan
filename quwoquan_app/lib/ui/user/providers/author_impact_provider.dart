@@ -25,7 +25,7 @@ final authorImpactProvider = FutureProvider.autoDispose
         return hit.value;
       }
       final summary = await ref
-          .watch(userProfileRepositoryProvider)
+          .watch(authorImpactQueryProvider)
           .getAuthorImpact(userId);
       cache.write(userId, summary);
       return summary;

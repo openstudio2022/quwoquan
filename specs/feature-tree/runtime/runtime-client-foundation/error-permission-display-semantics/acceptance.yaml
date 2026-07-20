@@ -42,12 +42,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.gwt1_local_contract
@@ -88,6 +90,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: navigation_ownership_and_error_layers
         cases:
         - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.navigation_ownership
@@ -125,6 +128,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: form_error_semantics
         cases:
         - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.form_error_semantics
@@ -164,6 +168,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: media_and_page_error_exit_semantics
         cases:
         - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.media_retry_copy
@@ -176,5 +181,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

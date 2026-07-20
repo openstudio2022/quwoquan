@@ -51,11 +51,8 @@ objects:
   - integration/external_interaction/aggregate.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
-  - PushDeliveryProviderCallback
-  - SendSmsOtp
-  - SmsOtpProviderCallback
+  - RecoverExternalInteractionDeadLetter
   - SubmitExternalInteractionRequest
-  - SubmitPushDelivery
   object_kind: aggregate_root
   relationships: []
   source_document: integration/external_interaction/fields.yaml
@@ -174,6 +171,33 @@ objects:
   identity:
     fields:
     - locationRef
+    version_source: external
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: external_reference
+  relationships: []
+  storage_backend: external
+  storage_role: external
+- access:
+    commands: none
+    cross_context: public_contract_only
+    queries: external_port
+  bounded_context: ExternalIntegration
+  canonical_object: PushDelivery
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state: []
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - endpointRef
+    - deliveryKey
     version_source: external
   invariant_refs: []
   lifecycle_refs: []

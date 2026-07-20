@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_write_access.dart';
 
 class HomepageClaimPage extends ConsumerStatefulWidget {
   const HomepageClaimPage({super.key, required this.homepageId});
@@ -25,8 +29,11 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
   HomepageDetail? _detail;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _didStartLoad = false;
+  bool _authResumeScheduled = false;
   UiErrorSemantic? _pageErrorSemantic;
   UiErrorSemantic? _submitErrorSemantic;
+  String? _phoneValidationMessage;
   String _claimTier = 'basic';
 
   bool get _hasUnsavedChanges =>
@@ -39,18 +46,20 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
 
   String get _confirmLabel {
     if ((_detail?.claimStatus ?? '') == 'claimed') {
-      return '该主页已被认领';
+      return UITextConstants.homepageClaimAlreadyClaimed;
     }
     if ((_detail?.status ?? '') == 'offline') {
-      return '主页已下线';
+      return UITextConstants.homepageClaimHomepageOffline;
     }
-    return '提交认领申请';
+    return UITextConstants.homepageClaimSubmit;
   }
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_gateEntryAndLoad());
+    });
   }
 
   @override
@@ -65,10 +74,24 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _scheduleAuthContinuationResume();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scheduleAuthContinuationResume();
+      });
+    }
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     if (_pageErrorSemantic != null && !_isLoading) {
       return IosSelectionPageScaffold(
-        title: '认领主页',
+        title: UITextConstants.homepageClaimAction,
         onBack: _handleCloseRequest,
         leadingStyle: IosSelectionHeaderLeadingStyle.close,
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -84,7 +107,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         (_detail?.status ?? '') != 'offline' &&
         (_detail?.claimStatus ?? '') != 'claimed';
     return IosSelectionPageScaffold(
-      title: '认领主页',
+      title: UITextConstants.homepageClaimAction,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -99,105 +122,171 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
           if (_isLoading)
             const Center(child: CupertinoActivityIndicator())
           else ...<Widget>[
-            _EntityFormCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _detail?.title ?? '主页',
-                    style: const TextStyle(
-                      fontSize: AppTypography.iosTitle3,
-                      fontWeight: AppTypography.semiBold,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    (_detail?.status ?? '') == 'offline'
-                        ? '该主页已下线，仅保留记录内容，当前不可继续认领。'
-                        : (_detail?.claimStatus ?? '') == 'claimed'
-                        ? '该主页已被认领，如信息有误可通过状态上报反馈。'
-                        : '提交后会进入审核，审核通过后即可维护主页基本信息。',
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
+            const IosSelectionSectionHeader(
+              title: UITextConstants.homepageFormOverviewSection,
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+            ),
+            IosSelectionSection(
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.containerMd),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      _detail?.title ??
+                          UITextConstants.homepageClaimHomepageFallback,
+                      style: const TextStyle(
+                        fontSize: AppTypography.iosTitle3,
+                        fontWeight: AppTypography.semiBold,
                       ),
                     ),
-                  ),
-                  if (_submitErrorSemantic != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.containerSm),
-                    AppSectionErrorCard(
-                      semantic: _submitErrorSemantic!,
-                      onAction: _handleSubmitErrorAction,
-                      margin: EdgeInsets.zero,
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      (_detail?.status ?? '') == 'offline'
+                          ? UITextConstants.homepageClaimOfflineDescription
+                          : (_detail?.claimStatus ?? '') == 'claimed'
+                          ? UITextConstants.homepageClaimClaimedDescription
+                          : UITextConstants.homepageClaimReviewDescription,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
+                      ),
                     ),
+                    if (_submitErrorSemantic != null) ...<Widget>[
+                      SizedBox(height: AppSpacing.containerSm),
+                      AppFormErrorCard(
+                        semantic: _submitErrorSemantic!,
+                        onAction: _handleSubmitErrorAction,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             SizedBox(height: AppSpacing.containerSm),
-            _EntityFormCard(
+            const IosSelectionSectionHeader(
+              title: UITextConstants.homepageClaimMaterialsSection,
+              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+            ),
+            IosSelectionSection(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _EntityFieldLabel('认领等级'),
-                  CupertinoSlidingSegmentedControl<String>(
-                    groupValue: _claimTier,
-                    children: const <String, Widget>{
-                      'basic': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('基础'),
-                      ),
-                      'verified': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('认证'),
-                      ),
-                    },
-                    onValueChanged: (value) {
-                      if (!canSubmit || value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _claimTier = value;
-                      });
-                    },
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                      vertical: AppSpacing.containerSm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          UITextConstants.homepageClaimTier,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosCaption1,
+                            color: AppColors.iosSecondaryLabel(context),
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupSm),
+                        CupertinoSlidingSegmentedControl<String>(
+                          groupValue: _claimTier,
+                          children: const <String, Widget>{
+                            'basic': Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.containerSm,
+                              ),
+                              child: Text(
+                                UITextConstants.homepageClaimTierBasic,
+                              ),
+                            ),
+                            'verified': Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.containerSm,
+                              ),
+                              child: Text(
+                                UITextConstants.homepageClaimTierVerified,
+                              ),
+                            ),
+                          },
+                          onValueChanged: (value) {
+                            if (!canSubmit || value == null) {
+                              return;
+                            }
+                            setState(() {
+                              _claimTier = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _EntityFieldLabel('联系电话'),
-                  CupertinoTextField(
-                    controller: _phoneController,
-                    enabled: canSubmit,
-                    keyboardType: TextInputType.phone,
-                    placeholder: '用于审核联系',
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _EntityFieldLabel('营业执照材料链接'),
-                  CupertinoTextField(
-                    controller: _licenseController,
-                    enabled: canSubmit,
-                    placeholder: '可选，上传后填入链接',
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageClaimContactPhone,
+                    validationMessage: _phoneValidationMessage,
+                    child: IosSelectionTextField(
+                      controller: _phoneController,
+                      enabled: canSubmit,
+                      keyboardType: TextInputType.phone,
+                      placeholder:
+                          UITextConstants.homepageClaimContactPhoneHint,
+                      onChanged: (_) {
+                        if (_phoneValidationMessage != null) {
+                          setState(() => _phoneValidationMessage = null);
+                        }
+                      },
+                    ),
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _EntityFieldLabel('身份证正面材料链接'),
-                  CupertinoTextField(
-                    controller: _idFrontController,
-                    enabled: canSubmit,
-                    placeholder: '可选，上传后填入链接',
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _EntityFieldLabel('身份证反面材料链接'),
-                  CupertinoTextField(
-                    controller: _idBackController,
-                    enabled: canSubmit,
-                    placeholder: '可选，上传后填入链接',
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageClaimBusinessLicense,
+                    child: IosSelectionTextField(
+                      controller: _licenseController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageClaimOptionalMaterialHint,
+                    ),
                   ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  _EntityFieldLabel('补充说明'),
-                  CupertinoTextField(
-                    controller: _noteController,
-                    enabled: canSubmit,
-                    placeholder: '说明你与该主页的关系',
-                    maxLines: 4,
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
+                  ),
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageClaimIdentityCardFront,
+                    child: IosSelectionTextField(
+                      controller: _idFrontController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageClaimOptionalMaterialHint,
+                    ),
+                  ),
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
+                  ),
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageClaimIdentityCardBack,
+                    child: IosSelectionTextField(
+                      controller: _idBackController,
+                      enabled: canSubmit,
+                      placeholder:
+                          UITextConstants.homepageClaimOptionalMaterialHint,
+                    ),
+                  ),
+                  const IosSelectionInlineDivider(
+                    indent: AppSpacing.containerMd,
+                  ),
+                  IosSelectionFormFieldRow(
+                    label: UITextConstants.homepageClaimNote,
+                    child: IosSelectionTextField(
+                      controller: _noteController,
+                      enabled: canSubmit,
+                      placeholder: UITextConstants.homepageClaimNoteHint,
+                      maxLines: 4,
+                    ),
                   ),
                 ],
               ),
@@ -211,6 +300,71 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         confirmLoading: _isSubmitting,
         onConfirm: _submit,
       ),
+    );
+  }
+
+  Future<void> _gateEntryAndLoad() async {
+    final allowed = await requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.claim,
+      homepageId: widget.homepageId,
+      dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+    );
+    if (allowed && mounted) {
+      await _loadOnce();
+    }
+  }
+
+  void _scheduleAuthContinuationResume({int remainingFrames = 30}) {
+    if (!mounted || !AuthGate.isAuthenticated(ref) || _authResumeScheduled) {
+      return;
+    }
+    _authResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authResumeScheduled = false;
+      if (!mounted || !AuthGate.isAuthenticated(ref)) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _scheduleAuthContinuationResume(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = takeHomepageWriteContinuation(
+        ref,
+        action: HomepageWriteContinuationAction.claim,
+        homepageId: widget.homepageId,
+      );
+      if (pending == null) {
+        unawaited(_loadOnce());
+        return;
+      }
+      if (pending.submitAfterLogin) {
+        unawaited(_submit());
+      } else {
+        unawaited(_loadOnce());
+      }
+    });
+  }
+
+  Future<void> _loadOnce() async {
+    if (_didStartLoad) {
+      return;
+    }
+    _didStartLoad = true;
+    await _load();
+  }
+
+  Future<bool> _ensureSubmitAuthentication() {
+    return requireHomepageWriteAccess(
+      ref,
+      context,
+      action: HomepageWriteContinuationAction.claim,
+      homepageId: widget.homepageId,
+      dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
+      submitAfterLogin: true,
     );
   }
 
@@ -246,17 +400,18 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
   }
 
   void _pop() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
+    if (context.canPop()) {
+      context.pop();
+      return;
     }
+    context.go(AppRoutePaths.homepageDetail(id: widget.homepageId));
   }
 
   Future<void> _load() async {
     _pageErrorSemantic = null;
     try {
       final detail = await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageQueryProvider)
           .getHomepageDetail(widget.homepageId);
       if (!mounted) {
         return;
@@ -282,18 +437,24 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
   }
 
   Future<void> _submit() async {
+    if (!await _ensureSubmitAuthentication() || !mounted) {
+      return;
+    }
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      AppToast.show(context, '请填写联系电话');
+      setState(() {
+        _phoneValidationMessage = UITextConstants.homepageClaimPhoneRequired;
+      });
       return;
     }
     setState(() {
       _isSubmitting = true;
       _submitErrorSemantic = null;
     });
+    final startedAt = DateTime.now();
     try {
       await ref
-          .read(homepageRepositoryProvider)
+          .read(homepageCommandWriterProvider)
           .createHomepageClaimRequest(
             homepageId: widget.homepageId,
             draft: HomepageClaimRequestDraft(
@@ -308,7 +469,18 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, '认领申请已提交');
+      await trackHomepageProductAction(
+        ref,
+        action: 'claim_request_submit',
+        pageName: 'homepageClaim',
+        result: 'success',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+      );
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.homepageClaimSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -322,6 +494,15 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
           scope: UiErrorScope.section,
         );
       });
+      await trackHomepageProductAction(
+        ref,
+        action: 'claim_request_submit',
+        pageName: 'homepageClaim',
+        result: 'failure',
+        startedAt: startedAt,
+        homepageId: widget.homepageId,
+        error: error,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -360,53 +541,5 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       case UiErrorActionType.login:
         return;
     }
-  }
-}
-
-class _EntityFormCard extends StatelessWidget {
-  const _EntityFormCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(
-          isDark,
-          ColorType.backgroundPrimary,
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-        border: Border.all(
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.separatorSubtle,
-          ),
-        ),
-      ),
-      padding: EdgeInsets.all(AppSpacing.containerMd),
-      child: child,
-    );
-  }
-}
-
-class _EntityFieldLabel extends StatelessWidget {
-  const _EntityFieldLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTypography.iosFootnote,
-          color: CupertinoColors.secondaryLabel.resolveFrom(context),
-        ),
-      ),
-    );
   }
 }

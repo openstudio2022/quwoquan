@@ -13,23 +13,31 @@ scenarios:
 
   - name: post_like_identity
     operation: LikePost
-    go_func: TestPostReactionContract
+    go_func: TestLikePost
     evidence: api_integration
     assertions:
       - Post 目标只允许 none/like
       - persona 与 device actor 使用不相交 identity
 
-  - name: post_unlike_idempotency
-    operation: UnlikePost
-    go_func: TestPostUnlikeReactionContract
+  - name: post_like_replay_idempotency
+    operation: LikePost
+    go_func: TestReactIdempotent
     evidence: api_integration
     assertions:
-      - receipt replay 不重复写 outbox fact
+      - 同一 identity 重复 like 幂等返回，不叠加计数
 
-  - name: post_reaction_state_slice
+  - name: post_unlike_idempotency
+    operation: UnlikePost
+    go_func: TestUnlikeDecrementsCounter
+    evidence: api_integration
+    assertions:
+      - unlike 使计数回落且 receipt replay 不重复写 outbox fact
+
+  - name: post_reaction_counter_strategy
     operation: GetContentReactionState
-    go_func: TestPostReactionContract
+    go_func: TestReactWithCounterStrategy
     evidence: api_integration
     assertions:
       - query 只返回 typed state Slice
+      - like/dislike 计数只由 content_reaction_aggregates 派生
       - 不返回 aggregate、actorId、receipt 或存储文档

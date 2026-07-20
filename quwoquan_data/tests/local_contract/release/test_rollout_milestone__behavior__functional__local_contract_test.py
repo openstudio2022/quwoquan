@@ -13,7 +13,9 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from core.control_types import RolloutMilestone  # noqa: E402
 from core.release_layout import attestation_root, payload_digest, payload_file  # noqa: E402
+from content.execution.identity import parse_execution_id  # noqa: E402
 from content.release.canonical.baseline_release import build_empty_baseline_release  # noqa: E402
 from content.release.canonical import rollout_attestation, rollout_milestone  # noqa: E402
 from content.release.canonical.rollout_contract import load_rollout_contract  # noqa: E402
@@ -23,6 +25,11 @@ CANARY_RELEASE = "20260714--travel-homepage-coverage--cn-zhejiang-sichuan--canar
 ZHEJIANG = "20260714--travel-homepage-coverage--cn-zhejiang--canary-001"
 SICHUAN = "20260714--travel-homepage-coverage--cn-sichuan--canary-001"
 M1_ZHEJIANG = "20260714--travel-homepage-coverage--cn-zhejiang--m1-001"
+POST_EXECUTIONS = tuple(
+    f"20260714--travel-{content_type}-cold-start--cn-{province}--canary-001"
+    for content_type in ("article", "image", "video")
+    for province in ("zhejiang", "sichuan")
+)
 
 
 def test_rollout_capacity_is_loaded_from_single_contract() -> None:
@@ -33,6 +40,16 @@ def test_rollout_capacity_is_loaded_from_single_contract() -> None:
     assert capacity.maximum_unrecovered_bridge_failures == 0
     assert capacity.minimum_approved_homepages_per_hour == 18
     assert capacity.maximum_homepage_object_p95_seconds == 720
+    assert capacity.minimum_h10k_accepted_objects_per_hour == 416.67
+    assert capacity.maximum_h10k_window_hours == 24
+
+    contract = load_rollout_contract()
+    zhejiang = contract.province_for_scope("cn-zhejiang")
+    sichuan = contract.province_for_scope("cn-sichuan")
+    assert contract.batch_count(RolloutMilestone.H10K, zhejiang) == 4078
+    assert contract.batch_count(RolloutMilestone.H10K, sichuan) == 3023
+    assert contract.cumulative_count(RolloutMilestone.H10K, zhejiang) == 5000
+    assert contract.cumulative_count(RolloutMilestone.H10K, sichuan) == 5000
 
 
 def _write(path: Path, payload: dict) -> None:
@@ -40,7 +57,13 @@ def _write(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _write_full_sync_receipts(root: Path, release_id: str, refs: list[str]) -> None:
+def _write_full_sync_receipts(
+    root: Path,
+    release_id: str,
+    refs: list[str],
+    posts: list[str] | None = None,
+) -> None:
+    post_refs = posts or []
     mapping = {ref: f"homepage-{index}" for index, ref in enumerate(refs, start=1)}
     _write(
         root / "import.json",
@@ -52,7 +75,10 @@ def _write_full_sync_receipts(root: Path, release_id: str, refs: list[str]) -> N
             "sourceOwner": "qwq_data",
             "mode": "sync",
             "deletePolicy": "tombstone",
-            "counts": {"postsLoaded": 0, "entitiesLoaded": len(refs)},
+            "counts": {
+                "postsLoaded": len(post_refs),
+                "entitiesLoaded": len(refs),
+            },
             "auditEvents": [],
         },
     )
@@ -200,6 +226,52 @@ def test_canary__locks_fixed_province_targets__local_contract() -> None:
     assert mandatory == "普陀山,东钱湖"
     assert excluded == ()
 
+
+def test_retry__uses_invalidated_target_freeze_only__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "output"
+    retry_root = (
+        output
+        / "data/local/workspace/invalidated/20260720T000000Z/tasks"
+        / ZHEJIANG
+    )
+    _write(
+        retry_root / "invalidation_receipt.json",
+        {
+            "schema": "quwoquan_data.local_evidence_invalidation",
+            "evidenceType": "execution",
+            "evidenceId": ZHEJIANG,
+            "originalPath": f".qwq_output/data/tasks/{ZHEJIANG}",
+            "reason": "source_digest_drift_requires_new_sequence_or_release",
+            "admission": "invalidated_not_release_evidence",
+        },
+    )
+    _write(
+        retry_root / "_shared/target_selection.json",
+        {
+            "targets": [
+                {"name": "普陀山"},
+                {"name": "东钱湖"},
+            ]
+        },
+    )
+    monkeypatch.setattr(rollout_milestone, "OUTPUT_ROOT", output)
+    monkeypatch.setattr(
+        rollout_milestone,
+        "execution_root",
+        lambda execution_id: output / "data/tasks" / execution_id,
+    )
+
+    assert rollout_milestone.retry_target_names(
+        identity=parse_execution_id(
+            "20260714--travel-homepage-coverage--cn-zhejiang--canary-002"
+        ),
+        retry_of=ZHEJIANG,
+    ) == ("普陀山", "东钱湖")
+
+
 def test_canary__attestation_binds_execution_and_gamma_evidence__local_contract(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -211,15 +283,44 @@ def test_canary__attestation_binds_execution_and_gamma_evidence__local_contract(
     monkeypatch.setattr(rollout_milestone, "RELEASE_ROOT", releases)
     monkeypatch.setattr(rollout_attestation, "OUTPUT_ROOT", output)
     monkeypatch.setattr(rollout_attestation, "RELEASE_ROOT", releases)
-    roots = {ZHEJIANG: tmp_path / "tasks" / ZHEJIANG, SICHUAN: tmp_path / "tasks" / SICHUAN}
+    execution_ids = (ZHEJIANG, SICHUAN, *POST_EXECUTIONS)
+    roots = {
+        execution_id: tmp_path / "tasks" / execution_id
+        for execution_id in execution_ids
+    }
     monkeypatch.setattr(rollout_attestation, "execution_root", lambda execution_id: roots[execution_id])
     monkeypatch.setattr(rollout_attestation, "execution_readiness_issues", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(rollout_attestation, "homepage_media_completeness_report", lambda _id: {"passed": True})
     refs = ["地点/景区/普陀山", "地点/自然景观/东钱湖", "地点/景区/海螺沟"]
-    _write(payload_file(release, "release.json"), {"schema": "quwoquan_data.release", "releaseId": CANARY_RELEASE, "releaseKind": "content", "executionIds": [ZHEJIANG, SICHUAN], "rolloutMilestone": "canary"})
-    _write(payload_file(release, "desired_state.json"), {"releaseId": CANARY_RELEASE, "desiredRefs": {"entities": refs}})
-    _write(roots[ZHEJIANG] / "publish_ref.json", {"executionId": ZHEJIANG, "publishedRefs": {"entities": refs[:2]}})
-    _write(roots[SICHUAN] / "publish_ref.json", {"executionId": SICHUAN, "publishedRefs": {"entities": refs[2:]}})
+    post_refs = [
+        f"帖子/{content_type}/{province}-{index}"
+        for content_type in ("article", "image", "video")
+        for province, count in (("zhejiang", 2), ("sichuan", 1))
+        for index in range(1, count + 1)
+    ]
+    _write(payload_file(release, "release.json"), {"schema": "quwoquan_data.release", "releaseId": CANARY_RELEASE, "releaseKind": "content", "executionIds": list(execution_ids), "rolloutMilestone": "canary"})
+    _write(payload_file(release, "desired_state.json"), {"releaseId": CANARY_RELEASE, "desiredRefs": {"entities": refs, "posts": post_refs}})
+    _write(roots[ZHEJIANG] / "publish_ref.json", {"executionId": ZHEJIANG, "publishedRefs": {"entities": refs[:2], "posts": []}})
+    _write(roots[SICHUAN] / "publish_ref.json", {"executionId": SICHUAN, "publishedRefs": {"entities": refs[2:], "posts": []}})
+    for execution_id in POST_EXECUTIONS:
+        parts = execution_id.split("--")
+        content_type = parts[1].removeprefix("travel-").removesuffix("-cold-start")
+        province = parts[2].removeprefix("cn-")
+        scoped_post_refs = [
+            ref
+            for ref in post_refs
+            if ref.startswith(f"帖子/{content_type}/{province}-")
+        ]
+        _write(
+            roots[execution_id] / "publish_ref.json",
+            {
+                "executionId": execution_id,
+                "publishedRefs": {
+                    "entities": [],
+                    "posts": scoped_post_refs,
+                },
+            },
+        )
 
     import_root = output / "env/gamma/runs/data-release" / CANARY_RELEASE / "import-001"
     importer_ref = (import_root / "homepage-import.json").relative_to(output).as_posix()
@@ -227,7 +328,7 @@ def test_canary__attestation_binds_execution_and_gamma_evidence__local_contract(
     mapping = {ref: f"homepage-{index}" for index, ref in enumerate(refs, start=1)}
     _write(import_root / "run.json", {"environment": "gamma", "releaseId": CANARY_RELEASE, "kind": "apply"})
     _write(import_root / "result.json", {"environment": "gamma", "releaseId": CANARY_RELEASE, "status": "completed", "homepageVerificationCasesRef": cases_ref})
-    _write_full_sync_receipts(import_root, CANARY_RELEASE, refs)
+    _write_full_sync_receipts(import_root, CANARY_RELEASE, refs, post_refs)
     _write(import_root / "homepage_verification_cases.json", {"schema": "quwoquan_data.homepage_verification_case_manifest", "environment": "gamma", "releaseId": CANARY_RELEASE, "runId": "import-001", "importerReportRef": importer_ref, "generatedAt": "2026-07-14T00:00:00Z", "cases": [{"entityRef": ref, "homepageId": homepage_id, "title": ref.rsplit("/", 1)[-1]} for ref, homepage_id in mapping.items()]})
 
     api_root = output / "env/gamma/runs/data-release" / CANARY_RELEASE / "api-001"
@@ -256,7 +357,7 @@ def test_canary__attestation_binds_execution_and_gamma_evidence__local_contract(
     replay_root = output / "env/gamma/runs/data-release" / CANARY_RELEASE / "replay-001"
     _write(replay_root / "run.json", {"environment": "gamma", "releaseId": CANARY_RELEASE, "kind": "apply"})
     _write(replay_root / "result.json", {"environment": "gamma", "releaseId": CANARY_RELEASE, "status": "completed"})
-    _write_full_sync_receipts(replay_root, CANARY_RELEASE, refs)
+    _write_full_sync_receipts(replay_root, CANARY_RELEASE, refs, post_refs)
 
     with pytest.raises(
         rollout_attestation.RolloutMilestoneError,

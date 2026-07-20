@@ -22,6 +22,14 @@ func NewMemorySkillSubscriptionStore() *MemorySkillSubscriptionStore {
 func (s *MemorySkillSubscriptionStore) CreateSkillSubscription(_ context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if subscription.ClientRequestID != "" {
+		for _, existing := range s.subscriptions {
+			if existing.Owner.OwnerID == subscription.Owner.OwnerID &&
+				existing.ClientRequestID == subscription.ClientRequestID {
+				return existing, nil
+			}
+		}
+	}
 	s.subscriptions[subscription.SubscriptionID] = subscription
 	return subscription, nil
 }
@@ -77,6 +85,10 @@ func (s *MemorySkillSubscriptionStore) UpdateSkillSubscriptionStatus(_ context.C
 	subscription, ok := s.subscriptions[subscriptionID]
 	if !ok || subscription.Owner.OwnerID != userID {
 		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "订阅不存在", "skill subscription not found")
+	}
+	if subscription.Status == status {
+		// 与 Mongo 实现同语义：目标状态已满足时 no-op 返回存量。
+		return subscription, nil
 	}
 	subscription.Status = status
 	subscription.UpdatedAt = updatedAt

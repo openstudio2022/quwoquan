@@ -1,0 +1,49 @@
+groups:
+  - name: quwoquan_content_report_lifecycle
+    rules:
+      - record: content_report_valid_create_rate
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{
+            operation="content.report.CreateReport",status=~"2.."
+          }[30m]))
+          /
+          clamp_min(
+            sum(rate(quwoquan_content_contract_operation_requests_total{
+              operation="content.report.CreateReport"
+            }[30m])),
+            0.000001
+          )
+
+      - record: content_report_closure_within_72h_rate
+        expr: |
+          sum(rate(content_report_closure_slo_total{within_72h="true"}[24h]))
+          /
+          clamp_min(sum(rate(content_report_closure_slo_total[24h])), 0.000001)
+
+      - record: content_feed_blocked_keyword_filter_rate
+        expr: |
+          rate(content_feed_blocked_keyword_filtered_total[30m])
+          /
+          clamp_min(rate(content_feed_blocked_keyword_candidates_total[30m]), 0.000001)
+
+      - alert: ContentReportCreateErrorRateHigh
+        expr: content_report_valid_create_rate < 0.99
+        for: 15m
+        labels:
+          severity: warning
+          service: content-service
+          object: Report
+        annotations:
+          summary: 举报有效创建率低于商用门槛
+          description: 检查 CreateReport 的鉴权、校验、幂等冲突与 PostgreSQL 写入错误。
+
+      - alert: ContentReportClosureSLOBreached
+        expr: content_report_closure_within_72h_rate < 0.95
+        for: 1h
+        labels:
+          severity: critical
+          service: content-service
+          object: Report
+        annotations:
+          summary: 举报 72 小时结案率低于商用门槛
+          description: 检查 Portal 待处理队列、审核 Case 消费延迟与 operator 处置容量。

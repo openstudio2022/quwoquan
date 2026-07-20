@@ -14,6 +14,8 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
+	preferenceports "quwoquan_service/services/assistant-service/internal/domain/assistant/preference_fact/ports"
+	preferencepersistence "quwoquan_service/services/assistant-service/internal/infrastructure/assistant/preference_fact/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/projection"
 	"quwoquan_service/services/assistant-service/internal/runtimeconfig"
@@ -59,6 +61,15 @@ func ValidateRuntimeDependenciesConfig(cfg runtimeconfig.Config) error {
 	if strings.TrimSpace(cfg.NotificationService.BaseURL) == "" {
 		return NewDependencyError("notification-service", "configuration", errors.New("notification_service.base_url is required"))
 	}
+	if strings.TrimSpace(cfg.SearchService.BaseURL) == "" {
+		return NewDependencyError("search-service", "configuration", errors.New("search_service.base_url is required"))
+	}
+	if strings.TrimSpace(cfg.EntityService.BaseURL) == "" {
+		return NewDependencyError("entity-service", "configuration", errors.New("entity_service.base_url is required"))
+	}
+	if strings.TrimSpace(cfg.ContentService.BaseURL) == "" {
+		return NewDependencyError("content-service", "configuration", errors.New("content_service.base_url is required"))
+	}
 	if err := validateRedisSceneConfig("general", cfg.Redis.General); err != nil {
 		return err
 	}
@@ -92,12 +103,15 @@ func BuildRedisRouter(cfg runtimeconfig.Config) (*rtredis.Router, error) {
 }
 
 type PersistentDependencies struct {
-	EventStore        application.EventStore
-	ProfileStore      application.LearningProfileStore
-	SubscriptionStore application.SkillSubscriptionStore
-	ConsentStore      application.ConsentStore
-	MongoClient       *mongo.Client
-	PostgresPool      *pgxpool.Pool
+	EventStore           application.EventStore
+	ProfileStore         application.LearningProfileStore
+	SubscriptionStore    application.SkillSubscriptionStore
+	ConsentStore         application.ConsentStore
+	ConversationRunStore application.ConversationRunStore
+	PreferenceStore      preferenceports.Store
+	PreferenceReader     preferenceports.Reader
+	MongoClient          *mongo.Client
+	PostgresPool         *pgxpool.Pool
 }
 
 func OpenPersistentDependencies(ctx context.Context, cfg runtimeconfig.Config) (deps *PersistentDependencies, err error) {
@@ -141,6 +155,23 @@ func OpenPersistentDependencies(ctx context.Context, cfg runtimeconfig.Config) (
 		return nil, NewDependencyError("mongodb.skill_subscriptions", "indexes", err)
 	}
 	deps.SubscriptionStore = mongoSubscriptions
+
+	mongoConversationRuns := persistence.NewMongoConversationRunStore(db)
+	if err := mongoConversationRuns.EnsureIndexes(ctx); err != nil {
+		return nil, NewDependencyError("mongodb.assistant_runs", "indexes", err)
+	}
+	deps.ConversationRunStore = mongoConversationRuns
+
+	mongoPreferences := preferencepersistence.NewMongoStore(db)
+	if err := mongoPreferences.EnsureIndexes(ctx); err != nil {
+		return nil, NewDependencyError(
+			"mongodb.assistant_preference_facts",
+			"indexes",
+			err,
+		)
+	}
+	deps.PreferenceStore = mongoPreferences
+	deps.PreferenceReader = mongoPreferences
 
 	poolCfg, err := pgxpool.ParseConfig(strings.TrimSpace(cfg.Postgres.DSN))
 	if err != nil {

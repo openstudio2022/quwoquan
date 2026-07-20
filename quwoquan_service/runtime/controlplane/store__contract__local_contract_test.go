@@ -117,79 +117,19 @@ func TestPutDocumentIfAbsentPreservesFirstImmutableFact(t *testing.T) {
 	}
 }
 
-func TestResolveEffectiveConfigStopsAtServiceLayers(t *testing.T) {
-	configKeys := []Document{
-		{"key": "sys.gateway.rate_limit.per_user_rps", "default": 30},
-		{"key": "sys.orchestrator.downstream.timeout_ms", "default": 800},
+func TestEffectiveConfigHashIsStableAndOrderSensitive(t *testing.T) {
+	values := []ResolvedConfigValue{
+		{Key: "sys.gateway.rate_limit.per_user_rps", Value: 50, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
+		{Key: "sys.orchestrator.downstream.timeout_ms", Value: 780, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
 	}
-	configLayers := []Document{
-		{
-			"id":         "global:all",
-			"scopeLevel": "global",
-			"scopeID":    "all",
-			"values": map[string]any{
-				"sys.orchestrator.downstream.timeout_ms": 900,
-			},
-		},
-		{
-			"id":         "environment:beta",
-			"scopeLevel": "environment",
-			"scopeID":    "beta",
-			"values": map[string]any{
-				"sys.gateway.rate_limit.per_user_rps": 40,
-			},
-		},
-		{
-			"id":         "cluster:beta-control-a",
-			"scopeLevel": "cluster",
-			"scopeID":    "beta-control-a",
-			"values": map[string]any{
-				"sys.gateway.rate_limit.per_user_rps": 45,
-			},
-		},
-		{
-			"id":         "service:product-ops-service",
-			"scopeLevel": "service",
-			"scopeID":    "product-ops-service",
-			"values": map[string]any{
-				"sys.gateway.rate_limit.per_user_rps":    50,
-				"sys.orchestrator.downstream.timeout_ms": 780,
-			},
-		},
-		{
-			"id":         "instance:product-ops-service-beta-control-a-0",
-			"scopeLevel": "instance",
-			"scopeID":    "product-ops-service-beta-control-a-0",
-			"values": map[string]any{
-				"sys.orchestrator.downstream.timeout_ms": 720,
-			},
-		},
+	first := EffectiveConfigHash(values)
+	second := EffectiveConfigHash(values)
+	if first == "" || first != second {
+		t.Fatalf("hash must be deterministic: %q vs %q", first, second)
 	}
-
-	items := ResolveEffectiveConfig(configLayers, configKeys, ConfigResolutionScope{
-		Environment: "beta",
-		Cluster:     "beta-control-a",
-		Service:     "product-ops-service",
-	})
-	if len(items) != 2 {
-		t.Fatalf("expected 2 config items, got %d", len(items))
-	}
-
-	byKey := map[string]ResolvedConfigValue{}
-	for _, item := range items {
-		byKey[item.Key] = item
-	}
-	if got := byKey["sys.gateway.rate_limit.per_user_rps"].Value; got != 50 {
-		t.Fatalf("expected service layer to win, got %#v", got)
-	}
-	if byKey["sys.gateway.rate_limit.per_user_rps"].ScopeLevel != "service" {
-		t.Fatalf("expected service scope level, got %s", byKey["sys.gateway.rate_limit.per_user_rps"].ScopeLevel)
-	}
-	if got := byKey["sys.orchestrator.downstream.timeout_ms"].Value; got != 780 {
-		t.Fatalf("expected service layer to win, got %#v", got)
-	}
-	if byKey["sys.orchestrator.downstream.timeout_ms"].ScopeLevel != "service" {
-		t.Fatalf("expected service scope level, got %s", byKey["sys.orchestrator.downstream.timeout_ms"].ScopeLevel)
+	changed := EffectiveConfigHash([]ResolvedConfigValue{values[0]})
+	if changed == first {
+		t.Fatalf("hash must change when values change")
 	}
 }
 

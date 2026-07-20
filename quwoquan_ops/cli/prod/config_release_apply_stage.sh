@@ -14,9 +14,8 @@ Usage:
     --error-rate <float> --p95-ms <int> --redis-error-rate <float>
 
 Behavior:
-  1) Update rollout stage state.
-  2) Evaluate SLO gate.
-  3) On rollback decision, execute config rollback automatically.
+  Evaluate the live SLO values supplied by stackctl. Release state and rollback
+  are committed only by stackctl's locked CAS transaction.
 EOF
 }
 
@@ -54,14 +53,6 @@ for v in SERVICE STEP FROM_IMAGE TO_IMAGE FROM_CONFIG TO_CONFIG ERROR_RATE P95_M
   fi
 done
 
-bash "$ROOT/quwoquan_ops/cli/prod/config_release_gray_rollout.sh" \
-  --service "$SERVICE" \
-  --from-image "$FROM_IMAGE" \
-  --to-image "$TO_IMAGE" \
-  --from-config "$FROM_CONFIG" \
-  --to-config "$TO_CONFIG" \
-  --step "$STEP"
-
 set +e
 gate_output="$(bash "$ROOT/quwoquan_ops/cli/prod/config_release_slo_gate.sh" \
   --error-rate "$ERROR_RATE" \
@@ -81,8 +72,7 @@ case "$gate_code" in
     exit 10
     ;;
   20)
-    echo "WARN: stage=$STEP decision=rollback service=$SERVICE -> rolling back to $FROM_CONFIG"
-    bash "$ROOT/quwoquan_ops/cli/prod/config_release_rollback.sh" --service "$SERVICE" --to-config-version "$FROM_CONFIG"
+    echo "WARN: stage=$STEP decision=rollback service=$SERVICE"
     exit 20
     ;;
   *)

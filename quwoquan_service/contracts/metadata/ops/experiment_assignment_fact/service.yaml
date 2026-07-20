@@ -73,22 +73,16 @@ api_routes:
   response_entity: ExperimentStatsSlice
 consumers:
 - capabilities:
-  - get_experiment_assignment
-  name: app
-- capabilities:
   - assign_experiment_variant
   - read_experiment_assignment
   - read_stats
   name: platform-ops
-- capabilities:
-  - get_experiment_assignment
-  name: recommendation-engine
 contract_test:
   coverage_requirements:
     - deterministic assignment and trusted subject derivation verified
     - PostgreSQL unique constraint and immutable replay verified
     - assignment fact and ExperimentAssigned outbox record committed atomically
-    - generated commercial guard remains default-deny until App typed client evidence exists
+    - generated commercial guard remains default-deny until recommendation/search runtime binding exists
   current_evidence:
     local_contract:
       - services/product-ops-service/internal/domain/product_ops/experiment/model/experiment__local_contract_test.go
@@ -103,14 +97,16 @@ contract_test:
       - repeated assignment returns one PostgreSQL fact for experiment_id + policy_version + subject_key
       - transactional outbox dispatch retry releases lease and preserves an undispatched event
   commercial_block:
-    gap_id: OPS_EXPERIMENT_ASSIGNMENT_FACT_COMMERCIAL_EVIDENCE
-    reason: App operation-specific contract, typed Facet/Remote and user_acceptance evidence are not complete
+    gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
+    reason: assignment fact 尚未由推荐/搜索线上 runtime 分桶结果写入；当前统计不得冒充线上真相源。
+      控制面保持冻结，只有 durable runtime binding、实际流量回写与 gamma 对账证据同时闭合后才能翻 ready。
 service:
   commercial_defaults:
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: OPS_EXPERIMENT_ASSIGNMENT_FACT_COMMERCIAL_EVIDENCE
+    block_reason: Product Ops assignment fact 未绑定推荐/搜索线上 runtime policy；为消除双轨统计，
+      assignment 查询/写入在真实 durable binding 完成前冻结
+    gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
     status: blocked
-    target_story: app-cloud-business-object-commercial-closure
+    target_story: bucketing-strategy-engine
   domain: ops
   name: product-ops
   owner: platform-ops-team

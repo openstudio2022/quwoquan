@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+
+import '../../cloud_services/assistant_facets_mock.dart';
 
 const String assistantScenarioFixtureName =
     'assistant/test_fixtures/scenarios/assistant_scenarios.json';
@@ -219,7 +221,7 @@ AppDataSourceMode expectedRepositoryModeForCurrentRuntimeEnv(
   );
 }
 
-class ScenarioMockAssistantRepository extends MockAssistantRepository {
+class ScenarioMockAssistantRepository extends AlphaAssistantFacets {
   ScenarioMockAssistantRepository({required AssistantScenarioPack pack})
     : _scenarios = {
         for (final scenario in pack.assistantTurnScenariosFor('alpha'))

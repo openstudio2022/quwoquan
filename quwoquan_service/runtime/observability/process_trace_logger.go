@@ -49,6 +49,6 @@ func (l *ProcessTraceLogger) Write(entry ProcessTraceLog, model string, operatio
 	if err := entry.Validate(); err != nil {
 		return err
 	}
-	payload := formatDelimitedLog("runtime", compactProcessTraceLog(entry))
+	payload := formatRuntimeLog("runtime", compactProcessTraceLog(entry))
 	return l.router.WriteStandard([]byte(payload + "\n"))
 }

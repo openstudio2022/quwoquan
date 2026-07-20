@@ -54,6 +54,139 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
+  - method: GET
+    path: /ops/runtime-logs/summary
+    operation: GetRuntimeLogSummary
+    actor: account
+    query_params: [signal, severity, errorCode, fingerprint, sourceType, service, appVersion, from, to]
+    application:
+      kind: query
+      facet: RuntimeLogQueryFacet
+      method: getSummary
+      reader: RuntimeLogSummaryReader
+      slice: RuntimeLogSummarySlice
+    authorization:
+      principal: account
+      permissions: [ops.runtime_log.read]
+      ownership_policy: ops_runtime_log_reader
+    commercial:
+      status: blocked
+      block_reason: real SLS aggregate logstore and gamma evidence are required before implemented
+      gap_id: OPS_EVENT_RECORD_SLS_GAMMA_EVIDENCE
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_runtime_log_summary
+      trace: true
+      attributes: [signal, outcome]
+    slo: { latency_p95_ms: 3000, availability_percent: 99.5 }
+    error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.runtime_logstore_unavailable]
+    response_fields: [totalCount, dimensions, sourceKind, freshness, generatedThrough, lagSeconds, actualFrom, actualTo]
+    description: 从闭合小时运行诊断聚合读取分级、signal、错误码与指纹趋势；响应声明中立 sourceKind、freshness、水位与实际窗口。
+    security:
+      auth_mode: required
+      principal: admin
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /ops/runtime-logs/drilldown
+    operation: GetRuntimeLogDrilldown
+    actor: account
+    query_params: [signal, severity, errorCode, fingerprint, sourceType, service, appVersion, from, to, limit, revealCorrelation]
+    application:
+      kind: query
+      facet: RuntimeLogQueryFacet
+      method: getDrilldown
+      reader: RuntimeLogDrilldownReader
+      slice: RuntimeLogDrilldownSlice
+    authorization:
+      principal: account
+      permissions: [ops.runtime_log.read]
+      ownership_policy: ops_runtime_log_reader
+    commercial:
+      status: blocked
+      block_reason: real SLS raw logstore and gamma evidence are required before implemented
+      gap_id: OPS_EVENT_RECORD_SLS_GAMMA_EVIDENCE
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_runtime_log_drilldown
+      trace: true
+      attributes: [signal, outcome]
+    slo: { latency_p95_ms: 3000, availability_percent: 99.5 }
+    error_codes: [OPS.USER.query_window_invalid, OPS.USER.event_drilldown_forbidden, OPS.SYSTEM.runtime_logstore_unavailable]
+    description: 从三天原始 SLS 运行诊断读取经脱敏的明细；关联键默认隐藏，仅持有敏感诊断权限时可显式展开。
+    security:
+      auth_mode: required
+      principal: admin
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /ops/runtime-logs
+    operation: ReportRuntimeLogBatch
+    actor: persona_or_device
+    request_fields: [records]
+    response_fields: [acceptedCount, duplicateBatch]
+    application:
+      kind: command
+      facet: RuntimeLogCommandFacet
+      method: appendAppRuntimeBatch
+      append_sink: EventRecord
+      mutation_target: EventRecord
+      invariant_target: EventRecord
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    commercial: { status: ready }
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - OPS.USER.runtime_log_batch_invalid
+      - OPS.USER.idempotency_key_invalid
+      - OPS.SYSTEM.runtime_logstore_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: redacted
+    telemetry:
+      metric: ops_runtime_log_batch_report
+      trace: true
+      attributes: [record_count, outcome]
+    slo: { latency_p95_ms: 800, availability_percent: 99.9 }
+    description: Dart、Go、Python 与 TypeScript runtime logger 的唯一远端入口；只接受 runtime_observability 目录声明的 signal、sourceType、关联键和脱敏属性。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: POST
     path: /ops/startup-events
     operation: ReportStartupEventBatch
@@ -108,10 +241,31 @@ api_routes:
       slice: EventSummarySlice
     authorization:
       principal: account
-      permissions: [ops.telemetry.read]
+      scopes: [ops.telemetry.read]
       ownership_policy: ops_telemetry_reader
+    commercial:
+      status: blocked
+      block_reason: real SLS aggregate logstore and gamma evidence are required before implemented
+      gap_id: OPS_EVENT_RECORD_SLS_GAMMA_EVIDENCE
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_event_summary
+      trace: true
+      attributes: [log_type, outcome]
+    slo: { latency_p95_ms: 3000, availability_percent: 99.5 }
     error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
-    description: 只读闭合小时 SLS 聚合；响应声明 source、freshness 与实际窗口。
+    response_fields: [totalCount, sessionCount, dimensions, sourceKind, freshness, generatedThrough, lagSeconds, actualFrom, actualTo]
+    description: 只读闭合小时聚合；响应声明中立 sourceKind、freshness、水位与实际窗口。
     security:
       auth_mode: required
       principal: admin
@@ -134,8 +288,91 @@ api_routes:
       principal: account
       permissions: [ops.telemetry.drilldown]
       ownership_policy: audited_ops_telemetry_drilldown
+    commercial:
+      status: blocked
+      block_reason: real SLS raw logstore and gamma evidence are required before implemented
+      gap_id: OPS_EVENT_RECORD_SLS_GAMMA_EVIDENCE
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_event_drilldown
+      trace: true
+      attributes: [log_type, outcome]
+    slo: { latency_p95_ms: 3000, availability_percent: 99.5 }
     error_codes: [OPS.USER.query_window_invalid, OPS.USER.event_drilldown_forbidden, OPS.SYSTEM.logstore_unavailable]
-    description: 三天内原始明细受限查询；时间范围必填、最多 100 条，sessionId 默认掩码。
+    response_fields: [totalCount, items, sourceKind, freshness, generatedThrough, lagSeconds, actualFrom, actualTo]
+    description: 三天内原始明细受限查询；时间范围必填、最多 100 条，sessionId 默认掩码，禁止暴露后端身份。
+    security:
+      auth_mode: required
+      principal: admin
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /ops/events/rtc-media-qoe/summary
+    operation: GetRtcMediaQoeSummary
+    actor: account
+    application:
+      kind: query
+      facet: RtcMediaQoeQueryFacade
+      method: get24HourSummary
+      reader: RtcMediaQoeSummaryReader
+      slice: RtcMediaQoeSummarySlice
+    authorization:
+      principal: account
+      scopes: [ops.telemetry.read]
+      ownership_policy: ops_telemetry_reader
+    commercial:
+      status: blocked
+      block_reason: 真实 SLS/Postgres 查询链已实现；Gamma/Prod 24h series readback 与告警恢复证据仍待收口
+      gap_id: OPS_RTC_MEDIA_QOE_GAMMA_READBACK
+      target_story: realtime-call-media-infrastructure
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: ops_rtc_media_qoe_summary
+      trace: true
+      attributes: [outcome, source_kind]
+    slo: { latency_p95_ms: 3000, availability_percent: 99.5 }
+    error_codes: [OPS.SYSTEM.logstore_unavailable]
+    response_body: RtcMediaQoeSummarySlice
+    response_body_kind: object
+    response_fields:
+      - hasSamples
+      - windowHours
+      - actualFrom
+      - actualTo
+      - effectiveSampleCount
+      - mediaConnectedCount
+      - mediaConnectedRate
+      - connectP95Ms
+      - connectionLostCount
+      - connectionLostRate
+      - reconnectCount
+      - series
+      - sourceKind
+      - freshness
+      - generatedThrough
+      - lagSeconds
+    description: 直接读取最近 24 个 UTC 小时的 rtc_media_qoe raw；排除 abandoned，以有效样本计算接通率，以已接通样本计算 P95 与 connection_lost 率，空分母返回 null。
     security:
       auth_mode: required
       principal: admin
@@ -145,9 +382,9 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [report_event_batch, report_startup_event_batch]
+    capabilities: [report_event_batch, report_runtime_log_batch, report_startup_event_batch]
   - name: platform-ops
-    capabilities: [read_event_summary, read_event_drilldown]
+    capabilities: [read_event_summary, read_event_drilldown, read_rtc_media_qoe_summary]
 
 contract_test:
   mock_strategy:
@@ -173,3 +410,11 @@ contract_test:
         - name: query_facade_masks_session
           command: GetEventDrilldown without elevated identity scope
           assertions: [source_sls_raw, session_id_masked, max_100_items]
+        - name: query_rtc_media_qoe_summary
+          command: GetRtcMediaQoeSummary
+          assertions:
+            - source_raw_records
+            - abandoned_excluded_from_denominator
+            - p95_from_connected_raw_samples
+            - connection_lost_denominator_is_connected_samples
+            - empty_rates_are_null

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
 	commentapp "quwoquan_service/services/content-service/internal/application/comment"
@@ -25,6 +26,8 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 		commentStore,
 		commentStore,
 		reactionStore,
+		commentStore,
+		commentStore,
 	)))
 	reactionService := reactionapp.BindFacades(reactionapp.NewService(reactionapp.BindDataPorts(reactionStore, reactionStore)))
 	handler := NewContentHandler(nil, nil, nil, commentService, reactionService, nil, nil).Routes()
@@ -143,6 +146,212 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 }
 
+func TestCommentModerationHTTPRequiresGeneratedOperatorAuthorization(t *testing.T) {
+	commentStore := commenttestsupport.NewStore()
+	commentStore.SeedPost("post-comment-moderation-http", "post-owner")
+	reactionStore := testsupport.NewReactionStore()
+	commentService := commentapp.BindFacades(commentapp.NewCommentService(commentapp.BindDataPorts(
+		commentStore,
+		commentStore,
+		reactionStore,
+		commentStore,
+		commentStore,
+	)))
+	baseHandler := NewContentHandler(
+		nil,
+		nil,
+		nil,
+		commentService,
+		reactionapp.BindFacades(reactionapp.NewService(
+			reactionapp.BindDataPorts(reactionStore, reactionStore),
+		)),
+		nil,
+		nil,
+	).Routes()
+	createdRecorder := performCommentRequest(
+		t,
+		baseHandler,
+		http.MethodPost,
+		"/content/posts/post-comment-moderation-http/comments",
+		map[string]any{"content": "moderation target", "mentions": []any{}},
+		"comment-moderation-http-create",
+		"comment-author",
+	)
+	if createdRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"create moderation target status=%d body=%s",
+			createdRecorder.Code,
+			createdRecorder.Body.String(),
+		)
+	}
+	var created commentapp.CommentCommandResult
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	handler := rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("content"),
+	)(baseHandler)
+	path := "/internal/content/comments/" + created.ID + ":hide"
+
+	forged := httptest.NewRequest(
+		http.MethodPost,
+		path,
+		bytes.NewBufferString(`{"reason":"forged headers"}`),
+	)
+	forged.Header.Set("Idempotency-Key", "comment-moderation-forged")
+	forged.Header.Set("X-Client-Role", "operator")
+	forged.Header.Set("X-Client-Scope", "ops.case.write")
+	forged.Header.Set("X-Client-Permission", "content.moderation.decide")
+	forgedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(forgedRecorder, forged)
+	if forgedRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf(
+			"forged operator headers status=%d want=%d body=%s",
+			forgedRecorder.Code,
+			http.StatusUnauthorized,
+			forgedRecorder.Body.String(),
+		)
+	}
+
+	for _, testCase := range []struct {
+		name       string
+		claims     rtauth.Claims
+		wantStatus int
+	}{
+		{
+			name: "regular account",
+			claims: rtauth.Claims{
+				Subject:     "regular-account",
+				Scope:       "ops.case.write",
+				Permissions: []string{"content.moderation.decide"},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "operator missing scope",
+			claims: rtauth.Claims{
+				Subject:     "operator-missing-scope",
+				Roles:       []string{"operator"},
+				Permissions: []string{"content.moderation.decide"},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "operator missing permission",
+			claims: rtauth.Claims{
+				Subject: "operator-missing-permission",
+				Scope:   "ops.case.write",
+				Roles:   []string{"operator"},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodPost,
+				path,
+				bytes.NewBufferString(`{"reason":"not authorized"}`),
+			)
+			request.Header.Set("Idempotency-Key", "comment-moderation-"+testCase.name)
+			request = request.WithContext(rtauth.WithPrincipal(
+				request.Context(),
+				rtauth.Principal{
+					Claims: testCase.claims,
+					Actor: operation.ActorContext{
+						AccountID: testCase.claims.Subject,
+					},
+				},
+			))
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != testCase.wantStatus {
+				t.Fatalf(
+					"status=%d want=%d body=%s",
+					recorder.Code,
+					testCase.wantStatus,
+					recorder.Body.String(),
+				)
+			}
+		})
+	}
+
+	operator := rtauth.Principal{
+		Claims: rtauth.Claims{
+			Subject:     "comment-moderation-operator",
+			Scope:       "ops.case.write",
+			Roles:       []string{"operator"},
+			Permissions: []string{"content.moderation.decide"},
+		},
+		Actor: operation.ActorContext{AccountID: "comment-moderation-operator"},
+	}
+	firstHide := performCommentOperatorRequest(
+		t,
+		handler,
+		http.MethodPost,
+		path,
+		`{"reason":"confirmed abuse"}`,
+		"comment-moderation-hide",
+		operator,
+	)
+	if firstHide.Code != http.StatusOK {
+		t.Fatalf("HideComment status=%d body=%s", firstHide.Code, firstHide.Body.String())
+	}
+	var hidden commentapp.CommentCommandResult
+	if err := json.Unmarshal(firstHide.Body.Bytes(), &hidden); err != nil {
+		t.Fatal(err)
+	}
+	if hidden.Status != "hidden" || hidden.Version != created.Version+1 || hidden.Replayed {
+		t.Fatalf("unexpected HideComment result: %+v", hidden)
+	}
+	replayedHide := performCommentOperatorRequest(
+		t,
+		handler,
+		http.MethodPost,
+		path,
+		`{"reason":"confirmed abuse"}`,
+		"comment-moderation-hide",
+		operator,
+	)
+	if replayedHide.Code != http.StatusOK {
+		t.Fatalf(
+			"replay HideComment status=%d body=%s",
+			replayedHide.Code,
+			replayedHide.Body.String(),
+		)
+	}
+	var replayed commentapp.CommentCommandResult
+	if err := json.Unmarshal(replayedHide.Body.Bytes(), &replayed); err != nil {
+		t.Fatal(err)
+	}
+	if !replayed.Replayed || replayed.Version != hidden.Version {
+		t.Fatalf("HideComment HTTP replay drifted: %+v", replayed)
+	}
+
+	restoredRecorder := performCommentOperatorRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/internal/content/comments/"+created.ID+":restore",
+		`{"reason":"review cleared"}`,
+		"comment-moderation-restore",
+		operator,
+	)
+	if restoredRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"RestoreComment status=%d body=%s",
+			restoredRecorder.Code,
+			restoredRecorder.Body.String(),
+		)
+	}
+	var restored commentapp.CommentCommandResult
+	if err := json.Unmarshal(restoredRecorder.Body.Bytes(), &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Status != "active" || restored.Version != hidden.Version+1 {
+		t.Fatalf("unexpected RestoreComment result: %+v", restored)
+	}
+}
+
 func performCommentRequest(
 	t *testing.T,
 	handler http.Handler,
@@ -164,6 +373,25 @@ func performCommentRequest(
 	request = request.WithContext(rtauth.WithPrincipal(context.Background(), rtauth.Principal{
 		Actor: operation.ActorContext{AccountID: "account-" + personaID, PersonaID: personaID},
 	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func performCommentOperatorRequest(
+	t *testing.T,
+	handler http.Handler,
+	method string,
+	path string,
+	body string,
+	idempotencyKey string,
+	principal rtauth.Principal,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", idempotencyKey)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	return recorder

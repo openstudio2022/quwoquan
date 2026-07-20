@@ -32,13 +32,17 @@ gwt_acceptance:
     - Android 12+ 系统 splash 至少显示同源静态花瓣 icon，不得退化成纯蓝空屏
     - Flutter 第一帧 bloomAmount=1，保持 90ms 后开始逆序聚拢
     - bloomAmount=1 不应用动态变换，不出现尺寸或位置跳变
+    - 图一高保仅作视觉参考，不烘焙截图文字；背景为上亮下深品牌蓝，花朵约屏宽 40% 且 clamp 132~168dp，slogan 为 Noto Sans SC 32sp/600 近白单色
+    - Noto Sans SC 的 OFL-1.1、固定上游 commit 与 SHA-256 校验通过，不存在待替换品牌字体或未知授权字体
+    - 欢迎页、登录页品牌标与应用图标消费同一 WelcomeAppearance；不存在 vivid/opacity 第二终态
+    - Android launch_background 与启动色由原生资产生成器从 Dart token 生成，四套 drawable 和 Android 12 色值不得漂移
     - 花苞视觉因子为 0.561024，花瓣宽高比相对 52:94 偏差不超过 0.5%
     - 聚拢顺序严格为 7→0，绽放顺序严格为 0→7
     - 开放 50% 时最大与最小花瓣视觉因子差至少 0.20
     - 聚拢时每片花瓣质心半径单调减小，绽放时单调增加
     - 不存在 rotateX/Y、透视、单轴伸缩、spring 或 overshoot
     done_when:
-    - native launch、几何/波次合同与新 Golden 通过，并有 Android/iPhone profile/release 完整录像证据
+    - native launch、字体授权、视觉 token、几何/波次合同与新 Golden 通过，并有 Android/iPhone profile/release 完整录像证据
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
@@ -54,6 +58,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_native_flutter_handoff
         cases:
         - local_contract.runtime.runtime_client_foundation.cold_start_performance.handoff
@@ -82,6 +87,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_welcome_state_machine
         cases:
         - local_contract.runtime.runtime_client_foundation.cold_start_performance.motion
@@ -111,6 +117,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_deadline_and_safe_shell
         cases:
         - local_contract.runtime.runtime_client_foundation.cold_start_performance.deadline
@@ -122,7 +129,7 @@ gwt_acceptance:
     when:
     - startup_welcome_sequence 上报
     then:
-    - 包含 motionSpecVersion=petal_bloom_v2、cycle、预算、readiness、提示、压缩、帧 P95、exitReason 与 deadlineOrigin
+    - 包含 motionSpec=petal_bloom、cycle、预算、readiness、提示、压缩、帧 P95、exitReason 与 deadlineOrigin
     - Shell 首帧记录 shellFirstPaintMs
     - 欢迎层实际移除记录 overlayRemovedMs
     - home_feed_first_usable 仅在默认推荐非空内容首帧和欢迎遮罩移除均完成后记录，Router/Provider 成功、空态、错误态与后台页不得伪造
@@ -147,6 +154,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_observability_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.cold_start_performance.observability
@@ -179,13 +187,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: startup_3s_6s_release_probe
         cases:
         - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.release_sla
         envs: [gamma_local]
       evidence:
       - platform: web
-        motion_spec_version: petal_bloom_v2
+        motion_spec: petal_bloom
         runs: 20
         result: passed
         ttid_p50_ms: 557
@@ -199,8 +208,8 @@ gwt_acceptance:
         replay_count: 0
         artifact: .qwq_output/env/alpha/runs/startup_first_frame/web_probe/20260715T205250/startup_web_report.json
       pending:
-      - Android petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
-      - iPhone petal_bloom_v2 profile/release 真机 20 次冷启动与完整录像
+      - Android petal_bloom profile/release 真机 20 次冷启动与完整录像
+      - iPhone petal_bloom profile/release 真机 20 次冷启动与完整录像
       - 旧 petal hinge 版本时长报告不得作为当前视觉规格验收证据
   GWT6:
     title: 启动故障终态与跨端遥测闭环
@@ -227,8 +236,6 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/app/startup_telemetry__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/startup_native_watchdog__local_contract_test.dart
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/startup_telemetry__api_integration_test.go
       - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
       recorded:
       - file: quwoquan_app/test/local_contract/app/bootstrap_recovery__local_contract_test.dart
@@ -239,16 +246,19 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: startup_failure_state_machine
         cases:
         - local_contract.runtime.runtime_client_foundation.cold_start_performance.recovery
         envs: [local]
       - layer: api_integration
+        execution_profile: integration
         suite: startup_telemetry_ingress
         cases:
         - api_integration.runtime.runtime_client_foundation.cold_start_performance.telemetry
         envs: [gamma]
       - layer: user_acceptance
+        execution_profile: release
         suite: startup_cross_platform_fault_injection
         cases:
         - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.fault_recovery
@@ -257,5 +267,5 @@ execution:
   local_gate:
   - make verify-app-startup-ttid
   - make verify-app-page-horizontal-quality
-  full_gate:
+  profile_gates:
   - make gate

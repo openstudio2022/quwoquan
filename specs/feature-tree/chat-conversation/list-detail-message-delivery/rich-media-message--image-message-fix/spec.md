@@ -1,4 +1,4 @@
-# 图片消息修复与增强（Image Message Fix）
+# L3 特性：图片消息修复与增强（Image Message Fix）
 
 > **层级**：L4_story（隶属 L3 `rich-media-message`）
 > **状态**：specified

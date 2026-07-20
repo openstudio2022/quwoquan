@@ -6,9 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -20,7 +17,10 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../typed_circle_query_test_double.dart';
 
 Future<void> _hubPumpSettled(WidgetTester tester) async {
   for (var i = 0; i < 24; i++) {
@@ -138,26 +138,96 @@ class _HubTestMockDataSourceModeNotifier extends AppDataSourceModeNotifier {
   AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
-class _FailingHubCircleRepository extends MockCircleRepository {
-  @override
-  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
-    int limit = kHomeCircleDiscoveryFeedDefaultLimit,
-  }) async {
-    throw StateError('hub unavailable');
-  }
-}
-
-/// 契约 seed 的 groupFeedPostIds 与摄影 tab 的 category 过滤不对齐；
-/// 网格导航测试需要稳定的 circle_post_image_1 / circle_post_video_1 样本。
-class _PriorHubCircleFeedRepository extends MockCircleRepository {
-  @override
-  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
-    int limit = kHomeCircleDiscoveryFeedDefaultLimit,
-  }) async {
-    return CircleMockData.catalogCircleFeedPostDtos
-        .take(limit)
-        .toList(growable: false);
-  }
+CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
+  final circles = <CircleProjection>[
+    CircleProjection(
+      circleId: 'fixture_circle_campus',
+      name: '校园同行',
+      ownerId: 'owner-campus',
+      category: 'campus',
+      subCategory: '母校',
+      memberCount: 120,
+    ),
+    CircleProjection(
+      circleId: 'fixture_circle_travel',
+      name: '一起旅行',
+      ownerId: 'owner-travel',
+      category: 'travel',
+      subCategory: '城市',
+      memberCount: 110,
+    ),
+    CircleProjection(
+      circleId: 'fixture_circle_photo',
+      name: '契约摄影社',
+      ownerId: 'owner-photo',
+      category: 'photography',
+      subCategory: '风光',
+      memberCount: 100,
+    ),
+    CircleProjection(
+      circleId: 'fixture_circle_tech',
+      name: '科技前沿',
+      ownerId: 'owner-tech',
+      category: 'tech',
+      subCategory: '数码',
+      memberCount: 90,
+    ),
+    CircleProjection(
+      circleId: 'fixture_circle_car',
+      name: '自驾同好',
+      ownerId: 'owner-car',
+      category: 'car',
+      subCategory: '自驾',
+      memberCount: 80,
+    ),
+  ];
+  return CircleDiscoveryFeedPageSlice(
+    circles: circles,
+    items: <CircleFeedPostProjection>[
+      CircleFeedPostProjection(
+        circleId: 'fixture_circle_campus',
+        placementId: 'fixture-placement-campus-1',
+        post: ContentPostProjection(
+          postId: 'circle_post_campus_1',
+          contentType: 'image',
+          contentIdentity: 'work',
+          authorId: 'author-campus',
+          authorDisplayName: '校园作者',
+          body: '校园记录',
+          coverUrl: 'media/image/circle_post_campus_1.jpg',
+          imageUrls: const <String>['media/image/circle_post_campus_1.jpg'],
+        ),
+      ),
+      CircleFeedPostProjection(
+        circleId: 'fixture_circle_photo',
+        placementId: 'fixture-placement-photo-image-1',
+        post: ContentPostProjection(
+          postId: 'circle_post_image_1',
+          contentType: 'image',
+          contentIdentity: 'work',
+          authorId: 'author-photo',
+          authorDisplayName: '摄影作者',
+          body: '山谷晨光',
+          coverUrl: 'media/image/circle_post_image_1.jpg',
+          imageUrls: const <String>['media/image/circle_post_image_1.jpg'],
+        ),
+      ),
+      CircleFeedPostProjection(
+        circleId: 'fixture_circle_photo',
+        placementId: 'fixture-placement-photo-video-1',
+        post: ContentPostProjection(
+          postId: 'circle_post_video_1',
+          contentType: 'video',
+          contentIdentity: 'work',
+          authorId: 'author-video',
+          authorDisplayName: '视频作者',
+          body: '城市延时',
+          videoUrl: 'media/video/circle_post_video_1.mp4',
+          thumbnailUrl: 'media/image/circle_post_video_1.jpg',
+        ),
+      ),
+    ],
+  );
 }
 
 class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
@@ -258,6 +328,7 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
 
 Widget _buildTestApp({
   double textScaleFactor = 1.0,
+  CircleDiscoveryFeedQueryReader? discoveryFeedQuery,
   List overrides = const [],
 }) {
   final router = GoRouter(
@@ -282,6 +353,14 @@ Widget _buildTestApp({
     overrides: [
       appDataSourceModeProvider.overrideWith(
         _HubTestMockDataSourceModeNotifier.new,
+      ),
+      resolvedOwnerUserIdProvider.overrideWithValue(''),
+      // 生产装配 Remote-only：local_contract 显式注入强类型 query port。
+      circlesListDiscoveryFeedQueryProvider.overrideWithValue(
+        discoveryFeedQuery ??
+            CircleDiscoveryFeedQueryTestDouble(
+              (_) => _hubDiscoveryFeedFixture(),
+            ),
       ),
       ...overrides,
     ],
@@ -367,19 +446,42 @@ void main() {
     HttpOverrides.global = _FakeHttpOverrides();
   });
 
-  test('Provider 覆盖下 Mock 圈子发现流非空', () async {
-    final container = ProviderContainer(
+  test('生产装配 Remote-only；显式注入的 Mock 圈子发现流非空', () async {
+    final productionContainer = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(
           _HubTestMockDataSourceModeNotifier.new,
         ),
       ],
     );
+    addTearDown(productionContainer.dispose);
+    expect(
+      () => productionContainer.read(circlesListDiscoveryFeedQueryProvider),
+      throwsA(
+        predicate(
+          (error) => error.toString().contains('Remote-only'),
+          '生产 composition 不得静默选择 Mock 数据源',
+        ),
+      ),
+    );
+
+    final queryReader = CircleDiscoveryFeedQueryTestDouble(
+      (_) => _hubDiscoveryFeedFixture(),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(
+          _HubTestMockDataSourceModeNotifier.new,
+        ),
+        circlesListDiscoveryFeedQueryProvider.overrideWithValue(queryReader),
+      ],
+    );
     addTearDown(container.dispose);
-    final repo = container.read(circleRepositoryProvider);
-    expect(repo, isA<MockCircleRepository>());
-    final feed = await repo.listHomeCircleDiscoveryFeed(limit: 20);
-    expect(feed, isNotEmpty);
+    final page = await container
+        .read(circlesListDiscoveryFeedQueryProvider)
+        .listDiscoveryFeed(const CircleDiscoveryFeedQuery(limit: 20));
+    expect(page.items, isNotEmpty);
+    expect(queryReader.receivedQueries, hasLength(1));
   });
 
   testWidgets('首页只展示五个固定业务垂类并隐藏频道管理入口', (tester) async {
@@ -410,11 +512,9 @@ void main() {
   testWidgets('圈子 hub bootstrap 失败时展示统一页态', (tester) async {
     await tester.pumpWidget(
       _buildTestApp(
-        overrides: [
-          circleRepositoryProvider.overrideWithValue(
-            _FailingHubCircleRepository(),
-          ),
-        ],
+        discoveryFeedQuery: CircleDiscoveryFeedQueryTestDouble(
+          (_) => throw StateError('hub unavailable'),
+        ),
       ),
     );
     await _hubPumpSettled(tester);
@@ -558,21 +658,21 @@ void main() {
   });
 
   testWidgets('一级 tab 图片作品网格渲染 inline carousel（导航由视频帖覆盖）', (tester) async {
-    await tester.pumpWidget(
-      _buildTestApp(
-        overrides: [
-          circleRepositoryProvider.overrideWithValue(
-            _PriorHubCircleFeedRepository(),
-          ),
-        ],
-      ),
+    final queryReader = CircleDiscoveryFeedQueryTestDouble(
+      (_) => _hubDiscoveryFeedFixture(),
     );
+    await tester.pumpWidget(_buildTestApp(discoveryFeedQuery: queryReader));
     _consumeImageLoadExceptions(tester);
 
     await _pumpUntilHubCategoryTabsVisible(tester);
+    expect(queryReader.receivedQueries, isNotEmpty);
+    expect(queryReader.receivedQueries.first.category, 'campus');
+    expect(queryReader.receivedQueries.first.subCategory, '母校');
     await tester.tap(find.text('摄影'));
     await _hubPumpSettled(tester);
     await _pumpUntilHubGridKeysVisible(tester);
+    expect(queryReader.receivedQueries.last.category, 'photography');
+    expect(queryReader.receivedQueries.last.subCategory, '风光');
     final card = find.byKey(
       const ValueKey('home-circle-grid-post-circle_post_image_1'),
     );
@@ -582,15 +682,7 @@ void main() {
   });
 
   testWidgets('一级 tab 视频作品点击进入 unified work browser', (tester) async {
-    await tester.pumpWidget(
-      _buildTestApp(
-        overrides: [
-          circleRepositoryProvider.overrideWithValue(
-            _PriorHubCircleFeedRepository(),
-          ),
-        ],
-      ),
-    );
+    await tester.pumpWidget(_buildTestApp());
     _consumeImageLoadExceptions(tester);
 
     await _pumpUntilHubCategoryTabsVisible(tester);

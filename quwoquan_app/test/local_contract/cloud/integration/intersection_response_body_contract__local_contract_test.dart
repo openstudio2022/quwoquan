@@ -12,11 +12,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/recommendation_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
 
@@ -66,8 +66,7 @@ void main() {
       expect(kinds[ContentApiMetadata.listMyIntersectionsOperation], 'page');
       expect(kinds[ContentApiMetadata.getObjectIntersectionsOperation], 'page');
       expect(
-        RecommendationApiMetadata
-            .operationToResponseKind[RecommendationApiMetadata.markRecommendationIntersectionsVisitedOperation],
+        kinds[ContentApiMetadata.markIntersectionsVisitedOperation],
         'ack',
       );
     });
@@ -107,13 +106,19 @@ void main() {
 
     test('ack 形态：markIntersectionsVisited 无读模型且返回 void', () async {
       expect(
-        RecommendationApiMetadata.operationToResponseModel.containsKey(
-          RecommendationApiMetadata.markRecommendationIntersectionsVisitedOperation,
+        ContentApiMetadata.operationToResponseModel.containsKey(
+          ContentApiMetadata.markIntersectionsVisitedOperation,
         ),
         isFalse,
       );
-      // ack 仅状态确认，端返回 void；调用不应抛错。
-      await expectLater(repo.markIntersectionsVisited(dimension: 'identity'), completes);
+      // ack 仅状态确认，端返回 void；调用经 typed 写面不应抛错。
+      final writer = RemoteIntersectionVisitWriter(
+        httpClient: CloudHttpClient(client: _stubClient()),
+      );
+      await expectLater(
+        writer.markIntersectionsVisited(dimension: 'identity'),
+        completes,
+      );
     });
   });
 }

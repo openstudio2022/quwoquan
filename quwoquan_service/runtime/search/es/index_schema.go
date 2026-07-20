@@ -1,7 +1,8 @@
 package es
 
 // IndexSchemaConfig controls how the unified object index is created (settings +
-// mappings). It is supplied by the service from configs/config.yaml so the
+// mappings). It is supplied by the service from configs/default/config.yaml
+// plus configs/<env>/config.yaml so the
 // analyzer chain, sharding and synonyms are auditable and environment-specific.
 type IndexSchemaConfig struct {
 	// NumberOfShards / NumberOfReplicas default to 1 when unset.

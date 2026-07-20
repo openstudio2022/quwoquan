@@ -6,7 +6,8 @@
 
 | 文件 | 说明 |
 |------|------|
-| **`00_AGENT_MASTER_SPEC.md`** | AI Agent 主导开发入口，索引主线、D0/F1 权威设计与验收 |
+| **`../AGENTS.md`** | Agent 执行入口，索引主线、阶段路由与仓库级约束 |
+| **`00_AGENT_MASTER_SPEC.md`** | Agent 规格导航，链接 D0/F1 与 metadata 权威文档 |
 | **`00_MASTER_DEVELOPMENT_FLOW.md`** | 唯一主线：5 阶段 × 自动卡点 + 命令 + 约束 + 扩展场景 |
 
 ---

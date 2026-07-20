@@ -1,4 +1,4 @@
-# L4 契约/任务：works-glass-drawer
+# L3 契约/任务：works-glass-drawer
 
 ## 功能说明
 右侧 40% 宽毛玻璃评论 Drawer：右侧热区点击或向左微拉触发，BackdropFilter sigma ≥ 15，深蓝倾向背景；评论列表滚动不影响外层 PageView。

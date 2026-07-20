@@ -30,6 +30,7 @@ const (
 // FeedbackEvent mirrors the metadata SearchFeedbackEvent entity.
 type FeedbackEvent struct {
 	SearchRequestID string `json:"searchRequestId"`
+	ViewerID        string `json:"-"`
 	EventType       string `json:"eventType"`
 	ObjectID        string `json:"objectId,omitempty"`
 	Target          string `json:"target,omitempty"`
@@ -181,7 +182,6 @@ func (s *SearchService) LogQuery(ctx context.Context, q QueryLog) {
 	} else if err := s.queryLog.Log(ctx, q); err != nil {
 		s.logger.WarnContext(ctx, "search query log persist failed (best-effort, retrieve unaffected)",
 			slog.String("searchRequestId", q.SearchRequestID),
-			slog.String("query", q.Query),
 			slog.String("err", err.Error()),
 		)
 	}
@@ -203,7 +203,6 @@ func (s *SearchService) LogQuery(ctx context.Context, q QueryLog) {
 	}); err != nil {
 		s.logger.WarnContext(ctx, "search recommendation signal publish failed (best-effort, retrieve unaffected)",
 			slog.String("searchRequestId", q.SearchRequestID),
-			slog.String("query", q.Query),
 			slog.String("err", err.Error()),
 		)
 	}

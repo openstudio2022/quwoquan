@@ -47,18 +47,21 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.product_ops_growth.feedback_optimization_loop.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.product_ops_growth.feedback_optimization_loop.sit1.sit1_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.product_ops_growth.feedback_optimization_loop.sit1.sit1_api_integration
@@ -66,6 +69,7 @@ sit_acceptance:
         - beta
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: journey
         cases:
         - user_acceptance.product_ops_growth.feedback_optimization_loop.sit1.journey
@@ -86,5 +90,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

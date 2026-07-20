@@ -1,45 +1,31 @@
 part of 'entity_repository.dart';
 
-class RemoteHomepageRepository implements HomepageRepository {
-  RemoteHomepageRepository({
-    required this.queryAdapter,
-    CloudHttpClient? httpClient,
-    String? baseUrl,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+typedef HomepageCommandInvocationContextFactory =
+    CloudOperationInvocationContext Function(
+      String clientPageId,
+      AppUiSurface surface,
+    );
+
+/// Production-only adapter：查询经 RemoteHomepageQueryAdapter，
+/// 写操作经 generated typed client；无裸 HTTP、无 fixture 回退。
+class RemoteHomepageRepository implements HomepageFacetSet {
+  factory RemoteHomepageRepository({
+    required RemoteHomepageQueryAdapter queryAdapter,
+    required GeneratedCloudOperationClient client,
+    required HomepageCommandInvocationContextFactory commandContext,
+  }) {
+    return RemoteHomepageRepository._(queryAdapter, client, commandContext);
+  }
+
+  RemoteHomepageRepository._(
+    this.queryAdapter,
+    this._client,
+    this._commandContext,
+  );
 
   final RemoteHomepageQueryAdapter queryAdapter;
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
-
-  Uri _uri(String path, {Map<String, String>? queryParameters}) {
-    return Uri.parse(
-      '$_baseUrl$path',
-    ).replace(queryParameters: queryParameters);
-  }
-
-  Map<String, String> _headersForSurface(
-    AppUiSurface surface, {
-    required String operationId,
-    required String clientPageId,
-  }) {
-    return CloudRequestHeaders.forSurfaceOperation(
-      surfaceId: surface.id,
-      routeId: surface.routeId,
-      operationId: operationId,
-      clientPageId: clientPageId,
-    );
-  }
-
-  String _contextForSurface(
-    AppUiSurface surface, {
-    required String operationId,
-  }) {
-    return CloudRequestHeaders.contextForSurfaceOperation(
-      surfaceId: surface.id,
-      operationId: operationId,
-    );
-  }
+  final GeneratedCloudOperationClient _client;
+  final HomepageCommandInvocationContextFactory _commandContext;
 
   @override
   Future<List<HomepageSummary>> searchHomepages({
@@ -69,49 +55,6 @@ class RemoteHomepageRepository implements HomepageRepository {
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
     return homepageDetailFromContract(
       await queryAdapter.getHomepageDetail(homepageId),
-    );
-  }
-
-  @override
-  Future<HomepageDetail> followHomepage(String homepageId) async {
-    final decoded = await _httpClient.postJson(
-      _uri(EntityApiMetadata.followHomepagePath(homepageId: homepageId)),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.followHomepageOperation,
-        clientPageId: EntityRequestPageIds.followHomepage,
-      ),
-      body: const <String, Object?>{},
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.followHomepageOperation,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Future<HomepageDetail> unfollowHomepage(String homepageId) async {
-    final decoded = await _httpClient.deleteJson(
-      _uri(EntityApiMetadata.unfollowHomepagePath(homepageId: homepageId)),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageDetail,
-        operationId: EntityApiMetadata.unfollowHomepageOperation,
-        clientPageId: EntityRequestPageIds.unfollowHomepage,
-      ),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageDetail,
-          operationId: EntityApiMetadata.unfollowHomepageOperation,
-        ),
-      ),
     );
   }
 
@@ -171,75 +114,26 @@ class RemoteHomepageRepository implements HomepageRepository {
   }
 
   @override
-  Future<HomepageDetail> intakeHomepageCandidate({
-    required HomepageSuggestionDraft draft,
-  }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(EntityApiMetadata.intakeHomepageCandidatePath),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepagePicker,
-        operationId: EntityApiMetadata.intakeHomepageCandidateOperation,
-        clientPageId: EntityRequestPageIds.intakeHomepageCandidate,
-      ),
-      body: draft.toMap(),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepagePicker,
-          operationId: EntityApiMetadata.intakeHomepageCandidateOperation,
-        ),
-      ),
-    );
-  }
-
-  @override
   Future<HomepageDetail> suggestHomepageCandidate({
     required HomepageSuggestionDraft draft,
   }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(EntityApiMetadata.suggestHomepageCandidatePath),
-      headers: _headersForSurface(
+    final projection = await _client.entityHomepageSuggestHomepageCandidate(
+      SuggestHomepageCandidateCommand(
+        title: draft.title,
+        homepageType: draft.homepageType,
+        subtitle: draft.subtitle,
+        categoryTags: draft.categoryTags,
+        coverUrl: draft.coverUrl,
+        address: draft.address,
+        city: draft.city,
+        location: _geoPointInput(draft.location),
+      ),
+      context: _commandContext(
+        EntityRequestPageIds.suggestHomepageCandidate,
         AppUiSurfaces.suggestHomepage,
-        operationId: EntityApiMetadata.suggestHomepageCandidateOperation,
-        clientPageId: EntityRequestPageIds.suggestHomepageCandidate,
-      ),
-      body: draft.toMap(),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.suggestHomepage,
-          operationId: EntityApiMetadata.suggestHomepageCandidateOperation,
-        ),
       ),
     );
-  }
-
-  @override
-  Future<HomepageDetail> publishHomepageCandidate(String homepageId) async {
-    final decoded = await _httpClient.postJson(
-      _uri(
-        EntityApiMetadata.publishHomepageCandidatePath(homepageId: homepageId),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepagePicker,
-        operationId: EntityApiMetadata.publishHomepageCandidateOperation,
-        clientPageId: EntityRequestPageIds.publishHomepageCandidate,
-      ),
-      body: PublishHomepageCandidateWire().toWire(),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepagePicker,
-          operationId: EntityApiMetadata.publishHomepageCandidateOperation,
-        ),
-      ),
-    );
+    return homepageDetailFromContract(projection);
   }
 
   @override
@@ -247,64 +141,31 @@ class RemoteHomepageRepository implements HomepageRepository {
     required String homepageId,
     required HomepageClaimRequestDraft draft,
   }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(
-        EntityApiMetadata.createHomepageClaimRequestPath(
-          homepageId: homepageId,
-        ),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageClaim,
-        operationId: EntityApiMetadata.createHomepageClaimRequestOperation,
-        clientPageId: EntityRequestPageIds.createHomepageClaimRequest,
-      ),
-      body: draft.toMap(),
-    );
-    return HomepageClaimRequestRecord.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageClaim,
-          operationId: EntityApiMetadata.createHomepageClaimRequestOperation,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Future<HomepageClaimRequestRecord> reviewHomepageClaimRequest({
-    required String homepageId,
-    required String claimRequestId,
-    required String status,
-    String? reviewNote,
-  }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(
-        EntityApiMetadata.reviewHomepageClaimRequestPath(
-          homepageId: homepageId,
-          claimRequestId: claimRequestId,
-        ),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageClaim,
-        operationId: EntityApiMetadata.reviewHomepageClaimRequestOperation,
-        clientPageId: EntityRequestPageIds.reviewHomepageClaimRequest,
-      ),
-      body: ReviewHomepageClaimRequestWire(
-        status: status,
-        reviewNote: (reviewNote != null && reviewNote.isNotEmpty)
-            ? reviewNote
-            : null,
-      ).toWire(),
-    );
-    return HomepageClaimRequestRecord.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageClaim,
-          operationId: EntityApiMetadata.reviewHomepageClaimRequestOperation,
-        ),
-      ),
+    final view = await _client
+        .entityHomepageClaimRequestCreateHomepageClaimRequest(
+          CreateHomepageClaimRequestCommand(
+            homepageId: homepageId,
+            claimTier: draft.claimTier,
+            businessLicenseUrl: draft.businessLicenseUrl,
+            contactPhone: draft.contactPhone,
+            identityCardFrontUrl: draft.identityCardFrontUrl,
+            identityCardBackUrl: draft.identityCardBackUrl,
+            note: draft.note,
+          ),
+          context: _commandContext(
+            EntityRequestPageIds.createHomepageClaimRequest,
+            AppUiSurfaces.homepageClaim,
+          ),
+        );
+    return HomepageClaimRequestRecord(
+      id: view.claimRequestId,
+      homepageId: view.homepageId,
+      requesterPersonaId: view.requesterPersonaId,
+      claimTier: view.claimTier,
+      status: view.status,
+      reviewNote: view.reviewNote,
+      createdAt: view.createdAt,
+      reviewedAt: view.reviewedAt,
     );
   }
 
@@ -313,28 +174,23 @@ class RemoteHomepageRepository implements HomepageRepository {
     required String homepageId,
     required HomepageBasicDraft draft,
   }) async {
-    final decoded = await _httpClient.patchJson(
-      _uri(
-        EntityApiMetadata.updateClaimedHomepageBasicsPath(
-          homepageId: homepageId,
-        ),
+    final projection = await _client.entityHomepageUpdateClaimedHomepageBasics(
+      UpdateClaimedHomepageBasicsCommand(
+        homepageId: homepageId,
+        title: draft.title,
+        subtitle: draft.subtitle,
+        categoryTags: draft.categoryTags,
+        coverUrl: draft.coverUrl,
+        address: draft.address,
+        city: draft.city,
+        location: _geoPointInput(draft.location),
       ),
-      headers: _headersForSurface(
+      context: _commandContext(
+        EntityRequestPageIds.updateClaimedHomepageBasics,
         AppUiSurfaces.homepageMaintenance,
-        operationId: EntityApiMetadata.updateClaimedHomepageBasicsOperation,
-        clientPageId: EntityRequestPageIds.updateClaimedHomepageBasics,
-      ),
-      body: draft.toMap(),
-    );
-    return HomepageDetail.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageMaintenance,
-          operationId: EntityApiMetadata.updateClaimedHomepageBasicsOperation,
-        ),
       ),
     );
+    return homepageDetailFromContract(projection);
   }
 
   @override
@@ -342,64 +198,35 @@ class RemoteHomepageRepository implements HomepageRepository {
     required String homepageId,
     required HomepageStatusReportDraft draft,
   }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(
-        EntityApiMetadata.createHomepageStatusReportPath(
-          homepageId: homepageId,
-        ),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageStatusReport,
-        operationId: EntityApiMetadata.createHomepageStatusReportOperation,
-        clientPageId: EntityRequestPageIds.createHomepageStatusReport,
-      ),
-      body: draft.toMap(),
-    );
-    return HomepageStatusReportRecord.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageStatusReport,
-          operationId: EntityApiMetadata.createHomepageStatusReportOperation,
-        ),
-      ),
+    final view = await _client
+        .entityHomepageStatusReportCreateHomepageStatusReport(
+          CreateHomepageStatusReportCommand(
+            homepageId: homepageId,
+            reason: draft.reason,
+            description: draft.description,
+            evidenceUrls: draft.evidenceUrls,
+          ),
+          context: _commandContext(
+            EntityRequestPageIds.createHomepageStatusReport,
+            AppUiSurfaces.homepageStatusReport,
+          ),
+        );
+    return HomepageStatusReportRecord(
+      id: view.reportId,
+      homepageId: view.homepageId,
+      reporterPersonaId: view.reporterPersonaId,
+      reason: view.reason,
+      status: view.status,
+      description: view.description,
+      evidenceUrls: view.evidenceUrls,
+      reviewNote: view.reviewNote,
+      createdAt: view.createdAt,
+      reviewedAt: view.reviewedAt,
     );
   }
+}
 
-  @override
-  Future<HomepageStatusReportRecord> reviewHomepageStatusReport({
-    required String homepageId,
-    required String reportId,
-    required String status,
-    String? reviewNote,
-  }) async {
-    final decoded = await _httpClient.postJson(
-      _uri(
-        EntityApiMetadata.reviewHomepageStatusReportPath(
-          homepageId: homepageId,
-          reportId: reportId,
-        ),
-      ),
-      headers: _headersForSurface(
-        AppUiSurfaces.homepageStatusReport,
-        operationId: EntityApiMetadata.reviewHomepageStatusReportOperation,
-        clientPageId: EntityRequestPageIds.reviewHomepageStatusReport,
-      ),
-      body: ReviewHomepageStatusReportWire(
-        status: status,
-        reviewNote: (reviewNote != null && reviewNote.isNotEmpty)
-            ? reviewNote
-            : null,
-      ).toWire(),
-    );
-    return HomepageStatusReportRecord.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.homepageStatusReport,
-          operationId: EntityApiMetadata.reviewHomepageStatusReportOperation,
-        ),
-      ),
-    );
-  }
+HomepageGeoPointInput? _geoPointInput(HomepageGeoPoint? location) {
+  if (location == null) return null;
+  return HomepageGeoPointInput(lat: location.latitude, lng: location.longitude);
 }

@@ -4,13 +4,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Mapping
 
 import yaml
 
-from core.paths import REPO_DATA_ROOT
+from core.io import read_json
+from core.paths import PUBLISH_ROOT, REPO_DATA_ROOT
 from core.schema import assert_valid
-from core.control_types import ContentType, RolloutMilestone
+from core.control_types import ContentType, EXECUTION_MILESTONES, RolloutMilestone
 from content.execution.identity import ExecutionIdentity, parse_execution_id
+from content.execution.workspace import execution_root
 
 
 COLD_START_SUPPLY_POLICY_PATH = (
@@ -198,12 +201,116 @@ def load_cold_start_supply_policy() -> ColdStartSupplyPolicy:
     return policy
 
 
+def _homepage_execution_target_names(
+    *,
+    identity: ExecutionIdentity,
+    homepage_execution_id: str,
+    contract: object,
+) -> tuple[str, ...]:
+    """Bind a post batch to the exact frozen and published homepage batch."""
+    homepage_identity = parse_execution_id(homepage_execution_id)
+    if (
+        homepage_identity.vertical,
+        homepage_identity.content_type,
+        homepage_identity.intent,
+        homepage_identity.scope,
+        homepage_identity.milestone,
+    ) != (
+        identity.vertical,
+        ContentType.HOMEPAGE,
+        "coverage",
+        identity.scope,
+        identity.milestone,
+    ):
+        raise ValueError(
+            "homepage execution binding must identify the matching travel homepage "
+            "coverage scope and milestone"
+        )
+    root = execution_root(homepage_execution_id)
+    target_set_path = root / "0.plan/target_set.json"
+    publish_ref_path = root / "publish_ref.json"
+    try:
+        target_set = read_json(target_set_path)
+        publish_ref = read_json(publish_ref_path)
+        assert_valid(
+            target_set,
+            "execution",
+            "target_set",
+            label=f"homepage target set:{homepage_execution_id}",
+        )
+        assert_valid(
+            publish_ref,
+            "execution",
+            "publish_ref",
+            label=f"homepage publish ref:{homepage_execution_id}",
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"homepage target set or publish closure is unavailable: {homepage_execution_id}: {exc}"
+        ) from exc
+    if (
+        target_set.get("executionId") != homepage_execution_id
+        or publish_ref.get("executionId") != homepage_execution_id
+    ):
+        raise ValueError("homepage execution binding identity drift")
+    targets = target_set.get("targets")
+    target_refs = target_set.get("targetRefs")
+    published = publish_ref.get("publishedRefs")
+    if (
+        not isinstance(targets, list)
+        or not isinstance(target_refs, list)
+        or not isinstance(published, Mapping)
+    ):
+        raise ValueError("homepage execution binding has invalid target or publish refs")
+    published_refs = published.get("entities")
+    published_posts = published.get("posts")
+    if not isinstance(published_refs, list) or published_posts != []:
+        raise ValueError("homepage execution binding must publish entities only")
+    if set(str(item) for item in published_refs) != set(str(item) for item in target_refs):
+        raise ValueError("homepage execution publish refs drift from its frozen target set")
+    province_contract = contract.province_for_scope(identity.scope)
+    expected_count = contract.batch_count(identity.milestone, province_contract)
+    if len(targets) != expected_count or len(target_refs) != expected_count:
+        raise ValueError(
+            f"homepage execution target count {len(targets)} != rollout batch {expected_count}"
+        )
+    names = tuple(
+        str(row.get("name") or "").strip()
+        for row in targets
+        if isinstance(row, Mapping)
+    )
+    if len(names) != len(targets) or not all(names) or len(set(names)) != len(names):
+        raise ValueError("homepage execution frozen target names are invalid")
+    if (
+        identity.milestone is RolloutMilestone.CANARY
+        and names != province_contract.canary_targets
+    ):
+        raise ValueError("canary homepage execution does not equal the fixed canary targets")
+    missing: list[str] = []
+    for ref in target_refs:
+        object_root = PUBLISH_ROOT / "entities" / str(ref)
+        if not (object_root / "page.md").is_file() or not (
+            object_root / "manifest.json"
+        ).is_file():
+            missing.append(str(ref))
+    if missing:
+        raise ValueError(
+            "bound homepage execution has non-canonical entities: " + ", ".join(missing)
+        )
+    return names
+
+
 def cold_start_execution_parameters(
     *,
     execution_id: str,
     retry_of: str | None = None,
+    homepage_execution_id: str | None = None,
 ) -> ColdStartExecutionParameters:
-    """Resolve one launch-supply execution from the frozen cold-start policy."""
+    """Resolve one post execution from an exact frozen homepage batch.
+
+    Canary、M1、M2、M3 的文章/图片/视频都显式绑定同省同档 homepage
+    execution；这样四车道可聚合，但 post execution 不会自行重新选择目标。
+    """
     identity = parse_execution_id(execution_id)
     if identity.vertical != "travel" or identity.intent != "cold-start":
         raise ValueError(
@@ -215,22 +322,28 @@ def cold_start_execution_parameters(
         ContentType.VIDEO,
     }:
         raise ValueError("cold-start rollout only accepts article, image, or video")
-    if identity.milestone is not RolloutMilestone.M3:
-        raise ValueError("cold-start execution requires milestone m3 after homepage closure")
+    if identity.milestone not in EXECUTION_MILESTONES:
+        raise ValueError("cold-start execution milestone is not a rollout milestone")
+    homepage_execution_id = str(homepage_execution_id or "").strip()
+    if not homepage_execution_id:
+        raise ValueError(
+            "cold-start execution requires --homepage-execution-id to bind the exact "
+            "published homepage batch"
+        )
 
     from content.release.canonical.rollout_contract import load_rollout_contract
     from content.release.canonical.rollout_milestone import (
-        assert_milestone_closed,
         retry_target_names,
     )
 
     contract = load_rollout_contract()
-    province = contract.province_for_scope(identity.scope).province
-    targets = load_cold_start_supply_policy().targets_for_province(province)
-    expected_names = tuple(target.name for target in targets)
-    if not expected_names:
-        raise ValueError(f"cold-start policy has no targets for {province}")
-    assert_milestone_closed(RolloutMilestone.M3)
+    province_contract = contract.province_for_scope(identity.scope)
+    province = province_contract.province
+    expected_names = _homepage_execution_target_names(
+        identity=identity,
+        homepage_execution_id=homepage_execution_id,
+        contract=contract,
+    )
     if retry_of:
         retry_names = retry_target_names(identity=identity, retry_of=retry_of)
         if retry_names != expected_names:

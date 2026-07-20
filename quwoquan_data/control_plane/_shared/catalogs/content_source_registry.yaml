@@ -112,21 +112,16 @@ lanePolicies:
         probeOrder: 1
         hosts: [baike.baidu.com]
         urlPatterns: ["https://baike.baidu.com/item/*"]
-        extractor: baidu_baike_openapi
+        extractor: baidu_baike_html
         sourceUseMode: factual_reference_only
         homepageTextAllowed: true
         sameSourceImageEvidenceAllowed: false
         canonicalResolution:
-          baseUrl: https://baike.baidu.com/api/openapi/BaikeLemmaCardApi
+          baseUrl: https://baike.baidu.com/search/word?word=
           candidateLimit: 3
           requireGeoContextForAlias: true
           canonicalConfidence: 0.94
           aliasConfidence: 0.85
-          fixedQuery:
-            scope: "103"
-            format: json
-            appid: "379020"
-            bk_length: "1200"
       - sourceKind: toutiao_baike
         sourceId: toutiao_baike
         platform: 今日头条百科
@@ -205,6 +200,39 @@ lanePolicies:
   video:
     discoveryAllowed: true
     publishRequiresAssetRights: true
+    admissionPolicyRevision: sourced-video-attribution-v1
+    requiredEvidence:
+      - directly_downloadable_asset
+      - media_probe
+      - sampled_watermark_ocr
+      - original_creator_attribution
+      - source_post_url
+      - original_asset_url
+      - audio_rights
+      - model_release
+      - property_release
+      - notice_and_takedown
+    invariant:
+      directDownloadRequired: true
+      accessControlBypassAllowed: false
+      drmAllowed: false
+      watermarkStatusRequired: absent
+      attributionRequired: true
+      audioRightsEvidenceRequired: true
+    commercialAdmissionMatrix:
+      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
+      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
     rankingSignals:
       - visual_relevance
       - officiality
@@ -213,7 +241,8 @@ lanePolicies:
       - source_traceability
     promptFacts:
       - 视频广泛检索通用视频平台、素材库、官方账号和垂类视频源。
-      - 视频能否发布由标题、描述、字幕、账号身份、音乐版权、画面水印、转载痕迹和授权声明逐条判断。
+      - 抖音、TikTok、微博、今日头条及中国旅行垂类只接收可直接下载、无 DRM、未绕过访问控制、采样 OCR 无水印的资产。
+      - 外部源视频必须冻结原创者、来源帖、原始资产、音频权利和下架策略；风险归因发布必须绑定审批 riskAcceptanceId，商业发布必须绑定已验证授权凭证。
 
 siteCrawlProfilePolicy:
   sourceRoot: sources/{vertical}/{sourceId}
@@ -653,20 +682,38 @@ common:
       platform: 抖音
       sourceClass: video_platform
       lanes: [video]
-      defaultRole: discovery_only
-      fetchMode: platform_reference
-      rightsPolicy: reference_only
+      defaultRole: publish_candidate
+      fetchMode: attribution_manifest
+      rightsPolicy: attribution_no_watermark
       rateLimit: conservative
-      promptFacts: [短视频发现和视觉参考, 不直接发布未授权素材]
+      promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
     - sourceId: tiktok
       platform: TikTok
       sourceClass: video_platform
       lanes: [video]
-      defaultRole: discovery_only
-      fetchMode: platform_reference
-      rightsPolicy: reference_only
+      defaultRole: publish_candidate
+      fetchMode: attribution_manifest
+      rightsPolicy: attribution_no_watermark
       rateLimit: conservative
-      promptFacts: [短视频发现和视觉参考, 不直接发布未授权素材]
+      promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
+    - sourceId: weibo
+      platform: 微博
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: publish_candidate
+      fetchMode: attribution_manifest
+      rightsPolicy: attribution_no_watermark
+      rateLimit: conservative
+      promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
+    - sourceId: toutiao_video
+      platform: 今日头条
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: publish_candidate
+      fetchMode: attribution_manifest
+      rightsPolicy: attribution_no_watermark
+      rateLimit: conservative
+      promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
     - sourceId: pexels_videos
       platform: Pexels Videos
       sourceClass: stock_video
@@ -822,8 +869,17 @@ verticals:
         platform: 旅行Vlog
         sourceClass: vertical_video
         lanes: [video]
-        defaultRole: reference_only
-        fetchMode: platform_reference
-        rightsPolicy: asset_level_required
+        defaultRole: publish_candidate
+        fetchMode: attribution_manifest
+        rightsPolicy: attribution_no_watermark
         rateLimit: conservative
-        promptFacts: [旅行实况和路线节奏参考, 发布需明确授权]
+        promptFacts: [旅行实况优先, 仅准入可直接下载无水印并冻结原创者归属、风险审批或商业授权的逐资产证据]
+      - sourceId: chinese_tourism_vertical
+        platform: 中国旅行垂类视频站
+        sourceClass: vertical_video
+        lanes: [video]
+        defaultRole: publish_candidate
+        fetchMode: attribution_manifest
+        rightsPolicy: attribution_no_watermark
+        rateLimit: conservative
+        promptFacts: [优先中国旅游专业内容, 仅准入可直接下载无水印并冻结原创者归属、风险审批或商业授权的逐资产证据]

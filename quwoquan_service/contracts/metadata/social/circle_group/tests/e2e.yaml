@@ -1,0 +1,15 @@
+aggregate: CircleGroup
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: group_lifecycle_in_circle
+    steps:
+      - member creates self-built group
+      - manager renames group with If-Match
+      - owner archives group
+    assertions:
+      - group_list_reflects_lifecycle
+      - stale_if_match_rejected

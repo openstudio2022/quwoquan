@@ -9,31 +9,35 @@ class SearchApiMetadata {
   static const String domain = 'search';
   static const List<String> apiPrefixes = <String>[
     '/search/feedback',
+    '/search/hot-queries',
     '/search/recent',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'ClearRecentSearches': '/search/recent',
     'DeleteRecentSearch': '/search/recent/{entryId}',
+    'ListHotQueries': '/search/hot-queries',
     'ListRecentSearches': '/search/recent',
     'ReportSearchFeedback': '/search/feedback',
     'SearchQuery': '/search',
-    'UpsertRecentSearch': '/search/recent/{entryId}',
+    'UpsertRecentSearch': '/search/recent',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'ClearRecentSearches': 'DELETE',
     'DeleteRecentSearch': 'DELETE',
+    'ListHotQueries': 'GET',
     'ListRecentSearches': 'GET',
     'ReportSearchFeedback': 'POST',
     'SearchQuery': 'POST',
-    'UpsertRecentSearch': 'PUT',
+    'UpsertRecentSearch': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'ClearRecentSearches': 'required',
     'DeleteRecentSearch': 'required',
+    'ListHotQueries': 'optional',
     'ListRecentSearches': 'required',
     'ReportSearchFeedback': 'optional',
     'SearchQuery': 'optional',
@@ -50,6 +54,7 @@ class SearchApiMetadata {
 
   static const String clearRecentSearchesOperation = 'ClearRecentSearches';
   static const String deleteRecentSearchOperation = 'DeleteRecentSearch';
+  static const String listHotQueriesOperation = 'ListHotQueries';
   static const String listRecentSearchesOperation = 'ListRecentSearches';
   static const String reportSearchFeedbackOperation = 'ReportSearchFeedback';
   static const String searchQueryOperation = 'SearchQuery';
@@ -62,15 +67,11 @@ class SearchApiMetadata {
       'entryId': entryId,
     });
   }
+  static const String listHotQueriesPath = '/search/hot-queries';
   static const String listRecentSearchesPath = '/search/recent';
   static const String reportSearchFeedbackPath = '/search/feedback';
   static const String searchQueryPath = '/search';
-  static const String upsertRecentSearchPathTemplate = '/search/recent/{entryId}';
-  static String upsertRecentSearchPath({required String entryId}) {
-    return _fillPath(upsertRecentSearchPathTemplate, <String, String>{
-      'entryId': entryId,
-    });
-  }
+  static const String upsertRecentSearchPath = '/search/recent';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

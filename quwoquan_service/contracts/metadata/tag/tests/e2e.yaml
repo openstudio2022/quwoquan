@@ -1,0 +1,40 @@
+entity: TagNodeView
+layer: e2e
+
+description: |
+  端云集成场景。app → gateway(/tag*) → tag-service → MongoDB。
+  执行环境：gamma_local（tag seed 经 cmd/import + cmd/import-objects 导入）。
+
+execution:
+  environment: gamma_local
+  ci_strategy: advisory
+  trigger: pre-release
+  runners:
+    api_contract: gamma HTTP client
+    ui_journey: Patrol / flutter integration_test
+
+scenarios:
+  - name: region_picker_roundtrip
+    test_type: ui_journey
+    actors:
+      app: lib/ui/user/pages/edit_profile_page.dart（地区选择）
+      gateway: /tag/children
+      service: tag-service ListTagChildren
+      storage: MongoDB tag_nodes
+    steps:
+      - 资料编辑页打开地区选择
+      - 逐级下钻省/市（走 /tag/children）
+    assertions:
+      - 行政区直辖层完整且只含 active 节点
+      - displayLabel 缩写规则与导入一致
+
+  - name: career_interest_tags_roundtrip
+    test_type: ui_journey
+    actors:
+      app: lib/ui/user/pages/career_interest_page.dart
+      service: tag-service ListTagChildren + ValidateTagRefs
+    steps:
+      - 加载职业/兴趣目录
+      - 保存前批量校验所选 tagRefs
+    assertions:
+      - 校验失败给出结构化错误（TAG.USER.*），非裸异常

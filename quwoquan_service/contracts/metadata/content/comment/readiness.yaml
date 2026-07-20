@@ -1,0 +1,53 @@
+object: Comment
+operations:
+  - CreateComment
+  - DeleteComment
+  - HideComment
+  - RestoreComment
+  - PinComment
+  - UnpinComment
+  - BindMediaAssetsToComment
+  - ListComments
+  - ListCommentReplies
+  - ListCommentsByAuthor
+  - ListCommentsForPostAuthor
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/content-service/internal/domain/comment/model/comment.go
+    - quwoquan_service/services/content-service/internal/application/comment/comment_service.go
+    - quwoquan_service/services/content-service/internal/application/comment/comment_moderation.go
+    - quwoquan_service/services/content-service/internal/application/comment/comment_events.go
+    - quwoquan_service/services/content-service/internal/application/comment/facades.go
+  store:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_aggregate_mongo_store.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_aggregate_mongo_documents.go
+  outbox:
+    - quwoquan_service/services/content-service/internal/application/comment/outbox_relay.go
+    - quwoquan_service/services/content-service/internal/infrastructure/messaging/comment_lifecycle_stream_publisher.go
+  reader:
+    - quwoquan_service/services/content-service/internal/domain/comment/ports/readers.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_aggregate_mongo_store.go
+  transport:
+    - quwoquan_service/services/content-service/internal/adapters/http/content_handler_comment.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/comment_facets.dart
+    - quwoquan_app/lib/cloud/services/content/remote/comment_facets_remote.dart
+  page:
+    - quwoquan_app/lib/ui/content/comments/widgets/comment_thread_view.dart
+    - quwoquan_app/lib/ui/content/comments/widgets/comment_input_overlay.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/content-service/tests/local_contract/comment_aggregate__command_query__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/adapters/http/comment_operations__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_aggregate_mongo_store__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/content/contract/content_comment_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/services/content/content_comment_remote__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/components/comment_system/comment_facet_widget__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/comment_keyset_explain_bench__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/comment_persistence_migration_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+environments: []

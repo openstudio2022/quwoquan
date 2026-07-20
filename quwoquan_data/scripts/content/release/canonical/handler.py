@@ -135,7 +135,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     environment_closure.set_defaults(handler=handle_attest_two_province_environment)
     rollout_closure = commands.add_parser(
         "attest-rollout-milestone",
-        help="从 Gamma import/API/App UAT/rollback/replay 证据冻结 canary/M1/M2/M3 准出",
+        help="从 Gamma import/API/App UAT/rollback/replay 证据冻结 canary/M1/M2/M3/H10K 准出",
     )
     rollout_closure.add_argument("--release-id", required=True)
     rollout_closure.add_argument("--release-root")

@@ -1,0 +1,84 @@
+version: 2
+node:
+  id: assistant-runtime-foundation
+  level: L2_business_capability
+  path: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation
+  title: assistant runtime foundation
+  parent_domain_service: assistant-run-learning
+  parent_business_capability: assistant-runtime-foundation
+scope:
+  summary: 助手域对象运行基座（conversation/run 持久化、订阅 lease、consent 门控、端侧对象级 Facet）验收范围。
+  in_scope:
+  - AssistantConversation/AssistantRun 对象 Store（state/receipt/outbox）与重启恢复语义
+  - SkillSubscription receipts/outbox 与 cron lease 领取
+  - SkillConsent 版本化事实、执行点 fail-closed 门控与事件
+  - 端侧对象级 Facet、alpha mock 物理隔离、结构化错误单轨
+  out_of_scope:
+  - Run/Stream 协议与策略模板（归 run-stream-policy）
+  - 学习事件聚合与反馈注入（归 learning-event-feedback-injection）
+sit_acceptance:
+  SIT1:
+    title: 助手对象运行基座能力 SIT
+    story_refs: []
+    done_when:
+    - conversation/run/turn 状态持久化于 MongoDB 对象 Store；服务重启后 run 可读、SSE resume 语义明确；进程内业务状态 map 为零。
+    - 创建类命令以稳定 intent + 唯一约束 + receipt 幂等；状态迁移类命令服务端内部 CAS + no-op receipt；公开请求无调用方版本字段。
+    - cron/主动投递经带 TTL 的 lease 领取，多实例并发不重复投递。
+    - consent 在敏感能力执行点强制校验且 fail-closed；未授权、撤权后、伪造身份、store 不可用负例全部拒绝。
+    - 端侧经对象级 Facet 消费，production 无 mock 可达、无吞异常 fallback、无本地合成成功数据。
+    - 对话/half sheet/技能中心/管理页消费真实 Facet；错误可见可恢复，任务/记忆具备 loading/empty/error/data 四态，无本地假开关、演示订阅载荷或悬空双写路径。
+    performance_points:
+    - run 创建与状态查询 P95 <= 800ms；SSE 首事件 <= 2s（deterministic provider 基线）。
+    tests:
+      planned:
+      - command: cd quwoquan_service && go test ./services/assistant-service/... -count=1
+      - command: cd quwoquan_service && go test ./services/assistant-service/tests/api_integration -count=1
+      - command: cd quwoquan_app && flutter test test/local_contract/cloud/assistant test/local_contract/ui/assistant
+      recorded:
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/learning_facts__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/consent_gate__security__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/conversation_store_fail_closed__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/personal_assistant_dialog/personal_assistant_dialog_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_half_sheet/assistant_half_sheet_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: sit1_local_contract
+        cases:
+        - local_contract.assistant_run_learning.assistant_runtime_foundation.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.assistant_run_learning.assistant_runtime_foundation.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: sit1_local_contract
+        cases:
+        - local_contract.assistant_run_learning.assistant_runtime_foundation.sit1.sit1_local_contract
+        envs: *id001
+    notes:
+    - 2026-07-19 B8 批次建立本 L2，收口 journey_scenario_registry 既有引用；对象收口证据随 B8 各阶段回填。
+    - 2026-07-19 服务端证据已落（conversation/run 持久化+重启恢复+幂等重放、SSE 终态重放、run 完成自评 scorecard、订阅幂等+状态 no-op+cron 租约、consent 版本化流水+双点 fail-closed gate、学习事实 dedupe，均经真实 Mongo/PG/Redis api_integration 通过）；端侧 Facet 拆分与 gamma 环境证据未闭合，保持 partial。
+    - 2026-07-19 端侧证据已落：1847 行聚合 Repository 拆 8 对象级 Facet（Remote-only provider 装配、mock 物理迁 test/support、production 零 mock 可达）；12 处吞异常/2 处 StateError/假 policy·搜索·personalization fallback 全部改结构化 CloudException 单轨（fail-closed）；学习回路接通（submitFeedback → ReportInteractionEvent typed 上报 + 稳定 eventId + 失败补发）；assistant 5 页曝光埋点接现行 pageAccess 通道。assistant local_contract 86 例 + search 回归全绿；verify-metadata/全仓 codegen/错误单轨门禁/mock 隔离门禁全绿。
+    - 2026-07-19 UAT 证据已落：assistant 5 页 UAT 由路径存在性伪验收改真实页面 pump（load_success/empty_permission_error/primary_cta/trace_context 四类 20 例全绿，负例断言结构化 CloudException 枚举同源，反馈 UAT 断言 typed InteractionEvent 上报）。剩余：gamma/beta/prod 环境运行证据（readiness environments 空，stage 停 implemented），保持 partial。
+    - 2026-07-20 页面商用续章完成：对话错误卡/原请求重试/欢迎空态/真实 phase；production half sheet 个性化与首条问题透传；技能中心去除 8 个假开关和演示订阅载荷，仅更新既有订阅；任务/记忆对象进入真实 UI 四态；订阅双写 controller、开发回放面板与死 ScheduleRow 清零；assistant 用户文案/视觉 token 单轨。证据：UI local_contract 38 例、cloud local_contract 8 例、真实页面 UAT 20 例、assistant-service 全包（含 api_integration）全绿。四环境 artifact 仍按既定环境批准出，SIT 保持 partial。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

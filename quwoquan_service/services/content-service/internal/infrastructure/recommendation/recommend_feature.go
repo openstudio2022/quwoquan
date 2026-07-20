@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"strings"
@@ -31,6 +32,22 @@ func NewRecommendFeatureProjector(db *mongo.Database, opts ...RecommendFeaturePr
 		opt(p)
 	}
 	return p
+}
+
+func (p *RecommendFeatureProjector) EnsureIndexes(ctx context.Context) error {
+	if p == nil || p.coll == nil {
+		return fmt.Errorf("RecommendFeature projector is not configured")
+	}
+	_, err := p.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "userId", Value: 1}},
+		Options: options.Index().
+			SetName("uq_recommend_feature_user").
+			SetUnique(true),
+	})
+	if err != nil {
+		return fmt.Errorf("create RecommendFeature user index: %w", err)
+	}
+	return nil
 }
 
 type RecommendFeatureProjectorOption func(*RecommendFeatureProjector)
@@ -235,10 +252,9 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 
 		if contentType != "" {
 			// 七态漏斗：仅「真实曝光 impressed / 停留 dwell」计入 typeImpressions（served/impressed
-			// 双轨的 impressed 侧）；弱可见 visible 不计入，避免稀释曝光分母与 CTR；未带 state 的上报按
-			// impression 兜底。served（仅下发未可见）不会进入 behavior 事件，只在 HotPath 曝光过滤中记账。
-			if state == "impressed" || state == "dwell" || action == "dwell" ||
-				(state == "" && action == "impression") {
+			// 双轨的 impressed 侧）；弱可见 visible 不计入，避免稀释曝光分母与 CTR。
+			// impression 的 state 已在行为入口强校验，禁止缺失 state 的兼容兜底。
+			if state == "impressed" || state == "dwell" || action == "dwell" {
 				typeImpressions[contentType]++
 			}
 			// 点击（click）与显式互动（like/share/comment）及深度≥2 计入 typeEngagements（CTR / 互动率分子）。
@@ -330,8 +346,9 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	}
 
 	setFields := bson.M{
-		"userId":    userID,
-		"updatedAt": time.Now().UTC(),
+		"userId":                   userID,
+		"behaviorProjectionLastId": event.ID,
+		"updatedAt":                time.Now().UTC(),
 	}
 	if depthCount > 0 {
 		setFields["userFeatures.avgEngagementDepth"] = float64(depthSum) / float64(depthCount)
@@ -342,18 +359,70 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		"$set": setFields,
 	}
 
-	opts := options.UpdateOne().SetUpsert(true)
-	if _, err := p.coll.UpdateOne(ctx, bson.M{"userId": userID}, update, opts); err != nil {
+	applied, err := p.applyBehaviorUpdate(ctx, userID, event.ID, update)
+	if err != nil {
 		return err
 	}
-	// Derive the consumer-facing interest profile in place. Failure here must
-	// not abort (and thus retry) the non-idempotent $inc projection above.
+	if !applied {
+		return nil
+	}
+	// 派生消费侧兴趣画像。这里失败不回滚已原子提交的计数；下一条事件或周期
+	// recompute 会继续收敛派生画像。
 	if p.interestAgg != nil {
 		if rerr := p.interestAgg.Recompute(ctx, userID); rerr != nil {
 			slog.Warn("interest profile recompute failed", "userId", userID, "err", rerr)
 		}
 	}
 	return nil
+}
+
+// applyBehaviorUpdate 用每条 rm_behavior_events ObjectID 的十六进制全序作为
+// 用户特征文档水位，使 $inc 与去重标记在同一原子 UpdateOne 中提交。
+// relay checkpoint 保存失败或多副本并发重扫时，旧/同一事件均成为 no-op。
+func (p *RecommendFeatureProjector) applyBehaviorUpdate(
+	ctx context.Context,
+	userID, eventID string,
+	update bson.M,
+) (bool, error) {
+	if strings.TrimSpace(eventID) == "" {
+		return false, fmt.Errorf("BehaviorBatchReported requires a projection event id")
+	}
+	filter := bson.M{
+		"userId": userID,
+		"$or": []bson.M{
+			{"behaviorProjectionLastId": bson.M{"$exists": false}},
+			{"behaviorProjectionLastId": bson.M{"$lt": eventID}},
+		},
+	}
+	result, err := p.coll.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return false, fmt.Errorf("project behavior features: %w", err)
+	}
+	if result.MatchedCount > 0 {
+		return true, nil
+	}
+
+	// MatchedCount=0 可能是重放，也可能是该用户第一条事件。先判存在，
+	// 再用唯一 userId 索引保护首次 upsert 的并发竞态。
+	existing, err := p.coll.CountDocuments(
+		ctx,
+		bson.M{"userId": userID},
+		options.Count().SetLimit(1),
+	)
+	if err != nil {
+		return false, fmt.Errorf("check RecommendFeature replay: %w", err)
+	}
+	if existing > 0 {
+		return false, nil
+	}
+	result, err = p.coll.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
+	if mongo.IsDuplicateKeyError(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("create RecommendFeature behavior projection: %w", err)
+	}
+	return result.UpsertedCount > 0 || result.MatchedCount > 0, nil
 }
 
 // intersectionEngagementActions are actions that signal the viewer actively

@@ -1,0 +1,44 @@
+aggregate: UserSettings
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 PostgreSQL）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  postgres: embedded-postgres
+
+spy_targets: [outbox]
+mock_targets: []
+
+scenarios:
+  - name: typed_command_rejects_dynamic_patch
+    command: UpdateNotificationSettings
+    assertions:
+      - unknown_fields_rejected_with_invalid_argument
+      - only_declared_writable_fields_persisted
+
+  - name: version_cas_and_audit_outbox
+    command: UpdatePrivacySettings
+    assertions:
+      - version_incremented_by_server_cas
+      - outbox_UserSettingsChanged_same_transaction
+
+  - name: same_value_rewrite_is_noop
+    command: UpdateCallSettings x2 (identical payload)
+    assertions:
+      - second_write_does_not_increment_version
+      - no_duplicate_audit_event
+
+  - name: call_settings_validate_ringtone
+    command: UpdateCallSettings (unknown ringtone id)
+    assertions:
+      - rejected_with_invalid_call_ringtone
+      - no_state_change
+
+  - name: appearance_scope_semantics
+    command: UpdateAppearanceSettings(applyScope=all_accounts|current_sub_account)
+    assertions:
+      - all_accounts_updates_owner_default_and_clears_overrides
+      - current_sub_account_writes_override_only
+      - appearance_version_incremented

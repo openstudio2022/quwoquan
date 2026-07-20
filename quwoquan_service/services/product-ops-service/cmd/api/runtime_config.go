@@ -56,6 +56,7 @@ type config struct {
 		Project                   string `yaml:"project"`
 		RawLogstore               string `yaml:"raw_logstore"`
 		StartupDiagnosticLogstore string `yaml:"startup_diagnostic_logstore"`
+		RuntimeLogstore           string `yaml:"runtime_logstore"`
 		AggregateLogstore         string `yaml:"aggregate_logstore"`
 		TimeoutMS                 int    `yaml:"timeout_ms"`
 	} `yaml:"sls"`
@@ -148,6 +149,9 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_STARTUP_DIAGNOSTIC_LOGSTORE")); v != "" {
 		cfg.SLS.StartupDiagnosticLogstore = v
 	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_RUNTIME_LOGSTORE")); v != "" {
+		cfg.SLS.RuntimeLogstore = v
+	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_AGGREGATE_LOGSTORE")); v != "" {
 		cfg.SLS.AggregateLogstore = v
 	}
@@ -225,7 +229,7 @@ func parseSemver(raw string) [3]int {
 	return out
 }
 
-func validateRequiredRuntimeConfig(cfg config) error {
+func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 	if strings.TrimSpace(cfg.MongoDB.URI) == "" {
 		return fmt.Errorf("mongodb.uri is required")
 	}
@@ -235,20 +239,27 @@ func validateRequiredRuntimeConfig(cfg config) error {
 	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
 		return fmt.Errorf("postgres.dsn is required")
 	}
-	for name, value := range map[string]string{
-		"region":                      cfg.SLS.Region,
-		"endpoint":                    cfg.SLS.Endpoint,
-		"project":                     cfg.SLS.Project,
-		"raw_logstore":                cfg.SLS.RawLogstore,
-		"startup_diagnostic_logstore": cfg.SLS.StartupDiagnosticLogstore,
-		"aggregate_logstore":          cfg.SLS.AggregateLogstore,
-	} {
-		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("sls.%s is required", name)
-		}
+	environment := "prod"
+	if len(appEnv) > 0 && strings.TrimSpace(appEnv[0]) != "" {
+		environment = strings.TrimSpace(appEnv[0])
 	}
-	if cfg.SLS.TimeoutMS <= 0 || cfg.SLS.TimeoutMS > 10000 {
-		return fmt.Errorf("sls.timeout_ms must be within 1..10000")
+	if postgresTelemetrySchema(environment) == "" {
+		for name, value := range map[string]string{
+			"region":                      cfg.SLS.Region,
+			"endpoint":                    cfg.SLS.Endpoint,
+			"project":                     cfg.SLS.Project,
+			"raw_logstore":                cfg.SLS.RawLogstore,
+			"startup_diagnostic_logstore": cfg.SLS.StartupDiagnosticLogstore,
+			"runtime_logstore":            cfg.SLS.RuntimeLogstore,
+			"aggregate_logstore":          cfg.SLS.AggregateLogstore,
+		} {
+			if strings.TrimSpace(value) == "" {
+				return fmt.Errorf("sls.%s is required", name)
+			}
+		}
+		if cfg.SLS.TimeoutMS <= 0 || cfg.SLS.TimeoutMS > 10000 {
+			return fmt.Errorf("sls.timeout_ms must be within 1..10000")
+		}
 	}
 	if _, err := buildRedisSceneConfig("rec", cfg.Redis.Rec); err != nil {
 		return err
@@ -257,6 +268,32 @@ func validateRequiredRuntimeConfig(cfg config) error {
 		return err
 	}
 	return nil
+}
+
+// postgresTelemetrySchema 返回 integration profile 的固定 schema。后端选择由
+// composition root 根据环境完成，禁止通过 TELEMETRY_BACKEND 在同一 artifact
+// 内动态切换；release/prod 不会命中此分支，继续要求真实 SLS 配置。
+func postgresTelemetrySchema(appEnv string) string {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "integration":
+		return "telemetry_local_integration"
+	case "beta-integration", "beta_integration":
+		return "telemetry_local_beta"
+	case "gamma-integration", "gamma_integration":
+		return "telemetry_local_gamma"
+	default:
+		return ""
+	}
+}
+
+func operatorOIDCRequired(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "alpha", "integration", "beta-integration", "beta_integration",
+		"gamma-integration", "gamma_integration":
+		return false
+	default:
+		return true
+	}
 }
 
 func buildRedisRouter(cfg config) (*rtredis.Router, error) {

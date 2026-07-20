@@ -40,6 +40,7 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit1.sit1_local_contract
@@ -47,11 +48,13 @@ sit_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit1.sit1_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.commercial_message_system.sit1.device_journey
@@ -77,11 +80,13 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit2.sit2_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit2_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.sit2.sit2_api_integration
@@ -90,6 +95,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit2_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit2.sit2_local_contract
@@ -117,17 +123,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit3.sit3_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit3_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.sit3.sit3_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit3_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit3.sit3_local_contract
@@ -156,17 +165,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit4_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit4.sit4_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit4_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.sit4.sit4_api_integration
         envs: *id002
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.commercial_message_system.sit4.device_journey
@@ -194,12 +206,14 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit5_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.sit5.sit5_local_contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: sit5_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.sit5.sit5_api_integration
@@ -233,17 +247,20 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.contract1.contract1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: contract1_api_integration
         cases:
         - api_integration.chat_conversation.commercial_message_system.contract1.contract1_api_integration
         envs: *id002
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.chat_conversation.commercial_message_system.contract1.contract1_local_contract
@@ -257,6 +274,6 @@ execution:
   - make verify-app-page-horizontal-quality
   - make verify-app-mock-isolation
   - make verify-app-login-entry-loop-contract
-  full_gate:
+  profile_gates:
   - bash quwoquan_ops/gate/gate_repo.sh --scope app
   - make gate

@@ -21,42 +21,80 @@ func TestCommentMongoAdapter_ListQueryUsesDeclaredIndex(t *testing.T) {
 		createCommentDirect(t, postID, fmt.Sprintf("index-author-%d", index), fmt.Sprintf("index-%d", index))
 	}
 
-	var plan struct {
-		QueryPlanner struct {
-			WinningPlan bson.M `bson:"winningPlan"`
-		} `bson:"queryPlanner"`
-	}
-	err := mongoDB.RunCommand(context.Background(), bson.D{
-		{Key: "explain", Value: bson.D{
-			{Key: "find", Value: "comments"},
-			{Key: "filter", Value: bson.D{
-				{Key: "postId", Value: postID},
-				{Key: "parentCommentId", Value: ""},
-				{Key: "status", Value: "active"},
-			}},
-			{Key: "sort", Value: bson.D{
+	cases := []struct {
+		name      string
+		indexName string
+		sort      bson.D
+	}{
+		{
+			name:      "latest",
+			indexName: "idx_comments_post_page",
+			sort: bson.D{
 				{Key: "isPinned", Value: -1},
 				{Key: "pinnedAt", Value: -1},
 				{Key: "createdAt", Value: -1},
 				{Key: "_id", Value: -1},
-			}},
-			{Key: "limit", Value: 20},
-		}},
-		{Key: "verbosity", Value: "queryPlanner"},
-	}).Decode(&plan)
-	if err != nil {
-		t.Fatalf("explain Comment list query: %v", err)
+			},
+		},
+		{
+			name:      "hot",
+			indexName: "idx_comments_post_hot_page",
+			sort: bson.D{
+				{Key: "isPinned", Value: -1},
+				{Key: "pinnedAt", Value: -1},
+				{Key: "hotScore", Value: -1},
+				{Key: "createdAt", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+		},
 	}
-	if len(plan.QueryPlanner.WinningPlan) == 0 {
-		t.Fatalf("Comment explain has no winningPlan: %+v", plan)
-	}
-	encoded, _ := json.Marshal(plan.QueryPlanner.WinningPlan)
-	planText := string(encoded)
-	if !strings.Contains(planText, "idx_comments_post_page") || !strings.Contains(planText, "IXSCAN") {
-		t.Fatalf("Comment list query does not use declared compound index: %s", planText)
-	}
-	if strings.Contains(planText, "COLLSCAN") || strings.Contains(planText, `"stage":"SORT"`) {
-		t.Fatalf("Comment list query regressed to collection scan or blocking sort: %s", planText)
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var plan struct {
+				QueryPlanner struct {
+					WinningPlan bson.M `bson:"winningPlan"`
+				} `bson:"queryPlanner"`
+			}
+			err := mongoDB.RunCommand(context.Background(), bson.D{
+				{Key: "explain", Value: bson.D{
+					{Key: "find", Value: "comments"},
+					{Key: "filter", Value: bson.D{
+						{Key: "postId", Value: postID},
+						{Key: "parentCommentId", Value: ""},
+						{Key: "status", Value: "active"},
+					}},
+					{Key: "sort", Value: testCase.sort},
+					{Key: "limit", Value: 20},
+				}},
+				{Key: "verbosity", Value: "queryPlanner"},
+			}).Decode(&plan)
+			if err != nil {
+				t.Fatalf("explain Comment %s query: %v", testCase.name, err)
+			}
+			if len(plan.QueryPlanner.WinningPlan) == 0 {
+				t.Fatalf("Comment %s explain has no winningPlan: %+v", testCase.name, plan)
+			}
+			encoded, _ := json.Marshal(plan.QueryPlanner.WinningPlan)
+			planText := string(encoded)
+			if !strings.Contains(planText, testCase.indexName) ||
+				!strings.Contains(planText, "IXSCAN") {
+				t.Fatalf(
+					"Comment %s query does not use %s: %s",
+					testCase.name,
+					testCase.indexName,
+					planText,
+				)
+			}
+			if strings.Contains(planText, "COLLSCAN") ||
+				strings.Contains(planText, `"stage":"SORT"`) {
+				t.Fatalf(
+					"Comment %s query regressed to collection scan or blocking sort: %s",
+					testCase.name,
+					planText,
+				)
+			}
+		})
 	}
 }
 

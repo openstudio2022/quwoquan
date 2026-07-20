@@ -5,6 +5,35 @@ metadata:
   owner: product-ops-growth
   environments: [beta, gamma, prod]
 spec:
+  deploymentProfiles:
+    alpha:
+      backend: memory
+      evidenceClass: local_contract
+      requiresSecret: false
+      invokeSlsWriter: false
+    beta:
+      integration:
+        backend: postgres_telemetry_local
+        evidenceClass: api_integration
+        requiresSecret: false
+      release:
+        backend: aliyun_sls
+        evidenceClass: api_integration
+        requiresSecret: true
+    gamma:
+      integration:
+        backend: postgres_telemetry_local
+        evidenceClass: api_integration
+        requiresSecret: false
+      release:
+        backend: aliyun_sls
+        evidenceClass: api_integration
+        requiresSecret: true
+    prod:
+      backend: aliyun_sls
+      evidenceClass: api_integration
+      requiresSecret: true
+    selection: compositionRoot
   project:
     configEnv: PRODUCT_OPS_SLS_PROJECT
     regionEnv: PRODUCT_OPS_SLS_REGION
@@ -27,7 +56,17 @@ spec:
           - logType
           - eventType
           - pageName
+          - journey
+          - action
           - result
+          - durationMs
+          - failReasonCode
+          - recoveryAction
+          - requestId
+          - resultCount
+          - rankPosition
+          - objectType
+          - traceId
           - appVersion
           - networkClass
           - deviceManufacturer
@@ -38,14 +77,27 @@ spec:
           - occurredAt
           - sessionId
           - _batchKey
+          - _batchIndex
           - readyMs
           - ttffMs
           - rebufferCount
           - rebufferMs
+          - effectivePlaybackMs
           - seekCount
+          - seekFailureCount
+          - seekCommandMaxMs
+          - seekSettleMaxMs
+          - droppedFrames
+          - processedVideoFrames
+          - audioUnderrunCount
+          - rendererMode
+          - decoderQueueMode
+          - decoderFallbackEnabled
+          - seekEvidenceSource
           - declaredDurationMs
           - observedDurationMs
           - durationMismatch
+          - devicePlatform
           - playbackMode
         forbidden: [callStack]
       access:
@@ -59,6 +111,31 @@ spec:
       access:
         write: product-ops-service
         query: [product-ops-service]
+    - name: runtime-diagnostics-raw
+      retentionDays: 3
+      appendMeta: true
+      forbiddenFields: [schemaVersion, eventVersion, contractVersion, protocolVersion, releaseVersion, releaseId, dataReleaseId, sessionId, userId]
+      indexes:
+        text: false
+        fields:
+          - logKind
+          - severity
+          - signal
+          - errorCode
+          - fingerprint
+          - resourceSourceType
+          - resourceService
+          - resourceAppVersion
+          - resourceServiceVersion
+          - resourceEnvironment
+          - operationId
+          - pageName
+          - occurredAt
+          - ingestedAt
+      access:
+        write: product-ops-service
+        query: [product-ops-service]
+        sensitiveExactQueryPermission: ops.runtime_log.drilldown.sensitive
     - name: app-product-telemetry-hourly
       retentionDays: 90
       appendMeta: true
@@ -78,53 +155,159 @@ spec:
       destinationLogTime: businessHour
       exactlyOnce: true
       lateArrival: emitIncrementForBusinessHour
+      rowKindField: rowKind
+      freshnessFields: [freshness, generatedThrough, lagSeconds]
+      rowIdentity: [_batchKey, _batchIndex]
+      duplicatePolicy: count_distinct_row_identity
     jobs:
       - name: app-product-telemetry-event-dimensions-hourly
         rowKind: event_dimensions
         sql: >-
-          * | SELECT date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          * | SELECT 'event_dimensions' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
           cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
           logType,eventType,pageName,appVersion,networkClass,deviceManufacturer,deviceModel,
           journey,action,result,
-          count(*) AS count,approx_set(sessionId) AS sessionHll
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          approx_set(sessionId) AS sessionHll,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
           GROUP BY businessHour,logType,eventType,pageName,appVersion,networkClass,
           deviceManufacturer,deviceModel,journey,action,result
+      - name: app-product-telemetry-product-action-funnel-hourly
+        rowKind: product_action_funnel
+        sql: >-
+          eventType:product_action | SELECT 'product_action_funnel' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          journey,action,pageName,result,failReasonCode,recoveryAction,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          approx_set(sessionId) AS sessionHll,
+          histogram(try_cast(durationMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS durationHistogram,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,journey,action,pageName,result,failReasonCode,recoveryAction
+      - name: app-product-telemetry-search-funnel-hourly
+        rowKind: search_funnel
+        sql: >-
+          (eventType:search_query_submit OR eventType:search_result_impression OR
+          eventType:search_result_click OR eventType:search_refine OR
+          eventType:search_zero_result OR eventType:search_result_dwell) |
+          SELECT 'search_funnel' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          action,
+          count(DISTINCT CASE WHEN eventType='search_query_submit' THEN requestId END) AS querySubmitCount,
+          count(DISTINCT CASE WHEN eventType='search_result_impression' THEN requestId END) AS nonEmptyResultCount,
+          count(DISTINCT CASE WHEN eventType='search_zero_result' THEN requestId END) AS zeroResultCount,
+          count(DISTINCT CASE WHEN eventType='search_result_click' THEN requestId END) AS clickRequestCount,
+          count(DISTINCT CASE WHEN eventType='search_result_dwell'
+            AND try_cast(durationMs AS bigint)>=3000 THEN requestId END) AS qualifiedDwellRequestCount,
+          count(DISTINCT CASE WHEN eventType='search_result_click'
+            OR (eventType='search_result_dwell' AND try_cast(durationMs AS bigint)>=3000)
+            THEN requestId END) AS effectiveActionRequestCount,
+          count(DISTINCT CASE WHEN eventType='search_refine' THEN requestId END) AS refineRequestCount,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS acceptedRowCount,
+          histogram(CASE WHEN eventType='search_result_impression'
+            THEN try_cast(durationMs AS double) END,
+            array[0,50,100,250,500,750,1000,1500,2000,3000,5000,10000]) AS firstActionableHistogram,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,action
       - name: app-product-telemetry-performance-hourly
         rowKind: performance
         sql: >-
           (eventType:performance_sample OR eventType:app_startup) | SELECT
+          'performance' AS rowKind,
           date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,eventType,
           cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
-          operationId,count(*) AS count,
-          approx_percentile(try_cast(durationMs AS double),array[0.5,0.95,0.99]) AS durationPercentiles,
-          approx_percentile(try_cast(tClickToFirstFrameMs AS double),array[0.5,0.95,0.99]) AS firstFramePercentiles,
-          approx_percentile(try_cast(tFirstFrameToShellMs AS double),array[0.5,0.95,0.99]) AS shellPercentiles,
-          approx_percentile(try_cast(tShellToContentMs AS double),array[0.5,0.95,0.99]) AS contentAfterShellPercentiles,
-          approx_percentile(try_cast(tClickToContentMs AS double),array[0.5,0.95,0.99]) AS contentPercentiles,
-          sum(CASE WHEN hasError='true' THEN 1 ELSE 0 END) AS errorCount
+          operationId,count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          histogram(try_cast(durationMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS durationHistogram,
+          histogram(try_cast(tClickToFirstFrameMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS firstFrameHistogram,
+          histogram(try_cast(tFirstFrameToShellMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS shellHistogram,
+          histogram(try_cast(tShellToContentMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS contentAfterShellHistogram,
+          histogram(try_cast(tClickToContentMs AS double),array[0,50,100,250,500,1000,2000,3000,5000,10000,30000]) AS contentHistogram,
+          count(DISTINCT CASE WHEN hasError='true' THEN concat(_batchKey, ':', _batchIndex) END) AS errorCount,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
           GROUP BY businessHour,eventType,operationId
       - name: app-product-telemetry-video-qoe-hourly
         rowKind: video_qoe
         sql: >-
           eventType:video_playback_qoe | SELECT
+          'video_qoe' AS rowKind,
           date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
           cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
-          playbackMode,result,count(*) AS readyCount,
-          approx_percentile(try_cast(readyMs AS double),array[0.5,0.95,0.99]) AS readyPercentiles,
-          approx_percentile(try_cast(ttffMs AS double),array[0.5,0.95,0.99]) AS ttffPercentiles,
+          devicePlatform,networkClass,
+          playbackMode,result,rendererMode,decoderQueueMode,decoderFallbackEnabled,seekEvidenceSource,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS readyCount,
+          count(DISTINCT CASE WHEN ttffMs IS NOT NULL THEN concat(_batchKey, ':', _batchIndex) END) AS nativeFirstFrameSuccessCount,
+          histogram(try_cast(readyMs AS double),array[0,100,250,500,1000,2000,3000,5000,10000,30000]) AS readyHistogram,
+          histogram(try_cast(ttffMs AS double),array[0,100,250,500,1000,2000,3000,5000,10000,30000]) AS ttffHistogram,
           sum(try_cast(rebufferCount AS bigint)) AS rebufferCount,
+          count(DISTINCT CASE WHEN try_cast(rebufferCount AS bigint)>0 THEN concat(_batchKey, ':', _batchIndex) END) AS rebufferSessionCount,
           sum(try_cast(rebufferMs AS bigint)) AS rebufferMs,
+          sum(try_cast(effectivePlaybackMs AS bigint)) AS effectivePlaybackMs,
           sum(try_cast(seekCount AS bigint)) AS seekCount,
-          sum(CASE WHEN durationMismatch='true' THEN 1 ELSE 0 END) AS durationMismatchCount
-          GROUP BY businessHour,playbackMode,result
+          sum(try_cast(seekFailureCount AS bigint)) AS seekFailureCount,
+          histogram(try_cast(seekCommandMaxMs AS double),array[0,25,50,100,250,500,1000,2000,5000]) AS seekCommandHistogram,
+          histogram(try_cast(seekSettleMaxMs AS double),array[0,25,50,100,250,500,1000,2000,5000]) AS seekSettleHistogram,
+          sum(try_cast(droppedFrames AS bigint)) AS droppedFrames,
+          sum(try_cast(processedVideoFrames AS bigint)) AS processedVideoFrames,
+          sum(try_cast(audioUnderrunCount AS bigint)) AS audioUnderrunCount,
+          count(DISTINCT CASE WHEN result<>'success' THEN concat(_batchKey, ':', _batchIndex) END) AS terminalFailureCount,
+          count(DISTINCT CASE WHEN durationMismatch='true' THEN concat(_batchKey, ':', _batchIndex) END) AS durationMismatchCount,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,devicePlatform,networkClass,playbackMode,result,rendererMode,decoderQueueMode,decoderFallbackEnabled,seekEvidenceSource
+      - name: app-product-telemetry-rtc-qoe-hourly
+        rowKind: rtc_qoe
+        sql: >-
+          eventType:rtc_media_qoe | SELECT
+          'rtc_qoe' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          callType,result,mediaConnected,networkQuality,disconnectReason,failReasonCode,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          histogram(try_cast(connectTimeMs AS double),array[0,250,500,1000,2000,3000,5000,8000,10000,30000]) AS connectTimeHistogram,
+          sum(try_cast(reconnectCount AS bigint)) AS reconnectCount,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,callType,result,mediaConnected,networkQuality,disconnectReason,failReasonCode
       - name: app-product-telemetry-errors-hourly
         rowKind: error_dimensions
         sql: >-
-          logType:error | SELECT date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          logType:error | SELECT 'error_dimensions' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
           cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
           errorCode,operationId,httpStatus,pageName,appVersion,deviceManufacturer,deviceModel,
-          networkClass,count(*) AS count GROUP BY businessHour,errorCode,operationId,httpStatus,
+          networkClass,count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,errorCode,operationId,httpStatus,
           pageName,appVersion,deviceManufacturer,deviceModel,networkClass
+      - name: runtime-diagnostics-fingerprint-hourly
+        rowKind: runtime_diagnostics
+        source: runtime-diagnostics-raw
+        sql: >-
+          * | SELECT 'runtime_diagnostics' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          logKind,severity,signal,errorCode,fingerprint,resourceSourceType,resourceService,
+          resourceAppVersion,resourceServiceVersion,resourceEnvironment,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,logKind,severity,signal,errorCode,fingerprint,resourceSourceType,
+          resourceService,resourceAppVersion,resourceServiceVersion,resourceEnvironment
   ram:
     productOpsActions:
       - log:PostLogStoreLogs
@@ -177,6 +360,117 @@ spec:
         / (count(*) + 0.001) AS mismatchRate
       condition: sampleCount >= 100 AND mismatchRate > 0.01
       severity: warning
+    - name: product-video-seek-command-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT
+        sum(try_cast(seekCount AS bigint)) AS seekCount,
+        sum(try_cast(seekFailureCount AS bigint)) / (sum(try_cast(seekCount AS bigint)) + 0.001) AS failureRate
+      condition: seekCount >= 100 AND failureRate >= 0.005
+      severity: warning
+    - name: product-video-dropped-frame-ratio-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT
+        count(*) AS sampleCount,
+        sum(try_cast(processedVideoFrames AS bigint)) AS processedFrames,
+        sum(try_cast(droppedFrames AS bigint))
+        / (sum(try_cast(processedVideoFrames AS bigint)) + 0.001) AS droppedFrameRatio
+      condition: sampleCount >= 100 AND processedFrames >= 1000 AND droppedFrameRatio >= 0.01
+      severity: warning
+    - name: product-video-audio-underrun-detected
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:video_playback_qoe | SELECT count(*) AS sampleCount,
+        sum(try_cast(audioUnderrunCount AS bigint)) AS audioUnderrunCount
+      condition: sampleCount >= 100 AND audioUnderrunCount > 0
+      severity: warning
+    - name: product-rtc-media-connect-rate-low
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:rtc_media_qoe | SELECT
+        sum(CASE WHEN result<>'abandoned' THEN 1 ELSE 0 END) AS sampleCount,
+        sum(CASE WHEN result<>'abandoned' AND mediaConnected='true' THEN 1 ELSE 0 END)
+        / (sum(CASE WHEN result<>'abandoned' THEN 1 ELSE 0 END) + 0.001) AS connectRate
+      condition: sampleCount >= 50 AND connectRate < 0.98
+      severity: critical
+    - name: product-rtc-media-connect-p95-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:rtc_media_qoe AND mediaConnected:true | SELECT count(*) AS sampleCount,
+        approx_percentile(try_cast(connectTimeMs AS double), 0.95) AS p95Ms
+      condition: sampleCount >= 50 AND p95Ms > 3000
+      severity: warning
+    - name: product-rtc-unexpected-disconnect-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:rtc_media_qoe AND mediaConnected:true | SELECT count(*) AS sampleCount,
+        sum(CASE WHEN result='connection_lost' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS disconnectRate
+      condition: sampleCount >= 50 AND disconnectRate > 0.02
+      severity: critical
+    - name: product-content-share-action-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:product_action AND journey:content_share | SELECT
+        count(*) AS sampleCount,
+        sum(CASE WHEN result='failure' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS failureRate
+      condition: sampleCount >= 20 AND failureRate > 0.05
+      severity: warning
+    - name: product-profile-interaction-state-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:product_action AND journey:profile_interaction | SELECT
+        count(*) AS sampleCount,
+        sum(CASE WHEN result='failure' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS failureRate
+      condition: sampleCount >= 20 AND failureRate > 0.02
+      severity: warning
+    - name: product-search-effective-success-rate-low
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        (eventType:search_query_submit OR eventType:search_result_click OR
+        eventType:search_result_dwell) | SELECT
+        count(DISTINCT CASE WHEN eventType='search_query_submit' THEN requestId END) AS submitCount,
+        count(DISTINCT CASE WHEN eventType='search_result_click'
+          OR (eventType='search_result_dwell' AND try_cast(durationMs AS bigint)>=3000)
+          THEN requestId END)
+        / (count(DISTINCT CASE WHEN eventType='search_query_submit' THEN requestId END) + 0.001)
+        AS effectiveSuccessRate
+      condition: submitCount >= 100 AND effectiveSuccessRate < 0.35
+      severity: warning
+    - name: product-search-first-actionable-p95-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:search_result_impression | SELECT count(*) AS sampleCount,
+        approx_percentile(try_cast(durationMs AS double), 0.95) AS p95Ms
+      condition: sampleCount >= 100 AND p95Ms > 1500
+      severity: warning
+    - name: product-search-effective-action-rate-low
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        (eventType:search_result_impression OR eventType:search_result_click OR
+        eventType:search_result_dwell) | SELECT
+        count(DISTINCT CASE WHEN eventType='search_result_impression' THEN requestId END) AS resultCount,
+        count(DISTINCT CASE WHEN eventType='search_result_click'
+          OR (eventType='search_result_dwell' AND try_cast(durationMs AS bigint)>=3000)
+          THEN requestId END)
+        / (count(DISTINCT CASE WHEN eventType='search_result_impression' THEN requestId END) + 0.001)
+        AS effectiveActionRate
+      condition: resultCount >= 100 AND effectiveActionRate < 0.20
+      severity: warning
     - name: product-telemetry-scheduled-sql-failed
       signal: scheduledSqlInstanceStatus
       condition: FAILED
@@ -187,5 +481,18 @@ spec:
       severity: warning
     - name: product-telemetry-raw-retention-drift
       signal: logstoreRetentionDays
+      expected: 3
+      severity: critical
+    - name: runtime-diagnostics-error-fingerprint-spike
+      signal: scheduledSqlQuery
+      source: runtime-diagnostics-raw
+      query: >-
+        severity:ERROR | SELECT signal,errorCode,fingerprint,count(*) AS count
+        GROUP BY signal,errorCode,fingerprint
+      condition: count >= 10
+      severity: warning
+    - name: runtime-diagnostics-raw-retention-drift
+      signal: logstoreRetentionDays
+      source: runtime-diagnostics-raw
       expected: 3
       severity: critical

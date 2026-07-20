@@ -168,6 +168,19 @@ func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet conten
 		}); err != nil {
 			t.Fatalf("seed content discovery projection %s: %v", post.ID, err)
 		}
+		projected, err := mongoDB.Collection("rm_discovery_feed").CountDocuments(
+			ctx,
+			bson.M{"postId": post.ID},
+		)
+		if err != nil || projected != 1 {
+			t.Fatalf(
+				"seed content discovery projection %s missing (count=%d err=%v payload=%#v)",
+				post.ID,
+				projected,
+				err,
+				payload,
+			)
+		}
 		inserted++
 	}
 	for _, reaction := range seedSet.Reactions {
@@ -283,6 +296,10 @@ func contentFixtureProjectionPayload(post *postmodel.Post) (map[string]any, erro
 	if err := json.Unmarshal(encoded, &payload); err != nil {
 		return nil, err
 	}
+	// PostPublished 的 canonical wire 主键是 postId；领域 aggregate 的 json
+	// 序列化字段为 id，测试种子必须显式映射，不能让 projector 静默 no-op。
+	payload["postId"] = post.ID
+	delete(payload, "id")
 	return payload, nil
 }
 

@@ -27,6 +27,7 @@ type PostStore struct {
 	receipts    map[string]postReceipt
 	outbox      []postports.OutboxEvent
 	checkpoints map[string]string
+	tombstones  map[string]postports.PostDeletionTombstone
 }
 
 func NewPostStore(seed []postmodel.Post) *PostStore {
@@ -34,6 +35,7 @@ func NewPostStore(seed []postmodel.Post) *PostStore {
 		posts:       make(map[string]postmodel.Post, len(seed)),
 		receipts:    map[string]postReceipt{},
 		checkpoints: map[string]string{},
+		tombstones:  map[string]postports.PostDeletionTombstone{},
 	}
 	for _, item := range seed {
 		copyItem := item
@@ -102,7 +104,35 @@ func (s *PostStore) Commit(_ context.Context, commit postports.Commit) (postport
 		event.AggregateVersion = next.Version
 		s.outbox = append(s.outbox, event)
 	}
+	if commit.Tombstone != nil {
+		key := strings.TrimSpace(commit.Tombstone.PostID)
+		if _, exists := s.tombstones[key]; !exists {
+			s.tombstones[key] = *commit.Tombstone
+		}
+	}
 	return postports.CommitResult{Post: &next}, nil
+}
+
+// FindTombstone 与生产 Mongo adapter 同语义：保留期内返回墓碑事实。
+func (s *PostStore) FindTombstone(
+	_ context.Context,
+	postID string,
+) (postports.PostDeletionTombstone, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tombstone, ok := s.tombstones[strings.TrimSpace(postID)]
+	if !ok || (!tombstone.ExpireAt.IsZero() && !tombstone.ExpireAt.After(time.Now().UTC())) {
+		return postports.PostDeletionTombstone{}, false, nil
+	}
+	return tombstone, true, nil
+}
+
+// RemovePostDocumentForTest 模拟聚合文档在保留期内被清理（隐私硬删）；
+// 墓碑事实保留，供 410 契约测试验证读取不依赖聚合文档存活。
+func (s *PostStore) RemovePostDocumentForTest(postID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.posts, strings.TrimSpace(postID))
 }
 
 func (s *PostStore) FindByID(_ context.Context, postID string) (*postmodel.Post, bool) {
@@ -165,13 +195,17 @@ func (s *PostStore) ListAll(_ context.Context) ([]postmodel.Post, error) {
 
 func (s *PostStore) ListPublished(_ context.Context, limit int, cursor string) []postmodel.Post {
 	return s.list(func(post postmodel.Post) bool {
-		return strings.EqualFold(post.Status, "published") && strings.EqualFold(post.Visibility, "public")
+		return strings.EqualFold(post.Status, "published") &&
+			strings.EqualFold(post.Visibility, "public") &&
+			strings.EqualFold(post.ModerationStatus, "approved")
 	}, limit, cursor)
 }
 
 func (s *PostStore) ListByAuthor(_ context.Context, authorID string, limit int, cursor string) []postmodel.Post {
 	return s.list(func(post postmodel.Post) bool {
-		return post.AuthorId == authorID && strings.EqualFold(post.Status, "published")
+		return post.AuthorId == authorID &&
+			strings.EqualFold(post.Status, "published") &&
+			strings.EqualFold(post.ModerationStatus, "approved")
 	}, limit, cursor)
 }
 

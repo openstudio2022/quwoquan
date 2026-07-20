@@ -53,6 +53,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt1_local_contract
@@ -60,11 +61,13 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt1_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
@@ -104,12 +107,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
@@ -148,11 +153,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt3_local_contract
         envs: *id001
       - layer: user_acceptance
+        execution_profile: release
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
@@ -160,6 +167,7 @@ gwt_acceptance:
         - gamma_local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt3_api_integration
         cases:
         - api_integration.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt3_api_integration
@@ -195,11 +203,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt4_local_contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.gwt4_local_contract
@@ -221,6 +231,7 @@ contract_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.external_inbound_deeplink_routing.contract1_local_contract
@@ -232,5 +243,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -238,6 +238,38 @@ func (store *MongoAggregateStore) validateParentChain(ctx context.Context, chang
 	return nil
 }
 
+// RecordNoopReceipt 落"目标状态已满足"回执：不递增 version、不写 outbox。
+func (store *MongoAggregateStore) RecordNoopReceipt(ctx context.Context, noop fileports.NoopReceipt) (fileports.CommitReceipt, error) {
+	if strings.TrimSpace(noop.FileID) == "" ||
+		strings.TrimSpace(noop.ReceiptKey) == "" ||
+		strings.TrimSpace(noop.CommandDigest) == "" {
+		return fileports.CommitReceipt{}, filemodel.ErrInvalidChange
+	}
+	if replay, found, err := store.findReceipt(ctx, noop.ReceiptKey, noop.CommandDigest); err != nil || found {
+		return replay, err
+	}
+	expiresAt := noop.ReceiptExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	_, err := store.receipts.InsertOne(ctx, bson.M{
+		"_id": noop.ReceiptKey, "commandDigest": noop.CommandDigest,
+		"fileId": noop.FileID, "version": noop.Version, "status": noop.Status,
+		"expiresAt": expiresAt,
+	})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			if replay, found, replayErr := store.findReceipt(ctx, noop.ReceiptKey, noop.CommandDigest); replayErr == nil && found {
+				return replay, nil
+			}
+		}
+		return fileports.CommitReceipt{}, err
+	}
+	return fileports.CommitReceipt{
+		FileID: noop.FileID, Version: noop.Version, Status: noop.Status,
+	}, nil
+}
+
 func (store *MongoAggregateStore) findReceipt(ctx context.Context, key, digest string) (fileports.CommitReceipt, bool, error) {
 	var document struct {
 		CommandDigest string                     `bson:"commandDigest"`

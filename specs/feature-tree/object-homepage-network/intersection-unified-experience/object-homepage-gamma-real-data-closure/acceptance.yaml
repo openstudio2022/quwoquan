@@ -63,7 +63,7 @@ implementation_backlog:
     owner_domains: [Ops, Service]
     entrypoints:
       - "python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full"
-      - "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all"
+      - "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release"
     done_when:
       - "gateway/product-ops gateway/entity-service/circle-service/content-service health 均可访问。"
       - "无 SSL EOF、404 mirror route 或服务未启动导致的 gate_block。"
@@ -111,7 +111,7 @@ implementation_backlog:
       - "quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart"
       - "quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart"
       - "quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart"
-      - "quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart"
+      - "quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart"
       - "quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart"
     done_when:
       - "local_contract 与 api_integration 字段、错误态、空态、点击行为一一对应。"
@@ -164,25 +164,28 @@ gwt_acceptance:
         - command: "bash quwoquan_service/scripts/contract/verify_contract_metadata.sh"
         - command: "docker compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml config"
         - command: "python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full"
-        - command: "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all"
+        - command: "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release"
       recorded:
         - file: quwoquan_ops/tests/local_contract/test_environment_patrol_smoke__local_contract_test.py
     status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: object_homepage_gamma_topology_static_contract
           cases:
             - local_contract.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.gamma_topology_static_contract
           envs:
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: object_homepage_gamma_gateway_health
           cases:
             - api_integration.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.gateway_health
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: object_homepage_gamma_page_smoke
           cases:
             - user_acceptance.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.page_smoke
@@ -192,8 +195,8 @@ gwt_acceptance:
     notes:
       - "2026-06-25: metadata verify pass with existing unrelated warnings in search/user_profile response_entity checks."
       - "2026-06-25: docker compose gamma-local config pass."
-      - "2026-06-25: stackctl verify --env gamma --kind all --tier all fails at api_integration gateway health with SSL UNEXPECTED_EOF_WHILE_READING, and user_acceptance page smoke fails because Patrol CLI is missing."
-      - "2026-07-05 continue-dev: `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` 通过，page smoke 改为本地 target 设备可达的 `.localhost` HTTPS base，并在 iOS simulator 注入 `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/.../root.crt`；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`QWQ_OUTPUT_ROOT/env/gamma/runs/20260705T133026Z-verify-gamma-local`）。仍未单独证明 GWT2-GWT5 的 populated real-data 细项，故 status 维持 partial。"
+      - "2026-06-25: stackctl verify --env gamma --kind all --profile release fails at api_integration gateway health with SSL UNEXPECTED_EOF_WHILE_READING, and user_acceptance page smoke fails because Patrol CLI is missing."
+      - "2026-07-05 continue-dev: `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` 通过，page smoke 改为本地 target 设备可达的 `.localhost` HTTPS base，并在 iOS simulator 注入 `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/.../root.crt`；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release` 16 checks 全绿（`QWQ_OUTPUT_ROOT/env/gamma/runs/20260705T133026Z-verify-gamma-local`）。仍未单独证明 GWT2-GWT5 的 populated real-data 细项，故 status 维持 partial。"
   GWT2_entity_homepage_real_bundle:
     title: "实体主页真实 bundle、简介、相关圈子与关注状态闭环"
     given:
@@ -213,25 +216,28 @@ gwt_acceptance:
         - file: "quwoquan_app/test/local_contract/ui/entity/pages/homepage_introduction_page_widget__local_contract_test.dart"
         - file: "quwoquan_app/test/local_contract/cloud/entity/contract/homepage_repository_contract__local_contract_test.dart"
         - command: "python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all"
-        - file: "quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart"
+        - file: "quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart"
         - file: "quwoquan_app/test/user_acceptance/pages/entity/homepage_introduction/homepage_introduction_page__user_acceptance_test.dart"
       recorded: []
     status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: entity_homepage_real_bundle_local_contract
           cases:
             - local_contract.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.entity_homepage_bundle
           envs:
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: entity_homepage_real_bundle_api_integration
           cases:
             - api_integration.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.entity_homepage_bundle
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: entity_homepage_remote_journey
           cases:
             - user_acceptance.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.entity_homepage_remote_journey
@@ -265,18 +271,21 @@ gwt_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: circle_homepage_real_detail_local_contract
           cases:
             - local_contract.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.circle_homepage_detail
           envs:
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: circle_homepage_real_detail_api_integration
           cases:
             - api_integration.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.circle_homepage_detail
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: circle_homepage_remote_journey
           cases:
             - user_acceptance.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.circle_homepage_remote_journey
@@ -305,29 +314,32 @@ gwt_acceptance:
       - "App 本地合同断言 shared fact row、span 深链与旧链路禁用。"
     tests:
       planned:
-        - file: "quwoquan_app/test/local_contract/widgets/object_intersection_card_test.dart"
         - file: "quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart"
+        - file: "quwoquan_app/test/local_contract/ui/components/object_page/intersection_target_navigator__local_contract_test.dart"
         - file: "quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart"
-        - file: "quwoquan_service/services/content-service/tests/api_integration/object_intersections_api_test.go"
         - file: "quwoquan_service/services/content-service/tests/api_integration/intersection_source_contract__api_integration_test.go"
-        - file: "quwoquan_app/test/user_acceptance/object_intersection_click_journey_test.dart"
+        - file: "quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart"
+        - file: "quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart"
       recorded: []
     status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: object_intersection_reason_local_contract
           cases:
             - local_contract.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_intersection_reason
           envs:
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: object_intersection_reason_api_integration
           cases:
             - api_integration.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_intersection_reason
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: object_intersection_click_journey
           cases:
             - user_acceptance.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_intersection_click_journey
@@ -353,28 +365,31 @@ gwt_acceptance:
       - "user_acceptance 覆盖未登录、弱网、无理由、无记录、重试和探索 CTA。"
     tests:
       planned:
-        - file: "quwoquan_app/test/local_contract/telemetry/object_homepage_telemetry_test.dart"
         - file: "quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart"
-        - file: "quwoquan_service/tests/api_integration/object_homepage_observability_test.go"
-        - file: "quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_metrics__local_contract_test.go"
-        - file: "quwoquan_app/test/user_acceptance/object_homepage_recovery_journey_test.dart"
+        - file: "quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service_operations__local_contract_test.go"
+        - file: "quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_feedback_cooldown__local_contract_test.go"
+        - file: "quwoquan_service/services/content-service/tests/api_integration/intersection_visit_http_contract__api_integration_test.go"
+        - file: "quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart"
       recorded: []
     status: partial
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: object_homepage_telemetry_local_contract
           cases:
             - local_contract.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_homepage_telemetry
           envs:
             - local
         - layer: api_integration
+          execution_profile: integration
           suite: object_homepage_observability_api_integration
           cases:
             - api_integration.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_homepage_observability
           envs:
             - gamma
         - layer: user_acceptance
+          execution_profile: release
           suite: object_homepage_recovery_journey
           cases:
             - user_acceptance.object_homepage_network.intersection_unified_experience.object_homepage_gamma_real_data_closure.object_homepage_recovery_journey
@@ -384,7 +399,7 @@ gwt_acceptance:
     notes:
       - "2026-07-06 continue-dev: `flutter test test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart` 与 `go test ./services/content-service/tests/local_contract/internal/application/intersection ./services/content-service/tests/api_integration -run 'TestIntersection(ServiceLocalContractTest|MetricsLocalContractTest|SourceContractApiIntegrationTest|WatermarkStoreContractApiIntegrationTest)' -count=1` 全绿；交集 attribution、MarkVisited/summary 清零、水位持久化与业务漏斗 recorder 保持通过。"
       - "2026-07-06 continue-dev: `flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证了 summary/list/object/feed attribution，并补证 `markIntersectionsVisited -> getMyIntersectionSummary` 远端清零链路。"
-      - "2026-07-06 continue-dev: 直接 `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url https://gamma-api.quwoquan-content.execution.preflight.test:19000 --product-ops-base-url https://gamma-product-ops.quwoquan-content.execution.preflight.test:19010 --media-base-url https://gamma-image.quwoquan-content.execution.preflight.test:19100 --test-auth-token local-gamma-token --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json` 通过；其后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`QWQ_OUTPUT_ROOT/env/gamma/runs/20260705T235459Z-verify-gamma-local`）。"
+      - "2026-07-06 continue-dev: 直接 `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url https://gamma-api.quwoquan-content.execution.preflight.test:19000 --product-ops-base-url https://gamma-product-ops.quwoquan-content.execution.preflight.test:19010 --media-base-url https://gamma-image.quwoquan-content.execution.preflight.test:19100 --test-auth-token local-gamma-token --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json` 通过；其后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release` 16 checks 全绿（`QWQ_OUTPUT_ROOT/env/gamma/runs/20260705T235459Z-verify-gamma-local`）。"
       - "2026-07-06 continue-dev: 只读拉取 `http://127.0.0.1:19220/metrics` 已观测到 `intersection_feed_candidates_total`、`intersection_feed_filtered_total`、`intersection_cooldown_exposure_reported_total`、`intersection_inbox_visit_total`；`intersection_inbox_filtered_total` 本轮未采样到（未触发 stale filter），因此状态维持 partial。"
       - "2026-07-06 continue-dev: `python3 quwoquan_ops/cli/stackctl.py health --target prod-hosted --scope edge` 仍 0/2 healthy（`.qwq_output/env/prod/runs/20260705T235900Z-health-prod-hosted`，api/product-ops `/healthz` 均报 `SSL record layer failure`），真实 prod-hosted gray smoke 尚未闭环。"
 execution:
@@ -397,7 +412,7 @@ execution:
     - "python3 quwoquan_ops/cli/stackctl.py up --env gamma --skip-app"
     - "python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full"
     - "python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all"
-    - "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all"
+    - "python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release"
   exit_review:
     - "规格达成：逐项说明 L3 GWT1-GWT5 状态。"
     - "测试证据：列出 local_contract、api_integration、user_acceptance 命令与结果。"

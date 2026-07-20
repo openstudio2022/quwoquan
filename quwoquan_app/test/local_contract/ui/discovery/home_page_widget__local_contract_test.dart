@@ -6,12 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -21,9 +21,11 @@ import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
 
 Widget _buildApp() {
   return ProviderScope(
+    overrides: [...mockContentFacetOverrides(MockContentRepository())],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
       child: MaterialApp.router(
@@ -73,7 +75,10 @@ Widget _buildApp() {
 
 Widget _buildDarkApp() {
   return ProviderScope(
-    overrides: [isDarkProvider.overrideWith((ref) => true)],
+    overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
+      isDarkProvider.overrideWith((ref) => true),
+    ],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
       child: MaterialApp.router(
@@ -107,7 +112,7 @@ Widget _buildAppWithStableFollowingArticles() {
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
-      ...mockContentFacetOverrides(_StableFollowingArticleContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       contentFeatureFlagProvider(
         'enable_article_distribution_profiles',
       ).overrideWith((ref) => true),
@@ -160,10 +165,10 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
-      if (stableArticles) ...[
-        ...mockContentFacetOverrides(
-          _StableFollowingArticleContentRepository(),
-        ),
+      if (!stableArticles)
+        ...mockContentFacetOverrides(MockContentRepository())
+      else ...[
+        ...mockContentFacetOverrides(MockContentRepository()),
         contentFeatureFlagProvider(
           'enable_article_distribution_profiles',
         ).overrideWith((ref) => true),
@@ -212,75 +217,73 @@ class _AuthenticatedSession extends AuthSessionController {
   }
 }
 
-class _StableFollowingArticleContentRepository extends MockContentRepository {
-  @override
-  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() {
-    return <PostBaseDto>[
-      _articlePost(
-        id: 'web-dev',
-        title: '给新同事的 Web 工程工具清单',
-        body: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
-        coverUrl:
-            'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
-      ),
-      _articlePost(
-        id: 'ritual_plain',
-        title: '晨间复盘的十分钟礼记',
-        body: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
-      ),
-      _articlePost(
-        id: 'diffuse_cover_body_only',
-        body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
-        coverUrl:
-            'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
-      ),
-      _articlePost(
-        id: 'journal_plain_body_only',
-        body: '没有标题也没有封面，仍然可以用正文首句承接整张卡片的信息层级。',
-      ),
-    ];
-  }
+List<PostBaseDto> _stableFollowingArticles() {
+  return <PostBaseDto>[
+    _stableFollowingArticlePost(
+      id: 'web-dev',
+      title: '给新同事的 Web 工程工具清单',
+      body: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
+      coverUrl:
+          'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
+    ),
+    _stableFollowingArticlePost(
+      id: 'ritual_plain',
+      title: '晨间复盘的十分钟礼记',
+      body: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
+    ),
+    _stableFollowingArticlePost(
+      id: 'diffuse_cover_body_only',
+      body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
+      coverUrl:
+          'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
+    ),
+    _stableFollowingArticlePost(
+      id: 'journal_plain_body_only',
+      body: '没有标题也没有封面，仍然可以用正文首句承接整张卡片的信息层级。',
+    ),
+  ];
+}
 
-  PostBaseDto _articlePost({
-    required String id,
-    String title = '',
-    required String body,
-    String coverUrl = '',
-  }) {
-    return postBaseDtoFromMap(<String, dynamic>{
-      'id': id,
-      '_id': id,
-      'postId': id,
-      'contentType': 'article',
-      'type': 'article',
-      'authorId': 'fixture_user_current',
-      'displayName': '测试作者',
-      'title': title,
-      'body': body,
-      'coverUrl': coverUrl,
-      'imageUrl': coverUrl,
-      'mediaCoverUrl': coverUrl,
-      'createdAt': '2026-05-01T08:00:00Z',
-      'articleTemplate': id == 'ritual_plain'
-          ? 'ritual'
-          : id == 'diffuse_cover_body_only'
-          ? 'diffuse'
-          : id == 'journal_plain_body_only'
-          ? 'journal'
-          : 'tech',
-    });
-  }
+PostBaseDto _stableFollowingArticlePost({
+  required String id,
+  String title = '',
+  required String body,
+  String coverUrl = '',
+}) {
+  return postBaseDtoFromMap(<String, dynamic>{
+    'id': id,
+    '_id': id,
+    'postId': id,
+    'contentType': 'article',
+    'type': 'article',
+    'authorId': 'fixture_user_current',
+    'displayName': '测试作者',
+    'title': title,
+    'body': body,
+    'coverUrl': coverUrl,
+    'imageUrl': coverUrl,
+    'mediaCoverUrl': coverUrl,
+    'createdAt': '2026-05-01T08:00:00Z',
+    'articleTemplate': id == 'ritual_plain'
+        ? 'ritual'
+        : id == 'diffuse_cover_body_only'
+        ? 'diffuse'
+        : id == 'journal_plain_body_only'
+        ? 'journal'
+        : 'tech',
+  });
 }
 
 class _StableFollowingDiscoveryFeedMapNotifier
     extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    final items = _stableFollowingArticles();
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'following': const AsyncData(
+      'following': AsyncData(
         DiscoveryFeedState(
-          items: <PostBaseDto>[],
-          seenItemIds: <String>[],
+          items: items,
+          seenItemIds: items.map((post) => post.id).toList(growable: false),
           nextCursor: null,
           isLoading: false,
         ),
@@ -335,6 +338,7 @@ class _SingleRecommendPostFeedMapNotifier extends DiscoveryFeedMapNotifier {
 Widget _buildAppWithSingleRecommendPost() {
   return ProviderScope(
     overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
       discoveryFeedMapProvider.overrideWith(
         _SingleRecommendPostFeedMapNotifier.new,
       ),
@@ -963,21 +967,14 @@ void main() {
         tester.getBottomRight(panel).dy,
         closeTo(tester.getSize(page).height, 2.0),
       );
-      expect(find.text('打赏'), findsOneWidget);
-      expect(find.text('私信'), findsOneWidget);
-      expect(find.text('复制链接'), findsOneWidget);
-      expect(find.text('字体设置'), findsOneWidget);
-      expect(find.text('取消'), findsOneWidget);
-      expect(find.text('分享'), findsNothing);
-      expect(find.text('查看原图'), findsNothing);
-
-      await tester.drag(
-        find.byKey(TestKeys.modalBottomSheetQuickActionsRail),
-        const Offset(-320, 0),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('功能反馈'), findsOneWidget);
+      expect(find.text(UITextConstants.copyLink), findsOneWidget);
+      expect(find.text(UITextConstants.cancel), findsOneWidget);
+      expect(find.text(UITextConstants.share), findsNothing);
+      expect(find.text(UITextConstants.viewOriginal), findsNothing);
+      expect(find.text('打赏'), findsNothing);
+      expect(find.text('私信'), findsNothing);
+      expect(find.text('字体设置'), findsNothing);
+      expect(find.text('功能反馈'), findsNothing);
     });
 
     testWidgets('关注流宽屏下文章卡更多面板贴底呈现', (tester) async {
@@ -1069,6 +1066,7 @@ void main() {
       var exited = false;
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [...mockContentFacetOverrides(MockContentRepository())],
           child: MaterialApp(
             home: Scaffold(
               body: HomeFeaturedImmersivePage(
@@ -1228,7 +1226,7 @@ void main() {
       );
     });
 
-    testWidgets('推荐流不感兴趣即时移除卡片并给出降级提示', (tester) async {
+    testWidgets('推荐流不感兴趣即时移除卡片且撤销后原位恢复', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -1244,7 +1242,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('home-feed-more-0')));
       await tester.pumpAndSettle();
 
-      final notInterested = find.text(AppStrings.notInterested);
+      final notInterested = find.text(AppLocalizationsZh().notInterested);
       expect(notInterested, findsOneWidget);
       await tester.ensureVisible(notInterested);
       await tester.tap(notInterested);
@@ -1260,7 +1258,15 @@ void main() {
         findsOneWidget,
       );
 
-      // 清理 toast 的 3s 计时器，避免挂起 Timer。
+      // 撤销会恢复原卡片，并把 HotPath 反向行为反馈给服务端。
+      expect(find.text(UITextConstants.undo), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.undo));
+      await tester.pumpAndSettle();
+      expect(cardFinder, findsOneWidget);
+      expect(find.text(_singleRecommendPostBody), findsOneWidget);
+      expect(find.text(UITextConstants.notInterestedUndone), findsOneWidget);
+
+      // 清理撤销成功 toast 的 3s 计时器，避免挂起 Timer。
       await tester.pump(const Duration(seconds: 3));
     });
   });

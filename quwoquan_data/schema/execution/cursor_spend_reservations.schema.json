@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/cursor_spend_reservations.schema.json",
+  "type": "object",
+  "required": ["schema", "days"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan.cursor_spend_reservations"},
+    "days": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["dailyCapUsd", "executions"],
+              "additionalProperties": false,
+        "properties": {
+          "dailyCapUsd": {"type": "number", "exclusiveMinimum": 0},
+                "executions": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": ["batchCapUsd", "reservations"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "batchCapUsd": {"type": "number", "exclusiveMinimum": 0},
+                      "reservations": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "required": [
+                            "reservedUsd",
+                            "settledUsd",
+                            "status",
+                            "costIssue"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "reservedUsd": {"type": "number", "minimum": 0},
+                            "settledUsd": {"type": "number", "minimum": 0},
+                            "status": {
+                              "enum": [
+                                "reserved",
+                                "settled",
+                                "cost_unknown",
+                                "settled_over_budget"
+                              ]
+                            },
+                            "costIssue": {"type": ["string", "null"]}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+        }
+      }
+    }
+  }
+}

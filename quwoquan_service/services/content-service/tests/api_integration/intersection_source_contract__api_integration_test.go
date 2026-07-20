@@ -65,11 +65,11 @@ func seedIntersectionSourceFixtures(t *testing.T) {
 	// coCommented：双方评论过同一篇内容；coVisitedEntity：双方都到访过 ixEntity；
 	// followeeVisited：visitor_c 到访过 ixEntity。
 	eventDocs := []any{
-		bson.M{"userId": ixViewer, "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
-		bson.M{"userId": ixObject, "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
-		bson.M{"userId": ixViewer, "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
-		bson.M{"userId": ixObject, "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
-		bson.M{"userId": "ixsrc_visitor_c", "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
+		bson.M{"userId": ixViewer, "clientEventId": "ixsrc-event-comment-viewer", "occurredAt": time.Now(), "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
+		bson.M{"userId": ixObject, "clientEventId": "ixsrc-event-comment-object", "occurredAt": time.Now(), "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
+		bson.M{"userId": ixViewer, "clientEventId": "ixsrc-event-entity-viewer", "occurredAt": time.Now(), "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
+		bson.M{"userId": ixObject, "clientEventId": "ixsrc-event-entity-object", "occurredAt": time.Now(), "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
+		bson.M{"userId": "ixsrc_visitor_c", "clientEventId": "ixsrc-event-entity-visitor", "occurredAt": time.Now(), "action": "entity_page_view", "contentId": "", "entityRefs": []string{ixEntity}, "createdAt": time.Now()},
 	}
 	if _, err := events.InsertMany(ctx, eventDocs); err != nil {
 		t.Fatalf("seed rm_behavior_events: %v", err)
@@ -163,6 +163,72 @@ func TestIntersectionSource_PersonObjectProducesStandardFactKinds(t *testing.T) 
 	}
 }
 
+// TestIntersectionSource_SharedCircleDoesNotUsePersonNameAsCircleName（V3）：
+// 人↔人的 sharedCircle reason 只有共同圈子数量，没有圈子对象 target；此时必须按
+// 「具名样本 → 纯计数 → 隐藏」降级为可证计数句，禁止把对方人名冒充圈子名。
+func TestIntersectionSource_SharedCircleDoesNotUsePersonNameAsCircleName(t *testing.T) {
+	ctx := context.Background()
+	const (
+		viewerID = "ixsrc_circle_only_viewer"
+		objectID = "ixsrc_circle_only_object"
+		circleID = "ixsrc_circle_only_circle"
+	)
+	members := mongoDB.Collection("circle_members")
+	posts := mongoDB.Collection("posts")
+	cleanup := func() {
+		_, _ = members.DeleteMany(ctx, bson.M{
+			"circleId": circleID,
+			"userId":   bson.M{"$in": []string{viewerID, objectID}},
+		})
+		_, _ = posts.DeleteMany(ctx, bson.M{"authorId": objectID})
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	if _, err := members.InsertMany(ctx, []any{
+		bson.M{"circleId": circleID, "userId": viewerID},
+		bson.M{"circleId": circleID, "userId": objectID},
+	}); err != nil {
+		t.Fatalf("seed circle_members: %v", err)
+	}
+	if _, err := posts.InsertOne(ctx, bson.M{
+		"authorId":                  objectID,
+		"status":                    "published",
+		"authorDisplayNameSnapshot": "交集约伴体验号",
+		"updatedAt":                 time.Now(),
+	}); err != nil {
+		t.Fatalf("seed author display projection: %v", err)
+	}
+
+	reasons, err := newRealIntersectionService(t).ObjectIntersections(
+		ctx,
+		viewerID,
+		objectID,
+		"user",
+		8,
+	)
+	if err != nil {
+		t.Fatalf("object intersections: %v", err)
+	}
+	if len(reasons) != 1 {
+		t.Fatalf("want one sharedCircle reason, got %+v", reasons)
+	}
+	reason := reasons[0]
+	if strings.Contains(reason.PrimaryText, "都加入了「交集约伴体验号」") {
+		t.Fatalf("person display name must not pose as circle name: %q", reason.PrimaryText)
+	}
+	if !strings.Contains(reason.PrimaryText, "1个共同圈子") {
+		t.Fatalf("counted sharedCircle fallback expected, got %q", reason.PrimaryText)
+	}
+	var joined strings.Builder
+	for _, span := range reason.PrimarySpans {
+		joined.WriteString(span.Text)
+	}
+	if joined.String() != reason.PrimaryText {
+		t.Fatalf("spans invariant broken: joined=%q primary=%q", joined.String(), reason.PrimaryText)
+	}
+}
+
 // TestIntersectionSource_PersonReasonBackfillsDisplayProfile（WP1·T3）：
 // 人级 reason 必须从 posts 作者快照读模型回填 displayName/avatarUrl，
 // 不得下发占位 label 进 spotlight 候选窗。
@@ -250,18 +316,22 @@ func TestIntersectionSource_HomepageAndCircleObjectsUseConcreteActionSemantics(t
 	}
 	eventDocs := []any{
 		bson.M{
-			"userId":      "ixsrc_homepage_friend",
-			"action":      "entity_page_view",
-			"entityRefs":  []string{"homepage_sight_west_lake"},
-			"displayName": "西湖景区",
-			"createdAt":   time.Now(),
+			"userId":        "ixsrc_homepage_friend",
+			"clientEventId": "ixsrc-event-homepage-friend",
+			"occurredAt":    time.Now(),
+			"action":        "entity_page_view",
+			"entityRefs":    []string{"homepage_sight_west_lake"},
+			"displayName":   "西湖景区",
+			"createdAt":     time.Now(),
 		},
 		bson.M{
-			"userId":      "ixsrc_circle_friend",
-			"action":      "entity_page_view",
-			"entityRefs":  []string{"fixture_circle_photo"},
-			"displayName": "契约摄影社",
-			"createdAt":   time.Now(),
+			"userId":        "ixsrc_circle_friend",
+			"clientEventId": "ixsrc-event-circle-friend",
+			"occurredAt":    time.Now(),
+			"action":        "entity_page_view",
+			"entityRefs":    []string{"fixture_circle_photo"},
+			"displayName":   "契约摄影社",
+			"createdAt":     time.Now(),
 		},
 	}
 	if _, err := events.InsertMany(ctx, eventDocs); err != nil {

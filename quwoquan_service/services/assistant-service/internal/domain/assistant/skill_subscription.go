@@ -42,6 +42,7 @@ type SkillSubscription struct {
 	SearchQueryPlan SkillSubscriptionSearchQueryPlan `bson:"searchQueryPlan" json:"searchQueryPlan"`
 	Trigger         SkillSubscriptionTrigger         `bson:"trigger" json:"trigger"`
 	Destination     SkillSubscriptionDestination     `bson:"destination" json:"destination"`
+	ClientRequestID string                           `bson:"clientRequestId,omitempty" json:"clientRequestId,omitempty"`
 	CreatedAt       time.Time                        `bson:"createdAt" json:"createdAt"`
 	UpdatedAt       time.Time                        `bson:"updatedAt" json:"updatedAt"`
 }
@@ -53,6 +54,7 @@ type CreateSkillSubscriptionInput struct {
 	SearchQueryPlan SkillSubscriptionSearchQueryPlan `json:"searchQueryPlan"`
 	Trigger         SkillSubscriptionTrigger         `json:"trigger"`
 	Destination     SkillSubscriptionDestination     `json:"destination"`
+	ClientRequestID string                           `json:"clientRequestId"`
 }
 
 type UpsertSkillSubscriptionInput struct {

@@ -5,8 +5,8 @@ service:
   description: Message 对象专属 command packet。
   commercial_defaults:
     status: blocked
-    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
-    gap_id: CHAT_OBJECT_PACKET_WIRING
+    block_reason: operation 尚未逐项完成商业证据绑定
+    gap_id: CHAT_MESSAGE_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
 api_routes:
   - method: POST
@@ -22,10 +22,10 @@ api_routes:
       mutation_target: Message
       invariant_target: Message
     commercial:
-      status: blocked
-      block_reason: generated Remote 真实 Gateway api_integration 与 Gamma UAT 尚未闭环
-      gap_id: CHAT_MESSAGE_MEDIA_GAMMA_CLOSURE
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
     reliability:
       timeout_ms: 3000
       cancellation: supported
@@ -49,7 +49,13 @@ api_routes:
       response_type: ChatSendMessageResult
       request_encoder: encodeChatSendMessageCommand
       response_decoder: decodeChatSendMessageResult
-    description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
+    description: |
+      发送消息（一次提交：clientMsgId 是唯一幂等身份，Idempotency-Key header 必须等于 body clientMsgId，
+      不一致即拒绝；服务端按 uq_messages_client_message 唯一约束 + 事务内 seq 分配保证重放返回首个
+      messageId + seq + timestamp）。群消息 mentions 由服务端去空、按首次出现顺序去重并限制 50 个；
+      普通目标必须是当前活跃成员，`__all__` 仅 owner/admin 可用，assistant 仅在助手已入群时合法。
+      校验后的 canonical mentions 必须同源写入 Message、MessageSent 与同步/列表投影；
+      非群会话不得提交 mentions。
     request_entity: Message
     writable_fields: [type, content, mediaAssetId, card, replyToMessageId, mentions, clientMsgId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.message_invalid, CHAT.USER.message_too_long, CHAT.USER.message_media_invalid, CHAT.USER.message_idempotency_conflict, CHAT.USER.not_mutual, CHAT.USER.blocked, CHAT.SYSTEM.message_media_unavailable, CHAT.SYSTEM.internal_error]
@@ -65,6 +71,8 @@ api_routes:
 
     operation: RecallMessage
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: MessageCommandFacet
@@ -72,7 +80,27 @@ api_routes:
       aggregate_owner: Message
       mutation_target: Message
       invariant_target: Message
-    description: 撤回消息（2 分钟内有效）
+    authorization:
+      principal: persona
+      ownership_policy: message_sender
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_command
+      trace: true
+      attributes: [operation, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 撤回消息（2 分钟内有效；已撤回消息重复撤回为 no-op 并重放原回执）
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.USER.message_recall_forbidden, CHAT.USER.message_recall_expired, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -86,6 +114,8 @@ api_routes:
 
     operation: ListMessages
     actor: persona
+    commercial:
+      status: ready
     authorization:
       principal: persona
       ownership_policy: conversation_member
@@ -128,28 +158,39 @@ api_routes:
 
     operation: SyncMessages
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: MessageSyncQueryFacet
       method: syncMessages
       reader: MessageSyncReader
       slice: MessageSyncSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_sync
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
     description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
-  - method: GET
-    path: /chat/messages/search
-
-    operation: SearchMessages
-    actor: persona
-    application:
-      kind: query
-      facet: MessageSearchQueryFacet
-      method: searchMessages
-      reader: MessageSearchReader
-      slice: MessageSearchResultSlice
-    description: 全局搜索消息投影；不加载 Conversation 聚合。
-    query_params: [query, cursor, limit]
-    response_entity: MessageSearchItemView
-    security:
-      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private

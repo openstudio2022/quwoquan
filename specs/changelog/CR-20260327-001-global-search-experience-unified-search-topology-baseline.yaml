@@ -39,7 +39,7 @@ entries:
       - design
       - plan
     changed_documents:
-      - path: specs/feature-tree/global-search-experience/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - l2
       - path: specs/feature-tree/global-search-experience/spec.md
@@ -153,7 +153,7 @@ entries:
       breaking_contract: false
     notes:
       - 本次为 `/baseline` 增量冻结，已将体验旅程与搜索架构分别挂到两个 L2。
-      - `social-relationship-search-contract` 已退出主特性树引用，聊天搜索主语义由 `local-chat-search-contract` 承接。
+      - "`social-relationship-search-contract` 已退出主特性树引用，聊天搜索主语义由 `local-chat-search-contract` 承接。"
       - 云侧搜索方案冻结为“按域写入、读模型查询、多读切片弹性、未来统一读库可替换”。
   - timestamp: "2026-03-27T16:55:00+08:00"
     summary: >
@@ -321,5 +321,5 @@ entries:
       breaking_contract: false
     notes:
       - canonical `search(request)` 已被明确为 query-first、web-search-like、AI 易拆解的接口。
-      - `web.document` 已进入统一 taxonomy，与趣我圈内部对象共用同一检索 contract。
+      - "`web.document` 已进入统一 taxonomy，与趣我圈内部对象共用同一检索 contract。"
       - 接口设计明确偏向“多次简单查询”而非“单次复杂 DSL 查询”。

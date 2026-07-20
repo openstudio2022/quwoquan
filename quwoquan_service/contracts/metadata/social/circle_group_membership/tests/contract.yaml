@@ -1,0 +1,12 @@
+aggregate: CircleGroupMembership
+
+scenarios:
+  - name: group_membership_lifecycle_bola_stream
+    operation: ApplyJoinCircleGroup
+    go_func: TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream
+    evidence: api_integration
+    assertions:
+      - 申请/审批/拒绝/移除为命名状态迁移，服务端内部 CAS 重放纯竞态
+      - owner 不可离开或被移除
+      - 非授权 persona 决策 fail closed（BOLA）
+      - membership、receipt、outbox 同一 Mongo transaction 提交

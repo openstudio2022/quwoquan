@@ -1,4 +1,4 @@
-# L4 对象任务：tool-registry-and-context-authorizer
+# L3 对象任务：tool-registry-and-context-authorizer
 
 ## 功能说明
 - ToolRegistry：从 tool_catalog.yaml 加载 Tool 定义，支持页面级 Tool 发现。

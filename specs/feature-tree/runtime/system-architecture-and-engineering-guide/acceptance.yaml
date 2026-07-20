@@ -47,12 +47,14 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: feature_tree_architecture_guide
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit1.feature_tree_schema
           envs: [local]
       supporting:
         - layer: local_contract
+          execution_profile: baseline
           suite: documentation_contract
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit1.docs_linkage
@@ -92,6 +94,7 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: topology_contract
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit2.deployment_domain_mapping
@@ -101,6 +104,7 @@ sit_acceptance:
           envs: [local]
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: gamma_local_onebox_smoke
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.sit2.seed_box_routes
@@ -132,12 +136,14 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: architecture_gap_matrix_contract
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit3.gap_matrix_refs
           envs: [local]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: commercial_closed_loop_review
           cases:
             - user_acceptance.runtime.system_architecture_and_engineering_guide.sit3.closed_loop_readiness_review
@@ -169,6 +175,7 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: business_object_design_freeze
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit4.actor_object_boundary
@@ -178,6 +185,7 @@ sit_acceptance:
           envs: [local]
       supporting:
         - layer: local_contract
+          execution_profile: baseline
           suite: feature_tree_contract
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit4.journey_owner_refs
@@ -210,6 +218,7 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: contract_graph_and_architecture_gate
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit5.contract_graph_idempotency
@@ -218,6 +227,7 @@ sit_acceptance:
           envs: [local]
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: runtime_contract_boundary
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.sit5.operation_error_trace
@@ -241,6 +251,7 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: api_integration
+          execution_profile: integration
           suite: content_commercial_pilot
           cases:
             - api_integration.content.post.sit6.aggregate_store_outbox
@@ -249,6 +260,7 @@ sit_acceptance:
           envs: [beta, gamma]
       supporting:
         - layer: user_acceptance
+          execution_profile: release
           suite: content_supply_consumption_journey
           cases:
             - user_acceptance.content.sit6.ugc_publish_consume_feedback
@@ -278,6 +290,7 @@ sit_acceptance:
     test_evidence:
       primary:
         - layer: local_contract
+          execution_profile: baseline
           suite: cloud_commercial_directory_governance
           cases:
             - local_contract.runtime.system_architecture_and_engineering_guide.sit7.spec_freeze
@@ -291,11 +304,13 @@ sit_acceptance:
           envs: [local]
       supporting:
         - layer: api_integration
+          execution_profile: integration
           suite: generated_remote_adapter
           cases:
             - api_integration.runtime.system_architecture_and_engineering_guide.sit7.operation_error_trace
           envs: [beta, gamma]
         - layer: user_acceptance
+          execution_profile: release
           suite: affected_cloud_journeys
           cases:
             - user_acceptance.runtime.system_architecture_and_engineering_guide.sit7.remote_journey
@@ -321,5 +336,5 @@ execution:
     - python3 quwoquan_ops/environments/verify/verify_strangler_contract_invariants.py
     - python3 quwoquan_ops/environments/verify/verify_workload_topology_inventory.py
     - python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py
-  full_gate:
+  profile_gates:
     - make gate

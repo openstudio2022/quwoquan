@@ -4,6 +4,7 @@ backend: mongodb
 collections:
   circles:
     entity: Circle
+    role: authoritative
     indexes:
       - { name: idx_circles_owner, keys: { ownerId: 1 } }
       - { name: idx_circles_category, keys: { category: 1, memberCount: -1 } }
@@ -16,6 +17,20 @@ collections:
         type: text
         fields: [name, description, tags]
         weights: { name: 10, tags: 5, description: 1 }
+  circle_command_receipts:
+    entity: CircleCommandReceipt
+    role: authoritative
+    indexes:
+      - { name: idx_circle_receipt_expiry, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+  circle_outbox:
+    entity: CircleOutbox
+    role: append_only
+    indexes:
+      - { name: idx_circle_outbox_version, keys: { aggregateId: 1, aggregateVersion: 1 }, unique: true }
+      - { name: idx_circle_outbox_sequence, keys: { outboxSequence: 1 }, unique: true }
+  circle_outbox_sequences:
+    entity: CircleOutboxSequence
+    role: authoritative
 
 redis_cache:
   - key: "cache:circle:{circleId}"

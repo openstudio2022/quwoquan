@@ -1,4 +1,4 @@
-# L4 特性：periodic-report-generation
+# L3 特性：periodic-report-generation
 
 ## 功能说明
 - 细化 periodic-report-generation 特性的功能边界与端云协同行为。

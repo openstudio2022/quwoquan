@@ -48,18 +48,21 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking_ranking_signal_fusion.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking_ranking_signal_fusion.gwt1_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: ui_explain_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.primary_text_explain_contract
@@ -71,5 +74,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

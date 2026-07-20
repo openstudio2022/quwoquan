@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -18,6 +17,7 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provi
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 class _FakeFileStorageGateway implements FileStorageGateway {
   const _FakeFileStorageGateway();

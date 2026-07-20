@@ -62,6 +62,7 @@ tables:
       - { name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
       - { name: claim_owner, type: VARCHAR(64), constraints: [NULLABLE] }
       - { name: claimed_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: counter_projected_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
       - { name: published_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
     indexes:
       - { name: uq_persona_relationship_outbox_version, columns: [aggregate_id, aggregate_version], unique: true }

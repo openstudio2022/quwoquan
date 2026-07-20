@@ -12,9 +12,13 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 // TestMongoPostFeedReaderDecodesCanonicalProjection 直接验证生产 Feed Reader
@@ -46,6 +50,50 @@ func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	}
 	if item.Width != 1280 || item.Height != 720 {
 		t.Fatalf("expected normalized 1280x720 dimensions, got %dx%d", item.Width, item.Height)
+	}
+}
+
+// TestMongoPostFeedReaderBatchFindByIDs 守护 N3-1 批量 $in 读接口：与单条读
+// 同一可见性谓词（published/public/approved），未命中 id 缺席、重复 id 去重、
+// 空输入返回空 map（feed 装配 N+1 消除的存储侧契约）。
+func TestMongoPostFeedReaderBatchFindByIDs(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"Batch feed read"}`)
+	createdID, _ := created["postId"].(string)
+	if createdID == "" {
+		t.Fatalf("created post is missing id: %+v", created)
+	}
+
+	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	batch, err := reader.FindPublishedFeedPosts(
+		context.Background(),
+		[]postports.PostID{
+			postports.NewPostID(createdID),
+			postports.NewPostID(createdID), // 重复 id 必须去重
+			postports.NewPostID("post_missing_batch_read"),
+		},
+	)
+	if err != nil {
+		t.Fatalf("batch find published feed posts: %v", err)
+	}
+	if len(batch) != 1 {
+		t.Fatalf("expected exactly the published post in batch, got %d: %+v", len(batch), batch)
+	}
+	slice, ok := batch[postports.NewPostID(createdID)]
+	if !ok {
+		t.Fatalf("expected batch hit for %q, got %+v", createdID, batch)
+	}
+	if string(slice.PostID) != createdID {
+		t.Fatalf("expected post %q, got %q", createdID, slice.PostID)
+	}
+
+	empty, err := reader.FindPublishedFeedPosts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("batch find with empty ids: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty map for empty input, got %+v", empty)
 	}
 }
 
@@ -108,6 +156,59 @@ func TestGetFeedByType(t *testing.T) {
 	}
 	if int(width) != 1280 || int(height) != 720 {
 		t.Fatalf("unexpected dimensions on feed item: width=%v height=%v", width, height)
+	}
+}
+
+func TestVideoPostProjectionCarriesAuthoritativeTimelineDescriptor(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	published := submitPublishedPost(
+		t,
+		`{"contentType":"video","contentIdentity":"work","title":"125 秒拖动回归视频"}`,
+	)
+	postID := asTestString(published["postId"])
+	if postID == "" {
+		t.Fatalf("published video post has no postId: %#v", published)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
+	recorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("get projected video post failed: %d %s", recorder.Code, recorder.Body.String())
+	}
+	var detail map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode projected video post: %v", err)
+	}
+	if detail["durationMs"] != float64(125000) ||
+		detail["width"] != float64(540) ||
+		detail["height"] != float64(960) {
+		t.Fatalf("video timeline descriptor drifted: %#v", detail)
+	}
+	items, ok := detail["mediaItems"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("video post must expose one media item: %#v", detail["mediaItems"])
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("video media item is not an object: %#v", items[0])
+	}
+	assetID := asTestString(item["mediaAssetId"])
+	assetVersion, versionOK := item["mediaAssetVersion"].(float64)
+	if assetID == "" ||
+		!versionOK ||
+		assetVersion < 1 ||
+		item["durationMs"] != float64(125000) ||
+		item["previewTrackVersion"] != float64(1) {
+		t.Fatalf("video media binding descriptor drifted: %#v", item)
+	}
+	preview := asTestString(item["previewTrackManifestUrl"])
+	if !strings.Contains(preview, "/preview/manifest.json") ||
+		!strings.Contains(preview, fmt.Sprintf("/v%d/", int(assetVersion))) ||
+		strings.Contains(preview, "objects/") ||
+		strings.Contains(preview, "://") {
+		t.Fatalf("preview track must remain a canonical public slice: %q", preview)
 	}
 }
 
@@ -423,7 +524,10 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	behaviorReq := httptest.NewRequest(
 		http.MethodPost,
 		"/content/behaviors",
-		strings.NewReader(fmt.Sprintf(`{"events":[{"contentId":"%s","action":"dislike"}]}`, dislikeID)),
+		strings.NewReader(fmt.Sprintf(
+			`{"events":[{"clientEventId":"evt-feed-dislike-001","occurredAt":%q,"contentId":"%s","action":"dislike"}]}`,
+			time.Now().UTC().Format(time.RFC3339Nano), dislikeID,
+		)),
 	)
 	behaviorReq.Header.Set("Content-Type", "application/json")
 	behaviorReq.Header.Set("X-Client-User-Id", "user_fw_01")
@@ -536,9 +640,11 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 		http.MethodPost,
 		"/content/behaviors",
 		strings.NewReader(fmt.Sprintf(
-			`{"events":[{"contentId":%q,"action":"hide_author","authorId":%q},{"contentId":%q,"action":"hide_content_type","contentType":%q}]}`,
+			`{"events":[{"clientEventId":"evt-hide-author-001","occurredAt":%q,"contentId":%q,"action":"hide_author","authorId":%q},{"clientEventId":"evt-hide-type-001","occurredAt":%q,"contentId":%q,"action":"hide_content_type","contentType":%q}]}`,
+			time.Now().UTC().Format(time.RFC3339Nano),
 			hideAuthorID,
 			hiddenAuthor,
+			time.Now().UTC().Format(time.RFC3339Nano),
 			hideTypeID,
 			hiddenType,
 		)),
@@ -671,11 +777,53 @@ func TestListFeedWithPagination(t *testing.T) {
 	}
 }
 
-// TestGetFeedFiltersBlockedUser verifies recall-post filtering can exclude
-// blocked authors via request header.
+// TestGetFeedFiltersBlockedUser 验证 Feed 只消费 PersonaBlocked 服务端投影；
+// 客户端 X-Blocked-User-Ids 不再参与内容授权或过滤。
 func TestGetFeedFiltersBlockedUser(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/content/feed?limit=10", nil)
-	req.Header.Set("X-Blocked-User-Ids", "user_1002")
+	ctx := context.Background()
+	relationships := requireMongoDB(t).Collection("persona_follow_projection")
+	viewerID := "feed_block_viewer"
+	blockedAuthorID := "feed_blocked_author"
+	visibleAuthorID := "feed_visible_author"
+	cleanup := func() {
+		cleanPosts(t)
+		_, _ = relationships.DeleteMany(ctx, bson.M{
+			"$or": []bson.M{
+				{"sourcePersonaId": viewerID},
+				{"targetPersonaId": viewerID},
+			},
+		})
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	blockedPost := submitPublishedPostWithAuthor(
+		t,
+		blockedAuthorID,
+		`{"contentType":"image","title":"server blocked feed post"}`,
+	)
+	visiblePost := submitPublishedPostWithAuthor(
+		t,
+		visibleAuthorID,
+		`{"contentType":"image","title":"server visible feed post"}`,
+	)
+	projector := recinfra.NewPersonaRelationshipProjection(requireMongoDB(t))
+	if err := projector.Apply(ctx, recinfra.PersonaRelationshipProjectionEvent{
+		EventID:         "feed_block_event",
+		EventName:       recinfra.PersonaBlocked,
+		PairID:          "feed_block_pair",
+		SourcePersonaID: viewerID,
+		TargetPersonaID: blockedAuthorID,
+		Version:         1,
+		OccurredAt:      time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("project feed block event: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=100", nil)
+	req.Header.Set("X-Client-Sub-Account-Id", viewerID)
+	// 伪造客户端列表不得隐藏本应可见的作者。
+	req.Header.Set("X-Blocked-User-Ids", visibleAuthorID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -688,10 +836,20 @@ func TestGetFeedFiltersBlockedUser(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
+	blockedPostID := asTestString(blockedPost["postId"])
+	visiblePostID := asTestString(visiblePost["postId"])
+	visibleFound := false
 	for _, item := range page.Items {
-		if item["authorId"] == "user_1002" {
-			t.Fatalf("blocked author should be filtered, got item=%v", item["postId"])
+		postID := asTestString(item["postId"])
+		if postID == blockedPostID {
+			t.Fatalf("server-projected blocked author leaked into feed: %v", item)
 		}
+		if postID == visiblePostID {
+			visibleFound = true
+		}
+	}
+	if !visibleFound {
+		t.Fatal("client-provided blocked-id header incorrectly filtered visible author")
 	}
 }
 

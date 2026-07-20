@@ -31,11 +31,19 @@ type mediaAssetDocument struct {
 	ProcessingStatus             mediamodel.ProcessingStatus `bson:"processingStatus"`
 	ProcessingFailureReason      string                      `bson:"processingFailureReason,omitempty"`
 	ProcessorProfile             string                      `bson:"processorProfile,omitempty"`
+	ImageWidth                   int                         `bson:"imageWidth,omitempty"`
+	ImageHeight                  int                         `bson:"imageHeight,omitempty"`
+	ImageDeliveryContentType     string                      `bson:"imageDeliveryContentType,omitempty"`
+	ImageNormalizedObjectKey     string                      `bson:"imageNormalizedObjectKey,omitempty"`
+	ImagePublicSliceKey          string                      `bson:"imagePublicSliceKey,omitempty"`
 	VerifiedDurationMs           int64                       `bson:"verifiedDurationMs,omitempty"`
 	VideoWidth                   int                         `bson:"videoWidth,omitempty"`
 	VideoHeight                  int                         `bson:"videoHeight,omitempty"`
 	VideoCodec                   string                      `bson:"videoCodec,omitempty"`
 	VideoContainer               string                      `bson:"videoContainer,omitempty"`
+	VideoAudioCodec              string                      `bson:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs      int                         `bson:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart               bool                        `bson:"videoFastStart,omitempty"`
 	VideoPublicSliceKey          string                      `bson:"videoPublicSliceKey,omitempty"`
 	CoverPublicSliceKey          string                      `bson:"coverPublicSliceKey,omitempty"`
 	PreviewTrackVersion          int                         `bson:"previewTrackVersion,omitempty"`
@@ -106,11 +114,19 @@ func (s *MongoMediaStore) FindMediaAssetForOwner(
 			{Key: "accessPolicy", Value: 1},
 			{Key: "processingStatus", Value: 1},
 			{Key: "processorProfile", Value: 1},
+			{Key: "imageWidth", Value: 1},
+			{Key: "imageHeight", Value: 1},
+			{Key: "imageDeliveryContentType", Value: 1},
+			{Key: "imageNormalizedObjectKey", Value: 1},
+			{Key: "imagePublicSliceKey", Value: 1},
 			{Key: "verifiedDurationMs", Value: 1},
 			{Key: "videoWidth", Value: 1},
 			{Key: "videoHeight", Value: 1},
 			{Key: "videoCodec", Value: 1},
 			{Key: "videoContainer", Value: 1},
+			{Key: "videoAudioCodec", Value: 1},
+			{Key: "videoKeyframeIntervalMs", Value: 1},
+			{Key: "videoFastStart", Value: 1},
 			{Key: "videoPublicSliceKey", Value: 1},
 			{Key: "coverPublicSliceKey", Value: 1},
 			{Key: "previewTrackVersion", Value: 1},
@@ -207,11 +223,19 @@ func mediaAssetSliceFromDocument(document mediaAssetDocument) mediaapp.MediaAsse
 		AccessPolicy:                 document.AccessPolicy,
 		ProcessingStatus:             document.ProcessingStatus,
 		ProcessorProfile:             document.ProcessorProfile,
+		ImageWidth:                   document.ImageWidth,
+		ImageHeight:                  document.ImageHeight,
+		ImageDeliveryContentType:     document.ImageDeliveryContentType,
+		ImageNormalizedObjectKey:     document.ImageNormalizedObjectKey,
+		ImagePublicSliceKey:          document.ImagePublicSliceKey,
 		VerifiedDurationMs:           document.VerifiedDurationMs,
 		VideoWidth:                   document.VideoWidth,
 		VideoHeight:                  document.VideoHeight,
 		VideoCodec:                   document.VideoCodec,
 		VideoContainer:               document.VideoContainer,
+		VideoAudioCodec:              document.VideoAudioCodec,
+		VideoKeyframeIntervalMs:      document.VideoKeyframeIntervalMs,
+		VideoFastStart:               document.VideoFastStart,
 		VideoPublicSliceKey:          document.VideoPublicSliceKey,
 		CoverPublicSliceKey:          document.CoverPublicSliceKey,
 		PreviewTrackVersion:          document.PreviewTrackVersion,
@@ -264,6 +288,68 @@ func (s *MongoMediaStore) FindMediaAssetReceipt(
 		Aggregate: asset,
 		Replayed:  true,
 	}, true, nil
+}
+
+// RecordMediaAssetNoopReceipt 持久化目标状态已满足的命名 set 回执：
+// 不递增 aggregate version、不写 outbox；并发首插以先者为准并回放先者结果。
+func (s *MongoMediaStore) RecordMediaAssetNoopReceipt(
+	ctx context.Context,
+	noop mediaports.MediaAssetNoopReceipt,
+) (mediaports.MediaAssetCommitResult, error) {
+	if noop.Aggregate == nil ||
+		strings.TrimSpace(noop.IdempotencyKey) == "" ||
+		strings.TrimSpace(noop.CommandName) == "" ||
+		strings.TrimSpace(noop.CommandDigest) == "" {
+		return mediaports.MediaAssetCommitResult{},
+			contentgenerated.AppErrorFromVersionConflict(
+				"media asset no-op receipt is incomplete",
+			)
+	}
+	if replayed, found, err := s.FindMediaAssetReceipt(
+		ctx,
+		noop.IdempotencyKey,
+		noop.CommandName,
+		noop.CommandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	record := mediaAssetDocumentFromModel(noop.Aggregate)
+	expiresAt := noop.ReceiptExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().UTC().Add(24 * time.Hour)
+	}
+	_, err := s.assetReceipts.InsertOne(ctx, mediaAssetReceiptDocument{
+		ID:               strings.TrimSpace(noop.IdempotencyKey),
+		AggregateID:      record.ID,
+		AggregateVersion: record.Version,
+		CommandName:      strings.TrimSpace(noop.CommandName),
+		CommandDigest:    strings.TrimSpace(noop.CommandDigest),
+		Result:           record,
+		CreatedAt:        time.Now().UTC(),
+		ExpiresAt:        expiresAt,
+	})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			replayed, found, replayErr := s.FindMediaAssetReceipt(
+				ctx,
+				noop.IdempotencyKey,
+				noop.CommandName,
+				noop.CommandDigest,
+			)
+			if replayErr != nil {
+				return mediaports.MediaAssetCommitResult{}, replayErr
+			}
+			if found {
+				return replayed, nil
+			}
+		}
+		return mediaports.MediaAssetCommitResult{}, err
+	}
+	asset, err := mediaAssetFromDocument(record)
+	if err != nil {
+		return mediaports.MediaAssetCommitResult{}, err
+	}
+	return mediaports.MediaAssetCommitResult{Aggregate: asset}, nil
 }
 
 func (s *MongoMediaStore) CommitMediaAsset(
@@ -446,11 +532,19 @@ func mediaAssetDocumentFromModel(asset *mediamodel.MediaAsset) mediaAssetDocumen
 		ProcessingStatus:             snapshot.ProcessingStatus,
 		ProcessingFailureReason:      snapshot.ProcessingFailureReason,
 		ProcessorProfile:             snapshot.ProcessorProfile,
+		ImageWidth:                   snapshot.ImageWidth,
+		ImageHeight:                  snapshot.ImageHeight,
+		ImageDeliveryContentType:     snapshot.ImageDeliveryContentType,
+		ImageNormalizedObjectKey:     snapshot.ImageNormalizedObjectKey,
+		ImagePublicSliceKey:          snapshot.ImagePublicSliceKey,
 		VerifiedDurationMs:           snapshot.VerifiedDurationMs,
 		VideoWidth:                   snapshot.VideoWidth,
 		VideoHeight:                  snapshot.VideoHeight,
 		VideoCodec:                   snapshot.VideoCodec,
 		VideoContainer:               snapshot.VideoContainer,
+		VideoAudioCodec:              snapshot.VideoAudioCodec,
+		VideoKeyframeIntervalMs:      snapshot.VideoKeyframeIntervalMs,
+		VideoFastStart:               snapshot.VideoFastStart,
 		VideoPublicSliceKey:          snapshot.VideoPublicSliceKey,
 		CoverPublicSliceKey:          snapshot.CoverPublicSliceKey,
 		PreviewTrackVersion:          snapshot.PreviewTrackVersion,
@@ -481,11 +575,19 @@ func mediaAssetFromDocument(
 		ProcessingStatus:             document.ProcessingStatus,
 		ProcessingFailureReason:      document.ProcessingFailureReason,
 		ProcessorProfile:             document.ProcessorProfile,
+		ImageWidth:                   document.ImageWidth,
+		ImageHeight:                  document.ImageHeight,
+		ImageDeliveryContentType:     document.ImageDeliveryContentType,
+		ImageNormalizedObjectKey:     document.ImageNormalizedObjectKey,
+		ImagePublicSliceKey:          document.ImagePublicSliceKey,
 		VerifiedDurationMs:           document.VerifiedDurationMs,
 		VideoWidth:                   document.VideoWidth,
 		VideoHeight:                  document.VideoHeight,
 		VideoCodec:                   document.VideoCodec,
 		VideoContainer:               document.VideoContainer,
+		VideoAudioCodec:              document.VideoAudioCodec,
+		VideoKeyframeIntervalMs:      document.VideoKeyframeIntervalMs,
+		VideoFastStart:               document.VideoFastStart,
 		VideoPublicSliceKey:          document.VideoPublicSliceKey,
 		CoverPublicSliceKey:          document.CoverPublicSliceKey,
 		PreviewTrackVersion:          document.PreviewTrackVersion,

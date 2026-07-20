@@ -118,7 +118,7 @@ entries:
     notes:
       - 本次已正式进入 `/design`，相关 `design.md / content.execution.planning.yaml` 已补齐。
       - 搜索对用户与页面层暴露统一 `Search` 接口；域级 `Search*` contract 退到内部 provider 层。
-      - `make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已执行并通过。
+      - "`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已执行并通过。"
   - timestamp: "2026-03-24T18:30:00+08:00"
     summary: >
       重新冻结群组主线 PRD：把首页与搜索中的统一入口词从“圈子”收口为“群组”，

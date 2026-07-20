@@ -83,6 +83,7 @@ objects:
     - pinnedCommentId
     owned_value:
     - creatorDisclosure
+    - sourceAttribution
     - semanticMentions
     - articleAssetManifest
     - articleRenderProfile
@@ -101,6 +102,9 @@ objects:
     - articleTemplate
     - articleFontPreset
     - videoUrl
+    - width
+    - height
+    - durationMs
     - coverStrategy
     - coverFrameTimeMs
     - locationName
@@ -144,7 +148,6 @@ objects:
   - ReportBehaviors
   - SubmitPostPublication
   - UpdatePostSettings
-  - UpdateProfileInteractionState
   object_kind: aggregate_root
   relationships:
   - access: named_reader
@@ -229,6 +232,9 @@ objects:
     - createdAt
     - updatedAt
     - deletedAt
+    - hiddenAt
+    - hotScore
+    - authorIpLocation
     - postId
     - authorId
     - replyToCommentId
@@ -262,7 +268,9 @@ objects:
   - BindMediaAssetsToComment
   - CreateComment
   - DeleteComment
+  - HideComment
   - PinComment
+  - RestoreComment
   - UnpinComment
   object_kind: aggregate_root
   relationships:
@@ -336,8 +344,16 @@ objects:
     - videoHeight
     - videoCodec
     - videoContainer
+    - videoAudioCodec
+    - videoKeyframeIntervalMs
+    - videoFastStart
     - videoPublicSliceKey
     - coverPublicSliceKey
+    - imageWidth
+    - imageHeight
+    - imageDeliveryContentType
+    - imageNormalizedObjectKey
+    - imagePublicSliceKey
     - previewTrackVersion
     - previewTrackManifestSliceKey
     - coverStrategy
@@ -401,6 +417,209 @@ objects:
   source_entity: MediaAsset
   storage_backend: mongodb
   storage_role: authoritative
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Media
+  canonical_object: FilterCatalogRelease
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - releaseId
+    - version
+    - sourceOwner
+    - canonicalDigest
+    - status
+    - categoryCount
+    - presetCount
+    - importedAt
+    - activatedAt
+    owned_value:
+    - categories
+    - presets
+    - recommendedFallbackPresetIds
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - releaseId
+    version_field: version
+    version_source: field
+  local_identity_reasons:
+    recommendedFallbackPresetIds: 同一 FilterCatalogRelease 内预设排序选择器，随聚合校验并不可变，不是跨对象业务引用
+  invariant_refs:
+  - content/filter_catalog_release/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - content/filter_catalog_release/aggregate.yaml#lifecycle
+  member_bounds:
+    FilterAdjustmentValues: 256
+    FilterCategoryDefinition: 32
+    FilterPresetDefinition: 256
+  mutation_entrypoints:
+  - ActivateFilterCatalogRelease
+  - RollbackFilterCatalogRelease
+  - StageFilterCatalogRelease
+  object_kind: aggregate_root
+  relationships:
+  - access: aggregate_root
+    cardinality: 1:N
+    consistency: strong
+    kind: owned
+    name: categories
+    on_delete: cascade
+    reference_fields: []
+    target_object: content.FilterCategoryDefinition
+  - access: aggregate_root
+    cardinality: 1:N
+    consistency: strong
+    kind: owned
+    name: presets
+    on_delete: cascade
+    reference_fields: []
+    target_object: content.FilterPresetDefinition
+  - access: aggregate_root
+    cardinality: 1:N
+    consistency: strong
+    kind: owned
+    name: adjustments
+    on_delete: cascade
+    reference_fields: []
+    target_object: content.FilterAdjustmentValues
+  source_document: content/filter_catalog_release/fields.yaml
+  source_entity: FilterCatalogRelease
+  storage_backend: mongodb
+  storage_role: authoritative
+- access:
+    commands: via_aggregate_root
+    cross_context: forbidden
+    queries: via_aggregate_projection
+  aggregate_owner: FilterCatalogRelease
+  bounded_context: Media
+  canonical_object: FilterCategoryDefinition
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - categoryId
+    - displayNameZhHans
+    - displayNameEn
+    - sort
+    - enabled
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - categoryId
+    version_source: owner
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: owned_entity
+  relationships: []
+  source_document: content/filter_catalog_release/fields.yaml
+  source_entity: FilterCategoryDefinition
+  storage_role: owned
+- access:
+    commands: via_aggregate_root
+    cross_context: forbidden
+    queries: via_aggregate_projection
+  aggregate_owner: FilterCatalogRelease
+  bounded_context: Media
+  canonical_object: FilterPresetDefinition
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - presetId
+    - categoryId
+    - displayNameZhHans
+    - displayNameEn
+    - sort
+    - enabled
+    - defaultStrength
+    owned_value:
+    - adjustments
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - presetId
+    version_source: owner
+  local_identity_reasons:
+    categoryId: 同一 FilterCatalogRelease 内分类选择器，由聚合根强校验，不允许 owned child 之间建立独立关系访问
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: owned_entity
+  relationships: []
+  source_document: content/filter_catalog_release/fields.yaml
+  source_entity: FilterPresetDefinition
+  storage_role: owned
+- access:
+    commands: via_aggregate_root
+    cross_context: forbidden
+    queries: via_aggregate_projection
+  aggregate_owner: FilterCatalogRelease
+  bounded_context: Media
+  canonical_object: FilterAdjustmentValues
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - lightSense
+    - brightness
+    - exposure
+    - contrast
+    - saturation
+    - vibrance
+    - texture
+    - sharpen
+    - structure
+    - highlight
+    - shadow
+    - temperature
+    - tint
+    - grain
+    - fade
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - lightSense
+    - brightness
+    - exposure
+    - contrast
+    - saturation
+    - vibrance
+    - texture
+    - sharpen
+    - structure
+    - highlight
+    - shadow
+    - temperature
+    - tint
+    - grain
+    - fade
+    version_source: owner
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: value_object
+  relationships: []
+  source_document: content/filter_catalog_release/fields.yaml
+  source_entity: FilterAdjustmentValues
+  storage_role: owned
 - access:
     commands: append_only_sink
     cross_context: event_only
@@ -562,8 +781,10 @@ objects:
     fields:
     - eventId
     version_source: immutable
-  invariant_refs: []
-  lifecycle_refs: []
+  invariant_refs:
+  - content/outbound_share_fact/entity.yaml#business_rules
+  lifecycle_refs:
+  - content/outbound_share_fact/entity.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
   - CreateOutboundShare
@@ -622,8 +843,10 @@ objects:
     fields:
     - _id
     version_source: immutable
-  invariant_refs: []
-  lifecycle_refs: []
+  invariant_refs:
+  - content/deleted_post_tombstone/entity.yaml#business_rules
+  lifecycle_refs:
+  - content/deleted_post_tombstone/entity.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints: []
   object_kind: append_only_fact
@@ -651,23 +874,76 @@ objects:
   storage_backend: mongodb
   storage_role: append_only
 - access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Content
+  canonical_object: IntersectionVisitState
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - userId
+    - identityVisitedAt
+    - locationVisitedAt
+    - contentVisitedAt
+    - interestVisitedAt
+    - relationshipVisitedAt
+    - updatedAt
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - userId
+    version_source: store_commit
+  invariant_refs:
+  - content/intersection_visit_state/entity.yaml#business_rules
+  lifecycle_refs:
+  - content/intersection_visit_state/entity.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - MarkIntersectionsVisited
+  object_kind: aggregate_root
+  relationships: []
+  source_document: content/intersection_visit_state/fields.yaml
+  source_entity: IntersectionVisitState
+  storage_backend: mongodb
+  storage_role: authoritative
+- access:
     commands: none
     cross_context: public_contract_only
     queries: named_reader
   bounded_context: Content
   canonical_object: ProfileInteractionActivityView
-  event_consumers: []
+  event_consumers:
+  - ContentReactionSet
+  - ContentReactionCleared
+  - CommentCreated
+  - CommentDeleted
+  - OutboundShareRecorded
+  - ProfileInteractionReadFactAppended
+  - PostDeleted
   field_roles:
     append_only_fact: []
     authoritative_state: []
     owned_value: []
     projection:
+    - ownerPersonaId
     - activityId
     - activityType
     - direction
+    - sourceType
+    - sourceEventId
+    - sourceVersion
+    - viewerReactionVersion
+    - targetVersion
+    - active
     - commentKind
     - actorDisplayName
     - actorAvatarUrl
+    - actorAvatarVersion
     - counterpartDisplayName
     - counterpartAvatarUrl
     - targetContentType
@@ -677,6 +953,7 @@ objects:
     - targetReplyCount
     - displayName
     - displayAvatarUrl
+    - displayAvatarVersion
     - displayUserRouteId
     - primaryText
     - contextText
@@ -704,6 +981,7 @@ objects:
     - parentCommentId
     - outboundShareEventId
     reference:
+    - ownerPersonaId
     - actorSubAccountId
     - counterpartSubAccountId
     - displaySubAccountId
@@ -716,6 +994,8 @@ objects:
     transport_only: []
   identity:
     fields:
+    - ownerPersonaId
+    - direction
     - activityId
     version_source: checkpoint
   invariant_refs: []
@@ -724,6 +1004,15 @@ objects:
   mutation_entrypoints: []
   object_kind: projection
   relationships:
+  - access: event
+    cardinality: N:1
+    consistency: eventual
+    kind: projection_source
+    name: ownerPersona
+    on_delete: retain
+    reference_fields:
+    - ownerPersonaId
+    target_object: user.Persona
   - access: event
     cardinality: N:1
     consistency: eventual
@@ -807,71 +1096,62 @@ objects:
     reference_fields:
     - outboundShareEventId
     target_object: content.OutboundShareFact
-  source_document: content/post/fields.yaml
+  source_document: content/profile_interaction_activity_view/fields.yaml
   source_entity: ProfileInteractionActivityView
   storage_backend: mongodb
   storage_role: projection
   local_identity_reasons:
     displayUserRouteId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
     previewRouteId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+    sourceEventId: immutable source outbox identity used only for projector dedupe and replay traceability
 - access:
-    commands: none
-    cross_context: public_contract_only
-    queries: named_reader
+    commands: append_only_sink
+    cross_context: event_only
+    queries: none
   bounded_context: Content
-  canonical_object: PostSearchItemView
+  canonical_object: ProfileInteractionReadFact
   event_consumers: []
   field_roles:
-    append_only_fact: []
+    append_only_fact:
+    - factId
+    - ownerPersonaId
+    - activityId
+    - state
+    - occurredAt
     authoritative_state: []
     owned_value: []
-    projection:
-    - postId
-    - contentType
-    - contentIdentity
-    - title
-    - summary
-    - coverUrl
-    - authorDisplayName
-    - authorAvatarUrl
-    - categoryId
-    - subCategory
-    - likeCount
-    - highlightText
-    - matchedField
-    - publishedAt
-    - connectionState
-    - intersectionReason
-    - authorId
+    projection: []
     reference:
-    - authorId
+    - ownerPersonaId
     transport_only: []
   identity:
     fields:
-    - postId
-    version_source: checkpoint
-  invariant_refs: []
-  lifecycle_refs: []
+    - factId
+    version_source: immutable
+  invariant_refs:
+  - content/profile_interaction_read_fact/entity.yaml#business_rules
+  lifecycle_refs:
+  - content/profile_interaction_read_fact/entity.yaml#lifecycle
   member_bounds: {}
-  mutation_entrypoints: []
-  object_kind: projection
+  mutation_entrypoints:
+  - UpdateProfileInteractionState
+  object_kind: append_only_fact
   relationships:
-  - access: event
+  - access: named_reader
     cardinality: N:1
     consistency: eventual
-    kind: projection_source
-    name: authorPersona
+    kind: reference
+    name: ownerPersona
     on_delete: retain
     reference_fields:
-    - authorId
+    - ownerPersonaId
     target_object: user.Persona
-  source_document: content/post/fields.yaml
-  source_entity: PostSearchItemView
-  storage_backend: elasticsearch
-  storage_role: projection
+  source_document: content/profile_interaction_read_fact/fields.yaml
+  source_entity: ProfileInteractionReadFact
+  storage_backend: mongodb
+  storage_role: append_only
   local_identity_reasons:
-    categoryId: stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store
-      identity
+    activityId: immutable projection target identity scoped by ownerPersonaId; it never grants aggregate access
 - access:
     commands: aggregate_facade
     cross_context: public_contract_only
@@ -916,6 +1196,7 @@ objects:
   mutation_entrypoints:
   - BeginReportReview
   - CreateReport
+  - DismissReport
   - ResolveReport
   object_kind: aggregate_root
   relationships:
@@ -968,6 +1249,7 @@ objects:
     authoritative_state:
     - id
     - version
+    - assetId
     - objectKey
     - mediaType
     - contentType
@@ -983,6 +1265,7 @@ objects:
     owned_value: []
     projection: []
     reference:
+    - assetId
     - ownerId
     transport_only: []
   identity:
@@ -1010,6 +1293,15 @@ objects:
     reference_fields:
     - ownerId
     target_object: user.Persona
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: completedAsset
+    on_delete: retain
+    reference_fields:
+    - assetId
+    target_object: content.MediaAsset
   source_document: content/media_upload_session/fields.yaml
   source_entity: MediaUploadSession
   storage_backend: mongodb

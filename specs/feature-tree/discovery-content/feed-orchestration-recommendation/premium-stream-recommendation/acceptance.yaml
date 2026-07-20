@@ -50,6 +50,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.gwt1_local_contract
@@ -57,6 +58,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: gwt1_user_acceptance
         cases:
         - user_acceptance.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.gwt1_user_acceptance
@@ -96,15 +98,15 @@ gwt_acceptance:
     - premium_pool_unknown_attribution_rate <= 0.01
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/tests/api_integration/recommendation/premium_pool_readpath__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/discovery/premium_stream_premium_pool__user_acceptance_test.dart
       recorded:
       - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/premium_pool_event_chain__api_integration_test.go
     status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.premium_pool_readpath
@@ -112,12 +114,14 @@ gwt_acceptance:
         - local
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: gwt2_api_integration
         cases:
         - api_integration.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.premium_pool_readpath
         envs:
         - gamma
       - layer: user_acceptance
+        execution_profile: release
         suite: gwt2_user_acceptance
         cases:
         - user_acceptance.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.premium_pool_readpath
@@ -126,10 +130,11 @@ gwt_acceptance:
     notes:
     - 2026-06-25 continue-dev 裁决：下一轮主切片为 P1d-2 精品池读路径闭环，且已进入开发。
     - 已完成 local_contract 基座：rm_premium_pool projection metadata、fail-closed 投影字段、product-ops PremiumPoolEntry* 事件发布、content-service PremiumPoolProjector/PremiumPoolEventConsumer、PremiumPoolSource premium_stream/similar 场景门控、RecallPath=premium_pool、content-service 接线和 disable_premium_pool_source 回滚开关。
-    - 仍不能宣称 GWT2 完成：真实 product-ops API -> Redis events.ops -> content-service Mongo rm_premium_pool -> /content/feed 的 api_integration、user_acceptance 和 Gamma/UAT 仍为 planned。
+    - 2026-07-19 W3 读路径闭环推进：① api_integration 已回填（premium_pool_event_chain——events.ops 真实 Redis pub/sub → 投影 → fail-closed 召回 → feed 返回 recallPath=premium_pool → takedown 即时回空）；② App 沉浸流精品源（featured/premium/immersive）改为 premium 频道单路数据源（channel=premium → premium_stream），移除三路时间流客户端合并，埋点 channelId 与真实数据源一致。
+    - 仍不能宣称 GWT2 完成：gamma 环境真实跨服务（product-ops API 起点）联调与 user_acceptance 真机旅程仍为 planned。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

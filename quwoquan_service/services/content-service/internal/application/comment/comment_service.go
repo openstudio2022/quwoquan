@@ -16,28 +16,79 @@ import (
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
 	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
-	reactiondomain "quwoquan_service/services/content-service/internal/domain/reaction"
 	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
 const (
 	commentReceiptTTL = 24 * time.Hour
-	maxCommentPage    = 100
 
 	commentCreatedEventType          = "CommentCreated"
 	commentDeletedEventType          = "CommentDeleted"
+	commentModeratedEventType        = "CommentModerated"
 	commentPinChangedEventType       = "CommentPinChanged"
 	commentAttachmentsBoundEventType = "CommentAttachmentsBound"
 )
 
+// RateLimitConfig 是 CreateComment 频控滑动窗口配置；阈值 <=0 表示对应窗口关闭。
+type RateLimitConfig struct {
+	BurstWindow time.Duration
+	BurstMax    int64
+	DailyWindow time.Duration
+	DailyMax    int64
+}
+
+// DefaultRateLimitConfig 与 config.yaml 默认口径一致：30s ≤ 5 条且 24h ≤ 200 条。
+func DefaultRateLimitConfig() RateLimitConfig {
+	return RateLimitConfig{
+		BurstWindow: 30 * time.Second,
+		BurstMax:    5,
+		DailyWindow: 24 * time.Hour,
+		DailyMax:    200,
+	}
+}
+
+// IPLocationResolver 把创建评论的客户端 IP 解析为省级属地快照；
+// 解析不出返回空串（前端不展示，绝不臆造）。
+type IPLocationResolver interface {
+	Resolve(ip string) string
+}
+
 // CommentService is the object-specific application service. All dependencies
 // are Comment domain ports; it neither imports infrastructure nor PostService.
 type CommentService struct {
-	data DataPorts
-	now  func() time.Time
+	data       DataPorts
+	now        func() time.Time
+	rateLimit  RateLimitConfig
+	ipResolver IPLocationResolver
+	clientIP   func(context.Context) string
 }
 
-func NewCommentService(data DataPorts) *CommentService {
+type CommentServiceOption func(*CommentService)
+
+// WithRateLimitConfig 覆盖默认频控窗口（config.yaml 驱动）。
+func WithRateLimitConfig(config RateLimitConfig) CommentServiceOption {
+	return func(s *CommentService) { s.rateLimit = config }
+}
+
+// WithIPLocationResolver 注入属地解析器（生产注入真实 GeoIP 实现）。
+func WithIPLocationResolver(resolver IPLocationResolver) CommentServiceOption {
+	return func(s *CommentService) {
+		if resolver != nil {
+			s.ipResolver = resolver
+		}
+	}
+}
+
+// WithClientIPExtractor 注入请求级客户端 IP 读取函数（HTTP 适配层注入 context）。
+func WithClientIPExtractor(extract func(context.Context) string) CommentServiceOption {
+	return func(s *CommentService) {
+		if extract != nil {
+			s.clientIP = extract
+		}
+	}
+}
+
+func NewCommentService(data DataPorts, opts ...CommentServiceOption) *CommentService {
 	if data.Aggregate == nil ||
 		data.PostPage == nil ||
 		data.ReplyPage == nil ||
@@ -48,13 +99,21 @@ func NewCommentService(data DataPorts) *CommentService {
 		data.Relations == nil ||
 		data.PostRelation == nil ||
 		data.Attachments == nil ||
-		data.Reactions == nil {
+		data.Reactions == nil ||
+		data.ViewerRelations == nil ||
+		data.ViewerBlocks == nil {
 		panic("CommentService requires all object-specific data ports")
 	}
-	return &CommentService{
-		data: data,
-		now:  time.Now,
+	s := &CommentService{
+		data:      data,
+		now:       time.Now,
+		rateLimit: DefaultRateLimitConfig(),
+		clientIP:  func(context.Context) string { return "" },
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func (s *CommentService) CreateComment(
@@ -91,6 +150,7 @@ func (s *CommentService) CreateComment(
 		AttachmentMediaIDs:        cloneStrings(command.AttachmentMediaIDs),
 		Mentions:                  cloneMentions(command.Mentions),
 		AssistantMentioned:        containsAssistantMention(command.Mentions),
+		AuthorIPLocation:          s.resolveAuthorIPLocation(ctx),
 		Now:                       s.now().UTC(),
 	}
 	if replyID := strings.TrimSpace(command.ReplyToCommentID); replyID != "" {
@@ -127,16 +187,18 @@ func (s *CommentService) CreateComment(
 		CommentID:        aggregate.ID(),
 		Version:          aggregate.Version(),
 		PostID:           params.PostID,
+		PostAuthorID:     post.AuthorID,
 		AuthorID:         actorID,
 		ReplyToCommentID: params.ReplyToCommentID,
 		ReplyToUserID:    params.ReplyToUserID,
 		ParentCommentID:  params.ParentCommentID,
+		MentionedUserIDs: mentionedUserIDs(params.Mentions),
 		CreatedAt:        params.Now.UTC(),
 	})
 	if err != nil {
 		return CommentCommandResult{}, unavailable(err)
 	}
-	return s.commit(
+	return s.commitWithAuthorRateLimit(
 		ctx,
 		actorID,
 		aggregate,
@@ -146,6 +208,7 @@ func (s *CommentService) CreateComment(
 		commentCreatedEventType,
 		payload,
 		params.Now,
+		s.authorRateLimit(actorID, params.Now),
 	)
 }
 
@@ -288,12 +351,13 @@ func (s *CommentService) changePin(
 		}
 		snapshot := aggregate.Snapshot()
 		payload, marshalErr := json.Marshal(commentPinChangedEvent{
-			CommentID:  snapshot.ID,
-			Version:    snapshot.Version,
-			PostID:     snapshot.PostID,
-			OperatorID: actorID,
-			IsPinned:   snapshot.IsPinned,
-			PinnedAt:   snapshot.PinnedAt,
+			CommentID:       snapshot.ID,
+			Version:         snapshot.Version,
+			PostID:          snapshot.PostID,
+			CommentAuthorID: snapshot.AuthorID,
+			OperatorID:      actorID,
+			IsPinned:        snapshot.IsPinned,
+			PinnedAt:        snapshot.PinnedAt,
 		})
 		if marshalErr != nil {
 			return CommentCommandResult{}, unavailable(marshalErr)
@@ -402,112 +466,6 @@ func (s *CommentService) BindAttachments(
 	panic("unreachable Comment attachment retry")
 }
 
-func (s *CommentService) ListComments(
-	ctx context.Context,
-	query ListCommentsQuery,
-) (CommentPageSlice, error) {
-	page, err := s.data.PostPage.ListByPost(
-		ctx,
-		strings.TrimSpace(query.PostID),
-		commentports.PageRequest{Cursor: strings.TrimSpace(query.Cursor), Limit: pageLimit(query.Limit)},
-	)
-	if err != nil {
-		return CommentPageSlice{}, unavailableRead(err)
-	}
-	items, err := s.projectItems(ctx, page.Items, query.ActorID, true)
-	if err != nil {
-		return CommentPageSlice{}, unavailableRead(err)
-	}
-	return CommentPageSlice{
-		Items:      items,
-		NextCursor: page.NextCursor,
-		Total:      page.Total,
-	}, nil
-}
-
-func (s *CommentService) ListReplies(
-	ctx context.Context,
-	query ListCommentRepliesQuery,
-) (ReplyPageSlice, error) {
-	page, err := s.data.ReplyPage.ListReplies(
-		ctx,
-		strings.TrimSpace(query.PostID),
-		strings.TrimSpace(query.ParentCommentID),
-		commentports.PageRequest{Cursor: strings.TrimSpace(query.Cursor), Limit: pageLimit(query.Limit)},
-	)
-	if err != nil {
-		return ReplyPageSlice{}, unavailableRead(err)
-	}
-	items, err := s.projectItems(ctx, page.Items, query.ActorID, false)
-	if err != nil {
-		return ReplyPageSlice{}, unavailableRead(err)
-	}
-	return ReplyPageSlice{
-		Items:      items,
-		NextCursor: page.NextCursor,
-		Total:      page.Total,
-	}, nil
-}
-
-func (s *CommentService) ListByAuthor(
-	ctx context.Context,
-	query ListCommentsByAuthorQuery,
-) (AuthorCommentPageSlice, error) {
-	actorID, err := requiredActorID(query.ActorID)
-	if err != nil {
-		return AuthorCommentPageSlice{}, err
-	}
-	page, err := s.data.AuthorPage.ListByAuthor(
-		ctx,
-		actorID,
-		commentports.PageRequest{Cursor: strings.TrimSpace(query.Cursor), Limit: pageLimit(query.Limit)},
-	)
-	if err != nil {
-		return AuthorCommentPageSlice{}, unavailableRead(err)
-	}
-	items, err := s.projectItems(ctx, page.Items, actorID, true)
-	if err != nil {
-		return AuthorCommentPageSlice{}, unavailableRead(err)
-	}
-	return AuthorCommentPageSlice{
-		Items:      items,
-		NextCursor: page.NextCursor,
-		Total:      page.Total,
-	}, nil
-}
-
-func (s *CommentService) ListReceivedByPostAuthor(
-	ctx context.Context,
-	query ListReceivedCommentsQuery,
-) (ReceivedCommentPageSlice, error) {
-	actorID, err := requiredActorID(query.ActorID)
-	if err != nil {
-		return ReceivedCommentPageSlice{}, err
-	}
-	postIDs, err := s.data.PostRelation.ListOwnedPostIDs(ctx, actorID)
-	if err != nil {
-		return ReceivedCommentPageSlice{}, unavailableRead(err)
-	}
-	page, err := s.data.ReceivedPage.ListReceivedByPostAuthor(
-		ctx,
-		actorID,
-		postIDs,
-		commentports.PageRequest{Cursor: strings.TrimSpace(query.Cursor), Limit: pageLimit(query.Limit)},
-	)
-	if err != nil {
-		return ReceivedCommentPageSlice{}, unavailableRead(err)
-	}
-	items, err := s.projectItems(ctx, page.Items, actorID, true)
-	if err != nil {
-		return ReceivedCommentPageSlice{}, unavailableRead(err)
-	}
-	return ReceivedCommentPageSlice{
-		Items:      items,
-		NextCursor: page.NextCursor,
-		Total:      page.Total,
-	}, nil
-}
-
 func (s *CommentService) load(
 	ctx context.Context,
 	commentID string,
@@ -558,6 +516,32 @@ func (s *CommentService) commit(
 	eventPayload []byte,
 	now time.Time,
 ) (CommentCommandResult, error) {
+	return s.commitWithAuthorRateLimit(
+		ctx,
+		actorID,
+		aggregate,
+		expectedVersion,
+		commandName,
+		commandDigest,
+		eventType,
+		eventPayload,
+		now,
+		nil,
+	)
+}
+
+func (s *CommentService) commitWithAuthorRateLimit(
+	ctx context.Context,
+	actorID string,
+	aggregate *commentmodel.Comment,
+	expectedVersion int64,
+	commandName string,
+	commandDigest string,
+	eventType string,
+	eventPayload []byte,
+	now time.Time,
+	authorRateLimit *commentports.AuthorRateLimit,
+) (CommentCommandResult, error) {
 	idempotencyKey, err := scopedIdempotencyKey(ctx, actorID)
 	if err != nil {
 		return CommentCommandResult{}, err
@@ -570,6 +554,7 @@ func (s *CommentService) commit(
 		CommandName:      commandName,
 		CommandDigest:    commandDigest,
 		ReceiptExpiresAt: now.UTC().Add(commentReceiptTTL),
+		AuthorRateLimit:  authorRateLimit,
 		Events: []commentports.OutboxEvent{{
 			EventID:          eventID,
 			EventType:        eventType,
@@ -647,213 +632,6 @@ func scopedIdempotencyKey(ctx context.Context, actorID string) (string, error) {
 	return "comment:" + hex.EncodeToString(sum[:]), nil
 }
 
-func pageLimit(limit int) int {
-	if limit <= 0 {
-		return 20
-	}
-	if limit > maxCommentPage {
-		return maxCommentPage
-	}
-	return limit
-}
-
-const commentReplyPreviewLimit = 1
-
-// projectItems 组合 Comment、ContentReaction、MediaAsset 与 Post ownership 的
-// 窄读投影。任何依赖读取失败都使 query fail closed，不产生默认零值伪成功。
-func (s *CommentService) projectItems(
-	ctx context.Context,
-	readModels []commentmodel.ReadModel,
-	actorID string,
-	includeReplySummary bool,
-) ([]CommentListItem, error) {
-	if len(readModels) == 0 {
-		return []CommentListItem{}, nil
-	}
-	actorID = strings.TrimSpace(actorID)
-	summaries := map[string]commentmodel.ReplySummary{}
-	if includeReplySummary {
-		parentIDs := make([]string, 0, len(readModels))
-		for _, readModel := range readModels {
-			if strings.TrimSpace(readModel.ParentCommentID) == "" {
-				parentIDs = append(parentIDs, readModel.ID)
-			}
-		}
-		var err error
-		summaries, err = s.data.ReplySummary.ReadReplySummaries(
-			ctx,
-			parentIDs,
-			commentReplyPreviewLimit,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	allModels := make([]commentmodel.ReadModel, 0, len(readModels)*2)
-	allModels = append(allModels, readModels...)
-	for _, summary := range summaries {
-		allModels = append(allModels, summary.Preview...)
-	}
-	commentIDs := uniqueCommentIDs(allModels)
-	reactionCounts, err := s.data.Reactions.ReadCommentReactionCounts(ctx, commentIDs)
-	if err != nil {
-		return nil, err
-	}
-	viewerValues := map[string]reactiondomain.Value{}
-	if actorID != "" {
-		actor, actorErr := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, actorID)
-		if actorErr != nil {
-			return nil, actorErr
-		}
-		viewerValues, err = s.data.Reactions.ReadCommentReactionValues(ctx, actor, commentIDs)
-		if err != nil {
-			return nil, err
-		}
-	}
-	ownerships, err := s.data.PostRelation.FindPostOwnerships(ctx, uniquePostIDs(allModels))
-	if err != nil {
-		return nil, err
-	}
-	attachments, err := s.data.Attachments.ReadCommentAttachments(ctx, uniqueAttachmentIDs(allModels))
-	if err != nil {
-		return nil, err
-	}
-
-	projectedByID := make(map[string]CommentListItem, len(allModels))
-	for _, readModel := range allModels {
-		projectedByID[readModel.ID] = projectCommentListItem(
-			readModel,
-			actorID,
-			ownerships[readModel.PostID],
-			reactionCounts[readModel.ID],
-			viewerValues[readModel.ID],
-			attachments,
-		)
-	}
-	items := make([]CommentListItem, 0, len(readModels))
-	for _, readModel := range readModels {
-		item := projectedByID[readModel.ID]
-		if summary, found := summaries[readModel.ID]; found {
-			item.ReplyCount = summary.Count
-			item.ReplyNextCursor = summary.NextCursor
-			item.ReplyPreview = make([]CommentListItem, 0, len(summary.Preview))
-			for _, preview := range summary.Preview {
-				item.ReplyPreview = append(item.ReplyPreview, projectedByID[preview.ID])
-			}
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
-
-func projectCommentListItem(
-	readModel commentmodel.ReadModel,
-	actorID string,
-	ownership commentmodel.PostOwnership,
-	reactionCounts reactiondomain.CommentReactionCounts,
-	viewerValue reactiondomain.Value,
-	attachmentProjections map[string]commentmodel.AttachmentProjection,
-) CommentListItem {
-	isAuthor := actorID != "" && actorID == strings.TrimSpace(readModel.AuthorID)
-	active := readModel.Status == commentmodel.StatusActive
-	attachments := make([]CommentAttachmentSlice, 0, len(readModel.AttachmentMediaIDs))
-	for _, mediaID := range readModel.AttachmentMediaIDs {
-		projection, found := attachmentProjections[mediaID]
-		if !found {
-			projection = commentmodel.AttachmentProjection{MediaID: mediaID}
-		}
-		attachments = append(attachments, CommentAttachmentSlice{
-			MediaID:   mediaID,
-			MediaType: projection.MediaType,
-			URL:       projection.URL,
-			Width:     projection.Width,
-			Height:    projection.Height,
-			Available: projection.Available,
-		})
-	}
-	viewerReaction := string(viewerValue)
-	if viewerReaction == "" {
-		viewerReaction = string(reactiondomain.ValueNone)
-	}
-	return CommentListItem{
-		ID:                        readModel.ID,
-		Version:                   readModel.Version,
-		PostID:                    readModel.PostID,
-		AuthorID:                  readModel.AuthorID,
-		AuthorDisplayNameSnapshot: readModel.AuthorDisplayNameSnapshot,
-		AuthorAvatarURLSnapshot:   readModel.AuthorAvatarURLSnapshot,
-		PersonaContextVersion:     readModel.PersonaContextVersion,
-		Content:                   readModel.Content,
-		ReplyToCommentID:          readModel.ReplyToCommentID,
-		ReplyToUserID:             readModel.ReplyToUserID,
-		ParentCommentID:           readModel.ParentCommentID,
-		AttachmentMediaIDs:        cloneStrings(readModel.AttachmentMediaIDs),
-		Attachments:               attachments,
-		Mentions:                  cloneMentions(readModel.Mentions),
-		AssistantMentioned:        readModel.AssistantMentioned,
-		AssistantReplySource:      readModel.AssistantReplySource,
-		AssistantCorrectionStatus: readModel.AssistantCorrectionStatus,
-		Status:                    readModel.Status,
-		IsPinned:                  readModel.IsPinned,
-		PinnedAt:                  cloneTime(readModel.PinnedAt),
-		CreatedAt:                 readModel.CreatedAt.UTC(),
-		UpdatedAt:                 readModel.UpdatedAt.UTC(),
-		DeletedAt:                 cloneTime(readModel.DeletedAt),
-		ReplyPreview:              []CommentListItem{},
-		LikeCount:                 reactionCounts.LikeCount,
-		DislikeCount:              reactionCounts.DislikeCount,
-		ViewerReaction:            viewerReaction,
-		IsAuthor:                  isAuthor,
-		CanDelete:                 active && isAuthor,
-		CanReply:                  active && actorID != "",
-		CanReport:                 active && actorID != "" && !isAuthor,
-		CanPin: active && actorID != "" &&
-			strings.TrimSpace(readModel.ParentCommentID) == "" &&
-			ownership.Active && strings.TrimSpace(ownership.AuthorID) == actorID,
-	}
-}
-
-func uniqueCommentIDs(readModels []commentmodel.ReadModel) []string {
-	return uniqueStringsFromReadModels(readModels, func(item commentmodel.ReadModel) []string {
-		return []string{item.ID}
-	})
-}
-
-func uniquePostIDs(readModels []commentmodel.ReadModel) []string {
-	return uniqueStringsFromReadModels(readModels, func(item commentmodel.ReadModel) []string {
-		return []string{item.PostID}
-	})
-}
-
-func uniqueAttachmentIDs(readModels []commentmodel.ReadModel) []string {
-	return uniqueStringsFromReadModels(readModels, func(item commentmodel.ReadModel) []string {
-		return item.AttachmentMediaIDs
-	})
-}
-
-func uniqueStringsFromReadModels(
-	readModels []commentmodel.ReadModel,
-	selectValues func(commentmodel.ReadModel) []string,
-) []string {
-	seen := map[string]struct{}{}
-	values := make([]string, 0)
-	for _, readModel := range readModels {
-		for _, value := range selectValues(readModel) {
-			value = strings.TrimSpace(value)
-			if value == "" {
-				continue
-			}
-			if _, found := seen[value]; found {
-				continue
-			}
-			seen[value] = struct{}{}
-			values = append(values, value)
-		}
-	}
-	return values
-}
-
 func mapDomainError(err error) error {
 	switch {
 	case errors.Is(err, commentmodel.ErrDeleteForbidden):
@@ -866,6 +644,10 @@ func mapDomainError(err error) error {
 		return contentgenerated.AppErrorFromCommentNotFound(err.Error())
 	case errors.Is(err, commentmodel.ErrAttachmentForbidden):
 		return contentgenerated.AppErrorFromCommentForbiddenDelete(err.Error())
+	case errors.Is(err, commentmodel.ErrModerationForbidden):
+		return contentgenerated.AppErrorFromCommentModerationForbidden(err.Error())
+	case errors.Is(err, commentmodel.ErrInvalidStatusTransition):
+		return contentgenerated.AppErrorFromCommentStatusTransitionInvalid(err.Error())
 	case errors.Is(err, commentmodel.ErrInvalidReplyTarget),
 		errors.Is(err, commentmodel.ErrInvalidComment),
 		errors.Is(err, commentmodel.ErrInvalidMutationClock):
@@ -971,14 +753,6 @@ func cloneMentions(values []commentmodel.Mention) []commentmodel.Mention {
 	return cloned
 }
 
-func cloneTime(value *time.Time) *time.Time {
-	if value == nil {
-		return nil
-	}
-	cloned := value.UTC()
-	return &cloned
-}
-
 func containsAssistantMention(mentions []commentmodel.Mention) bool {
 	for _, mention := range mentions {
 		if strings.EqualFold(strings.TrimSpace(mention.SubjectType), "assistant") {
@@ -986,4 +760,70 @@ func containsAssistantMention(mentions []commentmodel.Mention) bool {
 		}
 	}
 	return false
+}
+
+// mentionedUserIDs 从 typed mentions 中提取用户主体 id，供 @提及通知消费；
+// 助手等非用户主体不进入该列表。
+func mentionedUserIDs(mentions []commentmodel.Mention) []string {
+	ids := make([]string, 0, len(mentions))
+	seen := map[string]struct{}{}
+	for _, mention := range mentions {
+		if !strings.EqualFold(strings.TrimSpace(mention.SubjectType), "user") {
+			continue
+		}
+		id := strings.TrimSpace(mention.SubjectID)
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// authorRateLimit 把 burst + daily 滑动窗口编译为 Store 事务约束。
+// 校验与 Comment/receipt/outbox 同事务提交，避免多实例并发先读后写超卖。
+func (s *CommentService) authorRateLimit(
+	actorID string,
+	now time.Time,
+) *commentports.AuthorRateLimit {
+	windows := make([]commentports.AuthorRateWindow, 0, 2)
+	for _, configured := range []struct {
+		window time.Duration
+		max    int64
+	}{
+		{s.rateLimit.BurstWindow, s.rateLimit.BurstMax},
+		{s.rateLimit.DailyWindow, s.rateLimit.DailyMax},
+	} {
+		if configured.window <= 0 || configured.max <= 0 {
+			continue
+		}
+		windows = append(windows, commentports.AuthorRateWindow{
+			Since: now.UTC().Add(-configured.window),
+			Max:   configured.max,
+		})
+	}
+	if len(windows) == 0 {
+		return nil
+	}
+	return &commentports.AuthorRateLimit{
+		AuthorID:    strings.TrimSpace(actorID),
+		EvaluatedAt: now.UTC(),
+		Windows:     windows,
+	}
+}
+
+// resolveAuthorIPLocation 在创建时解析属地快照；未注入 resolver 或解析失败落空串。
+func (s *CommentService) resolveAuthorIPLocation(ctx context.Context) string {
+	if s.ipResolver == nil {
+		return ""
+	}
+	ip := strings.TrimSpace(s.clientIP(ctx))
+	if ip == "" {
+		return ""
+	}
+	return strings.TrimSpace(s.ipResolver.Resolve(ip))
 }

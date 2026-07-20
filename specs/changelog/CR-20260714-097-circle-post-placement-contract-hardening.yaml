@@ -24,7 +24,7 @@ entries:
       - path: quwoquan_service/contracts/metadata/social/circle_post_placement/service.yaml
         sections: [PlacePostInCircle]
       - path: quwoquan_service/contracts/metadata/circle/openapi.yaml
-        sections: [/v1/circles/{circleId}/post-placements]
+        sections: ["/v1/circles/{circleId}/post-placements"]
       - path: quwoquan_app/tool/cloud_codegen/contract_graph.lock.json
         sections: [circle.circle_post_placement.PlacePostInCircle]
       - path: quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json

@@ -98,22 +98,16 @@ def _entity_homepage_agent_run_id(
         state = load_execution_state(execution_id)
     except (ImportError, OSError, ValueError, TypeError):
         return ""
-    rows: list[Any] = []
-    history = state.agent_run_history
-    if isinstance(history, list):
-        rows.extend(history)
-    last = state.last_agent_run
-    if isinstance(last, dict):
-        rows.append(last)
-    for run in reversed(rows):
-        if str(run.get("stage") or "") != "build_homepage":
+    from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
+
+    for run in reversed(state_managed_agent_runs(state)):
+        if run.stage is not ExecutionStage.BUILD_HOMEPAGE:
             continue
-        for outcome in run.get("outcomes") or []:
-            if not isinstance(outcome, dict):
+        for job_outcome in run.outcomes:
+            if not job_outcome.succeeded:
                 continue
-            if str(outcome.get("status") or "") != "finished":
-                continue
-            run_id = str(outcome.get("runId") or "").strip()
+            run_id = job_outcome.outcome.run_id
             if run_id:
                 return run_id
     return ""

@@ -58,13 +58,15 @@ final class RemoteHomepageQueryAdapter {
   }
 
   Future<HomepageIntroductionProjection> getHomepageIntroduction(
-    String homepageId,
-  ) {
+    String homepageId, {
+    CloudOperationCancellationSignal? cancellation,
+  }) {
     return client.entityHomepageGetHomepageIntroduction(
       HomepageByIdQuery(homepageId: homepageId),
       context: invocationContext(
         EntityRequestPageIds.getHomepageIntroduction,
         HomepageQuerySurface.introduction,
+        cancellation: cancellation,
       ),
     );
   }

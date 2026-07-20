@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -146,6 +147,46 @@ func (c *S3PresignClient) CopyObject(
 	})
 	if err != nil {
 		return fmt.Errorf("s3 copy public slice: %w", err)
+	}
+	return nil
+}
+
+// GetObject streams a stored object. The media-processing worker downloads
+// the private CAS source through this server-side read path instead of a
+// presigned URL, so worker traffic never depends on URL TTL semantics.
+func (c *S3PresignClient) GetObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+) (io.ReadCloser, error) {
+	output, err := c.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("s3 get object: %w", err)
+	}
+	return output.Body, nil
+}
+
+// PutObject writes a derived delivery artifact (transcoded video, cover,
+// preview sprite/manifest). Only server-side processing writes through this
+// path; client uploads keep using presigned PUT grants.
+func (c *S3PresignClient) PutObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+	contentType string,
+	body io.Reader,
+) error {
+	_, err := c.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+		Body:        body,
+	})
+	if err != nil {
+		return fmt.Errorf("s3 put object: %w", err)
 	}
 	return nil
 }

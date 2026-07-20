@@ -22,7 +22,36 @@ tables:
       - { name: idx_gr_unique_pending, columns: [requester_sub_account_id, target_sub_account_id],
           condition: "status = 'pending'", unique: true }
       - { name: idx_gr_expire, columns: [expire_at], condition: "status = 'pending'",
-          description: 过期清理任务扫描索引 }
+          description: 惰性过期判断扫描索引 }
+
+  greeting_request_command_receipts:
+    description: 与 greeting_requests state 和 outbox 同事务提交的幂等命令回执
+    infrastructure_only: true
+    columns:
+      - { name: receipt_id, type: VARCHAR(64), constraints: [PK, NOT_NULL] }
+      - { name: actor_sub_account_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: idempotency_key, type: VARCHAR(160), constraints: [NOT_NULL] }
+      - { name: operation, type: VARCHAR(48), constraints: [NOT_NULL] }
+      - { name: request_id, type: UUID, constraints: [NOT_NULL] }
+      - { name: response_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL, DEFAULT_NOW] }
+    indexes:
+      - { name: uq_gr_receipt_key, columns: [actor_sub_account_id, idempotency_key], unique: true }
+
+  greeting_request_outbox:
+    description: GreetingRequest 事件的事务性 outbox（append-only，relay 消费）
+    infrastructure_only: true
+    columns:
+      - { name: event_id, type: VARCHAR(96), constraints: [PK, NOT_NULL] }
+      - { name: aggregate_id, type: UUID, constraints: [NOT_NULL] }
+      - { name: event_name, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: payload_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: claim_owner, type: VARCHAR(96), constraints: [NULLABLE] }
+      - { name: claimed_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: published_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+    indexes:
+      - { name: idx_gr_outbox_pending, columns: [published_at, occurred_at] }
 
 cache:
   backend: redis

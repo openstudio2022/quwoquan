@@ -8,6 +8,7 @@ collections:
       - { name: uq_messages_conversation_seq, keys: { conversationId: 1, seq: 1 }, unique: true }
       - { name: uq_messages_client_message, keys: { conversationId: 1, senderId: 1, clientMsgId: 1 }, unique: true }
       - { name: idx_messages_conversation_time, keys: { conversationId: 1, timestamp: -1 } }
+      - { name: idx_messages_conversation_mentions_seq, keys: { conversationId: 1, mentions: 1, seq: 1 } }
       - { name: idx_messages_reply, keys: { replyToMessageId: 1 }, sparse: true }
   messages_command_receipts:
     entity: Message

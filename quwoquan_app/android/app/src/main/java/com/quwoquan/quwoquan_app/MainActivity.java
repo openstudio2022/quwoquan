@@ -1,7 +1,11 @@
 package com.quwoquan.quwoquan_app;
 
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -23,6 +27,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,6 +35,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.json.JSONObject;
 
 public class MainActivity extends FlutterFragmentActivity {
   private static final String STARTUP_TAG = "QWQStartup";
@@ -38,6 +44,16 @@ public class MainActivity extends FlutterFragmentActivity {
   private static final long FLUTTER_FIRST_FRAME_DEADLINE_MS = 6000L;
   private static final long NATIVE_TERMINAL_RECONCILIATION_WINDOW_MS = 120L;
   private static final String NATIVE_RECOVERY_VIEW_TAG = "qwq_native_startup_recovery";
+  private static final String RUNTIME_CRASH_MARKER_CHANNEL =
+      "quwoquan/runtime/native_crash_marker";
+  private static final String RUNTIME_CRASH_MARKER_PREFERENCES =
+      "quwoquan.runtime.diagnostics";
+  private static final String RUNTIME_CRASH_MARKER_KIND_KEY =
+      "previous_native_crash_kind";
+  private static final String RUNTIME_ANR_CONSUMED_TIMESTAMP_KEY =
+      "previous_native_anr_consumed_timestamp";
+  private static final long RUNTIME_ANR_MAX_AGE_MS = TimeUnit.HOURS.toMillis(72);
+  private static volatile boolean nativeCrashMarkerInstalled;
   private static final Pattern STARTUP_EVENT_NAME_PATTERN =
       Pattern.compile("\"eventName\"\\s*:\\s*\"([A-Za-z0-9_.-]+)\"");
   private static final Pattern STARTUP_EVENT_PHASE_PATTERN =
@@ -72,11 +88,15 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile boolean appInForeground;
   private volatile boolean nativeRecoveryShown;
   private volatile boolean nativeRecoveryDeadlineReached;
+  private volatile boolean dartStartupAttemptStarted;
+  private volatile String currentDartAttemptId = "";
+  private volatile String currentLaunchMode = "unknown";
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
+    installNativeCrashMarker();
     activityOnCreateElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
     Log.i(STARTUP_TAG, "android_activity_on_create elapsedMs=" + activityOnCreateElapsedMs);
     initializeDartJniClassLoader();
@@ -115,13 +135,17 @@ public class MainActivity extends FlutterFragmentActivity {
     flutterEngineConfiguredElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
     Log.i(
         STARTUP_TAG,
-        "android_flutter_engine_configured elapsedMs=" + flutterEngineConfiguredElapsedMs);
+        "android_flutter_engine_configured elapsedMs="
+            + flutterEngineConfiguredElapsedMs
+            + startupAttemptLogSuffix());
     registerStartupTimingsChannel(flutterEngine);
     observeNativeFlutterFirstFrame(flutterEngine);
     // Gradle 在构建期通过 patch_android_plugin_registrant.sh 从 generated registrant
     // 剥离首帧后基础组（SecureStorage/Prefs/设备与网络探测）和 feature-demand 组。
     // bootstrap 只能使用 native timing/journal bridge；基础组由 post-frame barrier 装配。
     super.configureFlutterEngine(flutterEngine);
+    IncomingCallNativeBridgePlugin.register(
+        flutterEngine, getApplicationContext());
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/auth/native_bridge")
@@ -172,6 +196,23 @@ public class MainActivity extends FlutterFragmentActivity {
         .setMethodCallHandler(
             (MethodCall call, MethodChannel.Result result) ->
                 cellularNetworkProbePlugin().handle(call, result));
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
+            RUNTIME_CRASH_MARKER_CHANNEL)
+        .setMethodCallHandler(
+            (MethodCall call, MethodChannel.Result result) -> {
+              if ("consumePreviousCrash".equals(call.method)) {
+                result.success(consumePreviousNativeCrashMarker());
+              } else if ("readPreviousAnr".equals(call.method)) {
+                result.success(readPreviousNativeAnrMarker());
+              } else if ("acknowledgePreviousAnr".equals(call.method)) {
+                result.success(
+                    acknowledgePreviousNativeAnrMarker(
+                        call.argument("occurredAtEpochMs")));
+              } else {
+                result.notImplemented();
+              }
+            });
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/startup/deferred_plugins")
@@ -249,6 +290,129 @@ public class MainActivity extends FlutterFragmentActivity {
     return cellularNetworkProbePlugin;
   }
 
+  private void installNativeCrashMarker() {
+    synchronized (MainActivity.class) {
+      if (nativeCrashMarkerInstalled) {
+        return;
+      }
+      nativeCrashMarkerInstalled = true;
+      // 此处仅观察 Java 未捕获异常；信号级原生崩溃必须交由获批准的平台崩溃报告器，
+      // 禁止在此通过不安全的 signal handler 截获。
+      Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+      Thread.setDefaultUncaughtExceptionHandler(
+          (thread, error) -> {
+            persistPreviousNativeCrashMarker(error);
+            if (previous != null) {
+              previous.uncaughtException(thread, error);
+              return;
+            }
+            ThreadGroup group = thread.getThreadGroup();
+            if (group != null) {
+              group.uncaughtException(thread, error);
+              return;
+            }
+            android.os.Process.killProcess(android.os.Process.myPid());
+            System.exit(10);
+          });
+    }
+  }
+
+  private void persistPreviousNativeCrashMarker(Throwable error) {
+    try {
+      String kind = error == null ? "UnknownNativeError" : error.getClass().getSimpleName();
+      if (kind == null || kind.trim().isEmpty()) {
+        kind = "UnknownNativeError";
+      }
+      // 下次 Dart 启动只需要稳定类别；异常消息和堆栈可能含用户数据，绝不能持久化。
+      kind = kind.replaceAll("[^A-Za-z0-9_.-]", "_");
+      if (kind.length() > 80) {
+        kind = kind.substring(0, 80);
+      }
+      getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+          .edit()
+          .putString(RUNTIME_CRASH_MARKER_KIND_KEY, kind)
+          .commit();
+    } catch (RuntimeException ignored) {
+      // Never replace the platform's crash handling path with observability work.
+    }
+  }
+
+  private Map<String, Object> consumePreviousNativeCrashMarker() {
+    String kind =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+            .getString(RUNTIME_CRASH_MARKER_KIND_KEY, "");
+    if (kind == null || kind.trim().isEmpty()) {
+      return null;
+    }
+    getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .remove(RUNTIME_CRASH_MARKER_KIND_KEY)
+        .apply();
+    Map<String, Object> marker = new HashMap<>();
+    marker.put("kind", kind);
+    return marker;
+  }
+
+  private Map<String, Object> readPreviousNativeAnrMarker() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      return null;
+    }
+    ActivityManager manager =
+        (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+    if (manager == null) {
+      return null;
+    }
+    long consumedTimestamp =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+            .getLong(RUNTIME_ANR_CONSUMED_TIMESTAMP_KEY, 0L);
+    long latestAnrTimestamp = 0L;
+    try {
+      List<ApplicationExitInfo> exits =
+          manager.getHistoricalProcessExitReasons(getPackageName(), 0, 10);
+      for (ApplicationExitInfo exit : exits) {
+        if (exit.getReason() != ApplicationExitInfo.REASON_ANR) {
+          continue;
+        }
+        latestAnrTimestamp = Math.max(latestAnrTimestamp, exit.getTimestamp());
+      }
+    } catch (RuntimeException ignored) {
+      return null;
+    }
+    if (latestAnrTimestamp <= consumedTimestamp) {
+      return null;
+    }
+    long ageMs = System.currentTimeMillis() - latestAnrTimestamp;
+    if (ageMs < 0L || ageMs > RUNTIME_ANR_MAX_AGE_MS) {
+      // 超出事件目录 TTL 的事实不再上报，但仍推进高水位，避免每次启动重复扫描。
+      acknowledgePreviousNativeAnrMarker(latestAnrTimestamp);
+      return null;
+    }
+    Map<String, Object> marker = new HashMap<>();
+    marker.put("source", "android_application_exit_info");
+    marker.put("occurredAtEpochMs", latestAnrTimestamp);
+    return marker;
+  }
+
+  private boolean acknowledgePreviousNativeAnrMarker(Object rawTimestamp) {
+    if (!(rawTimestamp instanceof Number)) {
+      return false;
+    }
+    long occurredAtEpochMs = ((Number) rawTimestamp).longValue();
+    if (occurredAtEpochMs <= 0L) {
+      return false;
+    }
+    long consumedTimestamp =
+        getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+            .getLong(RUNTIME_ANR_CONSUMED_TIMESTAMP_KEY, 0L);
+    if (occurredAtEpochMs <= consumedTimestamp) {
+      return true;
+    }
+    return getSharedPreferences(RUNTIME_CRASH_MARKER_PREFERENCES, MODE_PRIVATE)
+        .edit()
+        .putLong(RUNTIME_ANR_CONSUMED_TIMESTAMP_KEY, occurredAtEpochMs)
+        .commit();
+  }
+
   private void registerStartupTimingsChannel(@NonNull FlutterEngine flutterEngine) {
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
@@ -296,7 +460,7 @@ public class MainActivity extends FlutterFragmentActivity {
                   confirmFlutterFirstFrame("dart_channel");
                 }
                 if (isStartupSafeTerminalEvent(event)) {
-                  confirmStartupSafeTerminal();
+                  confirmStartupSafeTerminal(startupEventElapsedMs(event));
                 }
                 result.success(null);
                 return;
@@ -354,6 +518,17 @@ public class MainActivity extends FlutterFragmentActivity {
         && ((String) event).contains("\"eventName\":\"startup_safe_terminal\"");
   }
 
+  private long startupEventElapsedMs(Object event) {
+    if (!(event instanceof String)) {
+      return -1L;
+    }
+    try {
+      return new JSONObject((String) event).optLong("elapsedMs", -1L);
+    } catch (Exception ignored) {
+      return -1L;
+    }
+  }
+
   private void logSafeStartupEvent(Object rawEvent) {
     if (!(rawEvent instanceof String)) {
       return;
@@ -364,12 +539,48 @@ public class MainActivity extends FlutterFragmentActivity {
       return;
     }
     String eventName = eventNameMatcher.group(1);
+    if ("startup_attempt_started".equals(eventName)) {
+      try {
+        JSONObject payload = new JSONObject(event);
+        currentDartAttemptId =
+            safeStartupIdentifier(payload.optString("attemptId", ""));
+        currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
+        boolean hotRestart = dartStartupAttemptStarted;
+        dartStartupAttemptStarted = true;
+        String configurationState =
+            safeStartupIdentifier(payload.optString("configurationState", "unknown"));
+        String missingDefineKeys =
+            safeDefineKeyList(payload.optString("missingDefineKeys", ""));
+        Log.i(
+            STARTUP_TAG,
+            "android_dart_startup_attempt attemptId="
+                + currentDartAttemptId
+                + " launchMode="
+                + currentLaunchMode
+                + " hotRestart="
+                + hotRestart
+                + " configurationState="
+                + configurationState
+                + (missingDefineKeys.isEmpty() ? "" : " missingDefineKeys=" + missingDefineKeys));
+      } catch (Exception ignored) {
+        Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid");
+      }
+      return;
+    }
     if ("startup_bootstrap_failure".equals(eventName)) {
       // bootstrap 根已经显示 Flutter recovery；只输出稳定错误码，不转写异常或用户态上下文。
+      String missingDefineKeys = "";
+      try {
+        missingDefineKeys = safeDefineKeyList(
+            new JSONObject(event).optString("missingDefineKeys", ""));
+      } catch (Exception ignored) {
+        // 固定 bootstrap failure 标识仍需输出。
+      }
       Log.i(
           STARTUP_TAG,
           "startup_probe phase=bootstrap_failure"
-              + safeStartupFailureCodeSuffix(event));
+              + safeStartupFailureCodeSuffix(event)
+              + (missingDefineKeys.isEmpty() ? "" : " missingDefineKeys=" + missingDefineKeys));
       return;
     }
     if (!"startup_welcome_sequence".equals(eventName)) {
@@ -480,6 +691,32 @@ public class MainActivity extends FlutterFragmentActivity {
     return failureCode.length() <= 128 ? " failureCode=" + failureCode : "";
   }
 
+  private String safeStartupIdentifier(String value) {
+    if (value == null || value.isEmpty() || value.length() > 128) {
+      return "unknown";
+    }
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      if (!(Character.isLetterOrDigit(character) || character == '_' || character == '-')) {
+        return "unknown";
+      }
+    }
+    return value;
+  }
+
+  private String safeDefineKeyList(String value) {
+    if (value == null || value.isEmpty() || value.length() > 512) {
+      return "";
+    }
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      if (!(Character.isLetterOrDigit(character) || character == '_' || character == ',')) {
+        return "";
+      }
+    }
+    return value;
+  }
+
   private void observeNativeFlutterFirstFrame(@NonNull FlutterEngine flutterEngine) {
     if (startupFlutterEngine != null && flutterUiDisplayListener != null) {
       startupFlutterEngine
@@ -505,40 +742,46 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private void confirmFlutterFirstFrame(@NonNull String source) {
-    if (flutterFirstFrameConfirmed) {
-      return;
-    }
     // 原生 watchdog 只守护 renderer 首帧。safe terminal 较慢交由 Flutter
     // 安全状态机处理，绝不能覆盖已经可见的 Flutter UI。
-    flutterFirstFrameConfirmed = true;
-    cancelFlutterFirstFrameWatchdog();
-    dismissNativeStartupRecoveryAfterFlutterFirstFrame();
+    boolean firstNativeFrame = !flutterFirstFrameConfirmed;
+    if (firstNativeFrame) {
+      flutterFirstFrameConfirmed = true;
+      cancelFlutterFirstFrameWatchdog();
+      dismissNativeStartupRecoveryAfterFlutterFirstFrame();
+    }
     Log.i(
         STARTUP_TAG,
         "android_flutter_first_frame elapsedMs="
             + (SystemClock.elapsedRealtime() - processStartElapsedMs)
             + " source="
-            + source);
+            + source
+            + startupAttemptLogSuffix());
   }
 
-  private void confirmStartupSafeTerminal() {
-    if (startupSafeTerminalConfirmed) {
-      return;
-    }
+  private void confirmStartupSafeTerminal(long reportedElapsedMs) {
     // MethodChannel 可能比 watchdog 主线程任务晚几毫秒。只要 Flutter 已到
     // routerShell / recovery 安全面，就必须取消看门狗并撤销竞态恢复层。
-    startupSafeTerminalConfirmed = true;
-    cancelFlutterFirstFrameWatchdog();
-    cancelNativeRecoveryTerminalReconciliation();
-    dismissNativeStartupRecoveryForSafeTerminalRace();
-    long elapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
-    if (flutterFirstFrameConfirmed && elapsedMs > FLUTTER_FIRST_FRAME_DEADLINE_MS) {
-      recordStartupSafeTerminalSlow(elapsedMs);
+    boolean firstNativeSafeTerminal = !startupSafeTerminalConfirmed;
+    if (firstNativeSafeTerminal) {
+      startupSafeTerminalConfirmed = true;
+      cancelFlutterFirstFrameWatchdog();
+      cancelNativeRecoveryTerminalReconciliation();
+      dismissNativeStartupRecoveryForSafeTerminalRace();
+    }
+    long receivedElapsedMs = SystemClock.elapsedRealtime() - processStartElapsedMs;
+    long reportedMs = reportedElapsedMs >= 0L ? reportedElapsedMs : receivedElapsedMs;
+    long effectiveBoundaryMs = Math.max(reportedMs, receivedElapsedMs);
+    if (flutterFirstFrameConfirmed && effectiveBoundaryMs > FLUTTER_FIRST_FRAME_DEADLINE_MS) {
+      recordStartupSafeTerminalSlow(effectiveBoundaryMs);
     }
     Log.i(
         STARTUP_TAG,
-        "android_startup_safe_terminal elapsedMs="
-            + elapsedMs);
+        "android_startup_safe_terminal reportedElapsedMs="
+            + reportedMs
+            + " receivedMs="
+            + receivedElapsedMs
+            + startupAttemptLogSuffix());
   }
 
   private void recordStartupSafeTerminalSlow(long elapsedMs) {
@@ -682,7 +925,9 @@ public class MainActivity extends FlutterFragmentActivity {
     if (!firstFrameMissing) return;
     Log.e(
         STARTUP_TAG,
-        "android_native_first_frame_timeout elapsedMs=" + elapsedMs);
+        "android_native_first_frame_timeout elapsedMs="
+            + elapsedMs
+            + startupAttemptLogSuffix());
     if (startupTelemetryJournal == null) {
       return;
     }
@@ -712,6 +957,24 @@ public class MainActivity extends FlutterFragmentActivity {
         "OPS.SYSTEM.startup_native_first_frame_timeout",
         "native_watchdog",
         "android_process");
+  }
+
+  @NonNull
+  private String startupAttemptLogSuffix() {
+    String attemptId =
+        currentDartAttemptId.isEmpty()
+            ? (startupTelemetryJournal == null ? "" : startupTelemetryJournal.attemptId())
+            : currentDartAttemptId;
+    if (attemptId.isEmpty()) {
+      return "";
+    }
+    return " attemptId="
+        + attemptId
+        + (startupTelemetryJournal == null
+            ? ""
+            : " nativeAttemptId=" + startupTelemetryJournal.attemptId())
+        + " launchMode="
+        + currentLaunchMode;
   }
 
   private void showNativeStartupRecovery() {

@@ -1,4 +1,4 @@
-# L3：跨平台可移植架构（cross-platform-portability）
+# L3 特性：跨平台可移植架构（cross-platform-portability）
 
 ## L1 / L2 / L3 映射
 
@@ -176,6 +176,7 @@ MainAppShell
 | `flutter_webrtc` | `fluttertpc_flutter_webrtc` | web 原生 | 能力位 + flag | 高 |
 | `livekit_client` | `fluttertpc_livekit_client` | web | 能力位 + flag | 高 |
 | `flutter_callkit_incoming` | 鸿蒙 VoIP 重写 | 不适用 | `incomingCallUi` 关闭 | 高 |
+| `video_player`/`video_player_android` | OH adapter 待实机验证 | federated `video_player_web` | 原生首帧/seek/renderer 证据经 `core/platform` 条件实现；缺失平台只上报 null，不影响基础播放 | 中 |
 
 原则：能用社区 OH 版/Git 依赖就不自行 fork；高风险包独立里程碑，不阻塞只读/社交文字主路径。
 

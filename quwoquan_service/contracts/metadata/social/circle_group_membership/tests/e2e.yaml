@@ -1,0 +1,14 @@
+aggregate: CircleGroupMembership
+layer: e2e
+
+description: |
+  端云集成测试（gamma）。
+
+scenarios:
+  - name: approval_group_join_flow
+    steps:
+      - member applies to approval group
+      - manager approves application
+    assertions:
+      - member_state_becomes_active
+      - chat_conversation_membership_projection_converges

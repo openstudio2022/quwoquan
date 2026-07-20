@@ -17,9 +17,10 @@ scenarios:
       - app_recovers_to_foreground
 
   - name: notification_center_reads_unread_count
+    patrol_flow: test/user_acceptance/pages/chat/notification_inbox_read__user_acceptance_test.dart
     steps:
-      - app loads unread count from /notifications/unread-count
-      - app opens /notifications and marks one item as read
+      - app loads unread count from /app-messages/unread-count
+      - app opens the message home notification dimension and marks one item as read
     assertions:
       - unread_count_visible
       - read_state_changes_persist

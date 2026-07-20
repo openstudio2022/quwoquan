@@ -5,26 +5,22 @@ class IntegrationRequestPageIds {
   const IntegrationRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'GetExternalInteractionMetricsSnapshot': 'integration.get.external.interaction.metrics.snapshot',
     'GetExternalInteractionRequest': 'integration.get.external.interaction.request',
     'GetNearbyLocations': 'integration.get.nearby.locations',
     'ListExternalInteractionAttempts': 'integration.list.external.interaction.attempts',
     'ListExternalInteractionDeadLetters': 'integration.list.external.interaction.dead.letters',
-    'PushDeliveryProviderCallback': 'integration.push.delivery.provider.callback',
+    'RecoverExternalInteractionDeadLetter': 'integration.recover.external.interaction.dead.letter',
     'SearchLocations': 'integration.search.locations',
-    'SendSmsOtp': 'integration.send.sms.otp',
-    'SmsOtpProviderCallback': 'integration.sms.otp.provider.callback',
     'SubmitExternalInteractionRequest': 'integration.submit.external.interaction.request',
-    'SubmitPushDelivery': 'integration.submit.push.delivery',
   };
 
+  static const String getExternalInteractionMetricsSnapshot = 'integration.get.external.interaction.metrics.snapshot';
   static const String getExternalInteractionRequest = 'integration.get.external.interaction.request';
   static const String getNearbyLocations = 'integration.get.nearby.locations';
   static const String listExternalInteractionAttempts = 'integration.list.external.interaction.attempts';
   static const String listExternalInteractionDeadLetters = 'integration.list.external.interaction.dead.letters';
-  static const String pushDeliveryProviderCallback = 'integration.push.delivery.provider.callback';
+  static const String recoverExternalInteractionDeadLetter = 'integration.recover.external.interaction.dead.letter';
   static const String searchLocations = 'integration.search.locations';
-  static const String sendSmsOtp = 'integration.send.sms.otp';
-  static const String smsOtpProviderCallback = 'integration.sms.otp.provider.callback';
   static const String submitExternalInteractionRequest = 'integration.submit.external.interaction.request';
-  static const String submitPushDelivery = 'integration.submit.push.delivery';
 }

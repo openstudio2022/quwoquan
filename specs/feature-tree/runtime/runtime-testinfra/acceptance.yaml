@@ -35,8 +35,6 @@ sit_acceptance:
     tests:
       planned:
       - file: quwoquan_ops/gate/scaffold/test_directory_inventory_lib.py
-      - file: quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
-      - file: quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
       - file: specs/gates/user_acceptance_page_inventory.yaml
       - command: python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
       - command: python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
@@ -50,6 +48,7 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: runtime_testinfra_bridge_inventory_local_contract
         cases:
         - local_contract.runtime.runtime_testinfra.sit1.bridge_inventory_local_contract
@@ -57,6 +56,7 @@ sit_acceptance:
         - alpha
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: runtime_testinfra_inventory_contract
         cases:
         - api_integration.runtime.runtime_testinfra.sit1.inventory_contract
@@ -65,6 +65,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: runtime_testinfra_page_matrix
         cases:
         - user_acceptance.runtime.runtime_testinfra.sit1.page_matrix
@@ -74,6 +75,7 @@ sit_acceptance:
         rollout_stages:
         - gray_initial
       - layer: local_contract
+        execution_profile: baseline
         suite: runtime_testinfra_no_fake_guard
         cases:
         - local_contract.runtime.runtime_testinfra.sit1.no_fake_guard
@@ -92,5 +94,5 @@ execution:
   - python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
   - python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
   - python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
-  full_gate:
+  profile_gates:
   - make gate

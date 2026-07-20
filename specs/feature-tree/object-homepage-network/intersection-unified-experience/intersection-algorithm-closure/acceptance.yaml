@@ -35,12 +35,13 @@ gwt_acceptance:
     - 交集特征在离线特征流水化，读路径零额外同步打分。
     tests:
       planned:
-      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/intersection_fusion__local_contract_test.go
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.contract
@@ -68,12 +69,13 @@ gwt_acceptance:
     - 交集信号经统一融合权重入口，无并行排序通道造成重复打分。
     tests:
       planned:
-      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/intersection_fusion__local_contract_test.go
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.contract
@@ -106,6 +108,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.cross_service_integration
@@ -114,6 +117,7 @@ gwt_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.contract
@@ -167,12 +171,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.contract
         envs: *id001
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: cross_service_integration
         cases:
         - api_integration.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.cross_service_integration

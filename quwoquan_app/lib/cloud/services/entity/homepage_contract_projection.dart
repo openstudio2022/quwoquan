@@ -263,14 +263,6 @@ Map<String, dynamic>? _reviewSummaryToWire(
     'averageRating': source.averageRating,
     'ratingCount': source.ratingCount,
     'highlightTags': source.highlightTags,
-    'dimensionScores': source.dimensionScores
-        .map(
-          (score) => <String, dynamic>{
-            'label': score.label,
-            'score': score.score,
-          },
-        )
-        .toList(),
   };
 }
 

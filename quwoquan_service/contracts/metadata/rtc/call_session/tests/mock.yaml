@@ -1,0 +1,59 @@
+aggregate: CallSession
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  data_source: fields.yaml constraints 派生 alpha fixture（NOT_NULL/DEFAULT/NULLABLE）。
+  覆盖：DTO 解析 + 错误码映射 + typed Facet 行为 + 信令事件 payload + Widget 渲染。
+  分层（与仓库实际目录对齐）：
+    dto_scenarios     → quwoquan_app/test/local_contract/cloud/rtc/call_session_dto__local_contract_test.dart
+    facet_scenarios   → quwoquan_app/test/local_contract/cloud/rtc/（alpha facets 与 remote wire 同构）
+    signal_scenarios  → quwoquan_app/test/local_contract/cloud/rtc/rtc_ws_payload_parse__local_contract_test.dart 等
+    widget_scenarios  → quwoquan_app/test/local_contract/ui/rtc/**
+  alpha fixture 由 quwoquan_cloud_mock 包内 rtc alpha facets 提供，production lib 不含 mock 数据。
+
+dto_scenarios:
+  - name: call_session_wire_roundtrip
+    description: CallSession DTO 只认 canonical wire 键（callId），字段与 fields.yaml 同源
+    assertions:
+      - callId/callType/status/participants 解码同源
+      - 未知状态值 fail closed（FormatException）
+
+  - name: call_participant_signal_fields_only
+    description: CallParticipant wire 仅承载信令字段（userId/role/status/isMuted/isCameraOn/joinedAt/leftAt/inviteStatus/invitedBy）
+    assertions:
+      - 展示信息（昵称/头像）不在服务端 wire 中，由端侧组合 user 域数据
+      - 运行时媒体信号（音量/说话中/连接质量）由 LiveKit 端侧事件承载
+
+facet_scenarios:
+  - name: lifecycle_facet_alpha_remote_parity
+    description: CallLifecycle alpha facet 与 Remote adapter 同构（同一 typed 契约、同一错误映射）
+    assertions:
+      - initiate/answer/reject/cancel/hangup 五命令 typed 请求与响应同源
+      - cancel 与 leave 调各自 operation，不复用 hangup
+
+  - name: media_control_noop_semantics
+    description: mute/camera set 操作的幂等语义
+    assertions:
+      - 重复设置同值成功返回且状态不变
+
+signal_scenarios:
+  - name: ringing_payload_contract
+    description: call.ringing 事件负载（realtime 通道下发）
+    assertions:
+      - callId/callType/initiatorId/targetUserId 必填
+      - callerName/sourceLabel/trustRelation/expiresAt 可选字符串
+      - expiresAt 用于端侧幂等去重
+
+  - name: ended_payload_contract
+    description: call.ended 事件负载
+    assertions:
+      - endReason 与 durationMs 同源于 events.yaml payload_fields
+
+widget_scenarios:
+  - name: incoming_call_accept_reject
+    description: 来电页接听/拒接动作触发对应 Facet 命令
+  - name: outgoing_call_cancel
+    description: 呼出页取消触发 CancelCall（非 hangup）
+  - name: in_call_media_controls
+    description: 通话页静音/摄像头/挂断控件状态与命令绑定

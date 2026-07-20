@@ -42,7 +42,7 @@ void main() {
     expect(restored.body, 'hello');
   });
 
-  test('title-only copyWith 会保留 canonical body 节点顺序', () {
+  test('copyWith nodes 更新标题时保留 canonical body 节点顺序', () {
     final original = ArticleDocumentData(
       nodes: <ArticleDocumentNode>[
         const ArticleDocumentNode(
@@ -69,7 +69,13 @@ void main() {
       ],
     );
 
-    final updated = original.copyWith(title: '新标题');
+    final updated = original.copyWith(
+      nodes: original.nodes
+          .map(
+            (node) => node.isDocumentTitle ? node.copyWith(text: '新标题') : node,
+          )
+          .toList(growable: false),
+    );
 
     expect(updated.title, '新标题');
     expect(
@@ -82,7 +88,7 @@ void main() {
 
   // ── 阶段 1 回归测试：nodes 为唯一真相源 ──
 
-  test('nodes 非空时 body/assets 为只读投影，不受构造参数影响', () {
+  test('body/assets/title 只从 nodes 投影', () {
     final doc = ArticleDocumentData(
       nodes: const <ArticleDocumentNode>[
         ArticleDocumentNode(
@@ -103,21 +109,31 @@ void main() {
           caption: '图说',
         ),
       ],
-      // 故意传入不同的 body/assets，应被忽略
-      body: '这段不应该出现',
-      assets: const <ArticleDocumentAsset>[
-        ArticleDocumentAsset(id: 'fake', offset: 0, imageUrl: '/fake.jpg'),
-      ],
     );
 
-    // body 应从 nodes 投影，不是构造参数
     expect(doc.body, '正文内容');
-    // assets 应从 nodes 投影
     expect(doc.assets.length, 1);
     expect(doc.assets.first.imageUrl, '/img.jpg');
     expect(doc.assets.first.caption, '图说');
-    // title 应从 nodes 投影
     expect(doc.title, '标题');
+  });
+
+  test('fromMap 不再从旧 title/body/assets/blocks 键反向构造 nodes', () {
+    final document = ArticleDocumentData.fromMap(<String, dynamic>{
+      'title': '旧标题',
+      'body': '旧正文',
+      'assets': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 'old_asset', 'imageUrl': '/old.jpg'},
+      ],
+      'blocks': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 'old_block', 'type': 'paragraph', 'text': '旧块'},
+      ],
+    });
+
+    expect(document.nodes, isEmpty);
+    expect(document.title, isEmpty);
+    expect(document.body, isEmpty);
+    expect(document.assets, isEmpty);
   });
 
   test('copyWith(nodes: ...) 后 body/assets 自动更新', () {
@@ -162,7 +178,7 @@ void main() {
     expect(updated.assets.first.imageUrl, '/new.jpg');
   });
 
-  test('wrap 双段 paragraph 在兼容 body 投影中保持连续文本', () {
+  test('wrap 双段 paragraph 在 body 只读投影中保持连续文本', () {
     final document = ArticleDocumentData(
       nodes: const <ArticleDocumentNode>[
         ArticleDocumentNode(

@@ -1,7 +1,9 @@
 package http
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -13,7 +15,7 @@ import (
 )
 
 func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Request) {
-	raw, err := io.ReadAll(r.Body)
+	raw, err := readBehaviorRequestBody(r)
 	if err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体读取失败", err.Error()))
 		return
@@ -55,14 +57,17 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		if strings.TrimSpace(batch.Events[i].FeedSessionID) == "" {
 			batch.Events[i].FeedSessionID = strings.TrimSpace(batch.FeedSessionID)
 		}
-		if strings.EqualFold(strings.TrimSpace(batch.Events[i].Type), "like") {
+		// N0-3：like/comment/report 是服务端权威信号（对象命令 outbox 事实注入），
+		// 通用行为端点拒收端侧补报，防止双计与伪造。
+		switch strings.ToLower(strings.TrimSpace(batch.Events[i].Action)) {
+		case "like", "comment", "report":
 			writeHTTPError(
 				w,
 				r,
 				rterr.NewInvalidArgument(
 					rterr.ModuleContent,
-					"like 需走专属点赞路由",
-					"like must use dedicated route",
+					"该行为由服务端权威采集，需走专属命令路由",
+					"like/comment/report are server-authoritative; use the dedicated command route",
 				),
 			)
 			return
@@ -73,6 +78,30 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const maxBehaviorRequestBytes = 128 * 1024
+
+func readBehaviorRequestBody(r *http.Request) ([]byte, error) {
+	var reader io.Reader = r.Body
+	var compressed *gzip.Reader
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
+		var err error
+		compressed, err = gzip.NewReader(r.Body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid gzip body: %w", err)
+		}
+		defer compressed.Close()
+		reader = compressed
+	}
+	raw, err := io.ReadAll(io.LimitReader(reader, maxBehaviorRequestBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read behavior body: %w", err)
+	}
+	if len(raw) > maxBehaviorRequestBytes {
+		return nil, fmt.Errorf("behavior body exceeds %d bytes", maxBehaviorRequestBytes)
+	}
+	return raw, nil
 }
 
 // handleGetMyFootprint 我的足迹只读列表：仅本人可见，复用既有行为边，
@@ -122,4 +151,31 @@ func (h *ContentHandler) handleGetMyFootprint(w http.ResponseWriter, r *http.Req
 		resp["nextCursor"] = nextCursor
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleGetEntityWishlistState(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	userID := resolveUserID(r)
+	if strings.TrimSpace(userID) == "" {
+		writeHTTPError(w, r, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "unauthorized"),
+			"需要登录后查看想去状态",
+			"entity wishlist state requires authenticated user",
+		))
+		return
+	}
+	query := r.URL.Query()
+	state, err := h.behaviorService.GetEntityWishlistState(
+		r.Context(),
+		userID,
+		query.Get("objectId"),
+		query.Get("objectKind"),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
 }

@@ -237,7 +237,26 @@
             "entityJson": "quwoquan_data/entities/地点/景区/西湖景区/_entity.json",
             "manifestJson": "quwoquan_data/entities/地点/景区/西湖景区/manifest.json",
             "mappingHelper": "quwoquan_data/scripts/build/homepage.py::homepage_introduction_seed_from_triplet"
-          }
+          },
+          "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+          "address": "浙江省杭州市西湖区",
+          "geo": {
+            "lat": 30.2431,
+            "lng": 120.15
+          },
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_photo",
+              "name": "契约摄影社",
+              "memberCount": 128,
+              "linkedHomepageId": "homepage_sight_west_lake",
+              "linkedHomepageTitle": "西湖景区",
+              "ownerUserId": "fixture_user_owner",
+              "ownerDisplayNameSnapshot": "契约摄影社主理人",
+              "ownerAvatarUrlSnapshot": "",
+              "evidenceSnapshotId": "circle:fixture_circle_photo:members:v1"
+            }
+          ]
         },
         {
           "homepageId": "fixture_homepage_university_pku",
@@ -388,36 +407,6 @@
               "linkedHomepageId": "homepage_restaurant_night_market",
               "linkedHomepageTitle": "夜巷小馆"
             }
-          ]
-        },
-        {
-          "homepageId": "homepage_sight_emeishan",
-          "homepageType": "sight",
-          "canonicalEntityId": "entity:sight:emeishan",
-          "title": "峨眉山",
-          "subtitle": "世界遗产与川西南山地旅行代表目的地",
-          "summary": "承接登山路线、寺院游览、云海日出与川西南旅行内容沉淀。",
-          "city": "乐山",
-          "status": "published",
-          "categoryTags": [
-            "景点",
-            "山地旅行",
-            "乐山"
-          ]
-        },
-        {
-          "homepageId": "homepage_sight_leshan_giant_buddha",
-          "homepageType": "sight",
-          "canonicalEntityId": "entity:sight:leshan_giant_buddha",
-          "title": "乐山大佛",
-          "subtitle": "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
-          "summary": "聚合大佛观景位、江岸路线、城市停留与乐山旅行内容。",
-          "city": "乐山",
-          "status": "published",
-          "categoryTags": [
-            "景点",
-            "石刻",
-            "乐山"
           ]
         },
         {
@@ -860,21 +849,27 @@
           }
         },
         {
-          "homepageId": "homepage_sight_乐山大佛",
+          "homepageId": "homepage_sight_leshan_giant_buddha",
           "homepageType": "sight",
-          "canonicalEntityId": "entity:sight:乐山大佛",
+          "canonicalEntityId": "entity:sight:leshan_giant_buddha",
           "title": "乐山大佛",
+          "subtitle": "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
           "summary": "乐山大佛概况乐山大佛，全名嘉州凌云寺大弥勒石像，别称凌云大佛，位于四川省乐山市市中区的岷江、青衣江、大渡河三江交汇之处，是世界上现存高度最高的石佛像。",
-          "city": "",
+          "city": "乐山",
           "status": "published",
           "coverUrl": "",
+          "categoryTags": [
+            "景点",
+            "石刻",
+            "乐山"
+          ],
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/乐山大佛",
             "sourceTaskId": "旅行/地域/中国/景区/全国景区主页百级0706a"
           },
           "introduction": {
-            "homepageId": "homepage_sight_乐山大佛",
+            "homepageId": "homepage_sight_leshan_giant_buddha",
             "displayName": "乐山大佛",
             "homepageType": "sight",
             "coverUrl": "",
@@ -918,8 +913,8 @@
               }
             ],
             "sourceRefs": [
-              "entity-service/homepage/homepage_sight_乐山大佛",
-              "entity:sight:乐山大佛"
+              "entity-service/homepage/homepage_sight_leshan_giant_buddha",
+              "entity:sight:leshan_giant_buddha"
             ]
           }
         },
@@ -1980,21 +1975,27 @@
           }
         },
         {
-          "homepageId": "homepage_sight_峨眉山",
+          "homepageId": "homepage_sight_emeishan",
           "homepageType": "sight",
-          "canonicalEntityId": "entity:sight:峨眉山",
+          "canonicalEntityId": "entity:sight:emeishan",
           "title": "峨眉山",
+          "subtitle": "世界遗产与川西南山地旅行代表目的地",
           "summary": "峨眉山概况峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。",
-          "city": "",
+          "city": "乐山",
           "status": "published",
           "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "categoryTags": [
+            "景点",
+            "山地旅行",
+            "乐山"
+          ],
           "seedSource": {
             "channel": "qwq-data fixture entity-introduction",
             "entityRef": "地点/景区/峨眉山",
             "sourceTaskId": "旅行/地域/中国/景区/全国景区主页百级0706a"
           },
           "introduction": {
-            "homepageId": "homepage_sight_峨眉山",
+            "homepageId": "homepage_sight_emeishan",
             "displayName": "峨眉山",
             "homepageType": "sight",
             "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
@@ -2083,8 +2084,8 @@
               }
             ],
             "sourceRefs": [
-              "entity-service/homepage/homepage_sight_峨眉山",
-              "entity:sight:峨眉山"
+              "entity-service/homepage/homepage_sight_emeishan",
+              "entity:sight:emeishan"
             ]
           }
         },

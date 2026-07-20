@@ -19,21 +19,21 @@ import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
 import 'package:quwoquan_app/app/startup/startup_state_machine.dart';
 import 'package:quwoquan_app/app/startup_welcome_appearance.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/services/app_permission_lifecycle_binding.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
+        appTelemetryReporterProvider,
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
         mediaDownloadCacheProvider,
         postObjectCacheProvider,
         realtimeConnectionManagerProvider;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -89,6 +89,11 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 在欢迎页首帧之前安装全局异常和帧时序采集，避免冷启动阶段的诊断空窗。
+    AppPageExperienceTracker.instance.attachReporter(
+      ref.read(appTelemetryReporterProvider),
+    );
+    ref.read(runtimeDiagnosticsProvider);
     _startupStateMachine = StartupStateMachine();
     _startupInitScheduler = StartupInitScheduler(
       ref: ref,

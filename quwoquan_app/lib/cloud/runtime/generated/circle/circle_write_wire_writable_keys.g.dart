@@ -9,27 +9,34 @@ abstract final class CircleWriteWireWritableKeys {
   CircleWriteWireWritableKeys._();
 
   static const Set<String> createCircle = {
+    'autoSyncChat',
     'category',
     'coverUrl',
     'description',
     'displaySubjectType',
     'followEnabled',
+    'iconUrl',
     'joinPolicy',
     'kind',
     'linkedHomepageId',
     'linkedHomepageTitle',
     'linkedHomepageType',
     'name',
+    'rulesText',
     'subCategory',
     'tags',
     'visibility',
+    'welcomeMessage',
   };
 
   /// service.yaml 中 `createCircleServiceFieldOrder` 声明顺序（与对应 Set 成员一致，用于序列化/校验对照）。
   static const List<String> createCircleServiceFieldOrder = [
     'name',
     'description',
+    'rulesText',
+    'welcomeMessage',
     'coverUrl',
+    'iconUrl',
     'category',
     'subCategory',
     'tags',
@@ -38,6 +45,7 @@ abstract final class CircleWriteWireWritableKeys {
     'kind',
     'displaySubjectType',
     'followEnabled',
+    'autoSyncChat',
     'linkedHomepageId',
     'linkedHomepageType',
     'linkedHomepageTitle',

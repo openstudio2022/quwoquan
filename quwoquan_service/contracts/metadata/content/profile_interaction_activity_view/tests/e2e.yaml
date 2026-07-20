@@ -1,0 +1,24 @@
+entity: ProfileInteractionActivityView
+layer: e2e
+
+execution:
+  environment: gamma_local
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: profile_interaction_projection_journey
+    test_type: ui_journey
+    actors:
+      app: ProfileInteractionTab
+      service: content-service
+      storage: MongoDB source outboxes + profile_interaction_activity_views
+      consumer: source-specific durable outbox relays with independent checkpoints
+    steps:
+      - 对已发布内容分别创建点赞、评论和成功站外转发事实
+      - 各对象 outbox/stream consumer 物化 ProfileInteractionActivityView
+      - 真实主页切换点赞、评论、转发与收到/发出方向
+    assertions:
+      - 页面展示与源事实一一对应且分页稳定
+      - 重复事实不产生重复行
+      - 删除目标显示不可用而非伪内容

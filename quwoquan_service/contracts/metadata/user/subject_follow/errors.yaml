@@ -1,0 +1,16 @@
+domain: USER
+entity: SubjectFollow
+
+errors:
+  - code: USER.SUBJECT_FOLLOW.invalid_subject_type
+    kind: SUBJECT_FOLLOW
+    reason: invalid_subject_type
+    http_status: 400
+    recovery_action: surface
+    go_const: ErrSubjectFollowInvalidSubjectType
+    dart_const: subjectFollowInvalidSubjectType
+    l10n_key: error_subject_follow_invalid_subject_type
+    user_message:
+      zh: 暂不支持关注该类型的对象
+      en: Following this type of subject is not supported
+    debug_hint: subjectType must be one of homepage/circle/location; persona relations belong to PersonaRelationship

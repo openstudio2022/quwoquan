@@ -54,10 +54,16 @@ void main() {
       expect(code!.httpStatus, 409);
     });
 
-    test('parse recording_not_allowed → recordingNotAllowed', () {
-      final code = RtcErrorCode.fromCode('RTC.USER.recording_not_allowed');
-      expect(code, RtcErrorCode.recordingNotAllowed);
-      expect(code!.httpStatus, 403);
+    test('parse version_conflict → versionConflict', () {
+      final code = RtcErrorCode.fromCode('RTC.USER.version_conflict');
+      expect(code, RtcErrorCode.versionConflict);
+      expect(code!.httpStatus, 409);
+    });
+
+    test('parse idempotency_conflict → idempotencyConflict', () {
+      final code = RtcErrorCode.fromCode('RTC.USER.idempotency_conflict');
+      expect(code, RtcErrorCode.idempotencyConflict);
+      expect(code!.httpStatus, 409);
     });
 
     test('parse rate_limited → rateLimited', () {
@@ -99,8 +105,8 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 16（含 not_mutual / blocked / invalid_call_action）', () {
-      expect(RtcErrorCode.values.length, 16);
+    test('enum 总数 = 17（含 version_conflict / idempotency_conflict，录制已删除）', () {
+      expect(RtcErrorCode.values.length, 17);
     });
 
     test('关系门禁错误码已贯通端侧', () {

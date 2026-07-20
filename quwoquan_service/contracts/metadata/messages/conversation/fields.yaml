@@ -208,6 +208,46 @@ entities:
         ops_exposure: read_write
         description: 是否启用已读回执（≤50 人默认 true，>50 默认 false，可配置覆盖）
 
+      - name: announcement
+        source: announcement
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 群公告正文（仅群聊；由 UpdateAnnouncement 命令维护，发布同事务写入 system_announcement 消息触达全员）
+
+      - name: announcementUpdatedBy
+        source: announcementUpdatedBy
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 最近一次群公告更新人
+
+      - name: announcementUpdatedAt
+        source: announcementUpdatedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 最近一次群公告更新时间
+
+      - name: nameEditableByAdminOnly
+        source: nameEditableByAdminOnly
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群治理开关：仅群主/管理员可修改群名（false 时任意成员可改）；由 UpdateGroupGovernanceSettings 命令维护并被 UpdateConversationTitle 授权消费
+
       - name: lastMessageId
         source: lastMessageId
         type: ObjectId
@@ -252,7 +292,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: active/archived/deleted
+        description: active/dissolved（与 aggregate lifecycle 单轨一致；dissolved 为终态）
 
       - name: originRequestId
         source: originRequestId
@@ -409,336 +449,6 @@ entities:
         source: pinned
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  ContactSearchItemView:
-    description: 联系人搜索结果项视图，用于全局搜索“联系人”联想分组
-    fields:
-      - name: contactId
-        source: contactId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: displayName
-        source: displayName
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: avatarUrl
-        source: avatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: conversationId
-        source: conversationId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 可直接打开的既有会话 ID；若为空，由 App 进入建联/创建会话流程
-
-      - name: conversationType
-        source: conversationType
-        type: enum
-        enum_ref: ConversationType
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: source
-        source: source
-        type: enum
-        enum_ref: ContactSource
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: subtitle
-        source: subtitle
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: highlightText
-        source: highlightText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: matchedField
-        source: matchedField
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  ConversationSearchItemView:
-    description: 会话搜索结果项视图，用于全局搜索消息分组中的会话命中
-    fields:
-      - name: conversationId
-        source: conversationId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: type
-        source: type
-        type: enum
-        enum_ref: ConversationType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: title
-        source: title
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: avatarUrl
-        source: avatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: groupAvatarVersion
-        source: groupAvatarVersion
-        type: int64
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: avatarCompositeUrls
-        source: avatarCompositeUrls
-        type: "[]string"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: "DEPRECATED: 旧端侧九宫格拼图源；搜索 UI 不得消费"
-
-      - name: lastMessagePreview
-        source: lastMessagePreview
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: lastMessageTime
-        source: lastMessageTime
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: memberCount
-        source: memberCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: circleId
-        source: circleId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: circleGroupId
-        source: circleGroupId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: highlightText
-        source: highlightText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: matchedField
-        source: matchedField
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  MessageSearchItemView:
-    description: 消息搜索结果项视图，用于全局搜索消息分组中的消息命中
-    fields:
-      - name: messageId
-        source: messageId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: conversationId
-        source: conversationId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: conversationTitle
-        source: conversationTitle
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: conversationAvatarUrl
-        source: conversationAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: senderPersonaId
-        source: senderPersonaId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: senderDisplayName
-        source: senderDisplayName
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: senderAvatarUrl
-        source: senderAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: messageType
-        source: messageType
-        type: enum
-        enum_ref: MessageType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: contentPreview
-        source: contentPreview
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: seq
-        source: seq
-        type: int64
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: timestamp
-        source: timestamp
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: highlightText
-        source: highlightText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: matchedField
-        source: matchedField
-        type: string
-        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read

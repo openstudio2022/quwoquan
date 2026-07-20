@@ -26,8 +26,8 @@ metrics:
 slis:
   # ---- HTTP 边界（用户感知延迟与可用性）----
   - id: homepage_read_latency
-    description: 主页读路由（search/bundle/introduction）的用户感知延迟；单文档
-      homepage_state 读模型 + 无请求期聚合，目标对齐 intersection 读路径。
+    description: 主页读路由（search/bundle/introduction）的用户感知延迟；权威
+      homepages 对象 Store + 具名投影读取，目标对齐 intersection 读路径。
     sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/homepages.*"}[5m])) by (le))
     objectives:
       p50_ms: 60

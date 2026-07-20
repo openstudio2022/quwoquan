@@ -11,15 +11,16 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -34,8 +35,82 @@ import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../support/harness/profile_shell_scroll_utils.dart';
+
+class _JourneyProfileInteractionFacet
+    implements
+        ContentProfileInteractionQueryFacet,
+        ContentProfileInteractionReadFactAppendFacet {
+  final List<AppendContentProfileInteractionReadFactCommand> appendedFacts =
+      <AppendContentProfileInteractionReadFactCommand>[];
+
+  @override
+  Future<ContentProfileInteractionPage> listActivities(
+    ContentProfileInteractionPageQuery query, {
+    required ContentProfileInteractionDirection direction,
+  }) async {
+    if (direction != ContentProfileInteractionDirection.received) {
+      return ContentProfileInteractionPage(
+        items: const <ContentProfileInteractionActivity>[],
+      );
+    }
+    final now = DateTime.utc(2026, 7, 19, 12);
+    final activityType = query.type.wireValue;
+    return ContentProfileInteractionPage(
+      items: <ContentProfileInteractionActivity>[
+        ContentProfileInteractionActivity(
+          activityId: 'journey-$activityType',
+          activityType: activityType,
+          direction: direction.wireValue,
+          actorSubAccountId: 'journey-actor',
+          actorDisplayName: '你的皮炎有点辣',
+          targetSubAccountId: query.subAccountId,
+          targetContentId: 'journey-post',
+          targetContentType: 'image',
+          targetContentSummary: '真实互动投影旅程',
+          displaySubAccountId: 'journey-actor',
+          displayName: '你的皮炎有点辣',
+          primaryText: switch (query.type) {
+            ContentProfileInteractionType.like => '赞了你的作品',
+            ContentProfileInteractionType.comment => '评论了你的作品',
+            ContentProfileInteractionType.share => '转发了你的作品',
+          },
+          previewText: '真实互动投影旅程',
+          previewObjectId: 'journey-post',
+          previewRouteId: 'workBrowser',
+          filterKeys: <String>[
+            switch (query.type) {
+              ContentProfileInteractionType.like => 'likes',
+              ContentProfileInteractionType.comment => 'comments',
+              ContentProfileInteractionType.share => 'shares',
+            },
+          ],
+          createdAt: now,
+          occurredAt: now,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+    AppendContentProfileInteractionReadFactCommand command,
+  ) async {
+    appendedFacts.add(command);
+    return ContentProfileInteractionReadFactAck(
+      factId: 'journey-${command.activityId}-${command.state.wireValue}',
+      activityId: command.activityId,
+      state: command.state.wireValue,
+      occurredAt: DateTime.utc(2026, 7, 19, 12),
+      replayed: false,
+    );
+  }
+}
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -56,8 +131,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -65,14 +140,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override
@@ -92,13 +164,17 @@ class _AuthedSessionStore implements AuthSessionStore {
 }
 
 class _AuthenticatedSessionController extends AuthSessionController {
+  _AuthenticatedSessionController(this.activeSubAccountId);
+
+  final String activeSubAccountId;
+
   @override
-  AuthSessionState build() => const AuthSessionState(
+  AuthSessionState build() => AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
-    ownerId: 'test_viewer',
-    activeSubAccountId: 'test_viewer',
+    ownerId: activeSubAccountId,
+    activeSubAccountId: activeSubAccountId,
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -136,18 +212,33 @@ class _NotFollowingRelationshipCapability
 }
 
 /// 端到端旅程用 Stub：主页事实交集 + 详情页时间桶列表（契约字段对齐）。
-class _JourneyIntersectionRepository implements IntersectionRepository {
+/// 同时实现 [IntersectionVisitWriter]：推进水位后未读清零，
+/// 模拟云侧 IntersectionVisitState 单调水位语义。
+class _JourneyIntersectionRepository
+    implements IntersectionRepository, IntersectionVisitWriter {
+  final Set<String> visitedDimensions = <String>{};
+
+  bool get _relationshipVisited =>
+      visitedDimensions.contains('') ||
+      visitedDimensions.contains('relationship');
+
+  @override
+  Future<void> markIntersectionsVisited({String? dimension}) async {
+    visitedDimensions.add((dimension ?? '').trim());
+  }
+
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    final newCount = _relationshipVisited ? 0 : 2;
     return IntersectionInboxSummary(
       totalCount: 4,
-      totalNewCount: 2,
+      totalNewCount: newCount,
       dimensions: <IntersectionDimensionTally>[
         IntersectionDimensionTally(
           dimension: 'relationship',
           label: '关系',
           count: 4,
-          newCount: 2,
+          newCount: newCount,
           briefText: '3 位联系人来过你的主页',
         ),
       ],
@@ -171,12 +262,27 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
         objectKind: 'circle',
         displayName: '黄金投资圈',
         primaryText: '你和林清越等4位用户都关注「黄金投资圈」',
+        actorEvidenceTotalCount: 4,
+        actorEvidenceCompleteness: 'complete',
+        representativeActor: IntersectionRepresentativeActor(
+          actorId: 'u_lin',
+          displayName: '林清越',
+          relationLabel: '联系人',
+          privacyState: 'visible',
+          target: IntersectionTarget(
+            objectType: 'user',
+            objectId: 'u_lin',
+            objectKind: 'person',
+            routeId: 'userProfile',
+          ),
+        ),
         primarySpans: <IntersectionTextSpan>[
           IntersectionTextSpan(text: '你和', role: 'plain'),
           IntersectionTextSpan(
             text: '林清越',
             role: 'object',
             target: IntersectionTarget(
+              objectType: 'user',
               objectId: 'u_lin',
               objectKind: 'person',
               routeId: 'userProfile',
@@ -196,6 +302,7 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
             text: '黄金投资圈',
             role: 'object',
             target: IntersectionTarget(
+              objectType: 'circle',
               objectId: 'fixture_circle_gold_invest',
               objectKind: 'circle',
               routeId: 'circleDetail',
@@ -210,9 +317,6 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
       ),
     ];
   }
-
-  @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({
@@ -249,11 +353,22 @@ bool _tapIntersectionSpanByText(WidgetTester tester, String text) {
 
 Widget _scopedApp({
   ProfileMode mode = ProfileMode.mine,
+  String userId = 'nature_photographer',
   List<Override> extraOverrides = const <Override>[],
+  _JourneyProfileInteractionFacet? profileInteractions,
 }) {
+  final interactionFacet =
+      profileInteractions ?? _JourneyProfileInteractionFacet();
+  final intersections = _JourneyIntersectionRepository();
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
+      ...mockContentFacetOverrides(MockContentRepository()),
+      intersectionRepositoryProvider.overrideWithValue(intersections),
+      intersectionVisitWriterProvider.overrideWithValue(intersections),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWithValue(
         const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
@@ -261,14 +376,20 @@ Widget _scopedApp({
       ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(
-        _AuthenticatedSessionController.new,
+        () => _AuthenticatedSessionController(
+          mode == ProfileMode.mine ? userId : 'test_viewer',
+        ),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(interactionFacet),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        interactionFacet,
       ),
       ...extraOverrides,
     ],
     child: MaterialApp(
       builder: (context, child) =>
           _AuthWarmup(child: child ?? const SizedBox.shrink()),
-      home: ProfileShell(mode: mode, userId: 'nature_photographer'),
+      home: ProfileShell(mode: mode, userId: userId),
     ),
   );
 }
@@ -305,6 +426,60 @@ Finder _profileActionLabel(String label) {
   );
 }
 
+Future<void> _tapProfileInteractionSubTab(
+  WidgetTester tester,
+  String label,
+) async {
+  final tab = find.descendant(
+    of: find.byKey(
+      const ValueKey<String>('profile-interaction-secondary-tabs'),
+    ),
+    matching: find.text(label),
+  );
+  expect(tab, findsOneWidget);
+  await tester.ensureVisible(tab);
+  await tester.pump();
+  final rect = tester.getRect(tab);
+  const safeTop = 160.0;
+  if (rect.top < safeTop) {
+    await tester.drag(
+      find.byType(Scrollable).first,
+      Offset(0, safeTop - rect.top),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+  }
+  await tester.tap(tab, warnIfMissed: false);
+  await tester.pump();
+}
+
+Future<void> _tapProfileInteractionDirection(
+  WidgetTester tester,
+  String label,
+) async {
+  final direction = find.descendant(
+    of: find.byKey(
+      const ValueKey<String>('profile-interaction-direction-switch'),
+    ),
+    matching: find.text(label),
+  );
+  expect(direction, findsOneWidget);
+  await tester.ensureVisible(direction);
+  await tester.pump();
+  final rect = tester.getRect(direction);
+  const safeTop = 160.0;
+  if (rect.top < safeTop) {
+    await tester.drag(
+      find.byType(Scrollable).first,
+      Offset(0, safeTop - rect.top),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+  }
+  await tester.tap(direction, warnIfMissed: false);
+  await tester.pump();
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
@@ -334,7 +509,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
       expect(_profileSegment('圈子'), findsNothing);
-      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+      expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
     });
 
     testWidgets('旅程 A3：切换到互动 Tab', (tester) async {
@@ -346,9 +521,13 @@ void main() {
       await _pumpFrames(tester);
       await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
+      await _tapProfileInteractionSubTab(
+        tester,
+        UITextConstants.interactionSubShares,
+      );
+      await _pumpFrames(tester, count: 10);
 
-      // 方向切换收敛到一级 Tab 右侧：两个选项同时可见，直接点选即可切换，
-      // 不再挤占互动二级分类，也不再弹出底部工具栏。
+      // 方向只对「转发」语义成立；赞/评论不展示无意义方向开关。
       expect(
         find.text(UITextConstants.profileInteractionDirectionReceived),
         findsOneWidget,
@@ -368,14 +547,16 @@ void main() {
 
       expect(currentDirection(), InteractionDirection.received);
 
-      await tester.tap(
-        find.text(UITextConstants.profileInteractionDirectionSent),
+      await _tapProfileInteractionDirection(
+        tester,
+        UITextConstants.profileInteractionDirectionSent,
       );
       await _pumpFrames(tester, count: 10);
       expect(currentDirection(), InteractionDirection.sent);
 
-      await tester.tap(
-        find.text(UITextConstants.profileInteractionDirectionReceived),
+      await _tapProfileInteractionDirection(
+        tester,
+        UITextConstants.profileInteractionDirectionReceived,
       );
       await _pumpFrames(tester, count: 10);
       expect(currentDirection(), InteractionDirection.received);
@@ -478,9 +659,10 @@ void main() {
         find.text(UITextConstants.interactionSubLikes),
         findsAtLeastNWidgets(1),
       );
+      // 赞没有 received/sent 双向语义，方向开关只在转发二级页展示。
       expect(
         find.text(UITextConstants.profileInteractionDirectionReceived),
-        findsOneWidget,
+        findsNothing,
       );
     });
 
@@ -494,6 +676,37 @@ void main() {
       await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
+    });
+
+    testWidgets('旅程 E4：收到的转发可见满一秒后追加 seen fact', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final interactions = _JourneyProfileInteractionFacet();
+
+      await tester.pumpWidget(_scopedApp(profileInteractions: interactions));
+      await _pumpFrames(tester);
+      await tapProfilePrimaryTab(tester, '互动');
+      await _pumpFrames(tester, count: 20);
+      await _tapProfileInteractionSubTab(
+        tester,
+        UITextConstants.interactionSubShares,
+      );
+      await _pumpFrames(tester, count: 10);
+      final shareActivity = find.text('你的皮炎有点辣').first;
+      await tester.ensureVisible(shareActivity);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump();
+
+      expect(
+        interactions.appendedFacts.any(
+          (fact) =>
+              fact.state == ContentProfileInteractionReadState.seen &&
+              fact.activityId == 'journey-share',
+        ),
+        isTrue,
+      );
     });
 
     testWidgets('旅程 E4：交集与打动模块从 Repository 加载', (tester) async {
@@ -551,7 +764,7 @@ void main() {
   });
 
   group('旅程 交集端到端（我的主页→我的交集→列表→对象主页）', () {
-    testWidgets('旅程 E5：维度简报下钻分组列表，再进对象主页', (tester) async {
+    testWidgets('旅程 E5：交集事实预览下钻分组列表，再进对象主页', (tester) async {
       final behaviorRepo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(
         reporter: behaviorRepo,
@@ -613,7 +826,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      // 我的主页：高保事实交集卡从 Repository 加载。
+      // 我的主页卡与下钻列表消费同一 canonical fact，不另造摘要真相源。
       expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
 
       // 我的交集：点击事实行下钻详情页。
@@ -630,6 +843,31 @@ void main() {
         behaviorRepo.recorded.last.contentId,
         'fixture_circle_gold_invest',
       );
+    });
+
+    testWidgets('旅程 E6：打开交集列表推进已读水位并清零红点（IntersectionVisitState 闭环）', (
+      tester,
+    ) async {
+      final repo = _JourneyIntersectionRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            intersectionRepositoryProvider.overrideWithValue(repo),
+            intersectionVisitWriterProvider.overrideWithValue(repo),
+          ],
+          child: const CupertinoApp(home: MyIntersectionInboxPage()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // 打开列表即触发 loadAndMarkVisited：typed 写面收到全维度推进。
+      expect(repo.visitedDimensions, contains(''));
+
+      // 水位推进后 summary 未读清零（红点消失的唯一数据来源）。
+      final summary = await repo.getMyIntersectionSummary();
+      expect(summary.totalNewCount, 0);
+      expect(summary.dimensions.single.newCount, 0);
     });
   });
 
@@ -699,7 +937,7 @@ void main() {
             UITextConstants.profileInteractionDirectionReceived,
           ),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(tester.getTopLeft(summaryFinder).dy, closeTo(summaryBefore, 8));
     });
@@ -711,21 +949,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            userProfileRepositoryProvider.overrideWithValue(
-              const MockUserProfileRepository(),
-            ),
-          ],
-          child: MaterialApp(
-            home: ProfileShell(
-              mode: ProfileMode.mine,
-              userId: 'nonexistent_user_xyz',
-            ),
-          ),
-        ),
-      );
+      await tester.pumpWidget(_scopedApp(userId: 'nonexistent_user_xyz'));
       await _pumpFrames(tester);
       // 空用户数据下仍应正常渲染：滚动构建首屏外一级 Tab 并断言不崩溃。
       await revealProfilePrimaryTabs(tester);

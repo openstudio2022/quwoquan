@@ -1,0 +1,35 @@
+entity: ContentReaction
+layer: e2e
+
+description: |
+  端云集成场景：app → gateway → content-service → MongoDB
+  content_reaction_aggregates + outbox relay → 计数投影收敛。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  real_engines:
+    mongodb: testcontainer
+
+scenarios:
+  - name: like_unlike_counter_convergence
+    test_type: api_contract
+    actors:
+      app: lib/ui/discovery/widgets/works_immersive_viewer_engagement_actions.dart
+      gateway: /content/posts/{postId}/like
+      service: content-service POST|DELETE /content/posts/{postId}/like
+      storage: MongoDB content_reaction_aggregates + reaction outbox
+    steps:
+      - app 点赞（乐观态 + outbox 重放）
+      - 服务端内部 CAS 提交 aggregate/receipt/outbox
+      - relay 投递 like count 到 post/discovery/recommend 投影
+    assertions:
+      - 重复 like 幂等；unlike 后计数回落
+      - likeCount 只由 content_reaction_aggregates 派生
+      - 断网重启后 outbox 重放收敛到同一最终计数
+
+  - name: like_post_user_journey
+    test_type: ui_journey
+    patrol_flow: quwoquan_app/test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart
+    assertions:
+      - 点赞图标即时反馈；失败回滚并可重试

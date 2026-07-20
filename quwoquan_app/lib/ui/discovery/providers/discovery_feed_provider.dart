@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -17,6 +18,7 @@ class DiscoveryFeedState {
 
   const DiscoveryFeedState({
     this.items = const [],
+    this.objectCards = const [],
     this.seenItemIds = const [],
     this.nextCursor,
     this.feedRequestId,
@@ -28,6 +30,10 @@ class DiscoveryFeedState {
   });
 
   final List<PostBaseDto> items;
+
+  /// 混合对象卡（B4 插卡模式）：anchorIndex 为 items 全量列表中的插入位。
+  /// 只随首刷下发（分页续接不重复注入）。
+  final List<FeedObjectCardDto> objectCards;
   final List<String> seenItemIds;
   final String? nextCursor;
 
@@ -59,6 +65,7 @@ class DiscoveryFeedState {
 
   DiscoveryFeedState copyWith({
     List<PostBaseDto>? items,
+    List<FeedObjectCardDto>? objectCards,
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
     Object? feedRequestId = _unset,
@@ -70,6 +77,7 @@ class DiscoveryFeedState {
   }) {
     return DiscoveryFeedState(
       items: items ?? this.items,
+      objectCards: objectCards ?? this.objectCards,
       seenItemIds: seenItemIds ?? this.seenItemIds,
       nextCursor: identical(nextCursor, _unset)
           ? this.nextCursor
@@ -94,28 +102,64 @@ class DiscoveryFeedState {
 
 typedef DiscoveryFeedQuery = ({
   String category,
+  String? channel,
   String? identity,
   String? type,
 });
 
 /// 将 surface tab id 映射到统一 discovery feed 查询。
+///
+/// 频道推荐主链路（首页频道）以 [DiscoveryFeedQuery.channel] 路由（服务端进
+/// 推荐引擎并按 channelId 归因）；发现页浏览流（moment/photo/video/article tab）
+/// 仍以 identity/type 走时间线具名查询，两者互斥。
 DiscoveryFeedQuery toDiscoveryFeedQuery(String channelId) {
   switch (channelId) {
     case 'following':
-      return (category: 'following', identity: 'moment', type: null);
+      return (
+        category: 'following',
+        channel: 'following',
+        identity: null,
+        type: null,
+      );
     case 'moment':
-      return (category: 'moment', identity: 'moment', type: null);
+      return (
+        category: 'moment',
+        channel: null,
+        identity: 'moment',
+        type: null,
+      );
     case 'work':
     case 'works':
-      return (category: 'work', identity: 'work', type: null);
+      return (category: 'work', channel: null, identity: 'work', type: null);
     case 'photo':
-      return (category: 'photo', identity: 'work', type: 'image');
+      return (
+        category: 'photo',
+        channel: null,
+        identity: 'work',
+        type: 'image',
+      );
     case 'video':
-      return (category: 'video', identity: 'work', type: 'video');
+      return (
+        category: 'video',
+        channel: null,
+        identity: 'work',
+        type: 'video',
+      );
     case 'article':
-      return (category: 'article', identity: 'work', type: 'article');
+      return (
+        category: 'article',
+        channel: null,
+        identity: 'work',
+        type: 'article',
+      );
     default:
-      return (category: channelId, identity: null, type: null);
+      // 首页频道（recommend/campus/travel/...）：channel 语义路由推荐引擎。
+      return (
+        category: channelId,
+        channel: channelId,
+        identity: null,
+        type: null,
+      );
   }
 }
 
@@ -124,6 +168,15 @@ class DiscoveryFeedMapNotifier
     extends Notifier<Map<String, AsyncValue<DiscoveryFeedState>>> {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    ref.listen<int>(contentPublicationEpochProvider, (previous, next) {
+      if (previous == null || previous == next) {
+        return;
+      }
+      final loadedChannels = state.keys.toList(growable: false);
+      for (final channelId in loadedChannels) {
+        unawaited(load(channelId, force: true));
+      }
+    });
     ref.onDispose(() {
       for (final controller in _waitControllers.values) {
         controller.dispose();
@@ -138,13 +191,27 @@ class DiscoveryFeedMapNotifier
 
   /// 解析取数查询：首页频道以 [homeChannelsProvider]（端默认 + 远程覆盖）的 feed_query 为真相源；
   /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
+  ///
+  /// feed_query.channel 是频道推荐主链路标识（B1 收口）：命中即以 channelId 请求
+  /// 推荐引擎，identity/type 不参与。仅当 feed_query 只声明 category（旧浏览流
+  /// 语义，运营远程覆盖兼容窗口）时才透传 identity/type。
   DiscoveryFeedQuery _resolveQuery(String channelId) {
     for (final channel in ref.read(homeChannelsProvider)) {
       if (channel.id != channelId) continue;
+      final routedChannel = channel.feedQuery['channel'];
+      if (routedChannel != null && routedChannel.isNotEmpty) {
+        return (
+          category: routedChannel,
+          channel: routedChannel,
+          identity: null,
+          type: null,
+        );
+      }
       final category = channel.feedQuery['category'];
       if (category != null && category.isNotEmpty) {
         return (
           category: category,
+          channel: null,
           identity: channel.feedQuery['identity'],
           type: channel.feedQuery['type'],
         );
@@ -158,7 +225,7 @@ class DiscoveryFeedMapNotifier
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
       return;
     }
-    final repo = ref.read(contentReadRepositoryProvider);
+    final repo = ref.read(contentDiscoveryFeedQueryProvider);
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
@@ -230,6 +297,7 @@ class DiscoveryFeedMapNotifier
       // 首刷不传 feedRequestId：由服务端权威生成并随 envelope 下发。
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
+        channelId: query.channel,
         identity: query.identity,
         type: query.type,
         sort: kFeedSortRecommend,
@@ -262,6 +330,7 @@ class DiscoveryFeedMapNotifier
         channelId: AsyncData(
           DiscoveryFeedState(
             items: page.items,
+            objectCards: page.objectCards,
             seenItemIds: seen,
             nextCursor: page.nextCursor,
             feedRequestId: page.feedRequestId,
@@ -399,13 +468,14 @@ class DiscoveryFeedMapNotifier
       itemCountBefore: value.items.length,
     );
     try {
-      final repo = ref.read(contentReadRepositoryProvider);
+      final repo = ref.read(contentDiscoveryFeedQueryProvider);
       final query = _resolveQuery(channelId);
       final feedSession = ref.read(feedSessionProvider.notifier);
       final sessionId = feedSession.sessionId;
       // 分页回显首刷服务端下发的 feedRequestId，保持同一 feed 会话归因连续。
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
+        channelId: query.channel,
         identity: query.identity,
         type: query.type,
         sort: kFeedSortRecommend,
@@ -541,17 +611,29 @@ class DiscoveryFeedMapNotifier
         );
   }
 
-  void removePostLocally(String postId) {
+  Map<String, ({PostBaseDto post, int index})> removePostLocally(
+    String postId,
+  ) {
     final normalized = postId.trim();
     if (normalized.isEmpty) {
-      return;
+      return const <String, ({PostBaseDto post, int index})>{};
     }
+    final removed = <String, ({PostBaseDto post, int index})>{};
     final next = <String, AsyncValue<DiscoveryFeedState>>{};
     for (final entry in state.entries) {
       final value = entry.value.value;
       if (value == null) {
         next[entry.key] = entry.value;
         continue;
+      }
+      final removedIndex = value.items.indexWhere(
+        (item) => item.id == normalized,
+      );
+      if (removedIndex >= 0) {
+        removed[entry.key] = (
+          post: value.items[removedIndex],
+          index: removedIndex,
+        );
       }
       final filteredItems = value.items
           .where((item) => item.id != normalized)
@@ -561,6 +643,34 @@ class DiscoveryFeedMapNotifier
           .toList(growable: false);
       next[entry.key] = AsyncData(
         value.copyWith(items: filteredItems, seenItemIds: filteredSeen),
+      );
+    }
+    state = next;
+    return removed;
+  }
+
+  void restorePostsLocally(
+    Map<String, ({PostBaseDto post, int index})> removed,
+  ) {
+    if (removed.isEmpty) return;
+    final next = Map<String, AsyncValue<DiscoveryFeedState>>.from(state);
+    for (final entry in removed.entries) {
+      final current = state[entry.key]?.value;
+      if (current == null ||
+          current.items.any((item) => item.id == entry.value.post.id)) {
+        continue;
+      }
+      final items = List<PostBaseDto>.from(current.items);
+      final index = entry.value.index.clamp(0, items.length).toInt();
+      items.insert(index, entry.value.post);
+      next[entry.key] = AsyncData(
+        current.copyWith(
+          items: items,
+          seenItemIds: <String>{
+            ...current.seenItemIds,
+            entry.value.post.id,
+          }.toList(growable: false),
+        ),
       );
     }
     state = next;

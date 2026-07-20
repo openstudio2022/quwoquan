@@ -4,7 +4,7 @@ backend: mongodb
 collections:
   media_assets:
     entity: MediaAsset
-    description: MediaAsset 权威聚合；不从 Post 或上传会话内存 map 回退读取。
+    description: MediaAsset 权威聚合；保存原始 CAS 身份及受信图片/视频处理 descriptor，不从 Post 或上传会话内存 map 回退读取。
     indexes:
       - { name: idx_media_assets_owner_status, keys: { ownerId: 1, processingStatus: 1, createdAt: -1 } }
       - { name: idx_media_assets_source_session, keys: { sourceSessionId: 1 }, unique: true }
@@ -27,3 +27,9 @@ collections:
       - { name: idx_media_asset_outbox_event, keys: { _id: 1 }, unique: true }
       - { name: idx_media_asset_outbox_replay, keys: { occurredAt: 1, _id: 1 } }
       - { name: idx_media_asset_outbox_aggregate_version, keys: { aggregateId: 1, aggregateVersion: 1 }, unique: true }
+
+  media_projection_checkpoints:
+    entity: MediaAsset
+    description: media outbox 消费者 checkpoint（media-processing worker 等）；按 occurredAt/eventId 原子单调推进，多副本陈旧保存不得回退；先投递后落 checkpoint，重放由 processing 态守卫与命令 digest 幂等吸收。
+    indexes:
+      - { name: idx_media_projection_checkpoint_consumer, keys: { _id: 1 }, unique: true }

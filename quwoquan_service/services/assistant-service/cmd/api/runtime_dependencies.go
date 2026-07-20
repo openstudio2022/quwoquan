@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/services/assistant-service/internal/application"
+	preferenceports "quwoquan_service/services/assistant-service/internal/domain/assistant/preference_fact/ports"
 	"quwoquan_service/services/assistant-service/internal/runtimewiring"
 )
 
@@ -24,13 +25,16 @@ func validateRuntimeDependenciesConfig(cfg config) error {
 }
 
 type persistentDependencies struct {
-	eventStore        application.EventStore
-	profileStore      application.LearningProfileStore
-	subscriptionStore application.SkillSubscriptionStore
-	consentStore      application.ConsentStore
-	mongoClient       *mongo.Client
-	postgresPool      *pgxpool.Pool
-	inner             *runtimewiring.PersistentDependencies
+	eventStore           application.EventStore
+	profileStore         application.LearningProfileStore
+	subscriptionStore    application.SkillSubscriptionStore
+	consentStore         application.ConsentStore
+	conversationRunStore application.ConversationRunStore
+	preferenceStore      preferenceports.Store
+	preferenceReader     preferenceports.Reader
+	mongoClient          *mongo.Client
+	postgresPool         *pgxpool.Pool
+	inner                *runtimewiring.PersistentDependencies
 }
 
 func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDependencies, error) {
@@ -39,13 +43,16 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		return nil, err
 	}
 	return &persistentDependencies{
-		eventStore:        inner.EventStore,
-		profileStore:      inner.ProfileStore,
-		subscriptionStore: inner.SubscriptionStore,
-		consentStore:      inner.ConsentStore,
-		mongoClient:       inner.MongoClient,
-		postgresPool:      inner.PostgresPool,
-		inner:             inner,
+		eventStore:           inner.EventStore,
+		profileStore:         inner.ProfileStore,
+		subscriptionStore:    inner.SubscriptionStore,
+		consentStore:         inner.ConsentStore,
+		conversationRunStore: inner.ConversationRunStore,
+		preferenceStore:      inner.PreferenceStore,
+		preferenceReader:     inner.PreferenceReader,
+		mongoClient:          inner.MongoClient,
+		postgresPool:         inner.PostgresPool,
+		inner:                inner,
 	}, nil
 }
 

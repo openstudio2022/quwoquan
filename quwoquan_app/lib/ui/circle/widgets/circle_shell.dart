@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/app/shell/object_detail_global_bottom_nav.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -20,14 +22,23 @@ import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_slogan_card.dart';
 import 'package:quwoquan_app/components/object_page/object_stats_row.dart';
+import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentReportTargetType, CreateContentReportCommand;
+import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circle_membership_approval_page.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
@@ -35,6 +46,7 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_members.dart';
+import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 
 part 'circle_shell_components.dart';
@@ -188,6 +200,27 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     );
   }
 
+  Future<void> _startCircleCall(
+    BuildContext context, {
+    required CircleState state,
+    required RtcCallEntryMediaType mediaType,
+  }) {
+    final group = state.defaultPublicGroup;
+    return ref
+        .read(rtcCallEntryPresenterProvider)
+        .start(
+          context: context,
+          ref: ref,
+          intent: RtcCallEntryIntent.circle(
+            mediaType: mediaType,
+            circleId: widget.circleId,
+            conversationId: group?.conversationId ?? '',
+            participantCount: group?.memberCount ?? 0,
+          ),
+          sourceSurface: AppUiSurfaces.circleDetail,
+        );
+  }
+
   Future<void> _showMoreOptions(
     BuildContext context, {
     required String circleName,
@@ -195,20 +228,46 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }) async {
     final isManager =
         state.role == CircleRole.owner || state.role == CircleRole.admin;
+    final isMember = state.role != CircleRole.visitor;
     final sections = <AppActionSheetSection<_CircleMoreAction>>[];
     if (isManager) {
       sections.add(
-        const AppActionSheetSection<_CircleMoreAction>(
+        AppActionSheetSection<_CircleMoreAction>(
           items: <AppActionSheetItem<_CircleMoreAction>>[
-            AppActionSheetItem<_CircleMoreAction>(
+            const AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.edit,
               label: UITextConstants.editCircle,
               icon: CupertinoIcons.pencil,
             ),
-            AppActionSheetItem<_CircleMoreAction>(
+            const AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.manage,
               label: UITextConstants.manageCenter,
               icon: CupertinoIcons.slider_horizontal_3,
+            ),
+            // 审批入口仅 approval 圈子展示（open 圈子无 pending 队列语义）。
+            if (state.circleData?.joinPolicy == 'approval')
+              const AppActionSheetItem<_CircleMoreAction>(
+                value: _CircleMoreAction.approval,
+                label: UITextConstants.circleApprovalTitle,
+                icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+              ),
+          ],
+        ),
+      );
+    }
+    if (isMember) {
+      sections.add(
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: <AppActionSheetItem<_CircleMoreAction>>[
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.voiceCall,
+              label: UITextConstants.callGroupVoice,
+              icon: CupertinoIcons.phone,
+            ),
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.videoCall,
+              label: UITextConstants.callGroupVideo,
+              icon: CupertinoIcons.video_camera,
             ),
           ],
         ),
@@ -221,6 +280,11 @@ class _CircleShellState extends ConsumerState<CircleShell> {
             value: _CircleMoreAction.submitPost,
             label: UITextConstants.circleSubmitPost,
             icon: CupertinoIcons.add_circled,
+          ),
+          AppActionSheetItem<_CircleMoreAction>(
+            value: _CircleMoreAction.invite,
+            label: UITextConstants.circleInviteMembers,
+            icon: CupertinoIcons.person_badge_plus,
           ),
         ],
       ),
@@ -268,6 +332,28 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           state: state,
           initialTab: CircleEditSettingsTab.settings,
         );
+      case _CircleMoreAction.approval:
+        await Navigator.of(context).push(
+          CupertinoPageRoute<void>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.circleMembershipApproval,
+            ),
+            builder: (_) =>
+                CircleMembershipApprovalPage(circleId: widget.circleId),
+          ),
+        );
+      case _CircleMoreAction.voiceCall:
+        await _startCircleCall(
+          context,
+          state: state,
+          mediaType: RtcCallEntryMediaType.audio,
+        );
+      case _CircleMoreAction.videoCall:
+        await _startCircleCall(
+          context,
+          state: state,
+          mediaType: RtcCallEntryMediaType.video,
+        );
       case _CircleMoreAction.submitPost:
         // /create 路由门负责未登录拦截；圈子锚点经 extra 注入 PublishSettings.circleIds。
         context.push(
@@ -277,16 +363,120 @@ class _CircleShellState extends ConsumerState<CircleShell> {
             circleName: circleName.isEmpty ? null : circleName,
           ),
         );
+      case _CircleMoreAction.invite:
+        await _shareCircle(context, circleName: circleName, asInvite: true);
       case _CircleMoreAction.share:
-        AppToast.show(context, UITextConstants.share);
+        await _shareCircle(context, circleName: circleName);
       case _CircleMoreAction.copyLink:
-        await Clipboard.setData(ClipboardData(text: widget.circleId));
+        await Clipboard.setData(
+          ClipboardData(
+            text: AppPublicContentLinks.circleWebUrl(widget.circleId),
+          ),
+        );
         if (context.mounted) {
-          AppToast.show(context, UITextConstants.copiedToClipboard);
+          AppToast.show(context, ChatText.shareLinkCopied);
         }
       case _CircleMoreAction.report:
-        AppToast.show(context, UITextConstants.report);
+        _gatedReportCircle(context);
     }
+  }
+
+  /// 系统分享圈子深链；[asInvite] 时使用邀请语气文案（同链路，不另建通道）。
+  Future<void> _shareCircle(
+    BuildContext context, {
+    required String circleName,
+    bool asInvite = false,
+  }) async {
+    final url = AppPublicContentLinks.circleWebUrl(widget.circleId);
+    final resolvedName = circleName.isEmpty
+        ? AppConceptConstants.circles
+        : circleName;
+    final headline = asInvite
+        ? UITextConstants.circleInviteShareText(resolvedName)
+        : UITextConstants.circleShareSubject(resolvedName);
+    final journeyTracker = ref.read(journeyEventTrackerProvider);
+    try {
+      final result = await SharePlus.instance.share(
+        ShareParams(
+          title: resolvedName,
+          subject: headline,
+          text: '$headline\n$url',
+        ),
+      );
+      if (result.status == ShareResultStatus.dismissed) {
+        return;
+      }
+      unawaited(
+        journeyTracker.trackAction(
+          journey: 'circle_share',
+          action: asInvite ? 'invite_members' : 'share_circle',
+          pageName: 'circle_shell',
+          targetType: 'circle',
+          targetKey: widget.circleId,
+          payload: const {'result': 'success'},
+        ),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(context, ChatText.shareFailed);
+      }
+    }
+  }
+
+  /// 举报圈子：登录门保障 + 原因选择，与用户主页举报共用统一举报链路。
+  void _gatedReportCircle(BuildContext context) {
+    runWhenLoggedIn(ref, context, AuthGateReason.report, () async {
+      final reason = await showContentReportReasonSheet(context);
+      if (reason == null || !context.mounted) return;
+      final journeyTracker = ref.read(journeyEventTrackerProvider);
+      final startedAt = DateTime.now();
+      try {
+        await ref
+            .read(circleDetailContentReportCommandWriterProvider)
+            .createReport(
+              CreateContentReportCommand(
+                targetId: widget.circleId,
+                targetType: ContentReportTargetType.circle,
+                reason: reason,
+              ),
+            );
+        await journeyTracker.trackAction(
+          journey: 'content_report',
+          action: 'submit_report',
+          pageName: 'circle_shell',
+          payload: {
+            'result': 'success',
+            'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+          },
+        );
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.commentReportSubmitted);
+        }
+      } catch (error) {
+        await journeyTracker.trackAction(
+          journey: 'content_report',
+          action: 'submit_report',
+          pageName: 'circle_shell',
+          payload: {
+            'result': 'failure',
+            'failReasonCode': error is CloudException
+                ? (error.code ?? error.type.name)
+                : error.runtimeType.toString(),
+            'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+          },
+        );
+        if (!context.mounted) {
+          return;
+        }
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: resolved);
+      }
+    });
   }
 
   @override

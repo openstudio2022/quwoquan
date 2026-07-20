@@ -56,13 +56,17 @@ func TestExceptionLogger_WritesToErrorSink(t *testing.T) {
 	if standard.Len() != 0 {
 		t.Fatalf("exception log should not write to standard sink")
 	}
-	if !strings.Contains(errorBuf.String(), ",CHAT.SYSTEM.internal_error,") {
+	if !strings.Contains(errorBuf.String(), `"errorCode":"CHAT.SYSTEM.internal_error"`) {
 		t.Fatalf("expected exception payload in error sink: %s", errorBuf.String())
 	}
-	if !strings.Contains(errorBuf.String(), `"inputKv":{"content":"***"}`) {
-		t.Fatalf("expected metadata filtered input kv in exception payload")
+	if !strings.Contains(errorBuf.String(), `"inputKv":"{\"content\":\"***\"}"`) {
+		t.Fatalf("expected string-only filtered input kv in exception payload")
 	}
-	if strings.Contains(errorBuf.String(), "schema"+"Version") || strings.Contains(errorBuf.String(), "requestId") {
-		t.Fatalf("exception log should use compact fields: %s", errorBuf.String())
+	if strings.Contains(errorBuf.String(), "schema"+"Version") ||
+		strings.Contains(errorBuf.String(), `"sessionId"`) {
+		t.Fatalf("exception log must not contain forbidden fields: %s", errorBuf.String())
+	}
+	if !strings.Contains(errorBuf.String(), `"requestId":"SVC.chat.message.create.l9z1y4.2f8k"`) {
+		t.Fatalf("exception log must preserve request correlation: %s", errorBuf.String())
 	}
 }

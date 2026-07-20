@@ -33,13 +33,34 @@ def test_aggregate_turn_usage_sums_multiple_turns() -> None:
     )
     assert usage["available"] is True
     assert usage["usedTokens"] == 4700
-    assert usage["costUsd"] == 0.05
+    assert usage["costUsd"] is None
+    assert usage["costAvailable"] is False
     assert usage["source"] == "stream_turn_ended"
 
 
 def test_aggregate_turn_usage_prefers_total_tokens_field() -> None:
     usage = aggregate_turn_usage([{"totalTokens": 8000, "inputTokens": 1}])
     assert usage["usedTokens"] == 8000
+
+
+def test_aggregate_turn_usage_preserves_billing_components() -> None:
+    usage = aggregate_turn_usage(
+        [
+            {
+                "inputTokens": 100,
+                "outputTokens": 20,
+                "cacheReadTokens": 50,
+                "cacheWriteTokens": 10,
+                "costUsd": 0.01,
+            }
+        ]
+    )
+    assert usage["inputTokens"] == 100
+    assert usage["outputTokens"] == 20
+    assert usage["cacheReadTokens"] == 50
+    assert usage["cacheWriteTokens"] == 10
+    assert usage["usedTokens"] == 180
+    assert usage["costAvailable"] is True
 
 
 def test_aggregate_turn_usage_empty_is_not_available() -> None:
@@ -156,7 +177,13 @@ def test_prompt_capturing_usage_collects_turn_ended_events() -> None:
     assert aggregated == {
         "available": True,
         "usedTokens": 46,
-        "costUsd": 0.0,
+        "inputTokens": 40,
+        "outputTokens": 6,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "costAvailable": False,
+        "costUsd": None,
+        "resolvedModelId": "",
         "source": "stream_turn_ended",
     }
 
@@ -202,3 +229,59 @@ def test_runner_source_prefers_result_usage_then_stream() -> None:
     stream = aggregate_turn_usage([payload])
     assert stream["available"] is True
     assert stream["usedTokens"] == 10
+
+
+def test_usage_journal_persists_turns_before_terminal_outcome(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution.controller import token_ledger_journal as journal
+
+    monkeypatch.setattr(
+        journal,
+        "execution_root",
+        lambda execution_id: tmp_path / execution_id,
+    )
+    fields = {
+        "usedTokens": 12,
+        "inputTokens": 10,
+        "outputTokens": 2,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "costUsd": 0.01,
+        "costKnown": True,
+        "costSource": "sdk_billed",
+        "costIssue": None,
+        "measurementMode": "stream_turn_ended",
+    }
+    journal.persist_cursor_usage_journal(
+        execution_id="execution-a",
+        invocation_id="invocation-001",
+        scope="content_object",
+        content_object_ref="/post/article/1",
+        execution_stage="post_author",
+        resolved_model_id="composer-2.5",
+        pricing_revision="pricing-1",
+        status="running",
+        turn_count=1,
+        aggregate=fields,
+        updated_at="2026-07-19T00:00:00Z",
+    )
+    journal.persist_cursor_usage_journal(
+        execution_id="execution-a",
+        invocation_id="invocation-001",
+        scope="content_object",
+        content_object_ref="/post/article/1",
+        execution_stage="post_author",
+        resolved_model_id="composer-2.5",
+        pricing_revision="pricing-1",
+        status="failed",
+        turn_count=1,
+        aggregate=fields,
+        updated_at="2026-07-19T00:01:00Z",
+    )
+
+    persisted = journal.existing_usage_journal("execution-a")
+    assert list(persisted) == ["invocation-001"]
+    assert persisted["invocation-001"]["status"] == "failed"
+    assert persisted["invocation-001"]["aggregate"]["costUsd"] == 0.01

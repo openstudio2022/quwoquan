@@ -1,13 +1,12 @@
-entity: ConfigLayer
+entity: ConfigSnapshot
 layer: user_acceptance
 scenarios:
-  - name: operator_updates_and_resolves_service_config
+  - name: operator_reviews_release_config_snapshot
     steps:
-      - operator selects a metadata-registered config key and target layer
-      - operator submits a typed value with If-Match and idempotency key
-      - portal resolves effective config for the target service
+      - operator opens the config domain catalog (cloud services / app / data / platform)
+      - operator selects environment and service to view the release config snapshot
+      - operator compares desired hash with instance ACK reports for drift
     assertions:
-      - layer_version_incremented_once
-      - effective_value_and_source_layer_visible
-      - duplicate_submit_has_one_side_effect
-      - unauthorized_operator_denied
+      - snapshot_files_show_source_path_and_sha256
+      - release_versions_limited_to_current_and_previous
+      - no_edit_entrypoint_visible_anywhere

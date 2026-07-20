@@ -1,4 +1,4 @@
-# L4 对象任务：redis-hot-path-and-rule-engine
+# L3 对象任务：redis-hot-path-and-rule-engine
 
 ## 功能说明
 - **Redis 热路径**：session_signals（标签权重漂移）、exposed_set（去重）、negative_set（负反馈过滤）、realtime_interest（实时兴趣向量）；key 格式 `session:{user_id}:{session_id}:*`。

@@ -1,0 +1,17 @@
+read_model: ProfileInteractionReadFactAck
+
+description: |
+  ProfileInteractionReadFact append 命令的确认投影；replayed=true 表示同一语义事实已存在。
+
+source_entities:
+  - ProfileInteractionReadFact
+
+consumers:
+  - app
+
+fields:
+  - { name: factId, type: string }
+  - { name: activityId, type: string }
+  - { name: state, type: string }
+  - { name: occurredAt, type: timestamp }
+  - { name: replayed, type: bool }

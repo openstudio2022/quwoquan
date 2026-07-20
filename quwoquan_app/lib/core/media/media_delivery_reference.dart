@@ -12,13 +12,15 @@ class MediaEndpointConfig {
     required String imageBaseUrl,
     required String videoBaseUrl,
     required String attachmentBaseUrl,
-  }) : avatarBaseUri = _parseHttpsBase(avatarBaseUrl, 'avatarBaseUrl'),
-       imageBaseUri = _parseHttpsBase(imageBaseUrl, 'imageBaseUrl'),
-       videoBaseUri = _parseHttpsBase(videoBaseUrl, 'videoBaseUrl'),
-       attachmentBaseUri = _parseHttpsBase(
-         attachmentBaseUrl,
-         'attachmentBaseUrl',
+  }) : _bases = _availableBases(
+         avatarBaseUrl: avatarBaseUrl,
+         imageBaseUrl: imageBaseUrl,
+         videoBaseUrl: videoBaseUrl,
+         attachmentBaseUrl: attachmentBaseUrl,
+         requireAll: true,
        );
+
+  const MediaEndpointConfig._(this._bases);
 
   factory MediaEndpointConfig.fromRuntimeConfig() {
     return MediaEndpointConfig(
@@ -29,27 +31,80 @@ class MediaEndpointConfig {
     );
   }
 
-  final Uri avatarBaseUri;
-  final Uri imageBaseUri;
-  final Uri videoBaseUri;
-  final Uri attachmentBaseUri;
-
-  Uri baseFor(MediaDeliveryKind kind) {
-    switch (kind) {
-      case MediaDeliveryKind.avatar:
-        return avatarBaseUri;
-      case MediaDeliveryKind.image:
-      case MediaDeliveryKind.background:
-        return imageBaseUri;
-      case MediaDeliveryKind.video:
-        return videoBaseUri;
-      case MediaDeliveryKind.attachment:
-        return attachmentBaseUri;
+  /// Creates the resolver view available to a non-launched UI.
+  ///
+  /// It never invents an authority: missing endpoints remain unavailable and
+  /// resolve to no public URL. The normal constructor remains the only full
+  /// runtime-package constructor.
+  static MediaEndpointConfig? tryCreateAvailable({
+    required String avatarBaseUrl,
+    required String imageBaseUrl,
+    required String videoBaseUrl,
+    required String attachmentBaseUrl,
+  }) {
+    try {
+      return MediaEndpointConfig._(
+        _availableBases(
+          avatarBaseUrl: avatarBaseUrl,
+          imageBaseUrl: imageBaseUrl,
+          videoBaseUrl: videoBaseUrl,
+          attachmentBaseUrl: attachmentBaseUrl,
+        ),
+      );
+    } on ArgumentError {
+      return null;
     }
   }
 
+  final Map<MediaDeliveryKind, Uri> _bases;
+
+  Uri baseFor(MediaDeliveryKind kind) {
+    final base = _bases[kind];
+    if (base == null) {
+      throw MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.endpointUnavailable,
+        '未注入 ${kind.name} 媒体交付端点',
+      );
+    }
+    return base;
+  }
+
   bool allowsOrigin(MediaDeliveryKind kind, Uri candidate) {
-    return _sameOrigin(baseFor(kind), candidate);
+    final base = _bases[kind];
+    return base != null && _sameOrigin(base, candidate);
+  }
+
+  static Map<MediaDeliveryKind, Uri> _availableBases({
+    required String avatarBaseUrl,
+    required String imageBaseUrl,
+    required String videoBaseUrl,
+    required String attachmentBaseUrl,
+    bool requireAll = false,
+  }) {
+    final declared = <MediaDeliveryKind, String>{
+      MediaDeliveryKind.avatar: avatarBaseUrl,
+      MediaDeliveryKind.image: imageBaseUrl,
+      MediaDeliveryKind.video: videoBaseUrl,
+      MediaDeliveryKind.attachment: attachmentBaseUrl,
+    };
+    if (requireAll && declared.values.any((value) => value.trim().isEmpty)) {
+      throw ArgumentError('完整运行时媒体端点不可为空');
+    }
+    final bases = <MediaDeliveryKind, Uri>{};
+    for (final entry in declared.entries) {
+      if (entry.value.trim().isEmpty) {
+        continue;
+      }
+      bases[entry.key] = _parseHttpsBase(
+        entry.value,
+        '${entry.key.name}BaseUrl',
+      );
+    }
+    final imageBase = bases[MediaDeliveryKind.image];
+    if (imageBase != null) {
+      bases[MediaDeliveryKind.background] = imageBase;
+    }
+    return Map<MediaDeliveryKind, Uri>.unmodifiable(bases);
   }
 
   static Uri _parseHttpsBase(String raw, String name) {
@@ -110,6 +165,7 @@ class MediaDeliveryReference {
 
 enum MediaDeliveryResolutionFailure {
   emptyReference,
+  endpointUnavailable,
   unsupportedScheme,
   untrustedOrigin,
   invalidCanonicalPath,

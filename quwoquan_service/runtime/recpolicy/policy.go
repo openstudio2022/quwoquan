@@ -328,6 +328,31 @@ type Guardrail struct {
 	Action         string  `yaml:"action" json:"action"`
 }
 
+// RecallFusionConfig 是多路召回合并的轻量融合策略（W9/B10，S0 反过度设计：
+// policy 权重表 + 源配额，不做 RRF；融合公式升级只改本配置的消费实现，契约不变）。
+// SourceQuotaPct：recallPath → 该源候选数占召回池的百分比上限（未登记 = 不限）。
+// SourceBoost：recallPath → 精排分乘数（未登记 = 1.0；fact 优先原则下 boost
+// 只做源间校准，不得用于伪造单条内容分）。
+type RecallFusionConfig struct {
+	Enabled        bool               `yaml:"enabled" json:"enabled"`
+	SourceQuotaPct map[string]int     `yaml:"sourceQuotaPct" json:"sourceQuotaPct"`
+	SourceBoost    map[string]float64 `yaml:"sourceBoost" json:"sourceBoost"`
+}
+
+// ObjectCardConfig 是首页混合对象卡（实体主页/用户/圈子卡）的注入策略（S0 插卡
+// 模式）：对象卡由独立召回器产出、按固定间隔混排进内容流，不进入内容候选池。
+// Enabled=false 或 EveryN<=0 即零成本关闭（运营可配可回滚）。
+type ObjectCardConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// EveryN 每 N 条内容后注入 1 张对象卡（anchorIndex = N, 2N, ...）。
+	EveryN int `yaml:"everyN" json:"everyN"`
+	// MaxCards 单页对象卡上限（防对象卡挤占内容主体）。
+	MaxCards int `yaml:"maxCards" json:"maxCards"`
+	// AllowedKinds 允许注入的对象卡类别闭集（entity_homepage/user_card/circle_card）。
+	// S0 只开 entity_homepage；user_card/circle_card 为 S1 触发开启。
+	AllowedKinds []string `yaml:"allowedKinds" json:"allowedKinds"`
+}
+
 // RecPolicy is the full recommendation scoring policy.
 type RecPolicy struct {
 	Version       int                     `yaml:"version" json:"version"`
@@ -347,6 +372,8 @@ type RecPolicy struct {
 	ExposureGovernance ExposureGovernanceConfig `yaml:"exposureGovernance" json:"exposureGovernance"`
 	OpsIntervention    OpsInterventionConfig    `yaml:"opsIntervention" json:"opsIntervention"`
 	ABAdmission        ABAdmissionConfig        `yaml:"abAdmission" json:"abAdmission"`
+	ObjectCards        ObjectCardConfig         `yaml:"objectCards" json:"objectCards"`
+	RecallFusion       RecallFusionConfig       `yaml:"recallFusion" json:"recallFusion"`
 }
 
 // ResolvedPolicy is the per-request resolved scoring configuration for a user
@@ -501,6 +528,55 @@ func (p *RecPolicy) Validate() error {
 	}
 	if err := validateABAdmission(p.ABAdmission); err != nil {
 		return err
+	}
+	if err := validateObjectCards(p.ObjectCards); err != nil {
+		return err
+	}
+	if err := validateRecallFusion(p.RecallFusion); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRecallFusion(cfg RecallFusionConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	for source, pct := range cfg.SourceQuotaPct {
+		if pct <= 0 || pct > 100 {
+			return fmt.Errorf("recpolicy: recallFusion.sourceQuotaPct[%s] must be in (0,100], got %d", source, pct)
+		}
+	}
+	for source, boost := range cfg.SourceBoost {
+		if boost <= 0 || boost > 5 {
+			return fmt.Errorf("recpolicy: recallFusion.sourceBoost[%s] must be in (0,5], got %v", source, boost)
+		}
+	}
+	return nil
+}
+
+func validateObjectCards(cfg ObjectCardConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if cfg.EveryN <= 0 {
+		return errors.New("recpolicy: objectCards.everyN must be > 0 when enabled")
+	}
+	if cfg.MaxCards <= 0 {
+		return errors.New("recpolicy: objectCards.maxCards must be > 0 when enabled")
+	}
+	allowed := map[string]bool{
+		"entity_homepage": true,
+		"user_card":       true,
+		"circle_card":     true,
+	}
+	if len(cfg.AllowedKinds) == 0 {
+		return errors.New("recpolicy: objectCards.allowedKinds required when enabled")
+	}
+	for _, kind := range cfg.AllowedKinds {
+		if !allowed[kind] {
+			return fmt.Errorf("recpolicy: objectCards.allowedKinds contains unknown kind %q", kind)
+		}
 	}
 	return nil
 }

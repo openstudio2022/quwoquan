@@ -73,10 +73,23 @@ func waitForEvent(t *testing.T, channel string, timeout time.Duration) (mqpkg.Do
 	}
 }
 
+// fixedRecipientResolver 让直连发布测试把事件 fan-out 到固定接收者，
+// 从而在既有的 rt:user:{recipientId} 通道上断言收到。
+func fixedRecipientResolver(recipients ...string) *mqpkg.MemberRecipientResolver {
+	return mqpkg.NewMemberRecipientResolver(
+		func(context.Context, string) ([]string, error) {
+			return recipients, nil
+		},
+	)
+}
+
 // publishDirect publishes a domain event via EventPublisher, bypassing HTTP handlers.
-func publishDirect(t *testing.T, evt mqpkg.DomainEvent) {
+func publishDirect(t *testing.T, evt mqpkg.DomainEvent, recipients ...string) {
 	t.Helper()
-	publisher := mqpkg.NewEventPublisher(redisRouter.Scene("realtime"))
+	publisher := mqpkg.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		fixedRecipientResolver(recipients...),
+	)
 	if err := publisher.Publish(context.Background(), evt); err != nil {
 		t.Fatalf("publishDirect: %v", err)
 	}
@@ -93,7 +106,7 @@ func TestEventPublish_MessageSent(t *testing.T) {
 	// Wait for the ConversationCreated goroutine to complete before subscribing
 	time.Sleep(200 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -139,7 +152,7 @@ func TestEventPublish_MessageRecalled(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -177,7 +190,7 @@ func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 	// Create path publishes ConversationRosterUpdated in a goroutine; wait it out.
 	time.Sleep(300 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -217,14 +230,17 @@ func TestEventPublish_ConversationRosterUpdatedOnAddMembers(t *testing.T) {
 	}
 }
 
-func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
+// 事务 outbox 取代了 debounce 直发：每个成员命令在提交事务内追加一个
+// ConversationRosterUpdated，revision 单调递增；客户端按 revision 幂等
+// 定点拉取，因此不再合并事件，可靠性优先。
+func TestEventPublish_ConversationRosterUpdatedPerCommandWithMonotonicRevision(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"group","title":"roster debounce"}`)
+	conv := createConversation(t, `{"type":"group","title":"roster per command"}`)
 	convId := conv["id"].(string)
 	time.Sleep(300 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -237,9 +253,9 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_a"]}`, "user_test_001", http.StatusOK)
 	doPost(t, "/chat/conversations/"+convId+"/members", `{"userIds":["user_merge_b"]}`, "user_test_001", http.StatusOK)
 
-	rosterCount := 0
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
+	revisions := make([]float64, 0, 2)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && len(revisions) < 2 {
 		select {
 		case raw := <-sub.Channel():
 			var evt mqpkg.DomainEvent
@@ -247,17 +263,21 @@ func TestEventPublish_ConversationRosterUpdatedDebouncedMerge(t *testing.T) {
 				t.Fatalf("unmarshal: %v", err)
 			}
 			if evt.Type == conversationevent.ConversationRosterUpdated {
-				rosterCount++
-				if rosterCount > 1 {
-					t.Fatalf("expected single merged roster event, got %d", rosterCount)
+				revision, ok := evt.Payload["membersRosterRevision"].(float64)
+				if !ok {
+					t.Fatalf("membersRosterRevision type %T", evt.Payload["membersRosterRevision"])
 				}
+				revisions = append(revisions, revision)
 			}
 		default:
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	if rosterCount != 1 {
-		t.Fatalf("expected exactly 1 ConversationRosterUpdated after debounce window, got %d", rosterCount)
+	if len(revisions) != 2 {
+		t.Fatalf("expected one roster event per member command, got %d", len(revisions))
+	}
+	if revisions[1] <= revisions[0] {
+		t.Fatalf("roster revision must be monotonic, got %v", revisions)
 	}
 }
 
@@ -271,7 +291,7 @@ func TestEventPublish_ConversationMemberRemoved(t *testing.T) {
 	// Let debounced ConversationRosterUpdated from AddMembers flush before we subscribe for RemoveMember.
 	time.Sleep(300 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -313,7 +333,7 @@ func TestEventPublish_ConversationCreated(t *testing.T) {
 	// give it a brief moment to fire, then verify via a second operation:
 	// send a message on the same channel and check we got ConversationCreated
 	// before or after it.
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -339,7 +359,7 @@ func TestEventPublish_ConversationUserSettingsChanged(t *testing.T) {
 	conv := createConversation(t, `{"type":"direct","title":"settings event","initialMemberIds":["user_test_002"]}`)
 	convId := conv["id"].(string)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -375,7 +395,7 @@ func TestEventPublish_ConversationReadWatermarkAdvanced(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -410,7 +430,7 @@ func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 	conv := createConversation(t, `{"type":"group","title":"assistant event"}`)
 	convId := conv["id"].(string)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -446,7 +466,7 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 	convId := conv["id"].(string)
 	doPost(t, "/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -493,7 +513,7 @@ func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 	convId := "fixture_assistant_removed_event_conv"
 	seedConversationWithAssistantMember(t, convId, "user_test_001", "assistant remove event", "general")
 
-	channel := "rt:conversation:" + convId
+	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -544,8 +564,12 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	convId := "test-conv-event-roundtrip"
-	publisher := mqpkg.NewEventPublisher(redisRouter.Scene("realtime"))
-	channel := "rt:conversation:" + convId
+	const recipient = "user_test_001"
+	publisher := mqpkg.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		fixedRecipientResolver(recipient),
+	)
+	channel := "rt:user:" + recipient
 
 	ctx := context.Background()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -596,8 +620,12 @@ func TestEventPublish_BatchPublish(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	convId := "test-conv-batch-events"
-	publisher := mqpkg.NewEventPublisher(redisRouter.Scene("realtime"))
-	channel := "rt:conversation:" + convId
+	const recipient = "user_batch_recipient"
+	publisher := mqpkg.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		fixedRecipientResolver(recipient),
+	)
+	channel := "rt:user:" + recipient
 
 	ctx := context.Background()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
@@ -639,9 +667,10 @@ func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 		conversationevent.ConversationCreated,
 		conversationevent.ConversationRosterUpdated,
 		conversationevent.ConversationAvatarUpdated,
-		conversationevent.ConversationArchived,
+		conversationevent.ConversationDissolved,
 		membershipevent.ConversationMemberAdded,
 		membershipevent.ConversationMemberRemoved,
+		membershipevent.ConversationMemberLeft,
 		membershipevent.ConversationMemberRoleChanged,
 		userstateevent.ConversationReadWatermarkAdvanced,
 		userstateevent.ConversationUserSettingsChanged,
@@ -668,12 +697,16 @@ func TestEventPublish_ChannelFormat(t *testing.T) {
 		ConversationID: "abc-123",
 	}
 
-	// Verify channel() returns the expected format by checking
-	// that publishing to a subscribe on the expected channel works.
+	// 会话事件按可信身份 fan-out 到每个接收者的 per-user 通道
+	// （rt:user:{recipientId}），与 realtime-gateway 订阅契约同源。
 	t.Cleanup(func() { cleanAll(t) })
 
-	publisher := mqpkg.NewEventPublisher(redisRouter.Scene("realtime"))
-	expectedChannel := "rt:conversation:abc-123"
+	const recipient = "user_channel_format"
+	publisher := mqpkg.NewEventPublisher(
+		redisRouter.Scene("realtime"),
+		fixedRecipientResolver(recipient),
+	)
+	expectedChannel := "rt:user:" + recipient
 
 	ctx := context.Background()
 	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, expectedChannel)

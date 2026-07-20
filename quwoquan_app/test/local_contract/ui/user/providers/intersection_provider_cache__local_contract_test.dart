@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
@@ -88,9 +89,9 @@ void main() {
 
   group('authorImpactProvider 短时去重', () {
     test('TTL 窗口内重复读取仅触发一次 GetAuthorImpact', () async {
-      final repo = _CountingUserProfileRepository();
+      final repo = _CountingAuthorImpactQuery();
       final container = ProviderContainer(
-        overrides: [userProfileRepositoryProvider.overrideWithValue(repo)],
+        overrides: [authorImpactQueryProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -103,9 +104,9 @@ void main() {
     });
 
     test('不同 userId 各自取数互不串用', () async {
-      final repo = _CountingUserProfileRepository();
+      final repo = _CountingAuthorImpactQuery();
       final container = ProviderContainer(
-        overrides: [userProfileRepositoryProvider.overrideWithValue(repo)],
+        overrides: [authorImpactQueryProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
@@ -140,9 +141,6 @@ class _CountingIntersectionRepository implements IntersectionRepository {
   }
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
-
-  @override
   Future<List<IntersectionReason>> getObjectIntersections({
     required String objectId,
     required String objectType,
@@ -172,9 +170,7 @@ class _PendingIntersectionRepository extends _CountingIntersectionRepository {
   }
 }
 
-class _CountingUserProfileRepository extends MockUserProfileRepository {
-  _CountingUserProfileRepository() : super();
-
+final class _CountingAuthorImpactQuery implements AuthorImpactQuery {
   final Map<String, int> impactCalls = <String, int>{};
 
   @override
@@ -184,6 +180,20 @@ class _CountingUserProfileRepository extends MockUserProfileRepository {
       authorId: userId,
       total: 0,
       items: const <AuthorImpactItem>[],
+    );
+  }
+
+  @override
+  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
+    required String subAccountId,
+    required String impactId,
+    String evidenceSnapshotId = '',
+    String cursor = '',
+    int limit = 20,
+  }) async {
+    return AuthorImpactEvidencePage(
+      impactId: impactId,
+      evidenceSnapshotId: evidenceSnapshotId,
     );
   }
 }

@@ -9,22 +9,25 @@ from content.execution.controller.homepage_author_evidence import (
 def _finalize_managed_homepage_outputs(
     ctx: ExecutionContext,
     prompts: list[str],
-    outcomes: list[dict[str, Any]],
-) -> int:
+    outcomes: list["ManagedAgentJobOutcome"],
+) -> tuple["ManagedAgentJobOutcome", ...]:
     """Finalize a completed homepage author run before materializing its page."""
     from content.execution.agent.agent_checkpoint import _managed_prompt_entity
+    from content.execution.agent.outcome import ManagedAgentJobOutcome
     from core.article_package import compute_document_sha256
     from content.post.article.draft_io import is_placeholder
     from core.schema import assert_valid
     from content.homepage.homepage_review import _entity_draft_dir
     from content.homepage.homepage_release import materialize_entity_page
-    finalized = 0
-    for index, outcome in enumerate(outcomes):
-        if str(outcome.get("status") or "") != "finished":
+    finalized: list[ManagedAgentJobOutcome] = []
+    for job_outcome in outcomes:
+        if not job_outcome.succeeded:
+            finalized.append(job_outcome)
             continue
-        prompt = prompts[index] if index < len(prompts) else ""
+        prompt = prompts[job_outcome.job_index] if job_outcome.job_index < len(prompts) else ""
         entity = _managed_prompt_entity(prompt)
         if not entity:
+            finalized.append(job_outcome)
             continue
         etype = coverage_entity_type(ctx.spec)
         target = next(
@@ -36,33 +39,34 @@ def _finalize_managed_homepage_outputs(
             None,
         )
         if not target:
+            finalized.append(job_outcome)
             continue
         domain, et = require_domain_etype(target.entity_type, context=entity)
         draft_dir = _entity_draft_dir(ctx.execution_id, domain, et, entity)
         draft_dir.mkdir(parents=True, exist_ok=True)
         meta_path = draft_dir / "draft_meta.json"
         meta = read_json(meta_path) if meta_path.is_file() else {}
-        run_id = str(outcome.get("runId") or "").strip()
+        outcome = job_outcome.outcome
+        run_id = outcome.run_id
         if not run_id:
+            finalized.append(job_outcome)
             continue
         draft_page = draft_dir / "page.md"
         if not draft_page.is_file():
-            outcome["status"] = "error"
-            outcome["error"] = "homepage author finished without 4.draft/page.md"
+            finalized.append(job_outcome.with_gate_issues(("homepage author finished without 4.draft/page.md",)))
             continue
         draft_text = draft_page.read_text(encoding="utf-8")
         if is_placeholder(draft_text):
-            outcome["status"] = "error"
-            outcome["error"] = "homepage author finished with placeholder 4.draft/page.md"
+            finalized.append(job_outcome.with_gate_issues(("homepage author finished with placeholder 4.draft/page.md",)))
             continue
         meta.update(
             {
                 "generator": "agent",
                 "status": "completed",
-                "provider": str(outcome.get("agentProvider") or meta.get("provider") or ctx.agent_provider),
+                "provider": outcome.provider.value,
                 "model": ctx.model,
                 "agentRunId": run_id,
-                "agentId": outcome.get("agentId"),
+                "agentId": outcome.agent_id or None,
                 "draftSha256": compute_document_sha256(draft_text),
                 "selfCheck": {"status": "passed", "issues": []},
                 "sessionTrace": "build_homepage",
@@ -83,8 +87,7 @@ def _finalize_managed_homepage_outputs(
                 draft_meta=meta,
             )
         except (OSError, ValueError, TypeError) as exc:
-            outcome["status"] = "error"
-            outcome["error"] = f"homepage author evidence failed: {exc}"
+            finalized.append(job_outcome.with_gate_issues((f"homepage author evidence failed: {exc}",)))
             continue
         try:
             materialize_issues = materialize_entity_page(
@@ -95,20 +98,17 @@ def _finalize_managed_homepage_outputs(
             )
         except Exception as exc:  # noqa: BLE001
             issue = _homepage_finalization_unexpected_issue(entity, exc)
-            outcome["status"] = "error"
-            outcome["error"] = issue.message
-            outcome["issueRecords"] = [issue.as_dict()]
+            finalized.append(job_outcome.with_gate_issues((issue.message,)))
             continue
         if materialize_issues:
-            outcome["status"] = "error"
-            outcome["error"] = (
-                "homepage finalize after agent failed: "
-                + "; ".join(str(item) for item in materialize_issues[:8])
+            finalized.append(
+                job_outcome.with_gate_issues(
+                    tuple(str(item) for item in materialize_issues[:20]),
+                )
             )
-            outcome["gateIssues"] = [str(item) for item in materialize_issues[:20]]
             continue
-        finalized += 1
-    return finalized
+        finalized.append(job_outcome)
+    return tuple(finalized)
 
 def _finalize_existing_object_queue_author_outputs(ctx: ExecutionContext, refs: list[str]) -> int:
     """补齐外部 fanout/object_queue author-runner 已成功草稿的 provenance。
@@ -125,15 +125,19 @@ def _finalize_existing_object_queue_author_outputs(ctx: ExecutionContext, refs: 
         read_draft_meta,
         read_writing_pack,
     )
-    from content.execution.queue.core import STATE_SUCCEEDED, _job_path, stable_job_id
+    from content.execution.queue.core import (
+        STATE_SUCCEEDED,
+        _read_job,
+        stable_job_id,
+    )
     finalized = 0
     for ref in refs:
         job_id = stable_job_id(ctx.execution_id, ref, "author")
         try:
-            job = read_json(_job_path(ctx.execution_id, job_id))
+            job = _read_job(ctx.execution_id, job_id)
         except Exception:  # noqa: BLE001
             continue
-        if str(job.get("state") or "") != STATE_SUCCEEDED:
+        if job.state is not STATE_SUCCEEDED:
             continue
         try:
             article_path = draft_article_path(ctx.execution_id, ref)
@@ -162,8 +166,8 @@ def _finalize_existing_object_queue_author_outputs(ctx: ExecutionContext, refs: 
                 "generator": "agent",
                 "status": "completed",
                 "model": meta.get("model") or ctx.model,
-                "agentRunId": meta.get("agentRunId") or job.get("lastAgentRunId"),
-                "agentId": meta.get("agentId") or job.get("lastAgentId"),
+                "agentRunId": meta.get("agentRunId") or job.agent_run_id,
+                "agentId": meta.get("agentId") or "",
                 "citedSourcePaths": [str(item) for item in cited_paths],
                 "promptSha256": facts.get("promptSha256"),
                 "writingPackSha256": facts.get("writingPackSha256"),

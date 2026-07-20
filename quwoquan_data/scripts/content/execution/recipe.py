@@ -125,6 +125,7 @@ _INSTANCE_PARAM_ATTRS = {
     "name": "name",
     "title": "title",
     "intentLabel": "intent_label",
+    "homepageExecutionId": "homepage_execution_id",
     "mandatory": "mandatory",
     "limit": "limit",
 }
@@ -261,17 +262,28 @@ def _readiness(
 ) -> None:
     """Single-execution readiness; no secondary identity or fan-out aggregate exists."""
     readiness = recipe.get("readiness") or {}
-    argv = ["verify", "execution-readiness", "--execution-id", execution_id]
+    argv = [
+        "verify",
+        "execution-readiness",
+        "--execution-id",
+        execution_id,
+        "--min-pass-rate",
+        str(float(readiness.get("minPassRate", 1.0))),
+        "--mode",
+        str(readiness.get("mode") or "commercial"),
+    ]
     if bool(readiness.get("requireReviewed", False)):
         argv.append("--require-reviewed")
+    if bool(readiness.get("failOnNoGo", False)):
+        argv.append("--fail-on-no-go")
     rc = invoke(argv)
     if rc != 0:
         raise SystemExit(f"[task execute] execution-readiness rc={rc}")
     return
 
 
-def _env_ready_argv(execution_id: str) -> list[str]:
-    evidence = execution_root(execution_id) / "evidence" / "environment_readiness.json"
+def _runtime_preflight_argv(execution_id: str) -> list[str]:
+    evidence = execution_root(execution_id) / "evidence" / "runtime_preflight.json"
     return [
         "task",
         "preflight",
@@ -366,7 +378,6 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             raise SystemExit(
                 f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
             ) from exc
-        write_execution_model_readiness(execution_id, model_readiness)
 
     execution_spec_id = _ensure_execution_spec(
         recipe,
@@ -383,6 +394,8 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         target_set_sha256=frozen_target_set_sha256(execution_id),
         retry_of=manifest_retry_of,
     )
+    if stage != "plan-only":
+        write_execution_model_readiness(execution_id, model_readiness)
     _contract_gate(recipe, execution_spec_id)
     from content.execution import prepare_execution_qualification
 
@@ -393,7 +406,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if stage == "readiness-only":
         _readiness(recipe, execution_id, invoke)
         return
-    rc = invoke(_env_ready_argv(execution_id))
+    rc = invoke(_runtime_preflight_argv(execution_id))
     if rc != 0:
         raise SystemExit(f"[task execute] task preflight rc={rc}")
     _execute(
@@ -427,6 +440,7 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             parameters = cold_start_execution_parameters(
                 execution_id=execution_id,
                 retry_of=getattr(args, "retry_of", None),
+                homepage_execution_id=getattr(args, "homepage_execution_id", None),
             )
             province = parameters.province
             limit = parameters.limit
@@ -438,8 +452,13 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         raise SystemExit(f"[task execute] GATE_BLOCK execution={execution_id}: {exc}") from exc
     region = f"中国/{province}"
     discovery = f"quwoquan_data/verticals/travel/coverage/中国/{province}"
-    label = _geo_label(region, identity.milestone.value)
-    name = f"{province}主页{identity.milestone.value}"
+    if rollout_id == cold_start_rollout:
+        kind = identity.content_type.value
+        name = f"{province}冷启动{kind}{identity.milestone.value}"
+        label = name.replace("_", "").replace("-", "")
+    else:
+        label = _geo_label(region, identity.milestone.value)
+        name = f"{province}主页{identity.milestone.value}"
     _run_execution(
         argparse.Namespace(
             execution_id=execution_id,
@@ -448,6 +467,7 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             recover_stage=getattr(args, "recover_stage", None),
             recovery_reason=getattr(args, "recovery_reason", None),
             rollout=rollout_id,
+            homepage_execution_id=getattr(args, "homepage_execution_id", None),
             discovery=discovery,
             limit=limit,
             region=region,
@@ -468,6 +488,10 @@ def register_recipe_parser(sub: argparse._SubParsersAction) -> None:
     )
     pg.add_argument("--execution-id", required=True, help="唯一 executionId")
     pg.add_argument("--retry-of", help="新 sequence 重试时指向原 executionId")
+    pg.add_argument(
+        "--homepage-execution-id",
+        help="文章/图片/视频执行必须绑定同省同档已 canonical 的 homepage executionId",
+    )
     from governance.coverage.cold_start_supply import load_cold_start_supply_policy
 
     pg.add_argument(

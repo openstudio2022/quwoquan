@@ -3,8 +3,8 @@ package application
 import "context"
 
 type RelationshipCapability struct {
-	IsMutual bool
-	IsBlocked bool
+	IsMutual    bool
+	IsBlocked   bool
 	IsBlockedBy bool
 }
 

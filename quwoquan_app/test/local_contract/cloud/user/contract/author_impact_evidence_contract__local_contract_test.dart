@@ -12,11 +12,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
 const _subAccountId = 'fixture_user_current';
@@ -25,22 +27,22 @@ void main() {
   group('ListAuthorImpactEvidence response_body 框架契约（R-ID02）', () {
     test('kind=object、model=AuthorImpactEvidencePage', () {
       expect(
-        ContentApiMetadata.operationToResponseKind[
-            ContentApiMetadata.listAuthorImpactEvidenceOperation],
+        ContentApiMetadata.operationToResponseKind[ContentApiMetadata
+            .listAuthorImpactEvidenceOperation],
         'object',
       );
       expect(
-        ContentApiMetadata.operationToResponseModel[
-            ContentApiMetadata.listAuthorImpactEvidenceOperation],
+        ContentApiMetadata.operationToResponseModel[ContentApiMetadata
+            .listAuthorImpactEvidenceOperation],
         'AuthorImpactEvidencePage',
       );
     });
   });
 
-  group('RemoteUserProfileRepository.listAuthorImpactEvidence（端云解码/翻页）', () {
+  group('RemoteAuthorImpactQuery.listAuthorImpactEvidence（端云解码/翻页）', () {
     late List<http.Request> captured;
 
-    RemoteUserProfileRepository repoReturning(List<Map<String, dynamic>> pages) {
+    RemoteAuthorImpactQuery repoReturning(List<Map<String, dynamic>> pages) {
       captured = <http.Request>[];
       var call = 0;
       final client = MockClient((request) async {
@@ -53,7 +55,7 @@ void main() {
           headers: <String, String>{'content-type': 'application/json'},
         );
       });
-      return RemoteUserProfileRepository(
+      return RemoteAuthorImpactQuery(
         httpClient: CloudHttpClient(client: client),
         baseUrl: _baseUrl,
       );
@@ -137,15 +139,15 @@ void main() {
     });
   });
 
-  group('MockUserProfileRepository.listAuthorImpactEvidence（无 seed 安全）', () {
-    late UserProfileRepository repo;
+  group('ProfileQuery alpha fixture（无 seed 安全）', () {
+    late AuthorImpactQuery query;
 
     setUp(() {
-      repo = const MockUserProfileRepository();
+      query = const MockUserProfileRepository();
     });
 
     test('未命中作者/impact 返回空页（不编造、不崩溃）', () async {
-      final page = await repo.listAuthorImpactEvidence(
+      final page = await query.listAuthorImpactEvidence(
         subAccountId: 'no_such_author',
         impactId: 'no_such_impact',
       );
@@ -155,7 +157,7 @@ void main() {
     });
 
     test('alpha lite 无 authorImpact seed：本人作者亦返回空页（不阻塞、不造假）', () async {
-      final page = await repo.listAuthorImpactEvidence(
+      final page = await query.listAuthorImpactEvidence(
         subAccountId: _subAccountId,
         impactId: 'imp_anything',
       );

@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-18T01:35:45.772508Z
+updated_at: 2026-07-20T14:35:49.873809Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -9,6 +9,13 @@ features:
       status: specified
       tags: []
       children:
+        - id: assistant-runtime-foundation
+          name: assistant-runtime-foundation
+          level: L2_business_capability
+          path: assistant-run-learning/assistant-runtime-foundation
+          domain: ""
+          status: specified
+          tags: []
         - id: learning-event-feedback-injection
           name: learning-event-feedback-injection
           level: L2_business_capability
@@ -246,6 +253,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: interaction-notification-inbox
+              name: interaction-notification-inbox
+              level: L3_story
+              path: chat-conversation/commercial-message-system/interaction-notification-inbox
+              domain: ""
+              status: specified
+              tags: []
             - id: message-home-commercial-ia
               name: message-home-commercial-ia
               level: L3_story
@@ -268,6 +282,20 @@ features:
           status: specified
           tags: []
           children:
+            - id: conversation-entry-matrix
+              name: conversation-entry-matrix
+              level: L3_story
+              path: chat-conversation/contact-and-session-governance/conversation-entry-matrix
+              domain: ""
+              status: specified
+              tags: []
+            - id: greeting-request-inbox-and-upgrade
+              name: greeting-request-inbox-and-upgrade
+              level: L3_story
+              path: chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade
+              domain: ""
+              status: specified
+              tags: []
             - id: session-audit-observability
               name: session-audit-observability
               level: L3_story
@@ -304,6 +332,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: group-candidate-source-orchestration
+              name: group-candidate-source-orchestration
+              level: L3_story
+              path: chat-conversation/group-creation-member-management/group-candidate-source-orchestration
+              domain: ""
+              status: specified
+              tags: []
             - id: group-create-flow
               name: group-create-flow
               level: L3_story
@@ -361,6 +396,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: assistant-in-conversation
+              name: assistant-in-conversation
+              level: L3_story
+              path: chat-conversation/list-detail-message-delivery/assistant-in-conversation
+              domain: ""
+              status: specified
+              tags: []
             - id: conversation-list-source-switch
               name: conversation-list-source-switch
               level: L3_story
@@ -1266,6 +1308,20 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: filter-catalog-release
+              name: filter-catalog-release
+              level: L3_story
+              path: discovery-content/publish-comment-reaction/filter-catalog-release
+              domain: ""
+              status: specified
+              tags: []
+            - id: image-editing
+              name: image-editing
+              level: L3_story
+              path: discovery-content/publish-comment-reaction/image-editing
+              domain: ""
+              status: specified
+              tags: []
             - id: post-create-update
               name: post-create-update
               level: L3_story
@@ -1298,6 +1354,13 @@ features:
               name: reaction-state-counter--reaction-counter-consistency
               level: L3_story
               path: discovery-content/publish-comment-reaction/reaction-state-counter--reaction-counter-consistency
+              domain: ""
+              status: specified
+              tags: []
+            - id: text-post-commercial-publication
+              name: text-post-commercial-publication
+              level: L3_story
+              path: discovery-content/publish-comment-reaction/text-post-commercial-publication
               domain: ""
               status: specified
               tags: []
@@ -1661,6 +1724,21 @@ features:
       status: specified
       tags: []
       children:
+        - id: commercial-readiness-risk-closure
+          name: commercial-readiness-risk-closure
+          level: L2_business_capability
+          path: platform-ops-governance/commercial-readiness-risk-closure
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: zero-risk-production-readiness
+              name: zero-risk-production-readiness
+              level: L3_story
+              path: platform-ops-governance/commercial-readiness-risk-closure/zero-risk-production-readiness
+              domain: ""
+              status: specified
+              tags: []
         - id: config-and-reliability-governance
           name: config-and-reliability-governance
           level: L2_business_capability
@@ -2159,6 +2237,28 @@ features:
           domain: ""
           status: specified
           tags: []
+          children:
+            - id: assistant-mentioned-consumer
+              name: assistant-mentioned-consumer
+              level: L3_story
+              path: runtime/runtime-assistant/assistant-mentioned-consumer
+              domain: ""
+              status: specified
+              tags: []
+            - id: context-grounded-answering
+              name: context-grounded-answering
+              level: L3_story
+              path: runtime/runtime-assistant/context-grounded-answering
+              domain: ""
+              status: specified
+              tags: []
+            - id: proactive-subscription-delivery
+              name: proactive-subscription-delivery
+              level: L3_story
+              path: runtime/runtime-assistant/proactive-subscription-delivery
+              domain: ""
+              status: specified
+              tags: []
         - id: runtime-client-foundation
           name: runtime-client-foundation
           level: L2_business_capability
@@ -2491,6 +2591,20 @@ features:
               name: geo-content-trinity
               level: L3_story
               path: runtime/runtime-data-engineering/geo-content-trinity
+              domain: ""
+              status: specified
+              tags: []
+            - id: image-commercial-scale-closure
+              name: image-commercial-scale-closure
+              level: L3_story
+              path: runtime/runtime-data-engineering/image-commercial-scale-closure
+              domain: ""
+              status: specified
+              tags: []
+            - id: video-commercial-scale-closure
+              name: video-commercial-scale-closure
+              level: L3_story
+              path: runtime/runtime-data-engineering/video-commercial-scale-closure
               domain: ""
               status: specified
               tags: []
@@ -2960,6 +3074,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: repository-layout-hygiene-and-retirement
+              name: repository-layout-hygiene-and-retirement
+              level: L3_story
+              path: runtime/system-architecture-and-engineering-guide/repository-layout-hygiene-and-retirement
+              domain: ""
+              status: specified
+              tags: []
     - id: shared-homepage-network
       name: shared-homepage-network
       level: L1_domain_service
@@ -3076,13 +3197,6 @@ features:
               domain: ""
               status: specified
               tags: []
-    - id: templates
-      name: templates
-      level: L1_domain_service
-      path: templates
-      domain: ""
-      status: specified
-      tags: []
     - id: user-identity-profile-relationship
       name: user-identity-profile-relationship
       level: L1_domain_service
@@ -3306,6 +3420,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: account-lifecycle--self-service-account-closure
+              name: account-lifecycle--self-service-account-closure
+              level: L3_story
+              path: user-identity-profile-relationship/settings-and-device-token/account-lifecycle--self-service-account-closure
+              domain: ""
+              status: specified
+              tags: []
             - id: appearance-accessibility-settings
               name: appearance-accessibility-settings
               level: L3_story

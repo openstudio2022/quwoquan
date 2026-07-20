@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -28,6 +29,7 @@ FORBIDDEN_SOURCE_TRUTH_DIRS = frozenset(
     }
 )
 OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset({"cache", "node_modules", "site-packages"})
+FORBIDDEN_LOCAL_TARGETS = frozenset({"python-envs"})
 EXPECTED_OUTPUT_CONSUMPTION = {
     "same_execution_stage",
     "derived_release_deployment",
@@ -116,6 +118,12 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                 for target in sorted(local.iterdir()):
                     if not target.is_dir():
                         issues.append(f"{_rel(target)}: local target must be a directory")
+                        continue
+                    if target.name in FORBIDDEN_LOCAL_TARGETS:
+                        issues.append(
+                            f"{_rel(target)}: interpreter caches belong in the external tool cache, "
+                            "never under disposable output"
+                        )
                         continue
                     for child in sorted(target.iterdir()):
                         if not child.is_dir() or child.name not in {"process", "cache"}:

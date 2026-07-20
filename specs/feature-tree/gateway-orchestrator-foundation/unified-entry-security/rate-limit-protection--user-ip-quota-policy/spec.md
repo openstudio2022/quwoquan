@@ -1,4 +1,4 @@
-# L4 特性：user-ip-quota-policy
+# L3 特性：user-ip-quota-policy
 
 ## 功能说明
 - 待补充

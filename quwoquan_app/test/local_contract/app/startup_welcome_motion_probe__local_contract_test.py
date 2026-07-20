@@ -37,7 +37,7 @@ class StartupWelcomeMotionProbeContractTest(unittest.TestCase):
         )
 
         self.assertTrue(report["passed"], report)
-        self.assertEqual(report["motionSpecVersion"], "petal_bloom_v2")
+        self.assertEqual(report["motionSpec"], "petal_bloom")
         self.assertTrue(report["gatheringOrderValid"])
         self.assertTrue(report["bloomingOrderValid"])
         self.assertEqual(report["monotonicViolations"], [])

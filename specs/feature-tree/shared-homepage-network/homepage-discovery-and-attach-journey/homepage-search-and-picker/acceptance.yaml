@@ -7,45 +7,75 @@ node:
   parent_domain_service: shared-homepage-network
   parent_business_capability: homepage-discovery-and-attach-journey
 scope:
-  summary: homepage search and picker 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 主页搜索候选列表与发布挂载选择器的最小闭环。
+  in_scope:
+  - 主页搜索输入、候选结果摘要（名称/类目/城市/评分摘要）。
+  - 选择器选中后返回 HomepagePickerSelectionResult 回填发布上下文。
+  out_of_scope:
+  - 搜索无结果时的补充主页流程（missing-homepage-suggestion-and-review）。
+  - 主页详情完整消费。
 gwt_acceptance:
   GWT1:
-    title: homepage search and picker GWT
+    title: 用户搜索主页并在选择器中确认候选
     given:
-    - 前置条件明确。
+    - 已发布主页存在于搜索投影（fixture entity_homepage_core 或 gamma seed）。
     when:
-    - 用户或系统动作发生。
+    - 用户在 homepagePicker 输入关键词并点击候选。
     then:
-    - 可观察结果符合预期。
+    - 候选列表展示名称、类目、城市与评分摘要，可区分同名主页。
+    - 选中后以 HomepagePickerSelectionResult 返回调用方，原上下文不丢失。
+    - 搜索失败/空结果展示结构化错误态或空态，不回退假数据。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - picker 页 loading/error/empty/populated 四态齐备且选择结果可回填。
+    edge_cases:
+    - 关键词无命中时展示空态与补充主页入口。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    performance_points:
+    - SearchHomepages p95 < 800ms（service.yaml slo 同源）。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_picker/homepage_picker_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_search_and_picker.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_search_and_picker.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_search_and_picker.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        execution_profile: release
+        suite: journey
+        cases:
+        - user_acceptance.shared_homepage_network.homepage_discovery_and_attach_journey.homepage_search_and_picker.journey
+        envs:
+        - gamma_local
+    notes:
+    - "2026-07-20 M9 商用化审查：planned 三层证据文件均已在磁盘存在；当前 entity-service packet 迁移与 search repository 改造（并行批次）处于中间态导致编译阻塞，跑绿后回填 recorded 并升 completed。"
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

@@ -3,7 +3,6 @@
   "p50": {
     "firstVisibleMs": 600
   },
-  "sourceBaseline": "specs/gates/startup_ttid_ratchet_baseline.json",
   "note": "2026-06-26 arm64 release + deferred plugins; branded content TTID P50=600ms (emulator API35)",
   "schema": "startup-ttid-ratchet-baseline"
 }

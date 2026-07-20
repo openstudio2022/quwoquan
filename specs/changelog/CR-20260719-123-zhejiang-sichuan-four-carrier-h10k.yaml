@@ -1,0 +1,35 @@
+id: CR-20260719-123-zhejiang-sichuan-four-carrier-h10k
+title: 浙江四川四载体 H10K 商业放量合同
+slug: zhejiang-sichuan-four-carrier-h10k
+revision: 1
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage
+  - specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure
+  - specs/feature-tree/runtime/runtime-data-engineering/image-commercial-scale-closure
+  - specs/feature-tree/runtime/runtime-data-engineering/video-commercial-scale-closure
+entries:
+  - timestamp: "2026-07-19T21:00:00+08:00"
+    summary: |
+      将浙江、四川实体主页、文章、图片、真实源视频拆为四个独立车道；
+      统一 Canary、H200、H1000、H10K 的真实 accepted/canonical/immutable
+      release/Gamma/App/rollback 完成口径。主页范围扩展为至少 12,000 个
+      唯一 source-ready 候选并冻结每省 5,000；新增 image/video L3 Story。
+      H100K 不实际生产，只允许依据 H10K 权威成本、吞吐、队列、存储/CDN/VOD
+      与 24h soak 外推。
+    reason: |
+      历史 acceptance 允许 estimated token ledger、text-only 文章、图片序列视频
+      或 assembled artifact 冒充商业完成，且图片、视频没有独立 L3 验收，无法对
+      四车道 10,000 条真实发布作出诚实结论。
+    change_type:
+      - spec
+      - contract
+      - local_contract
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_data/tests/local_contract/release/test_rollout_milestone__behavior__functional__local_contract_test.py
+    notes: |
+      本 CR 保持 in_progress。只有四车道各自 H10K 的真实 release、Gamma/API/App UAT、
+      rollback/replay 与权威 unitPassedCost 全部落盘后，才能改为 completed。

@@ -23,6 +23,20 @@ type SearchLoadObserver interface {
 	SetInflight(inflight int)
 }
 
+// RecentSearchObservation 是 RecentSearchState 公开 operation 的有界观测 DTO。
+// Operation/Status 都由 handler 的闭集常量产生，禁止把 query、persona 或 entry id
+// 放进 metric label。
+type RecentSearchObservation struct {
+	Operation string
+	Status    string
+	Seconds   float64
+}
+
+// RecentSearchObserver 记录最近搜索读写路径的吞吐、错误率和延迟。
+type RecentSearchObserver interface {
+	ObserveRecentSearch(observation RecentSearchObservation)
+}
+
 // RelatedTermsCacheObserver 记录热词缓存命中情况。
 type RelatedTermsCacheObserver interface {
 	ObserveRelatedTermsCache(hit bool)

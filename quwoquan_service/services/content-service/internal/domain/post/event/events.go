@@ -3,15 +3,16 @@ package event
 
 // Event type constants for Post.
 const (
-	PostPublished       = "PostPublished"
-	PostUpdated         = "PostUpdated"
-	PostSettingsUpdated = "PostSettingsUpdated"
-	PostPromotedToWork  = "PostPromotedToWork"
-	PostDeleted         = "PostDeleted"
-	PostQuoted          = "PostQuoted"
-	ContentViewed       = "ContentViewed"
-	PostPrivacyRedacted = "PostPrivacyRedacted"
-	PostPurged          = "PostPurged"
-	PostImported        = "PostImported"
-	PostTombstoned      = "PostTombstoned"
+	PostSubmittedForReview = "PostSubmittedForReview"
+	PostPublished          = "PostPublished"
+	PostModerationRejected = "PostModerationRejected"
+	PostUpdated            = "PostUpdated"
+	PostSettingsUpdated    = "PostSettingsUpdated"
+	PostPromotedToWork     = "PostPromotedToWork"
+	PostDeleted            = "PostDeleted"
+	ContentViewed          = "ContentViewed"
+	PostPrivacyRedacted    = "PostPrivacyRedacted"
+	PostPurged             = "PostPurged"
+	PostImported           = "PostImported"
+	PostTombstoned         = "PostTombstoned"
 )

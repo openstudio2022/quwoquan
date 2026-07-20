@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import mimetypes
 import shutil
 import sys
 from pathlib import Path
@@ -35,6 +36,7 @@ CHAT_SCENARIO = "messages/chat/test_fixtures/scenarios/chat_scenarios.json"
 CURATED_REFS: dict[str, list[str]] = {
     CONTENT_SCENARIO: [
         "content_discovery_core",
+        "comment_thread_core",
         "intersection_core",
         "home_showcase_core",
         "profile_share_interaction_core",
@@ -44,6 +46,10 @@ CURATED_REFS: dict[str, list[str]] = {
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "greeting_core",
+        "subject_follow_core",
+        "contact_discovery_core",
+        "following_subject_core",
     ],
     CIRCLE_SCENARIO: [
         "circle_core",
@@ -376,11 +382,14 @@ def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
 
 def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
     manifest = read_json(MEDIA_DELIVERY_MANIFEST)
-    manifest_keys = {
-        str(item.get("publicSliceKey") or "").strip()
+    manifest_mime_types = {
+        str(item.get("publicSliceKey") or "").strip(): str(
+            item.get("mimeType") or "",
+        ).strip()
         for item in manifest.get("assets") or []
         if isinstance(item, dict) and str(item.get("publicSliceKey") or "").strip()
     }
+    manifest_keys = set(manifest_mime_types)
     fixture_keys = {
             ref
             for relative_path in curated_paths
@@ -394,15 +403,11 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
         if not path.is_file():
             raise SystemExit(f"missing curated media object: {path.relative_to(ROOT)}")
         raw = path.read_bytes()
-        mime_type = "image/png"
-        if path.suffix.lower() in {".jpg", ".jpeg"}:
-            mime_type = "image/jpeg"
-        elif path.suffix.lower() == ".webp":
-            mime_type = "image/webp"
-        elif path.suffix.lower() == ".mp4":
-            mime_type = "video/mp4"
-        elif path.suffix.lower() == ".txt":
-            mime_type = "text/plain"
+        mime_type = (
+            manifest_mime_types.get(object_key)
+            or mimetypes.guess_type(path.name)[0]
+            or "application/octet-stream"
+        )
         if mime_type.startswith("image/"):
             image_count += 1
         media_objects.append(

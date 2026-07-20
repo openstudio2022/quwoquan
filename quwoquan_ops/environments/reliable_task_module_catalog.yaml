@@ -275,6 +275,16 @@ modules:
     allowOnebox: false
     allowStandalonePackage: true
 
+  # platform-ops-service：平台控制面（配置分层/发布执行/告警回流/审计），
+  # Postgres 承载 config layer 与 controlplane 事实，outbox 经 Redis 发布 events.ops.*。
+  platform.api:
+    domain: platform
+    capabilities: [api]
+    requiredStores: [platform.postgres]
+    requiredQueues: []
+    planes: [platform-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
   ops.task_outbox_dispatcher:
     domain: ops
     capabilities: [outbox_dispatch]
@@ -484,8 +494,7 @@ tasks:
     payloadAllowlist:
       - schema
       - jobId
-      - taskId
-      - batchId
+      - executionId
       - ref
       - stage
       - partitionKey

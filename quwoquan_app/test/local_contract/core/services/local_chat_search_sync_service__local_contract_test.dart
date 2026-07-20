@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.d
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';

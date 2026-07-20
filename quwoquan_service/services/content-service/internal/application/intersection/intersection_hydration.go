@@ -773,7 +773,21 @@ func primaryStatementSpansForReason(
 	if anchor.SourceRef == "commonContact" {
 		objectName = concreteObjectNameForReason(r)
 	}
-	if objectName == "" || target == nil {
+	if objectName == "" {
+		// V3 计数降级句（与 countedFallbackPrimaryText 同源模板）：主语 spans 保留
+		// 代表人可点击锚点，谓语 + 纯计数宾语为 plain——join(spans)==primaryText 成立。
+		predicate := countedFallbackPredicate(anchor.SourceRef)
+		phrase := countedFallbackObjectPhrase(anchor.SourceRef, anchor.Count)
+		if predicate == "" || phrase == "" {
+			return nil
+		}
+		subject := representativeSubjectSpans(r, anchor)
+		if len(subject) == 0 {
+			return nil
+		}
+		return append(subject, plainSpan(predicate+phrase))
+	}
+	if target == nil {
 		return nil
 	}
 	subject := representativeSubjectSpans(r, anchor)

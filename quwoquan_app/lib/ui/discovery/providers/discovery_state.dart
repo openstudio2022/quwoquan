@@ -12,7 +12,6 @@ class DiscoveryUiState {
     this.feedData = const <String, List<Post>>{},
     this.isLoading = const <String, bool>{},
     this.errorMessages = const <String, String?>{},
-    this.followingUsers = const {'nature_photographer', 'travel_photographer'},
     this.likedPosts = const <String>{},
     this.postLikesCount = const <String, int>{},
     this.postSharesCount = const <String, int>{},
@@ -28,7 +27,6 @@ class DiscoveryUiState {
   final Map<String, List<Post>> feedData;
   final Map<String, bool> isLoading;
   final Map<String, String?> errorMessages;
-  final Set<String> followingUsers;
   final Set<String> likedPosts;
   final Map<String, int> postLikesCount;
   final Map<String, int> postSharesCount;
@@ -49,7 +47,6 @@ class DiscoveryUiState {
     Map<String, List<Post>>? feedData,
     Map<String, bool>? isLoading,
     Map<String, String?>? errorMessages,
-    Set<String>? followingUsers,
     Set<String>? likedPosts,
     Map<String, int>? postLikesCount,
     Map<String, int>? postSharesCount,
@@ -66,7 +63,6 @@ class DiscoveryUiState {
       feedData: feedData ?? this.feedData,
       isLoading: isLoading ?? this.isLoading,
       errorMessages: errorMessages ?? this.errorMessages,
-      followingUsers: followingUsers ?? this.followingUsers,
       likedPosts: likedPosts ?? this.likedPosts,
       postLikesCount: postLikesCount ?? this.postLikesCount,
       postSharesCount: postSharesCount ?? this.postSharesCount,
@@ -115,23 +111,6 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     state = state.copyWith(errorMessages: next);
   }
 
-  void toggleFollow(String username) {
-    final next = state.followingUsers.contains(username)
-        ? (Set<String>.from(state.followingUsers)..remove(username))
-        : ({...state.followingUsers, username});
-    state = state.copyWith(followingUsers: next);
-  }
-
-  void setFollowState(String subAccountId, bool isFollowing) {
-    final next = Set<String>.from(state.followingUsers);
-    if (isFollowing) {
-      next.add(subAccountId);
-    } else {
-      next.remove(subAccountId);
-    }
-    state = state.copyWith(followingUsers: next);
-  }
-
   /// [baseLikesCount] 帖子原始点赞数，首次点赞时用于与本地状态合并，保证详情与列表一致
   void toggleLike(String postId, {int? baseLikesCount}) {
     if (state.likedPosts.contains(postId)) {
@@ -178,18 +157,9 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
 
   void applyMediaViewerResult(MediaViewerResult result) {
     final scopePostIds = result.effectiveScopePostIds;
-    final scopeProfileIds = result.effectiveScopeProfileIds;
-    final nextFollowing = Set<String>.from(state.followingUsers);
     final nextLiked = Set<String>.from(state.likedPosts);
     final nextLikeCounts = Map<String, int>.from(state.postLikesCount);
     final nextShareCounts = Map<String, int>.from(state.postSharesCount);
-    for (final profileId in scopeProfileIds) {
-      if (result.followingUsers.contains(profileId)) {
-        nextFollowing.add(profileId);
-      } else {
-        nextFollowing.remove(profileId);
-      }
-    }
     for (final postId in scopePostIds) {
       if (result.likedPosts.contains(postId)) {
         nextLiked.add(postId);
@@ -206,7 +176,6 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
       }
     }
     state = state.copyWith(
-      followingUsers: nextFollowing,
       likedPosts: nextLiked,
       postLikesCount: nextLikeCounts,
       postSharesCount: nextShareCounts,
@@ -254,11 +223,6 @@ final feedDataProvider = Provider<Map<String, List<Post>>>((ref) {
   return ref.watch(discoveryStateProvider).feedData;
 });
 
-final followingUsersProvider = Provider<Set<String>>((ref) {
-  return ref.watch(discoveryStateProvider).followingUsers;
-});
-
 final likedPostsProvider = Provider<Set<String>>((ref) {
   return ref.watch(discoveryStateProvider).likedPosts;
 });
-

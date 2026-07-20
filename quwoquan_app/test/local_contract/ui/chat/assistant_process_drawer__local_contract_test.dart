@@ -6,7 +6,7 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
@@ -264,7 +264,7 @@ void main() {
       expect(viewModel.activeStageId, ProcessStepId.retrievalProcessing);
       expect(
         viewModel.activeStageLabel,
-        UITextConstants.assistantProcessStageRetrievalProcessing,
+        AssistantText.assistantProcessStageRetrievalProcessing,
       );
       expect(
         viewModel.blocks.any(
@@ -342,7 +342,7 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessLongWaitReassurance),
+        find.text(AssistantText.assistantProcessLongWaitReassurance),
         findsNothing,
       );
     });
@@ -359,7 +359,7 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessLongWaitReassurance),
+        find.text(AssistantText.assistantProcessLongWaitReassurance),
         findsNothing,
       );
       expect(find.text('耗时 2 秒'), findsOneWidget);
@@ -377,12 +377,12 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.assistantProcessRunningSummary),
+        find.text(AssistantText.assistantProcessRunningSummary),
         findsOneWidget,
       );
       expect(find.text('耗时 9 秒'), findsOneWidget);
       expect(
-        find.text(UITextConstants.assistantProcessStageUnderstand),
+        find.text(AssistantText.assistantProcessStageUnderstand),
         findsNothing,
       );
     });
@@ -451,15 +451,15 @@ void main() {
       expect(find.text('接纳 1 篇'), findsOneWidget);
       expect(find.textContaining('搜索了 1 篇'), findsOneWidget);
       expect(
-        find.text(UITextConstants.assistantProcessStageUnderstand),
+        find.text(AssistantText.assistantProcessStageUnderstand),
         findsNothing,
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageRetrievalProcessing),
+        find.text(AssistantText.assistantProcessStageRetrievalProcessing),
         findsNothing,
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageAnswer),
+        find.text(AssistantText.assistantProcessStageAnswer),
         findsNothing,
       );
       expect(find.text('查找信息'), findsNothing);

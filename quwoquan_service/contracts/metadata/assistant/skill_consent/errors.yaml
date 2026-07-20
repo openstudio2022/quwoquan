@@ -16,3 +16,28 @@ errors:
     user_message:
       zh: "请先登录"
       en: "Please sign in first"
+
+  - code: ASSISTANT.USER.consent_invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: consentInvalidArgument
+    go_const: ErrConsentInvalidArgument
+    l10n_key: assistant.error.consent_invalid_argument
+    user_message:
+      zh: "授权请求参数有误"
+      en: "Consent request is invalid"
+
+  - code: ASSISTANT.SYSTEM.consent_unavailable
+    kind: SYSTEM
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: consentUnavailable
+    go_const: ErrConsentUnavailable
+    l10n_key: assistant.error.consent_unavailable
+    user_message:
+      zh: "授权服务暂不可用，敏感能力已按未授权处理"
+      en: "Consent service is unavailable; sensitive capabilities are treated as not granted"

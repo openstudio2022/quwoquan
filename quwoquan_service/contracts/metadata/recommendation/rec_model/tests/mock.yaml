@@ -1,0 +1,6 @@
+# 曝光/反馈事实是服务内闭环对象（content-service 写入、rec-model-service 训练消费），
+# App 端只经行为上报间接贡献信号，无直接 mock fixture 场景。
+entities: [RecommendationExposureFact, RecommendationFeedbackFact]
+layer: app_side
+
+scenarios: []

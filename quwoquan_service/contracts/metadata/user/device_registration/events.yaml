@@ -1,14 +1,4 @@
 aggregate: DeviceRegistration
-events:
-  - name: DeviceRegistered
-    producer: user-service
-    consumers: [projection-workers]
-    channel: event_store
-    payload_entity: UserDevice
-    payload_fields: [id]
-  - name: DeviceRegistrationRevoked
-    producer: user-service
-    consumers: [projection-workers]
-    channel: event_store
-    payload_entity: UserDevice
-    payload_fields: [id]
+# endpoint 投递由 internal named reader 按需解析；upsert/remove/invalidate 均在
+# DeviceRegistration PostgreSQL aggregate transaction 内完成，当前无事件消费者。
+events: []

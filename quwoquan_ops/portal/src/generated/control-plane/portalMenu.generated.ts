@@ -44,28 +44,14 @@ export const portalMenu = {
     {
       "menu_id": "platform-config-center",
       "parent_menu_id": "platform-config",
-      "label": "配置中心",
+      "label": "配置快照（IaC 只读）",
       "domain": "platform-ops",
-      "route_path": "/platform/config/layers",
+      "route_path": "/platform/config/snapshot",
       "icon": "settings-2",
       "order": 211,
       "permission_scope": "ops.platform.config.read",
       "object_types": [
-        "service_config",
-        "config_layer_value"
-      ]
-    },
-    {
-      "menu_id": "platform-config-packages",
-      "parent_menu_id": "platform-config",
-      "label": "配置包",
-      "domain": "platform-ops",
-      "route_path": "/platform/config/packages",
-      "icon": "package",
-      "order": 212,
-      "permission_scope": "ops.platform.config.read",
-      "object_types": [
-        "config_package"
+        "service_config"
       ]
     },
     {
@@ -110,20 +96,6 @@ export const portalMenu = {
       ]
     },
     {
-      "menu_id": "platform-governance",
-      "parent_menu_id": "platform-ops",
-      "label": "治理策略",
-      "domain": "platform-ops",
-      "route_path": "/platform/governance",
-      "icon": "shield-check",
-      "order": 24,
-      "permission_scope": "ops.platform.governance.read",
-      "object_types": [
-        "governance_policy_template",
-        "governance_policy_binding"
-      ]
-    },
-    {
       "menu_id": "platform-rollout",
       "parent_menu_id": "platform-ops",
       "label": "灰度与回滚",
@@ -137,36 +109,6 @@ export const portalMenu = {
       ]
     },
     {
-      "menu_id": "platform-dependency",
-      "parent_menu_id": "platform-ops",
-      "label": "环境与依赖",
-      "domain": "platform-ops",
-      "route_path": "/platform/dependency",
-      "icon": "network",
-      "order": 25,
-      "permission_scope": "ops.platform.dependency.read",
-      "object_types": [
-        "environment_topology",
-        "dependency_profile",
-        "capacity_profile"
-      ]
-    },
-    {
-      "menu_id": "platform-topology-cluster",
-      "parent_menu_id": "platform-dependency",
-      "label": "集群与实例",
-      "domain": "platform-ops",
-      "route_path": "/platform/dependency/clusters",
-      "icon": "network",
-      "order": 251,
-      "permission_scope": "ops.platform.dependency.read",
-      "object_types": [
-        "runtime_cluster",
-        "runtime_service",
-        "runtime_instance"
-      ]
-    },
-    {
       "menu_id": "platform-observability",
       "parent_menu_id": "platform-ops",
       "label": "可观测与 SLO",
@@ -176,35 +118,7 @@ export const portalMenu = {
       "order": 26,
       "permission_scope": "ops.platform.observability.read",
       "object_types": [
-        "slo_policy",
-        "alert_template",
-        "dashboard_card"
-      ]
-    },
-    {
-      "menu_id": "platform-runbook",
-      "parent_menu_id": "platform-ops",
-      "label": "Runbook 与演练",
-      "domain": "platform-ops",
-      "route_path": "/platform/runbook",
-      "icon": "book-open-text",
-      "order": 27,
-      "permission_scope": "ops.platform.runbook.read",
-      "object_types": [
-        "runbook"
-      ]
-    },
-    {
-      "menu_id": "platform-gates",
-      "parent_menu_id": "platform-ops",
-      "label": "CI/CD 门禁",
-      "domain": "platform-ops",
-      "route_path": "/platform/gates",
-      "icon": "badge-check",
-      "order": 28,
-      "permission_scope": "ops.platform.gate.read",
-      "object_types": [
-        "gate_rule"
+        "active_alert"
       ]
     },
     {
@@ -216,9 +130,9 @@ export const portalMenu = {
       "order": 30,
       "permission_scope": "ops.product.read",
       "object_types": [
-        "moderation_case",
-        "experiment",
-        "recommendation_policy"
+        "report_queue",
+        "premium_pool_entry",
+        "l1l4_metric_snapshot"
       ]
     },
     {
@@ -244,10 +158,22 @@ export const portalMenu = {
       "order": 32,
       "permission_scope": "ops.case.read",
       "object_types": [
-        "moderation_case",
-        "report_queue",
-        "appeal_case",
-        "recovery_case"
+        "report_queue"
+      ]
+    },
+    {
+      "menu_id": "entity-homepage-governance",
+      "parent_menu_id": "product-ops",
+      "label": "实体主页治理",
+      "domain": "product-ops",
+      "route_path": "/product/entity-homepage-governance",
+      "icon": "building",
+      "order": 33,
+      "permission_scope": "ops.case.read",
+      "object_types": [
+        "homepage_candidate_queue",
+        "homepage_claim_request_queue",
+        "homepage_status_report_queue"
       ]
     },
     {
@@ -257,11 +183,10 @@ export const portalMenu = {
       "domain": "product-ops",
       "route_path": "/product/recommendation",
       "icon": "chart-spline",
-      "order": 33,
+      "order": 34,
       "permission_scope": "ops.reco.read",
       "object_types": [
-        "recommendation_policy",
-        "recommendation_override"
+        "premium_pool_entry"
       ]
     },
     {
@@ -292,116 +217,17 @@ export const portalMenu = {
       ]
     },
     {
-      "menu_id": "product-l1-l4-drilldown",
-      "parent_menu_id": "product-l1-l4",
-      "label": "集群下钻",
-      "domain": "product-ops",
-      "route_path": "/product/l1-l4/cluster",
-      "icon": "chart-area",
-      "order": 342,
-      "permission_scope": "ops.product.dashboard.read",
-      "object_types": [
-        "l1l4_metric_snapshot",
-        "runtime_cluster"
-      ]
-    },
-    {
       "menu_id": "product-l1-l4-service",
       "parent_menu_id": "product-l1-l4",
       "label": "服务下钻",
       "domain": "product-ops",
       "route_path": "/product/l1-l4/service",
       "icon": "chart-area",
-      "order": 343,
+      "order": 342,
       "permission_scope": "ops.product.dashboard.read",
       "object_types": [
         "l1l4_metric_snapshot",
-        "runtime_cluster",
         "runtime_service"
-      ]
-    },
-    {
-      "menu_id": "product-l1-l4-instance",
-      "parent_menu_id": "product-l1-l4",
-      "label": "实例下钻",
-      "domain": "product-ops",
-      "route_path": "/product/l1-l4/instance",
-      "icon": "chart-area",
-      "order": 344,
-      "permission_scope": "ops.product.dashboard.read",
-      "object_types": [
-        "l1l4_metric_snapshot",
-        "runtime_cluster",
-        "runtime_service",
-        "runtime_instance"
-      ]
-    },
-    {
-      "menu_id": "entity-homepages",
-      "parent_menu_id": "product-ops",
-      "label": "实体主页运营",
-      "domain": "product-ops",
-      "route_path": "/product/entity-homepages",
-      "icon": "building-2",
-      "order": 35,
-      "permission_scope": "ops.product.homepage.read",
-      "object_types": [
-        "entity_homepage",
-        "homepage_quality_case"
-      ]
-    },
-    {
-      "menu_id": "circles-ops",
-      "parent_menu_id": "product-ops",
-      "label": "圈子运营",
-      "domain": "product-ops",
-      "route_path": "/product/circles-ops",
-      "icon": "users-round",
-      "order": 36,
-      "permission_scope": "ops.product.circle.read",
-      "object_types": [
-        "circle",
-        "circle_scenario"
-      ]
-    },
-    {
-      "menu_id": "xiaoqu-comments",
-      "parent_menu_id": "product-ops",
-      "label": "小趣评论审核",
-      "domain": "product-ops",
-      "route_path": "/product/xiaoqu-comments",
-      "icon": "sparkles",
-      "order": 37,
-      "permission_scope": "ops.product.xiaoqu.read",
-      "object_types": [
-        "assistant_comment",
-        "correction_case"
-      ]
-    },
-    {
-      "menu_id": "experiments",
-      "parent_menu_id": "product-ops",
-      "label": "实验与灰度",
-      "domain": "product-ops",
-      "route_path": "/product/experiments",
-      "icon": "flask-conical",
-      "order": 39,
-      "permission_scope": "ops.experiment.read",
-      "object_types": [
-        "experiment"
-      ]
-    },
-    {
-      "menu_id": "segments",
-      "parent_menu_id": "product-ops",
-      "label": "标签与分群",
-      "domain": "product-ops",
-      "route_path": "/product/segments",
-      "icon": "users-round",
-      "order": 40,
-      "permission_scope": "ops.segment.read",
-      "object_types": [
-        "segment"
       ]
     },
     {
@@ -414,18 +240,6 @@ export const portalMenu = {
       "permission_scope": "ops.audit.read",
       "object_types": [
         "audit_event"
-      ]
-    },
-    {
-      "menu_id": "settings",
-      "label": "系统设置",
-      "domain": "overview",
-      "route_path": "/settings",
-      "icon": "panel-left-close",
-      "order": 50,
-      "permission_scope": "ops.settings.read",
-      "object_types": [
-        "portal_settings"
       ]
     }
   ]

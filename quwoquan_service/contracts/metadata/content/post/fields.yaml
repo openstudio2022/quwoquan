@@ -96,6 +96,16 @@ entities:
         ops_exposure: read
         description: 用户可见的虚拟创作者披露信息
 
+      - name: sourceAttribution
+        source: sourceAttribution
+        type: SourceAttribution
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+        description: 外部来源视频的原创者、来源、权利事实与下架策略；平台发布作者不得覆盖该字段
+
       - name: experienceClaimMode
         source: experienceClaimMode
         type: string
@@ -172,7 +182,7 @@ entities:
       - name: title
         source: title
         type: string
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_LENGTH_80]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
@@ -184,7 +194,7 @@ entities:
       - name: body
         source: body
         type: string
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_LENGTH_5000]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
@@ -217,7 +227,7 @@ entities:
       - name: semanticMentions
         source: semanticMentions
         type: "[]object"
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_ITEMS_30]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
@@ -283,7 +293,7 @@ entities:
       - name: articleMarkdown
         source: articleMarkdown
         type: string
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_LENGTH_20000]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
@@ -388,6 +398,36 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 服务端从已绑定视频 MediaAsset 投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 CAS/object key。端侧播放器只消费经 MediaDeliveryResolver 校验后的 MediaDeliveryReference。
+
+      - name: width
+        source: width
+        type: int
+        constraints: [NULLABLE, POSITIVE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 服务端从 ready MediaAsset 投影的权威视频宽度（px）。
+
+      - name: height
+        source: height
+        type: int
+        constraints: [NULLABLE, POSITIVE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 服务端从 ready MediaAsset 投影的权威视频高度（px）。
+
+      - name: durationMs
+        source: durationMs
+        type: int
+        constraints: [NULLABLE, POSITIVE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 服务端从 ready MediaAsset verifiedDurationMs 投影的权威视频时长（毫秒）。
 
       - name: coverStrategy
         source: coverStrategy
@@ -518,7 +558,7 @@ entities:
       - name: summary
         source: summary
         type: string
-        constraints: [NULLABLE]
+        constraints: [NULLABLE, MAX_LENGTH_240]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
@@ -758,503 +798,77 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  ProfileInteractionActivityView:
-    description: 个人主页互动活动流视图；渲染字段由云侧投影，activityType/direction 仅作观测维度
+  UserAccountClosedProjectionInbox:
+    description: Content 已幂等应用 UserAccountClosed 的 durable inbox，不保存账号或 persona 原值。
     fields:
-      - name: activityId
-        source: activityId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: activityType
-        source: activityType
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: direction
-        source: direction
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: commentKind
-        source: commentKind
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: actorSubAccountId
-        source: actorSubAccountId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: actorDisplayName
-        source: actorDisplayName
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: actorAvatarUrl
-        source: actorAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: counterpartSubAccountId
-        source: counterpartSubAccountId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: counterpartDisplayName
-        source: counterpartDisplayName
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: counterpartAvatarUrl
-        source: counterpartAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: targetSubAccountId
-        source: targetSubAccountId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: targetContentId
-        source: targetContentId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: targetContentType
-        source: targetContentType
-        type: enum
-        enum_ref: ContentType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: targetContentSummary
-        source: targetContentSummary
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: targetKind
-        source: targetKind
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: record/discussion
-      - name: targetAvailability
-        source: targetAvailability
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: active/deleted/private/reviewing/author_deactivated
-      - name: targetReplyCount
-        source: targetReplyCount
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: displaySubAccountId
-        source: displaySubAccountId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: displayName
-        source: displayName
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: displayAvatarUrl
-        source: displayAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: displayUserRouteId
-        source: displayUserRouteId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: primaryText
-        source: primaryText
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: contextText
-        source: contextText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewMediaKind
-        source: previewMediaKind
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewImageUrl
-        source: previewImageUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewText
-        source: previewText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewUnavailable
-        source: previewUnavailable
-        type: bool
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewObjectId
-        source: previewObjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: previewRouteId
-        source: previewRouteId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: outboundShareEventId
-        source: outboundShareEventId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: shareText
-        source: shareText
-        type: string
-        constraints: [NULLABLE]
-        classification: PRIVATE
-        log_policy: redact
-        api_exposure: read
-        ops_exposure: redacted
-      - name: impactPrimaryText
-        source: impactPrimaryText
-        type: string
-        constraints: [NULLABLE]
-        classification: PRIVATE
-        log_policy: redact
-        api_exposure: read
-        ops_exposure: redacted
-      - name: impactDeepLink
-        source: impactDeepLink
-        type: string
-        constraints: [NULLABLE]
-        classification: PRIVATE
-        log_policy: redact
-        api_exposure: read
-        ops_exposure: redacted
-      - name: commentId
-        source: commentId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: parentCommentId
-        source: parentCommentId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: viewerReaction
-        source: viewerReaction
-        type: enum
-        enum_ref: CommentReactionType
-        constraints: [NOT_NULL, DEFAULT_NONE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 当前 viewer 对该互动评论的反应状态：none/like/dislike（互动列表内联赞↔已赞初始态）
-      - name: filterKeys
-        source: filterKeys
-        type: "[]string"
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: createdAt
-        source: createdAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: occurredAt
-        source: occurredAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-      - name: seenAt
-        source: seenAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PRIVATE
-        log_policy: redact
-        api_exposure: read
-        ops_exposure: redacted
-      - name: readAt
-        source: readAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PRIVATE
-        log_policy: redact
-        api_exposure: read
-        ops_exposure: redacted
+      - { name: _id, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, source: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: accountVersion, source: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: mongoAppliedAt, source: mongoAppliedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: completedAt, source: completedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
-  PostSearchItemView:
-    description: 内容搜索结果项视图，用于全局搜索结果分组
+  UserAccountClosedProjectionFailure:
+    description: Content 账户关闭投影的有限重试状态，仅保存不可逆事件与错误摘要并由 TTL 回收。
     fields:
-      - name: postId
-        source: postId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+      - { name: _id, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, source: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: errorDigest, source: errorDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: attempts, source: attempts, type: int64, constraints: [NOT_NULL, DEFAULT_0], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: lastFailedAt, source: lastFailedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: expireAt, source: expireAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
-      - name: contentType
-        source: contentType
-        type: enum
-        enum_ref: ContentType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+  UserAccountClosedSearchWork:
+    description: Content 账户关闭后的外部搜索文档删除工作项；成功后才标记完成并进入 TTL 回收。
+    fields:
+      - { name: _id, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventId, source: eventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: canonicalId, source: canonicalId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: objectType, source: objectType, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: doneAt, source: doneAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: expireAt, source: expireAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
-      - name: contentIdentity
-        source: contentIdentity
-        type: enum
-        enum_ref: ContentIdentity
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+  ClosedAccountAudit:
+    description: 不含账号原始标识的账户关闭审计摘要，不作为防复活查询源。
+    fields:
+      - { name: _id, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, source: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: accountVersion, source: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: subjectCount, source: subjectCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: closedAt, source: closedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: recordedAt, source: recordedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
-      - name: title
-        source: title
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
+  ClosedAccountSubjectTombstone:
+    description: HMAC-SHA256(subjectId) 永久防复活栅栏，不保存账号或 persona 原值且不设 TTL。
+    fields:
+      - { name: _id, source: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: eventDigest, source: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read }
+      - { name: accountVersion, source: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: closedAt, source: closedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
+      - { name: recordedAt, source: recordedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read }
 
-      - name: summary
-        source: summary
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: coverUrl
-        source: coverUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: authorId
-        source: authorId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: authorDisplayName
-        source: authorDisplayName
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: authorAvatarUrl
-        source: authorAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: categoryId
-        source: categoryId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: subCategory
-        source: subCategory
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: likeCount
-        source: likeCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: highlightText
-        source: highlightText
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: matchedField
-        source: matchedField
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: publishedAt
-        source: publishedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: connectionState
-        source: connectionState
-        type: enum
-        enum_values: [connected, unconnected, intersection_lead]
-        constraints: [NOT_NULL, DEFAULT_unconnected]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 搜索分组编排用连接状态；真相源 search_objects.connection_states
-
-      - name: intersectionReason
-        source: intersectionReason
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: |
-          IntersectionReason 子集（primaryText/sourceRef/dimension/intersectionClass/objectKind/
-          avatarUrl/displayName/confidenceLabel）；仅 connectionState=intersection_lead 或
-          discovery 区展示交集句时下发；端只读 primaryText（G2）。
+value_objects:
+  SourceAttribution:
+    fields:
+      - { name: isOriginal, type: bool, constraints: [NOT_NULL] }
+      - { name: originalCreatorId, type: string, constraints: [NULLABLE] }
+      - { name: originalCreatorName, type: string, constraints: [NOT_NULL] }
+      - { name: originalCreatorProfileUrl, type: string, constraints: [NULLABLE] }
+      - { name: platform, type: string, constraints: [NOT_NULL] }
+      - { name: sourcePostUrl, type: string, constraints: [NOT_NULL] }
+      - { name: originalAssetUrl, type: string, constraints: [NOT_NULL] }
+      - { name: attributionText, type: string, constraints: [NOT_NULL] }
+      - { name: rightsBasis, type: string, constraints: [NOT_NULL] }
+      - { name: commercialAuthorizationStatus, type: string, constraints: [NOT_NULL] }
+      - { name: publicationAdmission, type: string, constraints: [NOT_NULL] }
+      - { name: authorizationProofUrl, type: string, constraints: [NULLABLE] }
+      - { name: termsUrl, type: string, constraints: [NULLABLE] }
+      - { name: riskAcceptanceId, type: string, constraints: [NULLABLE] }
+      - { name: watermarkStatus, type: string, constraints: [NOT_NULL] }
+      - { name: audioRightsStatus, type: string, constraints: [NOT_NULL] }
+      - { name: modelReleaseStatus, type: string, constraints: [NOT_NULL] }
+      - { name: propertyReleaseStatus, type: string, constraints: [NOT_NULL] }
+      - { name: collectedAt, type: timestamp, constraints: [NOT_NULL] }
+      - { name: takedownPolicy, type: string, constraints: [NOT_NULL] }

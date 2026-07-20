@@ -344,36 +344,17 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     return matrix;
   }
 
-  List<double> _buildLocalApproxColorMatrix(List<LocalAnchor> anchors) {
-    if (anchors.isEmpty) return _identityColorMatrix();
-    var sumWeight = 0.0;
-    final weighted = <String, double>{
-      for (final key in kLocalParamOrder) key: 0.0,
-    };
-    for (final anchor in anchors) {
-      final weight = (anchor.radius * anchor.radius).clamp(0.0, 1.0);
-      sumWeight += weight;
-      for (final key in kLocalParamOrder) {
-        weighted[key] =
-            (weighted[key] ?? 0) + (anchor.values[key] ?? 0) * weight;
-      }
-    }
-    if (sumWeight <= 0) return _identityColorMatrix();
-    final averaged = <String, double>{
-      for (final entry in weighted.entries) entry.key: entry.value / sumWeight,
-    };
-    return _buildBaseColorMatrixFromValues(averaged);
-  }
-
   List<double> _buildCombinedProColorMatrix({
     bool useHslSessionBaseline = false,
     bool useBwLevelsSessionBaseline = false,
-    bool useLocalSessionBaseline = false,
-    bool includeLocal = true,
+    bool includeWhiteBalance = true,
   }) {
     var matrix = _identityColorMatrix();
     if (_hasProBaseAdjustments) {
       matrix = _multiplyColorMatrices(_buildProBaseColorMatrix(), matrix);
+    }
+    if (includeWhiteBalance && _hasWhiteBalanceAdjustments) {
+      matrix = _multiplyColorMatrices(_buildWhiteBalanceColorMatrix(), matrix);
     }
     final hslSource = useHslSessionBaseline
         ? _hslSessionBaselineValues
@@ -399,20 +380,6 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
         _bwLevelsMatrix(whiteLevel: white, blackLevel: black),
         matrix,
       );
-    }
-    if (includeLocal) {
-      final localSource = useLocalSessionBaseline
-          ? _localSnapshotAnchors
-          : _localAnchors;
-      final hasLocal = localSource.any(
-        (anchor) => anchor.values.values.any((value) => value.abs() > 0.001),
-      );
-      if (hasLocal) {
-        matrix = _multiplyColorMatrices(
-          _buildLocalApproxColorMatrix(localSource),
-          matrix,
-        );
-      }
     }
     return matrix;
   }
@@ -454,26 +421,24 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     );
   }
 
-  Widget _wrapWithProAdjustments(
-    Widget imageWidget, {
-    bool includeLocal = true,
-  }) {
+  Widget _wrapWithProAdjustments(Widget imageWidget) {
     if (!_hasProBaseAdjustments &&
         !_hasProHslAdjustments &&
         !_hasBwLevelsAdjustments &&
-        (!includeLocal || !_hasLocalAdjustments)) {
+        !_hasWhiteBalanceAdjustments) {
       return imageWidget;
     }
     final useBaseline = _isComparingSessionBaseline && _isEditingHsl;
     final useBwBaseline = _isComparingSessionBaseline && _isEditingBwLevels;
-    final useLocalBaseline = _isComparingSessionBaseline && _isEditingLocal;
+    // 白平衡编辑中长按对比原图时不应用 wb 矩阵。
+    final includeWhiteBalance =
+        !(_isComparingSessionBaseline && _isEditingWhiteBalance);
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
         _buildCombinedProColorMatrix(
           useHslSessionBaseline: useBaseline,
           useBwLevelsSessionBaseline: useBwBaseline,
-          useLocalSessionBaseline: useLocalBaseline,
-          includeLocal: includeLocal,
+          includeWhiteBalance: includeWhiteBalance,
         ),
       ),
       child: imageWidget,

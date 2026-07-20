@@ -1,0 +1,20 @@
+entity: AssistantInteractionEvent
+
+scenarios:
+  - name: interaction_event_append_dedupe
+    operation: ReportInteractionEvent
+    go_func: TestInteractionEventAppendDedupe
+    evidence: api_integration
+    assertions:
+      - assistant_interaction_events 集合按 eventId unique 索引 dedupe
+      - 重复 eventId 幂等重放，不产生第二条事实
+      - 学习画像投影更新且失败不阻塞主写
+
+  - name: interaction_event_http_contract
+    operation: ReportInteractionEvent
+    go_func: TestInteractionEventHTTPContract
+    evidence: api_integration
+    assertions:
+      - POST /assistant/learning/events 经 HTTP 写入真实 Mongo
+      - 非法 payload 返回 ASSISTANT.USER.learning_event_invalid
+      - 匿名请求 401

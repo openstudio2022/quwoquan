@@ -1,0 +1,37 @@
+entity: Notification
+
+scenarios:
+  - name: app_message_create_transactional_idempotent
+    operation: CreateAppMessage
+    go_func: TestAppMessageCreateTransactionalIdempotent
+    evidence: api_integration
+    assertions:
+      - app_messages 状态与 outbox 在同一 Mongo transaction 提交
+      - 同一 idempotencyKey 重放返回首个 AppMessage，不产生第二条
+      - service principal 缺失或 scope 不符返回结构化 401/403
+
+  - name: interaction_event_projects_exactly_one_app_message
+    operation: CreateAppMessage
+    go_func: TestInteractionNotificationStreamProjectsOnce
+    evidence: api_integration
+    assertions:
+      - 七源业务事件经 durable Redis Stream 消费后各生成一条 AppMessage
+      - 幂等键 notify:{eventType}:{eventId} 保证事件重放不重复
+      - 自互动、取关、reaction 清除与 allowStrangerGreeting=false 的打招呼不生成通知
+      - 消费失败进入失败计数与 DLQ stream，不阻塞后续事件
+
+  - name: inbox_pagination_and_type_filter
+    operation: ListAppMessages
+    go_func: TestAppMessageInboxPagination
+    evidence: api_integration
+    assertions:
+      - 只返回 recipient 本人的 AppMessage（owner 隔离，跨 actor 返回空/404）
+      - type/read 过滤与 cursor 分页稳定无重叠
+
+  - name: read_ack_monotonic_and_unread_count
+    operation: ReadAppMessage
+    go_func: TestAppMessageReadAckUnreadCount
+    evidence: api_integration
+    assertions:
+      - ack/read 只能由 recipient 推进且时间戳单调，重复标记幂等
+      - GetAppMessageUnreadCount 与 read 推进同步收敛

@@ -34,7 +34,7 @@ entries:
       - migrate
       - cleanup
     changed_documents:
-      - path: specs/feature-tree/global-search-experience/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - cross-domain-search-journey.l3
       - path: specs/feature-tree/global-search-experience/spec.md
@@ -109,7 +109,7 @@ entries:
         sections:
           - A1
           - S1
-      - path: specs/feature-tree/chat-conversation/tree.yaml
+      - path: specs/feature-tree/tree_index.yaml
         sections:
           - contact-and-session-governance.l3
       - path: specs/feature-tree/README.md

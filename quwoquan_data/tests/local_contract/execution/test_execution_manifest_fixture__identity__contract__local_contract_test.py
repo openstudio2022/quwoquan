@@ -24,6 +24,18 @@ def test_existing_manifest_is_revalidated_not_accepted_by_existence() -> None:
     resumed = build_execution_fixture(EXECUTION_ID, targets=targets)
 
     assert resumed == first
+    assert first["modelBinding"] == {
+        "provider": "cursor_sdk",
+        "authorModel": "composer-2.5",
+        "authorModelFamily": "composer",
+        "reviewerModel": "gpt-5.5",
+        "reviewerModelFamily": "gpt",
+    }
+    assert first["pricingRevision"]
+    assert first["rolloutContract"]["path"].endswith(
+        "two_province_homepage_rollout.yaml"
+    )
+    assert len(first["rolloutContract"]["sha256"]) == 64
     with pytest.raises(ValueError, match="different frozen target set"):
         build_execution_fixture(
             EXECUTION_ID,

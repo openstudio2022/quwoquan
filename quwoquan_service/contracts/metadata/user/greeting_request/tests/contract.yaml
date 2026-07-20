@@ -1,0 +1,51 @@
+aggregate: GreetingRequest
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 PostgreSQL）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  postgres: embedded-postgres
+
+spy_targets: [event_publisher]
+mock_targets: [chat_service_client]
+
+scenarios:
+  - name: send_greeting_receipt_and_outbox
+    command: SendGreetingRequest
+    assertions:
+      - greeting_row_pending
+      - state_receipt_outbox_same_transaction
+      - event_GreetingRequestSent_from_outbox_relay
+
+  - name: duplicate_pending_rejected
+    command: SendGreetingRequest x2 (same pair)
+    assertions:
+      - error_USER.GREETING.duplicate_pending
+      - only_one_pending_row
+
+  - name: reply_promotes_conversation
+    command: ReplyGreetingRequest
+    seed: [pending_greeting]
+    assertions:
+      - status_replied_with_promoted_conversation_id
+      - event_GreetingRequestReplied_published
+
+  - name: blocked_sender_rejected
+    command: SendGreetingRequest to blocked target
+    seed: [persona_relationship_block]
+    assertions:
+      - error_USER.GREETING.target_blocked_sender
+      - no_greeting_row_created
+
+  - name: rate_limit_enforced
+    command: SendGreetingRequest over daily quota
+    assertions:
+      - error_USER.GREETING.rate_limited
+
+  - name: cancel_only_requester_only_pending
+    command: CancelGreetingRequest
+    assertions:
+      - foreign_actor_gets_not_found
+      - replied_request_gets_invalid_status_transition

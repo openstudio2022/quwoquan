@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 Widget _buildCreatePageApp({String? initialTabKey}) {
   return ProviderScope(
@@ -121,4 +124,108 @@ void main() {
       '/tmp/d.jpg',
     ]);
   });
+
+  testWidgets('创作页会话失效后登录成功续接原图片选择动作', (tester) async {
+    var pickerLaunches = 0;
+    final router = GoRouter(
+      initialLocation: '/create-test',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/create-test',
+          builder: (context, state) => CreatePage(
+            initialTabKey: 'photo',
+            mediaPickerLauncher:
+                (
+                  context, {
+                  required mode,
+                  required maxSelection,
+                  initialPaths = const <String>[],
+                }) async {
+                  pickerLaunches += 1;
+                  return null;
+                },
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => const Scaffold(
+            body: SizedBox(key: ValueKey<String>('create-login-sentinel')),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...mockContentFacetOverrides(MockContentRepository()),
+          circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+          authSessionControllerProvider.overrideWith(
+            _FlippableCreateSession.new,
+          ),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (context, _) => MaterialApp.router(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+
+    await tester.tap(find.byKey(TestKeys.createMediaAddButton).first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('create-login-sentinel')),
+      findsOneWidget,
+    );
+    expect(pickerLaunches, 0);
+    final pending = container.read(authContinuationProvider);
+    expect(pending, isA<ResumeCreateActionContinuation>());
+    expect(
+      (pending! as ResumeCreateActionContinuation).action,
+      CreateActionContinuationKind.pickImages,
+    );
+    expect(
+      GoRouterState.of(
+        tester.element(
+          find.byKey(const ValueKey<String>('create-login-sentinel')),
+        ),
+      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.safeFallback.name,
+    );
+
+    (container.read(authSessionControllerProvider.notifier)
+            as _FlippableCreateSession)
+        .loginNow();
+    router.pop();
+    await tester.pumpAndSettle();
+
+    expect(pickerLaunches, 1);
+    expect(container.read(authContinuationProvider), isNull);
+  });
+}
+
+class _FlippableCreateSession extends AuthSessionController {
+  @override
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
+
+  void loginNow() {
+    state = const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'create-test-token',
+      ownerId: 'create-test-owner',
+      activeSubAccountId: 'create-test-persona',
+    );
+  }
 }

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -13,6 +12,7 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// 创作 Tab（V5）：二级子页恰为 全部/图片/视频/长文，全链路无「微趣/moment」概念。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -30,8 +30,8 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
@@ -70,9 +70,7 @@ void main() {
     expect(ids.contains('moment'), isFalse);
   });
 
-  testWidgets('创作 Tab 二级过滤改为内联横滑二级页签，全部/图片/视频/长文常驻可见', (
-    tester,
-  ) async {
+  testWidgets('创作 Tab 二级过滤改为内联横滑二级页签，全部/图片/视频/长文常驻可见', (tester) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -112,10 +110,7 @@ void main() {
 
     // 数量统计放到二级页签之下，仍可见。
     expect(
-      find.descendant(
-        of: subTabs,
-        matching: find.textContaining('条记录'),
-      ),
+      find.descendant(of: subTabs, matching: find.textContaining('条记录')),
       findsOneWidget,
     );
 

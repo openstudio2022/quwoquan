@@ -8,6 +8,11 @@ collections:
       - { name: idx_tag_ref, keys: { tagRef: 1 }, unique: true }
       - { name: idx_tag_group, keys: { group: 1 } }
       - { name: idx_parent_lifecycle_tagref, keys: { parentTagRef: 1, lifecycleStatus: 1, tagRef: 1 }, key_order: [parentTagRef, lifecycleStatus, tagRef] }
+  # object_tag_index 是跨服务共享派生读模型（与 search_index_view 的 ES 共享
+  # 索引同构）：writer = 离线 cmd/import-objects + user-service tagindex
+  # projector（UserProfileUpdated/UserRegistered 投影 Audience 标签）；
+  # reader = tag-service 查询面。所有 writer/reader 必须指向同一 Mongo
+  # database（TAG_MONGO_DATABASE），各环境拓扑经 process_domain_mapping 对账。
   object_tag_index:
     entity: ObjectTagIndex
     indexes:

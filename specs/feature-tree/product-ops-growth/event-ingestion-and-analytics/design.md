@@ -2,11 +2,16 @@
 
 ## 选型
 
-采用单轨 `App Reporter → product-ops → SLS raw → Scheduled SQL aggregate → product-ops query facade → Portal`。
+采用单轨 `App Reporter → product-ops → typed telemetry ports → profile backend → rollup/query facade → Portal`。
 产品日志不驱动推荐；推荐继续走 `BehaviorReporter → content-service → Redis/Mongo/outbox → BehaviorBatchReported`。
 
+production canonical backend 仍为 `aliyun_sls`；alpha 使用 Memory contract composition，
+beta/gamma 的 integration profile 使用独立 `quwoquan_telemetry_local` PostgreSQL，
+beta/gamma release 与 prod 使用真实 SLS。backend 只能由 composition root 选择，同一 artifact
+禁止通过环境变量切换，也不允许失败后 fallback 或双写。
+
 明确不采用 Mongo 日志库、Elasticsearch mirror、ClickHouse、消息队列、对象存储归档、浏览器直连 SLS，
-也不允许双写、fallback 或协议版本兼容信封。
+也不允许协议版本兼容信封。
 
 ## 端到端架构
 
@@ -16,12 +21,16 @@ flowchart LR
   Reporter --> Outbox["Actor-scoped encrypted outbox"]
   Outbox --> Ops["POST /ops/events"]
   Ops --> Validate["Catalog + digest + actor validation"]
-  Validate --> SLSRaw["SLS product raw, 3d"]
+  Validate --> Ports["Typed appenders/readers"]
+  Ports --> Profile{"Composition profile"}
+  Profile --> Mem["Memory alpha"]
+  Profile --> PG["Postgres local integration"]
+  Profile --> SLSRaw["SLS release/prod raw, 3d"]
   StartupJournal["Restricted startup journal"] --> StartupAPI["POST /ops/startup-events"]
   StartupAPI --> SLSStartup["SLS startup raw, 3d"]
-  SLSRaw --> SQL["Hourly Scheduled SQL"]
-  SQL --> SLSAgg["SLS aggregate, 90d"]
-  SLSRaw --> Facade["product-ops query facade"]
+  Profile --> Rollup["Shared rollup algebra"]
+  Rollup --> SLSAgg["Hourly rollup, 90d"]
+  Profile --> Facade["product-ops query facade"]
   SLSAgg --> Facade
   Facade --> Portal["Ops Portal"]
 
@@ -38,7 +47,9 @@ flowchart LR
 2. 启动 journal 是启动可靠性内部事实；`app_startup` 才是产品指标，两者不可互相转发。
 3. `visit_record` 是业务事实，继续用 Mongo；`EventRecord` 是短期日志事实，只用 SLS。
 4. Redis 只保存幂等状态和推荐热状态，不成为产品日志明细或查询 fallback。
-5. Portal 只访问 product-ops；SLS RAM 凭据只注入服务部署。
+5. Portal 只访问 product-ops；SLS RAM 凭据只注入 release/prod composition。
+6. Query response 只暴露 `sourceKind`、`freshness`、`generatedThrough`、`lagSeconds`，
+   不暴露后端身份；raw 与 hourly 的 `rowKind`、批次行身份和迟到重算由同一 rollups metadata 定义。
 
 ## 批次幂等状态机
 
@@ -57,10 +68,11 @@ committed retry → duplicateBatch=true
 
 ## 部署顺序
 
-1. 创建 Project、三 Logstore、TTL、索引、RAM、Scheduled SQL 和告警。
-2. 部署 product-ops 并通过协议模拟与真实 SLS api_integration。
-3. 发布 App，完成 beta/gamma UAT 后逐级 rollout。
-4. beta 验证后按 runbook 删除遗留 `event_records`；代码不保留双轨期。
+1. alpha 只运行 Memory/fake-SLS protocol contract，不读取或要求真实 SLS Secret。
+2. integration profile 初始化独立 PostgreSQL telemetry database/schema、角色、raw/rollup/receipt/run 表。
+3. release/prod 创建 Project、四 Logstore、TTL、索引、RAM、Scheduled SQL 和告警。
+4. 先用 conformance corpus 对比四个 composition，再通过真实 SLS api_integration。
+5. 发布 App，完成 beta/gamma release UAT 后逐级 rollout；代码不保留旧日志双轨。
 
 ## 验证设计
 
@@ -74,20 +86,20 @@ committed retry → duplicateBatch=true
 
 | 环境 | 唯一目的 | 允许依赖 | 明确禁止 | 晋级输出 |
 | --- | --- | --- | --- | --- |
-| alpha | 确定性 `local_contract` | metadata/codegen、fake-SLS、miniredis、contract fixture | 云凭据、真实 SLS、Mongo/ES 日志 fallback | 可重复的协议正确性证据 |
-| beta | 服务/存储/Portal 的 `api_integration` | 受控 beta SLS Project、VPC endpoint、测试 actor、只读验证 RAM | Dart mock、浏览器直连 SLS、生产 Project | 真实写入、聚合、查询、权限和 SLO 证据 |
-| gamma | App 真机 `user_acceptance` | local-gamma mirror、真机、beta 同构的受控 SLS 资源、Portal | 以录制/Mock 冒充远端、绕过 outbox 直写 SLS | 用户旅程、隐私和恢复证据 |
+| alpha | `smoke` | metadata/codegen、fake-SLS、miniredis、contract fixture | 云凭据、真实 SLS、Mongo/ES 日志 fallback | 可重复的协议与恢复证据 |
+| beta | `integration` 内容数据面 | 存储、内容 API、媒体、测试 actor | 将 SLS、Portal 当作内容导入前置 | 真实 import、API、媒体、幂等与回滚证据 |
+| gamma | `release` 商业观测 | local-gamma mirror、真机、受控 SLS、Portal | 以录制/Mock 冒充远端、绕过 outbox 直写 SLS | 用户旅程、隐私、trace 和 SLO 证据 |
 
-`gamma` 的唯一目标仍为 `gamma-local`，不存在远端 gamma。若执行 runner 无法到达 SLS VPC endpoint，
-gamma 只能完成协议/界面验证，不能标记为真实 SLS 验收；必须改在获批私网连通的 runner 重跑，
-不能改用公网 endpoint、共享 Project 或 ES 代替。
+`gamma` 的唯一目标仍为 `gamma-local`，不存在远端 gamma。SLS 仅是 commercial capability：它缺失时，
+Beta/Gamma 内容导入与 API 集成继续按 `integration` 执行；只有 Gamma release 验收必须 `GATE_BLOCK`，
+不得改用公网 endpoint、共享 Project 或 ES 代替。
 
-alpha → beta → gamma 必须串行。任一环境失败时，后续环境只能诊断，不能拿定向通过的用例替代该环境的
-全门证据；prod 的 5% rollout 以前必须三段均有对应输出。
+baseline → smoke → integration → release 必须按 profile 串行。任一 profile 失败时，后续 profile 只能诊断，
+不能拿定向通过的用例替代该 profile 证据；Prod 的 5% rollout 以前必须具备 release 输出。
 
 ### Alpha：确定性契约层
 
-入口为 `python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --tier t3`，但 alpha 的遥测
+入口为 `python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind all --profile smoke`，alpha 的遥测
 实质只允许运行本地测试，不启动 product-ops 的真实 SLS writer。验收集至少包含：
 
 1. `event_catalog.yaml` / `app_pages.yaml` 三端生成一致且二次 codegen 无漂移；未知 event、extension、
@@ -103,9 +115,10 @@ alpha 的入口需增加一项静态断言：虽然 `configs/alpha/config.yaml` 
 调用 `load_product_telemetry_sls`，也不得要求 Secret。当前 `avatarBaseUrl` 空 fixture 会在 alpha T3
 中止，因此先修 fixture，再把该断言和完整遥测用例作为 alpha green 的必要条件。
 
-### Beta：真实 SLS 的服务集成层
+### Beta：内容数据面服务集成层
 
-beta 在 VPC 可达的受控 runner 执行，先由受控资源流程创建独立 beta Project、三个 Standard Logstore、
+Beta 内容集成在受控 runner 执行，验证 immutable content release 的 full-sync、API、媒体、幂等和回滚。
+它不要求 product-ops、Portal 或 SLS。独立 beta SLS Project、三个 Standard Logstore、
 字段索引、3/3/90 天 TTL、三条 Scheduled SQL、告警及最小 RAM。服务部署角色只拥有目标 Logstore 的写入与
 必要查询权；验证角色必须是独立的只读 RAM，且只能读 beta Project 的目标 Logstore。两种 Secret 不可混用：
 
@@ -164,9 +177,11 @@ run-id。任何凭据、完整 sessionId、_batchKey、callStack 和用户键不
 | beta | `TEST_SLS_*` 只读资源/查询 probe、Portal 30 次 P95、Scheduled SQL polling | TTL/索引/RAM 漂移、重复、敏感字段、SLO 超标、10 分钟无聚合 | `.qwq_output/env/beta/runs/<id>/` 的脱敏报告 |
 | gamma | Patrol/真机旅程 + probe/Portal 交叉核对 | 无设备、无 VPC 连通、断网重复或丢失、隐私泄露、推荐双计 | `.qwq_output/env/gamma/runs/<id>/` 与设备证据 |
 
-`stackctl verify --env <env> --kind all --tier t3` 负责 alpha/beta/gamma 的自动化汇总；gamma 真机旅程
-作为 `user_acceptance` 追加 T4。alpha 当前的 fixture 红、beta/gamma 缺资源或设备都必须保持
-`partial / GATE_BLOCK`，不得以 ES、Mongo、mock 或手工控制台截图替代。
+`stackctl verify --env alpha --kind all --profile smoke`、
+`stackctl verify --env beta --kind all --profile integration`、
+`stackctl verify --env gamma --kind all --profile release` 分别产生互不替代的证据。Gamma 真机旅程
+属于 release；alpha fixture、Beta/Gamma 内容数据面、SLS 或设备任一缺失都必须保留相应 `GATE_BLOCK`，
+不得以 ES、Mongo、mock 或手工控制台截图替代。
 
 ## SLS 与 Elasticsearch 选型判定
 

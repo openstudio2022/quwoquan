@@ -1,0 +1,22 @@
+aggregate: CircleGroup
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/circle/
+
+scenarios:
+  - name: group_typed_facet_abi
+    description: Create/Update/Archive 与 list/search/get typed ABI；Update 显式携带 If-Match
+    assertions:
+      - update_requires_expected_version_header
+      - decoder_rejects_userId_alias
+      - alpha_facet_matches_remote_shape
+
+  - name: error_code_mapping
+    cases:
+      - http_status: 409
+        code: CIRCLE.USER.group_version_conflict
+        expected_dart_const: groupVersionConflict
+      - http_status: 409
+        code: CIRCLE.USER.group_default_cannot_archive
+        expected_dart_const: groupDefaultCannotArchive

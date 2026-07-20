@@ -4,8 +4,9 @@ export PYTHONDONTWRITEBYTECODE=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-export PYTHONPYCACHEPREFIX="$ROOT/.qwq_output/env/repo/local/python-cache/repo-gate"
+export PYTHONPYCACHEPREFIX="$ROOT/.qwq_output/env/repo/local/repo-gate/cache/bytecode"
 export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -o cache_dir=$ROOT/.qwq_output/env/repo/local/tests/cache/pytest"
+export QWQ_PYTHON_CACHE_ROOT="${QWQ_PYTHON_CACHE_ROOT:-$HOME/.cache/quwoquan/python-envs}"
 
 if [ -x "/opt/homebrew/opt/ruby/bin/ruby" ]; then
   export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
@@ -20,11 +21,11 @@ import yaml
 PY
   then
     export PATH="/opt/homebrew/bin:$PATH"
-  elif [ -x "$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin/python3" ] && "$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin/python3" - <<'PY' >/dev/null 2>&1
+  elif [ -x "$QWQ_PYTHON_CACHE_ROOT/quwoquan-data/bin/python3" ] && "$QWQ_PYTHON_CACHE_ROOT/quwoquan-data/bin/python3" - <<'PY' >/dev/null 2>&1
 import yaml
 PY
   then
-    export PATH="$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin:$PATH"
+    export PATH="$QWQ_PYTHON_CACHE_ROOT/quwoquan-data/bin:$PATH"
   fi
 fi
 
@@ -40,23 +41,36 @@ fi
 
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
+python3 quwoquan_ops/gate/verify_github_supply_chain.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/verify_business_object_design_freeze.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
+python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
 python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
 python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+python3 quwoquan_ops/gate/verify_execution_profiles.py
 python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
 python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
 python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
 python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
+python3 quwoquan_app/scripts/runtime/verify_content_page_funnel_coverage.py
+python3 quwoquan_ops/tests/local_contract/test_content_page_funnel_coverage__observability__local_contract_test.py
+python3 quwoquan_ops/gate/verify_runtime_log_governance.py
 python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_output_path_source_contract.py
+python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
+python3 quwoquan_ops/gate/verify_markdown_local_links.py
+# 丢弃误写入源码树的 Python 缓存，再跑 root layout（缓存只允许落在 .qwq_output）。
+find "$ROOT" \
+  \( -path "$ROOT/.git" -o -path "$ROOT/.qwq_output" \) -prune -o \
+  \( -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + \)
+rm -rf "$ROOT/.pytest_cache"
 python3 quwoquan_ops/gate/verify_root_layout.py
 python3 quwoquan_app/scripts/runtime/verify_app_layout.py
 python3 quwoquan_service/scripts/verify/verify_service_layout.py
@@ -96,14 +110,25 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_consistency.py
   bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
   python3 quwoquan_service/scripts/recommendation/verify_daily_metrics_dimension_consistency.py
+  # N2-2 gamma-local 推荐 policy overlay 与 metadata baseline 的受控差异守卫
+  # （允许差异仅 objectCards.enabled / policyVersion，防第二真相源漂移）
+  python3 quwoquan_ops/gate/verify_gamma_policy_overlay.py
   bash quwoquan_ops/environments/verify/verify_config_gray_parallel_binding.sh
   bash quwoquan_ops/environments/verify/verify_gray_rollout_stages.sh
+  # IaC 配置双版本保留（当前灰度 + 上一版本）
+  python3 quwoquan_ops/cli/prod/prune_config_releases.py --check
+  # 灰度路由策略（版本/userId/省份/运营商四维）schema 与枚举
+  python3 quwoquan_ops/environments/verify/verify_gray_routing_policy.py
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
   python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
+  python3 quwoquan_ops/tests/local_contract/test_content_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
+  python3 quwoquan_service/scripts/verify/verify_content_object_alert_coverage.py
+  python3 quwoquan_service/scripts/verify/verify_entity_object_alert_coverage.py
+  python3 quwoquan_service/scripts/verify/verify_entity_homepage_object_mainline.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_ops/environments/verify/verify_config_release_version_mapping.sh
   bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
@@ -205,11 +230,14 @@ run_app() {
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py >/dev/null || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_plugin_registration_policy.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_context_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
+    python3 quwoquan_ops/gate/verify_alpha_media_fixture_surface.py --files-only || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1
@@ -238,7 +266,8 @@ run_app() {
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_object_contract, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_assistant_context_contract, verify_assistant_security_contract, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_markdown_article_no_article_document, verify_article_contract_purity, verify_post_view_projection_wire_keys, verify_pageflip_backward_mainline, verify_content_ui_directory_boundaries"
+    echo "[gate] FAIL: python3 is required for App static verification" >&2
+    exit 1
   fi
   # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
@@ -291,7 +320,8 @@ run_app() {
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_dart_func_coverage.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping dart_func coverage check"
+    echo "[gate] FAIL: python3 is required for dart_func coverage verification" >&2
+    exit 1
   fi
 }
 

@@ -7,7 +7,9 @@ import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_f
 class ImageEditorFilterFeatureExtractor {
   const ImageEditorFilterFeatureExtractor();
 
-  Future<ImageEditorFilterImageFeatures> extractFromBytes(Uint8List bytes) async {
+  Future<ImageEditorFilterImageFeatures> extractFromBytes(
+    Uint8List bytes,
+  ) async {
     if (bytes.isEmpty) return const ImageEditorFilterImageFeatures();
     try {
       final codec = await ui.instantiateImageCodec(bytes);
@@ -63,11 +65,13 @@ class ImageEditorFilterFeatureExtractor {
           final ny = math.min(height - 1, y + sampleStep);
           final ix = toIndex(nx, y);
           final iy = toIndex(x, ny);
-          final lumax = (0.2126 * pixels[ix] +
+          final lumax =
+              (0.2126 * pixels[ix] +
                   0.7152 * pixels[ix + 1] +
                   0.0722 * pixels[ix + 2]) /
               255.0;
-          final lumay = (0.2126 * pixels[iy] +
+          final lumay =
+              (0.2126 * pixels[iy] +
                   0.7152 * pixels[iy + 1] +
                   0.0722 * pixels[iy + 2]) /
               255.0;

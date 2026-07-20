@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_page_surfaces.dart';
@@ -112,7 +113,7 @@ class _TemplatePreviewFiller extends StatelessWidget {
         SizedBox(height: AppSpacing.intraGroupXs),
         Expanded(
           child: Text(
-            '春风起，纸面轻轻落下',
+            CreatePageText.articleReaderPreviewSample,
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
             style: typography.bodyStyle.copyWith(

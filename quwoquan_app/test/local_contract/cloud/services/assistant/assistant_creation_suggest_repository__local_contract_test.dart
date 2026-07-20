@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+
+import '../../../../support/cloud_services/assistant_facets_mock.dart';
 
 void main() {
   test('mock skill catalog exposes creation assistant skill', () async {
-    final repository = MockAssistantRepository();
+    final repository = AlphaAssistantFacets();
 
     final skills = await repository.listSkillCatalog();
 
@@ -14,7 +16,7 @@ void main() {
   });
 
   test('creation suggest is unavailable before subscription', () async {
-    final repository = MockAssistantRepository();
+    final repository = AlphaAssistantFacets();
 
     final response = await repository.suggestCreationAssistance(
       request: const AssistantCreationSuggestRequest(
@@ -29,7 +31,7 @@ void main() {
   test(
     'creation suggest returns traceable suggestions after subscription',
     () async {
-      final repository = MockAssistantRepository();
+      final repository = AlphaAssistantFacets();
       await repository.createSkillSubscription(
         skillId: 'creation_assistant',
         domainId: 'content_creation',

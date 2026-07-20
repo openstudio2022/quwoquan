@@ -64,9 +64,19 @@ type ContentReactionStateReader interface {
 	) (ContentReactionStateSlice, error)
 }
 
-// ReactionTargetReader 只验证 reaction 引用的对象是否存在，不加载目标聚合。
+// ReactionTargetSlice 是 reaction 引用目标的窄读结果：
+// 只回答目标是否可互动以及作者是谁（通知接收者），不加载目标聚合。
+type ReactionTargetSlice struct {
+	Exists   bool
+	AuthorID string
+}
+
+// ReactionTargetReader 只读取 reaction 引用目标的存在性与作者，不加载目标聚合。
 type ReactionTargetReader interface {
-	ReactionTargetExists(ctx context.Context, target reactiondomain.Target) (bool, error)
+	FindReactionTarget(
+		ctx context.Context,
+		target reactiondomain.Target,
+	) (ReactionTargetSlice, error)
 }
 
 // CommentReactionCountReader 从 ContentReaction 权威集合派生评论赞踩计数。

@@ -31,7 +31,19 @@ REPO_ROOT = os.path.dirname(
 # AppError 工厂风格域：errors.yaml(可多个) -> 生成的 Go errors.go。
 FACTORY_DOMAINS = {
     "content": {
-        "yaml": ["quwoquan_service/contracts/metadata/content/post/errors.yaml"],
+        "yaml": [
+            "quwoquan_service/contracts/metadata/content/post/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/comment/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/content_reaction/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/deleted_post_tombstone/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/filter_catalog_release/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_asset/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_original_access_fact/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/media_upload_session/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/outbound_share_fact/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/post_moderation_case/errors.yaml",
+            "quwoquan_service/contracts/metadata/content/report/errors.yaml",
+        ],
         "go": "quwoquan_service/services/content-service/internal/generated/errors.go",
     },
     "chat": {
@@ -49,9 +61,17 @@ FACTORY_DOMAINS = {
     "user": {
         "yaml": [
             "quwoquan_service/contracts/metadata/user/user_profile/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/account_session/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/authentication_challenge/errors.yaml",
             "quwoquan_service/contracts/metadata/user/contact_discovery/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/credential_binding/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/device_registration/errors.yaml",
             "quwoquan_service/contracts/metadata/user/greeting_request/errors.yaml",
-            "quwoquan_service/contracts/metadata/user/invite_record/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/persona/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/persona_relationship/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/profile_update_proposal/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/subject_follow/errors.yaml",
+            "quwoquan_service/contracts/metadata/user/user_settings/errors.yaml",
         ],
         "go": "quwoquan_service/services/user-service/internal/generated/errors.go",
     },

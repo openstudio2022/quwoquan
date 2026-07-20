@@ -130,13 +130,16 @@ def main() -> int:
         return 1
 
     violations = sorted(hits - allowed)
-    if violations:
+    stale_entries = sorted(allowed - hits)
+    if violations or stale_entries:
         print(
-            "verify_lib_platform_check_isolation: BLOCK: new platform branching",
+            "verify_lib_platform_check_isolation: BLOCK: baseline drift",
             file=sys.stderr,
         )
         for p, k in violations:
-            print(f"  {p}: {k}", file=sys.stderr)
+            print(f"  new hit: {p}: {k}", file=sys.stderr)
+        for p, k in stale_entries:
+            print(f"  stale allowlist entry: {p}: {k}", file=sys.stderr)
         print(
             "  Use PlatformCapabilities (platformCapabilitiesProvider), the native "
             "bridge, or AppSpacing breakpoints instead.",

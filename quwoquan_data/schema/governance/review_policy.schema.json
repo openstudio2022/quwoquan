@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policyId",
+    "score",
+    "qualityScoreBands",
+    "requireHumanWhenDoubtful",
+    "reprocess"
+  ],
+  "properties": {
+    "policyId": {"const": "review"},
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum",
+        "maximum",
+        "agentPublishAtLeast",
+        "humanPublishAtLeast",
+        "autoDiscardAtMost"
+      ],
+      "properties": {
+        "minimum": {"type": "integer", "minimum": 1},
+        "maximum": {"type": "integer", "minimum": 1},
+        "agentPublishAtLeast": {"type": "integer", "minimum": 1},
+        "humanPublishAtLeast": {"type": "integer", "minimum": 1},
+        "autoDiscardAtMost": {"type": "integer", "minimum": 1}
+      }
+    },
+    "qualityScoreBands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["minimum", "score"],
+        "properties": {
+          "minimum": {"type": "number", "minimum": 0},
+          "score": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "requireHumanWhenDoubtful": {"type": "boolean"},
+    "reprocess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxAttempts"],
+      "properties": {"maxAttempts": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

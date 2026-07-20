@@ -4,6 +4,7 @@ RuntimeFailure testRuntimeFailure({
   String code = 'APP.SYSTEM.test_failure',
   RuntimeFailureKind kind = RuntimeFailureKind.internal,
   RuntimeFailureNature nature = RuntimeFailureNature.permanent,
+  RuntimeRecoveryDirective recovery = const RuntimeRecoveryDirective.none(),
 }) {
   return RuntimeFailure(
     code: code,
@@ -15,5 +16,6 @@ RuntimeFailure testRuntimeFailure({
       functionModule: 'test_runtime_failure',
     ),
     context: const RuntimeFailureContext(),
+    recovery: recovery,
   );
 }

@@ -26,7 +26,21 @@ type Commit struct {
 	CommandName      string
 	CommandDigest    string
 	ReceiptExpiresAt time.Time
+	AuthorRateLimit  *AuthorRateLimit
 	Events           []OutboxEvent
+}
+
+// AuthorRateLimit 是 CreateComment 随聚合提交执行的权威滑动窗口约束。
+// Store 必须在同一事务内先按 AuthorID 串行化，再校验现有 Comment 数并写入新聚合。
+type AuthorRateLimit struct {
+	AuthorID    string
+	EvaluatedAt time.Time
+	Windows     []AuthorRateWindow
+}
+
+type AuthorRateWindow struct {
+	Since time.Time
+	Max   int64
 }
 
 type CommitResult struct {

@@ -26,6 +26,10 @@ objects:
     - id
     - type
     - title
+    - announcement
+    - announcementUpdatedAt
+    - announcementUpdatedBy
+    - nameEditableByAdminOnly
     - avatarUrl
     - groupAvatarVersion
     - groupAvatarSourceHash
@@ -54,6 +58,7 @@ objects:
     owned_value: []
     projection: []
     reference:
+    - announcementUpdatedBy
     - circleGroupId
     - circleId
     - creatorId
@@ -75,6 +80,8 @@ objects:
   - CreateConversation
   - DissolveConversation
   - UpdateConversationTitle
+  - UpdateAnnouncement
+  - UpdateGroupGovernanceSettings
   object_kind: aggregate_root
   relationships:
   - access: named_reader
@@ -103,6 +110,15 @@ objects:
     on_delete: retain
     reference_fields:
     - creatorId
+    target_object: user.Persona
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: announcementUpdaterPersona
+    on_delete: retain
+    reference_fields:
+    - announcementUpdatedBy
     target_object: user.Persona
   - access: named_reader
     cardinality: N:1
@@ -189,6 +205,7 @@ objects:
   mutation_entrypoints:
   - AddMembers
   - InviteAssistant
+  - LeaveConversation
   - RemoveAssistant
   - RemoveMember
   - TransferOwnership
@@ -333,6 +350,7 @@ objects:
     authoritative_state:
     - _id
     - conversationId
+    - inboxProjectedSeq
     - readSeq
     - unreadCount
     - mentionUnreadCount
@@ -497,146 +515,4 @@ objects:
   source_document: messages/conversation/fields.yaml
   source_entity: ChatInbox
   storage_backend: mongodb
-  storage_role: projection
-- access:
-    commands: none
-    cross_context: public_contract_only
-    queries: named_reader
-  bounded_context: Chat
-  canonical_object: ConversationSearchItemView
-  event_consumers: []
-  field_roles:
-    append_only_fact: []
-    authoritative_state: []
-    owned_value: []
-    projection:
-    - conversationId
-    - type
-    - title
-    - avatarUrl
-    - groupAvatarVersion
-    - avatarCompositeUrls
-    - lastMessagePreview
-    - lastMessageTime
-    - memberCount
-    - highlightText
-    - matchedField
-    - circleGroupId
-    - circleId
-    reference:
-    - conversationId
-    - circleGroupId
-    - circleId
-    transport_only: []
-  identity:
-    fields:
-    - conversationId
-    version_source: checkpoint
-  invariant_refs: []
-  lifecycle_refs: []
-  member_bounds: {}
-  mutation_entrypoints: []
-  object_kind: projection
-  relationships:
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: conversationEvents
-    on_delete: tombstone
-    reference_fields:
-    - conversationId
-    target_object: chat.Conversation
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: circleGroup
-    on_delete: tombstone
-    reference_fields:
-    - circleGroupId
-    target_object: circle.CircleGroup
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: circle
-    on_delete: tombstone
-    reference_fields:
-    - circleId
-    target_object: circle.Circle
-  source_document: messages/conversation/fields.yaml
-  source_entity: ConversationSearchItemView
-  storage_backend: elasticsearch
-  storage_role: projection
-- access:
-    commands: none
-    cross_context: public_contract_only
-    queries: named_reader
-  bounded_context: Chat
-  canonical_object: MessageSearchItemView
-  event_consumers: []
-  field_roles:
-    append_only_fact: []
-    authoritative_state: []
-    owned_value: []
-    projection:
-    - messageId
-    - conversationTitle
-    - conversationAvatarUrl
-    - senderDisplayName
-    - senderAvatarUrl
-    - messageType
-    - contentPreview
-    - seq
-    - timestamp
-    - highlightText
-    - matchedField
-    - conversationId
-    - senderPersonaId
-    reference:
-    - messageId
-    - conversationId
-    - senderPersonaId
-    transport_only: []
-  identity:
-    fields:
-    - messageId
-    version_source: checkpoint
-  invariant_refs: []
-  lifecycle_refs: []
-  member_bounds: {}
-  mutation_entrypoints: []
-  object_kind: projection
-  relationships:
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: messageEvents
-    on_delete: tombstone
-    reference_fields:
-    - messageId
-    target_object: chat.Message
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: conversation
-    on_delete: tombstone
-    reference_fields:
-    - conversationId
-    target_object: chat.Conversation
-  - access: event
-    cardinality: N:1
-    consistency: eventual
-    kind: projection_source
-    name: senderPersona
-    on_delete: retain
-    reference_fields:
-    - senderPersonaId
-    target_object: user.Persona
-  source_document: messages/conversation/fields.yaml
-  source_entity: MessageSearchItemView
-  storage_backend: elasticsearch
   storage_role: projection

@@ -1,0 +1,60 @@
+object: Post
+operations:
+  - GetFeed
+  - SubmitPostPublication
+  - ListUserPosts
+  - GetPost
+  - DeletePost
+  - UpdatePostSettings
+  - PromotePostToWork
+  - GetAuthorImpact
+  - ListAuthorImpactEvidence
+  - GetAppConfig
+  - GetCounters
+  - GetMyFootprint
+  - GetEntityWishlistState
+  - ReportBehaviors
+  - GenerateArticleSummary
+  - GetHelperRead
+  - GetMyIntersectionSummary
+  - ListMyIntersections
+  - GetObjectIntersections
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/content-service/internal/domain/post/model/post.go
+    - quwoquan_service/services/content-service/internal/application/post/post_service.go
+    - quwoquan_service/services/content-service/internal/application/post/post_publication.go
+    - quwoquan_service/services/content-service/internal/application/post/query_facade.go
+  store:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_store.go
+  outbox:
+    - quwoquan_service/services/content-service/internal/application/post/outbox_relay.go
+    - quwoquan_service/services/content-service/internal/infrastructure/messaging/post_lifecycle_stream_publisher.go
+  reader:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_query_reader.go
+  transport:
+    - quwoquan_service/services/content-service/internal/adapters/http/content_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_publication_contracts.dart
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_queries.dart
+    - quwoquan_app/lib/cloud/services/content/remote/post_reader_remote.dart
+  page:
+    - quwoquan_app/lib/ui/discovery/pages/home_page.dart
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/content-service/internal/application/post/post_publication__local_contract_test.go
+    - quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_query_facet__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_store__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/content/post/contract/post_dto_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/remote/content/post/post_publication_remote__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/post_feed_contract__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/post_publication_intent__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/post_identity_contract__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/author_impact_evidence_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+environments: []

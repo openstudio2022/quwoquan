@@ -29,16 +29,7 @@ es:
   shards: 3
   replicas: 1
 
-experiments:
-  rec_model_vs_rule:
-    enabled: true
-    buckets:
-      rule: 90
-      model: 10
-  rec_scoring_weights:
-    enabled: true
-    buckets:
-      control: 60
-      engagement_heavy: 15
-      freshness_heavy: 15
-      explore_heavy: 10
+# N2-3 单真相源：AB 实验/分桶唯一定义在
+# contracts/metadata/recommendation/rec_model/policy.yaml（热更）。
+# 此前 config.yaml 的 experiments 段零消费且与 policy 矛盾（rule 90/10 vs
+# shadow-only rule 100/0），已删除；禁止回潮第二套实验配置。

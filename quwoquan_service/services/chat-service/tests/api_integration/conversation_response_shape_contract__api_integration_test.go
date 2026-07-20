@@ -8,13 +8,17 @@ func TestConversation_ResponseShape_HasRequiredFields(t *testing.T) {
 	conv := createConversation(t, `{"type":"group","title":"response shape"}`)
 
 	requiredFields := []string{
-		"_id", "type", "title", "status", "createdAt", "updatedAt",
+		"id", "type", "title", "status", "createdAt", "updatedAt",
 		"maxSeq", "memberCount", "maxGroupSize", "receiptEnabled",
 	}
 	for _, field := range requiredFields {
 		if _, ok := conv[field]; !ok {
 			t.Errorf("response missing required field: %s", field)
 		}
+	}
+	// 契约单轨：wire 只认业务键 id，不暴露存储 _id。
+	if _, exists := conv["_id"]; exists {
+		t.Fatal("conversation response must not expose storage _id")
 	}
 }
 
@@ -59,7 +63,7 @@ func TestMessage_ResponseShape_HasRequiredFields(t *testing.T) {
 			t.Errorf("message response missing required field: %s", field)
 		}
 	}
-	if _, exists := msg["id"]; exists {
+	if _, exists := msg["_id"]; exists {
 		t.Fatal("message response must not expose removed _id alias")
 	}
 }

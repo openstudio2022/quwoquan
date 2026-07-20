@@ -2,15 +2,26 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _buildBar({
   CallType callType = CallType.video,
   VoidCallback? onHangup,
   VoidCallback? onInvite,
+  bool interactionLocked = false,
+  VoidCallback? onToggleInteractionLock,
+  CallSessionNotifier Function()? callSessionNotifier,
 }) {
   return ProviderScope(
+    overrides: [
+      callSessionProvider.overrideWith(
+        callSessionNotifier ?? () => _ControlsCallSessionNotifier(callType),
+      ),
+    ],
     child: MaterialApp(
       builder: (context, child) => MediaQuery(
         data: const MediaQueryData(size: Size(1200, 800)),
@@ -24,6 +35,8 @@ Widget _buildBar({
             callType: callType,
             onHangup: onHangup,
             onInvite: onInvite,
+            interactionLocked: interactionLocked,
+            onToggleInteractionLock: onToggleInteractionLock,
             autoHide: false,
           ),
         ),
@@ -37,15 +50,19 @@ void main() {
   // 渲染契约
   // ──────────────────────────────────────────────────────────────────
   group('CallControlsBar — 渲染契约', () {
-    testWidgets('video 模式渲染 6 个控制按钮', (tester) async {
-      await tester.pumpWidget(_buildBar(callType: CallType.video));
+    testWidgets('video 模式渲染屏幕共享与防误触锁定入口', (tester) async {
+      await tester.pumpWidget(
+        _buildBar(callType: CallType.video, onToggleInteractionLock: () {}),
+      );
       await tester.pump();
 
       expect(find.byType(CallControlsBar), findsOneWidget);
 
       expect(find.byIcon(CupertinoIcons.mic), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.video_camera_solid), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.video_camera), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.switch_camera), findsOneWidget);
+      expect(find.text(UITextConstants.callShareScreen), findsOneWidget);
+      expect(find.text(UITextConstants.callLockControls), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.person_add), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.speaker_1), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.phone_down_fill), findsOneWidget);
@@ -68,14 +85,14 @@ void main() {
       await tester.pumpWidget(_buildBar());
       await tester.pump();
 
-      expect(find.text('挂断'), findsOneWidget);
+      expect(find.text(UITextConstants.callHangup), findsOneWidget);
     });
 
     testWidgets('静音按钮默认显示 "静音"', (tester) async {
       await tester.pumpWidget(_buildBar());
       await tester.pump();
 
-      expect(find.text('静音'), findsOneWidget);
+      expect(find.text(UITextConstants.callMute), findsOneWidget);
     });
   });
 
@@ -85,9 +102,7 @@ void main() {
   group('CallControlsBar — 交互契约', () {
     testWidgets('点击挂断触发 onHangup 回调', (tester) async {
       var hangupCalled = false;
-      await tester.pumpWidget(
-        _buildBar(onHangup: () => hangupCalled = true),
-      );
+      await tester.pumpWidget(_buildBar(onHangup: () => hangupCalled = true));
       await tester.pump();
 
       await tester.tap(find.byIcon(CupertinoIcons.phone_down_fill));
@@ -98,9 +113,7 @@ void main() {
 
     testWidgets('点击邀请触发 onInvite 回调', (tester) async {
       var inviteCalled = false;
-      await tester.pumpWidget(
-        _buildBar(onInvite: () => inviteCalled = true),
-      );
+      await tester.pumpWidget(_buildBar(onInvite: () => inviteCalled = true));
       await tester.pump();
 
       await tester.tap(find.byIcon(CupertinoIcons.person_add));
@@ -114,7 +127,49 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(CupertinoIcons.switch_camera), findsOneWidget);
-      expect(find.text('翻转'), findsOneWidget);
+      expect(find.text(UITextConstants.callFlipCamera), findsOneWidget);
+    });
+
+    testWidgets('屏幕共享入口调用 provider start/stop', (tester) async {
+      final startNotifier = _ScreenShareCallSessionNotifier();
+      await tester.pumpWidget(
+        _buildBar(callSessionNotifier: () => startNotifier),
+      );
+      await tester.pump();
+      await tester.tap(find.text(UITextConstants.callShareScreen));
+      await tester.pump();
+      expect(startNotifier.startCount, 1);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      final stopNotifier = _ScreenShareCallSessionNotifier(localSharing: true);
+      await tester.pumpWidget(
+        _buildBar(callSessionNotifier: () => stopNotifier),
+      );
+      await tester.pump();
+      await tester.tap(find.text(UITextConstants.callStopScreenSharing));
+      await tester.pump();
+      expect(stopNotifier.stopCount, 1);
+    });
+
+    testWidgets('锁定时隐藏危险控制且仅保留明确解锁动作', (tester) async {
+      var toggleCount = 0;
+      await tester.pumpWidget(
+        _buildBar(
+          interactionLocked: true,
+          onToggleInteractionLock: () => toggleCount++,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text(UITextConstants.callUnlockControls), findsOneWidget);
+      expect(find.text(UITextConstants.callHangup), findsNothing);
+      expect(find.text(UITextConstants.callMute), findsNothing);
+      expect(find.text(UITextConstants.callInvite), findsNothing);
+      expect(find.text(UITextConstants.callShareScreen), findsNothing);
+
+      await tester.tap(find.text(UITextConstants.callUnlockControls));
+      await tester.pump();
+      expect(toggleCount, 1);
     });
   });
 
@@ -142,11 +197,65 @@ void main() {
       expect(find.byType(CallControlsBar), findsOneWidget);
     });
 
-    testWidgets('audio 模式显示开启视频选项', (tester) async {
+    testWidgets('audio 模式不伪造未建模的通话中升级视频入口', (tester) async {
       await tester.pumpWidget(_buildBar(callType: CallType.audio));
       await tester.pump();
 
-      expect(find.text('开启视频'), findsOneWidget);
+      expect(find.text(UITextConstants.callEnableVideo), findsNothing);
     });
   });
+}
+
+final class _ControlsCallSessionNotifier extends CallSessionNotifier {
+  _ControlsCallSessionNotifier(this.callType);
+
+  final CallType callType;
+
+  @override
+  CallSessionState build() => CallSessionState(
+    status: CallStatus.inCall,
+    callType: callType,
+    isCameraOn: callType.isVideo,
+  );
+}
+
+final class _ScreenShareCallSessionNotifier extends CallSessionNotifier {
+  _ScreenShareCallSessionNotifier({this.localSharing = false});
+
+  final bool localSharing;
+  int startCount = 0;
+  int stopCount = 0;
+
+  @override
+  CallSessionState build() {
+    final now = DateTime.utc(2026, 7, 20);
+    return CallSessionState(
+      session: CallSessionDto(
+        callId: 'call-controls',
+        callType: 'video',
+        status: 'in_call',
+        initiatorId: 'user-a',
+        roomId: 'rtc-room-call-controls',
+        participantCount: 2,
+        isScreenSharing: localSharing,
+        screenShareUserId: localSharing ? 'user-a' : null,
+        createdAt: now,
+        updatedAt: now,
+      ),
+      status: CallStatus.inCall,
+      callType: CallType.video,
+      isCameraOn: true,
+      isLocalScreenSharing: localSharing,
+    );
+  }
+
+  @override
+  Future<void> startScreenShare() async {
+    startCount += 1;
+  }
+
+  @override
+  Future<void> stopScreenShare() async {
+    stopCount += 1;
+  }
 }

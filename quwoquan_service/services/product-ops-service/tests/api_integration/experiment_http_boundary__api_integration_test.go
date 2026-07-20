@@ -20,7 +20,7 @@ import (
 
 func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *testing.T) {
 	handler := newRealExperimentHTTPHandler(t)
-	guarded := realExperimentAuthenticatedHandler(t, true, handler)
+	guarded := realReadyExperimentAuthenticatedHandler(t, handler)
 	experimentID := seedRealExperiment(t, "draft")
 
 	unauthorized := performExperimentRequest(
@@ -226,6 +226,28 @@ func realExperimentAuthenticatedHandler(t *testing.T, generatedGuard bool, next 
 	return rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier: accessVerifier, DeviceTicketVerifier: deviceVerifier,
 	})(next)
+}
+
+func realReadyExperimentAuthenticatedHandler(t *testing.T, next http.Handler) http.Handler {
+	t.Helper()
+	descriptors := operationsecurity.ForDomain("ops")
+	matched := 0
+	for index := range descriptors {
+		if strings.HasPrefix(
+			descriptors[index].PathTemplate,
+			"/control-plane/product/experiments",
+		) {
+			// 生产合同继续 blocked；这里只把同一 generated descriptor 的商用开关
+			// 提升为 ready，以验证解冻后的鉴权与原子写边界。
+			descriptors[index].CommercialStatus = "ready"
+			matched++
+		}
+	}
+	if matched == 0 {
+		t.Fatal("missing generated experiment control-plane descriptors")
+	}
+	next = rtauth.RequireGeneratedOperationAuthorization(descriptors)(next)
+	return realExperimentAuthenticatedHandler(t, false, next)
 }
 
 func experimentAccessToken(t *testing.T, accountID, scopes string, roles []string, personaID ...string) string {

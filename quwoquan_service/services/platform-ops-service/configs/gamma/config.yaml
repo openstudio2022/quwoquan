@@ -5,9 +5,3 @@ service:
 
 postgres:
   dsn: "${POSTGRES_DSN}"
-
-redis:
-  rec:
-    mode: standalone
-    addr: ""
-    db: 0

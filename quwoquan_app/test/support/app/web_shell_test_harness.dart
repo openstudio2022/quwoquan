@@ -6,14 +6,15 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Web 宽屏壳测试通用脚手架：固定宽屏视口 + Web 能力 + 可控登录态，
 /// 复用同一 [MainAppShell] 入口，避免每个用例各自拼装第二套壳。
@@ -173,13 +174,15 @@ class _NoopIncomingCallCoordinator extends IncomingCallCoordinator {
         readRouter: () => throw UnimplementedError(
           'incoming call routing is disabled in web shell tests',
         ),
+        firebaseRuntime: ref.read(firebaseIncomingCallRuntimeProvider),
+        nativeBridge: ref.read(incomingCallNativeBridgeProvider),
       );
 
   @override
   void start(String userId) {}
 
   @override
-  void stop() {}
+  void stop({bool removePushEndpoints = true}) {}
 
   @override
   void dispose() {}
@@ -208,8 +211,8 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -217,14 +220,11 @@ class _TestAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

@@ -16,6 +16,8 @@ business_rules:
   - sourceSessionId 只能绑定一个完成且摘要一致的 MediaUploadSession
   - objectKey 与 sha256 创建后不可变，重复完成按摘要幂等返回同一资产
   - processing -> ready|rejected 只能由受信处理结果命令推进
+  - 图片 ready 必须具备方向归一后的宽高、真实交付 MIME、私有归一化对象 key 与稳定公共 slice key
+  - 图片多规格不复制第二套业务对象；thumbnail/display/cover/full 统一由 media_variant_profiles 驱动 CDN 派生
   - accessPolicy 变更必须校验 owner persona，并以服务端内部 version CAS 提交
   - deleted 资产不再被新 Post、Comment 或 Message 引用
 

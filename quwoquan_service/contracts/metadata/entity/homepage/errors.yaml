@@ -93,6 +93,28 @@ errors:
       zh: "当前无权限执行此操作"
       en: "You are not allowed to do this"
 
+  - code: ENTITY.USER.version_conflict
+    kind: USER
+    reason: version_conflict
+    http_status: 409
+    recovery_action: refresh
+    dart_const: versionConflict
+    go_const: ErrVersionConflict
+    user_message:
+      zh: "内容已变更，请刷新后重试"
+      en: "Content changed, refresh and retry"
+
+  - code: ENTITY.USER.idempotency_conflict
+    kind: USER
+    reason: idempotency_conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: idempotencyConflict
+    go_const: ErrIdempotencyConflict
+    user_message:
+      zh: "请求重复提交，请稍后重试"
+      en: "Duplicate request, please retry later"
+
   - code: ENTITY.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

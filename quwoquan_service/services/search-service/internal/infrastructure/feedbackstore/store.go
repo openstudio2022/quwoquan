@@ -7,6 +7,7 @@ package feedbackstore
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -41,25 +42,22 @@ var (
 	_ application.FeedbackSink = (*Store)(nil)
 )
 
-// NewStore builds the store and ensures TTL + lookup indexes (best-effort; an
-// index failure is logged, not fatal — the service still serves searches).
+// NewStore only binds collections. Production composition must call
+// [Store.EnsureIndexes] and fail fast: feedback replay correctness depends on
+// the unique semantic-key index and cannot degrade to duplicate facts.
 func NewStore(db *mongo.Database, logger *slog.Logger) *Store {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Store{
+	return &Store{
 		queries:  db.Collection(queriesCollection),
 		feedback: db.Collection(feedbackCollection),
 		logger:   logger,
 	}
-	s.ensureIndexes()
-	return s
 }
 
-func (s *Store) ensureIndexes() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+// EnsureIndexes installs all required lookup, TTL and semantic-key indexes.
+func (s *Store) EnsureIndexes(ctx context.Context) error {
 	queryIndexes := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "searchRequestId", Value: 1}},
@@ -80,8 +78,22 @@ func (s *Store) ensureIndexes() {
 			Options: options.Index().SetName("idx_search_feedback_request"),
 		},
 		{
+			Keys:    bson.D{{Key: "viewerId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("idx_search_feedback_viewer_created"),
+		},
+		{
 			Keys:    bson.D{{Key: "objectId", Value: 1}, {Key: "eventType", Value: 1}, {Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("idx_search_feedback_object"),
+		},
+		{
+			// 语义键 dedupe：同一次搜索请求对同一对象的同类反馈只追加一次
+			// （fact typed append + dedupe key；重放安全，见 service.yaml）。
+			Keys: bson.D{
+				{Key: "searchRequestId", Value: 1},
+				{Key: "eventType", Value: 1},
+				{Key: "objectId", Value: 1},
+			},
+			Options: options.Index().SetUnique(true).SetName("uq_search_feedback_dedupe"),
 		},
 		{
 			Keys:    bson.D{{Key: "createdAt", Value: 1}},
@@ -89,16 +101,13 @@ func (s *Store) ensureIndexes() {
 		},
 	}
 
-	for _, idx := range queryIndexes {
-		if _, err := s.queries.Indexes().CreateOne(ctx, idx); err != nil {
-			s.logger.Warn("feedbackstore: query index creation failed", slog.String("error", err.Error()))
-		}
+	if _, err := s.queries.Indexes().CreateMany(ctx, queryIndexes); err != nil {
+		return fmt.Errorf("ensure search query indexes: %w", err)
 	}
-	for _, idx := range feedbackIndexes {
-		if _, err := s.feedback.Indexes().CreateOne(ctx, idx); err != nil {
-			s.logger.Warn("feedbackstore: feedback index creation failed", slog.String("error", err.Error()))
-		}
+	if _, err := s.feedback.Indexes().CreateMany(ctx, feedbackIndexes); err != nil {
+		return fmt.Errorf("ensure search feedback indexes: %w", err)
 	}
+	return nil
 }
 
 // queryDoc is the persistent form of a SearchQuery log row (bson mirrors the
@@ -140,6 +149,7 @@ func (s *Store) Log(ctx context.Context, q application.QueryLog) error {
 // feedbackDoc is the persistent form of a SearchFeedbackEvent row.
 type feedbackDoc struct {
 	SearchRequestID string    `bson:"searchRequestId"`
+	ViewerID        string    `bson:"viewerId,omitempty"`
 	EventType       string    `bson:"eventType"`
 	ObjectID        string    `bson:"objectId,omitempty"`
 	Target          string    `bson:"target,omitempty"`
@@ -150,11 +160,14 @@ type feedbackDoc struct {
 	CreatedAt       time.Time `bson:"createdAt"`
 }
 
-// Record appends a feedback event (multiple events per request are expected, so
-// it is an insert, not an upsert).
+// Record appends a feedback event. The (searchRequestId, eventType, objectId)
+// semantic key is unique: a duplicate append (client retry / double tap) is a
+// replay-safe no-op — the fact is already recorded, so the duplicate-key error
+// is swallowed and the caller sees the same accepted outcome.
 func (s *Store) Record(ctx context.Context, ev application.FeedbackEvent) error {
 	doc := feedbackDoc{
 		SearchRequestID: ev.SearchRequestID,
+		ViewerID:        ev.ViewerID,
 		EventType:       ev.EventType,
 		ObjectID:        ev.ObjectID,
 		Target:          ev.Target,
@@ -165,5 +178,8 @@ func (s *Store) Record(ctx context.Context, ev application.FeedbackEvent) error 
 		CreatedAt:       time.Now().UTC(),
 	}
 	_, err := s.feedback.InsertOne(ctx, doc)
+	if mongo.IsDuplicateKeyError(err) {
+		return nil
+	}
 	return err
 }

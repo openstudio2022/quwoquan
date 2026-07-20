@@ -5,17 +5,224 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"quwoquan_service/runtime/operation"
 )
 
 func insertPost(t *testing.T, doc bson.M) {
 	t.Helper()
-	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), doc)
+	postDoc := bson.M{}
+	for key, value := range doc {
+		postDoc[key] = value
+	}
+	if _, ok := postDoc["status"]; !ok {
+		postDoc["status"] = "published"
+	}
+	if _, ok := postDoc["contentType"]; !ok {
+		postDoc["contentType"] = "image"
+	}
+	circleIDs := stringSlice(postDoc["circleIds"])
+	delete(postDoc, "circleIds")
+	delete(postDoc, "circleId")
+	pinnedAt, _ := postDoc["pinnedAt"].(time.Time)
+	featuredAt, _ := postDoc["featuredAt"].(time.Time)
+	pinned, _ := postDoc["pinned"].(bool)
+	featured, _ := postDoc["featured"].(bool)
+	pinned = pinned || !pinnedAt.IsZero()
+	featured = featured || !featuredAt.IsZero()
+	delete(postDoc, "pinned")
+	delete(postDoc, "featured")
+	delete(postDoc, "pinnedAt")
+	delete(postDoc, "featuredAt")
+
+	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), postDoc)
 	if err != nil {
 		t.Fatalf("insertPost failed: %v", err)
+	}
+	postID := fmt.Sprint(postDoc["_id"])
+	now, _ := postDoc["createdAt"].(time.Time)
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	for _, circleID := range circleIDs {
+		placement := bson.M{
+			"_id":          fmt.Sprintf("fixture-placement-%s-%s", circleID, postID),
+			"version":      int64(1),
+			"postId":       postID,
+			"circleId":     circleID,
+			"groupId":      "",
+			"state":        "active",
+			"pinned":       pinned,
+			"featured":     featured,
+			"lastActiveAt": now,
+			"createdAt":    now,
+			"updatedAt":    now,
+		}
+		if !pinnedAt.IsZero() {
+			placement["pinnedAt"] = pinnedAt
+		}
+		if !featuredAt.IsZero() {
+			placement["featuredAt"] = featuredAt
+		}
+		if _, err := mongoDB.Collection("circle_post_placements").InsertOne(
+			context.Background(),
+			placement,
+		); err != nil {
+			t.Fatalf("insert feed placement failed: %v", err)
+		}
+	}
+}
+
+func stringSlice(value any) []string {
+	switch typed := value.(type) {
+	case []string:
+		return typed
+	case bson.A:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			result = append(result, fmt.Sprint(item))
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func TestListCircleDiscoveryFeed(t *testing.T) {
+	defer cleanCollections(t)
+
+	mineCircleID := createTestCircleAs(t, "我的校园摄影圈", "persona-owner-mine")
+	recommendedCircleID := createTestCircleAs(t, "推荐校园摄影圈", "persona-owner-recommended")
+	otherCircleID := createTestCircleAs(t, "其他分类圈", "persona-owner-other")
+	now := time.Now().UTC()
+	for circleID, category := range map[string]string{
+		mineCircleID: "campus", recommendedCircleID: "campus", otherCircleID: "travel",
+	} {
+		_, err := mongoDB.Collection("circles").UpdateOne(
+			context.Background(),
+			bson.M{"_id": circleID},
+			bson.M{"$set": bson.M{
+				"category": category, "subCategory": "photography",
+				"visibility": "public", "status": "active",
+			}},
+		)
+		if err != nil {
+			t.Fatalf("update circle category: %v", err)
+		}
+	}
+	if _, err := mongoDB.Collection("circle_memberships").InsertOne(context.Background(), bson.M{
+		"_id": "membership-discovery-mine", "circleId": mineCircleID,
+		"personaId": "persona-viewer", "state": "active", "role": "member",
+	}); err != nil {
+		t.Fatalf("insert discovery membership: %v", err)
+	}
+	insertPost(t, bson.M{
+		"_id": "post-discovery-mine", "circleIds": []string{mineCircleID},
+		"title": "我的圈帖子", "createdAt": now.Add(-time.Minute),
+	})
+	insertPost(t, bson.M{
+		"_id": "post-discovery-recommended", "circleIds": []string{recommendedCircleID},
+		"title": "推荐圈帖子", "createdAt": now,
+	})
+	insertPost(t, bson.M{
+		"_id": "post-discovery-draft", "circleIds": []string{recommendedCircleID},
+		"title": "不可见草稿", "status": "draft", "createdAt": now.Add(time.Minute),
+	})
+	insertPost(t, bson.M{
+		"_id": "post-discovery-other", "circleIds": []string{otherCircleID},
+		"title": "其他分类帖子", "createdAt": now,
+	})
+
+	recommended := doCircleDiscoveryRequest(
+		t,
+		"/circles/discovery-feed?category=campus&subCategory=photography&scope=recommended&sort=latest&limit=10",
+		"persona-viewer",
+	)
+	if recommended.Code != http.StatusOK {
+		t.Fatalf("recommended feed status=%d body=%s", recommended.Code, recommended.Body.String())
+	}
+	recommendedBody := decodeBody(t, recommended)
+	assertDiscoveryIDs(
+		t,
+		recommendedBody,
+		[]string{recommendedCircleID},
+		[]string{"post-discovery-recommended"},
+	)
+
+	mine := doCircleDiscoveryRequest(
+		t,
+		"/circles/discovery-feed?category=campus&subCategory=photography&scope=mine&sort=latest&limit=10",
+		"persona-viewer",
+	)
+	if mine.Code != http.StatusOK {
+		t.Fatalf("mine feed status=%d body=%s", mine.Code, mine.Body.String())
+	}
+	mineBody := decodeBody(t, mine)
+	assertDiscoveryIDs(
+		t,
+		mineBody,
+		[]string{mineCircleID},
+		[]string{"post-discovery-mine"},
+	)
+}
+
+func doCircleDiscoveryRequest(
+	t *testing.T,
+	path string,
+	personaID string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
+		OperationID: "circle.circle.ListCircleDiscoveryFeed",
+		RequestID:   "request-circle-discovery", TraceID: "trace-circle-discovery",
+		Actor: operation.ActorContext{
+			AccountID: "account-" + personaID,
+			PersonaID: personaID,
+		},
+	}))
+	recorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func assertDiscoveryIDs(
+	t *testing.T,
+	body map[string]any,
+	wantCircleIDs []string,
+	wantPostIDs []string,
+) {
+	t.Helper()
+	rawCircles, ok := body["circles"].([]any)
+	if !ok {
+		t.Fatalf("discovery circles missing: %#v", body)
+	}
+	gotCircleIDs := make([]string, 0, len(rawCircles))
+	for _, raw := range rawCircles {
+		gotCircleIDs = append(gotCircleIDs, raw.(map[string]any)["id"].(string))
+	}
+	if fmt.Sprint(gotCircleIDs) != fmt.Sprint(wantCircleIDs) {
+		t.Fatalf("circle ids=%v want=%v", gotCircleIDs, wantCircleIDs)
+	}
+	rawItems, ok := body["items"].([]any)
+	if !ok {
+		t.Fatalf("discovery items missing: %#v", body)
+	}
+	gotPostIDs := make([]string, 0, len(rawItems))
+	for _, raw := range rawItems {
+		item := raw.(map[string]any)
+		gotPostIDs = append(gotPostIDs, item["postId"].(string))
+		if item["circleId"] == "" {
+			t.Fatalf("circleId missing from typed feed item: %#v", item)
+		}
+	}
+	if fmt.Sprint(gotPostIDs) != fmt.Sprint(wantPostIDs) {
+		t.Fatalf("post ids=%v want=%v", gotPostIDs, wantPostIDs)
 	}
 }
 
@@ -182,11 +389,11 @@ func TestGetCircleFeed_Featured(t *testing.T) {
 		"createdAt": now,
 	})
 	insertPost(t, bson.M{
-		"_id":        "feat_pinned",
-		"circleIds":  []string{circleID},
-		"title":      "置顶帖子",
-		"createdAt":  now.Add(-1 * time.Hour),
-		"pinnedAt":   now,
+		"_id":       "feat_pinned",
+		"circleIds": []string{circleID},
+		"title":     "置顶帖子",
+		"createdAt": now.Add(-1 * time.Hour),
+		"pinnedAt":  now,
 	})
 	insertPost(t, bson.M{
 		"_id":        "feat_featured",

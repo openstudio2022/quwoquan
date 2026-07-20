@@ -19,6 +19,7 @@ from quwoquan_ops.ci.device_matrix import evidence as device_evidence
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import flutter_android_device_proxy as flutter_proxy
+from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
 
 
 class EnvironmentPatrolSmokeTest(unittest.TestCase):
@@ -61,6 +62,29 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "test/user_acceptance/patrol/environment/"
                 "video_playback_canary__user_acceptance_test.dart"
             ),
+        )
+
+    def test_native_video_evidence_only_accepts_patrol_log_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            patrol_log = Path(temporary_dir) / "patrol.log"
+            patrol_log.write_text(
+                "\n".join(
+                    [
+                        "controller ready",
+                        (
+                            "QWQ_VIDEO_PLAYBACK_EVIDENCE "
+                            '{"nativeFirstFrame":true,"nativeSeekSettled":true}'
+                        ),
+                    ],
+                ),
+                encoding="utf-8",
+            )
+
+            evidence = smoke._read_video_playback_evidence(patrol_log)
+
+        self.assertEqual(
+            evidence,
+            {"nativeFirstFrame": True, "nativeSeekSettled": True},
         )
 
     def test_alpha_playback_canary_uses_bundled_mock_video_not_remote_fixture_id(self) -> None:
@@ -150,6 +174,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
             "gamma_local_anonymous_public_video",
+            command,
+        )
+        self.assertIn(
+            "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS=true",
             command,
         )
         self.assertNotIn("--dart-define-from-file=", command)
@@ -245,6 +273,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("--dart-define=MEDIA_UPLOAD_BASE_URL=https://gamma-upload.localhost:19130", joined)
         self.assertIn(
             "--dart-define=VIDEO_PLAYBACK_CANARY_WORK_ID=fixture_video_001",
+            joined,
+        )
+        self.assertIn(
+            "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS=false",
             joined,
         )
         self.assertIn("--dart-define=QWQ_PATROL_SESSION_MODE=local_gamma_anonymous", joined)
@@ -752,6 +784,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         beta_manual = (
             ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
         ).read_text(encoding="utf-8")
+        beta_stack = (
+            ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+        ).read_text(encoding="utf-8")
         beta_backing_compose = (
             ROOT / "quwoquan_ops/environments/compose/docker-compose.beta-backing.yaml"
         ).read_text(encoding="utf-8")
@@ -767,7 +802,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             / "dev_assistant_beta_gateway.py"
         ).read_text(encoding="utf-8")
         backing_ready = beta_manual.index(
-            "chat backing services must be ready before assistant-service starts",
+            "chat backing services must be ready before beta services start",
         )
         assistant_start = beta_manual.index(
             'echo "[app-beta-manual] starting assistant-service beta',
@@ -783,6 +818,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'MONGODB_DATABASE="quwoquan_assistant"',
             'REDIS_GENERAL_ADDR="$CHAT_REDIS_ADDR"',
             'REDIS_REC_ADDR="$CHAT_REDIS_ADDR"',
+            'ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}"',
             "export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT",
             'mkdir -p "$(dirname "$CHAT_SEED_LOG")"',
             'python3 "$BETA_MANUAL_RUNTIME_LOG_PROCESS"',
@@ -806,6 +842,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'path.startswith("/chat") or path == "/user/sync"',
             beta_gateway,
         )
+        self.assertIn("--skip-assistant", beta_manual)
+        self.assertIn('if [[ "$START_ASSISTANT" == "1" ]]; then', beta_manual)
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" ]]; then',
+            beta_stack,
+        )
+        self.assertIn("APP_BETA_CMD+=(--skip-assistant)", beta_stack)
         self.assertNotIn("_rewrite_media_urls", beta_gateway)
         self.assertNotIn("_join_media_base", beta_gateway)
         self.assertIn(
@@ -843,10 +886,16 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "https://localhost:{$LOCAL_GAMMA_HTTP_PORT:",
             "https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:",
             "https://localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:",
-            "https://localhost:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:",
         ):
             self.assertIn(token, caddyfile)
+        self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT", caddyfile)
+        # object-storage-edge 由带 TLS 的 MinIO workload 独占；Caddy 不能再次
+        # 绑定同一宿主端口，否则 gamma-proxy 永远无法启动。
         self.assertIn(
+            '"${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"',
+            compose,
+        )
+        self.assertNotIn(
             '"${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:-19130}"',
             compose,
         )
@@ -857,10 +906,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
     def test_video_range_mime_preflight_precedes_patrol(self) -> None:
         with mock.patch.object(stackctl, "_local_target_runtime_ready", return_value=True):
-            commands = stackctl._selected_tier_commands(
+            commands = stackctl._selected_profile_commands(
                 "gamma",
                 "gamma-local",
-                "t4",
+                VerificationProfile.RELEASE,
                 Path("/tmp/gamma-report"),
             )
 
@@ -874,7 +923,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertTrue(commands[media_surface_index]["stopOnFailure"])
 
     def test_prod_hosted_patrol_requires_release_video_canary_preflight(self) -> None:
-        command = stackctl._target_media_preflight_tier_command(
+        command = stackctl._target_media_preflight_profile_command(
             "prod-hosted",
             Path("/tmp/prod-report"),
         )
@@ -884,6 +933,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(command["name"], "prod-hosted-release-video-canary-preflight")
         self.assertTrue(
             any("verify_video_playback_canary.py" in value for value in command["argv"])
+        )
+        self.assertIn("--report", command["argv"])
+        self.assertEqual(
+            command["reportPath"],
+            "/tmp/prod-report/video-range-mime-preflight/report.json",
         )
         self.assertTrue(command["stopOnFailure"])
 
@@ -898,6 +952,108 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             smoke._validate_video_playback_canary_work_id(args, "prod")
 
     def test_stackctl_t4_evidence_binds_same_range_and_player_ready_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            health_report = root / "health.json"
+            smoke_report = root / "smoke.json"
+            patrol_log = root / "patrol.log"
+            patrol_log.write_text(
+                (
+                    "QWQ_VIDEO_PLAYBACK_EVIDENCE "
+                    '{"nativeFirstFrame":true,"nativeSeekSettled":true}\n'
+                ),
+                encoding="utf-8",
+            )
+            health_report.write_text(
+                json.dumps(
+                    {
+                        "checks": [
+                            {
+                                "name": "media-public-content-video-primary",
+                                "statusCode": 206,
+                                "contentType": "video/mp4",
+                            },
+                        ],
+                    },
+                ),
+                encoding="utf-8",
+            )
+            smoke_report.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "runs": [
+                            {
+                                "exitCode": 0,
+                                "device": {
+                                    "targetPlatform": "android-arm64",
+                                    "emulator": False,
+                                },
+                                "evidence": {
+                                    "afterScreenshot": {
+                                        "path": "evidence/after.png",
+                                    },
+                                    "videoPlayback": {
+                                        "nativeFirstFrame": True,
+                                        "nativeSeekSettled": True,
+                                    },
+                                    "rawLogPath": str(patrol_log),
+                                },
+                            },
+                            {
+                                "exitCode": 0,
+                                "device": {
+                                    "targetPlatform": "ios",
+                                    "emulator": False,
+                                },
+                                "evidence": {},
+                            },
+                        ],
+                    },
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "VIDEO_PLAYBACK_QOE_READBACK_PATH": "qoe.json",
+                    "VIDEO_PLAYBACK_PERFETTO_TRACE_PATH": "perfetto.trace",
+                    "VIDEO_PLAYBACK_PERFETTO_SUMMARY_PATH": "perfetto-summary.json",
+                },
+                clear=False,
+            ):
+                evidence = stackctl._runtime_media_t4_evidence(
+                    target_name="gamma-local",
+                    steps=[
+                        {
+                            "name": "gamma-local-video-range-mime-preflight",
+                            "reportPath": str(health_report),
+                        },
+                        {
+                            "name": "gamma-local-environment-page-smoke",
+                            "reportPath": str(smoke_report),
+                        },
+                    ],
+                    started_at="2026-07-16T00:00:00Z",
+                    ended_at="2026-07-16T00:01:00Z",
+                )
+
+        self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["environment"]["target"], "gamma-local")
+        self.assertEqual(evidence["serviceEvidence"]["videoRange"]["statusCode"], 206)
+        self.assertTrue(evidence["uiEvidence"]["stageRendered"])
+        self.assertTrue(evidence["uiEvidence"]["playerReady"])
+        self.assertFalse(evidence["uiEvidence"]["playerError"])
+        self.assertTrue(evidence["uiEvidence"]["nativeFirstFrame"])
+        self.assertTrue(evidence["uiEvidence"]["nativeSeekSettled"])
+        self.assertTrue(
+            evidence["uiEvidence"]["nativeEvidenceFromPhysicalAndroidDevice"],
+        )
+        self.assertTrue(evidence["uiEvidence"]["physicalIosPatrolPassed"])
+        self.assertEqual(evidence["uiEvidence"]["playerState"], "ready")
+
+    def test_stackctl_t4_evidence_rejects_emulator_native_signal_claim(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
             health_report = root / "health.json"
@@ -923,9 +1079,14 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                         "runs": [
                             {
                                 "exitCode": 0,
+                                "device": {
+                                    "targetPlatform": "android-arm64",
+                                    "emulator": True,
+                                },
                                 "evidence": {
-                                    "afterScreenshot": {
-                                        "path": "evidence/after.png",
+                                    "videoPlayback": {
+                                        "nativeFirstFrame": True,
+                                        "nativeSeekSettled": True,
                                     },
                                 },
                             },
@@ -951,13 +1112,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 ended_at="2026-07-16T00:01:00Z",
             )
 
-        self.assertEqual(evidence["status"], "passed")
-        self.assertEqual(evidence["environment"]["target"], "gamma-local")
-        self.assertEqual(evidence["serviceEvidence"]["videoRange"]["statusCode"], 206)
-        self.assertTrue(evidence["uiEvidence"]["stageRendered"])
-        self.assertTrue(evidence["uiEvidence"]["playerReady"])
-        self.assertFalse(evidence["uiEvidence"]["playerError"])
-        self.assertEqual(evidence["uiEvidence"]["playerState"], "ready")
+        self.assertEqual(evidence["status"], "failed")
+        self.assertFalse(evidence["uiEvidence"]["nativeFirstFrame"])
+        self.assertFalse(evidence["uiEvidence"]["nativeSeekSettled"])
+        self.assertFalse(
+            evidence["uiEvidence"]["nativeEvidenceFromPhysicalAndroidDevice"],
+        )
+        self.assertEqual(evidence["uiEvidence"]["seekEvidenceSource"], "unverified")
 
     def test_stackctl_t4_evidence_does_not_mislabel_missing_stage_as_player_error(
         self,
@@ -1050,7 +1211,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 clear=False,
             ),
         ):
-            command = stackctl._environment_page_smoke_tier_command(
+            command = stackctl._environment_page_smoke_profile_command(
                 "gamma",
                 "gamma-local",
                 Path("/tmp/gamma-report"),
@@ -1115,7 +1276,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 clear=False,
             ),
         ):
-            command = stackctl._environment_page_smoke_tier_command(
+            command = stackctl._environment_page_smoke_profile_command(
                 "beta",
                 "beta-local",
                 Path("/tmp/beta-report"),

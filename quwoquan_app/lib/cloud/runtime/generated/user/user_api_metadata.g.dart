@@ -13,8 +13,8 @@ class UserApiMetadata {
     '/auth/logout',
     '/auth/otp',
     '/auth/token',
-    '/invites/{linkCode}',
-    '/me/invites',
+    '/internal/user',
+    '/owner/account',
     '/owner/contact-discovery',
     '/owner/credentials',
     '/public/profile',
@@ -35,28 +35,24 @@ class UserApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AcceptInvite': '/invites/{linkCode}/accept',
     'ActivatePersona': '/user/personas/{subAccountId}/activate',
     'ApplyPersonaProfileSync': '/user/personas/{subAccountId}/profile-sync',
     'ApplyProposal': '/user/profile/proposals/{id}/apply',
     'BindCarrierPhoneCredential': '/owner/credentials/carrier-phone/bind',
-    'BindCredential': '/owner/credentials/bind',
     'BindPhoneCredential': '/owner/credentials/phone/bind',
     'BlockUser': '/user/sub-accounts/{targetSubAccountId}/block',
     'CancelGreetingRequest': '/user/greeting-request/{requestId}',
+    'CloseAccount': '/owner/account/close',
     'ConfirmProposal': '/user/profile/proposals/{id}/confirm',
     'CreateAlipayAuthorizationRequest': '/auth/authorization/alipay',
     'CreatePersona': '/user/personas',
     'CreateProfileUpdateProposal': '/user/personas/{personaId}/profile-proposals',
-    'DeleteEmptyPersona': '/user/personas/{subAccountId}/delete-empty',
     'DismissContactDiscovery': '/owner/contact-discovery/{id}',
     'FollowSubject': '/relationships/subjects/{subjectType}/{subjectId}/follow',
     'FollowUser': '/user/sub-accounts/{targetSubAccountId}/follow',
-    'GenerateInvite': '/me/invites',
     'GetActivePersonaContext': '/user/personas/active',
     'GetAppearanceSettings': '/user/settings/appearance',
     'GetCallSettings': '/user/settings/calls',
-    'GetInviteByCode': '/invites/{linkCode}',
     'GetLatestContactDiscovery': '/owner/contact-discovery/latest',
     'GetMeProfile': '/me',
     'GetNotificationSettings': '/user/settings/notifications',
@@ -74,6 +70,7 @@ class UserApiMetadata {
     'GetUserProfile': '/user/profile/{userId}',
     'IgnoreGreetingRequest': '/user/greeting-request/{requestId}/ignore',
     'InitiateContactDiscovery': '/owner/contact-discovery',
+    'InvalidateDevicePushEndpoint': '/internal/user/push-endpoints/{endpointRef}/invalidate',
     'ListBlockedUsers': '/user/blocked',
     'ListCredentials': '/owner/credentials',
     'ListFollowers': '/user/sub-accounts/{subAccountId}/followers',
@@ -81,12 +78,8 @@ class UserApiMetadata {
     'ListFollowingSubjects': '/user/following-subjects',
     'ListGreetingInbox': '/user/greeting-request/inbox',
     'ListGreetingOutbox': '/user/greeting-request/outbox',
-    'ListMyInvites': '/me/invites',
     'ListPersonas': '/user/personas',
     'ListProfileUpdateProposals': '/user/personas/{personaId}/profile-proposals',
-    'ListUserLifeItems': '/users/{userId}/life-items',
-    'ListUserLikes': '/users/{userId}/likes',
-    'ListUserWorks': '/users/{userId}/works',
     'LoginAnonymous': '/auth/login/anonymous',
     'LoginOneTap': '/auth/login/one-tap',
     'LoginWithAlipay': '/auth/login/alipay',
@@ -97,11 +90,13 @@ class UserApiMetadata {
     'MarkFollowedSubjectVisited': '/user/followed-subjects/{subjectType}/{subjectId}:mark-visited',
     'PullUserSync': '/user/sync',
     'RefreshToken': '/auth/token/refresh',
-    'RegisterDevice': '/user/devices/push-tokens',
     'RejectProposal': '/user/profile/proposals/{id}/reject',
+    'RemoveDevicePushEndpoint': '/user/devices/{deviceId}/push-endpoints/{endpointKind}',
     'ReplyGreetingRequest': '/user/greeting-request/{requestId}/reply',
+    'ResolveIncomingCallPushDestinations': '/internal/user/personas/{personaId}/push-destinations',
     'ResolveOneTapLoginHint': '/auth/login/one-tap/hint',
     'ResolveProfileQrToken': '/public/profile/qr/resolve',
+    'ResolvePushEndpointSecret': '/internal/user/push-endpoints/{endpointRef}/secret',
     'RetirePersona': '/user/personas/{subAccountId}/retire',
     'SearchSocialRelations': '/user/search/social-relations',
     'SendGreetingRequest': '/user/greeting-request',
@@ -116,31 +111,28 @@ class UserApiMetadata {
     'UpdatePersona': '/user/personas/{subAccountId}',
     'UpdatePrivacySettings': '/user/settings/privacy',
     'UpdateUserProfile': '/user/profile',
+    'UpsertDevicePushEndpoint': '/user/devices/{deviceId}/push-endpoints/{endpointKind}',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'AcceptInvite': 'POST',
     'ActivatePersona': 'POST',
     'ApplyPersonaProfileSync': 'POST',
     'ApplyProposal': 'POST',
     'BindCarrierPhoneCredential': 'POST',
-    'BindCredential': 'POST',
     'BindPhoneCredential': 'POST',
     'BlockUser': 'POST',
     'CancelGreetingRequest': 'DELETE',
+    'CloseAccount': 'POST',
     'ConfirmProposal': 'POST',
     'CreateAlipayAuthorizationRequest': 'POST',
     'CreatePersona': 'POST',
     'CreateProfileUpdateProposal': 'POST',
-    'DeleteEmptyPersona': 'DELETE',
     'DismissContactDiscovery': 'DELETE',
     'FollowSubject': 'POST',
     'FollowUser': 'POST',
-    'GenerateInvite': 'POST',
     'GetActivePersonaContext': 'GET',
     'GetAppearanceSettings': 'GET',
     'GetCallSettings': 'GET',
-    'GetInviteByCode': 'GET',
     'GetLatestContactDiscovery': 'GET',
     'GetMeProfile': 'GET',
     'GetNotificationSettings': 'GET',
@@ -158,6 +150,7 @@ class UserApiMetadata {
     'GetUserProfile': 'GET',
     'IgnoreGreetingRequest': 'POST',
     'InitiateContactDiscovery': 'POST',
+    'InvalidateDevicePushEndpoint': 'POST',
     'ListBlockedUsers': 'GET',
     'ListCredentials': 'GET',
     'ListFollowers': 'GET',
@@ -165,12 +158,8 @@ class UserApiMetadata {
     'ListFollowingSubjects': 'GET',
     'ListGreetingInbox': 'GET',
     'ListGreetingOutbox': 'GET',
-    'ListMyInvites': 'GET',
     'ListPersonas': 'GET',
     'ListProfileUpdateProposals': 'GET',
-    'ListUserLifeItems': 'GET',
-    'ListUserLikes': 'GET',
-    'ListUserWorks': 'GET',
     'LoginAnonymous': 'POST',
     'LoginOneTap': 'POST',
     'LoginWithAlipay': 'POST',
@@ -181,11 +170,13 @@ class UserApiMetadata {
     'MarkFollowedSubjectVisited': 'POST',
     'PullUserSync': 'POST',
     'RefreshToken': 'POST',
-    'RegisterDevice': 'POST',
     'RejectProposal': 'POST',
+    'RemoveDevicePushEndpoint': 'DELETE',
     'ReplyGreetingRequest': 'POST',
+    'ResolveIncomingCallPushDestinations': 'GET',
     'ResolveOneTapLoginHint': 'POST',
     'ResolveProfileQrToken': 'GET',
+    'ResolvePushEndpointSecret': 'GET',
     'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
@@ -200,32 +191,29 @@ class UserApiMetadata {
     'UpdatePersona': 'PATCH',
     'UpdatePrivacySettings': 'PATCH',
     'UpdateUserProfile': 'PATCH',
+    'UpsertDevicePushEndpoint': 'PUT',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'AcceptInvite': 'required',
     'ActivatePersona': 'required',
     'ApplyPersonaProfileSync': 'required',
     'ApplyProposal': 'required',
     'BindCarrierPhoneCredential': 'required',
-    'BindCredential': 'required',
     'BindPhoneCredential': 'required',
     'BlockUser': 'required',
     'CancelGreetingRequest': 'required',
+    'CloseAccount': 'required',
     'ConfirmProposal': 'required',
     'CreateAlipayAuthorizationRequest': 'public',
     'CreatePersona': 'required',
     'CreateProfileUpdateProposal': 'required',
-    'DeleteEmptyPersona': 'required',
     'DismissContactDiscovery': 'required',
     'FollowSubject': 'required',
     'FollowUser': 'required',
-    'GenerateInvite': 'required',
     'GetActivePersonaContext': 'required',
     'GetAppearanceSettings': 'required',
     'GetCallSettings': 'required',
-    'GetInviteByCode': 'public',
     'GetLatestContactDiscovery': 'required',
     'GetMeProfile': 'required',
     'GetNotificationSettings': 'required',
@@ -235,27 +223,24 @@ class UserApiMetadata {
     'GetProfileEditSnapshot': 'required',
     'GetProfileQrCard': 'required',
     'GetProfileUpdateProposal': 'required',
-    'GetRelationship': 'required',
-    'GetRelationshipCapability': 'required',
-    'GetSubAccountProfile': 'required',
+    'GetRelationship': 'optional',
+    'GetRelationshipCapability': 'optional',
+    'GetSubAccountProfile': 'optional',
     'GetUserHomepageBundle': 'optional',
     'GetUserInterestProfile': 'required',
-    'GetUserProfile': 'optional',
+    'GetUserProfile': 'required',
     'IgnoreGreetingRequest': 'required',
     'InitiateContactDiscovery': 'required',
+    'InvalidateDevicePushEndpoint': 'required',
     'ListBlockedUsers': 'required',
     'ListCredentials': 'required',
-    'ListFollowers': 'required',
-    'ListFollowing': 'required',
+    'ListFollowers': 'optional',
+    'ListFollowing': 'optional',
     'ListFollowingSubjects': 'required',
     'ListGreetingInbox': 'required',
     'ListGreetingOutbox': 'required',
-    'ListMyInvites': 'required',
     'ListPersonas': 'required',
     'ListProfileUpdateProposals': 'required',
-    'ListUserLifeItems': 'required',
-    'ListUserLikes': 'required',
-    'ListUserWorks': 'required',
     'LoginAnonymous': 'public',
     'LoginOneTap': 'public',
     'LoginWithAlipay': 'public',
@@ -266,11 +251,13 @@ class UserApiMetadata {
     'MarkFollowedSubjectVisited': 'required',
     'PullUserSync': 'required',
     'RefreshToken': 'public',
-    'RegisterDevice': 'required',
     'RejectProposal': 'required',
+    'RemoveDevicePushEndpoint': 'required',
     'ReplyGreetingRequest': 'required',
+    'ResolveIncomingCallPushDestinations': 'required',
     'ResolveOneTapLoginHint': 'public',
     'ResolveProfileQrToken': 'optional',
+    'ResolvePushEndpointSecret': 'required',
     'RetirePersona': 'required',
     'SearchSocialRelations': 'required',
     'SendGreetingRequest': 'required',
@@ -285,13 +272,12 @@ class UserApiMetadata {
     'UpdatePersona': 'required',
     'UpdatePrivacySettings': 'required',
     'UpdateUserProfile': 'required',
+    'UpsertDevicePushEndpoint': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
     'GetUserHomepageBundle': 'UserHomepageBundleWireDto',
-    'ListUserLifeItems': 'UserLifeItemDto',
-    'ListUserWorks': 'UserWorkDto',
     'LoginAnonymous': 'AuthLoginResultDto',
   };
 
@@ -303,34 +289,28 @@ class UserApiMetadata {
     'GetProfileUpdateProposal': 'object',
     'GetUserHomepageBundle': 'object',
     'ListProfileUpdateProposals': 'page',
-    'ListUserLifeItems': 'page',
-    'ListUserWorks': 'page',
     'LoginAnonymous': 'object',
     'RejectProposal': 'object',
   };
 
-  static const String acceptInviteOperation = 'AcceptInvite';
   static const String activatePersonaOperation = 'ActivatePersona';
   static const String applyPersonaProfileSyncOperation = 'ApplyPersonaProfileSync';
   static const String applyProposalOperation = 'ApplyProposal';
   static const String bindCarrierPhoneCredentialOperation = 'BindCarrierPhoneCredential';
-  static const String bindCredentialOperation = 'BindCredential';
   static const String bindPhoneCredentialOperation = 'BindPhoneCredential';
   static const String blockUserOperation = 'BlockUser';
   static const String cancelGreetingRequestOperation = 'CancelGreetingRequest';
+  static const String closeAccountOperation = 'CloseAccount';
   static const String confirmProposalOperation = 'ConfirmProposal';
   static const String createAlipayAuthorizationRequestOperation = 'CreateAlipayAuthorizationRequest';
   static const String createPersonaOperation = 'CreatePersona';
   static const String createProfileUpdateProposalOperation = 'CreateProfileUpdateProposal';
-  static const String deleteEmptyPersonaOperation = 'DeleteEmptyPersona';
   static const String dismissContactDiscoveryOperation = 'DismissContactDiscovery';
   static const String followSubjectOperation = 'FollowSubject';
   static const String followUserOperation = 'FollowUser';
-  static const String generateInviteOperation = 'GenerateInvite';
   static const String getActivePersonaContextOperation = 'GetActivePersonaContext';
   static const String getAppearanceSettingsOperation = 'GetAppearanceSettings';
   static const String getCallSettingsOperation = 'GetCallSettings';
-  static const String getInviteByCodeOperation = 'GetInviteByCode';
   static const String getLatestContactDiscoveryOperation = 'GetLatestContactDiscovery';
   static const String getMeProfileOperation = 'GetMeProfile';
   static const String getNotificationSettingsOperation = 'GetNotificationSettings';
@@ -348,6 +328,7 @@ class UserApiMetadata {
   static const String getUserProfileOperation = 'GetUserProfile';
   static const String ignoreGreetingRequestOperation = 'IgnoreGreetingRequest';
   static const String initiateContactDiscoveryOperation = 'InitiateContactDiscovery';
+  static const String invalidateDevicePushEndpointOperation = 'InvalidateDevicePushEndpoint';
   static const String listBlockedUsersOperation = 'ListBlockedUsers';
   static const String listCredentialsOperation = 'ListCredentials';
   static const String listFollowersOperation = 'ListFollowers';
@@ -355,12 +336,8 @@ class UserApiMetadata {
   static const String listFollowingSubjectsOperation = 'ListFollowingSubjects';
   static const String listGreetingInboxOperation = 'ListGreetingInbox';
   static const String listGreetingOutboxOperation = 'ListGreetingOutbox';
-  static const String listMyInvitesOperation = 'ListMyInvites';
   static const String listPersonasOperation = 'ListPersonas';
   static const String listProfileUpdateProposalsOperation = 'ListProfileUpdateProposals';
-  static const String listUserLifeItemsOperation = 'ListUserLifeItems';
-  static const String listUserLikesOperation = 'ListUserLikes';
-  static const String listUserWorksOperation = 'ListUserWorks';
   static const String loginAnonymousOperation = 'LoginAnonymous';
   static const String loginOneTapOperation = 'LoginOneTap';
   static const String loginWithAlipayOperation = 'LoginWithAlipay';
@@ -371,11 +348,13 @@ class UserApiMetadata {
   static const String markFollowedSubjectVisitedOperation = 'MarkFollowedSubjectVisited';
   static const String pullUserSyncOperation = 'PullUserSync';
   static const String refreshTokenOperation = 'RefreshToken';
-  static const String registerDeviceOperation = 'RegisterDevice';
   static const String rejectProposalOperation = 'RejectProposal';
+  static const String removeDevicePushEndpointOperation = 'RemoveDevicePushEndpoint';
   static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
+  static const String resolveIncomingCallPushDestinationsOperation = 'ResolveIncomingCallPushDestinations';
   static const String resolveOneTapLoginHintOperation = 'ResolveOneTapLoginHint';
   static const String resolveProfileQrTokenOperation = 'ResolveProfileQrToken';
+  static const String resolvePushEndpointSecretOperation = 'ResolvePushEndpointSecret';
   static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
@@ -390,13 +369,8 @@ class UserApiMetadata {
   static const String updatePersonaOperation = 'UpdatePersona';
   static const String updatePrivacySettingsOperation = 'UpdatePrivacySettings';
   static const String updateUserProfileOperation = 'UpdateUserProfile';
+  static const String upsertDevicePushEndpointOperation = 'UpsertDevicePushEndpoint';
 
-  static const String acceptInvitePathTemplate = '/invites/{linkCode}/accept';
-  static String acceptInvitePath({required String linkCode}) {
-    return _fillPath(acceptInvitePathTemplate, <String, String>{
-      'linkCode': linkCode,
-    });
-  }
   static const String activatePersonaPathTemplate = '/user/personas/{subAccountId}/activate';
   static String activatePersonaPath({required String subAccountId}) {
     return _fillPath(activatePersonaPathTemplate, <String, String>{
@@ -416,7 +390,6 @@ class UserApiMetadata {
     });
   }
   static const String bindCarrierPhoneCredentialPath = '/owner/credentials/carrier-phone/bind';
-  static const String bindCredentialPath = '/owner/credentials/bind';
   static const String bindPhoneCredentialPath = '/owner/credentials/phone/bind';
   static const String blockUserPathTemplate = '/user/sub-accounts/{targetSubAccountId}/block';
   static String blockUserPath({required String targetSubAccountId}) {
@@ -430,6 +403,7 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
+  static const String closeAccountPath = '/owner/account/close';
   static const String confirmProposalPathTemplate = '/user/profile/proposals/{id}/confirm';
   static String confirmProposalPath({required String id}) {
     return _fillPath(confirmProposalPathTemplate, <String, String>{
@@ -442,12 +416,6 @@ class UserApiMetadata {
   static String createProfileUpdateProposalPath({required String personaId}) {
     return _fillPath(createProfileUpdateProposalPathTemplate, <String, String>{
       'personaId': personaId,
-    });
-  }
-  static const String deleteEmptyPersonaPathTemplate = '/user/personas/{subAccountId}/delete-empty';
-  static String deleteEmptyPersonaPath({required String subAccountId}) {
-    return _fillPath(deleteEmptyPersonaPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
     });
   }
   static const String dismissContactDiscoveryPathTemplate = '/owner/contact-discovery/{id}';
@@ -469,16 +437,9 @@ class UserApiMetadata {
       'targetSubAccountId': targetSubAccountId,
     });
   }
-  static const String generateInvitePath = '/me/invites';
   static const String getActivePersonaContextPath = '/user/personas/active';
   static const String getAppearanceSettingsPath = '/user/settings/appearance';
   static const String getCallSettingsPath = '/user/settings/calls';
-  static const String getInviteByCodePathTemplate = '/invites/{linkCode}';
-  static String getInviteByCodePath({required String linkCode}) {
-    return _fillPath(getInviteByCodePathTemplate, <String, String>{
-      'linkCode': linkCode,
-    });
-  }
   static const String getLatestContactDiscoveryPath = '/owner/contact-discovery/latest';
   static const String getMeProfilePath = '/me';
   static const String getNotificationSettingsPath = '/user/settings/notifications';
@@ -541,6 +502,12 @@ class UserApiMetadata {
     });
   }
   static const String initiateContactDiscoveryPath = '/owner/contact-discovery';
+  static const String invalidateDevicePushEndpointPathTemplate = '/internal/user/push-endpoints/{endpointRef}/invalidate';
+  static String invalidateDevicePushEndpointPath({required String endpointRef}) {
+    return _fillPath(invalidateDevicePushEndpointPathTemplate, <String, String>{
+      'endpointRef': endpointRef,
+    });
+  }
   static const String listBlockedUsersPath = '/user/blocked';
   static const String listCredentialsPath = '/owner/credentials';
   static const String listFollowersPathTemplate = '/user/sub-accounts/{subAccountId}/followers';
@@ -558,30 +525,11 @@ class UserApiMetadata {
   static const String listFollowingSubjectsPath = '/user/following-subjects';
   static const String listGreetingInboxPath = '/user/greeting-request/inbox';
   static const String listGreetingOutboxPath = '/user/greeting-request/outbox';
-  static const String listMyInvitesPath = '/me/invites';
   static const String listPersonasPath = '/user/personas';
   static const String listProfileUpdateProposalsPathTemplate = '/user/personas/{personaId}/profile-proposals';
   static String listProfileUpdateProposalsPath({required String personaId}) {
     return _fillPath(listProfileUpdateProposalsPathTemplate, <String, String>{
       'personaId': personaId,
-    });
-  }
-  static const String listUserLifeItemsPathTemplate = '/users/{userId}/life-items';
-  static String listUserLifeItemsPath({required String userId}) {
-    return _fillPath(listUserLifeItemsPathTemplate, <String, String>{
-      'userId': userId,
-    });
-  }
-  static const String listUserLikesPathTemplate = '/users/{userId}/likes';
-  static String listUserLikesPath({required String userId}) {
-    return _fillPath(listUserLikesPathTemplate, <String, String>{
-      'userId': userId,
-    });
-  }
-  static const String listUserWorksPathTemplate = '/users/{userId}/works';
-  static String listUserWorksPath({required String userId}) {
-    return _fillPath(listUserWorksPathTemplate, <String, String>{
-      'userId': userId,
     });
   }
   static const String loginAnonymousPath = '/auth/login/anonymous';
@@ -600,11 +548,17 @@ class UserApiMetadata {
   }
   static const String pullUserSyncPath = '/user/sync';
   static const String refreshTokenPath = '/auth/token/refresh';
-  static const String registerDevicePath = '/user/devices/push-tokens';
   static const String rejectProposalPathTemplate = '/user/profile/proposals/{id}/reject';
   static String rejectProposalPath({required String id}) {
     return _fillPath(rejectProposalPathTemplate, <String, String>{
       'id': id,
+    });
+  }
+  static const String removeDevicePushEndpointPathTemplate = '/user/devices/{deviceId}/push-endpoints/{endpointKind}';
+  static String removeDevicePushEndpointPath({required String deviceId, required String endpointKind}) {
+    return _fillPath(removeDevicePushEndpointPathTemplate, <String, String>{
+      'deviceId': deviceId,
+      'endpointKind': endpointKind,
     });
   }
   static const String replyGreetingRequestPathTemplate = '/user/greeting-request/{requestId}/reply';
@@ -613,8 +567,20 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
+  static const String resolveIncomingCallPushDestinationsPathTemplate = '/internal/user/personas/{personaId}/push-destinations';
+  static String resolveIncomingCallPushDestinationsPath({required String personaId}) {
+    return _fillPath(resolveIncomingCallPushDestinationsPathTemplate, <String, String>{
+      'personaId': personaId,
+    });
+  }
   static const String resolveOneTapLoginHintPath = '/auth/login/one-tap/hint';
   static const String resolveProfileQrTokenPath = '/public/profile/qr/resolve';
+  static const String resolvePushEndpointSecretPathTemplate = '/internal/user/push-endpoints/{endpointRef}/secret';
+  static String resolvePushEndpointSecretPath({required String endpointRef}) {
+    return _fillPath(resolvePushEndpointSecretPathTemplate, <String, String>{
+      'endpointRef': endpointRef,
+    });
+  }
   static const String retirePersonaPathTemplate = '/user/personas/{subAccountId}/retire';
   static String retirePersonaPath({required String subAccountId}) {
     return _fillPath(retirePersonaPathTemplate, <String, String>{
@@ -660,6 +626,13 @@ class UserApiMetadata {
   }
   static const String updatePrivacySettingsPath = '/user/settings/privacy';
   static const String updateUserProfilePath = '/user/profile';
+  static const String upsertDevicePushEndpointPathTemplate = '/user/devices/{deviceId}/push-endpoints/{endpointKind}';
+  static String upsertDevicePushEndpointPath({required String deviceId, required String endpointKind}) {
+    return _fillPath(upsertDevicePushEndpointPathTemplate, <String, String>{
+      'deviceId': deviceId,
+      'endpointKind': endpointKind,
+    });
+  }
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

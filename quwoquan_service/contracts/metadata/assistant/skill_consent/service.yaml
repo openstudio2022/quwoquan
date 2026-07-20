@@ -7,11 +7,35 @@ api_routes:
     facet: SkillConsentCommandFacade
     kind: command
     method: grantConsent
-  description: 授权 Skill
+  description: 授权 Skill；命名状态迁移，重复授权持久化 no-op receipt，产生版本化事实与事件。
   method: POST
   operation: GrantSkillConsent
   path: /assistant/skills/{skillId}/consent
 
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.consent_invalid_argument
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_command
+    trace: true
+    attributes: [operation, outcome, error_code, replayed]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -26,11 +50,35 @@ api_routes:
     facet: SkillConsentCommandFacade
     kind: command
     method: revokeConsent
-  description: 撤销 Skill 授权
+  description: 撤销 Skill 授权；命名状态迁移，撤权即时生效，执行点失败关闭。
   method: DELETE
   operation: RevokeSkillConsent
   path: /assistant/skills/{skillId}/consent
 
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - ASSISTANT.USER.consent_invalid_argument
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_command
+    trace: true
+    attributes: [operation, outcome, error_code, replayed]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
   security:
     anonymous_policy: deny
     auth_mode: required
@@ -44,11 +92,34 @@ api_routes:
     method: listConsents
     reader: SkillConsentListReader
     slice: SkillConsentListSlice
-  description: 授权列表
+  description: 授权列表；store 不可用时返回结构化 503，禁止按未授权静默放行或按已授权静默降级。
   method: GET
   operation: ListConsents
   path: /assistant/consents
 
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.consent_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_consent_query
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: consent_owner
   security:
     anonymous_policy: deny
     auth_mode: required

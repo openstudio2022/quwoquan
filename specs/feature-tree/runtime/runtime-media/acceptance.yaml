@@ -12,9 +12,11 @@ scope:
     - publicSliceKey / MediaDeliveryReference 命名与 authority-only 交付
     - App 图片负缓存与视频控制器槽位退出
     - manifest 驱动的 canonical media Range/MIME、Dart define parity 与门禁
-    - alpha/beta/gamma-local/prod-sim 的本地 target preflight，以及 prod-hosted gray-initial 的 release canary 证据
+    - alpha/beta/gamma-local/prod-sim 的本地 target preflight，以及 prod-hosted 三阶段 release canary 证据
+    - P0 progressive MP4/Range 安全 seek、1 小时时长边界、有效播放和 QoE/readback
+    - 独立准入的 P1-A storyboard 与 P1-B HLS/CMAF ABR
   out_of_scope:
-    - 独立的视频剪辑、转码策略和内容供给能力
+    - 独立的视频剪辑、创作型转码策略和内容供给能力
 sit_acceptance:
   SIT1:
     title: runtime media 交付与加载恢复 SIT
@@ -51,6 +53,7 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: media_delivery_contract
         cases:
         - local_contract.runtime.runtime_media.delivery_uri.authority_only
@@ -60,6 +63,7 @@ sit_acceptance:
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: media_asset_reference
         cases:
         - api_integration.runtime.runtime_media.projection.no_object_key
@@ -69,6 +73,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: media_delivery_gate
         cases:
         - local_contract.runtime.runtime_media.gate.forbidden_tokens
@@ -76,35 +81,58 @@ sit_acceptance:
         - local_contract.runtime.runtime_media.gate.runtime_config_and_launch_define_parity
         envs: *id001
     notes:
-      - "`prod-sim` 是 prod 语义的本地演练 target；生产播放证据只接受 `prod-hosted` 的 `gray-initial` release canary。"
+      - "`prod-sim` 是 prod 语义的本地演练 target；生产播放证据只接受 `prod-hosted` 的 `gray-initial / carry-on / full` release canary。"
       - 未产生真实 beta/gamma-local/prod-hosted 设备 ready 证据时，SIT 状态保持 partial，不能由 curl、dry-run 或页面节点存在替代。
   SIT2:
-    title: VOD 权威描述符、storyboard、QoE 与有效播放分轨
+    title: VOD 权威描述符、P0 seek、独立增强、QoE 与有效播放分轨
     story_refs:
     - specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey
     done_when:
     - 内容视频以 `{assetId, assetVersion, processorProfile}` 幂等处理，并且只允许 `processing -> ready | rejected`。
-    - 只有 ready asset 可被 publish 和投影；descriptor 从服务端探测结果提供 verifiedDurationMs、尺寸、codec/container、canonical video/cover slice 与可选 previewTrack。
+    - P0 只有真实 probe 验证过 H.264/AAC、时长、尺寸、GOP/keyframe、fast-start、hash 与 canonical video/cover slice 的 ready asset 可被 publish 和投影；seed 不得直接伪造 ready。
+    - 产品时长上限为 3600000ms；125000ms 资产用于 seek 回归，3605000ms 资产必须被超上限策略拒绝，同时保留接近一小时合法资产的边界验证。
     - native duration 只用于 seek 边界和数据质量校验；超容差只产生一次去重事件/修复任务，不覆盖服务端权威值或伪装为播放失败。
-    - previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标。
+    - P0 拖动只更新虚拟 target，release 只提交一次 seek；切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
+    - P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
+    - P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
     - video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
+    - video_playback_qoe 必须携带低基数 devicePlatform/networkClass 与 effectivePlaybackMs，使 rebuffer time ratio、Android Wi-Fi/蜂窝 TTFF/seek settle、终态失败、掉帧和 audio underrun 可由 SLS readback 直接计算；任一必需字段缺失不得以零值补齐。
     - 每会话每内容最多一次 effective_play，服务端拒绝未达有效播放门槛、seek 虚增、buffering、后台或离屏时段。
-    - SLS hourly 聚合与 dashboard/alert 能 readback P50/P95 ready/TTFF、rebuffer incidents per ready 和 duration mismatch rate，告警有最小样本量抑制。
+    - SLS hourly 聚合与 dashboard/alert 能 readback P50/P95 TTFF/seek settle、rebuffer incidents per ready、seek failure 和 duration mismatch rate，告警有最小样本量抑制。
+    - 发布级 user_acceptance evidence 必须重新解析 Range health report、物理 Android 原始 native 日志、物理 iOS Patrol 成功 run、Android Perfetto trace/同 hash 指标摘要和结构化 SLS QoE readback；只检查文件存在、手写布尔值或 simulator 均不得通过。
+    - prod-hosted 的 gray-initial、carry-on、full 必须各自可执行同一个 release canary preflight，并绑定同一 commit、production config hash 与 media identity；任一阶段不可达即阻断后续阶段。
+    - Android 不按品牌或具体机型维护 renderer/codec 分支；统一能力策略必须覆盖最低支持 API、低内存、低算力、软件 decoder 与能力缺失，并保留结构化降级和真实物理机证据。
     performance_points:
     - 首帧真实可用时采集 TTFF；平台无法取得首帧时不得伪报 TTFF，只报告 readyMs。
+    - 首帧成功率 >= 99.5%；P95 Wi-Fi <= 1500ms、蜂窝网络 <= 2500ms。
+    - release seek settle P95 Wi-Fi <= 1000ms、蜂窝网络 <= 2000ms；seek failure rate < 0.5%。
+    - 拖动 move 期间 native seek 次数为 0，触控到 thumb/time 更新 P95 <= 50ms，>2x vsync 的 jank frame < 1%。
+    - 30 秒播放窗口 dropped-frame ratio < 1%、audio underrun = 0；秒级黑帧或主线程 stall 为阻断。
+    - rebuffer sessions / ready sessions < 2%，rebuffer time / effective playback time < 1%，终态播放失败率 < 0.5%。
+    - P1-A preview 内存/磁盘/网络命中 P95 分别 <= 100ms/300ms/1000ms；超时或失败只允许降级。
     - raw QoE 留存 3 天、去身份 hourly 聚合留存 90 天。
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/tests/local_contract/video_playback_descriptor__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/api_integration/video_media_processing__api_integration_test.go
-      - file: quwoquan_service/services/content-service/tests/api_integration/effective_play_behavior__api_integration_test.go
-      - file: quwoquan_ops/tests/local_contract/test_video_playback_qoe_sls__local_contract_test.py
-      - file: quwoquan_app/test/user_acceptance/patrol/video/video_playback_qoe__user_acceptance_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_feed_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+      - file: quwoquan_ops/tests/local_contract/test_video_playback_qoe_observability__local_contract_test.py
+      - file: quwoquan_ops/tests/local_contract/test_runtime_media_t4_evidence__local_contract_test.py
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_data/tests/local_contract/governance/test_media_canary__video_playback__functional__local_contract_test.py
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_session_seek__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/platform/video_playback_view_type__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/observability/runtime_diagnostics__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_feed_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+      - file: quwoquan_ops/tests/local_contract/test_video_playback_qoe_observability__local_contract_test.py
+      - file: quwoquan_ops/tests/local_contract/test_runtime_media_t4_evidence__local_contract_test.py
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: smoke
         suite: video_playback_descriptor
         cases:
         - local_contract.runtime.runtime_media.video_descriptor.ready_asset_only
@@ -113,6 +141,7 @@ sit_acceptance:
         envs: &id002
         - alpha
       - layer: api_integration
+        execution_profile: integration
         suite: video_media_processing
         cases:
         - api_integration.runtime.runtime_media.video_processing.ready_publish_projection
@@ -122,6 +151,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: video_playback_qoe
         cases:
         - user_acceptance.runtime.runtime_media.video_qoe.device_readback
@@ -130,12 +160,16 @@ sit_acceptance:
         - prod
         rollout_stages:
         - gray_initial
+        - carry_on
+        - full
     notes:
-    - 2026-07-18：现有播放器仅证明 controller initialize ready，尚不具备真实 TTFF、卡顿、seek 或时长偏差采集；effective_play、处理状态机、SLS readback 和真实设备证据均未实现，状态保持 pending。
+    - 2026-07-19：商用准入拆分为 P0 progressive MP4/Range、P1-A storyboard、P1-B ABR。Android 已以 prepare-to-rendered-frame 与 seek discontinuity 后 rendered-frame 产出真实 TTFF/seek settle，并记录 dropped frames、audio underrun 与通用 renderer/queue/fallback；controller initialize 与 seekTo Future 仍不作为该证据。125 秒、3595 秒和 3605 秒 canary 的 probe/fast-start/GOP/时长/哈希本地合同已验证，effective_play 服务端防作弊及 QoE 字段分轨也已进入本地门禁。
+    - 2026-07-20：发布证据合同进一步冻结为“可解析而非只存在”：Range health、物理 Android native 日志、物理 iOS Patrol、Perfetto trace/同 hash summary、SLS QoE 双网络桶 readback 均由 full gate 重新验证；prod 三阶段使用同一 preflight 主线。beta/gamma/prod-hosted 的非 dry-run 处理回调、早期/低端 Android 与 iOS 物理机、Perfetto、SLS readback 与同 release/config 的 prod 三阶段真实报告仍缺失；SIT2 只能保持 partial，`make gate-runtime-media-full` 继续 GATE_BLOCK。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - python3 quwoquan_ops/gate/verify_media_delivery_contract.py
-  full_gate:
+  profile_gates:
   - make gate
+  - make gate-release ENV=gamma

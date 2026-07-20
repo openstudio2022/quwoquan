@@ -53,7 +53,7 @@ quwoquan_data/schema/
 `executionId` 必须符合：
 
 ```text
-YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<canary|m1|m2|m3>-<sequence>
+YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<canary|m1|m2|m3|h10k>-<sequence>
 ```
 
 同一 ID 只允许 resume。新尝试递增 sequence，并在根 manifest 中声明 `retryOf`。不允许 taskId、batchId、planId、workerId 或其它平行身份。
@@ -109,7 +109,7 @@ python3 quwoquan_data/scripts/cli.py verify content-execution-layout
 python3 quwoquan_data/scripts/cli.py verify publish-purity
 python3 quwoquan_data/scripts/cli.py verify two-province-coverage-release --release <releaseId>
 python3 quwoquan_data/scripts/cli.py verify all
-python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
 ```
 
 凭证、来源、权利、Gamma、API 或 App 任一真实证据缺失，必须返回带 executionId 的 `GATE_BLOCK`，不得用 fixture、skip、历史数据或估算报告替代。

@@ -22,13 +22,3 @@ rec_model_service:
 es:
   enabled: false
   endpoints: []
-
-experiments:
-  rec_model_vs_rule:
-    enabled: true
-    buckets:
-      model: 100
-  rec_scoring_weights:
-    enabled: true
-    buckets:
-      control: 100

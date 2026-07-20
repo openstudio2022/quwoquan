@@ -12,37 +12,48 @@ var _ = time.Now
 var (
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrMemberNotFound       = errors.New("conversation member not found")
+	ErrUserStateNotFound    = errors.New("conversation user state not found")
 )
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
-	ID                    string    `json:"id" bson:"_id"`
-	Type                  string    `json:"type" bson:"type"`
-	Title                 string    `json:"title" bson:"title"`
-	AvatarUrl             string    `json:"avatarUrl" bson:"avatarUrl"`
-	GroupAvatarAssetId    string    `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
-	GroupAvatarVersion    int64     `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
-	GroupAvatarSourceHash string    `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
-	CreatorId             string    `json:"creatorId" bson:"creatorId"`
-	CircleId              string    `json:"circleId" bson:"circleId"`
-	CircleGroupId         string    `json:"circleGroupId" bson:"circleGroupId"`
-	EntityId              string    `json:"entityId" bson:"entityId"`
-	OriginType            string    `json:"originType" bson:"originType"`
-	BindingType           string    `json:"bindingType" bson:"bindingType"`
-	LifecyclePolicy       string    `json:"lifecyclePolicy" bson:"lifecyclePolicy"`
-	MaxSeq                int64     `json:"maxSeq" bson:"maxSeq"`
-	MemberCount           int       `json:"memberCount" bson:"memberCount"`
-	MembersRosterRevision int64     `json:"membersRosterRevision" bson:"membersRosterRevision"`
-	MaxGroupSize          int       `json:"maxGroupSize" bson:"maxGroupSize"`
-	ReceiptEnabled        bool      `json:"receiptEnabled" bson:"receiptEnabled"`
-	LastMessageId         string    `json:"lastMessageId" bson:"lastMessageId"`
-	LastMessagePreview    string    `json:"lastMessagePreview" bson:"lastMessagePreview"`
-	LastMessageTime       time.Time `json:"lastMessageTime" bson:"lastMessageTime"`
-	MessageCount          int       `json:"messageCount" bson:"messageCount"`
-	Status                string    `json:"status" bson:"status"`
-	CreatedAt             time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt             time.Time `json:"updatedAt" bson:"updatedAt"`
+	ID                      string     `json:"id" bson:"_id"`
+	Type                    string     `json:"type" bson:"type"`
+	Title                   string     `json:"title" bson:"title"`
+	AvatarUrl               string     `json:"avatarUrl" bson:"avatarUrl"`
+	GroupAvatarAssetId      string     `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
+	GroupAvatarVersion      int64      `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
+	GroupAvatarSourceHash   string     `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
+	CreatorId               string     `json:"creatorId" bson:"creatorId"`
+	CircleId                string     `json:"circleId" bson:"circleId"`
+	CircleGroupId           string     `json:"circleGroupId" bson:"circleGroupId"`
+	EntityId                string     `json:"entityId" bson:"entityId"`
+	OriginType              string     `json:"originType" bson:"originType"`
+	BindingType             string     `json:"bindingType" bson:"bindingType"`
+	LifecyclePolicy         string     `json:"lifecyclePolicy" bson:"lifecyclePolicy"`
+	MaxSeq                  int64      `json:"maxSeq" bson:"maxSeq"`
+	MemberCount             int        `json:"memberCount" bson:"memberCount"`
+	MembersRosterRevision   int64      `json:"membersRosterRevision" bson:"membersRosterRevision"`
+	MaxGroupSize            int        `json:"maxGroupSize" bson:"maxGroupSize"`
+	ReceiptEnabled          bool       `json:"receiptEnabled" bson:"receiptEnabled"`
+	Announcement            string     `json:"announcement" bson:"announcement"`
+	AnnouncementUpdatedBy   string     `json:"announcementUpdatedBy" bson:"announcementUpdatedBy"`
+	AnnouncementUpdatedAt   *time.Time `json:"announcementUpdatedAt,omitempty" bson:"announcementUpdatedAt,omitempty"`
+	NameEditableByAdminOnly bool       `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
+	LastMessageId           string     `json:"lastMessageId" bson:"lastMessageId"`
+	LastMessagePreview      string     `json:"lastMessagePreview" bson:"lastMessagePreview"`
+	LastMessageTime         time.Time  `json:"lastMessageTime" bson:"lastMessageTime"`
+	MessageCount            int        `json:"messageCount" bson:"messageCount"`
+	Status                  string     `json:"status" bson:"status"`
+	CreatedAt               time.Time  `json:"createdAt" bson:"createdAt"`
+	UpdatedAt               time.Time  `json:"updatedAt" bson:"updatedAt"`
 }
+
+// Conversation lifecycle states（与 metadata aggregate lifecycle 单轨一致）。
+const (
+	ConversationStatusActive    = "active"
+	ConversationStatusDissolved = "dissolved"
+)
 
 // ConversationMember tracks membership in a conversation (independent collection for scale).
 type ConversationMember struct {
@@ -66,6 +77,7 @@ type ConversationUserState struct {
 	UserId             string    `json:"userId" bson:"userId"`
 	ConversationId     string    `json:"conversationId" bson:"conversationId"`
 	ReadSeq            int64     `json:"readSeq" bson:"readSeq"`
+	InboxProjectedSeq  int64     `json:"-" bson:"inboxProjectedSeq"`
 	UnreadCount        int       `json:"unreadCount" bson:"unreadCount"`
 	MentionUnreadCount int       `json:"mentionUnreadCount" bson:"mentionUnreadCount"`
 	Muted              bool      `json:"muted" bson:"muted"`

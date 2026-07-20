@@ -1,0 +1,53 @@
+object: MediaAsset
+operations:
+  - GetMediaAsset
+  - GetOwnedMediaAsset
+  - GetMediaAssetReference
+  - GetMediaAssetDeliveryReference
+  - RecordMediaProcessingResult
+  - UpdateMediaAssetAccessPolicy
+  - SelectAutoVideoCover
+  - SelectManualVideoCover
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/content-service/internal/domain/media/model/media.go
+    - quwoquan_service/services/content-service/internal/application/media/media_service.go
+    - quwoquan_service/services/content-service/internal/application/media/processing/worker.go
+  store:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_asset.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_checkpoint.go
+  outbox:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_asset.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_outbox.go
+    - quwoquan_service/services/content-service/internal/application/media/processing/worker.go
+    - quwoquan_service/services/content-service/internal/infrastructure/content/media/processing/ffmpeg_processor.go
+    - quwoquan_service/services/content-service/internal/infrastructure/content/media/processing/metrics.go
+    - quwoquan_service/services/content-service/cmd/api/main.go
+    - quwoquan_service/services/content-service/configs/default/config.yaml
+    - quwoquan_service/services/content-service/deploy/Dockerfile
+  reader:
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_asset.go
+  transport:
+    - quwoquan_service/services/content-service/internal/adapters/http/content_handler_media.go
+    - quwoquan_service/services/content-service/internal/adapters/http/generated_routes.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/media_facets.dart
+    - quwoquan_app/lib/cloud/remote/content/media/content_media_object_uploader.dart
+  page:
+    - quwoquan_app/lib/ui/discovery/pages/unified_media_viewer_page.dart
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/content-service/cmd/api/media_processing_composition__availability__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/infrastructure/content/media/processing/ffmpeg_processor__availability__local_contract_test.go
+    - quwoquan_service/services/content-service/tests/local_contract/media/media_processing_worker__reliability__local_contract_test.go
+    - quwoquan_app/test/local_contract/core/media/content_media_url__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/media/contract/media_asset_dto_contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/content-service/tests/api_integration/media_commercial_operations__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/media_processing_pipeline__data_consistency__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/media_processing_checkpoint__data_consistency__api_integration_test.go
+    - quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+  user_acceptance: []
+environments: []

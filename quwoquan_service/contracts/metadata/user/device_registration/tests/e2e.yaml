@@ -1,0 +1,19 @@
+aggregate: DeviceRegistration
+layer: e2e
+
+description: |
+  端云集成测试场景（gamma 环境）。
+  执行：CI gamma，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: register_dual_push_endpoints_after_login
+    steps:
+      - user logs in on device
+      - app upserts apns_voip or fcm token
+      - app re-upserts the same endpoint on restart
+      - integration-service resolves destination ref and secret
+    assertions:
+      - endpoint_visible_exactly_once
+      - restart_upsert_is_natural_idempotent_replay
+      - destination_response_contains_no_token
+      - secret_is_transient_and_no_store

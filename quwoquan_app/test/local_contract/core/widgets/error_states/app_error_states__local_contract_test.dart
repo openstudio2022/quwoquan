@@ -1,6 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
   testWidgets('AppPageErrorState 使用柔和整页空态和再试一次动作', (tester) async {
@@ -70,6 +78,118 @@ void main() {
     expect(find.text(UITextConstants.back), findsNothing);
     expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+  });
+
+  testWidgets('AppPageErrorState 统一结算错误 TTI 与恢复 outcome', (tester) async {
+    final pageContext = AppPageContextStore.instance..setPageName('home');
+    final recorder = _CapturingTelemetryRecorder();
+    final tracker = AppPageExperienceTracker(pageContextStore: pageContext)
+      ..attachReporter(recorder)
+      ..beginPageVisit(
+        pageName: 'home',
+        pageVisitId: 'visit-error-1',
+        openedAt: DateTime.now(),
+      );
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: AppPageErrorState(
+          experienceTracker: tracker,
+          semantic: const UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: UITextConstants.temporarilyUnavailable,
+            message: UITextConstants.checkNetworkAndTryAgain,
+            sourceCode: 'CONTENT.SYSTEM.read_unavailable',
+            sourceSurfaceId: 'home_feed',
+            recoveryAction: RuntimeRecoveryAction.retry,
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+          ),
+          onAction: (_) async {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      recorder.records.map((payload) => payload.eventType),
+      containsAll(<String>['page_first_usable', 'page_error_outcome']),
+    );
+    final shown = recorder.records.lastWhere(
+      (payload) =>
+          payload.eventType == 'page_error_outcome' &&
+          payload.extensions['result'] == 'shown',
+    );
+    expect(shown.extensions['surfaceId'], 'home_feed');
+    expect(shown.extensions['errorCode'], 'CONTENT.SYSTEM.read_unavailable');
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pumpAndSettle();
+
+    final outcomes = recorder.records
+        .where((payload) => payload.eventType == 'page_error_outcome')
+        .map((payload) => payload.extensions['result'])
+        .toList(growable: false);
+    expect(outcomes, <Object?>['shown', 'recovery_started', 'recovered']);
+  });
+
+  testWidgets('AppPageErrorState 不以遥测持久化阻塞用户恢复动作', (tester) async {
+    final pageContext = AppPageContextStore.instance..setPageName('home');
+    final recorder = _BlockingTelemetryRecorder();
+    final tracker = AppPageExperienceTracker(pageContextStore: pageContext)
+      ..attachReporter(recorder)
+      ..beginPageVisit(
+        pageName: 'home',
+        pageVisitId: 'visit-non-blocking-recovery',
+        openedAt: DateTime.now(),
+      );
+    var retryCount = 0;
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: AppPageErrorState(
+          experienceTracker: tracker,
+          semantic: const UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: UITextConstants.temporarilyUnavailable,
+            message: UITextConstants.checkNetworkAndTryAgain,
+            sourceSurfaceId: 'home_feed',
+            recoveryAction: RuntimeRecoveryAction.retry,
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+          ),
+          onAction: (_) async => retryCount += 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pump();
+
+    expect(retryCount, 1);
+    expect(
+      recorder.records
+          .where((payload) => payload.eventType == 'page_error_outcome')
+          .map((payload) => payload.extensions['result']),
+      <Object?>['shown'],
+    );
+
+    recorder.release.complete();
+    await tester.pumpAndSettle();
+
+    expect(
+      recorder.records
+          .where((payload) => payload.eventType == 'page_error_outcome')
+          .map((payload) => payload.extensions['result']),
+      <Object?>['shown', 'recovery_started', 'recovered'],
+    );
   });
 
   testWidgets('AppSectionErrorState 使用无卡片外框的区块阻塞空态', (tester) async {
@@ -311,4 +431,54 @@ void main() {
     expect(find.text('提交未完成'), findsOneWidget);
     expect(find.text(UITextConstants.gotIt), findsOneWidget);
   });
+}
+
+final class _CapturingTelemetryRecorder implements AppTelemetryRecorder {
+  final List<AppTelemetryPayload> records = <AppTelemetryPayload>[];
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async {
+    records.add(payload);
+    return AppTelemetryRecordResult.accepted;
+  }
+}
+
+final class _BlockingTelemetryRecorder implements AppTelemetryRecorder {
+  final List<AppTelemetryPayload> records = <AppTelemetryPayload>[];
+  final Completer<void> release = Completer<void>();
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async {
+    records.add(payload);
+    await release.future;
+    return AppTelemetryRecordResult.accepted;
+  }
 }

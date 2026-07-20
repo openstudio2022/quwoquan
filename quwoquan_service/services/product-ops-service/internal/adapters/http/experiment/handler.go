@@ -151,14 +151,16 @@ func (h *Handler) listExperiments(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]ExperimentCatalogItem, 0, len(items))
 	for _, item := range items {
-		current, stats, err := h.experiments.Stats(r.Context(), item.ID)
+		// 目录读已携带当前 policyVersion，统计只做一次分配聚合查询，
+		// 不再逐实验重复 Load（N+1 收敛）。
+		stats, err := h.experiments.StatsFor(r.Context(), item)
 		if err != nil {
 			writeExperimentError(w, r, err, false)
 			return
 		}
 		out = append(out, ExperimentCatalogItem{
-			ID: current.ID, Key: current.Key, Status: current.Status,
-			PolicyVersion: strconv.FormatInt(current.Version, 10), Variants: current.Variants,
+			ID: item.ID, Key: item.Key, Status: item.Status,
+			PolicyVersion: strconv.FormatInt(item.Version, 10), Variants: item.Variants,
 			VariantStats: stats.VariantCounts, AssignedSubjects: stats.AssignedSubjects,
 		})
 	}

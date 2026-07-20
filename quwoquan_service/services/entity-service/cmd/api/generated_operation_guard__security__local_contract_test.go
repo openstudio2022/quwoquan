@@ -24,7 +24,7 @@ func TestGeneratedEntityOperationGuardUsesCurrentCommercialContract(t *testing.T
 		wantStatus int
 	}{
 		{method: http.MethodGet, path: "/homepages/search", wantStatus: http.StatusOK},
-		{method: http.MethodPost, path: "/homepages/candidates", wantStatus: http.StatusForbidden},
+		{method: http.MethodPost, path: "/homepages/candidates", wantStatus: http.StatusUnauthorized},
 		{method: http.MethodGet, path: "/entity/legacy-unregistered-route", wantStatus: http.StatusNotFound},
 	} {
 		recorder := httptest.NewRecorder()
@@ -34,7 +34,7 @@ func TestGeneratedEntityOperationGuardUsesCurrentCommercialContract(t *testing.T
 		}
 	}
 	if handlerCalls != 1 {
-		t.Fatalf("only the ready public route may reach handler, calls=%d", handlerCalls)
+		t.Fatalf("only the ready public route without authentication may reach handler, calls=%d", handlerCalls)
 	}
 }
 

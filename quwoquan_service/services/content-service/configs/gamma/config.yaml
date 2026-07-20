@@ -19,25 +19,26 @@ rec_model_service:
   timeout_ms: 100
   enabled: true
 
+# N2-3 gamma embedding 配置路径：写入管线（PostPublished → posts.embedding）
+# 的 endpoint/api_key/enabled 由部署 env 注入（EMBEDDING_ENDPOINT /
+# EMBEDDING_API_KEY / EMBEDDING_ENABLED，main.go env-first 解析），committed
+# config 不落 secret；未注入时保持 disabled 安全跳过。向量召回读通道
+# （vector_recall_enabled）保持 S0 flag-off（S1 内容池阈值达标后开启）。
+embedding:
+  endpoint: ""
+  api_key: ""
+  model: "text-embedding-3-small"
+  enabled: false
+  vector_recall_enabled: false
+
 # gamma runs the dedicated ES cluster; endpoints are injected via SEARCH_ES_ENDPOINTS
 # (shared with search-service — same cluster/index).
 es:
   enabled: true
   endpoints: []
   index: "quwoquan_objects"
+  # gamma-local ES 为 amd64 模拟（R-S06-S-1），冷启动/单请求可超默认 800ms；
+  # 放宽硬超时避免 EnsureIndex fail-fast 把服务打死，真集群另行校准。
+  requestTimeoutMs: 5000
   shards: 1
   replicas: 1
-
-experiments:
-  rec_model_vs_rule:
-    enabled: true
-    buckets:
-      rule: 50
-      model: 50
-  rec_scoring_weights:
-    enabled: true
-    buckets:
-      control: 60
-      engagement_heavy: 15
-      freshness_heavy: 15
-      explore_heavy: 10

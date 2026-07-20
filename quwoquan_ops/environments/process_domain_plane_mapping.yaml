@@ -127,6 +127,10 @@ environments:
       bindings:
         - domain: ops
           planes: [platform-control-plane, product-control-plane]
+    platform-ops-service:
+      bindings:
+        - domain: platform
+          planes: [platform-control-plane]
     recommendation-service:
       bindings:
         - domain: recommendation
@@ -168,6 +172,10 @@ environments:
       bindings:
         - domain: ops
           planes: [platform-control-plane, product-control-plane]
+    platform-ops-service:
+      bindings:
+        - domain: platform
+          planes: [platform-control-plane]
     recommendation-service:
       bindings:
         - domain: recommendation
@@ -209,6 +217,10 @@ environments:
       bindings:
         - domain: ops
           planes: [platform-control-plane, product-control-plane]
+    platform-ops-service:
+      bindings:
+        - domain: platform
+          planes: [platform-control-plane]
     recommendation-service:
       bindings:
         - domain: recommendation

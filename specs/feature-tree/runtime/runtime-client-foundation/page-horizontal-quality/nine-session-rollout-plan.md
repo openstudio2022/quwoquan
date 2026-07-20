@@ -38,23 +38,19 @@
 - **顺序**：默认 **S1→S2→…→S8→S9**。若多人并行，**禁止** S7 与 S8 由同一人同一 PR 混写；**S9 必须最后**（全列一致性 + 债条登记）。  
 - **S2**：逐页结论以 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 为准；矩阵 P2 与清单 `status` 冲突时 **先改清单再改矩阵**。  
 - **S4**：Tab 根可依托 `MainAppShell` pageAccess；独立路由页按统一观测方案补齐或标 **○** 并指向后续 Story。  
-- **S9**：  
-  - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；  
-  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash quwoquan_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
-  - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-content.review.quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
-  - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `树内任务文档` 勾选完成。
+- **S9**：
+  - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；
+  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash quwoquan_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；
+  - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；
+  - 更新 `specs/changelog/CR-*.yaml` 与本 L3 `acceptance.yaml` 证据。
 
 ## 与会话规划相关的仓库产物
 
 | 产物 | 说明 |
 |------|------|
 | 本文件 | 九会话 **唯一执行顺序与出口定义** |
-| [`树内计划文档`](./树内计划文档) | `slice-3-nine-session-rollout` 指向本文件 |
-| [`树内任务文档`](./树内任务文档) | M4 勾选 S1–S9；**M8** 勾选 **实施波次 B** |
 | [`s2-metadata-driven-contract-baseline-20260330.md`](./s2-metadata-driven-contract-baseline-20260330.md) | **S2** 全页 P2↔清单对照表与基线锁定声明 |
 | [`CR-20260329-006`](../../../../changelog/CR-20260329-006-page-horizontal-quality-nine-session-rollout.yaml) | 变更登记 |
-| `树内计划文档` **slice-6** | `slice-6-mock-cloud-test-isolation-wave-b`（与 `acceptance.yaml` **A6** 同步；首 PR 实施时落盘） |
-| [`CR-20260330-010`](../../../../changelog/CR-20260330-010-mock-isolation-implementation-wave.md) | 实施波次 B 登记（YAML 可与首 PR 补） |
 
 ---
 
@@ -62,8 +58,7 @@
 
 > **定位**：与 **横向维度 S1–S9**（P1–P8 矩阵列）**正交**；聚焦 **数据源真隔离**、**目录 §9**、**正式包零 Mock 耦合**。  
 > **策略全文**：[`mock_data_cloud_integration_policy.md`](../../../../gates/mock_data_cloud_integration_policy.md)（含 **§4.1** 同文件测试、**§9** 目录、`P0–P4` 阶段表）。  
-> **变更登记**：**CR-20260330-010**（YAML 见 changelog，与实施首 PR 一并提交）。  
-> **执行勾选**：[`树内任务文档`](./树内任务文档) **M8**。
+> **执行证据**：以本 L3 `acceptance.yaml`、页面矩阵和对应 CR 为准。
 
 ### B0 脚手架（可首 PR 落地）
 
@@ -107,30 +102,4 @@ bash quwoquan_ops/gate/gate_repo.sh --scope app
 | 日期 | 说明 |
 |------|------|
 | 2026-03-29 | 初版：S1–S9 规划冻结，供 9 个独立会话执行 |
-| 2026-03-30 | 新增「实施波次 B」：Mock/端云/测试隔离 + B0–B3 与 CR-20260330-010 |
-
----
-
-## 附录：实施首 PR 需合入的 YAML 片段（若仓库中尚未自动落盘）
-
-> 以下供 **Agent 模式** 粘贴进 `树内计划文档` / `acceptance.yaml`；若已存在 **slice-6** / **A6** 则跳过。
-
-**`树内计划文档`** 在 `slice-5-...` 块后追加：
-
-```yaml
-  - id: slice-6-mock-cloud-test-isolation-wave-b
-    title: 实施波次 B（Mock·端云·测试编译隔离；policy §4.1 §9；清空 allowlist；prod 入口）
-    outputs:
-      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-content.execution.planning.md
-      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/树内任务文档
-      - specs/gates/mock_data_cloud_integration_policy.md
-      - specs/gates/ui_mock_isolation_allowlist.yaml
-      - quwoquan_app/test/support/README.md
-      - quwoquan_app/lib/core/data_source/
-    tests:
-      - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
-      - bash quwoquan_ops/gate/gate_repo.sh --scope app
-    dev_status: specified
-```
-
-**`acceptance.yaml`**：在 `A7` 与 `execution` 之间插入 **A6**；将 `execution.local_gate` 改为含 `verify_ui_mock_isolation.py`（见 [`acceptance.yaml`](./acceptance.yaml) 目标形态或本仓库已合并版本）。
+| 2026-03-30 | 新增「实施波次 B」：Mock/端云/测试隔离 + B0–B3 |

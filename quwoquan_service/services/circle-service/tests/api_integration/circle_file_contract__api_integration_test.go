@@ -131,8 +131,28 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 		t.Fatalf("deleted CircleFile must be absent from Reader: status=%d body=%s", missing.Code, missing.Body.String())
 	}
 
+	// 已删除后的新 key：no-op 持久化 receipt、不递增版本；相同 key 重放原始结果。
+	noop := executeFileCommand(
+		t, http.MethodDelete, "/circles/circle-file/files/"+fileID,
+		nil, "file-delete-noop", "", "persona-owner", "DeleteCircleFile",
+	)
+	if noop.Code != http.StatusOK {
+		t.Fatalf("CircleFile delete no-op failed: status=%d body=%s", noop.Code, noop.Body.String())
+	}
+	noopBody := decodeBody(t, noop)
+	if noopBody["version"] != float64(3) || noopBody["idempotentReplay"] != true {
+		t.Fatalf("CircleFile delete no-op must keep version and replay: %#v", noopBody)
+	}
+	noopReplay := executeFileCommand(
+		t, http.MethodDelete, "/circles/circle-file/files/"+fileID,
+		nil, "file-delete-noop", "", "persona-owner", "DeleteCircleFile",
+	)
+	if noopReplay.Code != http.StatusOK || decodeBody(t, noopReplay)["idempotentReplay"] != true {
+		t.Fatalf("CircleFile delete no-op replay drift: status=%d body=%s", noopReplay.Code, noopReplay.Body.String())
+	}
+
 	for collection, want := range map[string]int64{
-		"circle_files": 2, "circle_files_command_receipts": 4, "circle_files_outbox": 4,
+		"circle_files": 2, "circle_files_command_receipts": 5, "circle_files_outbox": 4,
 	} {
 		count, err := mongoDB.Collection(collection).CountDocuments(context.Background(), bson.M{})
 		if err != nil || count != want {

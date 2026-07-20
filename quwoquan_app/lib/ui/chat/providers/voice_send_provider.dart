@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/voice_message_observability.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -72,7 +72,20 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         );
         state = state.copyWith(
           status: VoiceSendStatus.failed,
-          error: UITextConstants.chatVoiceRecordUnavailable,
+          error: ChatText.chatVoiceRecordUnavailable,
+        );
+        return;
+      }
+      final policyError = validateUpload(
+        category: MediaCategory.chatVoice,
+        fileSize: result.fileSize,
+        contentType: 'audio/mp4',
+      );
+      if (policyError != null) {
+        _trackUploadFailed('upload_policy_rejected');
+        state = state.copyWith(
+          status: VoiceSendStatus.failed,
+          error: policyError,
         );
         return;
       }
@@ -153,7 +166,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: UITextConstants.chatVoicePendingRetry,
+        error: ChatText.chatVoicePendingRetry,
       );
       return;
     }
@@ -191,7 +204,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: UITextConstants.chatVoicePendingRetry,
+        error: ChatText.chatVoicePendingRetry,
       );
       return;
     }
@@ -210,14 +223,8 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     state = const VoiceSendState();
   }
 
-  String _userFacingVoiceFailureMessage(Object? raw) {
-    if (raw is String) {
-      final message = raw.trim();
-      if (message.contains('文件大小') || message.contains('文件类型')) {
-        return message;
-      }
-    }
-    return UITextConstants.chatVoicePendingRetry;
+  String _userFacingVoiceFailureMessage(Object? _) {
+    return ChatText.chatVoicePendingRetry;
   }
 
   void _trackUploadFailed(String? raw) {

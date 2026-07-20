@@ -1,0 +1,73 @@
+id: CR-20260720-131-photo-video-publication-commercial-closure
+title: 照片与视频发布商用闭环
+slug: photo-video-publication-commercial-closure
+revision: 1
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/discovery-content/publish-comment-reaction
+  - specs/feature-tree/discovery-content/media-processing-helper-read
+  - specs/feature-tree/runtime/runtime-media
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics
+entries:
+  - timestamp: "2026-07-20T21:15:00+08:00"
+    summary: |
+      将照片与视频从「本地可选、可编辑、可提交」收口为端云商用发布主线：媒体流式读取与
+      上传、MediaAsset 单轨绑定、content-service 内独立媒体处理模块、视频 H.264/AAC
+      progressive fast-start MP4 与封面/预览轨道、发布准入、处理中/待审核/成功结果回流、
+      发布任务恢复、产品遥测、Worker SLI/告警和三层测试证据。
+    reason: |
+      历史实现存在图片集成测试假绿、视频 processing 无生产消费者、整文件读入内存、
+      media_not_ready 与未授权恢复动作混淆、发布成功只 Toast 关闭、验收文件为空壳和
+      adaptive profile 超前承诺等断点，任何一项都会阻断大文件稳定发布或造成不可播放内容
+      进入公开读模型。
+    decisions:
+      - content-service 内保留独立 media/processing application 与 infrastructure 模块；
+        通过窄端口装配，未来可替换 adapter 后拆分部署，不创建第二套 MediaAsset 状态机。
+      - 图片完成摘要校验后直接 ready；视频必须经过真实 FFmpeg/FFprobe 处理才可 ready。
+      - 首发播放唯一交付为 H.264/AAC progressive fast-start MP4；adaptive flag 关闭时
+        不宣称 HLS/DASH，禁止 fallback 到原始上传视频。
+      - App 发布主线使用 prepare/openRead + streaming PUT，禁止整文件进入 Dart heap；
+        小字节上传接口只保留给明确的小对象/测试边界。
+      - 发布队列以 metadata recovery.action 为自动重试真相源：media_not_ready=retry，
+        unauthorized=reauthenticate/永久阻断。
+      - published、pending_review、queued 均展示结果面；发布任务持久化并允许刷新、继续编辑
+        或放弃。
+      - 能解决的缺口直接实现并关闭，不为本功能新增长期 backlog 风险。
+    change_type:
+      - specification
+      - contract
+      - implementation
+      - local_contract
+      - api_integration
+      - user_acceptance
+      - observability
+      - reliability
+    tests:
+      - layer: local_contract
+        intent: GWT
+        evidence:
+          - quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
+          - quwoquan_service/services/content-service/tests/local_contract/media/media_processing_worker__reliability__local_contract_test.go
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_app/test/api_integration/ui/content/photo_publish_atomic_publication_roundtrip__api_integration_test.dart
+          - quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+          - quwoquan_service/services/content-service/tests/api_integration/media_processing_checkpoint__data_consistency__api_integration_test.go
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+    rollout:
+      stages: [alpha, beta, gamma_local, prod_gray_initial, prod_full]
+      rollback:
+        - 停止新媒体上传与新发布，保留私有源对象、processing 资产和 outbox 待恢复重放。
+        - 不把 processing 强改 ready，不回退到原始上传字节。
+        - 已发布 Post 与 versioned public slices 继续可读。
+    notes: |
+      三层测试、触发范围门禁、gamma_local 真实依赖链与 prod gray readback 全部通过后改为
+      completed；任何未执行环境证据均保持显式 GATE_BLOCK。

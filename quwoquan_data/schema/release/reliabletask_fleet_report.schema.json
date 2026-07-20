@@ -8,6 +8,10 @@
     "backend",
     "total",
     "succeeded",
+    "stageCompletedCount",
+    "publishTaskCount",
+    "objectTransactionResultCount",
+    "commercialAcceptedCount",
     "controlPlaneTaskThroughputPerHour",
     "acceptedContentThroughputPerHour",
     "acceptedContentThroughputStatus",
@@ -34,6 +38,22 @@
       "type": "integer",
       "minimum": 0
     },
+    "stageCompletedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "publishTaskCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "objectTransactionResultCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "commercialAcceptedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
     "controlPlaneTaskThroughputPerHour": {
       "type": "number",
       "minimum": 0
@@ -45,7 +65,8 @@
     "acceptedContentThroughputStatus": {
       "enum": [
         "MEASURED",
-        "GATE_BLOCK_NO_COMMERCIAL_BATCH"
+        "GATE_BLOCK_NO_COMMERCIAL_BATCH",
+        "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
       ]
     },
     "automaticRecoveryRate": {
@@ -99,7 +120,7 @@
       "minimum": 0
     },
     "idempotencyKey": {
-      "const": "entity+carrier+sourceRevision"
+      "const": "entity+carrier+sourceRevision+stage"
     },
     "completedAt": {
       "type": "string",

@@ -1,0 +1,9 @@
+entity: RecommendationModelRelease
+layer: app_side
+
+description: |
+  评分 Reader 是 service-to-service internal 能力（content/circle/search-service 消费），
+  App 端零消费，无 App mock fixture 场景。生命周期命令 V1 deferred（见
+  aggregate.yaml#deferred_operations）。
+
+scenarios: []

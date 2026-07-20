@@ -2,7 +2,7 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 
 const String assistantDisplayStateField = 'displayState';
 
@@ -279,7 +279,7 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
       ? snapshot.processedDocumentCount
       : acceptedCount;
   final statsLabel = (processedCount > 0 || acceptedCount > 0)
-      ? UITextConstants.assistantProcessReferenceDigestTemplate
+      ? AssistantText.assistantProcessReferenceDigestTemplate
             .replaceFirst('%s', processedCount.toString())
             .replaceFirst('%s', acceptedCount.toString())
       : '';

@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 void main() {
   test(
     'career and interest profile catalog comes from Audience user roots',
     () async {
-      final repo = MockTagRepository();
+      final repo = AlphaTagFacet();
 
       final occupationCategories = await repo.listChildren(
         TagTaxonomyRefs.careerOccupationRoot,

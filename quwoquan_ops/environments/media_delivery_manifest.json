@@ -24,6 +24,54 @@
       "version": 1,
       "sha256": "sha256:0cd83d944a6ca7822b4a8306cecc60a36e859b041f6702c6a1ad9ead78924451",
       "mimeType": "video/mp4"
+    },
+    {
+      "logicalAssetId": "media-canary-seek-125s-video",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-seek-125s/v1/source.mp4",
+      "version": 1,
+      "sha256": "sha256:889ce288e07259e832b1e6a1895d52324c152de669d8bf798750998b3bcad082",
+      "mimeType": "video/mp4"
+    },
+    {
+      "logicalAssetId": "media-canary-seek-125s-cover",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-seek-125s/v1/cover.webp",
+      "version": 1,
+      "sha256": "sha256:c54f284bf8cdbc0a5562650dd3c894f61a1f102e9e6abcd463aad18767c3f31e",
+      "mimeType": "image/webp"
+    },
+    {
+      "logicalAssetId": "media-canary-seek-125s-preview-manifest",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-seek-125s/v1/preview/manifest.json",
+      "version": 1,
+      "sha256": "sha256:0cb67b3186086d8d498b3e2bc9174a91bcdb8f8766490afb2daecdb6096a5eb2",
+      "mimeType": "application/json"
+    },
+    {
+      "logicalAssetId": "media-canary-seek-125s-preview-sprite",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-seek-125s/v1/preview/sprite.webp",
+      "version": 1,
+      "sha256": "sha256:03f692ad5e27a93c6aff74799b6ee8767166167085e1bc4629b89e8c7ea01f28",
+      "mimeType": "image/webp"
+    },
+    {
+      "logicalAssetId": "media-canary-hour-boundary-3595s-video",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-hour-boundary-3595s/v1/source.mp4",
+      "version": 1,
+      "sha256": "sha256:293cf11f6b170ccf87f04ad078d1db62cc91ab8dc9e2b3042f96710b2c75df5f",
+      "mimeType": "video/mp4"
+    },
+    {
+      "logicalAssetId": "media-canary-hour-boundary-3595s-cover",
+      "mediaType": "video",
+      "publicSliceKey": "media/video/s/media-canary-hour-boundary-3595s/v1/cover.webp",
+      "version": 1,
+      "sha256": "sha256:de873a0665a703570cc441209b2291067738d000e92ef62cfa6d7ca131e1ac71",
+      "mimeType": "image/webp"
     }
   ],
   "schema": "media-delivery-manifest"

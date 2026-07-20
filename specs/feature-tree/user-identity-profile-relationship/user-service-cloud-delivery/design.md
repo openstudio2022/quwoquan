@@ -501,7 +501,7 @@ test-contract:
 | S7: 部署流水线 | Dockerfile + Kustomize overlay + CI workflow + Makefile + 配置版本 | A10, A11, A12 | api_integration |
 | S8: 端侧 codegen 对齐 | codegen-app + DTO 替换 + UserErrorCode + Remote 错误处理 | A8, A9 | local_contract |
 | S9: 端侧测试补充 | L1 DTO 字段契约 + 错误码契约 + L4 旅程测试×4 | A13, A16 | local_contract, user_acceptance |
-| S10: 集成验证 + 验收 | L3 端云集成 + make gate-full + A1~A18 逐项 | A15, A17, A18 | api_integration |
+| S10: 集成验证 + 验收 | L3 端云集成 + make gate-release ENV=gamma + A1~A18 逐项 | A15, A17, A18 | api_integration |
 
 **推荐实施顺序**：S1 → S2 → S3 → S4 → S5 → S6 → S7 → S8 → S9 → S10
 
@@ -576,6 +576,6 @@ GIN trigram 索引已建（`gin_user_profiles_search` on nickname, bio），搜�
 
 ---
 
-## 存量带规划任务
+## 剩余风险
 
-见 树内任务文档「搁置任务」和「未来演进任务」章节。
+长期遗留仅登记在 `docs/outstanding_risks_backlog.md`；本节点不维护第二套任务清单。

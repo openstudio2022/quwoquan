@@ -26,6 +26,7 @@ fields:
   - { name: authorIdentityTags,    type: "[]string", description: 作者身份标签（反范式，首页卡片最多展示 2 个） }
   - { name: authorVerified,        type: bool, description: 作者认证标记（反范式，驱动卡片认证角标） }
   - { name: body,                  type: string, description: 视频简介（可选） }
+  - { name: sourceAttribution,     type: SourceAttribution, nullable: true, description: 外部来源视频原创者与权利事实；与平台发布作者分离 }
   - { name: videoUrl,       type: string, description: 视频流 URL }
   - { name: thumbnailUrl,   type: string, description: 未播放态主封面 URL }
   - { name: coverUrl,       type: string, description: 通用封面 URL；视频时与 thumbnailUrl 同源或作兼容回退 }
@@ -57,6 +58,7 @@ client_projection:
   output_path: cloud/runtime/generated/content/video_post_dto.g.dart
   dart_imports:
     - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+    - source_attribution_dto.g.dart
   computed_getters:
     - name: displayFormat
       source: displayFormat
@@ -149,6 +151,14 @@ client_projection:
       source: body
       default: "null"
       description: "视频简介（可选）"
+
+    - name: sourceAttribution
+      dart_type: SourceAttributionDto
+      nullable: true
+      source: sourceAttribution
+      map_from_string_key_class: SourceAttributionDto
+      default: "null"
+      description: "外部来源视频原创者与权利事实；与平台发布作者分离"
 
     - name: videoUrl
       dart_type: String

@@ -6,9 +6,7 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
   home: Scaffold(
-    body: SingleChildScrollView(
-      child: SizedBox(height: 300, child: child),
-    ),
+    body: SingleChildScrollView(child: SizedBox(height: 300, child: child)),
   ),
 );
 

@@ -1,8 +1,8 @@
 # S2：元数据驱动契约（P2）— 全页落实检查与基线锁定（2026-03-30）
 
-> **会话代号**：S2（见 [`nine-session-rollout-content.execution.planning.md`](./nine-session-rollout-content.execution.planning.md)）  
-> **横向维度**：P2 — 定义见 [`page-horizontal-quality-spec.md`](../page-horizontal-quality-spec.md) §「P2」  
-> **L1 / L2 / L3（横向登记）**：`runtime` → `runtime-client-foundation` → `page-horizontal-quality`  
+> **会话代号**：S2（见 [`nine-session-rollout-plan.md`](./nine-session-rollout-plan.md)）
+> **横向维度**：P2 — 定义见 [`page-horizontal-quality-spec.md`](../page-horizontal-quality-spec.md) §「P2」
+> **L1 / L2 / L3（横向登记）**：`runtime` → `runtime-client-foundation` → `page-horizontal-quality`
 > **L3（契约专题）**：同 L2 下 [`metadata-driven-client-data-contract`](../metadata-driven-client-data-contract/spec.md)（与 P2 同向）
 
 ---

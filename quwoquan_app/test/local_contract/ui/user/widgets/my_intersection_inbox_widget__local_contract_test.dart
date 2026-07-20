@@ -149,40 +149,6 @@ void main() {
     expect(find.byType(InteractiveIntersectionText), findsOneWidget);
   });
 
-  testWidgets('契约 seed 默认 Mock：显示查看全部，不显示展开收起', (tester) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const CupertinoApp(
-          home: CupertinoPageScaffold(
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: MyIntersectionInboxCard(isDark: false),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsOneWidget);
-    expect(find.text(DiscoveryFeedText.intersectionViewAll), findsOneWidget);
-    expect(find.text(DiscoveryFeedText.intersectionExpandMore), findsNothing);
-    // 真实契约 seed 至少渲染一条 fact 交集预览行，非空态；具体合成句由 T1 合成测试覆盖，
-    // 此处不耦合 fixture 措辞，避免 seed 文案演进即误伤卡片行为契约。
-    expect(find.byType(InteractiveIntersectionText), findsWidgets);
-    expect(
-      find.text(UITextConstants.profileIntersectionEmptyGuidance),
-      findsNothing,
-    );
-  });
-
   testWidgets('primarySpans 名字片段点击进对象主页（优先于整行）', (tester) async {
     final behaviorRepo = MockBehaviorRepository();
     final tracker = ContentBehaviorTracker(
@@ -443,9 +409,6 @@ class _StubIntersectionRepository implements IntersectionRepository {
   }) async {
     return items.take(limit).toList(growable: false);
   }
-
-  @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {}
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({

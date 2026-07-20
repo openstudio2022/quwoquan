@@ -1,7 +1,14 @@
 {
   "eagerRuntime": [
     "com.github.dart_lang.jni.JniPlugin",
-    "com.github.dart_lang.jni_flutter.JniFlutterPlugin"
+    "com.github.dart_lang.jni_flutter.JniFlutterPlugin",
+    "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin",
+    "com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin",
+    "io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin",
+    "io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingPlugin",
+    "io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin",
+    "com.tekartik.sqflite.SqflitePlugin",
+    "io.flutter.plugins.videoplayer.VideoPlayerPlugin"
   ],
   "startupPostFirstFrame": [
     "com.ryanheise.audio_session.AudioSessionPlugin",
@@ -13,20 +20,15 @@
     "com.llfbandit.record.RecordPlugin",
     "dev.fluttercommunity.plus.share.SharePlusPlugin",
     "io.flutter.plugins.urllauncher.UrlLauncherPlugin",
-    "io.flutter.plugins.videoplayer.VideoPlayerPlugin",
     "dev.fluttercommunity.plus.wakelock.WakelockPlusPlugin",
     "io.flutter.plugins.webviewflutter.WebViewFlutterPlugin",
     "dev.fluttercommunity.plus.connectivity.ConnectivityPlugin",
     "dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin",
-    "dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin",
-    "com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin",
-    "io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin",
-    "com.tekartik.sqflite.SqflitePlugin"
+    "dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin"
   ],
   "rtc": [
     "com.cloudwebrtc.webrtc.FlutterWebRTCPlugin",
-    "io.livekit.plugin.LiveKitPlugin",
-    "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin"
+    "io.livekit.plugin.LiveKitPlugin"
   ],
   "contentEntry": [
     "io.flutter.plugins.camerax.CameraAndroidCameraxPlugin",

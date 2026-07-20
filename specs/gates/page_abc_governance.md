@@ -23,7 +23,10 @@
 | **B** | 业务 Current 标识：`Current*` 类名、`currentPageId`、`fromCurrent*`、`onOpenCurrent*` 等（与脚本内 `B_BAD_PATTERNS` 一致）。 |
 | **C** | 文件内 `dynamic` 关键字与 `Map<String, dynamic>` 出现；`enforce-c` 要求二者合计为 **0**（除非白名单豁免）。 |
 
-**会话 C 数据驱动收口**：browse/open/return 等 page_access 载荷须使用 [ops/event_record/projections/](../../../quwoquan_service/contracts/metadata/ops/event_record/projections/) 中 `app_log_*.yaml` 经 `make codegen-app` 生成的 DTO（`.toMap()` 仅在生成体内），详见 [session_c_page_typing.md](session_c_page_typing.md)。
+**会话 C 数据驱动收口**：云端 page_access 载荷须使用
+[ops/event_record/event_catalog.yaml](../../quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml)
+经 `make codegen-app` 生成的 `AppTelemetryPayload`；本地 AppLog Map 只用于诊断，不是上传契约。
+详见 [session_c_page_typing.md](session_c_page_typing.md)。
 
 **Riverpod 官方子库**：`import 'package:flutter_riverpod/current.dart'` **不计入** B 违规，仅作信息行 `B~`；**不**触发 `--enforce-b`。
 

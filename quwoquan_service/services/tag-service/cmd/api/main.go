@@ -22,7 +22,11 @@ import (
 
 	httpadapter "quwoquan_service/services/tag-service/internal/adapters/http"
 	"quwoquan_service/services/tag-service/internal/application"
+	"quwoquan_service/services/tag-service/internal/application/tagfeedback"
+	"quwoquan_service/services/tag-service/internal/application/taxonomyrelease"
 	"quwoquan_service/services/tag-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/tag-service/internal/infrastructure/tagfeedbackstore"
+	"quwoquan_service/services/tag-service/internal/infrastructure/taxonomyreleasestore"
 )
 
 type config struct {
@@ -92,7 +96,29 @@ func main() {
 	}
 
 	tagService := application.NewTagService(tagNodeStore, objectTagStore)
-	handler := httpadapter.NewTagHandler(tagService).Routes()
+
+	releaseStore := taxonomyreleasestore.NewStore(db)
+	if err := releaseStore.EnsureIndexes(ctx); err != nil {
+		log.Printf("WARN: tag-service ensure tag_taxonomy_releases indexes: %v", err)
+	}
+	releaseFacade, err := taxonomyrelease.NewFacade(releaseStore)
+	if err != nil {
+		log.Fatalf("tag-service taxonomy release facade init failed: %v", err)
+	}
+	feedbackSink := tagfeedbackstore.NewSink(db)
+	if err := feedbackSink.EnsureIndexes(ctx); err != nil {
+		log.Printf("WARN: tag-service ensure tag_feedback indexes: %v", err)
+	}
+	feedbackFacade, err := tagfeedback.NewFacade(feedbackSink, tagNodeStore)
+	if err != nil {
+		log.Fatalf("tag-service tag feedback facade init failed: %v", err)
+	}
+
+	routesMux := http.NewServeMux()
+	httpadapter.NewTagHandler(tagService).Register(routesMux)
+	httpadapter.NewTaxonomyReleaseHandler(releaseFacade).Register(routesMux)
+	httpadapter.NewTagFeedbackHandler(feedbackFacade).Register(routesMux)
+	var handler http.Handler = routesMux
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
@@ -105,12 +131,27 @@ func main() {
 	outerMux.Handle("/", handler)
 
 	instanceID, _ := os.Hostname()
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("tag-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("tag-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("tag-service exception logger init failed: %v", err)
 	}
@@ -194,22 +235,16 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 		return cfg, nil
 	}
 	localDefault := filepath.Join("configs", "default", "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
-				return config{}, fmt.Errorf("read local version config: %w", err)
-			}
-		}
-		return cfg, nil
+	if err := mergeConfigFile(&cfg, localDefault); err != nil {
+		return config{}, fmt.Errorf("read local default config: %w", err)
 	}
-	if err := mergeConfigFile(&cfg, filepath.Join("configs", "config.yaml")); err != nil {
-		return config{}, fmt.Errorf("read current config: %w", err)
+	if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
+		return config{}, fmt.Errorf("read local env config: %w", err)
+	}
+	if strings.TrimSpace(configVersion) != "" {
+		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
+			return config{}, fmt.Errorf("read local version config: %w", err)
+		}
 	}
 	return cfg, nil
 }

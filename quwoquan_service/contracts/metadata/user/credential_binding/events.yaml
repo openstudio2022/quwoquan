@@ -2,13 +2,13 @@ aggregate: CredentialBinding
 events:
   - name: CredentialBound
     producer: user-service
-    consumers: [projection-workers]
-    channel: event_store
+    consumers: [security-audit]
+    channel: transactional_outbox
     payload_entity: CredentialBinding
     payload_fields: [id]
   - name: CredentialRevoked
     producer: user-service
-    consumers: [projection-workers]
-    channel: event_store
+    consumers: [security-audit]
+    channel: transactional_outbox
     payload_entity: CredentialBinding
     payload_fields: [id]

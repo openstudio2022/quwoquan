@@ -1,4 +1,4 @@
-version: 2
+version: 3
 node:
   id: object-homepage-coverage-scaling
   level: L2_business_capability
@@ -7,12 +7,13 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: object-homepage-coverage-scaling
 scope:
-  summary: 实体主页覆盖从静态主清单、execution 内来源资格核验、单 execution 生产到环境发布与 App 消费的验收范围。
+  summary: 实体主页从双省 20K 发现候选、12K source-ready 唯一对象、H10K 冻结目标到真实生产、环境发布与 App 消费的验收范围。
   in_scope:
   - 区县、实体类型与来源 coverage cell 及 checkpoint。
+  - 浙江、四川各至少 6,000 个 source-ready 唯一对象，以及各 5,000 个不可替换 H10K 冻结目标。
   - execution-owned encyclopedia-primary 来源资格核验与逐图权利闭包。
-  - 单 execution 工作包的五阶段生产、review 与 release 引用。
-  - immutable release、Gamma 导入、API 与 App UAT 证据。
+  - Mongo+Redis ReliableTask、Cursor SDK author/reviewer、权威成本、对象事务与 accepted throughput。
+  - Canary、H200、H1000、M3、H10K immutable release、Gamma 导入、API、App UAT、回滚与重放。
   out_of_scope:
   - 两省以外的本轮实跑。
 sit_acceptance:
@@ -22,12 +23,13 @@ sit_acceptance:
     - zhejiang-sichuan-province-coverage
     done_when:
     - coverage cell 的终态、失败与截断可审计，资源上限不冒充饱和。
+    - 原始发现候选不少于 20,000，去重且 source-ready 唯一对象不少于 12,000；H10K 每省冻结 5,000 且失败不得替换。
     - 静态主清单只保存稳定身份与分类，不保存来源 URL、来源资格或运行期证据。
     - 每个 execution 包含 plan、sources、五阶段对象树、evidence 与 publish_ref。
-    - approved 对象进入 canonical publish，release 环境中立且 create-once。
-    - Gamma 导入、API 与 App UAT 证据写入对应 env run。
+    - approved 对象只经对象事务进入 canonical publish，release 环境中立且 create-once。
+    - H10K 在 24 小时内达到至少 416.67 accepted homepage/h，Gamma 导入、API、App UAT、回滚与重放证据写入对应 env run。
     performance_points:
-    - M1 记录每小时 approved homepage 数量及 P95 单对象耗时。
+    - H200、H1000、H10K 记录每小时 accepted homepage、P50/P95 单对象耗时、首过率、queue lag 与 unitPassedCost。
     tests:
       planned:
       - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
@@ -45,11 +47,13 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: object_homepage_coverage_contract
         cases:
         - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.contract
         envs: [local]
       - layer: api_integration
+        execution_profile: integration
         suite: object_homepage_coverage_gamma
         cases:
         - api_integration.discovery_content.object_homepage_coverage_scaling.sit1.gamma
@@ -60,5 +64,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

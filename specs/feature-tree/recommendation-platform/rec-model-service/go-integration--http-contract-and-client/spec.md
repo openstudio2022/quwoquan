@@ -1,4 +1,4 @@
-# L5 叶子：http-contract-and-client
+# L3 特性：http-contract-and-client
 
 Go 与模型服务集成最小可交付单元：ModelPredictRequest 增加 Scenario；HTTPModelServiceClient 实现并传 scenario；content-service 配置与 CascadeScorer 组装；失败回退 RuleScorer。
 

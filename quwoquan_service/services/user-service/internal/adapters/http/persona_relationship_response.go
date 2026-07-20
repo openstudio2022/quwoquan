@@ -4,6 +4,7 @@ import (
 	"time"
 
 	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
+	relports "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/ports"
 )
 
 // relationshipViewResponse is the REST projection of a relationship aggregate.
@@ -35,16 +36,18 @@ func newRelationshipViewResponse(
 // the opposite direction's follow state.
 type blockedListItemResponse struct {
 	TargetSubAccountID string    `json:"targetSubAccountId"`
+	DisplayName        string    `json:"displayName"`
+	UserHandle         string    `json:"userHandle"`
+	AvatarURL          string    `json:"avatarUrl"`
 	BlockedAt          time.Time `json:"blockedAt"`
 }
 
-func newBlockedListItemResponse(direction relmodel.Direction) blockedListItemResponse {
-	blockedAt := direction.UpdatedAt.UTC()
-	if direction.BlockedAt != nil {
-		blockedAt = direction.BlockedAt.UTC()
-	}
+func newBlockedListItemResponse(item relports.BlockedListItem) blockedListItemResponse {
 	return blockedListItemResponse{
-		TargetSubAccountID: direction.TargetPersonaID,
-		BlockedAt:          blockedAt,
+		TargetSubAccountID: item.TargetSubAccountID,
+		DisplayName:        item.DisplayName,
+		UserHandle:         item.UserHandle,
+		AvatarURL:          item.AvatarURL,
+		BlockedAt:          item.BlockedAt.UTC(),
 	}
 }

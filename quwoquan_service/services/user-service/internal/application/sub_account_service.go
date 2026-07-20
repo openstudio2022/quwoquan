@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	personaports "quwoquan_service/services/user-service/internal/domain/persona/persona/ports"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
@@ -13,13 +14,14 @@ import (
 )
 
 // SubAccountService owns persona lifecycle and profile synchronization.
+// 所有写命令经 PersonaCommandStore 以「服务端内部 CAS + receipt + outbox
+// 同事务」提交；本服务只承载业务校验与字段合成。
 type SubAccountService struct {
-	personas          PersonaStore
-	personaHistory    userrepo.PersonaHistoryReader
-	personaActivation userrepo.PersonaActivationStore
-	profiles          userrepo.UserProfileStore
-	pcache            ProfileCacheInvalidator
-	creatorProfiles   userrepo.CreatorRuntimeProfileReader
+	personas        PersonaStore
+	commands        personaports.PersonaCommandStore
+	profiles        userrepo.UserProfileStore
+	pcache          ProfileCacheInvalidator
+	creatorProfiles userrepo.CreatorRuntimeProfileReader
 }
 
 type SubAccountServiceOption func(*SubAccountService)
@@ -32,18 +34,16 @@ func WithCreatorRuntimeProfiles(repository userrepo.CreatorRuntimeProfileReader)
 
 func NewSubAccountService(
 	personas PersonaStore,
-	personaHistory userrepo.PersonaHistoryReader,
-	personaActivation userrepo.PersonaActivationStore,
+	commands personaports.PersonaCommandStore,
 	profiles userrepo.UserProfileStore,
 	pcache ProfileCacheInvalidator,
 	options ...SubAccountServiceOption,
 ) *SubAccountService {
 	service := &SubAccountService{
-		personas:          personas,
-		personaHistory:    personaHistory,
-		personaActivation: personaActivation,
-		profiles:          profiles,
-		pcache:            pcache,
+		personas: personas,
+		commands: commands,
+		profiles: profiles,
+		pcache:   pcache,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -59,10 +59,12 @@ func (s *SubAccountService) ListSubAccounts(ctx context.Context, ownerID string)
 }
 
 // CreateSubAccount creates a new isolated sub-account for the owner.
-func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string, data map[string]any) (*model.Persona, error) {
-	if _, ok := data["userHandle"]; ok {
-		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
-	}
+func (s *SubAccountService) CreateSubAccount(
+	ctx context.Context,
+	ownerID string,
+	command CreatePersonaCommand,
+	meta PersonaCommandMeta,
+) (*model.Persona, error) {
 	primary, _ := s.personas.FindActiveByUserID(ctx, ownerID)
 	if primary == nil {
 		personas, err := s.personas.FindByUserID(ctx, ownerID)
@@ -79,22 +81,16 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 		UserID:                   ownerID,
 		SubAccountID:             newSubAccountID,
 		UserHandle:               systemUserHandleForSubAccount(newSubAccountID),
+		DisplayName:              strings.TrimSpace(command.DisplayName),
+		AvatarURL:                strings.TrimSpace(command.AvatarURL),
 		IsolationLevel:           defaultIsolationLevel,
+		PurposeHint:              strings.TrimSpace(command.PurposeHint),
 		InheritsProfileFromOwner: true,
 		OverriddenProfileFields:  encodeProfileFieldList(nil),
 		LastProfileSyncSource:    "initial_inherit",
 	}
-	if v, ok := data["displayName"].(string); ok {
-		p.DisplayName = strings.TrimSpace(v)
-	}
-	if v, ok := data["avatarUrl"].(string); ok {
-		p.AvatarURL = strings.TrimSpace(v)
-	}
-	if v, ok := data["isolationLevel"].(string); ok {
-		p.IsolationLevel = v
-	}
-	if v, ok := data["purposeHint"].(string); ok {
-		p.PurposeHint = v
+	if isolationLevel := strings.TrimSpace(command.IsolationLevel); isolationLevel != "" {
+		p.IsolationLevel = isolationLevel
 	}
 	if primary != nil {
 		p.Phone = primary.Phone
@@ -105,19 +101,23 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 	now := time.Now().UTC()
 	p.LastProfileSyncAt = &now
 	normalizePersonaPersistence(p)
-	if err := s.personas.Create(ctx, p); err != nil {
+	if _, err := s.commands.CommitCreate(ctx, p, meta); err != nil {
 		if isPersonaHandleConflict(err) {
 			return nil, ErrPersonaHandleTaken
 		}
 		return nil, err
 	}
-	// Bump sub_account_count
 	_ = s.pcache.Del(ctx, ownerID)
 	return p, nil
 }
 
-func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaID string, data map[string]any) (*model.Persona, error) {
-	if profileMutationRequestsUserHandle(data) {
+func (s *SubAccountService) UpdatePersona(
+	ctx context.Context,
+	ownerID, personaID string,
+	command UpdatePersonaCommand,
+	meta PersonaCommandMeta,
+) (*model.Persona, error) {
+	if fieldsMaskRequestsUserHandle(command.Sync.FieldsMask) {
 		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
 	}
 	persona, err := s.personas.FindBySubAccountID(ctx, personaID)
@@ -135,20 +135,20 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 		return nil, err
 	}
 	changedFields := make([]string, 0, 5)
-	if v, ok := data["displayName"].(string); ok {
-		persona.DisplayName = strings.TrimSpace(v)
+	if command.DisplayName != nil {
+		persona.DisplayName = strings.TrimSpace(*command.DisplayName)
 		changedFields = append(changedFields, "displayName")
 	}
-	if v, ok := data["phone"].(string); ok {
-		persona.Phone = strings.TrimSpace(v)
+	if command.Phone != nil {
+		persona.Phone = strings.TrimSpace(*command.Phone)
 		changedFields = append(changedFields, "phone")
 	}
-	if v, ok := data["email"].(string); ok {
-		persona.Email = strings.TrimSpace(v)
+	if command.Email != nil {
+		persona.Email = strings.TrimSpace(*command.Email)
 		changedFields = append(changedFields, "email")
 	}
-	if v, ok := data["avatarUrl"].(string); ok {
-		nextAvatarURL := strings.TrimSpace(v)
+	if command.AvatarURL != nil {
+		nextAvatarURL := strings.TrimSpace(*command.AvatarURL)
 		if nextAvatarURL != strings.TrimSpace(persona.AvatarURL) {
 			persona.AvatarURL = nextAvatarURL
 			if nextAvatarURL == "" {
@@ -162,15 +162,15 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 		}
 		changedFields = append(changedFields, "avatarUrl")
 	}
-	if v, ok := data["backgroundUrl"].(string); ok {
-		persona.BackgroundURL = strings.TrimSpace(v)
+	if command.BackgroundURL != nil {
+		persona.BackgroundURL = strings.TrimSpace(*command.BackgroundURL)
 		changedFields = append(changedFields, "backgroundUrl")
 	}
-	if v, ok := data["isolationLevel"].(string); ok {
-		persona.IsolationLevel = v
+	if command.IsolationLevel != nil {
+		persona.IsolationLevel = *command.IsolationLevel
 	}
-	if v, ok := data["purposeHint"].(string); ok {
-		persona.PurposeHint = v
+	if command.PurposeHint != nil {
+		persona.PurposeHint = *command.PurposeHint
 	}
 	if len(changedFields) > 0 {
 		persona.InheritsProfileFromOwner = false
@@ -180,15 +180,22 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 		persona.LastProfileSyncSource = "sub_account_edit"
 	}
 	normalizePersonaPersistence(persona)
-	if err := s.personas.Update(ctx, persona); err != nil {
+	if _, err := s.commands.CommitMutation(
+		ctx,
+		persona,
+		personaports.PersonaUpdatedEvent,
+		meta,
+	); err != nil {
 		if isPersonaHandleConflict(err) {
 			return nil, ErrPersonaHandleTaken
 		}
 		return nil, err
 	}
-	fieldsMask := parseRequestedFieldsMask(data, changedFields)
-	if shouldApplyPersonaSync(data) && len(fieldsMask) > 0 {
-		if _, err := s.applyPersonaProfileSync(ctx, ownerID, persona, personas, data, fieldsMask); err != nil {
+	fieldsMask := normalizeProfileFieldsWithFallback(command.Sync.FieldsMask, changedFields)
+	if shouldApplyPersonaSyncScope(command.Sync) && len(fieldsMask) > 0 {
+		if _, err := s.applyPersonaProfileSync(
+			ctx, ownerID, persona, personas, command.Sync, fieldsMask, meta,
+		); err != nil {
 			return nil, err
 		}
 		usertelemetry.Collector().RecordSyncScopeSubmit()
@@ -198,7 +205,11 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 }
 
 // ActivateSubAccount atomically switches the active sub-account.
-func (s *SubAccountService) ActivateSubAccount(ctx context.Context, ownerID, subAccountID string) error {
+func (s *SubAccountService) ActivateSubAccount(
+	ctx context.Context,
+	ownerID, subAccountID string,
+	meta PersonaCommandMeta,
+) error {
 	startedAt := time.Now()
 	defer func() {
 		usertelemetry.RolloutCollector().RecordSwitchLatency(time.Since(startedAt))
@@ -221,60 +232,26 @@ func (s *SubAccountService) ActivateSubAccount(ctx context.Context, ownerID, sub
 	if isRetiredPersona(target) {
 		return ErrRetiredPersonaAction
 	}
-	if err := s.personaActivation.SwitchActive(ctx, ownerID, target.SubAccountID); err != nil {
+	if _, err := s.commands.CommitActivation(ctx, ownerID, target.SubAccountID, meta); err != nil {
 		return err
 	}
 	_ = s.pcache.Del(ctx, ownerID)
 	return nil
 }
 
-// DeleteSubAccount only deletes truly empty personas.
-func (s *SubAccountService) DeleteSubAccount(ctx context.Context, ownerID, subAccountID string) error {
-	subs, err := s.personas.FindByUserID(ctx, ownerID)
-	if err != nil {
-		return err
-	}
-	var target *model.Persona
-	for i := range subs {
-		if subs[i].SubAccountID == subAccountID {
-			target = &subs[i]
-			break
-		}
-	}
-	if target == nil {
-		return ErrSubAccountNotFound
-	}
-	if target.IsPrimary {
-		return ErrPrimarySubAccount
-	}
-	if isRetiredPersona(target) {
-		return ErrRetiredPersonaAction
-	}
-	if target.IsActive {
-		return ErrActiveSubAccountAction
-	}
-	if activePersonaCount(subs) <= 1 {
-		return ErrLastSubAccount
-	}
-	hasHistory, err := s.personaHistory.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return err
-	}
-	if hasHistory {
-		return ErrSubAccountRetireRequired
-	}
-	if err := s.personas.Delete(ctx, target.SubAccountID); err != nil {
-		return err
-	}
-	_ = s.pcache.Del(ctx, ownerID)
-	return nil
+// ProfileSyncResult 是 ApplyPersonaProfileSync 的强类型回执。
+type ProfileSyncResult struct {
+	Status       string   `json:"status"`
+	AppliedCount int      `json:"appliedCount"`
+	FieldsMask   []string `json:"fieldsMask"`
 }
 
-func (s *SubAccountService) DeleteEmptyPersona(ctx context.Context, ownerID, personaID string) error {
-	return s.DeleteSubAccount(ctx, ownerID, personaID)
-}
-
-func (s *SubAccountService) ApplyPersonaProfileSync(ctx context.Context, ownerID, personaID string, data map[string]any) (map[string]any, error) {
+func (s *SubAccountService) ApplyPersonaProfileSync(
+	ctx context.Context,
+	ownerID, personaID string,
+	options PersonaProfileSyncOptions,
+	meta PersonaCommandMeta,
+) (*ProfileSyncResult, error) {
 	personas, err := s.personas.FindByUserID(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -283,18 +260,20 @@ func (s *SubAccountService) ApplyPersonaProfileSync(ctx context.Context, ownerID
 	if source == nil {
 		return nil, ErrSubAccountNotFound
 	}
-	fieldsMask := parseRequestedFieldsMask(data, nil)
-	applied, err := s.applyPersonaProfileSync(ctx, ownerID, source, personas, data, fieldsMask)
+	fieldsMask := normalizeProfileFields(options.FieldsMask)
+	applied, err := s.applyPersonaProfileSync(
+		ctx, ownerID, source, personas, options, fieldsMask, meta,
+	)
 	if err != nil {
 		return nil, err
 	}
 	if len(fieldsMask) > 0 {
 		usertelemetry.Collector().RecordSyncScopeSubmit()
 	}
-	return map[string]any{
-		"status":       "ok",
-		"appliedCount": applied,
-		"fieldsMask":   fieldsMask,
+	return &ProfileSyncResult{
+		Status:       "ok",
+		AppliedCount: applied,
+		FieldsMask:   fieldsMask,
 	}, nil
 }
 
@@ -319,7 +298,6 @@ func (s *SubAccountService) GetActivePersonaContextView(ctx context.Context, own
 		"avatarVersion":          view["avatarVersion"],
 		"subjectType":            "persona",
 		"isPrimary":              persona != nil && persona.IsPrimary,
-		"personaContextVersion":  "1",
 		"personaSnapshotVersion": 1,
 		"sourceSurfaceId":        "",
 		"explicitOverride":       false,
@@ -339,11 +317,7 @@ func (s *SubAccountService) GetPersonaManagementSummary(ctx context.Context, own
 	activeID := ""
 	primaryID := ""
 	for i := range personas {
-		hasHistory, err := s.personaHistory.HasAttributedHistory(ctx, personas[i].SubAccountID)
-		if err != nil {
-			return nil, err
-		}
-		item := BuildPersonaManagementItemWithHistory(personas[i], hasHistory)
+		item := BuildPersonaManagementItem(personas[i])
 		items = append(items, item)
 		if personas[i].IsActive && !isRetiredPersona(&personas[i]) {
 			activeID = personas[i].SubAccountID
@@ -387,14 +361,17 @@ func (s *SubAccountService) GetPersonaLifecycleGuard(ctx context.Context, ownerI
 	if target == nil {
 		return nil, ErrSubAccountNotFound
 	}
-	hasHistory, err := s.personaHistory.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return nil, err
-	}
-	return buildPersonaLifecycleGuardView(target, activePersonaCount(personas), hasHistory), nil
+	return buildPersonaLifecycleGuardView(
+		target,
+		activePersonaCount(personas),
+	), nil
 }
 
-func (s *SubAccountService) RetirePersona(ctx context.Context, ownerID, personaID string) (map[string]any, error) {
+func (s *SubAccountService) RetirePersona(
+	ctx context.Context,
+	ownerID, personaID string,
+	meta PersonaCommandMeta,
+) (map[string]any, error) {
 	personas, err := s.personas.FindByUserID(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -415,34 +392,26 @@ func (s *SubAccountService) RetirePersona(ctx context.Context, ownerID, personaI
 	if activePersonaCount(personas) <= 1 {
 		return nil, ErrLastSubAccount
 	}
-	hasHistory, err := s.personaHistory.HasAttributedHistory(ctx, target.SubAccountID)
-	if err != nil {
-		return nil, err
-	}
-	if !hasHistory {
-		return nil, ErrDeleteEmptyPersonaOnly
-	}
 	now := time.Now().UTC()
 	target.Status = personaStatusRetired
 	target.IsActive = false
 	target.RetiredAt = &now
 	normalizePersonaPersistence(target)
-	if err := s.personas.Update(ctx, target); err != nil {
+	if _, err := s.commands.CommitMutation(
+		ctx,
+		target,
+		personaports.PersonaRetiredEvent,
+		meta,
+	); err != nil {
 		return nil, err
 	}
 	_ = s.pcache.Del(ctx, ownerID)
 	return map[string]any{
-		"requestedAction":      "retire",
-		"allowed":              true,
-		"reason":               "allowed",
-		"hasAttributedHistory": true,
-		"requiresSuccessor":    false,
-		"subAccountId":         target.SubAccountID,
-		"canDelete":            false,
-		"canRetire":            false,
-		"requiredAction":       "",
-		"reasonCode":           "allowed",
-		"message":              "分身已退役，记录归因已保留",
+		"subAccountId":      target.SubAccountID,
+		"requestedAction":   "retire",
+		"allowed":           true,
+		"reason":            "allowed",
+		"requiresSuccessor": false,
 	}, nil
 }
 
@@ -528,10 +497,6 @@ func (s *SubAccountService) resolvePublicPersona(ctx context.Context, handleOrPe
 }
 
 func BuildPersonaManagementItem(persona model.Persona) map[string]any {
-	return BuildPersonaManagementItemWithHistory(persona, false)
-}
-
-func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedHistory bool) map[string]any {
 	avatarVersion := resolvedPersonaAvatarVersion(&persona)
 	var lastProfileSyncAt any
 	if persona.LastProfileSyncAt != nil {
@@ -567,7 +532,6 @@ func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedH
 		"lastProfileSyncAt":        lastProfileSyncAt,
 		"lastProfileSyncSource":    persona.LastProfileSyncSource,
 		"lastActivatedAt":          lastActivatedAt,
-		"hasAttributedHistory":     hasAttributedHistory,
 		"hasPublishedContent":      false,
 		"subjectType":              "persona",
 		"updatedAt":                persona.UpdatedAt.Format(time.RFC3339),
@@ -621,45 +585,9 @@ func canExposePublicPersona(persona *model.Persona) bool {
 	return personaIsolationLevel(persona) != "strict"
 }
 
-func lifecycleGuardMessage(reason string) string {
-	switch reason {
-	case "blocked_primary_persona":
-		return "主分身不可删除或退役"
-	case "blocked_last_persona":
-		return "至少需要保留一个分身"
-	case "blocked_active_persona":
-		return "请先切换到其他分身后再执行该操作"
-	case "blocked_retired_persona":
-		return "该分身已退役，记录归因已保留，不可删除或再次退役"
-	case "retire_instead_of_delete":
-		return "该分身已有记录归因，请使用退役而不是删除"
-	default:
-		return ""
-	}
-}
-
-func shouldApplyPersonaSync(data map[string]any) bool {
-	scope, _ := data["applyScope"].(string)
-	if scope == "" || scope == "current_subject_only" {
-		return false
-	}
-	return true
-}
-
-func parseRequestedFieldsMask(data map[string]any, fallback []string) []string {
-	raw, ok := data["fieldsMask"]
-	if !ok {
+func normalizeProfileFieldsWithFallback(fields, fallback []string) []string {
+	if len(fields) == 0 {
 		return normalizeProfileFields(fallback)
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return normalizeProfileFields(fallback)
-	}
-	fields := make([]string, 0, len(list))
-	for _, item := range list {
-		if text := strings.TrimSpace(fmt.Sprint(item)); text != "" {
-			fields = append(fields, text)
-		}
 	}
 	return normalizeProfileFields(fields)
 }
@@ -680,26 +608,10 @@ func normalizeProfileFields(fields []string) []string {
 	return result
 }
 
-func profileMutationRequestsUserHandle(data map[string]any) bool {
-	if _, ok := data["userHandle"]; ok {
-		return true
-	}
-	raw, ok := data["fieldsMask"]
-	if !ok {
-		return false
-	}
-	switch list := raw.(type) {
-	case []any:
-		for _, item := range list {
-			if strings.TrimSpace(fmt.Sprint(item)) == "userHandle" {
-				return true
-			}
-		}
-	case []string:
-		for _, item := range list {
-			if strings.TrimSpace(item) == "userHandle" {
-				return true
-			}
+func fieldsMaskRequestsUserHandle(fieldsMask []string) bool {
+	for _, item := range fieldsMask {
+		if strings.TrimSpace(item) == "userHandle" {
+			return true
 		}
 	}
 	return false
@@ -763,30 +675,12 @@ func parsePgTextArray(raw string) []string {
 	return result
 }
 
-func parseProfileFieldList(raw string) []string {
-	text := strings.TrimSpace(raw)
-	text = strings.TrimPrefix(text, "{")
-	text = strings.TrimSuffix(text, "}")
-	if text == "" {
-		return nil
-	}
-	parts := strings.Split(text, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.Trim(strings.TrimSpace(part), `"`)
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-	return normalizeProfileFields(result)
+func parseProfileFieldList(fields []string) []string {
+	return normalizeProfileFields(fields)
 }
 
-func encodeProfileFieldList(fields []string) string {
-	normalized := normalizeProfileFields(fields)
-	if len(normalized) == 0 {
-		return "{}"
-	}
-	return "{" + strings.Join(normalized, ",") + "}"
+func encodeProfileFieldList(fields []string) []string {
+	return normalizeProfileFields(fields)
 }
 
 func normalizePersonaPersistence(persona *model.Persona) {
@@ -794,9 +688,9 @@ func normalizePersonaPersistence(persona *model.Persona) {
 		return
 	}
 	persona.AvatarURL = strings.TrimSpace(persona.AvatarURL)
-	if strings.TrimSpace(persona.OverriddenProfileFields) == "" {
-		persona.OverriddenProfileFields = "{}"
-	}
+	persona.OverriddenProfileFields = normalizeProfileFields(
+		persona.OverriddenProfileFields,
+	)
 	if strings.TrimSpace(persona.Status) == "" {
 		persona.Status = personaStatusActive
 	}
@@ -837,43 +731,30 @@ func activePersonaCount(personas []model.Persona) int {
 	return count
 }
 
-func buildPersonaLifecycleGuardView(target *model.Persona, activeCount int, hasAttributedHistory bool) map[string]any {
-	reason := "allowed"
-	canDelete := true
-	canRetire := false
-	requiredAction := ""
+func buildPersonaLifecycleGuardView(target *model.Persona, activeCount int) map[string]any {
+	blockedReason := "allowed"
+	allowed := true
 	requiresSuccessor := false
 	if target.IsPrimary {
-		reason = "blocked_primary_persona"
-		canDelete = false
+		blockedReason = "blocked_primary_persona"
+		allowed = false
 	} else if isRetiredPersona(target) {
-		reason = "blocked_retired_persona"
-		canDelete = false
+		blockedReason = "blocked_retired_persona"
+		allowed = false
 	} else if activeCount <= 1 {
-		reason = "blocked_last_persona"
-		canDelete = false
+		blockedReason = "blocked_last_persona"
+		allowed = false
 	} else if target.IsActive {
-		reason = "blocked_active_persona"
-		canDelete = false
+		blockedReason = "blocked_active_persona"
+		allowed = false
 		requiresSuccessor = true
-	} else if hasAttributedHistory {
-		reason = "retire_instead_of_delete"
-		canDelete = false
-		canRetire = true
-		requiredAction = "retire"
 	}
 	return map[string]any{
-		"requestedAction":      "delete",
-		"allowed":              canDelete,
-		"reason":               reason,
-		"hasAttributedHistory": hasAttributedHistory,
-		"requiresSuccessor":    requiresSuccessor,
-		"subAccountId":         target.SubAccountID,
-		"canDelete":            canDelete,
-		"canRetire":            canRetire,
-		"requiredAction":       requiredAction,
-		"reasonCode":           reason,
-		"message":              lifecycleGuardMessage(reason),
+		"subAccountId":      target.SubAccountID,
+		"requestedAction":   "retire",
+		"allowed":           allowed,
+		"reason":            blockedReason,
+		"requiresSuccessor": requiresSuccessor,
 	}
 }
 
@@ -919,25 +800,6 @@ func resolveSyncTargetPersonas(personas []model.Persona, sourcePersonaID, applyS
 		}
 	}
 	return targets
-}
-
-func extractSyncTargetIDs(data map[string]any) []string {
-	raw, ok := data["syncTargetIds"]
-	if !ok {
-		return nil
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]string, 0, len(list))
-	for _, item := range list {
-		text := strings.TrimSpace(fmt.Sprint(item))
-		if text != "" {
-			result = append(result, text)
-		}
-	}
-	return result
 }
 
 func applyFieldsFromSource(target *model.Persona, source *model.Persona, fields []string) {

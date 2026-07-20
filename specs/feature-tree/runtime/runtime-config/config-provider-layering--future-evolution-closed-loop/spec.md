@@ -1,4 +1,4 @@
-# L4 细节：future-evolution-closed-loop
+# L3 细节：future-evolution-closed-loop
 
 ## 功能定位
 
@@ -13,7 +13,7 @@
 
 本节点负责：
 - 演进目标、边界与分阶段任务定义
-- 门禁草案（本地 verify、CI、发布前 gate-full）
+- 门禁草案（baseline、smoke、integration、release）
 - 验收口径（A1/A3/A4/A7/A8）
 
 本节点不负责：
@@ -37,12 +37,12 @@
   - 增加 `config-evolution-regression` workflow 任务
   - 执行 split alpha/beta/gamma/prod 配置加载回归 + 漂移模拟
 - G3（发布前）：
-  - `make gate-full` 追加演进门禁聚合 target（草案）
+  - `make gate-release ENV=gamma` 追加演进门禁聚合 target（草案）
 
 ## 验收概要
 
 - A1：C11~C13 均有明确实施路径与边界
-- A3：演进门禁在 verify/CI/gate-full 三层可执行
+- A3：演进门禁在 baseline/CI/release 三层可执行
 - A4：热更新与漂移检测具备审计可观测输出
 - A7：演进不破坏现有配置契约与目录标准
 - A8：关键场景具备自动化测试与回归入口

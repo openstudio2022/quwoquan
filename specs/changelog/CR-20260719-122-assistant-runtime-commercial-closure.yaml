@@ -1,0 +1,138 @@
+id: CR-20260719-122-assistant-runtime-commercial-closure
+title: B8 助手域商用闭环（对象运行基座 + 端侧 Facet 拆分 + 学习回路）
+slug: assistant-runtime-commercial-closure
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/assistant-run-learning/assistant-runtime-foundation
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+
+entries:
+  - timestamp: "2026-07-19T19:10:00+08:00"
+    summary: |
+      按业务对象范式收口 assistant 域（AssistantConversation / AssistantRun(+turn_view) /
+      SkillSubscription / SkillConsent / AssistantInteractionEvent / AssistantScorecardFact）。
+
+      规格与树：补建 assistant-runtime-foundation L2 三件（spec/design/acceptance），
+      消除 journey_scenario_registry 对该 L2 的悬空引用；tree_index 重建。
+
+      metadata：assistant_conversation 新建 errors.yaml；4 个对象 service.yaml 补齐全部
+      23 个 operation 的 reliability/error_codes/privacy/telemetry/slo/authorization 合同；
+      skill_subscription 状态迁移去调用方幂等键、改服务端 no-op receipt 语义；
+      6 对象补 readiness.yaml（引用路径全部经存在性校验）。verify-metadata 与全仓
+      codegen（Go/Dart/OpenAPI/portal）重跑通过。
+
+      服务端：conversation/turn 迁出进程内存 map，落 MongoDB ConversationRunStore packet
+      （唯一约束幂等 + ClientRequestId 重放 + turn 终态持久化）；SSE 断线后按持久化终态
+      重放（replayCompletedTurnStream）；run 完成自动落 scorecard 事实；cron/主动投递
+      claim 迁 Redis SetNX+TTL 租约（多实例不重复投递）；consent 改版本化事实流水
+      （grant/revoke 追加）、执行点双 gate（CreateTurn 入口 + agent loop 工具执行前）
+      fail-closed，store 不可用一律拒绝敏感能力；creationAssistantEnabled 由失败开放改
+      失败关闭；ListAssistantTasks/Memories 删除硬编码演示兜底；handler 路由与 metadata
+      对齐（/internal 前缀、requireIdentifiedUser、SSE 已发 header 后错误以
+      assistant.turn.failed 事件收口）；事件集合名对齐 storage.yaml
+      （assistant_interaction_events / assistant_scorecard_facts）。
+
+      端侧：1847 行聚合 AssistantRepository 拆 8 个对象级 Facet（conversation_run /
+      skill_subscription / skill_consent / learning_append / personalization /
+      personal_data / xiaoqu_search / creation_suggest），装配改 Remote-only 8 个
+      Facet provider；Mock 物理迁 test/support/cloud_services（production lib/** 零
+      mock 可达）；assistant 域 AppDataSourceMode 引用清零。
+
+      可观测：quwoquan_alerts.yaml 新增 quwoquan_l2_assistant_objects 规则组
+      （run 可用性/延迟 SLO、consent fail-closed 503、订阅 cron 停摆）。
+    reason: |
+      勘察确认 assistant 域存在系统性技术债：conversation/run 全在进程内存（重启丢失、
+      多实例不可用）、consent 失败开放且执行点无 gate、cron claim 进程内去重多实例必重复、
+      服务端硬编码演示任务/记忆兜底污染生产、端侧 1847 行聚合 Repository 12 处吞异常
+      + 假 fallback 把失败伪装成功、学习回路端侧断裂（契约已生成无调用方）。按对象
+      范式一次收口，不加旁路。
+    change_type:
+      - spec
+      - metadata
+      - codegen
+      - service
+      - app
+      - local_contract
+      - api_integration
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_service/services/assistant-service/internal/application/consent_gate__security__local_contract_test.go
+          - quwoquan_service/services/assistant-service/internal/application/conversation_store_fail_closed__local_contract_test.go
+          - quwoquan_app/test/local_contract/cloud/assistant/assistant_consent_fail_closed__security__local_contract_test.dart
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
+          - quwoquan_service/services/assistant-service/tests/api_integration/learning_facts__api_integration_test.go
+    notes: |
+      已续接完成（本 entry 范围内）：端侧错误单轨与假 fallback 删除（12 处 catch(_)
+      全部收口为 CloudErrorMapper 结构化异常、policy/搜索/personalization 失败开放兜底
+      与 buildAssistantFallback* 构造器删除、2 处 StateError 清除、UI 硬编码错误文案改
+      runtimeErrorDisplayMessage、management 页 4 个无后端假开关删除）；学习回路
+      submitFeedback→ReportInteractionEvent typed 上报接通（稳定 eventId 派生 + 内存
+      待重试补发）；5 页曝光埋点接现行 pageAccess 通道（assistant local_contract 86 例
+      + search 回归全绿）。
+
+      已续接完成（UAT 改真）：assistant 5 个页面 UAT（对话/half sheet/设置/历史/反馈）
+      由路径存在性伪验收改为真实页面 pump + 四类 case（load_success/
+      empty_permission_error/primary_cta/trace_context），20 例全绿；负例断言结构化
+      CloudException 且错误码经 AssistantErrorCode 枚举同源；反馈 UAT 断言学习回路
+      typed InteractionEvent 上报与稳定 eventId。
+
+      剩余边界：readiness environments 四环境证据补全后才能 commercial-ready
+      （当前 stage 停 implemented，gamma/beta/prod 运行证据未落）。half sheet 曝光
+      复用通用 pageAccess catalog，不新增专属事件；页面商用深化见下一 entry。
+
+  - timestamp: "2026-07-20T06:00:00+08:00"
+    summary: |
+      完成 B8 页面商用深化续章。找私助对话页把外层 Remote 失败从隐藏 provider
+      errorMessage 改为时间线内结构化错误卡，保留 RuntimeFailure/recovery 语义并支持
+      原请求重试（重试不重复用户消息）；补上下文欢迎空态、真实 process phase 与反馈
+      类型/工具栏选中态同源。
+
+      `AssistantHalfSheet.show` 从“记录曝光后直接跳全屏”改为真实生产半弹层，恢复
+      reportPageContext/getEntryPersonalization/getSuggestedActions 消费链；输入与
+      command chip 通过 `autoSendQuery` 携带首条问题进入完整对话。曝光继续复用
+      metadata surface + 通用 pageAccess 管道，不为单一弹层发明第二套 telemetry 事件。
+
+      技能中心删除风险策略/场景门/简洁模式共 8 个本地假开关，删除所有演示订阅
+      query/rawText/cron；无服务端订阅的技能只显示结构化不可用提示，不合成成功；
+      既有订阅启停失败可见并按 Remote 真值回弹，最近会话真实展开/收起。新增
+      AssistantUserTask 与 AssistantUserMemory 的 loading/empty/error/data 页面四态。
+
+      删除悬空 `skill_subscription_controller.dart`、开发回放面板、死
+      `AssistantScheduleRow`；历史加载移除 runtimeType 测试探测；assistant 页面与
+      message widgets 的用户文案、动态模板、无障碍标签和视觉数字收敛到
+      `AssistantText` / l10n / `AppSpacing`。页面矩阵与 rollout B8 执行结果同步刷新。
+    reason: |
+      对象 packet 已完成不等于用户链路可商用。复盘发现 half sheet 生产不可达、
+      对话失败不可见、任务/记忆无消费者、技能中心以本地假开关和演示参数伪装能力，
+      会导致端云对象与页面展示断裂。本续章复用既有对象 Facet 和错误体系，不新增
+      偏好对象、兼容分支或第二写路径。
+    change_type:
+      - app
+      - local_contract
+      - user_acceptance
+      - docs
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_app/test/user_acceptance/pages/assistant/personal_assistant_dialog/personal_assistant_dialog_page__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/pages/assistant/assistant_half_sheet/assistant_half_sheet_page__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+    notes: |
+      页面深化不修改 metadata/API/storage；服务端对象模型与四环境准出边界不变。
+      `go test ./services/assistant-service/... -count=1`（含真实存储 api_integration）、
+      assistant UI local_contract 38 例、cloud local_contract 8 例、页面 UAT 20 例通过。
+      commercial-ready 仍只由 readiness 四环境 artifact 派生，本 entry 不伪造环境证据。

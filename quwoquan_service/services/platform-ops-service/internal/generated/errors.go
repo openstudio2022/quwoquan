@@ -11,46 +11,25 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrConfigInvalid             = errors.New("OPS.USER.config_invalid")
-	ErrConfigLayerNotFound       = errors.New("OPS.USER.config_layer_not_found")
-	ErrConfigVersionConflict     = errors.New("OPS.USER.config_version_conflict")
-	ErrConfigIdempotencyConflict = errors.New("OPS.USER.config_idempotency_conflict")
-	ErrConfigStorageReadFailed   = errors.New("OPS.SYSTEM.config_storage_read_failed")
-	ErrConfigStorageWriteFailed  = errors.New("OPS.SYSTEM.config_storage_write_failed")
+	ErrConfigInvalid           = errors.New("OPS.USER.config_invalid")
+	ErrConfigSnapshotNotFound  = errors.New("OPS.USER.config_snapshot_not_found")
+	ErrConfigStorageReadFailed = errors.New("OPS.SYSTEM.config_storage_read_failed")
 )
 
 // AppErrorFromConfigInvalid returns *AppError for OPS.USER.config_invalid (user_message from errors.yaml).
 func AppErrorFromConfigInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInvalid.Error()))
-	return rerrors.NewAppError(code, "配置值或作用域无效", debugMessage).WithMetadata("config_invalid", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "配置查询作用域无效", debugMessage).WithMetadata("config_invalid", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromConfigLayerNotFound returns *AppError for OPS.USER.config_layer_not_found (user_message from errors.yaml).
-func AppErrorFromConfigLayerNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConfigLayerNotFound.Error()))
-	return rerrors.NewAppError(code, "配置层不存在", debugMessage).WithMetadata("config_layer_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromConfigVersionConflict returns *AppError for OPS.USER.config_version_conflict (user_message from errors.yaml).
-func AppErrorFromConfigVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConfigVersionConflict.Error()))
-	return rerrors.NewAppError(code, "配置已更新，请刷新后重试", debugMessage).WithMetadata("config_version_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromConfigIdempotencyConflict returns *AppError for OPS.USER.config_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromConfigIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConfigIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复配置请求与原操作不一致", debugMessage).WithMetadata("config_idempotency_conflict", 409).WithRecovery("refresh", 0)
+// AppErrorFromConfigSnapshotNotFound returns *AppError for OPS.USER.config_snapshot_not_found (user_message from errors.yaml).
+func AppErrorFromConfigSnapshotNotFound(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConfigSnapshotNotFound.Error()))
+	return rerrors.NewAppError(code, "配置快照不存在", debugMessage).WithMetadata("config_snapshot_not_found", 404).WithRecovery("refresh", 0)
 }
 
 // AppErrorFromConfigStorageReadFailed returns *AppError for OPS.SYSTEM.config_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromConfigStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigStorageReadFailed.Error()))
 	return rerrors.NewAppError(code, "配置读取失败，请稍后重试", debugMessage).WithMetadata("config_storage_read_failed", 500).WithRecovery("retry", 2)
-}
-
-// AppErrorFromConfigStorageWriteFailed returns *AppError for OPS.SYSTEM.config_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromConfigStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConfigStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "配置写入失败，请稍后重试", debugMessage).WithMetadata("config_storage_write_failed", 500).WithRecovery("retry", 2)
 }

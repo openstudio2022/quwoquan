@@ -16,6 +16,7 @@ from typing import Any
 
 from core import paths as _paths
 from core.runtime_policy import RuntimePolicy
+from core.source_digest import current_source_digest
 from governance.coverage.master_list import (
     admin_children,
     admin_geo_ref,
@@ -187,10 +188,12 @@ def prepare_coverage_matrix(
         raise FileExistsError(f"coverage run already exists; use --resume: {run_dir}")
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    source_digest = current_source_digest()
     revisions = {
         "adminTreeRevision": _digest(tree),
         "typeTaxonomyRevision": _digest(ENTITY_TYPES),
         "adapterRevision": "coverage-discovery-matrix",
+        "sourceDigest": source_digest.digest,
     }
     checkpoint_paths: list[str] = []
     cell_count = 0
@@ -265,6 +268,7 @@ def prepare_coverage_matrix(
                 "province": province,
                 "city": city,
                 "revisions": revisions,
+                "sourceDigest": source_digest.to_document(),
                 "guardrails": effective_guardrails,
                 "updatedAt": _now_iso(),
                 "cells": cells,
@@ -286,6 +290,7 @@ def prepare_coverage_matrix(
         "sources": selected_sources,
         "entityTypes": list(ENTITY_TYPES),
         "revisions": revisions,
+        "sourceDigest": source_digest.to_document(),
         "guardrails": effective_guardrails,
         "checkpointFiles": checkpoint_paths,
         "cellCount": cell_count,
@@ -327,6 +332,38 @@ def resumable_cells(*, run_dir: Path) -> list[dict[str, Any]]:
                 }
             )
     return pending
+
+
+def completed_discovery_shards(
+    *,
+    run_dir: Path,
+    sources: list[str],
+) -> set[tuple[str, str, str, str]]:
+    """返回已成功终结的 province/city/district/source，供进程崩溃后跳过。"""
+    successful = {"exhausted", "saturated", "empty"}
+    grouped: dict[tuple[str, str, str, str], list[str]] = {}
+    for checkpoint_path in sorted(run_dir.glob("checkpoint_*.json")):
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        for cell in checkpoint.get("cells") or []:
+            identity = cell.get("identity") if isinstance(cell, dict) else None
+            if not isinstance(identity, dict):
+                continue
+            source = str(identity.get("source") or "")
+            if source not in sources:
+                continue
+            key = (
+                str(identity.get("province") or ""),
+                str(identity.get("city") or ""),
+                str(identity.get("district") or ""),
+                source,
+            )
+            grouped.setdefault(key, []).append(str(cell.get("status") or "pending"))
+    return {
+        key
+        for key, statuses in grouped.items()
+        if len(statuses) == len(ENTITY_TYPES)
+        and all(status in successful for status in statuses)
+    }
 
 
 def record_cell_page(
@@ -548,6 +585,132 @@ def record_cell_page(
         },
     )
     return cell
+
+
+def finalize_discovery_source_cells(
+    *,
+    run_dir: Path,
+    source: str,
+    candidates: list[dict[str, Any]],
+    failed_districts: list[str] | None = None,
+    blocked_reason: str | None = None,
+    province_filter: str | None = None,
+    city_filter: str | None = None,
+    district_filter: str | None = None,
+    retry_only: bool = False,
+) -> dict[str, Any]:
+    """把已自然结束的 source shard 归档到矩阵；不推断未执行的来源完成。"""
+    from governance.coverage.coverage_merge import (
+        _candidate_locations,
+        _type_evidence,
+    )
+
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        if str(candidate.get("source") or "") != source:
+            continue
+        classified = _type_evidence(
+            [candidate],
+            str(candidate.get("name") or ""),
+        )
+        if classified is None:
+            continue
+        entity_type = classified[0]
+        for province, city, district, _geo_ref in _candidate_locations(
+            [candidate],
+            country="中国",
+        ):
+            grouped.setdefault(
+                (province, city, district, entity_type),
+                [],
+            ).append(candidate)
+
+    shard_failures: dict[tuple[str, str], str] = {}
+    for raw in failed_districts or []:
+        shard, _, reason = str(raw).partition(":")
+        city, separator, district = shard.partition("/")
+        if separator and city and district:
+            shard_failures[(city, district)] = reason or "request_failed"
+
+    updated_cells = 0
+    for checkpoint_path in sorted(Path(run_dir).glob("checkpoint_*.json")):
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        province = str(checkpoint.get("province") or "")
+        city = str(checkpoint.get("city") or "")
+        if province_filter and province != province_filter:
+            continue
+        if city_filter and city != city_filter:
+            continue
+        for cell in checkpoint.get("cells") or []:
+            identity = cell.get("identity") if isinstance(cell, dict) else None
+            if not isinstance(identity, dict) or identity.get("source") != source:
+                continue
+            district = str(identity.get("district") or "")
+            entity_type = str(identity.get("entityType") or "")
+            if district_filter and district != district_filter:
+                continue
+            if retry_only and str(cell.get("status") or "") not in {
+                "pending",
+                "running",
+                "partial",
+                "failed",
+            }:
+                continue
+            rows = grouped.get((province, city, district, entity_type), [])
+            failure_reason = blocked_reason or shard_failures.get((city, district))
+            request_failed = bool(
+                failure_reason and "failed_" in failure_reason
+            )
+            truncated = bool(
+                failure_reason
+                and not request_failed
+                and (
+                    failure_reason.startswith("result_limit_")
+                    or failure_reason.startswith("page_limit_")
+                    or "truncated_" in failure_reason
+                )
+            )
+            request_succeeded = failure_reason is None or truncated
+            dedup_results = [
+                {
+                    "result": "unique",
+                    "identityKey": _digest(
+                        [
+                            candidate.get("identityRefs") or {},
+                            candidate.get("name"),
+                            province,
+                            city,
+                            district,
+                        ]
+                    ),
+                }
+                for candidate in rows
+            ]
+            record_cell_page(
+                checkpoint_path=checkpoint_path,
+                cell_id=str(cell.get("cellId") or ""),
+                raw_rows=rows,
+                semantic_admitted_count=len(rows),
+                semantic_rejected_count=0,
+                dedup_unique_count=len(rows),
+                dedup_duplicate_count=0,
+                semantic_admitted_rows=rows,
+                dedup_results=dedup_results,
+                request_succeeded=request_succeeded,
+                exhausted=request_succeeded and not truncated,
+                truncated=truncated,
+                retry_state=(
+                    {"reason": str(failure_reason)}
+                    if failure_reason
+                    else None
+                ),
+            )
+            updated_cells += 1
+    return {
+        "source": source,
+        "updatedCells": updated_cells,
+        "status": coverage_matrix_status(run_dir=Path(run_dir)),
+    }
 
 
 from governance.coverage.coverage_status import coverage_matrix_status

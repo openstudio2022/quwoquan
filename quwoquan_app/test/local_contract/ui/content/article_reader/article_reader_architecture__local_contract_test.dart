@@ -89,28 +89,88 @@ void main() {
     );
   });
 
+  test('article reader page surface files remain below R03 threshold', () {
+    final appLib = Directory('lib').existsSync()
+        ? Directory('lib')
+        : Directory('quwoquan_app/lib');
+    for (final relative in const <String>[
+      'ui/content/article_reader/content/article_reader_page_surfaces.dart',
+      'ui/content/article_reader/content/article_reader_page_surfaces_blocks.dart',
+      'ui/content/article_reader/content/article_reader_page_surfaces_backdrops.dart',
+    ]) {
+      final file = File('${appLib.path}/$relative');
+      expect(file.existsSync(), isTrue, reason: relative);
+      expect(
+        file.readAsLinesSync().length,
+        lessThan(1000),
+        reason: '$relative must stay below the R03 hard limit',
+      );
+    }
+  });
+
+  test('article reader deck library files remain below R03 threshold', () {
+    final appLib = Directory('lib').existsSync()
+        ? Directory('lib')
+        : Directory('quwoquan_app/lib');
+    final hostDir = Directory(
+      '${appLib.path}/ui/content/article_reader/pageflip/host',
+    );
+    final deckFiles =
+        hostDir
+            .listSync()
+            .whereType<File>()
+            .where(
+              (file) =>
+                  file.uri.pathSegments.last.startsWith(
+                    'article_read_only_book_deck',
+                  ) &&
+                  file.path.endsWith('.dart'),
+            )
+            .toList(growable: false)
+          ..sort((a, b) => a.path.compareTo(b.path));
+
+    expect(deckFiles, isNotEmpty);
+    for (final file in deckFiles) {
+      expect(
+        file.readAsLinesSync().length,
+        lessThan(1000),
+        reason: '${file.path} must stay below the R03 hard limit',
+      );
+    }
+  });
+
   test('article reader deck does not expose deprecated hard page flipping', () {
     final appLib = Directory('lib').existsSync()
         ? Directory('lib')
         : Directory('quwoquan_app/lib');
-    final hostFile = File(
-      '${appLib.path}/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+    final hostDir = Directory(
+      '${appLib.path}/ui/content/article_reader/pageflip/host',
     );
-    expect(hostFile.existsSync(), isTrue);
-    final hostSource = hostFile.readAsStringSync();
+    final hostSources = hostDir
+        .listSync()
+        .whereType<File>()
+        .where(
+          (file) =>
+              file.uri.pathSegments.last.startsWith(
+                'article_read_only_book_deck',
+              ) &&
+              file.path.endsWith('.dart'),
+        )
+        .map((file) => file.readAsStringSync())
+        .join('\n');
 
     expect(
-      hostSource,
+      hostSources,
       isNot(contains('_buildHardFlippingPageLayer')),
       reason: '文章阅读 deck 必须只走 soft/paperFold 主线，不能保留旧 3D 硬翻页入口。',
     );
     expect(
-      hostSource,
+      hostSources,
       isNot(contains('rotateY(')),
       reason: '截图中的侧翻残影来自 rotateY 硬翻页路径，article reader deck 中应不可达。',
     );
     expect(
-      hostSource,
+      hostSources,
       contains('hardPagePolicy: StPageFlipHardPagePolicy.none'),
       reason: 'coverUrl 只能决定扉页内容，不能再隐式启用 hard density。',
     );

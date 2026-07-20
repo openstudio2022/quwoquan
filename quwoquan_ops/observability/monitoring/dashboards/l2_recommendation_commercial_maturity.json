@@ -217,6 +217,70 @@
             "legendFormat": "{{ ranking_version }} / {{ reason_version }}"
           }
         ]
+      },
+      {
+        "title": "Seven-state funnel (served → negative)",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "N1-3 七态漏斗：served/visible/impressed/click/dwell/interaction/negative 每秒速率。漏斗断层（如 served 高但 impressed 低）指向下发浪费或可见性问题。",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_feed_served_total[10m]))",
+            "legendFormat": "served"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_visible_total[10m]))",
+            "legendFormat": "visible"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_impressed_total[10m]))",
+            "legendFormat": "impressed"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_click_total[10m]))",
+            "legendFormat": "click"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_dwell_total[10m]))",
+            "legendFormat": "dwell"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_interaction_total[10m]))",
+            "legendFormat": "interaction"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_negative_feedback_total[10m]))",
+            "legendFormat": "negative"
+          }
+        ]
+      },
+      {
+        "title": "AB experiment: bucket CTR and admission validity",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "N1-3 AB 闭环：experiment_bucket 维度的行为 CTR（click/impressed）与 AB 准入有效率（valid / total，来自每小时 ABAdmissionRunner）。",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\"}[30m])) by (experiment_bucket) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\"}[30m])) by (experiment_bucket), 0.001)",
+            "legendFormat": "ctr {{experiment_bucket}}"
+          },
+          {
+            "expr": "sum(rate(recommendation_feed_ab_experiment_validity_total{result=\"valid\"}[6h])) by (experiment) / clamp_min(sum(rate(recommendation_feed_ab_experiment_validity_total[6h])) by (experiment), 0.001)",
+            "legendFormat": "validity {{experiment}}"
+          }
+        ]
       }
     ]
   }

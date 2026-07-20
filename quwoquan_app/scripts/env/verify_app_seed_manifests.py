@@ -17,6 +17,7 @@ MANIFESTS = {
     "gamma": SHARED / "app_gamma_seed_manifest.json",
 }
 PROD_FORBIDDEN = ("test_fixtures", "seedRefs", "requiresSeedReset", "APP_DATA_SOURCE=mock")
+ENTITY_HOMEPAGE_TARGET = "mongodb:quwoquan_entity.homepages"
 
 
 def load_json(path: Path) -> dict:
@@ -46,6 +47,7 @@ def verify_manifest(env: str, path: Path) -> None:
         fail(f"{rel(path)} environment must be {env}")
 
     seen_domains: set[str] = set()
+    domain_items: dict[str, dict] = {}
     for item in manifest.get("seedRefs", []):
         domain = str(item.get("domain", "")).strip()
         fixture_rel = str(item.get("fixturePath", "")).strip()
@@ -55,6 +57,7 @@ def verify_manifest(env: str, path: Path) -> None:
         if domain in seen_domains:
             fail(f"{rel(path)} duplicates domain seed entry: {domain}")
         seen_domains.add(domain)
+        domain_items[domain] = item
 
         fixture_path = METADATA / fixture_rel
         fixture = load_json(fixture_path)
@@ -79,6 +82,23 @@ def verify_manifest(env: str, path: Path) -> None:
 
     if env in ("beta", "gamma") and manifest.get("appAssets", {}).get("alphaOnlyFixtureAllowlist"):
         fail(f"{rel(path)} must not carry alphaOnlyFixtureAllowlist for {env}")
+    if env in ("beta", "gamma"):
+        entity = domain_items.get("entity")
+        if entity is None:
+            fail(f"{rel(path)} must declare entity seed delivery")
+        if entity.get("targetStore") != ENTITY_HOMEPAGE_TARGET:
+            fail(
+                f"{rel(path)} entity targetStore must be "
+                f"{ENTITY_HOMEPAGE_TARGET}"
+            )
+        seed_channel = str(entity.get("seedChannel", ""))
+        if "homepage-import" not in seed_channel:
+            fail(
+                f"{rel(path)} entity seedChannel must use canonical "
+                "homepage-import"
+            )
+        if "homepage_state" in str(entity.get("resetScope", "")):
+            fail(f"{rel(path)} must not reference retired homepage_state")
 
     print(f"[verify] OK: {rel(path)}")
 

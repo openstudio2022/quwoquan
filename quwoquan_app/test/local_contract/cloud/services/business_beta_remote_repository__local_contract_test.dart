@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
@@ -14,275 +15,287 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
-import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart';
+import 'package:quwoquan_app/cloud/remote/user/profile/profile_query_remote.dart';
+import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
 void main() {
-  test(
-    'beta RemoteRepository reads contract fixture data through HTTP',
-    () async {
-      final fixtures = _BusinessFixtures.load();
-      final server = await _ContractSeedHttpServer.start(fixtures);
-      addTearDown(server.close);
+  test('beta object Facets read contract fixture data through HTTP', () async {
+    final fixtures = _BusinessFixtures.load();
+    final server = await _ContractSeedHttpServer.start(fixtures);
+    addTearDown(server.close);
 
-      final baseUrl = 'http://${server.address.host}:${server.port}';
-      final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
-      final contentPostReader = RemoteContentPostReaderAdapter(
-        client: buildGeneratedCloudOperationClient(
-          httpClient: CloudHttpClient(),
-          clientContextProvider: const _BusinessFixtureClientContext(),
-          telemetrySink: const _NoopCloudOperationTelemetrySink(),
-          environment: CloudRuntimeEnvironment(
-            environment: CloudEnvironment.beta,
-            gatewayBaseUri: Uri.parse(baseUrl),
-          ),
-        ),
-        invocationContext: (clientPageId) => CloudOperationInvocationContext(
-          surfaceId: AppUiSurfaces.workBrowser.id,
-          routeId: AppUiSurfaces.workBrowser.routeId,
+    final baseUrl = 'http://${server.address.host}:${server.port}';
+    final httpClient = CloudHttpClient(
+      authTokenProvider: const _BusinessFixtureAuthTokenProvider(),
+    );
+    final generatedClient = buildGeneratedCloudOperationClient(
+      httpClient: httpClient,
+      clientContextProvider: const _BusinessFixtureClientContext(),
+      telemetrySink: const _NoopCloudOperationTelemetrySink(),
+      environment: CloudRuntimeEnvironment(
+        environment: CloudEnvironment.beta,
+        gatewayBaseUri: Uri.parse(baseUrl),
+      ),
+    );
+    final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
+    final contentPostReader = RemoteContentPostReaderAdapter(
+      client: generatedClient,
+      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.workBrowser.id,
+        routeId: AppUiSurfaces.workBrowser.routeId,
+        clientPageId: clientPageId,
+        actor: const CloudOperationActorContext(),
+      ),
+    );
+    const currentUserId = 'fixture_user_current';
+    final chatRepository = RemoteChatRepository(
+      baseUrl: baseUrl,
+      mergeRequestContext: (base) async {
+        return CloudRequestHeaders.withOwnerSubAccountContext(
+          base,
+          ownerUserId: currentUserId,
+          subAccountId: currentUserId,
+        );
+      },
+    );
+    final circleRepository = RemoteCircleRepository(
+      httpClient: httpClient,
+      baseUrl: baseUrl,
+    );
+    final userProfileQuery = RemoteUserProfileQueryFacet(
+      client: generatedClient,
+      invocationContext: (clientPageId, canonicalOperationId) {
+        final operation = appCloudOperationContracts[canonicalOperationId]!;
+        final surface = AppUiSurfaces.byId[operation.surfaceIds.first]!;
+        return CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
           clientPageId: clientPageId,
-          actor: const CloudOperationActorContext(),
-        ),
-      );
-      const currentUserId = 'fixture_user_current';
-      final chatRepository = RemoteChatRepository(
-        baseUrl: baseUrl,
-        mergeRequestContext: (base) async {
-          return CloudRequestHeaders.withOwnerSubAccountContext(
-            base,
-            ownerUserId: currentUserId,
-            subAccountId: currentUserId,
-          );
-        },
-      );
-      final circleRepository = RemoteCircleRepository(baseUrl: baseUrl);
-      final userIdentityRepository = RemoteUserRepository(
-        baseUrl: baseUrl,
-        mergeRequestContext: (base) async {
-          return CloudRequestHeaders.withOwnerSubAccountContext(
-            base,
-            ownerUserId: currentUserId,
-          );
-        },
-      );
-      final userRepository = RemoteUserProfileRepository(baseUrl: baseUrl);
-
-      final photoFeed = await contentRepository.listDiscoveryFeed(
-        category: 'photo',
-        identity: 'work',
-        type: 'photo',
-        limit: 20,
-      );
-      expect(photoFeed.length, greaterThanOrEqualTo(3));
-      expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
-      expect(
-        photoFeed.every(
-          (item) => item.primaryVisualUrl.contains(
-            'media/image/s/archived-image/post/',
+          actor: const CloudOperationActorContext(
+            accountId: currentUserId,
+            personaId: currentUserId,
           ),
+        );
+      },
+    );
+    final personaQuery = RemotePersonaQuery(
+      managementQuery: userProfileQuery,
+      publicProfileQuery: userProfileQuery,
+    );
+    final profileQuery = RemoteProfileQuery(
+      publicProfileQuery: userProfileQuery,
+      userHomepageQuery: userProfileQuery,
+    );
+
+    final photoFeed = await contentRepository.listDiscoveryFeed(
+      category: 'photo',
+      identity: 'work',
+      type: 'photo',
+      limit: 20,
+    );
+    expect(photoFeed.length, greaterThanOrEqualTo(3));
+    expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
+    expect(
+      photoFeed.every(
+        (item) => item.primaryVisualUrl.contains(
+          'media/image/s/archived-image/post/',
         ),
-        isTrue,
-      );
-      final videoFeed = await contentRepository.listDiscoveryFeed(
-        category: 'video',
-        identity: 'work',
-        type: 'video',
-        limit: 20,
-      );
-      expect(videoFeed.length, greaterThanOrEqualTo(2));
-      expect(videoFeed.every((item) => item.hasVideo), isTrue);
-      final followingFeed = await contentRepository.listDiscoveryFeed(
-        category: 'following',
-        identity: 'moment',
-        limit: 20,
-      );
-      expect(followingFeed.length, greaterThanOrEqualTo(3));
-      final post = await contentPostReader.getPost(postId: 'fixture_photo_001');
-      expect(post.post.id, 'fixture_photo_001');
+      ),
+      isTrue,
+    );
+    final videoFeed = await contentRepository.listDiscoveryFeed(
+      category: 'video',
+      identity: 'work',
+      type: 'video',
+      limit: 20,
+    );
+    expect(videoFeed.length, greaterThanOrEqualTo(2));
+    expect(videoFeed.every((item) => item.hasVideo), isTrue);
+    final followingFeed = await contentRepository.listDiscoveryFeed(
+      category: 'following',
+      identity: 'moment',
+      limit: 20,
+    );
+    expect(followingFeed.length, greaterThanOrEqualTo(3));
+    final post = await contentPostReader.getPost(postId: 'fixture_photo_001');
+    expect(post.post.id, 'fixture_photo_001');
 
-      final inbox = await chatRepository.listInbox(limit: 20);
-      expect(inbox.length, greaterThanOrEqualTo(5));
-      expect(inbox.map((item) => item.id), contains('fixture_conv_direct'));
-      expect(inbox.every((item) => item.avatarUrl.trim().isNotEmpty), isTrue);
-      final messages = await chatRepository.listMessages(
-        conversationId: 'fixture_conv_direct',
-        limit: 20,
-      );
-      expect(messages.map((item) => item.id), contains('fixture_msg_direct_1'));
-      final contacts = await chatRepository.listContacts(limit: 20);
-      expect(contacts.length, greaterThanOrEqualTo(6));
-      expect(
-        contacts.map((item) => item.userId),
-        contains('fixture_user_friend'),
-      );
-      final contactStates = contacts.map((item) => item.relationState).toSet();
-      expect(contactStates, contains('mutual'));
-      expect(contactStates, isNot(contains('not_following')));
-      expect(contacts.every((item) => item.source.isNotEmpty), isTrue);
-      expect(
-        contacts.every(
-          (item) => item.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+    final inbox = await chatRepository.listInbox(limit: 20);
+    expect(inbox.length, greaterThanOrEqualTo(5));
+    expect(inbox.map((item) => item.id), contains('fixture_conv_direct'));
+    expect(inbox.every((item) => item.avatarUrl.trim().isNotEmpty), isTrue);
+    final messages = await chatRepository.listMessages(
+      conversationId: 'fixture_conv_direct',
+      limit: 20,
+    );
+    expect(messages.map((item) => item.id), contains('fixture_msg_direct_1'));
+    final contacts = await chatRepository.listContacts(limit: 20);
+    expect(contacts.length, greaterThanOrEqualTo(6));
+    expect(
+      contacts.map((item) => item.userId),
+      contains('fixture_user_friend'),
+    );
+    final contactStates = contacts.map((item) => item.relationState).toSet();
+    expect(contactStates, contains('mutual'));
+    expect(contactStates, isNot(contains('not_following')));
+    expect(contacts.every((item) => item.source.isNotEmpty), isTrue);
+    expect(
+      contacts.every(
+        (item) => item.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+      ),
+      isTrue,
+    );
+
+    final messageHome = await chatRepository.listMessageHome(limit: 20);
+    expect(messageHome.length, greaterThanOrEqualTo(5));
+    expect(
+      messageHome.every(
+        (row) => row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+      ),
+      isTrue,
+    );
+    expect(messageHome.any((row) => row.mentionUnreadCount > 0), isTrue);
+
+    final contactHomeAll = await chatRepository.listContactHome(
+      filter: 'all',
+      limit: 50,
+    );
+    expect(contactHomeAll.where((row) => row.kind == 'user'), isNotEmpty);
+    expect(contactHomeAll.where((row) => row.kind == 'circle'), isNotEmpty);
+    expect(
+      contactHomeAll.every(
+        (row) =>
+            row.avatarUrl.isEmpty ||
+            row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+      ),
+      isTrue,
+    );
+
+    final contactHomeCircles = await chatRepository.listContactHome(
+      filter: 'circle',
+      limit: 20,
+    );
+    expect(contactHomeCircles, isNotEmpty);
+    expect(contactHomeCircles.every((row) => row.kind == 'circle'), isTrue);
+    final groupMembers = await chatRepository.listMembers(
+      conversationId: 'fixture_conv_group',
+      limit: 20,
+    );
+    final contactIds = contacts.map((item) => item.userId).toSet();
+    expect(
+      groupMembers
+          .where((member) => !member.isCurrentUser)
+          .every((member) => contactIds.contains(member.userId)),
+      isTrue,
+    );
+    expect(
+      contactHomeCircles.map((item) => item.circleId),
+      contains('fixture_circle_photo'),
+    );
+    final funGroups = await chatRepository.listContactHome(
+      filter: 'group',
+      limit: 20,
+    );
+    expect(
+      funGroups.map((item) => item.conversationId),
+      contains('fixture_conv_group'),
+    );
+
+    final circles = await circleRepository.listCircles(limit: 20);
+    expect(circles.length, greaterThanOrEqualTo(6));
+    expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
+    expect(
+      circles.every(
+        (item) =>
+            item.coverUrl?.contains('media/image/s/archived-image/circle/') ==
+            true,
+      ),
+      isTrue,
+    );
+    final circle = await circleRepository.getCircle('fixture_circle_photo');
+    expect(circle.circle.id, 'fixture_circle_photo');
+    final circleHomeFeed = await circleRepository.listHomeCircleDiscoveryFeed(
+      limit: 20,
+    );
+    expect(
+      circleHomeFeed.map((item) => item.id),
+      contains('fixture_photo_001'),
+    );
+    expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
+    expect(
+      circleHomeFeed.every(
+        (item) => item.primaryVisualUrl.contains(
+          'media/image/s/archived-image/post/',
         ),
-        isTrue,
-      );
+      ),
+      isTrue,
+    );
 
-      final messageHome = await chatRepository.listMessageHome(limit: 20);
-      expect(messageHome.length, greaterThanOrEqualTo(5));
-      expect(
-        messageHome.every(
-          (row) => row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+    final currentUser = await profileQuery.getUserProfile(
+      'fixture_user_current',
+    );
+    final activePersonaContext = await personaQuery.getActivePersonaContext();
+    expect(activePersonaContext.ownerUserId, currentUserId);
+    expect(activePersonaContext.subAccountId, currentUserId);
+    expect(currentUser.displayName, matches(_defaultNicknamePattern));
+    expect(
+      currentUser.backgroundUrl.contains(
+        'media/background/s/archived-avatar/user/',
+      ),
+      isTrue,
+    );
+    final userPostsPage = await contentRepository.listUserPosts(
+      userId: 'fixture_user_current',
+      limit: 20,
+    );
+    final userPosts = userPostsPage.items;
+    expect(userPosts.length, greaterThanOrEqualTo(4));
+    expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
+    expect(
+      userPosts.every(
+        (item) => item.primaryVisualUrl.contains(
+          'media/image/s/archived-image/post/',
         ),
-        isTrue,
-      );
-      expect(messageHome.any((row) => row.mentionUnreadCount > 0), isTrue);
+      ),
+      isTrue,
+    );
+    final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
+    expect(
+      userProfiles.map((item) => item['userId']),
+      contains('fixture_user_current'),
+    );
 
-      final contactHomeAll = await chatRepository.listContactHome(
-        filter: 'all',
-        limit: 50,
-      );
-      expect(contactHomeAll.where((row) => row.kind == 'user'), isNotEmpty);
-      expect(contactHomeAll.where((row) => row.kind == 'circle'), isNotEmpty);
-      expect(
-        contactHomeAll.every(
-          (row) =>
-              row.avatarUrl.isEmpty ||
-              row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
-        ),
-        isTrue,
-      );
+    final homepages = await _getJsonList('$baseUrl/homepages/search', 'items');
+    expect(
+      homepages.map((item) => item['homepageId']),
+      contains('fixture_homepage_author'),
+    );
 
-      final contactHomeCircles = await chatRepository.listContactHome(
-        filter: 'circle',
-        limit: 20,
-      );
-      expect(contactHomeCircles, isNotEmpty);
-      expect(contactHomeCircles.every((row) => row.kind == 'circle'), isTrue);
-      final groupMembers = await chatRepository.listMembers(
-        conversationId: 'fixture_conv_group',
-        limit: 20,
-      );
-      final contactIds = contacts.map((item) => item.userId).toSet();
-      expect(
-        groupMembers
-            .where((member) => !member.isCurrentUser)
-            .every((member) => contactIds.contains(member.userId)),
-        isTrue,
-      );
-      final contactCircles = await chatRepository.listContactTabCircles(
-        limit: 20,
-      );
-      expect(
-        contactCircles.map((item) => item.circleId),
-        contains('fixture_circle_photo'),
-      );
-      final funGroups = await chatRepository.listContactTabFunGroups(limit: 20);
-      expect(
-        funGroups.map((item) => item.conversationId),
-        contains('fixture_conv_group'),
-      );
+    final pois = await _getJsonList(
+      '$baseUrl/integration/locations/pois',
+      'items',
+    );
+    expect(
+      pois.map((item) => item['poiId']),
+      contains('fixture_poi_west_lake'),
+    );
 
-      final circles = await circleRepository.listCircles(limit: 20);
-      expect(circles.length, greaterThanOrEqualTo(6));
-      expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
-      expect(
-        circles.every(
-          (item) =>
-              item.coverUrl?.contains('media/image/s/archived-image/circle/') ==
-              true,
-        ),
-        isTrue,
-      );
-      final circle = await circleRepository.getCircle('fixture_circle_photo');
-      expect(circle.circle.id, 'fixture_circle_photo');
-      final circleHomeFeed = await circleRepository.listHomeCircleDiscoveryFeed(
-        limit: 20,
-      );
-      expect(
-        circleHomeFeed.map((item) => item.id),
-        contains('fixture_photo_001'),
-      );
-      expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
-      expect(
-        circleHomeFeed.every(
-          (item) => item.primaryVisualUrl.contains(
-            'media/image/s/archived-image/post/',
-          ),
-        ),
-        isTrue,
-      );
+    final appMessages = await _getJsonList('$baseUrl/app-messages', 'items');
+    expect(
+      appMessages.map((item) => item['messageId']),
+      contains('fixture_app_message_assistant_stock'),
+    );
 
-      final currentUser = await userRepository.getUserProfile(
-        'fixture_user_current',
-      );
-      final activePersonaContext = await userIdentityRepository
-          .getActivePersonaContext();
-      expect(activePersonaContext.ownerUserId, currentUserId);
-      expect(activePersonaContext.subAccountId, currentUserId);
-      expect(currentUser.displayName, matches(_defaultNicknamePattern));
-      expect(
-        currentUser.backgroundUrl.contains(
-          'media/background/s/archived-avatar/user/',
-        ),
-        isTrue,
-      );
-      final userPosts = await userRepository.listUserPosts(
-        'fixture_user_current',
-        limit: 20,
-      );
-      expect(userPosts.length, greaterThanOrEqualTo(4));
-      expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
-      expect(
-        userPosts.every(
-          (item) => item.primaryVisualUrl.contains(
-            'media/image/s/archived-image/post/',
-          ),
-        ),
-        isTrue,
-      );
-      final userWorks = await userRepository.listUserWorks(
-        'fixture_user_photo',
-      );
-      expect(userWorks.map((item) => item.id), contains('fixture_photo_001'));
-      final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
-      expect(
-        userProfiles.map((item) => item['userId']),
-        contains('fixture_user_current'),
-      );
-
-      final homepages = await _getJsonList(
-        '$baseUrl/homepages/search',
-        'items',
-      );
-      expect(
-        homepages.map((item) => item['homepageId']),
-        contains('fixture_homepage_author'),
-      );
-
-      final pois = await _getJsonList(
-        '$baseUrl/integration/locations/pois',
-        'items',
-      );
-      expect(
-        pois.map((item) => item['poiId']),
-        contains('fixture_poi_west_lake'),
-      );
-
-      final appMessages = await _getJsonList('$baseUrl/app-messages', 'items');
-      expect(
-        appMessages.map((item) => item['messageId']),
-        contains('fixture_app_message_assistant_stock'),
-      );
-
-      final calls = await _getJsonList('$baseUrl/rtc/calls', 'items');
-      expect(
-        calls.map((item) => item['sessionId']),
-        contains('fixture_call_voice'),
-      );
-    },
-  );
+    final calls = await _getJsonList('$baseUrl/rtc/calls', 'items');
+    expect(
+      calls.map((item) => item['sessionId']),
+      contains('fixture_call_voice'),
+    );
+  });
 }
 
 Future<List<Map<String, dynamic>>> _getJsonList(String url, String key) async {
@@ -819,8 +832,18 @@ class _ContractSeedHttpServer {
 
   bool _hasClientUserId(HttpRequest request) {
     final userId = request.headers.value('X-Client-User-Id')?.trim() ?? '';
-    return userId.isNotEmpty;
+    final personaId =
+        request.headers.value('X-Client-Persona-Id')?.trim() ?? '';
+    return userId.isNotEmpty || personaId.isNotEmpty;
   }
+}
+
+final class _BusinessFixtureAuthTokenProvider
+    implements CloudAuthTokenProvider {
+  const _BusinessFixtureAuthTokenProvider();
+
+  @override
+  Future<String?> getAccessToken() async => 'business-fixture-token';
 }
 
 final class _BusinessFixtureClientContext

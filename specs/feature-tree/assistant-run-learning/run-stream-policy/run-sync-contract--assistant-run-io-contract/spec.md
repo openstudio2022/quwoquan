@@ -1,4 +1,4 @@
-# L4 特性：assistant-run-io-contract
+# L3 特性：assistant-run-io-contract
 
 ## 功能说明
 - 细化 Run 同步模式的输入输出对象与字段约束。

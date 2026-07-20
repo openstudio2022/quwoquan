@@ -1,0 +1,17 @@
+entity: VisitRecord
+layer: app_side
+
+description: |
+  端侧访问上报链（visit_recorder_service + typed append writer）的独立场景。
+
+scenarios:
+  - name: visit_wire_shape
+    source: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
+    assertions:
+      - 出站 wire 只含 targetType/targetKey/sessionId/source，绝不携带 userId
+      - 每次上报携带稳定 Idempotency-Key（同一次访问重试与补传 key 不变）
+
+  - name: visit_local_dedupe_window
+    source: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
+    assertions:
+      - 同目标 5 分钟本地去重；断网入队补传（队列上限 200）

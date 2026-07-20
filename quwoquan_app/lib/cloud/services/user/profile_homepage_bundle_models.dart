@@ -90,7 +90,7 @@ class UserHomepageViewerContextViewData {
   }
 }
 
-/// 主页首屏聚合视图（[UserProfileRepository.getUserHomepageBundle]）。
+/// 主页首屏聚合视图（`ProfileQuery.getUserHomepageBundle`）。
 ///
 /// 仅承载身份域真相（profile/stats/relationship/tabCounts/viewerContext）；交集卡与
 /// 打动 evidence 属 content 域，由端侧并发补充，bundle 不做内容事实第二真相源。
@@ -155,6 +155,69 @@ class UserHomepageBundleViewData {
       tabCounts: tabCounts,
       viewerContext: viewerContext,
       cacheVersion: w.cacheVersion,
+    );
+  }
+
+  factory UserHomepageBundleViewData.fromUserHomepageBundleProjection(
+    UserHomepageBundleProjection projection,
+  ) {
+    final profileProjection = projection.profile;
+    if (profileProjection == null) {
+      throw const FormatException('homepage-bundle 响应缺少 profile');
+    }
+    final profile = SubAccountProfileViewData.fromSubAccountProfileProjection(
+      profileProjection,
+    );
+    final stats = projection.stats == null
+        ? UserProfileStatsViewData.fromProfile(profile)
+        : UserProfileStatsViewData.fromUserProfileStatsProjection(
+            projection.stats!,
+          );
+    final counts = projection.tabCounts;
+    final viewer = projection.viewerContext;
+    final capability = projection.relationshipCapability;
+    return UserHomepageBundleViewData(
+      profile: profile,
+      stats: stats,
+      relationshipCapability: capability == null
+          ? null
+          : RelationshipCapabilityDto(
+              viewerSubAccountId: capability.viewerSubAccountId,
+              targetSubAccountId: capability.targetSubAccountId,
+              relationState: capability.relationState,
+              canFollow: capability.canFollow,
+              canUnfollow: capability.canUnfollow,
+              canFollowBack: capability.canFollowBack,
+              canGreet: capability.canGreet,
+              canCreateDirectConversation:
+                  capability.canCreateDirectConversation,
+              canSendMessage: capability.canSendMessage,
+              canOpenConversation: capability.canOpenConversation,
+              hasPendingGreeting: capability.hasPendingGreeting,
+              hasFormalConversation: capability.hasFormalConversation,
+              canStartVoiceCall: capability.canStartVoiceCall,
+              canStartVideoCall: capability.canStartVideoCall,
+              isBlocked: capability.isBlocked,
+              isBlockedBy: capability.isBlockedBy,
+            ),
+      tabCounts: counts == null
+          ? UserHomepageTabCountsViewData.fromStats(stats)
+          : UserHomepageTabCountsViewData(
+              worksCount: counts.worksCount,
+              likesCount: counts.likesCount,
+              circlesCount: counts.circlesCount,
+              collectionsCount: counts.collectionsCount,
+            ),
+      viewerContext: viewer == null
+          ? const UserHomepageViewerContextViewData.guest()
+          : UserHomepageViewerContextViewData(
+              viewerSubAccountId: viewer.viewerSubAccountId,
+              isOwner: viewer.isOwner,
+              isGuest: viewer.isGuest,
+              relationToTarget: viewer.relationToTarget,
+              canViewFullProfile: viewer.canViewFullProfile,
+            ),
+      cacheVersion: projection.cacheVersion,
     );
   }
 }

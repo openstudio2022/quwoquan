@@ -1,34 +1,18 @@
 read_model: ChatGroupSettings
 description: |
-  群管理页开关与圈子绑定信息（从 GetConversation / 群设置合并对象解析；与 Mock _defaultSettings 键对齐）。
+  群管理页治理开关与圈子绑定信息（从 GetConversation 权威字段解析）。
+  仅承载有权威对象链支撑的开关；扫码进群/进群审批/隐私盾随 JoinRequest
+  对象链落地后再恢复，不保留假开关。
 
 client_projection:
   dart_class: ChatGroupSettingsDto
   base_class: ""
   output_path: cloud/runtime/generated/chat/chat_group_settings_dto.g.dart
   fields:
-    - name: qrCodeJoinEnabled
-      dart_type: bool
-      nullable: false
-      source: qrCodeJoinEnabled
-      default: "true"
-
-    - name: joinRequiresApproval
-      dart_type: bool
-      nullable: false
-      source: joinRequiresApproval
-      default: "false"
-
     - name: nameEditableByAdminOnly
       dart_type: bool
       nullable: false
       source: nameEditableByAdminOnly
-      default: "false"
-
-    - name: privacyShieldAdminOnly
-      dart_type: bool
-      nullable: false
-      source: privacyShieldAdminOnly
       default: "false"
 
     - name: conversationType

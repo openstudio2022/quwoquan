@@ -1,7 +1,7 @@
 """match_creator 内容感知匹配契约。
 
 验证「在底稿/内容信号基础上找最适配的虚拟作者」，而非随意安排：
-- 同 archetype（travel_blogger）内，川西内容选区域作者、非川西/无地域信号选全国作者；
+- 同 archetype（travel_blogger）内，高原主题内容选主题作者、无主题信号选全国作者；
 - 载体偏向 carrierAffinity 读取正确；
 - 范围契合 coverage_range_fit 命中>未命中、全国为中性基线；
 - 相同 seed 确定性命中同一作者（幂等 + 等分负载分摊）。
@@ -48,17 +48,17 @@ def _travel_blogger_specialty_tag() -> str:
     raise AssertionError("missing topical travel_blogger creator in active registry")
 
 
-def test_chuanxi_region_content_prefers_regional_creator():
+def test_highland_topic_content_prefers_specialist_creator():
     creator = match_creator(
         _registry(),
         _TRAVEL_BLUEPRINT,
         carrier="article",
-        tag_refs=["Topic/地理/行政区/中国/四川省/甘孜藏族自治州", "Topic/旅行/旅行主题/文化深度游"],
+        tag_refs=["Topic/地理/行政区/中国/四川省/甘孜藏族自治州", "Topic/旅行/旅行主题/高原秘境"],
         region="四川省",
         vertical="travel",
         seed="entity/地点/景区/稻城亚丁",
     )
-    assert creator["authorId"] == "builtin_travel_blogger_chuanxi"
+    assert creator["authorId"] == "builtin_highland_travel_blogger"
 
 
 def test_specialty_content_prefers_matching_specialist_creator():
@@ -166,14 +166,14 @@ def test_carrier_affinity_reads_weights():
     assert carrier_affinity(photographer, "image") > carrier_affinity(photographer, "article")
 
 
-def test_coverage_range_fit_regional_hit_beats_miss_and_nationwide_is_neutral():
+def test_coverage_range_fit_topic_hit_beats_miss_and_nationwide_is_neutral():
     reg = _registry()
-    chuanxi = reg.creators["qwq_creator_travel_blogger_chuanxi_001"]
+    highland = reg.creators["qwq_creator_highland_travel_blogger_001"]
     nationwide = reg.creators["qwq_creator_travel_blogger_001"]
     hit = coverage_range_fit(
-        chuanxi, region="四川省", tag_refs=["Topic/地理/行政区/中国/四川省/甘孜藏族自治州"]
+        highland, region="四川省", tag_refs=["Topic/旅行/旅行主题/高原秘境"]
     )
-    miss = coverage_range_fit(chuanxi, region="沿海海岛", tag_refs=["Topic/旅行/旅行主题/海岛度假"])
+    miss = coverage_range_fit(highland, region="沿海海岛", tag_refs=["Topic/旅行/旅行主题/海岛度假"])
     neutral = coverage_range_fit(nationwide, region=None, tag_refs=None)
     assert miss < neutral < hit
 

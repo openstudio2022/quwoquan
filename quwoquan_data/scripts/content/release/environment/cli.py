@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse
 from content.release.environment.handler import VALID_ENVS, handle_ship
-from content.release.model import ReleaseRunKind
+from core.control_types import ReleaseRunKind
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
@@ -18,7 +18,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     apply.add_argument(
         "--full-sync",
         action="store_true",
-        help="按 release desired state tombstone 缺失对象；baseline/canary/M1/M2/M3 强制使用",
+        help="按 release desired state tombstone 缺失对象；baseline/canary/M1/M2/M3/H10K 强制使用",
     )
     apply.add_argument("--dry-run", action="store_true")
     apply.add_argument("--confirm-prod-apply", action="store_true")

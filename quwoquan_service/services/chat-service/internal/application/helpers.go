@@ -33,3 +33,25 @@ func chatGroupMemberNotMutual(debugMessage string) *rterr.AppError {
 func chatGroupMemberBlocked(debugMessage string) *rterr.AppError {
 	return generated.AppErrorFromGroupMemberBlocked(debugMessage)
 }
+
+func chatGroupGovernanceForbidden(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromGroupGovernanceForbidden(debugMessage)
+}
+
+func chatGroupFull(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromGroupFull(debugMessage)
+}
+
+func chatConversationDissolved(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromConversationDissolved(debugMessage)
+}
+
+func chatOwnerMustTransferBeforeLeave(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromGroupOwnerMustTransferBeforeLeave(debugMessage)
+}
+
+// chatConversationNotFoundForNonMember 对非成员统一返回 not_found，
+// 避免通过成员操作探测会话存在性（信息隐藏）。
+func chatConversationNotFoundForNonMember(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromConversationNotFound(debugMessage)
+}

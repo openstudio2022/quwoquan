@@ -1,0 +1,13 @@
+read_model: AppearanceSettingsView
+description: Account owner 默认值与当前 Persona override 合成的外观设置 typed slice。
+source_entities: [UserSetting, Persona]
+consumers: [app]
+fields:
+  - { name: themeMode, type: string }
+  - { name: fontSizePreset, type: string }
+  - { name: source, type: string }
+  - { name: ownerDefaultThemeMode, type: string }
+  - { name: ownerDefaultFontSizePreset, type: string }
+  - { name: hasSubAccountOverride, type: bool }
+  - { name: version, type: int }
+  - { name: updatedAt, type: timestamp }

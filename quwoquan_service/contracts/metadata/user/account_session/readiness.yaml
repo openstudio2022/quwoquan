@@ -1,0 +1,41 @@
+object: AccountSession
+operations:
+  - LoginWithPhone
+  - LoginWithWechat
+  - LoginWithAlipay
+  - LoginWithQq
+  - LoginOneTap
+  - LoginAnonymous
+  - RefreshToken
+  - Logout
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/domain/account/account_session/ports/account_session_ports.go
+    - quwoquan_service/services/user-service/internal/application/account/account_session/command_facade.go
+    - quwoquan_service/services/user-service/internal/application/auth_service.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence/account_session_store.go
+  outbox:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence/account_session_store.go
+  reader:
+    - quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence/account_session_store.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+  app_client:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/user/account_session_contracts.dart
+    - quwoquan_app/lib/cloud/remote/user/account_session/account_session_remote.dart
+  page:
+    - quwoquan_app/lib/ui/user/pages/login_page.dart
+    - quwoquan_app/lib/ui/settings/pages/settings_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/user-service/tests/local_contract/internal/application/account/account_session/account_session_facade__security__local_contract_test.go
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/account_session_packet__api_integration_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+    - quwoquan_app/test/api_integration/cloud/user/user_api_contract_runner.dart
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/user/commercial_login_recovery_journey__user_acceptance_test.dart
+environments: []

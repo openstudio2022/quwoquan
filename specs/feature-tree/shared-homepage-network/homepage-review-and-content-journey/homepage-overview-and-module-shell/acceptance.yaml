@@ -42,24 +42,28 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.gwt1_local_contract
         envs: *id001
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: journey
         cases:
         - user_acceptance.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.journey
         envs:
         - gamma_local
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.gwt1_api_integration
@@ -71,5 +75,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

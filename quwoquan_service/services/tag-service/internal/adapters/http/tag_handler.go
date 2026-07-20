@@ -23,6 +23,12 @@ func NewTagHandler(svc *application.TagService) *TagHandler {
 // Routes 注册已实现的交集核心、创作打标查询、推荐搜索与共现图谱路由。
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	h.Register(mux)
+	return mux
+}
+
+// Register 挂载只读查询路由到既有 mux（与 release/feedback handler 组合装配）。
+func (h *TagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /tag/resolve", h.resolve)
 	mux.HandleFunc("GET /tag/children", h.listChildren)
 	mux.HandleFunc("GET /tag/shared-tags", h.sharedTags)
@@ -35,22 +41,21 @@ func (h *TagHandler) Routes() http.Handler {
 	mux.HandleFunc("POST /tag/search-by-tags", h.searchByTags)
 	mux.HandleFunc("GET /tag/graph/cooccurrence", h.cooccurrence)
 	mux.HandleFunc("GET /tag/related-objects", h.relatedObjects)
-	return mux
 }
 
 func (h *TagHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	tagRef := r.URL.Query().Get("tagRef")
 	if tagRef == "" {
-		writeError(w, http.StatusBadRequest, "tagRef is required")
+		writeTagError(w, r, tagInvalidArgument("tagRef is required"))
 		return
 	}
 	view, err := h.svc.Resolve(r.Context(), tagRef)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	if view == nil {
-		writeError(w, http.StatusNotFound, "tagRef not found")
+		writeTagError(w, r, tagNotFound("tagRef not found"))
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -60,16 +65,16 @@ func (h *TagHandler) listChildren(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	parentTagRef := q.Get("parentTagRef")
 	if parentTagRef == "" {
-		writeError(w, http.StatusBadRequest, "parentTagRef is required")
+		writeTagError(w, r, tagInvalidArgument("parentTagRef is required"))
 		return
 	}
 	views, err := h.svc.ListChildren(r.Context(), parentTagRef, parseLimit(q.Get("limit")))
 	if err != nil {
 		if errors.Is(err, application.ErrTagParentNotFound) {
-			writeError(w, http.StatusNotFound, "parentTagRef not found")
+			writeTagError(w, r, tagNotFound("parentTagRef not found"))
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -80,12 +85,12 @@ func (h *TagHandler) sharedTags(w http.ResponseWriter, r *http.Request) {
 	aID := q.Get("objectAId")
 	bID := q.Get("objectBId")
 	if aID == "" || bID == "" {
-		writeError(w, http.StatusBadRequest, "objectAId and objectBId are required")
+		writeTagError(w, r, tagInvalidArgument("objectAId and objectBId are required"))
 		return
 	}
 	views, err := h.svc.SharedTags(r.Context(), aID, q.Get("objectAType"), bID, q.Get("objectBType"), parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -95,13 +100,13 @@ func (h *TagHandler) inverted(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tagRef := q.Get("tagRef")
 	if tagRef == "" {
-		writeError(w, http.StatusBadRequest, "tagRef is required")
+		writeTagError(w, r, tagInvalidArgument("tagRef is required"))
 		return
 	}
 	includeDescendants := strings.EqualFold(strings.TrimSpace(q.Get("includeDescendants")), "true")
 	view, err := h.svc.Inverted(r.Context(), tagRef, q.Get("objectType"), parseLimit(q.Get("limit")), includeDescendants)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -109,12 +114,12 @@ func (h *TagHandler) inverted(w http.ResponseWriter, r *http.Request) {
 
 func (h *TagHandler) listDimensions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeTagError(w, r, tagInvalidArgument("method not allowed"))
 		return
 	}
 	views, err := h.svc.ListDimensions(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -124,12 +129,12 @@ func (h *TagHandler) suggest(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	query := q.Get("q")
 	if query == "" {
-		writeError(w, http.StatusBadRequest, "q is required")
+		writeTagError(w, r, tagInvalidArgument("q is required"))
 		return
 	}
 	views, err := h.svc.Suggest(r.Context(), query, q.Get("group"), parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -137,19 +142,19 @@ func (h *TagHandler) suggest(w http.ResponseWriter, r *http.Request) {
 
 func (h *TagHandler) validate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeTagError(w, r, tagInvalidArgument("method not allowed"))
 		return
 	}
 	var req struct {
 		TagRefs []string `json:"tagRefs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeTagError(w, r, tagInvalidArgument("invalid request body"))
 		return
 	}
 	view, err := h.svc.ValidateTagRefs(r.Context(), req.TagRefs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -159,12 +164,12 @@ func (h *TagHandler) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	query := q.Get("q")
 	if query == "" {
-		writeError(w, http.StatusBadRequest, "q is required")
+		writeTagError(w, r, tagInvalidArgument("q is required"))
 		return
 	}
 	views, err := h.svc.SearchTags(r.Context(), query, q.Get("group"), parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -174,12 +179,12 @@ func (h *TagHandler) related(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tagRef := q.Get("tagRef")
 	if tagRef == "" {
-		writeError(w, http.StatusBadRequest, "tagRef is required")
+		writeTagError(w, r, tagInvalidArgument("tagRef is required"))
 		return
 	}
 	views, err := h.svc.RelatedTags(r.Context(), tagRef, parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -187,7 +192,7 @@ func (h *TagHandler) related(w http.ResponseWriter, r *http.Request) {
 
 func (h *TagHandler) searchByTags(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeTagError(w, r, tagInvalidArgument("method not allowed"))
 		return
 	}
 	var req struct {
@@ -196,16 +201,16 @@ func (h *TagHandler) searchByTags(w http.ResponseWriter, r *http.Request) {
 		Limit      int      `json:"limit"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeTagError(w, r, tagInvalidArgument("invalid request body"))
 		return
 	}
 	if len(req.TagRefs) == 0 {
-		writeError(w, http.StatusBadRequest, "tagRefs is required")
+		writeTagError(w, r, tagInvalidArgument("tagRefs is required"))
 		return
 	}
 	views, err := h.svc.SearchByTags(r.Context(), req.TagRefs, req.ObjectType, req.Limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -215,12 +220,12 @@ func (h *TagHandler) cooccurrence(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tagRef := q.Get("tagRef")
 	if tagRef == "" {
-		writeError(w, http.StatusBadRequest, "tagRef is required")
+		writeTagError(w, r, tagInvalidArgument("tagRef is required"))
 		return
 	}
 	views, err := h.svc.TagCooccurrence(r.Context(), tagRef, parseLimit(q.Get("minCount")), parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -230,12 +235,12 @@ func (h *TagHandler) relatedObjects(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	objectID := q.Get("objectId")
 	if objectID == "" {
-		writeError(w, http.StatusBadRequest, "objectId is required")
+		writeTagError(w, r, tagInvalidArgument("objectId is required"))
 		return
 	}
 	views, err := h.svc.RelatedObjects(r.Context(), objectID, q.Get("objectType"), parseLimit(q.Get("limit")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeTagError(w, r, tagStorageReadFailed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, views)
@@ -256,8 +261,4 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }

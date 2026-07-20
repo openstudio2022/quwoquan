@@ -115,6 +115,15 @@ extension _CircleShellBuilders on _CircleShellState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         identityCard,
+        if (circle != null &&
+            ((circle.rulesText ?? '').trim().isNotEmpty ||
+                (_isMemberLike(state) &&
+                    (circle.welcomeMessage ?? '').trim().isNotEmpty))) ...<
+          Widget
+        >[
+          SizedBox(height: AppSpacing.containerSm),
+          _buildGovernanceCard(state, isDark),
+        ],
         if (circle != null) ...<Widget>[
           SizedBox(height: AppSpacing.containerSm),
           _buildIntersectionCard(isDark),
@@ -141,6 +150,84 @@ extension _CircleShellBuilders on _CircleShellState {
           ),
         ],
       ],
+    );
+  }
+
+  /// 圈规对所有访客可见；欢迎语只在加入后出现，形成治理信息闭环。
+  Widget _buildGovernanceCard(CircleState state, bool isDark) {
+    final circle = state.circleData!;
+    final rulesText = (circle.rulesText ?? '').trim();
+    final welcomeMessage = (circle.welcomeMessage ?? '').trim();
+    final sections = <Widget>[
+      if (rulesText.isNotEmpty)
+        _buildGovernanceSection(
+          title: UITextConstants.circleRulesTitle,
+          body: rulesText,
+          key: const ValueKey<String>('circle-rules-section'),
+        ),
+      if (_isMemberLike(state) && welcomeMessage.isNotEmpty)
+        _buildGovernanceSection(
+          title: UITextConstants.circleWelcomeTitle,
+          body: welcomeMessage,
+          key: const ValueKey<String>('circle-welcome-section'),
+        ),
+    ];
+    return Container(
+      key: const ValueKey<String>('circle-governance-card'),
+      padding: EdgeInsets.all(AppSpacing.containerLg),
+      decoration: BoxDecoration(
+        color: AppColors.iosProfileSurface(context),
+        borderRadius: BorderRadius.circular(_CircleShellState._cardRadius),
+        border: Border.all(
+          color: AppColors.iosSeparator(
+            context,
+          ).withValues(alpha: isDark ? 0.24 : 0.08),
+          width: AppSpacing.hairline,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (var index = 0; index < sections.length; index++) ...<Widget>[
+            if (index > 0) SizedBox(height: AppSpacing.md),
+            sections[index],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGovernanceSection({
+    required String title,
+    required String body,
+    required Key key,
+  }) {
+    return Semantics(
+      key: key,
+      container: true,
+      label: title,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: TextStyle(
+              color: AppColors.iosLabel(context),
+              fontSize: AppTypography.base,
+              fontWeight: AppTypography.semiBold,
+            ),
+          ),
+          SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.sm,
+              height: AppTypography.lineHeightRelaxed,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -389,8 +476,9 @@ extension _CircleShellBuilders on _CircleShellState {
                           ),
                           onAssistant: (ref) =>
                               GlobalAssistantLauncher.open(context, ref),
-                          onShare: () =>
-                              AppToast.show(context, UITextConstants.share),
+                          onShare: () => unawaited(
+                            _shareCircle(context, circleName: circleName),
+                          ),
                           onMore: () => _showMoreOptions(
                             context,
                             circleName: circleName,
@@ -485,14 +573,7 @@ extension _CircleShellBuilders on _CircleShellState {
                     : UITextConstants.circleJoinOpenDescription,
                 keySuffix: _activeTabId,
               )
-            : Padding(
-                padding: EdgeInsets.only(top: AppSpacing.containerSm),
-                child: SectionChat(
-                  circleId: widget.circleId,
-                  conversationId: state.defaultPublicGroup?.conversationId,
-                  isDark: isDark,
-                ),
-              ),
+            : _buildDiscussionBody(context, isDark: isDark, state: state),
       'members' =>
         memberLocked
             ? _buildGateCard(
@@ -516,6 +597,50 @@ extension _CircleShellBuilders on _CircleShellState {
     return KeyedSubtree(
       key: ValueKey<String>('circle-tab-body-$_activeTabId'),
       child: child,
+    );
+  }
+
+  /// 讨论 tab 按 metadata sectionTypes `[chat, storage]` 组合两个成员板块：
+  /// 群聊入口 + 圈子文件（容量来自 stats wire，缺失配额时不渲染文件板块）。
+  Widget _buildDiscussionBody(
+    BuildContext context, {
+    required bool isDark,
+    required CircleState state,
+  }) {
+    final stats = state.circleStats;
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionChat(
+            circleId: widget.circleId,
+            conversationId: state.defaultPublicGroup?.conversationId,
+            isDark: isDark,
+          ),
+          if (stats.storageQuotaBytes > 0) ...[
+            SizedBox(height: AppSpacing.containerSm),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+              child: Text(
+                UITextConstants.circleStorageSection,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.semiBold,
+                  color: AppColors.iosSecondaryLabel(context),
+                ),
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            SectionStorage(
+              circleId: widget.circleId,
+              isDark: isDark,
+              storageUsedBytes: stats.storageUsedBytes,
+              storageQuotaBytes: stats.storageQuotaBytes,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

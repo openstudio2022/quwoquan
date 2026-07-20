@@ -6,7 +6,7 @@
 > **L3 索引**：[`page-horizontal-quality/spec.md`](./page-horizontal-quality/spec.md)。  
 > **新增页面**：合入前必须 **新增一行** 并核对 **P1–Pn 当前列**；详见 [`page_horizontal_quality_pr_checklist.md`](../../../gates/page_horizontal_quality_pr_checklist.md)。  
 > **既有横向补齐**：历史九会话覆盖 P1–P8 与 S9 收口；P9 于 2026-07-16 作为独立增量追加，不重写既有会话口径。
-> **S8（P8）子 L3 /baseline**：[`s8-p8-semantic-token/spec.md`](./s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml)（W0–W5 代码波次见该目录 `树内计划文档`）。
+> **S8（P8）子 L3 /baseline**：[`s8-p8-semantic-token/spec.md`](./s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml)。
 
 ## 页面类型（与矩阵列「类型」一致）
 

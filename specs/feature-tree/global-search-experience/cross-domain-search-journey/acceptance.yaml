@@ -10,7 +10,7 @@ scope:
   summary: cross domain search journey SIT 验收范围；suggest 本地快速检索 + result 云侧最终结果两阶段、最近搜索、降级横幅、埋点归因链。
   in_scope:
   - suggest 阶段本地快速检索（chat/contact/circleGroup 本地命名空间）。
-  - result 阶段云侧最终结果（content.post/entity.homepage/location.place/相关词/小趣）与固定 Tab。
+  - result 阶段云侧最终结果（content.post/user.profile/entity.homepage/location.place/相关词/小趣）与固定 Tab。
   - 最近搜索本地+云同步与记录管理态。
   - 降级横幅、空态/错误态、权限态与单域降级不阻塞整页。
   - 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 埋点归因链。
@@ -27,11 +27,16 @@ sit_acceptance:
     - specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/spec.md
     done_when:
     - suggest 阶段本地快速检索按 联系人/聊天记录/已加入圈子/已关注地点/已关注的人/推荐搜索词 组织，无命中分组隐藏；本地对象不进 result。
-    - result 阶段固定 Tab 小趣/全部/交集/图片/视频/长文，最终结果只来自云侧；全部 Tab 已连接区每类一组、发现区按比例混排无查看更多。
+    - result 阶段固定 Tab 小趣/全部/交集/图片/视频/长文，最终结果只来自云侧；全部 Tab 承载用户分区、实体顶卡与内容流。
+    - Tag 明确作为 filters.tags 过滤维度，不作为独立结果对象或结果 section；动态筛选首批设计只开放 location/circle 云侧 facet。
     - 最近搜索记录 query+launch_context+category_context+timestamp，本地+云同步，支持管理态删除/清空。
     - 远端降级/能力受限时由 degradeSignals 驱动降级横幅；单域失败只显该域降级，不阻塞整页。
     - 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 归因链可观测。
-    - 加载/空态/错误/降级/权限/最近搜索管理四态齐全；错误态可重试恢复且不丢 query。
+    - 搜索专有事件按 requestId 形成提交/非空或零结果/点击/筛选/非空结果停留漏斗，原始 query、objectId、userId 不进入产品遥测。
+    - 三项黄金指标在 SLS 聚合、大盘和至少 100 样本告警中同源：有效搜索成功率 ≥35%、首个可操作结果 P95 ≤1.5s、结果到有效行动率 ≥20%。
+    - Delivery Gate 执行 `/search` contract smoke；manual_full/mainline_auto_prod Pre-Release 对显式 beta/prod URL 执行真实商业信封探针。
+    - 加载/空态/错误/降级/权限/最近搜索管理四态齐全；空态回显 query、相关词与调整关键词行动，错误态可重试恢复且不丢 query。
+    - 搜索命中落地返回 post_not_found/content_deleted 时留在结果页，移除失效项、展示 typed 提示并按原 searchRequestId 上报 degrade。
     - 点击本地 suggest hit、点击搜索网络结果、点击云侧 result hit 与相关搜索词均保留 query/session/request 归因。
     performance_points:
     - suggest 本地检索即时返回且不等待云侧；连续输入只保留最新 query，旧响应不得覆盖新 query。
@@ -40,33 +45,49 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/cross_domain_search_journey__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/cross_domain_search_hybrid_journey__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/search/cross_domain_search_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
       - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
-    status: completed
+      - file: quwoquan_ops/tests/local_contract/test_search_commercial_observability__local_contract_test.py
+    status: partial
     notes:
     - WP-B 已闭合：降级横幅（R-002）、inspiration 清债（R-005）、mock 术语（R-006）、埋点归因链（R-007）、demo
       回退删除（R-008）；widget local_contract 已 recorded。
     - 交集 Tab 端侧单源收口归 WP-C / R-IX06。
-    - user_acceptance journey 已 recorded：cross_domain_search_journey_test.dart 覆盖
-      suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页
-      referralSource=search + feedRequestId 归因链。
+    - 原 widget 旅程含 Mock/Alpha provider，只能作为 local_contract；现已迁移到
+      `test/local_contract/ui/search/`，继续覆盖 suggest 两阶段、响应投影、本地对象不进 result、
+      最近搜索水合、单域降级、整页错误重试及 referralSource/feedRequestId 归因链。
+    - production Remote 的真实 Gamma App 旅程由 Patrol 用例承载；在真实设备执行通过前，
+      本 SIT 保持 partial，禁止把测试文件存在性当作 user_acceptance 通过。
     - api_integration 远端集成：local-gamma `/search` 冒烟 + search-service contract test
       + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`.qwq_output/env/gamma/runs/search_rollback_rehearsal.md`）。真集群容量/性能为
       WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
+    - WP-K 实现与 local_contract 已收口：user.profile 全部 Tab 分区、404/410 失效反馈与
+      degrade 回流、空态 query/相关词/行动、发现卡片与网络直达行精修；动态筛选与 Tag
+      角色裁定见 design.md KD12/KD13。2026-07-20 已通过搜索默认页 13 例、结果页 20 例
+      widget local_contract 及定向 `flutter analyze`；production Remote 的真实 Gamma App
+      旅程仍按本节点 user_acceptance 阻断，故本 SIT 保持 partial。
+    - WP-L metadata/codegen、SLS 聚合、三项告警、大盘和 Delivery/Pre-Release 搜索专项门已
+      落地；App 结果页按 requestId 上报 typed 漏斗且定向 analyze 通过。新增 widget 漏斗
+      测试尚受并行 FilterCatalog 半迁移导致的全 App 编译错误阻断，待该编译链恢复后必须重跑；
+      beta/prod live probe 与漏斗对账演练仍是 completed 前置证据。
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_test.go'
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.global_search_experience.cross_domain_search_journey.sit1.sit1_api_integration
@@ -75,6 +96,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.global_search_experience.cross_domain_search_journey.sit1.sit1_local_contract
@@ -83,5 +105,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

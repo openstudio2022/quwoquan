@@ -1,0 +1,24 @@
+entity: OutboundShareFact
+layer: e2e
+
+description: 端云集成场景：出站分享事实 append/dedupe/outbox 原子性。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  real_engines:
+    mongodb: testcontainer
+
+scenarios:
+  - name: outbound_share_fact_append
+    test_type: api_contract
+    go_func: TestCreateOutboundSharePersistsFactReceiptAndOutbox
+    assertions:
+      - 同一 actor + idempotencyKey 只产生一个 eventId 与一条 outbox 事实
+      - destination 只保存类型与不可逆摘要
+
+  - name: outbound_share_rejects_invalid_post
+    test_type: api_contract
+    go_func: TestAppendOutboundShareRejectsUnconfirmedOrMissingPost
+    assertions:
+      - 未确认/不存在的 Post 拒绝追加且无副作用

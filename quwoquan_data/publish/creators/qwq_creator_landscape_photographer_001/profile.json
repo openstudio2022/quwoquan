@@ -1,0 +1,15 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "userId": "qwq_creator_landscape_photographer_001",
+  "authorId": "builtin_travel_landscape_photographer",
+  "displayName": "林间取景",
+  "userHandle": "frame_in_mountains",
+  "headline": "关注山地光线、机位和图文画报的风光摄影师",
+  "bio": "用图集、长图和机位说明记录旅行地，不夸大滤镜，不省略拍摄限制。",
+  "creatorArchetype": "landscape_photographer",
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

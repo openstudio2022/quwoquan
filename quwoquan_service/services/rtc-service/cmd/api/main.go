@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,13 +23,13 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtotel "quwoquan_service/runtime/otel"
 
+	runtimeconfig "quwoquan_service/runtime/config"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/rtc-service/internal/adapters/http"
 	"quwoquan_service/services/rtc-service/internal/adapters/mq"
-	wsadapter "quwoquan_service/services/rtc-service/internal/adapters/ws"
 	"quwoquan_service/services/rtc-service/internal/application"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
@@ -102,12 +103,27 @@ func main() {
 	logger := slog.Default()
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
 
-	ioLogger := robs.NewIOAccessLogger(os.Stdout)
-	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
+	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("rtc-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
+	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
+	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
+	defer standardLogWriter.Close()
+	defer errorLogWriter.Close()
+	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
+	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
 		log.Fatalf("rtc-service process logger init failed: %v", err)
 	}
-	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
 		log.Fatalf("rtc-service exception logger init failed: %v", err)
 	}
@@ -128,8 +144,11 @@ func main() {
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
 	callStore := persistence.NewMongoCallStore(mongoDB)
+	if err := callStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("rtc-service call session indexes unavailable: %v", err)
+	}
 	callCache := rtccache.NewCallStateCache(router.Scene("general"))
-	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
+	realtimePublisher := mq.NewRealtimePublisher(router.Scene("realtime"))
 
 	livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
 	livekitClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, livekitCB)
@@ -138,8 +157,10 @@ func main() {
 	roomSvc := application.NewRoomService(roomAdapter)
 	tokenIssuer := livekit.NewParticipantTokenIssuer(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
 
-	signalHandler := wsadapter.NewSignalHandler(logger)
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
+	if userServiceBaseURL == "" && failFastEnvironment(appEnv) {
+		log.Fatalf("rtc-service requires USER_SERVICE_BASE_URL in %s for the one-to-one relationship gate", appEnv)
+	}
 	relationshipGate := application.DenyRelationshipGate()
 	if userServiceBaseURL != "" {
 		profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
@@ -152,11 +173,41 @@ func main() {
 		domainSvc,
 		roomSvc,
 		tokenIssuer,
-		eventPublisher,
 		relationshipGate,
-		signalHandler,
+		cfg.LiveKit.URL,
 	)
-	handler := httpadapter.NewCallHandler(orchestrator, signalHandler).Routes()
+	outboxRelay := application.NewCallOutboxRelay(
+		callStore,
+		realtimePublisher,
+	)
+	workerCtx, cancelWorkers := context.WithCancel(context.Background())
+	var workerWG sync.WaitGroup
+	workerWG.Add(2)
+	go func() {
+		defer workerWG.Done()
+		runRecoveringWorker(
+			workerCtx,
+			logger,
+			"rtc call outbox relay",
+			func(runCtx context.Context) error {
+				return outboxRelay.Run(runCtx, 100*time.Millisecond)
+			},
+		)
+	}()
+	// 振铃超时收割：无人接听迁移 ended/no_answer 并经 outbox 下发 call.ended
+	//（storage.yaml lifecycle_timers.ring_timeout 同源）。
+	go func() {
+		defer workerWG.Done()
+		runRecoveringWorker(
+			workerCtx,
+			logger,
+			"rtc ring timeout sweeper",
+			func(runCtx context.Context) error {
+				return orchestrator.RunRingTimeoutSweeper(runCtx, 5*time.Second)
+			},
+		)
+	}()
+	handler := httpadapter.NewCallHandler(orchestrator).Routes()
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(hctx context.Context) error {
@@ -187,17 +238,67 @@ func main() {
 
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("rtc-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("rtc-service access token verifier invalid: %v", err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("rtc-service device ticket config invalid: %v", err)
+	}
+	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("rtc-service device ticket verifier invalid: %v", err)
+	}
+	authenticated := rtauth.Middleware(rtauth.MiddlewareConfig{
+		AccessTokenVerifier:  accessVerifier,
+		DeviceTicketVerifier: deviceVerifier,
+	})(rateLimited)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           rateLimited,
+		Handler:           authenticated,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	logger.Info("rtc-service starting", "addr", addr, "env", appEnv)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("rtc-service: %v", err)
+	serveErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)
+	cancelWorkers()
+	workerWG.Wait()
+	if serveErr != nil {
+		log.Fatalf("rtc-service: %v", serveErr)
+	}
+}
+
+func runRecoveringWorker(
+	ctx context.Context,
+	logger *slog.Logger,
+	name string,
+	run func(context.Context) error,
+) {
+	for {
+		err := run(ctx)
+		if err == nil || ctx.Err() != nil {
+			return
+		}
+		logger.Error(name+" stopped", "error", err)
+		retry := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			if !retry.Stop() {
+				select {
+				case <-retry.C:
+				default:
+				}
+			}
+			return
+		case <-retry.C:
+		}
 	}
 }
 
@@ -229,6 +330,15 @@ func isValidAppEnv(env string) bool {
 func requiresConfigVersion(env string) bool {
 	switch env {
 	case "gamma", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func failFastEnvironment(appEnv string) bool {
+	switch strings.TrimSpace(appEnv) {
+	case "beta", "gamma", "prod":
 		return true
 	default:
 		return false
@@ -285,28 +395,16 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	if _, err := os.Stat(localDefault); err == nil {
-		if err := mergeConfigFile(&cfg, localDefault); err != nil {
-			return config{}, fmt.Errorf("read local default config: %w", err)
-		}
-		if err := mergeConfigFile(&cfg, localEnv); err != nil {
-			return config{}, fmt.Errorf("read local env config: %w", err)
-		}
-		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
-			if _, err := os.Stat(versionFile); err == nil {
-				if err := mergeConfigFile(&cfg, versionFile); err != nil {
-					return config{}, fmt.Errorf("read local version config: %w", err)
-				}
-			}
-		}
-		return cfg, nil
+	if err := mergeConfigFile(&cfg, localDefault); err != nil {
+		return config{}, fmt.Errorf("read local default config: %w", err)
 	}
-
-	currentPath := filepath.Join("configs", "config.yaml")
-	if _, err := os.Stat(currentPath); err == nil {
-		if err := mergeConfigFile(&cfg, currentPath); err != nil {
-			return config{}, fmt.Errorf("read current config: %w", err)
+	if err := mergeConfigFile(&cfg, localEnv); err != nil {
+		return config{}, fmt.Errorf("read local env config: %w", err)
+	}
+	if strings.TrimSpace(configVersion) != "" {
+		versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
+		if err := mergeConfigFile(&cfg, versionFile); err != nil {
+			return config{}, fmt.Errorf("read local version config: %w", err)
 		}
 	}
 	return cfg, nil

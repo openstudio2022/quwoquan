@@ -88,7 +88,7 @@ Future<String> _diagnoseHomepageBoundary(
   }
   final container = ProviderScope.containerOf(navigator.first);
   final actor = container.read(homepageQueryActorContextProvider);
-  final repository = container.read(homepageRepositoryProvider);
+  final repository = container.read(homepageFacetSetProvider);
   final introductionRepository = container.read(
     homepageIntroductionRepositoryProvider,
   );

@@ -1,108 +1,37 @@
-/// Client-side upload policy pre-validation (mirrors Go runtime/media policies).
-/// Prevents invalid uploads before network round-trip.
-class UploadPolicy {
-  final int maxFileSize;
-  final List<String> allowedTypes;
-  final int maxDurationMs;
-  final int maxWidth;
-  final int maxHeight;
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-  const UploadPolicy({
-    required this.maxFileSize,
-    this.allowedTypes = const [],
-    this.maxDurationMs = 0,
-    this.maxWidth = 0,
-    this.maxHeight = 0,
-  });
-}
+enum MediaCategory { chatVoice, chatImage, chatVideo, chatFile }
 
-enum MediaCategory {
-  chatVoice,
-  chatImage,
-  chatVideo,
-  chatFile,
-  post,
-  avatar,
-  circle,
-}
-
-const _mb = 1024 * 1024;
-
-const Map<MediaCategory, UploadPolicy> defaultPolicies = {
-  MediaCategory.chatVoice: UploadPolicy(
-    maxFileSize: 10 * _mb,
-    allowedTypes: ['audio/aac', 'audio/mp4', 'audio/x-m4a', 'audio/mpeg'],
-    maxDurationMs: 120000,
-  ),
-  MediaCategory.chatImage: UploadPolicy(
-    maxFileSize: 20 * _mb,
-    allowedTypes: [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'image/heic',
-    ],
-    maxWidth: 8192,
-    maxHeight: 8192,
-  ),
-  MediaCategory.chatVideo: UploadPolicy(
-    maxFileSize: 100 * _mb,
-    allowedTypes: ['video/mp4', 'video/quicktime'],
-    maxDurationMs: 600000,
-  ),
-  MediaCategory.chatFile: UploadPolicy(
-    maxFileSize: 100 * _mb,
-  ),
-  MediaCategory.post: UploadPolicy(
-    maxFileSize: 50 * _mb,
-    allowedTypes: [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'image/heic',
-      'video/mp4',
-      'video/quicktime',
-    ],
-  ),
-  MediaCategory.avatar: UploadPolicy(
-    maxFileSize: 5 * _mb,
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    maxWidth: 2048,
-    maxHeight: 2048,
-  ),
-  MediaCategory.circle: UploadPolicy(
-    maxFileSize: 50 * _mb,
-    allowedTypes: [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'video/mp4',
-    ],
-  ),
-};
-
-/// Validates an upload against its category policy.
-/// Returns null if valid, or an error message string.
+/// Chat 的 UI 类别只负责投影到 canonical MediaAsset 类型；大小、MIME 与错误语义
+/// 均由 metadata 生成的 [ContentMediaUploadPolicy] 经 application validator 决定。
 String? validateUpload({
   required MediaCategory category,
   required int fileSize,
   required String contentType,
 }) {
-  final policy = defaultPolicies[category];
-  if (policy == null) return '不支持的媒体类别';
-
-  if (fileSize > policy.maxFileSize) {
-    final maxMb = policy.maxFileSize ~/ _mb;
-    return '文件大小超过限制（最大 $maxMb MB）';
+  try {
+    validateContentMediaUploadPolicy(
+      mediaType: contentMediaTypeForCategory(category),
+      contentType: contentType,
+      fileSize: fileSize,
+    );
+    return null;
+  } on RuntimeFailureBase catch (failure) {
+    final errorCode = ContentErrorCode.fromCode(failure.code);
+    return ContentErrorMessages.zh[errorCode] ??
+        ContentErrorMessages.zh[ContentErrorCode.unknown] ??
+        failure.semanticReason;
   }
+}
 
-  if (policy.allowedTypes.isNotEmpty &&
-      !policy.allowedTypes.contains(contentType.toLowerCase())) {
-    return '不支持的文件类型';
-  }
-
-  return null;
+ContentMediaType contentMediaTypeForCategory(MediaCategory category) {
+  return switch (category) {
+    MediaCategory.chatVoice => ContentMediaType.audio,
+    MediaCategory.chatVideo => ContentMediaType.video,
+    MediaCategory.chatFile => ContentMediaType.file,
+    MediaCategory.chatImage => ContentMediaType.image,
+  };
 }

@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -10,6 +16,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
@@ -24,6 +31,8 @@ import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_picker_route.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+part 'content_share_sheet_components.dart';
 
 typedef ContentShareExternalCallback =
     Future<void> Function(ForwardExternalShareTarget target);
@@ -41,6 +50,7 @@ class ContentShareSheet extends StatefulWidget {
     this.onGroupTap,
     this.onMessageTap,
     this.onExternalShare,
+    this.journeyEventTracker,
   });
 
   final ContentShareTemplate template;
@@ -54,6 +64,7 @@ class ContentShareSheet extends StatefulWidget {
   final VoidCallback? onGroupTap;
   final VoidCallback? onMessageTap;
   final ContentShareExternalCallback? onExternalShare;
+  final JourneyEventTracker? journeyEventTracker;
 
   static Future<void> show(
     BuildContext context, {
@@ -129,6 +140,8 @@ class _ConnectedContentShareSheetState
     extends ConsumerState<_ConnectedContentShareSheet> {
   late final AppForwardPayload _payload;
   late Future<List<AppForwardRecipient>> _recentFuture;
+  List<AppForwardRecipient> _recentRecipients = const <AppForwardRecipient>[];
+  bool _continuationResumeScheduled = false;
 
   @override
   void initState() {
@@ -151,58 +164,193 @@ class _ConnectedContentShareSheetState
         'permission': widget.template.permission,
       },
     );
-    _recentFuture = _loadRecentRecipients();
+    _recentFuture = ref.read(authSessionControllerProvider).isAuthenticated
+        ? _loadRecentRecipients()
+        : Future<List<AppForwardRecipient>>.value(
+            const <AppForwardRecipient>[],
+          );
   }
 
   Future<List<AppForwardRecipient>> _loadRecentRecipients() async {
     final conversations = await ref
-        .read(chatRepositoryProvider)
+        .read(chatConversationRepositoryProvider)
         .listConversations(limit: 30);
-    return uniqueForwardRecipients(
+    final recipients = uniqueForwardRecipients(
       sortForwardRecipientsByRecent(
         conversations.map(AppForwardRecipient.fromConversation),
       ),
     ).take(AppForwardLimits.recentRecipients).toList(growable: false);
+    _recentRecipients = recipients;
+    return recipients;
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      if (next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated)) {
+        _scheduleContinuationResume();
+      }
+    });
     return ContentShareSheet(
       template: widget.template,
       actionHandler: widget.actionHandler,
       onActionCompleted: _handleActionCompleted,
       recentRecipients: _recentFuture,
       onRecentRecipientsRetry: _retryRecentRecipients,
-      onRecentRecipientTap: (recipient) => runWhenLoggedIn(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        () => _shareToRecentRecipient(recipient),
+      onRecentRecipientTap: (recipient) => _runOrContinueShare(
+        target: ContentShareContinuationTarget.recentRecipient,
+        reason: AuthGateReason.sendMessage,
+        recipientId: recipient.id,
+        action: () => _shareToRecentRecipient(recipient),
       ),
       onCircleTap:
           widget.circlePostPlacementWriter == null ||
               widget.circleMembershipQuery == null
           ? null
-          : () => runWhenLoggedIn(
-              ref,
-              context,
-              AuthGateReason.generic,
-              _openCirclePicker,
+          : () => _runOrContinueShare(
+              target: ContentShareContinuationTarget.circlePlacement,
+              reason: AuthGateReason.generic,
+              action: _openCirclePicker,
             ),
-      onGroupTap: () => runWhenLoggedIn(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        () => _openRecipientPicker(ForwardRecipientPickerMode.groups),
+      onGroupTap: () => _runOrContinueShare(
+        target: ContentShareContinuationTarget.groupChat,
+        reason: AuthGateReason.sendMessage,
+        action: () => _openRecipientPicker(ForwardRecipientPickerMode.groups),
       ),
-      onMessageTap: () => runWhenLoggedIn(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        () => _openRecipientPicker(ForwardRecipientPickerMode.messages),
+      onMessageTap: () => _runOrContinueShare(
+        target: ContentShareContinuationTarget.directMessage,
+        reason: AuthGateReason.sendMessage,
+        action: () => _openRecipientPicker(ForwardRecipientPickerMode.messages),
       ),
       onExternalShare: _shareExternal,
+      journeyEventTracker: ref.read(journeyEventTrackerProvider),
     );
+  }
+
+  void _runOrContinueShare({
+    required ContentShareContinuationTarget target,
+    required AuthGateReason reason,
+    required VoidCallback action,
+    String? recipientId,
+  }) {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      action();
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ShareContentContinuation(
+            postId: widget.template.postId,
+            target: target,
+            recipientId: recipientId,
+          ),
+          ownerToken: 'content-share:${widget.template.postId}:${target.name}',
+        );
+    if (!accepted) {
+      return;
+    }
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        reason,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  void _scheduleContinuationResume({int remainingFrames = 30}) {
+    if (_continuationResumeScheduled) {
+      return;
+    }
+    _continuationResumeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _continuationResumeScheduled = false;
+      if (!mounted ||
+          !ref.read(authSessionControllerProvider).isAuthenticated) {
+        return;
+      }
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (remainingFrames > 0) {
+          _scheduleContinuationResume(remainingFrames: remainingFrames - 1);
+        }
+        return;
+      }
+      final pending = ref
+          .read(authContinuationProvider.notifier)
+          .take<ShareContentContinuation>();
+      if (pending == null) {
+        _retryRecentRecipients();
+        return;
+      }
+      if (pending.postId != widget.template.postId) {
+        ref.read(authContinuationProvider.notifier).set(pending);
+        return;
+      }
+      _retryRecentRecipients();
+      switch (pending.target) {
+        case ContentShareContinuationTarget.recentRecipient:
+          unawaited(_resumeRecentRecipient(pending.recipientId));
+          return;
+        case ContentShareContinuationTarget.circlePlacement:
+          _openCirclePicker();
+          return;
+        case ContentShareContinuationTarget.groupChat:
+          _openRecipientPicker(ForwardRecipientPickerMode.groups);
+          return;
+        case ContentShareContinuationTarget.directMessage:
+          _openRecipientPicker(ForwardRecipientPickerMode.messages);
+          return;
+      }
+    });
+  }
+
+  Future<void> _resumeRecentRecipient(String? recipientId) async {
+    final targetId = recipientId?.trim() ?? '';
+    if (targetId.isEmpty) {
+      return;
+    }
+    try {
+      var recipients = _recentRecipients;
+      if (!recipients.any((recipient) => recipient.id == targetId)) {
+        recipients = await _loadRecentRecipients();
+        if (mounted) {
+          setState(() {
+            _recentFuture = Future<List<AppForwardRecipient>>.value(recipients);
+          });
+        }
+      }
+      AppForwardRecipient? matched;
+      for (final recipient in recipients) {
+        if (recipient.id == targetId) {
+          matched = recipient;
+          break;
+        }
+      }
+      if (matched == null) {
+        throw StateError(ChatText.forwardCardUnavailable);
+      }
+      await _shareToRecentRecipient(matched);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+        ),
+      );
+    }
   }
 
   void _retryRecentRecipients() {
@@ -286,12 +434,23 @@ class _ConnectedContentShareSheetState
   }
 
   Future<void> _shareExternal(ForwardExternalShareTarget target) async {
+    final stopwatch = Stopwatch()..start();
     late final ForwardExternalShareResult result;
     try {
       result = await ref
           .read(forwardExternalShareServiceProvider)
           .share(payload: _payload, target: target);
     } catch (error) {
+      stopwatch.stop();
+      if (!mounted) {
+        return;
+      }
+      await _trackExternalShare(
+        target: target,
+        result: 'failure',
+        durationMs: stopwatch.elapsedMilliseconds,
+        error: error,
+      );
       if (!mounted) {
         return;
       }
@@ -316,30 +475,104 @@ class _ConnectedContentShareSheetState
       return;
     }
     if (result.delivery == ForwardExternalShareDelivery.cancelled) {
+      stopwatch.stop();
+      await _trackExternalShare(
+        target: target,
+        result: 'dismissed',
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       return;
     }
     final message = switch (result.delivery) {
       ForwardExternalShareDelivery.wechatAccepted =>
-        UITextConstants.forwardOpeningWechat,
-      ForwardExternalShareDelivery.wechatCompleted =>
-        UITextConstants.shareCompleted,
+        ChatText.forwardOpeningWechat,
+      ForwardExternalShareDelivery.wechatCompleted => ChatText.shareCompleted,
       ForwardExternalShareDelivery.systemShareFallback =>
-        UITextConstants.forwardShareSystemFallback,
+        ChatText.forwardShareSystemFallback,
       ForwardExternalShareDelivery.cancelled => '',
       ForwardExternalShareDelivery.unavailable =>
-        UITextConstants.forwardExternalShareUnavailable,
+        ChatText.forwardExternalShareUnavailable,
     };
     AppToast.show(context, message);
     if (result.delivery == ForwardExternalShareDelivery.wechatCompleted) {
-      await _complete(
-        target == ForwardExternalShareTarget.wechatFriend
-            ? 'wechat_friend'
-            : 'wechat_moments',
-        destinationKind: 'external_app',
-        destination: target.name,
-        providerReceiptId: result.requestId,
-      );
+      try {
+        await _complete(
+          target == ForwardExternalShareTarget.wechatFriend
+              ? 'wechat_friend'
+              : 'wechat_moments',
+          destinationKind: 'external_app',
+          destination: target.name,
+          providerReceiptId: result.requestId,
+        );
+      } catch (error) {
+        stopwatch.stop();
+        if (!mounted) {
+          return;
+        }
+        await _trackExternalShare(
+          target: target,
+          result: 'failure',
+          durationMs: stopwatch.elapsedMilliseconds,
+          error: error,
+        );
+        if (!mounted) {
+          return;
+        }
+        await AppActionErrorFeedback.show(
+          context,
+          semantic: runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _complete(
+                target == ForwardExternalShareTarget.wechatFriend
+                    ? 'wechat_friend'
+                    : 'wechat_moments',
+                destinationKind: 'external_app',
+                destination: target.name,
+                providerReceiptId: result.requestId,
+              );
+            }
+          },
+        );
+        return;
+      }
     }
+    stopwatch.stop();
+    await _trackExternalShare(
+      target: target,
+      result: result.delivery == ForwardExternalShareDelivery.unavailable
+          ? 'failure'
+          : 'success',
+      durationMs: stopwatch.elapsedMilliseconds,
+    );
+  }
+
+  Future<void> _trackExternalShare({
+    required ForwardExternalShareTarget target,
+    required String result,
+    required int durationMs,
+    Object? error,
+  }) {
+    return ref
+        .read(journeyEventTrackerProvider)
+        .trackAction(
+          journey: 'content_share',
+          action: target.name,
+          pageName: 'content_share_sheet',
+          targetType: 'post',
+          targetKey: widget.template.postId,
+          error: error,
+          payload: <String, Object?>{
+            'result': result,
+            'durationMs': durationMs,
+          },
+        );
   }
 
   Future<void> _complete(
@@ -423,7 +656,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
           ] else ...<Widget>[
             SizedBox(height: AppSpacing.interGroupMd),
             _ShareSectionTitle(
-              title: UITextConstants.shareInternalTitle,
+              title: ChatText.shareInternalTitle,
               color: primaryText,
             ),
             if (widget.recentRecipients != null) ...<Widget>[
@@ -483,7 +716,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                 ),
                 _ShareTargetAction(
                   icon: CupertinoIcons.person_3_fill,
-                  label: UITextConstants.shareTargetGroup,
+                  label: ChatText.shareTargetGroup,
                   color: CupertinoDynamicColor.resolve(
                     CupertinoColors.systemOrange,
                     context,
@@ -492,7 +725,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                 ),
                 _ShareTargetAction(
                   icon: CupertinoIcons.chat_bubble_2_fill,
-                  label: UITextConstants.shareTargetMessage,
+                  label: ChatText.shareTargetMessage,
                   color: CupertinoDynamicColor.resolve(
                     CupertinoColors.systemBlue,
                     context,
@@ -508,7 +741,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             _ShareSectionTitle(
-              title: UITextConstants.shareExternalTitle,
+              title: ChatText.shareExternalTitle,
               color: primaryText,
             ),
             SizedBox(height: AppSpacing.containerSm),
@@ -518,7 +751,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                 children: <Widget>[
                   _ShareTargetAction(
                     icon: CupertinoIcons.chat_bubble_2_fill,
-                    label: UITextConstants.forwardActionWechatFriend,
+                    label: ChatText.forwardActionWechatFriend,
                     color: AppColors.success,
                     busy: _busyActionId == 'wechat_friend',
                     onPressed: widget.onExternalShare == null
@@ -531,7 +764,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                   _actionSpacer,
                   _ShareTargetAction(
                     icon: CupertinoIcons.circle_grid_3x3_fill,
-                    label: UITextConstants.forwardActionWechatMoments,
+                    label: ChatText.forwardActionWechatMoments,
                     color: AppColors.success,
                     busy: _busyActionId == 'wechat_moments',
                     onPressed: widget.onExternalShare == null
@@ -546,7 +779,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                     _ShareTargetAction(
                       icon: _iconForAction(action.id),
                       label: action.id == 'system_share'
-                          ? UITextConstants.shareActionMore
+                          ? ChatText.shareActionMore
                           : action.label,
                       color: primaryText,
                       busy: _busyActionId == action.id,
@@ -581,6 +814,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
   }
 
   Future<void> _handleAction(ContentShareAction action) async {
+    final stopwatch = Stopwatch()..start();
     setState(() => _busyActionId = action.id);
     final result = await widget.actionHandler.execute(
       context,
@@ -591,8 +825,49 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
       return;
     }
     setState(() => _busyActionId = null);
+    Object? completionError;
     if (result.success) {
-      await widget.onActionCompleted?.call(result);
+      try {
+        await widget.onActionCompleted?.call(result);
+      } catch (error) {
+        completionError = error;
+      }
+    }
+    stopwatch.stop();
+    await widget.journeyEventTracker?.trackAction(
+      journey: 'content_share',
+      action: action.id,
+      pageName: 'content_share_sheet',
+      targetType: 'post',
+      targetKey: widget.template.postId,
+      error: completionError ?? result.error,
+      payload: <String, Object?>{
+        'result': completionError != null
+            ? 'failure'
+            : result.dismissed
+            ? 'dismissed'
+            : result.success
+            ? 'success'
+            : 'failure',
+        'durationMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    if (completionError != null && mounted) {
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: completionError,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+        onAction: (retryAction) async {
+          if (retryAction.type == UiErrorActionType.retry ||
+              retryAction.type == UiErrorActionType.resubmit) {
+            await widget.onActionCompleted?.call(result);
+          }
+        },
+      );
     }
   }
 
@@ -602,266 +877,5 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
       'system_share' => CupertinoIcons.ellipsis,
       _ => CupertinoIcons.link,
     };
-  }
-}
-
-class _ShareHeader extends StatelessWidget {
-  const _ShareHeader({required this.primaryText});
-
-  final Color primaryText;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppSpacing.modalHeaderHeight,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          Text(
-            UITextConstants.shareTo,
-            style: TextStyle(
-              fontSize: AppTypography.iosTitle3,
-              fontWeight: AppTypography.semiBold,
-              color: primaryText,
-            ),
-          ),
-          PositionedDirectional(
-            end: 0,
-            child: CupertinoButton(
-              key: const ValueKey<String>('content-share-close-button'),
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(
-                AppSpacing.minInteractiveSize,
-                AppSpacing.minInteractiveSize,
-              ),
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: Icon(
-                CupertinoIcons.xmark,
-                size: AppSpacing.iconMedium,
-                color: primaryText,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SharePreviewCard extends StatelessWidget {
-  const _SharePreviewCard({
-    required this.template,
-    required this.primaryText,
-    required this.secondaryText,
-  });
-
-  final ContentShareTemplate template;
-  final Color primaryText;
-  final Color secondaryText;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerSm),
-        child: Row(
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(
-                AppSpacing.contentPreviewCornerRadius,
-              ),
-              child: SizedBox(
-                width: AppSpacing.largeButtonSize,
-                height: AppSpacing.largeButtonSize,
-                child: template.coverUrl.trim().isEmpty
-                    ? ColoredBox(
-                        color: AppColors.iosTintedFill(context),
-                        child: Icon(
-                          CupertinoIcons.doc_richtext,
-                          color: AppColors.iosAccent(context),
-                        ),
-                      )
-                    : AppCachedNetworkImage(
-                        imageUrl: template.coverUrl,
-                        fit: BoxFit.cover,
-                        width: AppSpacing.largeButtonSize,
-                        height: AppSpacing.largeButtonSize,
-                        cdnPreset: CdnImagePreset.thumbnail,
-                        errorWidget: ColoredBox(
-                          color: AppColors.iosTintedFill(context),
-                          child: Icon(
-                            CupertinoIcons.doc_richtext,
-                            color: AppColors.iosAccent(context),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.containerSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    template.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption1,
-                      color: AppColors.iosAccent(context),
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    template.shareTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.semiBold,
-                      color: primaryText,
-                    ),
-                  ),
-                  if (template.shareSummary.trim().isNotEmpty)
-                    Text(
-                      template.shareSummary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosCaption1,
-                        color: secondaryText,
-                      ),
-                    ),
-                  Text(
-                    template.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption2,
-                      color: secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ShareSectionTitle extends StatelessWidget {
-  const _ShareSectionTitle({required this.title, required this.color});
-
-  final String title;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: AppTypography.iosSubheadline,
-        fontWeight: AppTypography.semiBold,
-        color: color,
-      ),
-    );
-  }
-}
-
-class _ShareTargetAction extends StatelessWidget {
-  const _ShareTargetAction({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onPressed,
-    this.busy = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback? onPressed;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: AppSpacing.largeButtonSize + AppSpacing.containerMd,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: AppSpacing.largeButtonSize,
-              height: AppSpacing.largeButtonSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: busy
-                  ? const CupertinoActivityIndicator()
-                  : Icon(icon, size: AppSpacing.iconLarge, color: color),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption2,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BlockedShareNotice extends StatelessWidget {
-  const _BlockedShareNotice({required this.primaryText});
-
-  final Color primaryText;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.iosSecondaryFill(context),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.lock_fill,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-            SizedBox(width: AppSpacing.containerSm),
-            Expanded(
-              child: Text(
-                UITextConstants.sharePrivateBlocked,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  color: primaryText,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

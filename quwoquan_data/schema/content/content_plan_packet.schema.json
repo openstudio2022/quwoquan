@@ -110,6 +110,9 @@
               "additionalProperties": false
             }
           },
+          "sourceVideo": {
+            "$ref": "sourced_video_evidence.schema.json"
+          },
           "entityRefs": {
             "type": "array",
             "items": {
@@ -207,14 +210,23 @@
               "required": [
                 "title",
                 "researchLane",
-                "assetRefs",
-                "sourceFrames"
+                "assetRefs"
               ],
               "properties": {
                 "researchLane": {
                   "const": "video"
                 }
-              }
+              },
+              "oneOf": [
+                {
+                  "required": ["sourceVideo"],
+                  "not": { "required": ["sourceFrames"] }
+                },
+                {
+                  "required": ["sourceFrames"],
+                  "not": { "required": ["sourceVideo"] }
+                }
+              ]
             }
           },
           {

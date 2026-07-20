@@ -1,4 +1,4 @@
-# L3：元数据驱动的客户端数据契约（metadata-driven-client-data-contract）
+# L3 特性：元数据驱动的客户端数据契约（metadata-driven-client-data-contract）
 
 ## 背景与动机
 
@@ -26,8 +26,8 @@
    - `lib/ui/{domain}/pages/**` 中，**领域实体行数据**（会话、帖子、成员、圈子卡片等）应以 **codegen DTO / 基于 metadata 的 ViewModel** 进入 `build`，**禁止**长期以裸 `Map` 作为列表模型类型（见 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 登记存量）。
 
 4. **本 baseline 交付**  
-   - 本 L3 的 **spec / design / acceptance / plan**、**缺口清单**、**CR**、**tree_index** 登记。  
-   - **不**在本 baseline 会话内完成全仓库逐页改码；迁移按 `树内计划文档` 切片在独立 `/dev` 会话执行。
+   - 本 L3 的 **spec / acceptance**、**缺口清单**、**CR**、**tree_index** 登记。
+   - **不**在本 baseline 会话内完成全仓库逐页改码；迁移按领域 PR 独立执行并回写 acceptance 证据。
 
 ## Out of Scope
 
@@ -35,7 +35,7 @@
 - 不重新定义 Go 侧 ContractGraph compiler、Object Facade/Data Ports 或字段策略
   （沿用 D0/F1 权威设计与 `quwoquan_service` 规则）。
 - **纯本地、无云契约** 的 UI 状态（如展开/折叠 flag）不要求 metadata。  
-- **个人助理引擎** 内部 LLM 契约以 `lib/personal_assistant/contracts/` 为准，与本 L3「云 metadata」正交；若助理 **调用云 API**，仍须走 codegen Repository。
+- 助手内部模型协议与云 API 同样遵守各自 metadata/typed contract，不保留 App 内第二套 wire 契约。
 
 ## 约束与对标
 
@@ -55,7 +55,7 @@
 ## Explore / baseline 就绪分析
 
 - **全页路径与清单对照、能否进入 baseline、Gap 与修改方案**：见同目录 [`explore-baseline-readiness-20260329.md`](./explore-baseline-readiness-20260329.md)。  
-- **摘要**：规格类 baseline **可冻结**；**全页 UI 元数据消费闭环** 仍按 `树内计划文档` 切片推进；当前须优先消除 **横向矩阵 P2=✓** 与清单 **`partial`** 的语义冲突。
+- **摘要**：规格类 baseline **可冻结**；**全页 UI 元数据消费闭环** 按领域 PR 推进，当前须优先消除 **横向矩阵 P2=✓** 与清单 **`partial`** 的语义冲突。
 
 ## 数据生命周期 / 权限
 
@@ -68,7 +68,7 @@
 
 ## 验收重点摘要
 
-- `spec.md` / `design.md` / `acceptance.yaml` / `树内计划文档` / `CR` / `metadata_driven_ui_gap_inventory.yaml` 已合入。  
+- `spec.md` / `acceptance.yaml` / `CR` / `metadata_driven_ui_gap_inventory.yaml` 已合入。
 - `tree_index.yaml` 已登记本 L3。  
 - 新增云接口或新页面数据模型：**须** 先改 metadata 再 codegen，**禁止** 仅端侧手写 DTO 作为长期方案。
 

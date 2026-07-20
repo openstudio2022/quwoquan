@@ -25,7 +25,7 @@ Journey -> Scenario -> Surface/Page -> App boundary -> API operation
 
 ```text
 area / layer / domain_service / service / test_object / quality_facet
-env / rollout_stage / case_id / source_file / recorded_artifact
+env / rollout_stage / execution_profile / case_id / source_file / recorded_artifact
 ```
 
 `quality_facet` 闭集：
@@ -41,6 +41,13 @@ env / rollout_stage / case_id / source_file / recorded_artifact
 - `data_consistency`
 
 `rollout_stage` 只用于生产发布阶段，例如 `gray_initial`。它不能替代环境；生产灰度必须表达为 `env=prod` + `rollout_stage=gray_initial`，不得写成派生环境名。
+
+`execution_profile` 是运行与证据维度，不是第四层测试目录。每项环境相关证据只能属于一个 profile：
+
+- `baseline`：无外部环境；规格、契约、静态质量和全部 `local_contract`。外部依赖不得被读取，失败即 `FAIL`。
+- `smoke`：Alpha；确定性 mock/contract 投影、关键页面/API/导入形状。Alpha 不可用即 `FAIL`。
+- `integration`：Beta/Gamma 内容数据平面；真实 import、API、媒体、幂等与回滚/replay。核心依赖不可达为 `GATE_BLOCK`，不要求 SLS 或 product-ops。
+- `release`：Gamma 真机消费、trace/SLO/SLS 与 Prod 审批/灰度。商业依赖缺失为 `GATE_BLOCK`，绝不降级成 integration 通过。
 
 `test_object` 闭集：
 
@@ -266,7 +273,9 @@ make test-local-contract
 make test-api-integration ENV=beta|gamma|prod
 make test-user-acceptance TARGET=local|gamma-local|prod-hosted
 make gate
-make gate-full
+make gate-smoke
+make gate-integration ENV=beta|gamma
+make gate-release ENV=gamma|prod
 ```
 
-`make gate` 覆盖静态规范、目录、no-fake、coverage 与 `local_contract`。`make gate-full` 在此基础上追加 beta/gamma `api_integration` 与 gamma-local UAT；外部依赖不可达时必须报告 `GATE_BLOCK`，不得假绿。
+`make gate` 是纯 `baseline`，不读取 SLS、法务主体、远端 URL、设备或运行输出。其余入口只验证指定 profile，不允许 Prod 未配置时改跑 Gamma。`PASS` 仅表示该 profile 的实际证据通过；外部能力缺失只能输出该 profile 的 `GATE_BLOCK`。

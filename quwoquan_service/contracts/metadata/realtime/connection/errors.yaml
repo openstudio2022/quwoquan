@@ -1,0 +1,68 @@
+domain: REALTIME
+aggregate: Connection
+
+description: |
+  realtime 域结构化错误码声明。格式：MODULE.KIND.REASON。
+  codegen 从本文件生成 Dart RealtimeErrorCode enum + RealtimeErrorMessages，
+  以及 Go errors.go 常量。ticket 二态（invalid/replayed）：TTL 过期与伪造
+  在存储上均表现为键不存在，统一归并 invalid；已消费标记命中为 replayed。
+
+errors:
+  - code: REALTIME.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    recovery_action: surface
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in"
+
+  - code: REALTIME.USER.ticket_invalid
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    recovery_action: retry
+    recovery_after_seconds: 1
+    dart_const: ticketInvalid
+    go_const: ErrTicketInvalid
+    user_message:
+      zh: "实时连接凭据无效，正在重新连接"
+      en: "Realtime credential invalid, reconnecting"
+
+  - code: REALTIME.USER.ticket_replayed
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    recovery_action: retry
+    recovery_after_seconds: 1
+    dart_const: ticketReplayed
+    go_const: ErrTicketReplayed
+    user_message:
+      zh: "实时连接凭据已被使用，正在重新连接"
+      en: "Realtime credential already used, reconnecting"
+
+  - code: REALTIME.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "操作太频繁，请稍后重试"
+      en: "Too many requests, please wait"
+
+  - code: REALTIME.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "实时服务异常，请稍后重试"
+      en: "Realtime service error, please try again"

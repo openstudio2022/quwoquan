@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:developer' as developer;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 /// Upload task state.
 enum UploadStatus { pending, uploading, completed, failed }
@@ -49,8 +51,11 @@ class MediaUploadManager {
   final int _maxRetries;
   final Queue<UploadTask> _queue = Queue<UploadTask>();
   final List<UploadTask> _active = [];
+  final Set<UploadTask> _failedRetryable = <UploadTask>{};
+  final Set<Timer> _retryTimers = <Timer>{};
   final _controller = StreamController<UploadTask>.broadcast();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _disposed = false;
 
   Stream<UploadTask> get onTaskUpdate => _controller.stream;
 
@@ -93,7 +98,7 @@ class MediaUploadManager {
       }
       final asset = await coordinator.uploadPreparedSource(
         source: source,
-        mediaType: _mediaTypeForCategory(task.category),
+        mediaType: contentMediaTypeForCategory(task.category),
         contentType: task.contentType,
         uploadStream: uploadStream,
       );
@@ -102,15 +107,25 @@ class MediaUploadManager {
         ..cdnUrl = asset.cdnUrl?.toString()
         ..assetId = asset.assetId;
       _controller.add(task);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'Media upload task failed',
+        name: 'MediaUploadManager',
+        error: error,
+        stackTrace: stackTrace,
+      );
       task.retryCount++;
-      if (task.retryCount <= _maxRetries) {
+      final retryable = _isRetryableUploadError(error);
+      if (retryable && task.retryCount <= _maxRetries) {
         task.status = UploadStatus.pending;
-        _queue.add(task);
+        _scheduleRetry(task);
       } else {
         task
           ..status = UploadStatus.failed
-          ..error = 'upload_failed';
+          ..error = _uploadFailureCode(error);
+        if (retryable) {
+          _failedRetryable.add(task);
+        }
         _controller.add(task);
       }
     } finally {
@@ -130,33 +145,64 @@ class MediaUploadManager {
   }
 
   void _retryFailedTasks() {
-    final failed = _queue
-        .where((t) => t.status == UploadStatus.failed)
-        .toList();
+    final failed = _failedRetryable.toList(growable: false);
+    _failedRetryable.clear();
     for (final task in failed) {
-      if (task.retryCount <= _maxRetries) {
-        task
-          ..status = UploadStatus.pending
-          ..retryCount = 0;
-      }
+      task
+        ..status = UploadStatus.pending
+        ..retryCount = 0
+        ..error = null;
+      _queue.add(task);
     }
     _processQueue();
   }
 
   void dispose() {
-    _connectivitySub?.cancel();
-    _controller.close();
+    _disposed = true;
+    for (final timer in _retryTimers) {
+      timer.cancel();
+    }
+    _retryTimers.clear();
+    unawaited(_connectivitySub?.cancel());
+    unawaited(_controller.close());
   }
 
   int get pendingCount => _queue.length;
   int get activeCount => _active.length;
+
+  void _scheduleRetry(UploadTask task) {
+    final exponent = (task.retryCount - 1).clamp(0, 5);
+    final delay = Duration(seconds: 1 << exponent);
+    late final Timer timer;
+    timer = Timer(delay, () {
+      _retryTimers.remove(timer);
+      if (_disposed) return;
+      _queue.add(task);
+      _processQueue();
+    });
+    _retryTimers.add(timer);
+  }
 }
 
-ContentMediaType _mediaTypeForCategory(MediaCategory category) {
-  return switch (category) {
-    MediaCategory.chatVoice => ContentMediaType.audio,
-    MediaCategory.chatVideo => ContentMediaType.video,
-    MediaCategory.chatFile => ContentMediaType.file,
-    _ => ContentMediaType.image,
-  };
+bool _isRetryableUploadError(Object error) {
+  if (error is ContentMediaObjectUploadException) {
+    return error.retryable;
+  }
+  final failure = error is CloudException
+      ? error.runtimeFailure
+      : error is RuntimeFailureBase
+      ? error
+      : null;
+  if (failure == null) return false;
+  return failure.recovery.action.trim().toLowerCase() == 'retry' ||
+      failure.nature == RuntimeFailureNature.transient;
+}
+
+String _uploadFailureCode(Object error) {
+  final failure = error is CloudException
+      ? error.runtimeFailure
+      : error is RuntimeFailureBase
+      ? error
+      : null;
+  return failure?.code ?? RuntimeFailureCodes.cloudSystemUnavailable;
 }

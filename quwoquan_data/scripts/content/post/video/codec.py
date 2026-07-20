@@ -11,6 +11,7 @@ from core.content_tags import resolved_content_tag_refs
 from core.io import read_json
 from core.schema import assert_valid
 from governance.creators.assignment import creator_from_payload
+from content.post.video.source_video import SourcedVideoEvidence
 
 
 class VideoReviewDecision(StrEnum):
@@ -157,6 +158,7 @@ class VideoWritingPack:
     tag_refs: tuple[str, ...]
     template_id: str
     source_frames: tuple[VideoSourceFrameEvidence, ...]
+    source_video: SourcedVideoEvidence | None
     creator: VideoCreatorAssignment
 
     @property
@@ -167,11 +169,17 @@ class VideoWritingPack:
 
     @property
     def source_paths(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys(frame.source_ref for frame in self.source_frames))
+        values = [frame.source_ref for frame in self.source_frames]
+        if self.source_video is not None:
+            values.append(self.source_video.source_ref)
+        return tuple(dict.fromkeys(values))
 
     @property
     def source_urls(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys(frame.source_url for frame in self.source_frames))
+        values = [frame.source_url for frame in self.source_frames]
+        if self.source_video is not None:
+            values.append(self.source_video.source_post_url)
+        return tuple(dict.fromkeys(values))
 
     @classmethod
     def from_brief(
@@ -180,9 +188,20 @@ class VideoWritingPack:
         payload: Mapping[str, object],
     ) -> tuple["VideoWritingPack", tuple[str, ...]]:
         raw_frames = payload.get("sourceFrames")
+        raw_source_video = payload.get("sourceVideo")
         failures: list[str] = []
         frames: list[VideoSourceFrameEvidence] = []
-        if not isinstance(raw_frames, list):
+        source_video: SourcedVideoEvidence | None = None
+        if isinstance(raw_source_video, Mapping):
+            source_video, source_video_issues = SourcedVideoEvidence.from_mapping(
+                raw_source_video
+            )
+            failures.extend(source_video_issues)
+            if isinstance(raw_frames, list) and raw_frames:
+                failures.append(
+                    "sourceVideo and sourceFrames are mutually exclusive"
+                )
+        elif not isinstance(raw_frames, list):
             failures.append("sourceFrames must be an array")
         else:
             for index, raw_frame in enumerate(raw_frames):
@@ -212,6 +231,7 @@ class VideoWritingPack:
                     or "travel.entity.short_video"
                 ),
                 source_frames=tuple(frames),
+                source_video=source_video,
                 creator=VideoCreatorAssignment.from_payload(payload),
             ),
             tuple(failures),
@@ -235,6 +255,11 @@ class VideoWritingPack:
 
     def to_dict(self) -> dict[str, object]:
         frames = [frame.to_dict() for frame in self.source_frames]
+        source_video = (
+            self.source_video.to_dict()
+            if self.source_video is not None
+            else None
+        )
         primary = self.primary_entity
         return {
             "ref": self.ref,
@@ -244,14 +269,28 @@ class VideoWritingPack:
             "entityRefs": list(self.entity_refs),
             "tagRefs": list(self.tag_refs),
             "templateId": self.template_id,
-            "sourceFrames": frames,
-            "assetRefs": [frame.asset_ref for frame in self.source_frames],
+            **({"sourceFrames": frames} if source_video is None else {}),
+            **({"sourceVideo": source_video} if source_video is not None else {}),
+            "sourceMode": (
+                "sourced_video"
+                if source_video is not None
+                else "rights_cleared_image_sequence"
+            ),
+            "assetRefs": (
+                [source_video["assetRef"]]
+                if source_video is not None
+                else [frame.asset_ref for frame in self.source_frames]
+            ),
             "sourcePaths": list(self.source_paths),
             "sourceUrls": list(self.source_urls),
             "storySpine": {
                 "primaryEntity": primary,
                 "routeEntities": [primary] if primary else [],
-                "beats": [frame.caption or primary for frame in self.source_frames],
+                "beats": (
+                    [primary]
+                    if source_video is not None
+                    else [frame.caption or primary for frame in self.source_frames]
+                ),
             },
             **self.creator.to_dict(),
         }

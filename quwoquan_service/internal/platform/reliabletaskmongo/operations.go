@@ -2,10 +2,12 @@ package reliabletaskmongo
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/reliabletask"
@@ -46,6 +48,27 @@ func (s *Store) ListDeadTasks(
 		})
 	}
 	return out, cursor.Err()
+}
+
+// FindLatestTaskOutboxByAggregateID 返回聚合的最新任务 outbox 记录，
+// 供外部交互请求状态查询派生归一化状态。
+func (s *Store) FindLatestTaskOutboxByAggregateID(
+	ctx context.Context,
+	aggregateID string,
+) (reliabletask.TaskOutboxRecord, bool, error) {
+	var record reliabletask.TaskOutboxRecord
+	err := s.outboxes.FindOne(
+		ctx,
+		bson.M{"aggregateId": strings.TrimSpace(aggregateID)},
+		options.FindOne().SetSort(bson.D{{Key: "updatedAt", Value: -1}}),
+	).Decode(&record)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return reliabletask.TaskOutboxRecord{}, false, nil
+	}
+	if err != nil {
+		return reliabletask.TaskOutboxRecord{}, false, err
+	}
+	return record, true, nil
 }
 
 func (s *Store) RecoverDeadTask(ctx context.Context, taskID string, now time.Time) error {

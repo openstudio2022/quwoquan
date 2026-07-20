@@ -1,15 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
-/// T2：MockTagRepository 行为契约 + 后端响应字段→前端 DTO 映射一致性（R12/R13）。
+/// T2：AlphaTagFacet（fixture bundle 驱动）行为契约 + 后端响应字段→前端 DTO
+/// 映射一致性（R12/R13）。
 ///
-/// tag-service 的 search / related / search-by-tags / cooccurrence / related-objects
-/// 已从 501 落地为只读实现；本测试锁定 Mock 行为类型契约，并用与后端 *View 同构的
-/// JSON 验证 fromJson 字段无漂移，防止端云字段名分叉。
+/// 标签目录数据唯一来源为 metadata tag_scenarios.json（tag_catalog_core）经
+/// seed manifest 生成的 immutable bundle；本测试锁定替身行为与端云字段无漂移。
 void main() {
-  final MockTagRepository repo = MockTagRepository();
+  final AlphaTagFacet repo = AlphaTagFacet();
 
-  group('MockTagRepository 行为契约', () {
+  group('AlphaTagFacet 行为契约（fixture bundle 驱动）', () {
     test('listDimensions 返回 18 维度', () async {
       final dims = await repo.listDimensions();
       expect(dims, isNotEmpty);

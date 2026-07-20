@@ -29,14 +29,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/services/entity-service/internal/application"
-	"quwoquan_service/services/entity-service/internal/infrastructure/persistence"
+	homepagepersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage/persistence"
 	"quwoquan_service/services/entity-service/internal/infrastructure/searchindex"
 )
 
 func main() {
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	entityDB := flag.String("entity-db", "quwoquan_entity", "entity database name")
-	stateColl := flag.String("state-collection", "homepage_state", "homepage state collection name")
 	esIndex := flag.String("es-index", "", "ES index name (default: quwoquan_objects)")
 	esEndpoints := flag.String("es-endpoints", "", "comma-separated ES endpoints (overrides SEARCH_ES_ENDPOINTS)")
 	batchSize := flag.Int("batch-size", 0, "bulk batch size (0 = default)")
@@ -74,9 +73,11 @@ func main() {
 		_ = client.Disconnect(shutdownCtx)
 	}()
 
-	store := persistence.NewMongoHomepageStateStore(client.Database(*entityDB).Collection(*stateColl))
-	// The homepage service hydrates the full state from the store on construction,
-	// so it is the live HomepageLister for backfill.
+	store := homepagepersistence.NewMongoHomepageStore(client.Database(*entityDB), false)
+	if err := store.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("[search-backfill] ensure homepage indexes: %v", err)
+	}
+	// Backfill 通过 HomepageQueryFacade cursor 扫描权威 homepages 集合。
 	service := application.NewHomepageServiceWithStore(ctx, store)
 
 	built, err := searchindex.Build(esCfg)

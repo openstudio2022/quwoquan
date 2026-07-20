@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
@@ -21,6 +22,8 @@ class ProfileActionBar extends StatelessWidget {
     this.onShareProfile,
     this.onFollow,
     this.onMessage,
+    this.onVoiceCall,
+    this.onVideoCall,
   });
 
   final ProfileMode mode;
@@ -36,6 +39,8 @@ class ProfileActionBar extends StatelessWidget {
   final VoidCallback? onShareProfile;
   final VoidCallback? onFollow;
   final VoidCallback? onMessage;
+  final VoidCallback? onVoiceCall;
+  final VoidCallback? onVideoCall;
 
   @override
   Widget build(BuildContext context) {
@@ -108,24 +113,57 @@ class ProfileActionBar extends StatelessWidget {
     }
 
     final alreadyFollowing = capability?.viewerFollowsTarget ?? isFollowing;
-    return ObjectActionBar(
-      actions: <ObjectAction>[
-        alreadyFollowing
-            ? neutralAction(
-                label: UITextConstants.following,
-                icon: CupertinoIcons.check_mark,
-                onPressed: onFollow,
-              )
-            : primaryFollowAction(
-                label: UITextConstants.follow,
-                icon: CupertinoIcons.add,
-                onPressed: onFollow,
-              ),
+    final primaryActions = <ObjectAction>[
+      alreadyFollowing
+          ? neutralAction(
+              label: UITextConstants.following,
+              icon: CupertinoIcons.check_mark,
+              onPressed: onFollow,
+            )
+          : primaryFollowAction(
+              label: UITextConstants.follow,
+              icon: CupertinoIcons.add,
+              onPressed: onFollow,
+            ),
+      neutralAction(
+        label: UITextConstants.profileDirectMessage,
+        icon: CupertinoIcons.chat_bubble,
+        onPressed: onMessage,
+      ),
+    ];
+    final targetUserId = capability?.targetSubAccountId ?? '';
+    final voiceAvailable = RtcCallEntryIntent.direct(
+      mediaType: RtcCallEntryMediaType.audio,
+      targetUserId: targetUserId,
+      capability: capability,
+    ).availability.isAvailable;
+    final videoAvailable = RtcCallEntryIntent.direct(
+      mediaType: RtcCallEntryMediaType.video,
+      targetUserId: targetUserId,
+      capability: capability,
+    ).availability.isAvailable;
+    final callActions = <ObjectAction>[
+      if (voiceAvailable)
         neutralAction(
-          label: UITextConstants.profileDirectMessage,
-          icon: CupertinoIcons.chat_bubble,
-          onPressed: onMessage,
+          label: UITextConstants.callVoice,
+          icon: CupertinoIcons.phone,
+          onPressed: onVoiceCall,
         ),
+      if (videoAvailable)
+        neutralAction(
+          label: UITextConstants.callVideo,
+          icon: CupertinoIcons.video_camera,
+          onPressed: onVideoCall,
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ObjectActionBar(actions: primaryActions),
+        if (callActions.isNotEmpty) ...<Widget>[
+          SizedBox(height: AppSpacing.sm),
+          ObjectActionBar(actions: callActions),
+        ],
       ],
     );
   }

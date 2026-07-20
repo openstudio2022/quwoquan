@@ -30,7 +30,7 @@ type RecordMediaProcessingResultCommand struct {
 	AssetID       string
 	Processing    mediamodel.ProcessingStatus
 	FailureReason string
-	Descriptor    mediamodel.VideoProcessingDescriptor
+	Descriptor    mediamodel.MediaProcessingDescriptor
 }
 
 type UpdateMediaAssetAccessPolicyCommand struct {
@@ -95,21 +95,27 @@ type MediaUploadSessionCommandResult struct {
 }
 
 type MediaAssetCommandResult struct {
-	AssetID             string                      `json:"assetId"`
-	Version             int64                       `json:"version"`
-	ProcessingStatus    mediamodel.ProcessingStatus `json:"processingStatus"`
-	AccessPolicy        mediamodel.AccessPolicy     `json:"accessPolicy"`
-	CoverStrategy       string                      `json:"coverStrategy"`
-	ManualCoverAssetID  string                      `json:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs    int64                       `json:"coverFrameTimeMs"`
-	VerifiedDurationMs  int64                       `json:"verifiedDurationMs,omitempty"`
-	VideoWidth          int                         `json:"videoWidth,omitempty"`
-	VideoHeight         int                         `json:"videoHeight,omitempty"`
-	VideoCodec          string                      `json:"videoCodec,omitempty"`
-	VideoContainer      string                      `json:"videoContainer,omitempty"`
-	PreviewTrackVersion int                         `json:"previewTrackVersion,omitempty"`
-	CoverURL            string                      `json:"coverUrl,omitempty"`
-	Replayed            bool                        `json:"replayed"`
+	AssetID                  string                      `json:"assetId"`
+	Version                  int64                       `json:"version"`
+	ProcessingStatus         mediamodel.ProcessingStatus `json:"processingStatus"`
+	AccessPolicy             mediamodel.AccessPolicy     `json:"accessPolicy"`
+	CoverStrategy            string                      `json:"coverStrategy"`
+	ManualCoverAssetID       string                      `json:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs         int64                       `json:"coverFrameTimeMs"`
+	ImageWidth               int                         `json:"imageWidth,omitempty"`
+	ImageHeight              int                         `json:"imageHeight,omitempty"`
+	ImageDeliveryContentType string                      `json:"imageDeliveryContentType,omitempty"`
+	VerifiedDurationMs       int64                       `json:"verifiedDurationMs,omitempty"`
+	VideoWidth               int                         `json:"videoWidth,omitempty"`
+	VideoHeight              int                         `json:"videoHeight,omitempty"`
+	VideoCodec               string                      `json:"videoCodec,omitempty"`
+	VideoContainer           string                      `json:"videoContainer,omitempty"`
+	VideoAudioCodec          string                      `json:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs  int                         `json:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart           bool                        `json:"videoFastStart,omitempty"`
+	PreviewTrackVersion      int                         `json:"previewTrackVersion,omitempty"`
+	CoverURL                 string                      `json:"coverUrl,omitempty"`
+	Replayed                 bool                        `json:"replayed"`
 }
 
 // MediaUploadSessionSlice contains the owner-scoped projection. The expected
@@ -117,6 +123,7 @@ type MediaAssetCommandResult struct {
 type MediaUploadSessionSlice struct {
 	SessionID   string                         `json:"sessionId"`
 	Version     int64                          `json:"version"`
+	AssetID     string                         `json:"assetId,omitempty"`
 	ObjectKey   string                         `json:"objectKey"`
 	MediaType   string                         `json:"mediaType"`
 	ContentType string                         `json:"contentType"`
@@ -186,11 +193,19 @@ type MediaAssetSlice struct {
 	ManualCoverAssetID           string                      `json:"manualCoverAssetId,omitempty"`
 	CoverFrameTimeMs             int64                       `json:"coverFrameTimeMs"`
 	ProcessorProfile             string                      `json:"-"`
+	ImageWidth                   int                         `json:"imageWidth,omitempty"`
+	ImageHeight                  int                         `json:"imageHeight,omitempty"`
+	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
+	ImageNormalizedObjectKey     string                      `json:"-"`
+	ImagePublicSliceKey          string                      `json:"-"`
 	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
 	VideoWidth                   int                         `json:"videoWidth,omitempty"`
 	VideoHeight                  int                         `json:"videoHeight,omitempty"`
 	VideoCodec                   string                      `json:"videoCodec,omitempty"`
 	VideoContainer               string                      `json:"videoContainer,omitempty"`
+	VideoAudioCodec              string                      `json:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart               bool                        `json:"videoFastStart,omitempty"`
 	VideoPublicSliceKey          string                      `json:"-"`
 	CoverPublicSliceKey          string                      `json:"-"`
 	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`
@@ -221,9 +236,15 @@ type MediaAssetDeliveryReferenceSlice struct {
 	FileSize                     int64                       `json:"fileSize"`
 	PublicSliceKey               string                      `json:"publicSliceKey,omitempty"`
 	DeliveryURL                  string                      `json:"cdnUrl"`
+	ImageWidth                   int                         `json:"imageWidth,omitempty"`
+	ImageHeight                  int                         `json:"imageHeight,omitempty"`
+	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
 	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
 	VideoWidth                   int                         `json:"videoWidth,omitempty"`
 	VideoHeight                  int                         `json:"videoHeight,omitempty"`
+	VideoAudioCodec              string                      `json:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart               bool                        `json:"videoFastStart,omitempty"`
 	VideoPublicSliceKey          string                      `json:"videoPublicSliceKey,omitempty"`
 	CoverPublicSliceKey          string                      `json:"coverPublicSliceKey,omitempty"`
 	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`

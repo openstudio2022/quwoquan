@@ -153,7 +153,7 @@ def main() -> int:
     if baseline is None:
         print(
             f"ERROR: missing or invalid baseline: {baseline_path}\n"
-            "Run: python3 scripts/verify_ui_app_data_source_mode_ratchet.py --write-baseline",
+            "Run: python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py --write-baseline",
             file=sys.stderr,
         )
         return 1

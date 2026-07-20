@@ -2,37 +2,37 @@ aggregate: CircleGroupMembership
 events:
   - name: CircleGroupMembershipRequested
     producer: circle-service
-    consumers: [circle-group-membership-stream]
+    consumers: [circle-group-membership-stream, notification-service]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state, createdAt]
+    payload_fields: [id, version, groupId, groupOwnerPersonaId, circleId, personaId, role, state, createdAt]
   - name: CircleGroupMembershipActivated
     producer: circle-service
-    consumers: [chat-conversation-membership-projector, circle-group-membership-stream]
+    consumers: [chat-conversation-membership-projector, circle-group-membership-stream, notification-service]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state, joinedAt]
+    payload_fields: [id, version, groupId, groupOwnerPersonaId, circleId, personaId, role, state, joinedAt]
   - name: CircleGroupMembershipRejected
     producer: circle-service
-    consumers: [circle-group-membership-stream]
+    consumers: [circle-group-membership-stream, notification-service]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state, decidedAt]
+    payload_fields: [id, version, groupId, groupOwnerPersonaId, circleId, personaId, role, state, decidedAt]
   - name: CircleGroupMembershipLeft
     producer: circle-service
     consumers: [chat-conversation-membership-projector, circle-group-membership-stream]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state, leftAt]
+    payload_fields: [id, version, groupId, circleId, personaId, role, state, leftAt]
   - name: CircleGroupMembershipRemoved
     producer: circle-service
     consumers: [chat-conversation-membership-projector, circle-group-membership-stream]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state, leftAt]
+    payload_fields: [id, version, groupId, circleId, personaId, role, state, leftAt]
   - name: CircleGroupMembershipRoleChanged
     producer: circle-service
     consumers: [chat-conversation-membership-projector, circle-group-membership-stream]
     channel: transactional_outbox
     payload_entity: CircleGroupMembership
-    payload_fields: [_id, version, groupId, circleId, personaId, role, state]
+    payload_fields: [id, version, groupId, circleId, personaId, role, state]

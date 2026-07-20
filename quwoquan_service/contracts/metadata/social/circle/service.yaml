@@ -5,7 +5,7 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
+    block_reason: 新增 operation 需按 B4 商用水位补齐三层证据后逐个翻牌
     gap_id: CIRCLE_CIRCLE_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   description: 群组入口、圈子主页、组织主页、成员治理与群组协作
@@ -54,11 +54,72 @@ api_routes:
     description: 群组 / 主页列表（分类 + 推荐）
     query_params: [category, domainId, recommendFor, cursor, limit, sort]
     response_entity: Circle
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleListQuery
+      response_type: CirclePageSlice
+      request_encoder: encodeCircleListQuery
+      response_decoder: decodeCirclePageSlice
+
+  - method: GET
+    path: /circles/discovery-feed
+
+    operation: ListCircleDiscoveryFeed
+    actor: none
+    commercial:
+      status: blocked
+      block_reason: 待聚合读模型、端侧单请求消费与三层测试证据全部通过后翻牌
+      gap_id: R-CIRCLE-001
+      target_story: circle-homepage-redesign
+    authorization:
+      principal: public
+      ownership_policy: public_circle_discovery
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_discovery_feed_list
+      trace: true
+      attributes: [outcome, category, scope, sort]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    application:
+      kind: query
+      facet: CircleDiscoveryFeedQueryFacet
+      method: listCircleDiscoveryFeed
+      reader: CircleDiscoveryFeedReader
+      slice: CircleDiscoveryFeedPageSlice
+    description: 圈子频道聚合流；服务端完成分类、成员范围与游标分页，一次返回圈子卡片和强类型帖子投影
+    query_params: [category, subCategory, scope, cursor, limit, sort]
+    response_entity: CircleDiscoveryFeedView
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleDiscoveryFeedQuery
+      response_type: CircleDiscoveryFeedPageSlice
+      request_encoder: encodeCircleDiscoveryFeedQuery
+      response_decoder: decodeCircleDiscoveryFeedPageSlice
 
   - method: GET
     path: /circles/search
 
     operation: SearchCircles
+    commercial:
+      status: ready
     actor: persona
     application:
       kind: query
@@ -71,11 +132,36 @@ api_routes:
     response_entity: CircleSearchResultView
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    authorization: { principal: persona, ownership_policy: public_circle_discovery }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.SYSTEM.internal_error]
+    privacy: { request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only }
+    telemetry: { metric: circle_search, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 500, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleSearchQuery
+      response_type: CircleSearchResultSlice
+      request_encoder: encodeCircleSearchQuery
+      response_decoder: decodeCircleSearchResultSlice
+
   - method: POST
     path: /circles
 
     operation: CreateCircle
+    commercial:
+      status: ready
     actor: persona
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     application:
       kind: command
       facet: CircleLifecycleCommandFacet
@@ -85,12 +171,27 @@ api_routes:
       invariant_target: Circle
     description: 创建圈子 / 组织主页
     request_entity: Circle
-    writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
+    response_entity: CircleCommandResult
+    writable_fields: [name, description, rulesText, welcomeMessage, coverUrl, iconUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, autoSyncChat, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
+    authorization: { principal: persona, ownership_policy: creator_becomes_owner }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.circle_idempotency_conflict, CIRCLE.SYSTEM.circle_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_create, trace: true, attributes: [outcome, visibility] }
+    slo: { latency_p95_ms: 700, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_contracts.dart
+      request_type: CreateCircleCommand
+      response_type: CircleCommandResult
+      request_encoder: encodeCreateCircleCommand
+      response_decoder: decodeCircleCommandResult
 
   - method: GET
     path: /circles/{circleId}
 
     operation: GetCircle
+    commercial:
+      status: ready
     actor: none
     authorization:
       principal: public
@@ -127,12 +228,27 @@ api_routes:
       slice: CircleDetailSlice
     description: 群组主页详情
     response_entity: Circle
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleDetailQuery
+      response_type: CircleProjection
+      request_encoder: encodeCircleDetailQuery
+      response_decoder: decodeCircleProjection
 
   - method: PATCH
     path: /circles/{circleId}
 
     operation: UpdateCircle
+    commercial:
+      status: ready
     actor: persona
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    headers: [Idempotency-Key]
     application:
       kind: command
       facet: CircleLifecycleCommandFacet
@@ -140,14 +256,36 @@ api_routes:
       aggregate_owner: Circle
       mutation_target: Circle
       invariant_target: Circle
-    description: 更新圈子 / 组织主页
-    writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
+    description: 更新圈子 / 组织主页；圈主/管理员命名迁移，服务端内部 version CAS，公开请求不携带版本字段
+    response_entity: CircleCommandResult
+    writable_fields: [name, description, rulesText, welcomeMessage, coverUrl, iconUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, autoSyncChat, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
+    authorization: { principal: persona, ownership_policy: circle_owner_or_admin }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.circle_archived, CIRCLE.USER.circle_version_conflict, CIRCLE.USER.circle_idempotency_conflict, CIRCLE.SYSTEM.circle_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_update, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 700, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_contracts.dart
+      request_type: UpdateCircleCommand
+      response_type: CircleCommandResult
+      request_encoder: encodeUpdateCircleCommand
+      response_decoder: decodeCircleCommandResult
 
   - method: DELETE
     path: /circles/{circleId}
 
     operation: ArchiveCircle
+    commercial:
+      status: ready
     actor: persona
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    headers: [Idempotency-Key]
     application:
       kind: command
       facet: CircleLifecycleCommandFacet
@@ -155,39 +293,94 @@ api_routes:
       aggregate_owner: Circle
       mutation_target: Circle
       invariant_target: Circle
-    description: 归档圈子
+    description: 归档圈子；仅圈主，命名状态迁移，已归档时返回 no-op receipt
+    response_entity: CircleCommandResult
+    authorization: { principal: persona, ownership_policy: circle_owner_only }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.circle_version_conflict, CIRCLE.USER.circle_idempotency_conflict, CIRCLE.SYSTEM.circle_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_archive, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 700, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_contracts.dart
+      request_type: ArchiveCircleCommand
+      response_type: CircleCommandResult
+      request_encoder: encodeArchiveCircleCommand
+      response_decoder: decodeCircleCommandResult
 
   - method: GET
     path: /circles/{circleId}/feed
 
     operation: GetCircleFeed
+    commercial:
+      status: ready
     actor: none
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: CircleFeedQueryFacet
       method: getCircleFeed
       reader: CircleFeedReader
       slice: CircleFeedPageSlice
-    description: 圈子动态流
+    description: 圈子动态流；items 为 content Post 投影 wire，端侧经 content generated DTO 解码
     query_params: [identity, type, cursor, limit, sort]
+    authorization: { principal: public, ownership_policy: public_circle_read }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]
+    privacy: { request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only }
+    telemetry: { metric: circle_feed_get, trace: true, attributes: [outcome, sort] }
+    slo: { latency_p95_ms: 600, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleFeedQuery
+      response_type: CircleFeedPageSlice
+      request_encoder: encodeCircleFeedQuery
+      response_decoder: decodeCircleFeedPageSlice
 
   - method: GET
     path: /circles/{circleId}/stats
 
     operation: GetCircleStats
+    commercial:
+      status: ready
     actor: none
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
     application:
       kind: query
       facet: CircleAnalyticsQueryFacet
       method: getCircleStats
       reader: CircleStatsReader
       slice: CircleStatsSlice
-    description: 圈子统计
+    description: 圈子统计；返回体为 CircleStatsWire 松散投影（projections/circle_stats_wire.yaml）
+    authorization: { principal: public, ownership_policy: public_circle_read }
+    reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]
+    privacy: { request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only }
+    telemetry: { metric: circle_stats_get, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 350, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleStatsQuery
+      response_type: CircleStatsSlice
+      request_encoder: encodeCircleStatsQuery
+      response_decoder: decodeCircleStatsSlice
 
   - method: GET
     path: /circles/{circleId}/impact
 
     operation: GetCircleImpact
+    commercial:
+      status: ready
     actor: persona
     application:
       kind: query
@@ -199,12 +392,38 @@ api_routes:
     response_entity: CircleImpactSummary
     security:
       auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    authorization: { principal: persona, ownership_policy: public_circle_read }
+    reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
+    error_codes: [CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]
+    privacy: { request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only }
+    telemetry: { metric: circle_impact_get, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 500, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_query_contracts.dart
+      request_type: CircleImpactQuery
+      response_type: CircleImpactSlice
+      request_encoder: encodeCircleImpactQuery
+      response_decoder: decodeCircleImpactSlice
+
   # --- 板块配置 ---
   - method: PATCH
     path: /circles/{circleId}/sections
 
     operation: UpdateCircleSections
+    commercial:
+      status: ready
     actor: persona
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    headers: [Idempotency-Key]
     application:
       kind: command
       facet: CircleConfigurationCommandFacet
@@ -212,8 +431,21 @@ api_routes:
       aggregate_owner: Circle
       mutation_target: Circle
       invariant_target: Circle
-    description: 更新圈子主页板块配置（顺序+可见性）
+    description: 更新圈子主页板块配置（顺序+可见性）；owned entity 只经聚合根提交，服务端内部 version CAS
     request_entity: CircleSectionConfig
+    response_entity: CircleCommandResult
+    authorization: { principal: persona, ownership_policy: circle_owner_or_admin }
+    reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_found, CIRCLE.USER.permission_denied, CIRCLE.USER.circle_archived, CIRCLE.USER.circle_version_conflict, CIRCLE.USER.circle_idempotency_conflict, CIRCLE.SYSTEM.circle_storage_write_failed]
+    privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
+    telemetry: { metric: circle_sections_update, trace: true, attributes: [outcome] }
+    slo: { latency_p95_ms: 700, availability_percent: 99.9 }
+    client_contract:
+      dart_import: ../circle/circle_contracts.dart
+      request_type: UpdateCircleSectionsCommand
+      response_type: CircleCommandResult
+      request_encoder: encodeUpdateCircleSectionsCommand
+      response_decoder: decodeCircleCommandResult
 
   # --- 存储空间 ---
 consumers:

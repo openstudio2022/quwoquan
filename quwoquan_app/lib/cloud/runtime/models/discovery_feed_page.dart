@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
 /// 首页发现流强类型 envelope。
@@ -8,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 class DiscoveryFeedPage {
   const DiscoveryFeedPage({
     required this.items,
+    this.objectCards = const <FeedObjectCardDto>[],
     this.nextCursor,
     this.feedRequestId,
     this.rankingVersion,
@@ -17,6 +19,10 @@ class DiscoveryFeedPage {
   });
 
   final List<PostBaseDto> items;
+
+  /// 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在 items[anchorIndex] 之前；
+  /// 空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
+  final List<FeedObjectCardDto> objectCards;
   final String? nextCursor;
 
   /// 服务端权威下发的归因 id（frq_ 前缀）；端侧回显 + 透传行为事件。

@@ -2,6 +2,10 @@
 // ignore_for_file: constant_identifier_names
 
 enum AssistantErrorCode {
+  runNotFound('ASSISTANT.USER.run_not_found', '本次执行不存在或已失效', 404),
+  runInvalidArgument('ASSISTANT.USER.run_invalid_argument', '执行请求参数有误', 400),
+  runIdempotencyConflict('ASSISTANT.USER.run_idempotency_conflict', '请求重复提交，请刷新后重试', 409),
+  runStorageUnavailable('ASSISTANT.SYSTEM.run_storage_unavailable', '助手执行服务暂不可用，请稍后重试', 503),
   skillConsentRequired('ASSISTANT.USER.skill_consent_required', '该能力需要先授权后使用', 403),
   invalidActionPayload('ASSISTANT.USER.invalid_action_payload', '建议动作数据格式有误，请重试', 400),
   streamUnavailable('ASSISTANT.SYSTEM.stream_unavailable', '流式服务暂不可用，已切换为普通回复', 503),
@@ -32,6 +36,10 @@ class AssistantErrorMessages {
   const AssistantErrorMessages._();
 
   static const Map<AssistantErrorCode, String> zh = <AssistantErrorCode, String>{
+    AssistantErrorCode.runNotFound: '本次执行不存在或已失效',
+    AssistantErrorCode.runInvalidArgument: '执行请求参数有误',
+    AssistantErrorCode.runIdempotencyConflict: '请求重复提交，请刷新后重试',
+    AssistantErrorCode.runStorageUnavailable: '助手执行服务暂不可用，请稍后重试',
     AssistantErrorCode.skillConsentRequired: '该能力需要先授权后使用',
     AssistantErrorCode.invalidActionPayload: '建议动作数据格式有误，请重试',
     AssistantErrorCode.streamUnavailable: '流式服务暂不可用，已切换为普通回复',
@@ -44,6 +52,10 @@ class AssistantErrorMessages {
   };
 
   static const Map<AssistantErrorCode, String> en = <AssistantErrorCode, String>{
+    AssistantErrorCode.runNotFound: 'Assistant run not found or expired',
+    AssistantErrorCode.runInvalidArgument: 'Assistant run request is invalid',
+    AssistantErrorCode.runIdempotencyConflict: 'Duplicate request, please refresh and retry',
+    AssistantErrorCode.runStorageUnavailable: 'Assistant run service is temporarily unavailable',
     AssistantErrorCode.skillConsentRequired: 'This capability requires consent before use',
     AssistantErrorCode.invalidActionPayload: 'Suggested action payload is invalid, please retry',
     AssistantErrorCode.streamUnavailable: 'Streaming is temporarily unavailable; switched to standard response',

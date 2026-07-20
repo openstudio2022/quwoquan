@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import {
+  fetchGrowthOverview,
   fetchPlatformAudits,
   fetchProductEventDrilldown,
   fetchProductEventSummary,
@@ -13,6 +14,7 @@ import {
   fetchProductWorkflows,
   fetchRecommendationBehaviorMetrics,
   fetchReleases,
+  type GrowthOverviewResponse,
   type PlatformAuditItem,
   type ProductEventDrilldownItem,
   type ProductEventSummary,
@@ -33,9 +35,13 @@ export function OverviewDashboardPage() {
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
   const [pageAccessSummary, setPageAccessSummary] = useState<ProductEventSummary | null>(null);
+  const [businessSummary, setBusinessSummary] = useState<ProductEventSummary | null>(null);
+  const [qoeSummary, setQoeSummary] = useState<ProductEventSummary | null>(null);
   const [behaviorMetrics, setBehaviorMetrics] = useState<RecommendationBehaviorMetrics | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
   const [l1l4Metrics, setL1l4Metrics] = useState<ProductMetricItem[]>([]);
+  const [growth, setGrowth] = useState<GrowthOverviewResponse | null>(null);
+  const [growthError, setGrowthError] = useState<RuntimeError | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
@@ -52,16 +58,20 @@ export function OverviewDashboardPage() {
       fetchReleases(),
       fetchProductProjectionSummary(),
       fetchProductEventSummary({ eventType: 'page_open', from: closedFrom, to: closedTo.toISOString() }),
+      fetchProductEventSummary({ from: closedFrom, to: closedTo.toISOString() }),
+      fetchProductEventSummary({ eventType: 'video_playback_qoe', from: closedFrom, to: closedTo.toISOString() }),
       fetchRecommendationBehaviorMetrics(),
       fetchProductEventDrilldown({ from: rawFrom, to: rawTo, limit: 6 }),
       fetchProductL1L4Metrics({}),
     ])
-      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, behaviorItem, drilldown, l1l4Payload]) => {
+      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, businessItem, qoeItem, behaviorItem, drilldown, l1l4Payload]) => {
         setAudits(auditItems);
         setWorkflows(workflowItems);
         setReleases(releaseItems);
         setSummary(summaryItem);
         setPageAccessSummary(pageAccessItem);
+        setBusinessSummary(businessItem);
+        setQoeSummary(qoeItem);
         setBehaviorMetrics(behaviorItem);
         setDrilldownItems(drilldown.items);
         setL1l4Metrics(l1l4Payload.items);
@@ -71,6 +81,15 @@ export function OverviewDashboardPage() {
       .catch((error) => {
         setRemoteReady(false);
         setRuntimeError(coerceRuntimeError(error));
+      });
+    fetchGrowthOverview(30)
+      .then((payload) => {
+        setGrowth(payload);
+        setGrowthError(null);
+      })
+      .catch((error) => {
+        setGrowth(null);
+        setGrowthError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -132,6 +151,27 @@ export function OverviewDashboardPage() {
     () => new Set(behaviorMetrics?.series.map((item) => item.labels.state).filter(Boolean) ?? []).size,
     [behaviorMetrics],
   );
+  const pageUsageRows = useMemo(
+    () =>
+      Object.entries(pageAccessSummary?.dimensions.pageName ?? {})
+        .sort(([, left], [, right]) => right - left)
+        .slice(0, 8),
+    [pageAccessSummary],
+  );
+  const funnelRows = useMemo(() => {
+    const dimensions = businessSummary?.dimensions ?? {};
+    const rows = [
+      ['journey', dimensions.journey ?? {}],
+      ['action', dimensions.action ?? {}],
+      ['result', dimensions.result ?? {}],
+    ] as const;
+    return rows.flatMap(([stage, values]) =>
+      Object.entries(values)
+        .sort(([, left], [, right]) => right - left)
+        .slice(0, 4)
+        .map(([name, count]) => ({ stage, name, count })),
+    );
+  }, [businessSummary]);
 
   return (
     <PageScaffold
@@ -140,19 +180,14 @@ export function OverviewDashboardPage() {
       meta={
         <>
           <span className="badge badge--neutral">总览 / Dashboard</span>
-          <span className="badge badge--success">健康基线稳定</span>
+          <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
+            {remoteReady ? '控制面已连接' : '等待控制面'}
+          </span>
           <span className="badge badge--warning">{summary?.pendingDualReview ?? 0} 个流程接近 SLA</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实总览数据已接入' : '等待控制面连接'}
           </span>
           <RuntimeErrorBadge error={runtimeError} />
-        </>
-      }
-      actions={<button className="button button--primary">创建跨域观察视图</button>}
-      footer={
-        <>
-          <button className="button">导出日报</button>
-          <button className="button button--primary">进入统一工作台</button>
         </>
       }
     >
@@ -237,8 +272,61 @@ export function OverviewDashboardPage() {
         </div>
       </SectionCard>
 
+      <SectionCard
+        title="用户规模与留存（user_activity_daily）"
+        subtitle="DAU/WAU/MAU、PV 与 D1/D7 留存来自天级活跃聚合（sessionId actor 段去重），业界标准口径"
+      >
+        {growthError ? <RuntimeErrorBadge error={growthError} /> : null}
+        <div className="section-grid section-grid--cards">
+          <KpiCard
+            label="今日 DAU"
+            value={String(growth?.todayDau ?? 0)}
+            icon={<Activity size={20} color="#2563EB" />}
+            trendLabel={`PV ${growth?.todayPv ?? 0}`}
+            trendTone="positive"
+            description="当日 distinct 活跃用户（actorHash 去重）。"
+          />
+          <KpiCard
+            label="WAU / MAU"
+            value={`${growth?.wau ?? 0} / ${growth?.mau ?? 0}`}
+            icon={<Sparkles size={20} color="#16A34A" />}
+            trendLabel="7 / 30 天窗口 union 去重"
+            trendTone="positive"
+            description="周活与月活（跨日 union 去重，非累加）。"
+          />
+          <KpiCard
+            label="D1 留存"
+            value={`${(growth?.d1RetentionPercent ?? 0).toFixed(1)}%`}
+            icon={<ShieldCheck size={20} color="#2563EB" />}
+            trendLabel="cohort ∩ 次日活跃"
+            trendTone={(growth?.d1RetentionPercent ?? 0) >= 30 ? 'positive' : 'warning'}
+            description="首见 cohort 的次日回访比例。"
+          />
+          <KpiCard
+            label="D7 留存"
+            value={`${(growth?.d7RetentionPercent ?? 0).toFixed(1)}%`}
+            icon={<AlertTriangle size={20} color="#F59E0B" />}
+            trendLabel="cohort ∩ 第 7 日活跃"
+            trendTone={(growth?.d7RetentionPercent ?? 0) >= 15 ? 'positive' : 'warning'}
+            description="首见 cohort 的第 7 日回访比例。"
+          />
+        </div>
+        <div style={{ width: '100%', height: 240, marginTop: 16 }}>
+          <ResponsiveContainer>
+            <AreaChart data={growth?.days ?? []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" hide />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Area type="monotone" dataKey="dau" stroke="#2563EB" fill="#DBEAFE" name="DAU" />
+              <Area type="monotone" dataKey="newActors" stroke="#16A34A" fill="#DCFCE7" name="新增" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </SectionCard>
+
       <div className="section-grid section-grid--two">
-        <SectionCard title="治理负载与处理趋势" subtitle="按天观察创建量、解决量和 SLA 风险">
+        <SectionCard title="治理负载与处理趋势" subtitle="当前控制面闭合窗口的创建量、解决量和 SLA 风险">
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>
               <AreaChart data={moderationTrend}>
@@ -307,7 +395,7 @@ export function OverviewDashboardPage() {
               <tr>
                 <td>产品日志 freshness</td>
                 <td>{pageAccessSummary?.freshness ?? 'n/a'}</td>
-                <td>{pageAccessSummary?.source ?? 'n/a'}</td>
+                <td>{pageAccessSummary?.sourceKind ?? 'n/a'}</td>
               </tr>
             </tbody>
           </table>
@@ -339,8 +427,61 @@ export function OverviewDashboardPage() {
         </SectionCard>
       </div>
 
+      <SectionCard
+        title="运营基本盘：PV / 会话 UV / 漏斗 / 页面使用强度"
+        subtitle="24 小时闭合窗口；PV、UV、漏斗与轻量页面热力均来自统一事件事实源"
+      >
+        <div className="section-grid section-grid--two">
+          <div>
+            <h3 className="item-title">PV / 会话 UV / QoE</h3>
+            <div className="stack-list">
+              <div className="case-item">
+                <span>page_open PV</span>
+                <strong>{pageAccessSummary?.totalCount ?? 0}</strong>
+              </div>
+              <div className="case-item">
+                <span>session UV</span>
+                <strong>{pageAccessSummary?.sessionCount ?? 0}</strong>
+              </div>
+              <div className="case-item">
+                <span>video QoE samples</span>
+                <strong>{qoeSummary?.totalCount ?? 0}</strong>
+              </div>
+            </div>
+            <p className="item-subtitle">
+              数据窗口：{pageAccessSummary?.actualFrom ?? 'n/a'} → {pageAccessSummary?.actualTo ?? 'n/a'}；
+              {pageAccessSummary?.sourceKind ?? 'n/a'}
+            </p>
+          </div>
+          <div>
+            <h3 className="item-title">journey → action → result 漏斗</h3>
+            <div className="stack-list">
+              {funnelRows.map((row) => (
+                <div className="case-item" key={`${row.stage}:${row.name}`}>
+                  <span>{row.stage} / {row.name}</span>
+                  <strong>{row.count}</strong>
+                </div>
+              ))}
+              {funnelRows.length === 0 ? <div className="item-subtitle">暂无闭合窗口漏斗事件</div> : null}
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <h3 className="item-title">页面使用强度（pageName 聚合热力）</h3>
+          <div className="stack-list">
+            {pageUsageRows.map(([pageName, count]) => (
+              <div className="case-item" key={pageName}>
+                <span>{pageName}</span>
+                <strong>{count}</strong>
+              </div>
+            ))}
+            {pageUsageRows.length === 0 ? <div className="item-subtitle">暂无页面访问事件</div> : null}
+          </div>
+        </div>
+      </SectionCard>
+
       <div className="section-grid section-grid--two">
-        <SectionCard title="配置灰度健康" subtitle="沿用 5% -> 25% -> 50% -> 100% 的统一放量阶梯（成功率/延迟待 SLO 落点）">
+        <SectionCard title="配置灰度健康" subtitle="仅展示控制面真实回读的阶段与状态；成功率和延迟等待 Prometheus SLO 落点">
           <table className="table">
             <thead>
               <tr>

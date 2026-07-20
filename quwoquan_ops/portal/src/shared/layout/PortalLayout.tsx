@@ -1,34 +1,45 @@
-import { Bell, ChevronDown, Search } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Search } from 'lucide-react';
+import { useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import { portalMenu } from '../../generated/control-plane/portalMenu.generated.js';
 import { portalShell } from '../../generated/control-plane/portalShell.generated.js';
 import { getPortalIcon } from '../navigation/icons.js';
 import { usePortalScope } from './PortalContext.js';
+import { usePortalAuth } from '../auth/portalAuth.js';
 
-function buildMenuGroups() {
-  const roots = [...portalMenu.menus]
-    .filter((item) => !('parent_menu_id' in item) || !item.parent_menu_id)
+export function buildMenuGroups(hasPermission: (permission: string) => boolean) {
+  const visibleMenus = portalMenu.menus.filter((item) =>
+    hasPermission(item.permission_scope),
+  );
+  const visibleMenuIds = new Set(visibleMenus.map((item) => item.menu_id));
+  const roots = visibleMenus
+    .filter(
+      (item) =>
+        !('parent_menu_id' in item) ||
+        !item.parent_menu_id ||
+        !visibleMenuIds.has(item.parent_menu_id),
+    )
     .sort((a, b) => a.order - b.order);
 
   return roots.map((root) => ({
     root,
-    children: portalMenu.menus
+    children: visibleMenus
       .filter((item) => 'parent_menu_id' in item && item.parent_menu_id === root.menu_id)
       .sort((a, b) => a.order - b.order)
       .map((child) => ({
         child,
-        grandchildren: portalMenu.menus
+        grandchildren: visibleMenus
           .filter((item) => 'parent_menu_id' in item && item.parent_menu_id === child.menu_id)
           .sort((a, b) => a.order - b.order),
       })),
   }));
 }
 
-const menuGroups = buildMenuGroups();
-
 export function PortalLayout() {
   const { environment, setEnvironment } = usePortalScope();
+  const { claims, hasPermission, logout } = usePortalAuth();
+  const menuGroups = useMemo(() => buildMenuGroups(hasPermission), [hasPermission]);
 
   return (
     <div className="portal-root">
@@ -144,6 +155,10 @@ export function PortalLayout() {
               <Bell size={16} />
               {portalShell.notification_channels.length} 类通知
             </div>
+            <button type="button" className="portal-button portal-button--ghost" onClick={logout} title="退出登录">
+              <LogOut size={16} />
+              {claims.name || claims.email || claims.sub || 'operator'}
+            </button>
           </div>
         </header>
         <Outlet />

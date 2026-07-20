@@ -13,7 +13,9 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rtoperation "quwoquan_service/runtime/operation"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/application"
+	"quwoquan_service/services/assistant-service/internal/application/tool"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/environmentseed"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
@@ -33,6 +35,7 @@ func TestConsentRoutesRequireVerifiedAccountAndIgnoreForgedHeader(t *testing.T) 
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -88,6 +91,7 @@ func TestHandleReportInteractionEvent_BatchWrapperAndHeaders(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -125,13 +129,6 @@ func TestHandleReportInteractionEvent_BatchWrapperAndHeaders(t *testing.T) {
 	if resp["resource"] != "interaction_event_batch" {
 		t.Fatalf("resource=%v, want interaction_event_batch", resp["resource"])
 	}
-	items, err := service.ListAssistantMemories(context.Background(), "user_1", 10)
-	if err != nil {
-		t.Fatalf("ListAssistantMemories error: %v", err)
-	}
-	if len(items.Items) != 1 {
-		t.Fatalf("memories=%d, want 1", len(items.Items))
-	}
 }
 
 func TestHandleReportScorecard_BatchWrapper(t *testing.T) {
@@ -139,6 +136,7 @@ func TestHandleReportScorecard_BatchWrapper(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -155,7 +153,7 @@ func TestHandleReportScorecard_BatchWrapper(t *testing.T) {
 		},
 	}
 	payload, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/assistant/learning/scorecards", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/internal/assistant/learning/scorecards", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -180,6 +178,7 @@ func TestHandleGetLearningOpsSummary(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 	_, err := service.ReportInteractionEvents(context.Background(), []assistant.InteractionEvent{{
 		EventID:       "evt_ops_http_1",
@@ -216,6 +215,7 @@ func TestAssistantDoesNotExposeNotificationRoutes(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 	)
 	handler := NewHandler(service).Routes()
 	for _, route := range []struct {
@@ -241,7 +241,9 @@ func TestHandleSuggestCreationAssistance(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+		application.WithCreationSuggestGrounding(httpCreationGrounding{}),
 	)
 	if _, err := service.CreateSkillSubscription(context.Background(), "user_creation", assistant.CreateSkillSubscriptionInput{
 		SkillID:  "creation_assistant",
@@ -277,11 +279,34 @@ func TestHandleSuggestCreationAssistance(t *testing.T) {
 	}
 }
 
+type httpCreationGrounding struct{}
+
+func (httpCreationGrounding) ResolveTagRefs(context.Context, []string) ([]string, error) {
+	return []string{"Topic/旅行"}, nil
+}
+
+func (httpCreationGrounding) ResolveHomepages(
+	_ context.Context,
+	ids []string,
+) ([]assistant.AssistantSuggestedHomepageView, error) {
+	if len(ids) == 0 {
+		return []assistant.AssistantSuggestedHomepageView{}, nil
+	}
+	return []assistant.AssistantSuggestedHomepageView{{
+		ID:                ids[0],
+		Type:              "sight",
+		CanonicalEntityID: "entity_emeishan",
+		DisplayName:       "峨眉山",
+		Reason:            "已作为主关联主页",
+	}}, nil
+}
+
 func TestHandleTickIntersectionReminders(t *testing.T) {
 	service := application.NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithNotificationAppMessageCommandWriter(httpNotificationCommandWriter{}),
 		application.WithIntersectionInboxReader(httpFakeIntersectionInboxReader{reasons: []application.IntersectionReminderReason{{
 			ReasonID:    "reason_http_1",
@@ -324,6 +349,7 @@ func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
 		application.WithNotificationAppMessageCommandWriter(httpNotificationCommandWriter{}),
 	)
@@ -375,7 +401,7 @@ func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), resumeReq)
 
 	tickPayload, _ := json.Marshal(map[string]any{"now": "2026-04-29T08:00:00Z"})
-	tickReq := httptest.NewRequest(http.MethodPost, "/assistant/skill-subscriptions/cron/tick", bytes.NewReader(tickPayload))
+	tickReq := httptest.NewRequest(http.MethodPost, "/internal/assistant/skill-subscriptions:tick", bytes.NewReader(tickPayload))
 	tickReq.Header.Set("Content-Type", "application/json")
 	tickReq.Header.Set("X-Client-User-Id", "user_sub_1")
 	tickResp := httptest.NewRecorder()
@@ -397,6 +423,8 @@ func TestHandleConversationTurnStream(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		application.WithAgentLoop(newDeterministicHTTPTestAgentLoop()),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -465,6 +493,8 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		application.WithAgentLoop(newDeterministicHTTPTestAgentLoop()),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -564,6 +594,8 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		application.WithAgentLoop(newDeterministicHTTPTestAgentLoop()),
 	)
 	handler := NewHandler(service).Routes()
 	pack, err := environmentseed.LoadAssistantScenarioPack()
@@ -594,6 +626,63 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandleTurnStreamRejectsResumeTokenFromAnotherRun(t *testing.T) {
+	store := persistence.NewMemoryConversationRunStore()
+	_, _, err := store.InsertTurn(t.Context(), assistant.AssistantTurn{
+		TurnID:         "turn-resume-owner",
+		ConversationID: "conv-resume-owner",
+		UserID:         "user-resume-owner",
+		Status:         "completed",
+		AnswerText:     "done",
+		StreamState: assistant.AssistantTurnStreamState{
+			LastSeq:     3,
+			Completed:   true,
+			ResumeToken: streaming.NewResumeToken("turn-resume-owner", 3),
+		},
+		CreatedAt: time.Date(2026, 7, 20, 15, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("seed turn: %v", err)
+	}
+	service := application.NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(store),
+	)
+	request := httptest.NewRequest(http.MethodGet, "/assistant/runs/turn-resume-owner/events", nil)
+	request.Header.Set("X-Client-User-Id", "user-resume-owner")
+	request.Header.Set("Last-Event-ID", streaming.NewResumeToken("another-run", 1))
+	response := httptest.NewRecorder()
+	NewHandler(service).Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte("ASSISTANT.USER.run_invalid_argument")) {
+		t.Fatalf("body=%s", response.Body.String())
+	}
+}
+
+func TestRunResumeAfterSeqAcceptsMetadataQueryToken(t *testing.T) {
+	const runID = "turn-resume-query"
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/assistant/runs/"+runID+"/events",
+		nil,
+	)
+	query := request.URL.Query()
+	query.Set("resumeToken", streaming.NewResumeToken(runID, 7))
+	request.URL.RawQuery = query.Encode()
+
+	afterSeq, err := runResumeAfterSeq(request, runID)
+	if err != nil {
+		t.Fatalf("runResumeAfterSeq() error = %v", err)
+	}
+	if afterSeq != 7 {
+		t.Fatalf("afterSeq = %d, want 7", afterSeq)
 	}
 }
 
@@ -672,12 +761,48 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 	return streamResp.Body.String()
 }
 
+func newDeterministicHTTPTestAgentLoop() *application.AgentLoop {
+	registry := tool.BaseRegistry()
+	registry.Register(tool.AppSearchMetadata(), func(_ context.Context, _ tool.Request) (tool.Result, error) {
+		return tool.Result{Output: map[string]any{
+			"provider": "test_search_adapter",
+			"summary":  "站内检索测试结果",
+			"results": []map[string]any{{
+				"target":   "article",
+				"objectId": "post_test",
+				"title":    "站内检索测试结果",
+			}},
+			"citations": []map[string]any{},
+			"provenance": map[string]any{
+				"provider":     "test_search_adapter",
+				"indexVersion": "test",
+			},
+		}}, nil
+	})
+	registry.Register(tool.WebSearchMetadata(), func(_ context.Context, _ tool.Request) (tool.Result, error) {
+		return tool.Result{Output: map[string]any{
+			"provider":   "test_web_adapter",
+			"summary":    "公开网络检索测试结果",
+			"references": []map[string]any{},
+		}}, nil
+	})
+	return application.NewAgentLoop(
+		application.DefaultSkillRuntime{},
+		application.ReactRuntime{
+			Model: application.DeterministicModelProvider{},
+			Tools: application.DefaultToolCoordinator{Registry: registry},
+		},
+		nil,
+	)
+}
+
 func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 4, 29, 3, 20, 0, 0, time.UTC) }
 	service := application.NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
+		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithAgentLoop(application.NewAgentLoop(
 			application.DefaultSkillRuntime{},
 			application.ReactRuntime{

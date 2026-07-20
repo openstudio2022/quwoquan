@@ -39,6 +39,17 @@ type ListReportsQuery struct {
 	Limit int
 }
 
+type ListMyReportsQuery struct {
+	ReporterID string
+	Cursor     string
+	Limit      int
+}
+
+type MyReportCursor struct {
+	CreatedAt time.Time
+	ID        string
+}
+
 type ReportCommandResult struct {
 	ID       string             `json:"id"`
 	Version  int64              `json:"version"`
@@ -78,6 +89,23 @@ type ReportQueueSlice struct {
 	Total int                    `json:"total"`
 }
 
+type MyReportItemSlice struct {
+	ID          string                 `json:"id"`
+	TargetType  reportmodel.TargetType `json:"targetType"`
+	TargetID    string                 `json:"targetId"`
+	Reason      reportmodel.Reason     `json:"reason"`
+	Description string                 `json:"description,omitempty"`
+	Status      reportmodel.Status     `json:"status"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
+	ResolvedAt  *time.Time             `json:"resolvedAt,omitempty"`
+}
+
+type MyReportPageSlice struct {
+	Items      []MyReportItemSlice `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
 type DetailReader interface {
 	FindByID(
 		ctx context.Context,
@@ -87,4 +115,13 @@ type DetailReader interface {
 
 type QueueReader interface {
 	List(ctx context.Context, limit int) (ReportQueueSlice, error)
+}
+
+type MyReportReader interface {
+	ListByReporter(
+		ctx context.Context,
+		reporterID string,
+		cursor *MyReportCursor,
+		limit int,
+	) ([]MyReportItemSlice, error)
 }

@@ -29,7 +29,7 @@ from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
 from quwoquan_ops.cli.lib.local_media_origin import LocalMediaOriginHandler
 from quwoquan_ops.cli.lib.mock_public_plane import MockPublicPlaneHandler
-from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_tier_command
+from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_profile_command
 
 ROOT = Path(__file__).resolve().parents[4]
 _ASSISTANT_BETA_GATEWAY_PATH = (
@@ -348,11 +348,30 @@ class DevUpTest(unittest.TestCase):
             "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
             video_check["url"],
         )
+        cover_check = next(
+            item
+            for item in checks
+            if item["name"] == "media-public-media-canary-seek-125s-cover"
+        )
+        self.assertNotIn("headers", cover_check)
+        self.assertNotIn("expectedStatus", cover_check)
+        self.assertEqual(cover_check["expectedContentTypePrefix"], "image/webp")
+        preview_manifest_check = next(
+            item
+            for item in checks
+            if item["name"]
+            == "media-public-media-canary-seek-125s-preview-manifest"
+        )
+        self.assertNotIn("headers", preview_manifest_check)
+        self.assertEqual(
+            preview_manifest_check["expectedContentTypePrefix"],
+            "application/json",
+        )
 
     def test_stackctl_t4_blocks_on_full_seeded_media_surface(self) -> None:
         for env_name in ("alpha", "beta", "gamma"):
             with self.subTest(env_name=env_name):
-                command = _seeded_media_surface_tier_command(env_name, f"{env_name}-local")
+                command = _seeded_media_surface_profile_command(env_name, f"{env_name}-local")
                 self.assertIsNotNone(command)
                 assert command is not None
                 argv = command["argv"]

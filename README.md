@@ -46,7 +46,7 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 
 ```bash
 python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind runtime --include-services
-python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
 cd quwoquan_ops/portal && npm test && npm run build
 bash quwoquan_ops/gate/gate_repo.sh
 ```

@@ -17,6 +17,7 @@
 
 - 父节点：`assistant-run-learning` L1（助手运行与学习闭环能力边界）
 - 关键子节点：
+  - `assistant-runtime-foundation`（L2）：助手对象运行基座（conversation/run 持久化、订阅 lease、consent 门控、端侧对象级 Facet）
   - `learning-event-feedback-injection`（L2）：统一学习事件、反馈聚合、注入链路
   - `run-stream-policy`（L2）：运行与策略模板
   - `profile-proposal-apply-loop`（L2）：画像提案回流
@@ -28,7 +29,6 @@
 
 - [`learning-event-feedback-injection/spec.md`](./learning-event-feedback-injection/spec.md)
 - [`learning-event-feedback-injection/learning-event-ingestion/spec.md`](./learning-event-feedback-injection/learning-event-ingestion/spec.md)
-- [`learning-event-feedback-injection/树内计划文档`](./learning-event-feedback-injection/树内计划文档)
 
 ## 验收标准（L1 重点）
 - A1：Run/Stream、学习上报、反馈注入可用。

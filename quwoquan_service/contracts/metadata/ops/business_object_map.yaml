@@ -129,6 +129,13 @@ objects:
     - networkClass
     - durationMs
     - result
+    - callType
+    - participantCount
+    - connectTimeMs
+    - mediaConnected
+    - reconnectCount
+    - disconnectReason
+    - networkQuality
     - failReasonCode
     - errorCode
     - operationId
@@ -144,6 +151,16 @@ objects:
     - rebufferCount
     - rebufferMs
     - seekCount
+    - seekFailureCount
+    - seekCommandMaxMs
+    - seekSettleMaxMs
+    - droppedFrames
+    - processedVideoFrames
+    - audioUnderrunCount
+    - rendererMode
+    - decoderQueueMode
+    - decoderFallbackEnabled
+    - seekEvidenceSource
     - declaredDurationMs
     - observedDurationMs
     - durationMismatch
@@ -164,6 +181,7 @@ objects:
   member_bounds: {}
   mutation_entrypoints:
   - ReportEventBatch
+  - ReportRuntimeLogBatch
   - ReportStartupEventBatch
   object_kind: append_only_fact
   relationships: []
@@ -174,14 +192,15 @@ objects:
   local_identity_reasons:
     operationId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
 - access:
-    commands: append_only_sink
-    cross_context: event_only
+    commands: aggregate_facade
+    cross_context: public_contract_only
     queries: named_reader
   bounded_context: ProductOps
   canonical_object: VisitRecord
   event_consumers: []
   field_roles:
-    append_only_fact:
+    append_only_fact: []
+    authoritative_state:
     - userId
     - targetType
     - targetKey
@@ -190,7 +209,6 @@ objects:
     - sessionId
     - source
     - timestamp
-    authoritative_state: []
     owned_value: []
     projection: []
     reference: []
@@ -200,108 +218,57 @@ objects:
     - userId
     - targetType
     - targetKey
-    - timestamp
-    version_source: immutable
-  invariant_refs: []
-  lifecycle_refs: []
+    version_source: store_commit
+  invariant_refs:
+  - ops/visit_record/entity.yaml#business_rules
+  lifecycle_refs:
+  - ops/visit_record/entity.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints:
   - RecordVisit
-  object_kind: append_only_fact
+  object_kind: aggregate_root
   relationships: []
   source_document: ops/visit_record/fields.yaml
   source_entity: VisitRecord
   storage_backend: mongodb
-  storage_role: append_only
+  storage_role: authoritative
   local_identity_reasons:
     sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate reference
 - access:
-    commands: aggregate_facade
+    commands: none
     cross_context: public_contract_only
-    queries: named_reader
+    queries: external_port
   bounded_context: PlatformOps
-  canonical_object: ConfigLayer
+  canonical_object: ConfigSnapshot
   event_consumers: []
   field_roles:
     append_only_fact: []
-    authoritative_state:
-    - id
-    - version
-    - scopeLevel
-    - scopeId
-    - environment
-    - cluster
-    - service
-    - status
-    - createdAt
-    - updatedAt
-    owned_value:
-    - entries
-    projection: []
-    reference: []
-    transport_only: []
-  identity:
-    fields:
-    - id
-    version_field: version
-    version_source: field
-  invariant_refs:
-  - ops/config_layer/aggregate.yaml#business_rules
-  lifecycle_refs:
-  - ops/config_layer/aggregate.yaml#lifecycle
-  member_bounds:
-    ConfigEntry: 256
-  mutation_entrypoints:
-  - UpdateServiceConfig
-  object_kind: aggregate_root
-  relationships:
-  - access: aggregate_root
-    cardinality: 1:N
-    consistency: strong
-    kind: owned
-    name: entries
-    on_delete: cascade
-    reference_fields: []
-    target_object: ops.ConfigEntry
-  source_document: ops/config_layer/fields.yaml
-  source_entity: ConfigLayer
-  storage_backend: postgres
-  storage_role: authoritative
-  local_identity_reasons:
-    scopeId: ConfigLayer-local scope discriminator key; scope ownership is enforced by the ConfigLayer aggregate
-- access:
-    commands: via_aggregate_root
-    cross_context: forbidden
-    queries: via_aggregate_projection
-  aggregate_owner: ConfigLayer
-  bounded_context: PlatformOps
-  canonical_object: ConfigEntry
-  event_consumers: []
-  field_roles:
-    append_only_fact: []
-    authoritative_state:
-    - key
-    - kind
-    - stringValue
-    - intValue
-    - floatValue
-    - boolValue
+    authoritative_state: []
     owned_value: []
-    projection: []
+    projection:
+    - domain
+    - service
+    - environment
+    - files
+    - releaseVersions
+    - mergedSha256
+    - snapshotSource
     reference: []
     transport_only: []
   identity:
     fields:
-    - key
-    version_source: owner
+    - environment
+    - service
+    version_source: external
   invariant_refs:
-  - ops/config_layer/aggregate.yaml#business_rules
+  - ops/config_layer/entity.yaml#business_rules
   lifecycle_refs:
-  - ops/config_layer/aggregate.yaml#lifecycle
+  - ops/config_layer/entity.yaml#lifecycle
   member_bounds: {}
   mutation_entrypoints: []
-  object_kind: owned_entity
+  object_kind: external_reference
   relationships: []
   source_document: ops/config_layer/fields.yaml
-  source_entity: ConfigEntry
-  storage_role: owned
+  source_entity: ConfigSnapshotView
+  storage_backend: external
+  storage_role: external

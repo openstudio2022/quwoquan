@@ -16,7 +16,8 @@ capabilities:
   - queryable
 
 ddd_layer_mapping:
-  domain_model: internal/domain/tag/model
-  repository: internal/domain/tag/repository
-  application: internal/application/tag
-  adapter_rest: internal/adapter/rest/tag
+  domain_model: services/tag-service/internal/domain/tag/model
+  ports: services/tag-service/internal/domain/tag/ports
+  application: services/tag-service/internal/application
+  adapter_rest: services/tag-service/internal/adapters/http
+  infrastructure: services/tag-service/internal/infrastructure/persistence

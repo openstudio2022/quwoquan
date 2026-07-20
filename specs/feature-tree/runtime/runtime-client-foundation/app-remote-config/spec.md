@@ -1,4 +1,4 @@
-# L3：App 远程运营配置（app-remote-config）
+# L3 特性：App 远程运营配置（app-remote-config）
 
 ## 背景与目标
 

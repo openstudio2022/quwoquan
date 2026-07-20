@@ -132,7 +132,6 @@ objects:
     - latencyMs
     - status
     - satisfactionScore
-    - contextEmbedding
     - createdAt
     - completedAt
     - userId
@@ -156,8 +155,10 @@ objects:
   - assistant/assistant_run/aggregate.yaml#business_rules
   lifecycle_refs:
   - assistant/assistant_run/aggregate.yaml#lifecycle
-  member_bounds: {}
+  member_bounds:
+    AssistantPreferenceSnapshot: 32
   mutation_entrypoints:
+  - CancelAssistantRun
   - ReportPageContext
   - StartAssistantRun
   object_kind: aggregate_root
@@ -215,6 +216,73 @@ objects:
     skillId: stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store
       identity
     sourceSurfaceId: generated route, surface, or operation registry key used only for navigation or telemetry attribution
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Assistant
+  canonical_object: AssistantPreferenceFact
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - preferenceId
+    - userId
+    - scope
+    - conversationId
+    - kind
+    - value
+    - sourceType
+    - status
+    - revokedAt
+    - revocationDeadline
+    - createdAt
+    - updatedAt
+    - version
+    owned_value: []
+    projection: []
+    reference:
+    - userId
+    - conversationId
+    transport_only: []
+  identity:
+    fields:
+    - preferenceId
+    version_field: version
+    version_source: field
+  invariant_refs:
+  - assistant/assistant_preference_fact/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - assistant/assistant_preference_fact/aggregate.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - SetAssistantPreference
+  - RevokeAssistantPreference
+  - RestoreAssistantPreference
+  object_kind: aggregate_root
+  relationships:
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: accountOwner
+    on_delete: retain
+    reference_fields:
+    - userId
+    target_object: user.UserAccount
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: conversation
+    on_delete: retain
+    reference_fields:
+    - conversationId
+    target_object: assistant.AssistantConversation
+  source_document: assistant/assistant_preference_fact/fields.yaml
+  source_entity: AssistantPreferenceFact
+  storage_backend: mongodb
+  storage_role: authoritative
 - access:
     commands: aggregate_facade
     cross_context: public_contract_only

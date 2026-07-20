@@ -29,8 +29,8 @@ def _receipt() -> ReleaseAttestation:
         ),
         rollout_milestone=RolloutMilestone.CANARY,
         entity_count=3,
-        post_count=0,
-        creator_count=0,
+        post_count=9,
+        creator_count=3,
         tag_count=0,
         canonical_merkle="sha256:" + "a" * 64,
         source_digest=current_source_digest(),
@@ -43,6 +43,39 @@ def test_release_attestation__typed_receipt__contract__local_contract() -> None:
     document = _receipt().to_document()
 
     assert ReleaseAttestation.from_document(document) == _receipt()
+
+
+def test_release_attestation__allows_post_only_lane_release__contract__local_contract() -> None:
+    document = _receipt().to_document()
+    document.update(
+        {
+            "releaseId": "20260718--travel-article-cold-start--cn-zhejiang--m1-001",
+            "executionIds": [
+                "20260718--travel-article-cold-start--cn-zhejiang--m1-001"
+            ],
+            "rolloutMilestone": RolloutMilestone.M1.value,
+            "entityCount": 0,
+            "postCount": 100,
+        }
+    )
+
+    receipt = ReleaseAttestation.from_document(document)
+
+    assert receipt.entity_count == 0
+    assert receipt.post_count == 100
+
+
+def test_release_attestation__rejects_content_without_objects__contract__local_contract() -> None:
+    document = _receipt().to_document()
+    document["entityCount"] = 0
+    document["postCount"] = 0
+
+    try:
+        ReleaseAttestation.from_document(document)
+    except ReleaseAttestationError as exc:
+        assert "canonical entities or posts" in str(exc)
+    else:
+        raise AssertionError("content release without canonical objects must block")
 
 
 def test_release_attestation__rejects_baseline_with_objects__contract__local_contract() -> None:

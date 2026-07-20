@@ -3,18 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
   setUp(() {
@@ -208,6 +210,51 @@ void main() {
       expect(state.imagePaths, isEmpty);
     },
   );
+
+  testWidgets('Android 无原生剪辑实现时保留原视频并给出可直接发布的降级提示', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildHarness(
+        initialAction: EditorStartAction.video,
+        capabilities: platformCapabilitiesFor(AppPlatform.android),
+        mediaPickerLauncher:
+            (
+              context, {
+              required mode,
+              required maxSelection,
+              List<String> initialPaths = const <String>[],
+            }) async {
+              return CreateMediaPickerResult(
+                items: <CreateMediaItem>[
+                  _item('video_android', CreateMediaType.video),
+                ],
+              );
+            },
+        videoPreparationProbe: (_) async {
+          return const CreateVideoPreparationResult(
+            durationMs: 9000,
+            thumbnailPath: '/tmp/video_android_cover.jpg',
+            width: 1080,
+            height: 1920,
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    final state = container.read(createEditorProvider);
+    expect(state.videoPath, '/tmp/video_android');
+    expect(state.originalVideoPath, '/tmp/video_android');
+    expect(
+      find.text(UITextConstants.videoEditorCapabilityUnavailable),
+      findsOneWidget,
+    );
+    expect(find.byType(VideoEditorPage), findsNothing);
+  });
 }
 
 CreateMediaItem _item(String id, CreateMediaType type) {
@@ -224,6 +271,7 @@ Widget _buildHarness({
   CreateMediaPickerLauncher? mediaPickerLauncher,
   CreateVideoPreparationProbe? videoPreparationProbe,
   CreateVideoEditorLauncher? videoEditorLauncher,
+  PlatformCapabilities? capabilities,
 }) {
   return ProviderScope(
     overrides: [
@@ -232,6 +280,8 @@ Widget _buildHarness({
       ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      if (capabilities != null)
+        platformCapabilitiesProvider.overrideWithValue(capabilities),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -285,8 +335,8 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markLaunchPromptDismissed() async {}
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
@@ -294,14 +344,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
-  Future<void> saveRefreshedTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
 
   @override
   Future<void> saveRefreshedAccountHint(
-    Map<String, dynamic>? accountHint,
+    AccountHintSnapshot? accountHint,
   ) async {}
 
   @override

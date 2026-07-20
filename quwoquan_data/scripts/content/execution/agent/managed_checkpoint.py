@@ -10,9 +10,24 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     from content.execution.agent.checkpoint_prompts import _checkpoint_prompts
     from content.execution.agent.agent_runner import _terminate_workspace_cursor_bridges
     from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated, _terminate_managed_agent_subprocesses
+    from content.execution.agent.history import (
+        ManagedAgentRunRecord,
+        ManagedAgentScheduler,
+        save_managed_agent_run,
+    )
+    from content.execution.agent.outcome import (
+        AgentRunOutcome,
+        ManagedAgentJobOutcome,
+        coerce_agent_outcome,
+    )
     from content.execution.controller.homepage_author_finalization import _finalize_managed_homepage_outputs
-    from content.execution.controller.token_ledger import dedupe_agent_runs
     from content.execution.context import _managed_local_cursor_worker_cap
+    from core.control_types import (
+        AgentFailureKind,
+        AgentProvider,
+        ExecutionStage,
+        ManagedAgentCheckpointStatus,
+    )
     prompts = _checkpoint_prompts(ctx, stage)
     if not prompts:
         return False
@@ -39,20 +54,29 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
         "startedAt": checkpoint_started_at,
     }
-    previous_agent_run = state.last_agent_run
-    if isinstance(previous_agent_run, Mapping):
-        history = state.agent_run_history
-        if isinstance(history, list):
-            history.append(dict(previous_agent_run))
-            state.agent_run_history = list(dedupe_agent_runs(history))[-20:]
     state.last_agent_run = None
     save_execution_state(state)
-    runner = ctx.agent_runner or (lambda prompt: _default_managed_agent_runner_isolated(ctx, prompt))
+    if ctx.agent_runner is not None:
+        runner = ctx.agent_runner
+    else:
+        from dataclasses import replace
+
+        def runner(prompt: str):
+            object_ref = _managed_checkpoint_ref(ctx, stage, prompt)
+            scoped_ctx = replace(
+                ctx,
+                agent_usage_scope=(
+                    "content_object" if object_ref else "execution_stage"
+                ),
+                agent_content_object_ref=object_ref,
+                agent_execution_stage=stage,
+            )
+            return _default_managed_agent_runner_isolated(scoped_ctx, prompt)
     queued = list(range(len(prompts)))
     futures: dict[Any, tuple[int, str, float]] = {}
     active_by_lane: dict[str, int] = defaultdict(int)
     job_timings: dict[int, dict[str, Any]] = {}
-    outcomes: list[dict[str, Any]] = []
+    outcomes: list[ManagedAgentJobOutcome] = []
     pool = ThreadPoolExecutor(max_workers=worker_count)
     interrupted = False
     force_abort_pool = False
@@ -108,34 +132,32 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 timing["finishedAt"] = store.now_iso()
                 timing["durationSeconds"] = round(max(0.0, time.monotonic() - _started_at), 3)
                 try:
-                    outcome = future.result()
+                    outcome = coerce_agent_outcome(
+                        future.result(),
+                        label=f"managed agent runner {stage}/{index}",
+                    )
                 except Exception as exc:  # noqa: BLE001
-                    outcome = {
-                        "started": False,
-                        "status": "error",
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "retryable": False,
-                    }
-                outcome["jobIndex"] = index
-                outcome["timing"] = timing
+                    outcome = AgentRunOutcome.failed(
+                        AgentFailureKind.SDK_EXECUTION_FAILED,
+                        message=f"managed agent runner failed: {type(exc).__name__}: {exc}",
+                    )
                 checkpoint_ref = _managed_checkpoint_ref(ctx, stage, prompts[index])
-                if checkpoint_ref:
-                    outcome["ref"] = checkpoint_ref
-                if str(outcome.get("status")) == "finished":
+                job_outcome = ManagedAgentJobOutcome(
+                    outcome=outcome,
+                    job_index=index,
+                    lane=lane,
+                    ref=checkpoint_ref,
+                    timing=tuple(timing.items()),
+                )
+                if job_outcome.succeeded:
                     gate_issues = _managed_checkpoint_job_issues(
                         ctx,
                         stage=stage,
                         prompt=prompts[index],
                     )
                     if gate_issues:
-                        outcome["status"] = "error"
-                        outcome["error"] = (
-                            "agent finished but checkpoint lane gate still fails: "
-                            + "; ".join(str(item) for item in gate_issues[:8])
-                        )
-                        outcome["retryable"] = True
-                        outcome["gateIssues"] = [str(item) for item in gate_issues[:20]]
-                outcomes.append(outcome)
+                        job_outcome = job_outcome.with_gate_issues(tuple(gate_issues))
+                outcomes.append(job_outcome)
             now = time.monotonic()
             expired = [
                 (future, index, lane, started_at)
@@ -151,29 +173,20 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 timing["finishedAt"] = store.now_iso()
                 timing["durationSeconds"] = round(max(0.0, now - started_at), 3)
                 outcomes.append(
-                    {
-                        "started": False,
-                        "status": "error",
-                        "error": (
-                            f"managed agent future timed out after "
-                            f"{int(now - started_at)}s for {stage}/{lane}"
+                    ManagedAgentJobOutcome(
+                        outcome=AgentRunOutcome.failed(
+                            AgentFailureKind.FUTURE_TIMEOUT,
+                            message=(
+                                f"managed agent future timed out after "
+                                f"{int(now - started_at)}s for {stage}/{lane}"
+                            ),
+                            retryable=True,
                         ),
-                        "retryable": True,
-                        "errorType": "future_timeout",
-                        "jobIndex": index,
-                        "timing": timing,
-                        **(
-                            {"ref": checkpoint_ref}
-                            if (
-                                checkpoint_ref := _managed_checkpoint_ref(
-                                    ctx,
-                                    stage,
-                                    prompts[index],
-                                )
-                            )
-                            else {}
-                        ),
-                    }
+                        job_index=index,
+                        lane=lane,
+                        ref=_managed_checkpoint_ref(ctx, stage, prompts[index]),
+                        timing=tuple(timing.items()),
+                    )
                 )
                 if str(ctx.runtime) == "local":
                     _terminate_workspace_cursor_bridges(Path.cwd())
@@ -195,14 +208,14 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         terminated_subprocesses = _terminate_managed_agent_subprocesses()
         if str(ctx.runtime) == "local":
             _terminate_workspace_cursor_bridges(Path.cwd())
-        outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
+        outcomes.sort(key=lambda item: item.job_index)
         if stage == "post_author":
             _finalize_managed_author_outputs(ctx, prompts, outcomes)
         elif stage == "build_homepage":
-            _finalize_managed_homepage_outputs(ctx, prompts, outcomes)
-        finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
-        started_count = sum(bool(out.get("started")) for out in outcomes)
-        infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
+            outcomes = list(_finalize_managed_homepage_outputs(ctx, prompts, outcomes))
+        finished_count = sum(out.succeeded for out in outcomes)
+        started_count = sum(out.outcome.started for out in outcomes)
+        infrastructure_failures = sum(not out.outcome.started for out in outcomes)
         state = load_execution_state(ctx.execution_id)
         state.active_agent_scheduler = None
         resumable_author_interrupt = stage == "post_author"
@@ -223,44 +236,36 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         yield_reason = "managed checkpoint interrupted"
         if finished_count > 0:
             yield_reason = "managed checkpoint interrupted after partial author progress"
-        partial_record = {
-            "stage": stage,
-            "status": "interrupted",
-            "interruptReason": interrupt_reason,
-            "jobCount": len(outcomes),
-            "plannedJobCount": len(prompts),
-            "scheduler": {
-                "requestedMaxWorkers": int(ctx.max_workers or 1),
-                "effectiveWorkerCount": worker_count,
-                "localCursorMaxWorkers": _managed_local_cursor_worker_cap(ctx),
-                "runtime": str(ctx.runtime),
-                "promptCount": len(prompts),
-                "estimatedMinWaves": estimated_waves,
-                "laneLimits": dict(MANAGED_LANE_LIMITS),
-                "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
-                "startedAt": checkpoint_started_at,
-                "interruptedAt": interrupted_at,
-                "elapsedSeconds": round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
-            },
-            "refs": [
-                str(out.get("ref"))
-                for out in outcomes
-                if str(out.get("ref") or "").strip()
-            ],
-            "startedCount": started_count,
-            "finishedCount": finished_count,
-            "infrastructureFailures": infrastructure_failures,
-            "cancelledQueuedJobCount": cancelled_queued_count,
-            "cancelledActiveJobCount": cancelled_active_count,
-            "terminatedSubprocessPids": terminated_subprocesses,
-            "outcomes": outcomes,
-            "finishedAt": interrupted_at,
-        }
-        history = state.agent_run_history
-        if isinstance(history, list):
-            history.append(partial_record)
-            state.agent_run_history = list(dedupe_agent_runs(history))[-20:]
-        state.last_agent_run = partial_record
+        partial_record = ManagedAgentRunRecord(
+            stage=ExecutionStage(stage),
+            job_count=len(outcomes),
+            planned_job_count=len(prompts),
+            scheduler=ManagedAgentScheduler(
+                requested_max_workers=int(ctx.max_workers or 1),
+                effective_worker_count=worker_count,
+                local_cursor_max_workers=_managed_local_cursor_worker_cap(ctx),
+                runtime=str(ctx.runtime),
+                prompt_count=len(prompts),
+                estimated_min_waves=estimated_waves,
+                lane_limits=tuple(sorted(MANAGED_LANE_LIMITS.items())),
+                provider=AgentProvider(_normalize_managed_agent_provider(ctx.agent_provider)),
+                started_at=checkpoint_started_at,
+                finished_at=interrupted_at,
+                elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
+            ),
+            refs=tuple(out.ref for out in outcomes if out.ref),
+            started_count=started_count,
+            finished_count=finished_count,
+            infrastructure_failures=infrastructure_failures,
+            outcomes=tuple(outcomes),
+            finished_at=interrupted_at,
+            status=ManagedAgentCheckpointStatus.INTERRUPTED,
+            interrupt_reason=interrupt_reason,
+            cancelled_queued_job_count=cancelled_queued_count,
+            cancelled_active_job_count=cancelled_active_count,
+            terminated_subprocess_pids=tuple(terminated_subprocesses),
+        )
+        save_managed_agent_run(state, partial_record)
         if resumable_author_interrupt:
             state.managed_checkpoint_interruption = {
                 "stage": stage,
@@ -284,56 +289,48 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         raise
     finally:
         pool.shutdown(wait=not (interrupted or force_abort_pool), cancel_futures=True)
-    outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
+    outcomes.sort(key=lambda item: item.job_index)
     if stage == "post_author":
         _finalize_managed_author_outputs(ctx, prompts, outcomes)
     elif stage == "build_homepage":
-        _finalize_managed_homepage_outputs(ctx, prompts, outcomes)
-    started_count = sum(bool(out.get("started")) for out in outcomes)
-    finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
-    infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
+        outcomes = list(_finalize_managed_homepage_outputs(ctx, prompts, outcomes))
+    started_count = sum(out.outcome.started for out in outcomes)
+    finished_count = sum(out.succeeded for out in outcomes)
+    infrastructure_failures = sum(not out.outcome.started for out in outcomes)
     finished_at = store.now_iso()
     state = load_execution_state(ctx.execution_id)
     state.active_agent_scheduler = None
-    agent_run_record = {
-        "stage": stage,
-        "jobCount": len(outcomes),
-        "plannedJobCount": len(prompts),
-        "scheduler": {
-            "requestedMaxWorkers": int(ctx.max_workers or 1),
-            "effectiveWorkerCount": worker_count,
-            "localCursorMaxWorkers": _managed_local_cursor_worker_cap(ctx),
-            "runtime": str(ctx.runtime),
-            "promptCount": len(prompts),
-            "estimatedMinWaves": estimated_waves,
-            "laneLimits": dict(MANAGED_LANE_LIMITS),
-            "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
-            "startedAt": checkpoint_started_at,
-            "finishedAt": finished_at,
-            "elapsedSeconds": round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
-        },
-        "refs": [
-            str(out.get("ref"))
-            for out in outcomes
-            if str(out.get("ref") or "").strip()
-        ],
-        "startedCount": started_count,
-        "finishedCount": finished_count,
-        "infrastructureFailures": infrastructure_failures,
-        "outcomes": outcomes,
-        "finishedAt": finished_at,
-    }
-    history = state.agent_run_history
-    if isinstance(history, list):
-        history.append(agent_run_record)
-        state.agent_run_history = list(dedupe_agent_runs(history))[-20:]
-    state.last_agent_run = agent_run_record
+    agent_run_record = ManagedAgentRunRecord(
+        stage=ExecutionStage(stage),
+        job_count=len(outcomes),
+        planned_job_count=len(prompts),
+        scheduler=ManagedAgentScheduler(
+            requested_max_workers=int(ctx.max_workers or 1),
+            effective_worker_count=worker_count,
+            local_cursor_max_workers=_managed_local_cursor_worker_cap(ctx),
+            runtime=str(ctx.runtime),
+            prompt_count=len(prompts),
+            estimated_min_waves=estimated_waves,
+            lane_limits=tuple(sorted(MANAGED_LANE_LIMITS.items())),
+            provider=AgentProvider(_normalize_managed_agent_provider(ctx.agent_provider)),
+            started_at=checkpoint_started_at,
+            finished_at=finished_at,
+            elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
+        ),
+        refs=tuple(out.ref for out in outcomes if out.ref),
+        started_count=started_count,
+        finished_count=finished_count,
+        infrastructure_failures=infrastructure_failures,
+        outcomes=tuple(outcomes),
+        finished_at=finished_at,
+    )
+    save_managed_agent_run(state, agent_run_record)
     save_execution_state(state)
-    failures = [out for out in outcomes if str(out.get("status")) != "finished"]
+    failures = [out for out in outcomes if not out.succeeded]
     if failures:
         state = load_execution_state(ctx.execution_id)
         state.status = ExecutionStateStatus.REPAIRING
-        state.failed_objects = [str(out.get("error") or "agent failed") for out in failures]
+        state.failed_objects = [out.outcome.message for out in failures]
         save_execution_state(state)
         return False
     ok, issues = _checkpoint_is_done(ctx, stage)

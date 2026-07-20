@@ -1,0 +1,85 @@
+# App 体验一级黄金指标唯一机器真相源。Dashboard、告警和 Portal 只能消费本目录，
+# 不得在查询或页面中复制分子、分母、阈值与下钻维度。
+registration_rules:
+  max_primary_metrics_per_business: 3
+  required_source_track: product_telemetry
+  forbidden_dimensions:
+    - sessionId
+    - requestId
+    - traceId
+    - callStack
+    - correlationHash
+  required_drilldown_dimensions:
+    - pageName
+    - appVersion
+    - networkClass
+
+metrics:
+  - metric_id: app_anr_rate
+    business: app_experience
+    tier: primary
+    owner: runtime-client-foundation
+    source:
+      track: product_telemetry
+      numerator_event_type: app_anr_outcome
+      numerator_result: detected
+      denominator_event_type: app_startup
+      aggregation: unique_session_ratio
+    dimensions: [pageName, detectionSource, appVersion, networkClass]
+    target:
+      operator: less_than
+      value: 0.0047
+    freshness_seconds: 300
+
+  - metric_id: page_first_usable_p95_ms
+    business: app_experience
+    tier: primary
+    owner: runtime-client-foundation
+    source:
+      track: product_telemetry
+      event_type: page_first_usable
+      value_field: durationMs
+      aggregation: percentile_p95
+    dimensions: [pageName, terminalState, appVersion, networkClass]
+    target:
+      operator: less_than_or_equal
+      value: 2000
+    freshness_seconds: 300
+
+  - metric_id: page_error_recovery_rate
+    business: app_experience
+    tier: primary
+    owner: runtime-client-foundation
+    source:
+      track: product_telemetry
+      numerator_event_type: page_error_outcome
+      numerator_result: recovered
+      denominator_event_type: page_error_outcome
+      denominator_result: shown
+      aggregation: event_ratio
+    dimensions:
+      - pageName
+      - surfaceId
+      - errorCode
+      - recoveryAction
+      - appVersion
+      - networkClass
+    target:
+      operator: greater_than_or_equal
+      value: 0.8
+    freshness_seconds: 300
+
+  - metric_id: app_jank_session_rate
+    business: app_experience
+    tier: secondary
+    owner: runtime-client-foundation
+    source:
+      track: product_telemetry
+      numerator_event_type: app_frame_jank_outcome
+      denominator_event_type: app_startup
+      aggregation: unique_session_ratio
+    dimensions: [pageName, appVersion, networkClass]
+    target:
+      operator: less_than
+      value: 0.05
+    freshness_seconds: 300

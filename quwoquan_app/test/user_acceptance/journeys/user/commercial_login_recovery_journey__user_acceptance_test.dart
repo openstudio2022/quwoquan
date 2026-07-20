@@ -1,27 +1,32 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
-import '../../../support/fakes/test_auth_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/fakes/test_auth_facets.dart';
 import '../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
   testWidgets('游客手机号登录：发码、六位输入与显式提交后回到目标表面', (tester) async {
-    final repository = _JourneyAuthRepository();
+    final facets = _JourneyAuthFacets();
     var targetResumed = false;
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(_JourneyAuthStore()),
-          authRepositoryProvider.overrideWithValue(repository),
+          accountSessionLoginCommandWriterProvider.overrideWithValue(facets),
+          accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+            facets,
+          ),
+          authenticationChallengeCommandWriterProvider.overrideWithValue(
+            facets,
+          ),
           oneTapLoginClientProvider.overrideWithValue(
             const _JourneyUnavailableOneTapClient(),
           ),
@@ -50,16 +55,16 @@ void main() {
     await tester.tap(find.text(UITextConstants.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(repository.sendOtpCalls, 1);
+    expect(facets.sendOtpCalls, 1);
     expect(find.byType(OtpCodeBoxes), findsOneWidget);
     await tester.enterText(find.byType(CupertinoTextField).last, '000000');
     await tester.pump();
-    expect(repository.loginCalls, 0, reason: '六位验证码完成后不得自动提交');
+    expect(facets.loginCalls, 0, reason: '六位验证码完成后不得自动提交');
 
     await tester.tap(find.text(UITextConstants.loginPhoneSubmit));
     await tester.pump(const Duration(milliseconds: 350));
 
-    expect(repository.loginCalls, 1);
+    expect(facets.loginCalls, 1);
     expect(targetResumed, isTrue);
   });
 
@@ -94,11 +99,14 @@ Future<void> _pumpJourneyLogin(
   required AuthSessionStore authStore,
   required OneTapLoginClient oneTapClient,
 }) async {
+  final facets = _JourneyAuthFacets();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         authSessionStoreProvider.overrideWithValue(authStore),
-        authRepositoryProvider.overrideWithValue(_JourneyAuthRepository()),
+        accountSessionLoginCommandWriterProvider.overrideWithValue(facets),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(facets),
+        authenticationChallengeCommandWriterProvider.overrideWithValue(facets),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
         appTelemetryReporterProvider.overrideWithValue(
           RecordingAppTelemetryRecorder(),
@@ -112,52 +120,20 @@ Future<void> _pumpJourneyLogin(
   await tester.pump();
 }
 
-class _JourneyAuthRepository extends TestAuthRepository {
+class _JourneyAuthFacets extends TestAuthFacets {
   int sendOtpCalls = 0;
   int loginCalls = 0;
 
   @override
-  Future<OtpSendResultData> sendOtp({
-    required String phone,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? sourceOperation,
-  }) async {
+  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
     sendOtpCalls += 1;
-    return super.sendOtp(
-      phone: phone,
-      deviceId: deviceId,
-      platform: platform,
-      appVersion: appVersion,
-      sourceOperation: sourceOperation,
-    );
+    return super.sendOtp(command);
   }
 
   @override
-  Future<AuthLoginResultDto> login({
-    required String credentialType,
-    required String credentialKey,
-    String? otpCode,
-    String? displayLabel,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? agreementVersion,
-    String? privacyVersion,
-  }) async {
+  Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) async {
     loginCalls += 1;
-    return super.login(
-      credentialType: credentialType,
-      credentialKey: credentialKey,
-      otpCode: otpCode,
-      displayLabel: displayLabel,
-      deviceId: deviceId,
-      platform: platform,
-      appVersion: appVersion,
-      agreementVersion: agreementVersion,
-      privacyVersion: privacyVersion,
-    );
+    return super.loginWithPhone(command);
   }
 }
 
@@ -176,8 +152,8 @@ class _JourneyAuthStore extends AuthSessionStore {
   );
 
   @override
-  Future<void> saveLoginResult(
-    AuthLoginResultDto result, {
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,

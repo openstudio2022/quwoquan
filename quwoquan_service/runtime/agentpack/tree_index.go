@@ -47,7 +47,7 @@ func ScanFeatureTree(rootDir string) (*TreeIndex, error) {
 			continue
 		}
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
+		if strings.HasPrefix(name, ".") || name == "templates" {
 			continue
 		}
 		node, err := scanL1(filepath.Join(rootDir, name), name)
@@ -69,7 +69,7 @@ func scanL1(dir, name string) (*FeatureNode, error) {
 		Name:   name,
 		Level:  "L1_domain_service",
 		Path:   dir,
-		Status: deriveNodeStatus(dir),
+		Status: "specified",
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -106,7 +106,7 @@ func scanL2(dir, name string) (*FeatureNode, error) {
 		Name:   name,
 		Level:  "L2_business_capability",
 		Path:   dir,
-		Status: deriveNodeStatus(dir),
+		Status: "specified",
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -143,32 +143,9 @@ func scanL3(dir, name string) (*FeatureNode, error) {
 		Name:   name,
 		Level:  "L3_story",
 		Path:   dir,
-		Status: deriveNodeStatus(dir),
+		Status: "specified",
 	}
 	return node, nil
-}
-
-func deriveNodeStatus(dir string) string {
-	status := "specified"
-
-	tasksPath := filepath.Join(dir, "tasks.md")
-	data, err := os.ReadFile(tasksPath)
-	if err != nil {
-		return status
-	}
-
-	content := string(data)
-	total := strings.Count(content, "- [")
-	done := strings.Count(content, "- [x]")
-
-	switch {
-	case total > 0 && done == total:
-		return "completed"
-	case done > 0:
-		return "in_progress"
-	default:
-		return status
-	}
 }
 
 func WriteIndex(index *TreeIndex, path string) error {
@@ -222,27 +199,4 @@ func matchesQuery(node FeatureNode, query string) bool {
 		}
 	}
 	return false
-}
-
-func IngestTaskPack(index *TreeIndex, pack TaskPack) {
-	node := FeatureNode{
-		ID:     pack.Feature.ID,
-		Name:   pack.Feature.Name,
-		Level:  pack.Feature.Level,
-		Path:   pack.Feature.Path,
-		Domain: pack.Feature.Domain,
-		Tags:   pack.Feature.Tags,
-		Status: "completed",
-	}
-
-	for i, f := range index.Features {
-		if f.ID == pack.Feature.Domain || f.Domain == pack.Feature.Domain {
-			index.Features[i].Children = append(index.Features[i].Children, node)
-			index.UpdatedAt = time.Now().UTC()
-			return
-		}
-	}
-
-	index.Features = append(index.Features, node)
-	index.UpdatedAt = time.Now().UTC()
 }

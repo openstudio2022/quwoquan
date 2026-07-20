@@ -6,21 +6,24 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_brand_cluster.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 /// 导出与 Flutter 欢迎终态同构的原生启动静态帧。
 ///
-/// 必须先加载 Noto Sans SC：widget test 默认无中文字形，否则标题/slogan 会栅格成
-/// 「豆腐块」方框并写进 Launch 位图。
+/// 布局与运行时共用 [WelcomeStaticFrame]（品牌簇视口分数对齐 + 贴底品牌名条），
+/// 保证原生启动图与 Flutter 首帧几何同源。
 ///
-/// 布局与运行时共用 [WelcomeBrandCluster]（视口分数对齐，不烘焙 SafeArea 顶 inset）。
+/// 必须先加载正式品牌字体（Noto Sans SC）：widget test 默认无中文字形，
+/// 否则 slogan / 品牌名会栅格成「豆腐块」方框并写进 Launch 位图。
 ///
 /// 运行：`flutter test --no-pub tool/generate_native_launch_welcome_final_test.dart`
 void main() {
   setUpAll(() async {
-    final loader = FontLoader('Noto Sans SC')
+    final loader = FontLoader(AppTypography.welcomeBrandFontFamily)
       ..addFont(
         rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
       );
@@ -34,6 +37,7 @@ void main() {
     final boundaryKey = GlobalKey();
     final backgroundBoundaryKey = GlobalKey();
     final brandBoundaryKey = GlobalKey();
+    final footerBoundaryKey = GlobalKey();
 
     await tester.binding.setSurfaceSize(logicalSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -42,7 +46,7 @@ void main() {
       MediaQuery(
         data: const MediaQueryData(
           size: logicalSize,
-          // 不烘焙假 SafeArea：与 Flutter WelcomeBrandCluster 分数对齐同构。
+          // 不烘焙假 SafeArea：与 Flutter WelcomeStaticFrame 分数对齐同构。
           padding: EdgeInsets.zero,
           devicePixelRatio: 1,
         ),
@@ -50,7 +54,7 @@ void main() {
           theme: const CupertinoThemeData(
             textTheme: CupertinoTextThemeData(
               textStyle: TextStyle(
-                fontFamily: 'Noto Sans SC',
+                fontFamily: AppTypography.welcomeBrandFontFamily,
                 decoration: TextDecoration.none,
               ),
             ),
@@ -60,6 +64,7 @@ void main() {
             child: _WelcomeFinalFrameExport(
               backgroundKey: backgroundBoundaryKey,
               brandKey: brandBoundaryKey,
+              footerKey: footerBoundaryKey,
             ),
           ),
         ),
@@ -68,15 +73,17 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
     expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);
+    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
     expect(find.byType(WelcomeBrandCluster), findsOneWidget);
+    expect(find.byType(WelcomeBrandFooter), findsOneWidget);
 
     final boundary =
         boundaryKey.currentContext!.findRenderObject()!
             as RenderRepaintBoundary;
 
     await tester.runAsync(() async {
+      await _writeAndroidLaunchResources();
       final master = File('assets/brand/launch_welcome_final_master.png');
       final backgroundMaster = File(
         'assets/brand/launch_welcome_background_master.png',
@@ -84,6 +91,7 @@ void main() {
       final brandFullMaster = File(
         'assets/brand/launch_brand_cluster_full_master.png',
       );
+      final footerMaster = File('assets/brand/launch_brand_footer_master.png');
       await _writeBoundary(boundary, master.path);
       await _writeBoundary(
         backgroundBoundaryKey.currentContext!.findRenderObject()!
@@ -94,6 +102,11 @@ void main() {
         brandBoundaryKey.currentContext!.findRenderObject()!
             as RenderRepaintBoundary,
         brandFullMaster.path,
+      );
+      await _writeBoundary(
+        footerBoundaryKey.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary,
+        footerMaster.path,
       );
 
       await _resize(
@@ -107,6 +120,10 @@ void main() {
         'android/app/src/main/res/drawable-nodpi/launch_brand_cluster.png',
         width: 1179,
         height: 1500,
+      );
+      await _copy(
+        footerMaster.path,
+        'android/app/src/main/res/drawable-nodpi/launch_brand_footer.png',
       );
 
       const iosBg =
@@ -174,6 +191,21 @@ void main() {
         width: 393,
         height: 500,
       );
+
+      const iosFooter = 'ios/Runner/Assets.xcassets/LaunchBrandFooter.imageset';
+      await _copy(footerMaster.path, '$iosFooter/LaunchBrandFooter@3x.png');
+      await _resize(
+        footerMaster.path,
+        '$iosFooter/LaunchBrandFooter@2x.png',
+        width: 786,
+        height: 192,
+      );
+      await _resize(
+        footerMaster.path,
+        '$iosFooter/LaunchBrandFooter.png',
+        width: 393,
+        height: 96,
+      );
     });
   });
 }
@@ -182,56 +214,27 @@ class _WelcomeFinalFrameExport extends StatelessWidget {
   const _WelcomeFinalFrameExport({
     required this.backgroundKey,
     required this.brandKey,
+    required this.footerKey,
   });
 
-  static const List<double> _fullBloom = [1, 1, 1, 1, 1, 1, 1, 1];
-  static const String _fontFamily = 'Noto Sans SC';
   final GlobalKey backgroundKey;
   final GlobalKey brandKey;
+  final GlobalKey footerKey;
 
   @override
   Widget build(BuildContext context) {
-    final appearance = WelcomeAppearance.of(context);
     return DefaultTextStyle.merge(
       style: const TextStyle(
-        fontFamily: _fontFamily,
+        fontFamily: AppTypography.welcomeBrandFontFamily,
         decoration: TextDecoration.none,
       ),
       child: ColoredBox(
         color: const Color(0x00000000),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            RepaintBoundary(
-              key: backgroundKey,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      appearance.gradientStart,
-                      appearance.background,
-                      appearance.gradientEnd,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            RepaintBoundary(
-              key: brandKey,
-              child: WelcomeBrandCluster(
-                flower: WelcomeFlowerMark(
-                  appearance: appearance,
-                  petalBloomAmounts: _fullBloom,
-                ),
-                typography: WelcomeBrandCluster.buildTypography(
-                  appearance,
-                  fontFamily: _fontFamily,
-                ),
-              ),
-            ),
-          ],
+        child: WelcomeStaticFrame(
+          flower: WelcomeFlowerMark(appearance: WelcomeAppearance.of(context)),
+          backgroundBoundaryKey: backgroundKey,
+          clusterBoundaryKey: brandKey,
+          footerBoundaryKey: footerKey,
         ),
       ),
     );
@@ -247,6 +250,70 @@ Future<void> _writeBoundary(
   final file = File(target);
   await file.create(recursive: true);
   await file.writeAsBytes(byteData!.buffer.asUint8List(), flush: true);
+}
+
+Future<void> _copy(String source, String target) async {
+  final file = File(target);
+  await file.parent.create(recursive: true);
+  await File(source).copy(file.path);
+}
+
+Future<void> _writeAndroidLaunchResources() async {
+  final launchBackground =
+      '''<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by generate_native_launch_welcome_final_test.dart. DO NOT EDIT. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="${_hexRgb(AppColors.welcomeBackground)}"
+                android:endColor="${_hexRgb(AppColors.welcomeGradientEnd)}"
+                android:startColor="${_hexRgb(AppColors.welcomeGradientStart)}" />
+        </shape>
+    </item>
+    <item
+        android:width="393dp"
+        android:height="500dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/launch_brand_cluster" />
+    </item>
+    <item
+        android:width="393dp"
+        android:height="96dp"
+        android:gravity="bottom|center_horizontal">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/launch_brand_footer" />
+    </item>
+</layer-list>
+''';
+  for (final path in const <String>[
+    'android/app/src/main/res/drawable/launch_background.xml',
+    'android/app/src/main/res/drawable-v21/launch_background.xml',
+    'android/app/src/main/res/drawable-night/launch_background.xml',
+    'android/app/src/main/res/drawable-night-v21/launch_background.xml',
+  ]) {
+    await File(path).writeAsString(launchBackground, flush: true);
+  }
+
+  final colors =
+      '''<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by generate_native_launch_welcome_final_test.dart. DO NOT EDIT. -->
+<resources>
+    <color name="quwoquan_launch_blue">${_hexRgb(AppColors.welcomeBackground)}</color>
+</resources>
+''';
+  await File(
+    'android/app/src/main/res/values/colors.xml',
+  ).writeAsString(colors, flush: true);
+}
+
+String _hexRgb(ui.Color color) {
+  final value = color.toARGB32() & 0x00FFFFFF;
+  return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
 }
 
 Future<void> _resize(

@@ -11,15 +11,6 @@ import (
 // state or load fixture data from the repository checkout.
 func seedTestPlatformService(service *platformService) error {
 	fixtures := map[string][]controlplane.Document{
-		"governance_templates": {
-			{"id": "timeout-template", "title": "默认超时模板", "status": "success"},
-		},
-		"runbooks": {
-			{"id": "cfg-rollback-drill", "title": "配置发布回滚演练", "status": "success"},
-		},
-		"gate_rules": {
-			{"id": "config_release_error_rate", "rule": "config_release_error_rate", "stage": "25%", "status": "success"},
-		},
 		"config_instance_reports": {
 			{
 				"id": "platform-ops-service-beta-control-a-0", "environment": "beta",
@@ -43,9 +34,6 @@ func seedTestPlatformService(service *platformService) error {
 func TestSeedTestPlatformServiceProvidesCanonicalControlPlaneEvidence(t *testing.T) {
 	service := newTestPlatformService(t)
 	for namespace, id := range map[string]string{
-		"governance_templates":    "timeout-template",
-		"runbooks":                "cfg-rollback-drill",
-		"gate_rules":              "config_release_error_rate",
 		"config_instance_reports": "platform-ops-service-beta-control-a-0",
 	} {
 		if _, found, err := service.store.GetDocument(namespace, id); err != nil {

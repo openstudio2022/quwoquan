@@ -67,6 +67,74 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) e
 	if err := s.Store.EnsureIndexes(ctx); err != nil {
 		return err
 	}
+	if _, err := s.jobs.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "deliveryKey", Value: 1},
+				{Key: "destinationRef", Value: 1},
+			},
+			Options: options.Index().
+				SetName("uq_notification_incoming_call_endpoint").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"deliveryKey":    bson.M{"$type": "string"},
+					"destinationRef": bson.M{"$type": "string"},
+				}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "deliveryKey", Value: 1},
+				{Key: "deviceId", Value: 1},
+			},
+			Options: options.Index().
+				SetName("uq_notification_incoming_call_device").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"deliveryKey": bson.M{"$type": "string"},
+					"deviceId":    bson.M{"$type": "string"},
+				}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "callId", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "updatedAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_notification_incoming_call_call_status").
+				SetSparse(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "status", Value: 1},
+				{Key: "ackDeadlineAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_notification_incoming_call_ack_deadline").
+				SetSparse(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "expiresAt", Value: 1},
+				{Key: "status", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_notification_incoming_call_expiry").
+				SetSparse(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "status", Value: 1},
+				{Key: "cancellationPushRequired", Value: 1},
+				{Key: "cancellationPushSubmittedAt", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_notification_incoming_call_cancel_push").
+				SetSparse(true),
+		},
+	}); err != nil {
+		return err
+	}
 	if _, err := s.receipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "result.jobId", Value: 1}, {Key: "createdAt", Value: -1}},

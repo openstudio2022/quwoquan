@@ -173,9 +173,9 @@ func circleFromFixture(fc circleFixtureCircle) *model.Circle {
 		AutoSyncChat:             fc.AutoSyncChat,
 		SectionConfig: []model.CircleSectionConfig{
 			{SectionType: model.CircleSectionTypeWorks, Visible: true, Order: 0},
-			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 1},
-			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 2},
-			{SectionType: model.CircleSectionTypeInteraction, Visible: true, Order: 3},
+			{SectionType: model.CircleSectionTypeMembers, Visible: true, Order: 1},
+			{SectionType: model.CircleSectionTypeChat, Visible: true, Order: 2},
+			{SectionType: model.CircleSectionTypeStorage, Visible: true, Order: 3},
 		},
 		StorageQuotaBytes: 1024 * 1024 * 1024,
 		DomainID:          fc.DomainID,

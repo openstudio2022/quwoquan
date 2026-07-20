@@ -15,16 +15,19 @@ consumers:
   - rec-model-service
 
 fields:
-  - { name: _id, type: ObjectId }
+  - { name: _id, type: string, description: 确定性 eventId，承担曝光/反馈事实 dedupe }
+  - { name: eventId, type: string }
   - { name: userId, type: string }
-  - { name: sessionId, type: string }
+  - { name: personaId, type: string }
   - { name: scenario, type: string, description: 场景如 content_feed / circle_discovery }
-  - { name: eventType, type: string, description: impression / click / dwell / like / dislike / share / report }
+  - { name: eventType, type: string, description: rec_impression / rec_engagement }
   - { name: targetId, type: string, description: 内容/圈子/用户 ID 等 }
-  - { name: targetType, type: string }
-  - { name: payload, type: object, description: 扩展 payload }
-  - { name: ts, type: timestamp }
+  - { name: labels, type: object, description: sessionId / contentType / recallPath / action 等稳定标签 }
+  - { name: context, type: object, description: 曝光含在线 userFeatureSnapshot / itemFeatureSnapshot / featureSnapshotAt；反馈含行为上下文 }
+  - { name: occurredAt, type: timestamp }
+  - { name: createdAt, type: timestamp }
 
 indexes:
-  - { name: idx_ts_user, keys: { ts: -1, userId: 1 } }
-  - { name: idx_scenario_ts, keys: { scenario: 1, ts: -1 } }
+  - { name: idx_rec_learning_user_type, keys: { userId: 1, eventType: 1, occurredAt: -1 } }
+  - { name: idx_rec_learning_scenario_time, keys: { scenario: 1, occurredAt: -1 } }
+  - { name: ttl_rec_learning_events, keys: { createdAt: 1 }, ttl_days: 30 }

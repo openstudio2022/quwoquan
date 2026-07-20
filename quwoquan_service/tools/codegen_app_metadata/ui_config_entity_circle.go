@@ -127,6 +127,14 @@ func renderHomepageUIConfigDart(uc *uiConfigFile) string {
 			homepageTypes))
 	}
 	b.WriteString("  ];\n")
+	b.WriteString("\n  static const Set<String> wishlistHomepageTypes = <String>{")
+	for index, homepageType := range uc.HomepageWishlistTypes {
+		if index > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(dartStringLiteral(homepageType))
+	}
+	b.WriteString("};\n")
 	b.WriteString("}\n")
 	return b.String()
 }

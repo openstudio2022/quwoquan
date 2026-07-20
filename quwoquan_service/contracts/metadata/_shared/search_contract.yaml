@@ -12,6 +12,8 @@ execution_strategies:
     description: 仅远端 provider 执行
   - id: hybrid_remote_fallback_local
     description: 远端优先，失败或 0 结果时回退本地
+  - id: filter_only
+    description: 仅作为 canonical retrieve 过滤维度，不产生独立搜索结果
 
 resolved_sources:
   - id: local

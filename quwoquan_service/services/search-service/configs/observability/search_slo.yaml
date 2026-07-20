@@ -17,6 +17,7 @@ metrics:
   load_shed_total: search_retrieve_load_shed_total       # labels: reason (背压熔断/限流退化)
   inflight_gauge: search_retrieve_inflight               # 当前在途并发（饱和度）
   related_terms_cache_total: search_retrieve_related_terms_cache_total # labels: result(hit|miss)
+  product_funnel_source: app-product-telemetry-search-funnel-hourly # SLS scheduled SQL；按 requestId 去重
 
 slis:
   - id: retrieve_latency
@@ -49,6 +50,21 @@ slis:
     description: 相关词热点缓存命中率（Mongo 卸载效果，越高越省后端）
     sli: sum(rate(search_retrieve_related_terms_cache_total{result="hit"}[5m])) / sum(rate(search_retrieve_related_terms_cache_total[5m]))
     objective_min: 0.5
+  - id: effective_search_success_rate
+    description: 有效搜索成功率 = 产生点击或结果页停留满 3 秒的去重 requestId / query_submit 去重 requestId
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly
+    sli: effectiveActionRequestCount / querySubmitCount
+    objective_min: 0.35
+  - id: submit_to_first_actionable_result
+    description: 提交到首个非空、可操作结果渲染完成的端到端耗时；零结果不混入成功延迟
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly.firstActionableHistogram
+    objective:
+      p95_ms: 1500
+  - id: result_to_effective_action_rate
+    description: 结果到有效行动率 = 点击或结果页停留满 3 秒的去重 requestId / 非空结果曝光去重 requestId
+    source: aliyun_sls.app-product-telemetry-search-funnel-hourly
+    sli: effectiveActionRequestCount / nonEmptyResultCount
+    objective_min: 0.20
 
 # AB：experimentBucket 作为所有 SLI 的可切分维度（mode/bucket label）；control vs
 # term_heat 的 zero_result_rate / latency / feedback CTR 可分桶对比做归因与显著性判定。

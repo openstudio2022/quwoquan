@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
@@ -12,6 +12,8 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../support/harness/profile_shell_scroll_utils.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../support/fakes/test_profile_interaction_facets.dart';
 
 /// T4 旅程：我的主页一级 2 Tab（创作/互动）端到端可达，圈子进入统计区。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -29,11 +31,20 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
+      profileQueryProvider.overrideWith(
+        (ref, surface) => const MockUserProfileRepository(),
+      ),
+      authorImpactQueryProvider.overrideWithValue(
         const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
+      ),
+      profileInteractionQueryFacetProvider.overrideWithValue(
+        const TestProfileInteractionFacets(),
+      ),
+      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+        const TestProfileInteractionFacets(),
       ),
     ],
     child: MaterialApp(
@@ -77,7 +88,7 @@ void main() {
       findsOneWidget,
     );
 
-    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+    expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
 
     await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);

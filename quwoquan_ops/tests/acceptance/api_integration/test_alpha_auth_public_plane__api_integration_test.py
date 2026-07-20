@@ -50,6 +50,18 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         self.assertEqual(payload["items"], [])
         self.assertTrue(payload["mockBoundary"])
 
+    def test_global_search_has_canonical_alpha_mock_projection(self) -> None:
+        status, payload = self._post(
+            "/search",
+            {"query": "西湖", "mode": "result", "limit": 1},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["hits"], [])
+        self.assertTrue(payload["requestId"])
+        self.assertTrue(payload["rankingVersion"])
+        self.assertTrue(payload["mockBoundary"])
+
     def test_bare_alpha_send_and_login_routes_are_json_and_metadata_aligned(self) -> None:
         send_status, send_payload = self._post(
             "/auth/otp/send",

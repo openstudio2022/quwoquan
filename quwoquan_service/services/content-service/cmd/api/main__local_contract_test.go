@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,44 @@ func TestApplyEnvOverrides_RecModelService(t *testing.T) {
 	}
 	if cfg.RecModelService.TimeoutMs != 75 {
 		t.Errorf("TimeoutMs: want 75, got %d", cfg.RecModelService.TimeoutMs)
+	}
+}
+
+// N2-3 embedding 配置路径契约：凭据只经运行时环境注入（gamma compose 声明
+// CONTENT_EMBEDDING_* 注入路径），默认关闭；写入管线与向量召回读通道独立控制。
+func TestApplyEnvOverrides_EmbeddingConfigPath(t *testing.T) {
+	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "https://embed.example.test/v1")
+	t.Setenv("CONTENT_EMBEDDING_API_KEY", "test-key")
+	t.Setenv("CONTENT_EMBEDDING_MODEL", "text-embedding-3-large")
+	t.Setenv("CONTENT_EMBEDDING_ENABLED", "true")
+	t.Setenv("CONTENT_EMBEDDING_VECTOR_RECALL_ENABLED", "true")
+	cfg := config{}
+	applyEnvOverrides(&cfg)
+	if cfg.Embedding.Endpoint != "https://embed.example.test/v1" {
+		t.Errorf("Embedding.Endpoint: got %q", cfg.Embedding.Endpoint)
+	}
+	if cfg.Embedding.APIKey != "test-key" {
+		t.Errorf("Embedding.APIKey: got %q", cfg.Embedding.APIKey)
+	}
+	if cfg.Embedding.Model != "text-embedding-3-large" {
+		t.Errorf("Embedding.Model: got %q", cfg.Embedding.Model)
+	}
+	if !cfg.Embedding.Enabled {
+		t.Error("Embedding.Enabled should be true")
+	}
+	if !cfg.Embedding.VectorRecallEnabled {
+		t.Error("Embedding.VectorRecallEnabled should be true")
+	}
+}
+
+func TestApplyEnvOverrides_EmbeddingDefaultsClosed(t *testing.T) {
+	cfg := config{}
+	applyEnvOverrides(&cfg)
+	if cfg.Embedding.Enabled || cfg.Embedding.VectorRecallEnabled {
+		t.Fatalf("embedding must stay disabled without env credentials: %+v", cfg.Embedding)
+	}
+	if cfg.Embedding.Endpoint != "" || cfg.Embedding.APIKey != "" {
+		t.Fatalf("embedding credentials must not materialize from nowhere: %+v", cfg.Embedding)
 	}
 }
 
@@ -301,6 +340,10 @@ func TestPreflightConfig_RequiresCommercialDataDependencies(t *testing.T) {
 }
 
 func TestPreflightConfig_RequiresEnabledSearchEndpoint(t *testing.T) {
+	t.Setenv(
+		accountClosureSubjectHMACEnv,
+		"content-account-closure-test-secret-32",
+	)
 	cfg := validCommercialConfig()
 	cfg.ES.Enabled = true
 	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "SEARCH_ES_ENDPOINTS") {
@@ -308,10 +351,46 @@ func TestPreflightConfig_RequiresEnabledSearchEndpoint(t *testing.T) {
 	}
 }
 
+func TestPreflightConfig_RequiresAccountClosureSubjectHMAC(t *testing.T) {
+	t.Setenv(accountClosureSubjectHMACEnv, "")
+	cfg := validCommercialConfig()
+	if err := preflightConfig(cfg, "gamma"); err == nil ||
+		!strings.Contains(err.Error(), accountClosureSubjectHMACEnv) {
+		t.Fatalf("expected account-closure HMAC requirement, got %v", err)
+	}
+}
+
 func TestPreflightConfig_AcceptsCompleteCommercialComposition(t *testing.T) {
+	t.Setenv(
+		accountClosureSubjectHMACEnv,
+		"content-account-closure-test-secret-32",
+	)
 	cfg := validCommercialConfig()
 	if err := preflightConfig(cfg, "gamma"); err != nil {
 		t.Fatalf("expected complete commercial composition, got %v", err)
+	}
+}
+
+func TestResolveAccountClosureSubjectDigestorFailsClosedOutsideAlpha(
+	t *testing.T,
+) {
+	t.Setenv(accountClosureSubjectHMACEnv, "")
+	if _, err := resolveAccountClosureSubjectDigestor(
+		"gamma",
+		"content-service",
+	); err == nil {
+		t.Fatal("commercial runtime accepted missing account-closure HMAC")
+	}
+
+	digestor, err := resolveAccountClosureSubjectDigestor(
+		"alpha",
+		"content-service",
+	)
+	if err != nil {
+		t.Fatalf("alpha synthetic digestor: %v", err)
+	}
+	if _, err := digestor.DigestSubject("alpha-persona"); err != nil {
+		t.Fatalf("alpha synthetic subject digest: %v", err)
 	}
 }
 
@@ -335,6 +414,14 @@ func validCommercialConfig() config {
 	}
 	cfg.Mongo.URI = "mongodb://mongodb:27017"
 	cfg.Postgres.ReportDSN = "postgres://content:content@postgres:5432/content?sslmode=disable"
+	cfg.IPLocation.Provider = "ip2region"
+	cfg.IPLocation.IPv4DatabasePath = "/geo/ip2region_v4.xdb"
+	cfg.IPLocation.IPv6DatabasePath = "/geo/ip2region_v6.xdb"
+	cfg.IPLocation.DataVersion = time.Now().UTC().Format("2006-01-02")
+	cfg.CommentRateLimit.BurstWindowSeconds = 30
+	cfg.CommentRateLimit.BurstMax = 5
+	cfg.CommentRateLimit.DailyWindowSeconds = 24 * 60 * 60
+	cfg.CommentRateLimit.DailyMax = 200
 	cfg.OSS.Endpoint = "minio:9000"
 	cfg.OSS.Bucket = "quwoquan-media"
 	cfg.OSS.Region = "us-east-1"

@@ -11,6 +11,7 @@ class TagRequestPageIds {
     'ListTagChildren': 'tag.list.tag.children',
     'RelatedObjects': 'tag.related.objects',
     'RelatedTags': 'tag.related.tags',
+    'ReportTagFeedback': 'tag.report.tag.feedback',
     'ResolveTag': 'tag.resolve.tag',
     'SearchByTags': 'tag.search.by.tags',
     'SearchTags': 'tag.search.tags',
@@ -27,6 +28,7 @@ class TagRequestPageIds {
   static const String listTagChildren = 'tag.list.tag.children';
   static const String relatedObjects = 'tag.related.objects';
   static const String relatedTags = 'tag.related.tags';
+  static const String reportTagFeedback = 'tag.report.tag.feedback';
   static const String resolveTag = 'tag.resolve.tag';
   static const String searchByTags = 'tag.search.by.tags';
   static const String searchTags = 'tag.search.tags';

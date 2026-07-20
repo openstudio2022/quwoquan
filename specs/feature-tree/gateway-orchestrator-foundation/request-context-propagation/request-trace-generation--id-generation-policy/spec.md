@@ -1,4 +1,4 @@
-# L4 特性：id-generation-policy
+# L3 特性：id-generation-policy
 
 ## 功能说明
 - 待补充

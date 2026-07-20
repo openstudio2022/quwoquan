@@ -9,7 +9,7 @@ Exemptions:
   - Scenarios with status: pending are skipped.
 
 Usage:
-  python3 scripts/verify_dart_func_coverage.py [--mock-yaml PATH] [--test-dir PATH]
+  python3 quwoquan_app/scripts/runtime/verify_dart_func_coverage.py [--mock-yaml PATH] [--test-dir PATH]
 
 Exit 0 on success, 1 on failure.
 """

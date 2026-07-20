@@ -23,12 +23,14 @@ business_rules:
   - candidate 只能在必填主档、标签和来源证据齐全后发布
   - published 主档修改使用服务端内部 version CAS 并生成可审计事件
   - offline 主页不可重新公开，重新上线必须创建新候选版本
-  - 认领、状态上报、评价和关注均通过各自上下文公开契约
+  - 认领、状态上报和评价均通过各自上下文公开契约；关注关系唯一归属 user.SubjectFollow，Homepage 不提供 follow 写入口
+  - averageRating/ratingCount/reviewSummary 是 HomepageReview 事件投影字段，claimStatus/owner 由 HomepageClaimReviewed 事件幂等推进；均不接受公开写入
 lifecycle:
   states: [candidate, published, offline]
   transitions:
     - { from: candidate, command: PublishHomepage, to: published }
     - { from: published, command: TakeHomepageOffline, to: offline }
+  transition_notes: TakeHomepageOffline 是内部行为，无公开 API；仅由 HomepageStatusReportReviewed(confirmed_offline) 事件消费或数据工程 reload 驱动
   optimistic_concurrency: version
   idempotency: command_receipt
 

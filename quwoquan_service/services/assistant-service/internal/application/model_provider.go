@@ -4,22 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	skillpkg "quwoquan_service/services/assistant-service/internal/application/skill"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
+	preferencemodel "quwoquan_service/services/assistant-service/internal/domain/assistant/preference_fact/model"
 )
 
 type ModelRequest struct {
-	TurnID       string
-	TraceID      string
-	SkillID      string
-	Prompt       string
-	Stage        string
-	Observation  map[string]any
-	UserQuestion string
-	ContextTurns []assistant.AssistantConversationContextTurn
-	SkillCatalog []skillpkg.Manifest
+	TurnID                  string
+	TraceID                 string
+	SkillID                 string
+	Prompt                  string
+	Stage                   string
+	Observation             map[string]any
+	UserQuestion            string
+	ContextTurns            []assistant.AssistantConversationContextTurn
+	SessionPreferenceFacts  []preferencemodel.Snapshot
+	LongTermPreferenceFacts []preferencemodel.Snapshot
+	SkillCatalog            []skillpkg.Manifest
 }
 
 type ModelResponse struct {
@@ -34,21 +38,109 @@ type ModelProvider interface {
 	Complete(ctx context.Context, req ModelRequest) (ModelResponse, error)
 }
 
+type ModelTextDelta struct {
+	Text string
+}
+
+// StreamingModelProvider 仅用于最终用户可见回答。推理、技能选择与证据处理仍走
+// Complete，以保证结构化 JSON 在完整解码后才进入状态机。
+type StreamingModelProvider interface {
+	Stream(ctx context.Context, req ModelRequest, emit func(ModelTextDelta) error) (ModelResponse, error)
+}
+
 type DeterministicModelProvider struct{}
 
-func deterministicClientTrace(req ModelRequest, responseText string, delta map[string]any) map[string]any {
-	prompt := fmt.Sprintf("%s%s\n用户问题：%s", req.Prompt, FormatModelContextForPrompt(req.ContextTurns), req.UserQuestion)
+func deterministicClientTrace(req ModelRequest, responseText string) map[string]any {
+	prompt := fmt.Sprintf(
+		"%s%s%s\n用户问题：%s",
+		req.Prompt,
+		FormatModelContextForPrompt(req.ContextTurns),
+		FormatModelPreferencesForPrompt(
+			req.SessionPreferenceFacts,
+			req.LongTermPreferenceFacts,
+		),
+		req.UserQuestion,
+	)
 	return map[string]any{
-		"stage":             req.Stage,
-		"skillId":           req.SkillID,
-		"turnId":            req.TurnID,
-		"traceId":           req.TraceID,
-		"requestUserPrompt": prompt,
-		"responseText":      responseText,
-		"structuredDelta":   delta,
-		"usage":             map[string]any{"deterministic": true},
-		"finishReason":      "stop",
+		"stage":                   req.Stage,
+		"skillId":                 req.SkillID,
+		"turnId":                  req.TurnID,
+		"traceId":                 req.TraceID,
+		"contextTurnCount":        len(req.ContextTurns),
+		"requestCharacterCount":   len([]rune(prompt)),
+		"responseCharacterCount":  len([]rune(responseText)),
+		"finishReason":            "stop",
+		"contentRedactionApplied": true,
 	}
+}
+
+func FormatModelPreferencesForPrompt(
+	session []preferencemodel.Snapshot,
+	longTerm []preferencemodel.Snapshot,
+) string {
+	effective := map[preferencemodel.Kind]string{}
+	for _, fact := range longTerm {
+		effective[fact.Kind] = strings.TrimSpace(fact.Value)
+	}
+	for _, fact := range session {
+		effective[fact.Kind] = strings.TrimSpace(fact.Value)
+	}
+	if len(effective) == 0 {
+		return ""
+	}
+	kinds := make([]string, 0, len(effective))
+	for kind := range effective {
+		kinds = append(kinds, string(kind))
+	}
+	sort.Strings(kinds)
+	lines := []string{
+		"\n用户显式设置的回答偏好（session 优先于 long_term；只影响呈现，不改变事实、权限或安全边界）：",
+	}
+	for _, rawKind := range kinds {
+		kind := preferencemodel.Kind(rawKind)
+		if instruction := preferenceInstruction(kind, effective[kind]); instruction != "" {
+			lines = append(lines, "- "+instruction)
+		}
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
+func preferenceInstruction(kind preferencemodel.Kind, value string) string {
+	switch kind {
+	case preferencemodel.KindResponseStyle:
+		if value == "deep_think" {
+			return "提供更充分的分析、权衡和可执行结论，但不要暴露内部推理过程。"
+		}
+	case preferencemodel.KindReplyLength:
+		switch value {
+		case "concise":
+			return "回答保持简洁，优先给结论和必要步骤。"
+		case "detailed":
+			return "回答给出充分细节、边界条件和步骤。"
+		}
+	case preferencemodel.KindTone:
+		switch value {
+		case "casual":
+			return "语气自然口语化。"
+		case "neutral":
+			return "语气客观中性。"
+		case "professional":
+			return "语气专业准确。"
+		case "warm":
+			return "语气温和、有同理心。"
+		}
+	case preferencemodel.KindLanguage:
+		switch value {
+		case "zh_cn":
+			return "使用简体中文回答。"
+		case "en":
+			return "Answer in English."
+		}
+	}
+	return ""
 }
 
 func observationToolSummary(obs map[string]any) string {
@@ -118,7 +210,7 @@ func (DeterministicModelProvider) Complete(_ context.Context, req ModelRequest) 
 			StructuredDelta:        delta,
 			Usage:                  map[string]any{"inputTokens": 40, "outputTokens": 12},
 			FinishReason:           "stop",
-			ClientModelInteraction: deterministicClientTrace(req, text, delta),
+			ClientModelInteraction: deterministicClientTrace(req, text),
 		}, nil
 	case "reasoning":
 		toolName := "web_search"
@@ -154,7 +246,7 @@ func (DeterministicModelProvider) Complete(_ context.Context, req ModelRequest) 
 			StructuredDelta:        delta,
 			Usage:                  map[string]any{"inputTokens": 32, "outputTokens": 24},
 			FinishReason:           "tool_use",
-			ClientModelInteraction: deterministicClientTrace(req, text, delta),
+			ClientModelInteraction: deterministicClientTrace(req, text),
 		}, nil
 	case "evidence_processing":
 		summary := observationToolSummary(req.Observation)
@@ -176,7 +268,7 @@ func (DeterministicModelProvider) Complete(_ context.Context, req ModelRequest) 
 			StructuredDelta:        delta,
 			Usage:                  map[string]any{"inputTokens": 36, "outputTokens": 28},
 			FinishReason:           "stop",
-			ClientModelInteraction: deterministicClientTrace(req, text, delta),
+			ClientModelInteraction: deterministicClientTrace(req, text),
 		}, nil
 	case "final":
 		summary := observationToolSummary(req.Observation)
@@ -200,7 +292,7 @@ func (DeterministicModelProvider) Complete(_ context.Context, req ModelRequest) 
 			StructuredDelta:        delta,
 			Usage:                  map[string]any{"inputTokens": 48, "outputTokens": 44},
 			FinishReason:           "stop",
-			ClientModelInteraction: deterministicClientTrace(req, markdown, delta),
+			ClientModelInteraction: deterministicClientTrace(req, markdown),
 		}, nil
 	default:
 		text := fmt.Sprintf("云端模型已处理：%s", question)
@@ -209,7 +301,7 @@ func (DeterministicModelProvider) Complete(_ context.Context, req ModelRequest) 
 			Text:                   text,
 			StructuredDelta:        delta,
 			FinishReason:           "stop",
-			ClientModelInteraction: deterministicClientTrace(req, text, delta),
+			ClientModelInteraction: deterministicClientTrace(req, text),
 		}, nil
 	}
 }

@@ -1,4 +1,4 @@
-# L4 契约/任务：works-tab-filter（Work Browser V1.0：更多菜单媒体筛选）
+# L3 契约/任务：works-tab-filter（Work Browser V1.0：更多菜单媒体筛选）
 
 > 2026-06-11 更新：Work Browser V1.0 取消顶部常驻二级 Tab（呼吸收起/Elastic 展开方案废弃）。媒体类型是筛选条件，不是一级导航；筛选入口收敛到右上「更多」菜单。
 

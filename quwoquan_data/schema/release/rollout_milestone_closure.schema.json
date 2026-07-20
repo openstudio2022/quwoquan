@@ -39,7 +39,8 @@
         "canary",
         "m1",
         "m2",
-        "m3"
+        "m3",
+        "h10k"
       ]
     },
     "environment": {

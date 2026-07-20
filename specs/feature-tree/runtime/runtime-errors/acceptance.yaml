@@ -40,7 +40,6 @@ sit_acceptance:
       - file: quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
       - file: quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors/test/runtime_failure_codec_test.dart
       - file: quwoquan_app/test/local_contract/cloud/runtime/errors/cloud_error_mapper_runtime_failure__local_contract_test.dart
-      - file: quwoquan_app/test/cloud/services/behavior/behavior_repository_error_contract_test.dart
       - file: quwoquan_app/test/local_contract/quality/observability/assistant/observability/logging/app_exception_telemetry_service__local_contract_test.dart
       - file: quwoquan_service/runtime/errors/errors_test.go
       - file: quwoquan_service/runtime/controlplane/error_message_override_test.go
@@ -50,17 +49,20 @@ sit_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.runtime.runtime_errors.sit1.sit1_local_contract
         envs: &id001
         - local
       - layer: local_contract
+        execution_profile: baseline
         suite: sit1_local_contract
         cases:
         - local_contract.runtime.runtime_errors.sit1.sit1_local_contract
         envs: *id001
       - layer: api_integration
+        execution_profile: integration
         suite: sit1_api_integration
         cases:
         - api_integration.runtime.runtime_errors.sit1.sit1_api_integration
@@ -69,6 +71,7 @@ sit_acceptance:
         - gamma
       supporting:
       - layer: user_acceptance
+        execution_profile: release
         suite: uat_journey
         cases:
         - user_acceptance.runtime.runtime_errors.sit1.uat_journey
@@ -81,5 +84,5 @@ execution:
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-error-endcloud-parity
   - make verify-service-error-recovery-alignment
-  full_gate:
+  profile_gates:
   - make gate

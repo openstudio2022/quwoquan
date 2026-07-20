@@ -1,0 +1,40 @@
+object: ContactDiscoveryRecord
+operations:
+  - InitiateContactDiscovery
+  - GetLatestContactDiscovery
+  - DismissContactDiscovery
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/user-service/internal/application/contact_discovery_service.go
+  store:
+    - quwoquan_service/services/user-service/internal/infrastructure/user/persistence/pg_contact_discovery_store_ext.go
+  transport:
+    - quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/services/user/contact_discovery_repository.dart
+  page:
+    - quwoquan_app/lib/ui/user/pages/add_contact_page.dart
+    - quwoquan_app/lib/ui/user/pages/phone_contacts_page.dart
+    - quwoquan_app/lib/ui/user/pages/contact_search_result_page.dart
+    - quwoquan_app/lib/ui/user/pages/scan_contact_qr_page.dart
+    - quwoquan_app/lib/ui/user/pages/contact_confirm_page.dart
+    - quwoquan_app/lib/ui/user/widgets/add_contact_entry_card.dart
+    - quwoquan_app/lib/ui/user/widgets/contact_candidate_row.dart
+  outbox: []
+  reader: []
+tests:
+  api_integration:
+    - quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
+  user_acceptance:
+    - quwoquan_app/test/user_acceptance/journeys/user/contact_relationship_lifecycle_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/user/add_contact/add_contact_page__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/user/add_contact_search/add_contact_search_page__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/user/add_contact_scan/add_contact_scan_page__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/user/add_contact_phone/add_contact_phone_page__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/pages/user/add_contact_confirm/add_contact_confirm_page__user_acceptance_test.dart
+  local_contract:
+    - quwoquan_app/test/local_contract/cloud/user/contact_facets_generated_client__contract__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/pages/add_contact_page_caps__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/pages/contact_search_result_page__local_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/pages/scan_contact_qr_page_unavailable__local_contract_test.dart
+environments: []

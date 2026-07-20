@@ -47,6 +47,7 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt1_local_contract
@@ -54,6 +55,7 @@ gwt_acceptance:
         - local
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -91,17 +93,20 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt2_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt2_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -144,7 +149,7 @@ gwt_acceptance:
     - 静态页与纹理工厂必须消费同一已解码 `ui.Image` 和同一 `coverSourceRect`；当前页、翻页末帧与落页首帧的裁剪/像素一致，图片晚到不得造成落页换图、裁剪或亮度跳变。
     - commit/cancel 到终点时必须与文章一样强制应用 animation plan 最后一帧，再同步执行 `completeAnimation` 与 page index 提交；terminal bottom 与目标静态页使用同一图片和 cover 裁剪。事务中晚到的图片状态在落平后的首个静态帧仍冻结，随后才应用并淡入。
     - 图片作品在内容下方、标题上方显示点状页态，最多 6 点且明确当前位置；单图无指示器。
-    - 视频作品显示自绘极简控制行（播放态/当前时间/进度/总时长）与 `视频集 · n/m ↔` 胶囊（时间轴下、标题上）；无点状指示器；单视频无胶囊；无平台默认控制层。
+    - 视频作品与 feedInline 共用同一自绘时间轴 token；首页轨道贴视频底边且总时长常驻轨道右上方，WorkBrowser 轨道贴互动工具栏上沿、无左侧播放按钮且总时长作为轨道上方的短暂 overlay；标题、正文与交集说明始终位于总时长/时间轴之上，WorkBrowser 总时长仅在进入或切集后最多显示 5 秒，首次几何测量确认安全前不得闪现，文本与总时长发生实际碰撞时立即隐藏视觉时长且不移动文本或轨道，不为时长单独占行；暂停态中央为无背景圆角播放三角；P0 提供大号时间浮标与 release-only seek，P1-A 才追加 storyboard，P1-B 才追加 ABR；`视频集 · n/m ↔` 胶囊位于 caption header、标题上方；无点状指示器；单视频无胶囊；无平台默认控制层。
     - 文章作品使用深色纸张阅读，页码 `n / m` 位于正文后、作者栏前，chevron 可切页；顶部无页码。
     - 文章默认不使用白纸，翻页正面、背面、底页共用同一纸张 palette。
     - 图片书与文章浏览器的前/后翻方向只由累计横向位移决定：左滑前翻、右滑后翻；起手左右半区不得参与方向判定。
@@ -164,6 +169,7 @@ gwt_acceptance:
     - frozen baseline 证据证明共享 `components/pageflip/**`、文章 `ui/content/article_reader/pageflip/**`、BACK 规则与既有测试相对恢复基线零差异；BACK 主线门禁继续保护文章 replacement、bottom clip 与 moving sheet。
     - local_contract 覆盖静态页、翻页末帧、落页首帧使用同一 cover 裁剪与像素；失败 overlay 不进入 moving sheet，`ImageBookPageSurfaceFactory` ready back 亮度为 front 的 `0.62..0.78` 并降低饱和度。
     - local_contract 覆盖 `works_image_pageflip_motion` 字段进入现有 behavior payload；widget/几何回归覆盖连续前后翻 10 次 seam/free-edge 无异常跳变、动态层不黑屏、不 loading、不瞬间换纹理。
+    - local_contract 覆盖 390×844、430×932、1024×1366 三档视频底部几何，真实 RenderParagraph 字形碰撞/未占满右侧正反例，动态文字缩放重测，暂停/拖动态轨道本体贴栏，评论分屏恢复、过滤移除/恢复、1→2→1 切集与 mediaItems 重排；视觉时长关闭后 current/total 语义仍存在。
     - user_acceptance 覆盖 390×844、430×932 与 iPad 视口的弱网/晚到图片连续前后翻旅程；每帧最多一条 free edge 与一条 seam，无第二折面、纹理重启、默认图片图标或瞬时换图，并保留真实设备 60fps 录屏证据。
     - widget 测试覆盖 Work Browser 图片书组件接入、首图中心小幅左滑 held curl 与翻到下一张、末图继续左滑不退出、三类媒体导航状态信息位置与上限断言。
     - pageflip 测试覆盖文章深色纸张正反面材质同源。
@@ -175,23 +181,30 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_timeline__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/video/video_playback_timeline__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
     status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt3_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt3_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -252,12 +265,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt4_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt4_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -270,12 +285,12 @@ gwt_acceptance:
     given:
     - 当前作品契约下发 `IntersectionReason.primaryText/primarySpans`、target 与详情列表。
     when:
-    - 用户查看默认态并点击底部具象化交集句或其中可导航片段。
+    - 用户查看默认态并点击具象化交集句或其中可导航片段。
     then:
-    - 默认态只在底部工具栏最下方显示云侧具象化交集句；不显示 `N 个交集 >` 摘要作为主表达；内容层无交集 chip/卡片/浮层。
+    - 默认态只显示一处云侧具象化交集句：视频位于标题/正文同一文本栈且高于总时长/时间轴，图片/文章位于工具栏上方；不显示 `N 个交集 >` 摘要作为主表达，不得在视频工具栏附近重复渲染第二份交集句。
     - 点击可导航片段进入对应主页/列表；整句 fallback 弹出「为什么推荐给你」详情 sheet，详情项文案来自云侧投影。
     done_when:
-    - widget 测试断言默认态具象化交集句、点击后详情/导航降级、内容层无交集元素。
+    - widget 测试断言默认态交集句按媒体类型只在规定位置显示一份，视频交集高于总时长/时间轴，点击后详情/导航降级正常。
     edge_cases:
     - 无交集数据时摘要行隐藏。
     contract_refs:
@@ -284,18 +299,21 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
     status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt5_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt5_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -327,12 +345,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt6_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt6_local_contract
@@ -364,12 +384,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt7_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt7_local_contract
         envs: *id001
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
@@ -404,11 +426,13 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt8_local_contract
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt8_local_contract
@@ -421,5 +445,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

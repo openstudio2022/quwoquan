@@ -1,0 +1,22 @@
+aggregate: AssistantInteractionEvent
+layer: e2e
+
+description: |
+  端云集成场景。反馈 → 事实入库 → 学习画像 → 个性化回读。
+
+execution:
+  environment: gamma
+  ci_strategy: advisory
+  trigger: pre-release
+
+scenarios:
+  - name: feedback_learning_roundtrip
+    description: 回答工具栏点反馈 → InteractionEvent 入库 → learning profile 更新
+    test_type: api_contract
+    actors:
+      app: lib/ui/assistant/widgets/message/assistant_answer_toolbar.dart
+      service: assistant-service POST /assistant/learning/events
+      storage: MongoDB assistant_interaction_events + rm_assistant_learning_profile
+    assertions:
+      - 事实 eventId 幂等；画像投影收敛
+      - ops learning-summary 可读到反馈计数

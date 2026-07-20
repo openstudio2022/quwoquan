@@ -39,19 +39,25 @@ void main() {
       startsWith('https://'),
     );
 
-    final prompts = secondState.events
+    final modelInteractions = secondState.events
         .where((event) => event.eventType == 'assistant.model.interaction')
-        .map((event) => event.payload['requestUserPrompt']?.toString() ?? '')
-        .where((prompt) => prompt.isNotEmpty)
         .toList(growable: false);
-    expect(prompts.any((prompt) => prompt.contains('同一会话前文')), isTrue);
     expect(
-      prompts.any(
-        (prompt) => prompt.contains('深圳') || prompt.contains('Shen zhen'),
+      modelInteractions.any(
+        (event) => (event.payload['contextTurnCount'] as num? ?? 0) >= 2,
       ),
       isTrue,
     );
-    expect(prompts.any((prompt) => prompt.contains('四口之家')), isTrue);
+    expect(
+      modelInteractions.every(
+        (event) =>
+            event.payload['contentRedactionApplied'] == true &&
+            !event.payload.containsKey('requestUserPrompt') &&
+            !event.payload.containsKey('responseText') &&
+            !event.payload.containsKey('structuredDelta'),
+      ),
+      isTrue,
+    );
   });
 }
 

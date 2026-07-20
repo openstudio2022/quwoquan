@@ -512,6 +512,11 @@ func (s *MongoIntersectionSource) coWishlistedEntityReason(ctx context.Context, 
 		Count:       len(shared),
 		SampleText:  strings.Join(wishlistSampleNames(shared, maxIntersectionPoint), "、"),
 	}}
+	_ = objectKind
+	// SVO 对象页合同（host_plain）：reason 对象必须是宿主 person（「你和 TA 都想去 X」
+	// 的关系主体是 TA），否则整条被 reasonTarget!=host 校验淘汰；entity 是证据与
+	// point 承载（SampleText=想去地名），约伴行动承接对象也是 person（dispatch=companion
+	// 复用建群，M0.7），故 ActionTargetID/RelationObjectID 归 person。
 	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     objectID + "_co_wishlisted_entity",
 		IntersectionClass:  "fact",
@@ -523,16 +528,16 @@ func (s *MongoIntersectionSource) coWishlistedEntityReason(ctx context.Context, 
 		Strength:           scoreFromCount(len(shared), 4),
 		ConfidenceLabel:    "",
 		RelationKind:       "shared_intent",
-		RelationObjectID:   head.EntityID,
+		RelationObjectID:   objectID,
 		ActionType:         "start_companion",
-		ActionTargetID:     head.EntityID,
+		ActionTargetID:     objectID,
 		Source:             "coWishlistedEntity",
 		FreshAt:            now.Format(time.RFC3339),
 		ExpiresAt:          now.Add(14 * 24 * time.Hour).Format(time.RFC3339),
 		IntersectionPoints: points,
 		FactPointCount:     1,
 		TotalPointCount:    1,
-		ObjectKind:         objectKind,
+		ObjectKind:         "person",
 	}, true
 }
 
@@ -892,109 +897,4 @@ func scoreFromCount(count, saturate int) float64 {
 		return 1.0
 	}
 	return v
-}
-
-func normalizedObjectType(objectID, objectType string) string {
-	normalized := strings.TrimSpace(objectType)
-	if normalized != "" && normalized != "homepage" && normalized != "entity" {
-		return normalized
-	}
-	id := strings.TrimSpace(objectID)
-	switch {
-	case strings.Contains(id, "_university_"):
-		return "university"
-	case strings.Contains(id, "_school_"):
-		return "school"
-	case strings.Contains(id, "_travel_route_"):
-		return "route"
-	case strings.Contains(id, "_travel_spot_") || strings.Contains(id, "_photo_spot_"):
-		return "photo_spot"
-	case strings.Contains(id, "_travel_gear_"):
-		return "gear"
-	case strings.Contains(id, "_travel_place_"), strings.HasPrefix(id, "homepage_sight_"), strings.HasPrefix(id, "fixture_homepage_poi"):
-		return "sight"
-	default:
-		return normalized
-	}
-}
-
-func objectDimension(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "university", "school":
-		return "identity"
-	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
-		return "location"
-	case "circle":
-		return "relationship"
-	default:
-		return "interest"
-	}
-}
-
-func objectLabel(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "university", "school":
-		return "同校"
-	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
-		return "同游"
-	case "circle":
-		return "同圈"
-	default:
-		return "同好"
-	}
-}
-
-func concreteObjectDisplayName(objectID, objectType string) string {
-	raw := strings.TrimSpace(objectID)
-	if raw == "" {
-		return ""
-	}
-	parts := strings.FieldsFunc(raw, func(r rune) bool {
-		return r == '/' || r == ':' || r == '|'
-	})
-	candidate := raw
-	if len(parts) > 0 {
-		candidate = strings.TrimSpace(parts[len(parts)-1])
-	}
-	switch candidate {
-	case "", objectLabel(objectType), "这里", "这个对象":
-		return ""
-	}
-	if strings.Contains(candidate, "_") {
-		return ""
-	}
-	return candidate
-}
-
-func relationActionType(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "user", "person":
-		return "open_profile"
-	default:
-		return "view_object"
-	}
-}
-
-// objectKindForObjectType 将开放 objectType 收口到闭集 objectKind（人/圈/校/地/企角标真相源）。
-func objectKindForObjectType(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "user", "person":
-		return "person"
-	case "circle":
-		return "circle"
-	case "university", "school":
-		return "school"
-	case "route":
-		return "route"
-	case "photo_spot":
-		return "photo_spot"
-	case "gear":
-		return "gear"
-	case "sight", "travel_photo", "place", "entity", "homepage":
-		return "place"
-	case "brand", "enterprise", "company":
-		return "enterprise"
-	default:
-		return ""
-	}
 }

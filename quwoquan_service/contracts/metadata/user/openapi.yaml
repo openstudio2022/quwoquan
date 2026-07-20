@@ -9,7 +9,7 @@ paths:
             operationId: CreateAlipayAuthorizationRequest
             x-contract-operation-id: user.authentication_challenge.CreateAlipayAuthorizationRequest
             x-object-id: user.authentication_challenge
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AuthenticationChallengeCommandFacade
@@ -35,7 +35,7 @@ paths:
             operationId: LoginWithAlipay
             x-contract-operation-id: user.account_session.LoginWithAlipay
             x-object-id: user.account_session
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -98,7 +98,7 @@ paths:
             operationId: LoginOneTap
             x-contract-operation-id: user.account_session.LoginOneTap
             x-object-id: user.account_session
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -124,7 +124,7 @@ paths:
             operationId: ResolveOneTapLoginHint
             x-contract-operation-id: user.authentication_challenge.ResolveOneTapLoginHint
             x-object-id: user.authentication_challenge
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AuthenticationChallengeCommandFacade
@@ -150,7 +150,7 @@ paths:
             operationId: LoginWithPhone
             x-contract-operation-id: user.account_session.LoginWithPhone
             x-object-id: user.account_session
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -176,7 +176,7 @@ paths:
             operationId: LoginWithQq
             x-contract-operation-id: user.account_session.LoginWithQq
             x-object-id: user.account_session
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -202,7 +202,7 @@ paths:
             operationId: LoginWithWechat
             x-contract-operation-id: user.account_session.LoginWithWechat
             x-object-id: user.account_session
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -256,7 +256,7 @@ paths:
             operationId: SendOtp
             x-contract-operation-id: user.authentication_challenge.SendOtp
             x-object-id: user.authentication_challenge
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: AuthenticationChallengeCommandFacade
@@ -282,7 +282,7 @@ paths:
             operationId: RefreshToken
             x-contract-operation-id: user.account_session.RefreshToken
             x-object-id: user.account_session
-            x-actor: account
+            x-actor: none
             x-application:
                 kind: command
                 facet: AccountSessionCommandFacade
@@ -303,22 +303,20 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /invites/{linkCode}:
+    /internal/user/personas/{personaId}/push-destinations:
         get:
-            operationId: GetInviteByCode
-            x-contract-operation-id: user.invite_record.GetInviteByCode
-            x-object-id: user.invite_record
-            x-actor: persona_or_device
+            operationId: ResolveIncomingCallPushDestinations
+            x-contract-operation-id: user.device_registration.ResolveIncomingCallPushDestinations
+            x-object-id: user.device_registration
+            x-actor: none
             x-application:
                 kind: query
-                facet: InviteRecordQueryFacade
-                method: getInviteByCode
-                reader: GetInviteByCodeReader
-                slice: GetInviteByCodeSlice
+                facet: DeviceRegistrationQueryFacade
+                method: resolveIncomingCallPushDestinations
+                reader: ResolveIncomingCallPushDestinationsReader
+                slice: IncomingCallPushDestinationSlice
             parameters:
-                - name: linkCode
+                - name: personaId
                   in: path
                   required: true
                   schema:
@@ -329,7 +327,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetInviteByCodeResponse'
+                                $ref: '#/components/schemas/IncomingCallPushDestinationSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -338,33 +336,69 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-                - {}
-    /invites/{linkCode}/accept:
+    /internal/user/push-endpoints/{endpointRef}/invalidate:
         post:
-            operationId: AcceptInvite
-            x-contract-operation-id: user.invite_record.AcceptInvite
-            x-object-id: user.invite_record
-            x-actor: persona
+            operationId: InvalidateDevicePushEndpoint
+            x-contract-operation-id: user.device_registration.InvalidateDevicePushEndpoint
+            x-object-id: user.device_registration
+            x-actor: none
             x-application:
                 kind: command
-                facet: InviteRecordCommandFacade
-                method: acceptInvite
-                aggregateOwner: InviteRecord
+                facet: DeviceRegistrationCommandFacade
+                method: invalidateDevicePushEndpoint
+                aggregateOwner: DeviceRegistration
             parameters:
-                - name: linkCode
+                - name: endpointRef
                   in: path
                   required: true
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AcceptInviteRequest'
+                            $ref: '#/components/schemas/InvalidateDevicePushEndpointRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DevicePushEndpointCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/user/push-endpoints/{endpointRef}/secret:
+        get:
+            operationId: ResolvePushEndpointSecret
+            x-contract-operation-id: user.device_registration.ResolvePushEndpointSecret
+            x-object-id: user.device_registration
+            x-actor: none
+            x-application:
+                kind: query
+                facet: DeviceRegistrationQueryFacade
+                method: resolvePushEndpointSecret
+                reader: ResolvePushEndpointSecretReader
+                slice: PushEndpointSecret
+            parameters:
+                - name: endpointRef
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PushEndpointSecret'
                 default:
                     description: Runtime failure
                     content:
@@ -400,52 +434,37 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /me/invites:
-        get:
-            operationId: ListMyInvites
-            x-contract-operation-id: user.invite_record.ListMyInvites
-            x-object-id: user.invite_record
-            x-actor: persona
+    /owner/account/close:
+        post:
+            operationId: CloseAccount
+            x-contract-operation-id: user.user_profile.CloseAccount
+            x-object-id: user.user_profile
+            x-actor: account
             x-application:
-                kind: query
-                facet: InviteRecordQueryFacade
-                method: listMyInvites
-                reader: ListMyInvitesReader
-                slice: ListMyInvitesSlice
+                kind: command
+                facet: AccountLifecycleCommandFacade
+                method: closeAccount
+                aggregateOwner: UserAccount
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CloseAccountRequestWire'
             responses:
                 "200":
                     description: OK
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InviteRecord'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-        post:
-            operationId: GenerateInvite
-            x-contract-operation-id: user.invite_record.GenerateInvite
-            x-object-id: user.invite_record
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: InviteRecordCommandFacade
-                method: generateInvite
-                aggregateOwner: InviteRecord
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/GenerateInviteRequest'
-            responses:
-                "204":
-                    description: No Content
+                                $ref: '#/components/schemas/CloseAccountResultWire'
                 default:
                     description: Runtime failure
                     content:
@@ -465,6 +484,13 @@ paths:
                 facet: ContactDiscoveryCommandFacade
                 method: initiateContactDiscovery
                 aggregateOwner: ContactDiscoveryRecord
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -497,6 +523,12 @@ paths:
                 - name: id
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             responses:
@@ -540,8 +572,8 @@ paths:
     /owner/credentials:
         get:
             operationId: ListCredentials
-            x-contract-operation-id: user.user_profile.ListCredentials
-            x-object-id: user.user_profile
+            x-contract-operation-id: user.credential_binding.ListCredentials
+            x-object-id: user.credential_binding
             x-actor: account
             x-application:
                 kind: query
@@ -582,36 +614,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
-                default:
-                    description: Runtime failure
+                "200":
+                    description: OK
                     content:
                         application/json:
                             schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /owner/credentials/bind:
-        post:
-            operationId: BindCredential
-            x-contract-operation-id: user.credential_binding.BindCredential
-            x-object-id: user.credential_binding
-            x-actor: account
-            x-application:
-                kind: command
-                facet: CredentialCommandFacade
-                method: bindCredential
-                aggregateOwner: CredentialBinding
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/BindCredentialRequest'
-            responses:
-                "204":
-                    description: No Content
+                                $ref: '#/components/schemas/CredentialBindingCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -638,8 +646,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/BindCarrierPhoneCredentialRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CredentialBindingCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -666,8 +678,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/BindPhoneCredentialRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CredentialBindingCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -681,7 +697,7 @@ paths:
             operationId: ResolveProfileQrToken
             x-contract-operation-id: user.user_profile.ResolveProfileQrToken
             x-object-id: user.user_profile
-            x-actor: persona_or_device
+            x-actor: none
             x-application:
                 kind: query
                 facet: PublicProfileQueryFacade
@@ -726,15 +742,25 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/FollowSubjectRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SubjectFollowCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -764,9 +790,19 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SubjectFollowCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -780,7 +816,7 @@ paths:
             operationId: GetSubAccountProfile
             x-contract-operation-id: user.user_profile.GetSubAccountProfile
             x-object-id: user.user_profile
-            x-actor: persona_or_device
+            x-actor: none
             x-application:
                 kind: query
                 facet: PublicProfileQueryFacade
@@ -836,26 +872,77 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /user/devices/push-tokens:
-        post:
-            operationId: RegisterDevice
-            x-contract-operation-id: user.device_registration.RegisterDevice
+    /user/devices/{deviceId}/push-endpoints/{endpointKind}:
+        put:
+            operationId: UpsertDevicePushEndpoint
+            x-contract-operation-id: user.device_registration.UpsertDevicePushEndpoint
             x-object-id: user.device_registration
             x-actor: account
             x-application:
                 kind: command
                 facet: DeviceRegistrationCommandFacade
-                method: registerDevice
+                method: upsertDevicePushEndpoint
                 aggregateOwner: DeviceRegistration
+            parameters:
+                - name: deviceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: endpointKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UserDevice'
+                            $ref: '#/components/schemas/DevicePushEndpointUpsertRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DevicePushEndpointCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        delete:
+            operationId: RemoveDevicePushEndpoint
+            x-contract-operation-id: user.device_registration.RemoveDevicePushEndpoint
+            x-object-id: user.device_registration
+            x-actor: account
+            x-application:
+                kind: command
+                facet: DeviceRegistrationCommandFacade
+                method: removeDevicePushEndpoint
+                aggregateOwner: DeviceRegistration
+            parameters:
+                - name: deviceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: endpointKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DevicePushEndpointCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -884,6 +971,12 @@ paths:
                 - name: subjectId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -945,6 +1038,13 @@ paths:
                 facet: GreetingRequestCommandFacade
                 method: sendGreetingRequest
                 aggregateOwner: GreetingRequest
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -979,6 +1079,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
                 "204":
                     description: No Content
@@ -1005,6 +1111,12 @@ paths:
                 - name: requestId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1039,6 +1151,12 @@ paths:
                 - name: requestId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1149,6 +1267,13 @@ paths:
                 facet: PersonaManagementCommandFacade
                 method: createPersona
                 aggregateOwner: Persona
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1263,6 +1388,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1301,6 +1432,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -1314,34 +1451,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ActivePersonaContextView'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /user/personas/{subAccountId}/delete-empty:
-        delete:
-            operationId: DeleteEmptyPersona
-            x-contract-operation-id: user.persona.DeleteEmptyPersona
-            x-object-id: user.persona
-            x-actor: account
-            x-application:
-                kind: command
-                facet: PersonaManagementCommandFacade
-                method: deleteEmptyPersona
-                aggregateOwner: Persona
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "204":
-                    description: No Content
                 default:
                     description: Runtime failure
                     content:
@@ -1400,6 +1509,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1432,6 +1547,12 @@ paths:
                 - name: subAccountId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -1520,6 +1641,13 @@ paths:
                 facet: ProfileCommandFacade
                 method: updateUserProfile
                 aggregateOwner: Persona
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1570,7 +1698,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-                - {}
     /user/profile/edit-snapshot:
         get:
             operationId: GetProfileEditSnapshot
@@ -1820,8 +1947,8 @@ paths:
     /user/settings/appearance:
         get:
             operationId: GetAppearanceSettings
-            x-contract-operation-id: user.user_profile.GetAppearanceSettings
-            x-object-id: user.user_profile
+            x-contract-operation-id: user.user_settings.GetAppearanceSettings
+            x-object-id: user.user_settings
             x-actor: account
             x-application:
                 kind: query
@@ -1854,6 +1981,13 @@ paths:
                 facet: UserSettingsCommandFacade
                 method: updateAppearanceSettings
                 aggregateOwner: UserSettings
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1878,8 +2012,8 @@ paths:
     /user/settings/calls:
         get:
             operationId: GetCallSettings
-            x-contract-operation-id: user.user_profile.GetCallSettings
-            x-object-id: user.user_profile
+            x-contract-operation-id: user.user_settings.GetCallSettings
+            x-object-id: user.user_settings
             x-actor: account
             x-application:
                 kind: query
@@ -1893,7 +2027,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/UserSetting'
+                                $ref: '#/components/schemas/CallSettingsView'
                 default:
                     description: Runtime failure
                     content:
@@ -1912,6 +2046,13 @@ paths:
                 facet: UserSettingsCommandFacade
                 method: updateCallSettings
                 aggregateOwner: UserSettings
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1919,8 +2060,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UserSetting'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserSettingsCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1932,8 +2077,8 @@ paths:
     /user/settings/notifications:
         get:
             operationId: GetNotificationSettings
-            x-contract-operation-id: user.user_profile.GetNotificationSettings
-            x-object-id: user.user_profile
+            x-contract-operation-id: user.user_settings.GetNotificationSettings
+            x-object-id: user.user_settings
             x-actor: account
             x-application:
                 kind: query
@@ -1947,7 +2092,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/UserSetting'
+                                $ref: '#/components/schemas/NotificationSettingsView'
                 default:
                     description: Runtime failure
                     content:
@@ -1966,6 +2111,13 @@ paths:
                 facet: UserSettingsCommandFacade
                 method: updateNotificationSettings
                 aggregateOwner: UserSettings
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -1973,8 +2125,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UserSetting'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserSettingsCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1986,8 +2142,8 @@ paths:
     /user/settings/privacy:
         get:
             operationId: GetPrivacySettings
-            x-contract-operation-id: user.user_profile.GetPrivacySettings
-            x-object-id: user.user_profile
+            x-contract-operation-id: user.user_settings.GetPrivacySettings
+            x-object-id: user.user_settings
             x-actor: account
             x-application:
                 kind: query
@@ -2001,7 +2157,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/UserSetting'
+                                $ref: '#/components/schemas/PrivacySettingsView'
                 default:
                     description: Runtime failure
                     content:
@@ -2020,6 +2176,13 @@ paths:
                 facet: UserSettingsCommandFacade
                 method: updatePrivacySettings
                 aggregateOwner: UserSettings
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: false
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -2027,8 +2190,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UserSetting'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserSettingsCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -2110,7 +2277,7 @@ paths:
             operationId: GetUserHomepageBundle
             x-contract-operation-id: user.user_profile.GetUserHomepageBundle
             x-object-id: user.user_profile
-            x-actor: persona_or_device
+            x-actor: none
             x-application:
                 kind: query
                 facet: PublicProfileQueryFacade
@@ -2224,6 +2391,12 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: false
                 content:
@@ -2231,8 +2404,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/BlockUserRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BlockCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -2257,9 +2434,19 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BlockCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -2283,6 +2470,12 @@ paths:
                 - name: targetSubAccountId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
             requestBody:
@@ -2322,9 +2515,19 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FollowCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -2393,118 +2596,11 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /users/{userId}/life-items:
-        get:
-            operationId: ListUserLifeItems
-            x-contract-operation-id: user.user_profile.ListUserLifeItems
-            x-object-id: user.user_profile
-            x-actor: persona_or_device
-            x-application:
-                kind: query
-                facet: ProfileContentQueryFacade
-                method: listUserLifeItems
-                reader: ListUserLifeItemsReader
-                slice: ListUserLifeItemsSlice
-            parameters:
-                - name: userId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListUserLifeItemsPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /users/{userId}/likes:
-        get:
-            operationId: ListUserLikes
-            x-contract-operation-id: user.user_profile.ListUserLikes
-            x-object-id: user.user_profile
-            x-actor: persona_or_device
-            x-application:
-                kind: query
-                facet: ProfileContentQueryFacade
-                method: listUserLikes
-                reader: ListUserLikesReader
-                slice: ListUserLikesSlice
-            parameters:
-                - name: userId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListUserLikesResponse'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
-    /users/{userId}/works:
-        get:
-            operationId: ListUserWorks
-            x-contract-operation-id: user.user_profile.ListUserWorks
-            x-object-id: user.user_profile
-            x-actor: persona_or_device
-            x-application:
-                kind: query
-                facet: ProfileContentQueryFacade
-                method: listUserWorks
-                reader: ListUserWorksReader
-                slice: ListUserWorksSlice
-            parameters:
-                - name: userId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListUserWorksPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
 components:
     securitySchemes:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AcceptInviteRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AcceptInviteRequest
-            x-contract-placeholder: true
         ActivatePersonaRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2540,15 +2636,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BindCarrierPhoneCredentialRequest
             x-contract-placeholder: true
-        BindCredentialRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: BindCredentialRequest
-            x-contract-placeholder: true
         BindPhoneCredentialRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BindPhoneCredentialRequest
+            x-contract-placeholder: true
+        BlockCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: BlockCommandResult
             x-contract-placeholder: true
         BlockUserRequest:
             type: object
@@ -2559,6 +2655,21 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BlockedListItemView
+            x-contract-placeholder: true
+        CallSettingsView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CallSettingsView
+            x-contract-placeholder: true
+        CloseAccountRequestWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CloseAccountRequestWire
+            x-contract-placeholder: true
+        CloseAccountResultWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CloseAccountResultWire
             x-contract-placeholder: true
         ConfirmProposalRequest:
             type: object
@@ -2584,6 +2695,21 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CredentialBinding
+            x-contract-placeholder: true
+        CredentialBindingCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CredentialBindingCommandResult
+            x-contract-placeholder: true
+        DevicePushEndpointCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DevicePushEndpointCommandResult
+            x-contract-placeholder: true
+        DevicePushEndpointUpsertRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DevicePushEndpointUpsertRequest
             x-contract-placeholder: true
         FollowCommandRequest:
             type: object
@@ -2620,16 +2746,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FollowingSubjectItemView
             x-contract-placeholder: true
-        GenerateInviteRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GenerateInviteRequest
-            x-contract-placeholder: true
-        GetInviteByCodeResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetInviteByCodeResponse
-            x-contract-placeholder: true
         GetUserInterestProfileResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2640,15 +2756,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IgnoreGreetingRequestRequest
             x-contract-placeholder: true
+        IncomingCallPushDestinationSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IncomingCallPushDestinationSlice
+            x-contract-placeholder: true
         InitiateContactDiscoveryRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: InitiateContactDiscoveryRequest
             x-contract-placeholder: true
-        InviteRecord:
+        InvalidateDevicePushEndpointRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InviteRecord
+            x-contract-entity: InvalidateDevicePushEndpointRequest
             x-contract-placeholder: true
         ListGreetingInboxResponse:
             type: object
@@ -2673,37 +2794,6 @@ components:
                     type: string
                     nullable: true
             x-contract-entity: ProfileUpdateProposalView
-        ListUserLifeItemsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/UserLifeItem'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: UserLifeItem
-        ListUserLikesResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ListUserLikesResponse
-            x-contract-placeholder: true
-        ListUserWorksPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/UserWork'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: UserWork
         LoginAnonymousRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2744,6 +2834,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MarkFollowedSubjectVisitedRequest
             x-contract-placeholder: true
+        NotificationSettingsView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: NotificationSettingsView
+            x-contract-placeholder: true
         Persona:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2763,6 +2858,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PersonaManagementQuotaView
+            x-contract-placeholder: true
+        PrivacySettingsView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PrivacySettingsView
             x-contract-placeholder: true
         ProfileEditSnapshotWire:
             type: object
@@ -2793,6 +2893,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PullUserSyncResponse
+            x-contract-placeholder: true
+        PushEndpointSecret:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PushEndpointSecret
             x-contract-placeholder: true
         RefreshTokenRequest:
             type: object
@@ -2854,33 +2959,28 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SubAccountProfileView
             x-contract-placeholder: true
+        SubjectFollowCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SubjectFollowCommandResult
+            x-contract-placeholder: true
         UserAccount:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UserAccount
-            x-contract-placeholder: true
-        UserDevice:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UserDevice
             x-contract-placeholder: true
         UserHomepageBundleWire:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UserHomepageBundleWire
             x-contract-placeholder: true
-        UserLifeItem:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UserLifeItem
-            x-contract-placeholder: true
         UserSetting:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UserSetting
             x-contract-placeholder: true
-        UserWork:
+        UserSettingsCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UserWork
+            x-contract-entity: UserSettingsCommandResult
             x-contract-placeholder: true

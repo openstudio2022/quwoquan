@@ -32,6 +32,18 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
+      - file: quwoquan_app/test/local_contract/app/verify_dart_semantic_text__local_contract_test.py
+      - file: quwoquan_app/test/local_contract/quality/observability/assistant/observability/logging/app_exception_telemetry_service__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/content_repository_subinterfaces_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/conversation/message_action_menu_overlay__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/article_reader/article_reader_architecture__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/article_editor_wysiwyg_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_draft_session_controller__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_page_structure__maintainability__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_announcement_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/services/app_request_wait_controller__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/widgets/app_request_feedback__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_cancellation__local_contract_test.dart
@@ -47,6 +59,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_transfer_ownership/chat_transfer_ownership_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_admins/chat_admins_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_member_search/chat_member_search_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_half_sheet/assistant_half_sheet_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/personal_assistant_dialog/personal_assistant_dialog_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
@@ -64,6 +77,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_maintenance/homepage_maintenance_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_status_report/homepage_status_report_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/my_footprint/my_footprint_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/user/user_profile/user_profile_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/user/add_contact/add_contact_page__user_acceptance_test.dart
@@ -100,9 +114,12 @@ gwt_acceptance:
       - file: quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
     status: implemented
+    notes:
+    - "2026-07-19 CR-20260719-124：已收口批次页面补用户文案语义棘轮、handled RuntimeFailure 结构化观测、production Remote-only typed Facet、核心页 R03 拆分和无契约假入口删除；P1–P9 结论不降级。"
     test_evidence:
       primary:
       - layer: user_acceptance
+        execution_profile: release
         suite: page_surface_matrix
         cases:
         - user_acceptance.page.chatList.load_success
@@ -110,6 +127,46 @@ gwt_acceptance:
         - user_acceptance.page.chatList.primary_cta
         - user_acceptance.page.chatList.trace_context
         - user_acceptance.page.chatList.request_wait_recovery
+        - user_acceptance.page.greetingInbox.load_success
+        - user_acceptance.page.greetingInbox.empty_permission_error
+        - user_acceptance.page.greetingInbox.primary_cta
+        - user_acceptance.page.greetingInbox.trace_context
+        - user_acceptance.page.greetingInbox.request_wait_recovery
+        - user_acceptance.page.blockedUsers.load_success
+        - user_acceptance.page.blockedUsers.empty_permission_error
+        - user_acceptance.page.blockedUsers.primary_cta
+        - user_acceptance.page.blockedUsers.trace_context
+        - user_acceptance.page.blockedUsers.request_wait_recovery
+        - user_acceptance.page.settingsNotifications.load_success
+        - user_acceptance.page.settingsNotifications.empty_permission_error
+        - user_acceptance.page.settingsNotifications.primary_cta
+        - user_acceptance.page.settingsNotifications.trace_context
+        - user_acceptance.page.settingsNotifications.request_wait_recovery
+        - user_acceptance.page.settingsPrivacy.load_success
+        - user_acceptance.page.settingsPrivacy.empty_permission_error
+        - user_acceptance.page.settingsPrivacy.primary_cta
+        - user_acceptance.page.settingsPrivacy.trace_context
+        - user_acceptance.page.settingsPrivacy.request_wait_recovery
+        - user_acceptance.page.settingsCalls.load_success
+        - user_acceptance.page.settingsCalls.empty_permission_error
+        - user_acceptance.page.settingsCalls.primary_cta
+        - user_acceptance.page.settingsCalls.trace_context
+        - user_acceptance.page.settingsCalls.request_wait_recovery
+        - user_acceptance.page.settingsAccountSecurity.load_success
+        - user_acceptance.page.settingsAccountSecurity.empty_permission_error
+        - user_acceptance.page.settingsAccountSecurity.primary_cta
+        - user_acceptance.page.settingsAccountSecurity.trace_context
+        - user_acceptance.page.settingsAccountSecurity.request_wait_recovery
+        - user_acceptance.page.blockedKeywords.load_success
+        - user_acceptance.page.blockedKeywords.empty_permission_error
+        - user_acceptance.page.blockedKeywords.primary_cta
+        - user_acceptance.page.blockedKeywords.trace_context
+        - user_acceptance.page.blockedKeywords.request_wait_recovery
+        - user_acceptance.page.myReports.load_success
+        - user_acceptance.page.myReports.empty_permission_error
+        - user_acceptance.page.myReports.primary_cta
+        - user_acceptance.page.myReports.trace_context
+        - user_acceptance.page.myReports.request_wait_recovery
         - user_acceptance.page.startGroupChat.load_success
         - user_acceptance.page.startGroupChat.empty_permission_error
         - user_acceptance.page.startGroupChat.primary_cta
@@ -125,6 +182,11 @@ gwt_acceptance:
         - user_acceptance.page.chatSettings.primary_cta
         - user_acceptance.page.chatSettings.trace_context
         - user_acceptance.page.chatSettings.request_wait_recovery
+        - user_acceptance.page.chatAnnouncement.load_success
+        - user_acceptance.page.chatAnnouncement.empty_permission_error
+        - user_acceptance.page.chatAnnouncement.primary_cta
+        - user_acceptance.page.chatAnnouncement.trace_context
+        - user_acceptance.page.chatAnnouncement.request_wait_recovery
         - user_acceptance.page.chatManage.load_success
         - user_acceptance.page.chatManage.empty_permission_error
         - user_acceptance.page.chatManage.primary_cta
@@ -150,6 +212,11 @@ gwt_acceptance:
         - user_acceptance.page.chatMemberSearch.primary_cta
         - user_acceptance.page.chatMemberSearch.trace_context
         - user_acceptance.page.chatMemberSearch.request_wait_recovery
+        - user_acceptance.page.chatAnnouncement.load_success
+        - user_acceptance.page.chatAnnouncement.empty_permission_error
+        - user_acceptance.page.chatAnnouncement.primary_cta
+        - user_acceptance.page.chatAnnouncement.trace_context
+        - user_acceptance.page.chatAnnouncement.request_wait_recovery
         - user_acceptance.page.assistantHalfSheet.load_success
         - user_acceptance.page.assistantHalfSheet.empty_permission_error
         - user_acceptance.page.assistantHalfSheet.primary_cta
@@ -292,12 +359,14 @@ gwt_acceptance:
         - gray_initial
       supporting:
       - layer: local_contract
+        execution_profile: baseline
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.page_horizontal_quality.gwt1_local_contract
         envs:
         - local
       - layer: api_integration
+        execution_profile: integration
         suite: gwt1_api_integration
         cases:
         - api_integration.runtime.runtime_client_foundation.page_horizontal_quality.gwt1_api_integration
@@ -310,5 +379,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

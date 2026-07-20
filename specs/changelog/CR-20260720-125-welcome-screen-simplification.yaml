@@ -1,0 +1,74 @@
+id: CR-20260720-125-welcome-screen-simplification
+title: 启动欢迎页信息结构全面简化与原生首帧同构刷新
+slug: welcome-screen-simplification
+revision: 2
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage
+entries:
+  - timestamp: "2026-07-20T07:30:00+08:00"
+    summary: |
+      欢迎页信息结构收敛为「深蓝渐变背景 + 八瓣花 + slogan『遇见同趣，绽放热爱』+
+      底部品牌名『趣我圈』+ 系统状态栏」：删除中央大号标题、小趣低语与 ShaderMask
+      渐变文字；花朵可见直径响应式（约屏宽 38%，clamp 132~168dp）；品牌深蓝在深浅
+      色系统模式下统一（WelcomeAppearance 去 brightness 分支，双主题矩阵登记
+      exempt）；状态栏透明 + 浅色内容在 Android styles / iOS Info.plist / Flutter
+      AnnotatedRegion 三处同源；底部品牌名视觉中心约 90% 屏高并避让安全区；启动
+      提示改为固定 24px 槽位挂在品牌名上方、轻微淡入；品牌簇只暴露单一无障碍语义
+      「趣我圈，遇见同趣，绽放热爱」。原生启动图与 Flutter 首帧继续由同一
+      WelcomeStaticFrame 导出（新增贴底品牌名条位图：Android layer-list 第三层 +
+      iOS storyboard bottom 约束），花瓣动效时间轴（90/415/70/815/90ms、7→0 聚拢、
+      0→7 绽放、最多重放 2 次、6s 硬退出）保持不变。
+    reason: |
+      原欢迎页同时承载大标题、slogan、小趣署名与第二句文案，信息结构超出品牌欢迎
+      页定位；深色系统模式下 Flutter 首帧背景与原生启动图不一致，存在接管闪变；
+      花瓣固定 256dp 画布在小屏过大且不随屏宽适配；无障碍层面八瓣与多段文本分散
+      暴露焦点。
+    change_type:
+      - implementation
+      - local_contract
+      - user_acceptance
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_welcome_motion_probe__local_contract_test.py
+          - quwoquan_app/test/local_contract/ui/welcome/app_icon_assets__local_contract_test.dart
+    notes: |
+      品牌展示字体确定为仓内打包的 Noto Sans SC（OFL-1.1、pinned commit 与
+      SHA-256 可审计），运行时与原生导出同字形，不保留待替换字体分支。
+      2026-07-20 回归补记：app_startup_welcome__local_contract_test.dart 的
+      auth 旧符号已迁移到对象级新契约；并行依赖迁移收口后完整启动链路 10/10
+      已通过。回归同时发现并修复 feed impression gate 在子树 dispose 时通过已失活
+      ref 查祖先的问题，改为构建期捕获与卡片批次同源的 tracker/session 快照，
+      欢迎结束进入主壳不再触发生命周期断言。
+  - timestamp: "2026-07-20T15:20:00+08:00"
+    summary: |
+      依据用户补充的图一高保完成视觉风险清零：背景调为更深、更饱和的上亮下深品牌蓝；
+      花朵可见宽度从 38% 调为 40%（仍受 132~168dp 限制）；标准屏 slogan 固定
+      32sp/600；欢迎页、登录品牌标与应用图标收敛到唯一高饱和 `WelcomeAppearance`。
+      Android 四套 launch_background 与 launch color 改由原生资产生成器从 Dart token
+      生成，Android 12 样式只引用 color resource；iOS fallback background 与同源位图
+      对齐。RTC 通话舞台迁到独立颜色 token，欢迎调色不会外溢。图一只作为视觉参考，
+      不复制截图、状态栏或文字位图。
+    reason: |
+      原实现信息结构正确，但背景偏亮偏青、花瓣透明度偏低，且 `vivid` 分支形成两个品牌
+      终态；同时把已具备完整 OFL 授权证据的 Noto Sans SC 记为待替换风险没有必要。
+      本次以可审计现有资产做正式裁决，删除分支与第二颜色真相源。
+    change_type:
+      - design
+      - implementation
+      - local_contract
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+          - quwoquan_app/test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+          - quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart

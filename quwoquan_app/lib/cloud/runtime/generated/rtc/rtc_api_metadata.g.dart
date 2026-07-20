@@ -8,7 +8,6 @@ class RtcApiMetadata {
 
   static const String domain = 'rtc';
   static const List<String> apiPrefixes = <String>[
-    '/rtc/call-recordings',
     '/rtc/calls',
   ];
 
@@ -23,9 +22,8 @@ class RtcApiMetadata {
     'LeaveCall': '/rtc/calls/{callId}/leave',
     'ListCalls': '/rtc/calls',
     'RejectCall': '/rtc/calls/{callId}/reject',
-    'StartCallRecording': '/rtc/calls/{callId}/recordings',
+    'ReportMediaConnected': '/rtc/calls/{callId}/connected',
     'StartScreenShare': '/rtc/calls/{callId}/screen-share/start',
-    'StopCallRecording': '/rtc/call-recordings/{recordingId}:stop',
     'StopScreenShare': '/rtc/calls/{callId}/screen-share/stop',
     'ToggleCamera': '/rtc/calls/{callId}/camera',
     'ToggleMute': '/rtc/calls/{callId}/mute',
@@ -42,9 +40,8 @@ class RtcApiMetadata {
     'LeaveCall': 'POST',
     'ListCalls': 'GET',
     'RejectCall': 'POST',
-    'StartCallRecording': 'POST',
+    'ReportMediaConnected': 'POST',
     'StartScreenShare': 'POST',
-    'StopCallRecording': 'POST',
     'StopScreenShare': 'POST',
     'ToggleCamera': 'POST',
     'ToggleMute': 'POST',
@@ -62,9 +59,8 @@ class RtcApiMetadata {
     'LeaveCall': 'required',
     'ListCalls': 'required',
     'RejectCall': 'required',
-    'StartCallRecording': 'required',
+    'ReportMediaConnected': 'required',
     'StartScreenShare': 'required',
-    'StopCallRecording': 'required',
     'StopScreenShare': 'required',
     'ToggleCamera': 'required',
     'ToggleMute': 'required',
@@ -88,9 +84,8 @@ class RtcApiMetadata {
   static const String leaveCallOperation = 'LeaveCall';
   static const String listCallsOperation = 'ListCalls';
   static const String rejectCallOperation = 'RejectCall';
-  static const String startCallRecordingOperation = 'StartCallRecording';
+  static const String reportMediaConnectedOperation = 'ReportMediaConnected';
   static const String startScreenShareOperation = 'StartScreenShare';
-  static const String stopCallRecordingOperation = 'StopCallRecording';
   static const String stopScreenShareOperation = 'StopScreenShare';
   static const String toggleCameraOperation = 'ToggleCamera';
   static const String toggleMuteOperation = 'ToggleMute';
@@ -145,9 +140,9 @@ class RtcApiMetadata {
       'callId': callId,
     });
   }
-  static const String startCallRecordingPathTemplate = '/rtc/calls/{callId}/recordings';
-  static String startCallRecordingPath({required String callId}) {
-    return _fillPath(startCallRecordingPathTemplate, <String, String>{
+  static const String reportMediaConnectedPathTemplate = '/rtc/calls/{callId}/connected';
+  static String reportMediaConnectedPath({required String callId}) {
+    return _fillPath(reportMediaConnectedPathTemplate, <String, String>{
       'callId': callId,
     });
   }
@@ -155,12 +150,6 @@ class RtcApiMetadata {
   static String startScreenSharePath({required String callId}) {
     return _fillPath(startScreenSharePathTemplate, <String, String>{
       'callId': callId,
-    });
-  }
-  static const String stopCallRecordingPathTemplate = '/rtc/call-recordings/{recordingId}:stop';
-  static String stopCallRecordingPath({required String recordingId}) {
-    return _fillPath(stopCallRecordingPathTemplate, <String, String>{
-      'recordingId': recordingId,
     });
   }
   static const String stopScreenSharePathTemplate = '/rtc/calls/{callId}/screen-share/stop';

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,12 +20,16 @@ type WorkflowTransition = controlplane.WorkflowTransition
 type WorkflowState = controlplane.WorkflowState
 type ApprovalDecision = controlplane.ApprovalDecision
 type AuditEvent = controlplane.AuditEvent
+type MutationReceipt = controlplane.MutationReceipt
+type MutationOutboxEvent = controlplane.MutationOutboxEvent
 
 type FileState struct {
-	Documents map[string]map[string]Document `json:"documents"`
-	Workflows map[string]WorkflowState       `json:"workflows"`
-	Approvals map[string][]ApprovalDecision  `json:"approvals"`
-	Audits    []AuditEvent                   `json:"audits"`
+	Documents        map[string]map[string]Document `json:"documents"`
+	Workflows        map[string]WorkflowState       `json:"workflows"`
+	Approvals        map[string][]ApprovalDecision  `json:"approvals"`
+	Audits           []AuditEvent                   `json:"audits"`
+	MutationReceipts map[string]MutationReceipt     `json:"mutationReceipts"`
+	MutationOutbox   []MutationOutboxEvent          `json:"mutationOutbox"`
 }
 
 type FileStore struct {
@@ -33,6 +38,7 @@ type FileStore struct {
 }
 
 var _ controlplane.StateStore = (*FileStore)(nil)
+var _ controlplane.AtomicMutationStore = (*FileStore)(nil)
 
 func NewFileStore(path string) *FileStore {
 	return &FileStore{path: path}
@@ -277,6 +283,91 @@ func (s *FileStore) ListAudits() ([]AuditEvent, error) {
 	return out, nil
 }
 
+func (s *FileStore) CommitApprovedMutation(
+	mutation controlplane.ApprovedMutation,
+) (MutationReceipt, error) {
+	if err := controlplane.ValidateApprovedMutation(mutation); err != nil {
+		return MutationReceipt{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, err := s.readLocked()
+	if err != nil {
+		return MutationReceipt{}, err
+	}
+	key := mutationReceiptKey(
+		mutation.ObjectType,
+		mutation.ObjectID,
+		mutation.IdempotencyKey,
+	)
+	if existing, ok := state.MutationReceipts[key]; ok {
+		if existing.Intent != mutation.Intent ||
+			existing.PayloadDigest != mutation.PayloadDigest {
+			return MutationReceipt{}, controlplane.ErrMutationIdempotencyConflict
+		}
+		existing.Replayed = true
+		return existing, nil
+	}
+	actors := map[string]struct{}{}
+	for _, approval := range state.Approvals[workflowKey(mutation.ObjectType, mutation.ObjectID)] {
+		actor := strings.TrimSpace(approval.Actor)
+		if approval.Decision == mutation.ApprovalDecision &&
+			approval.PayloadDigest == mutation.PayloadDigest &&
+			actor != "" && actor != "unverified" {
+			actors[actor] = struct{}{}
+		}
+	}
+	if len(actors) < 2 {
+		return MutationReceipt{}, controlplane.ErrDualApprovalRequired
+	}
+	if state.Documents[mutation.Namespace] == nil {
+		state.Documents[mutation.Namespace] = map[string]Document{}
+	}
+	committedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if mutation.Workflow.UpdatedAt == "" {
+		mutation.Workflow.UpdatedAt = committedAt
+	}
+	if mutation.Audit.At == "" {
+		mutation.Audit.At = committedAt
+	}
+	state.Documents[mutation.Namespace][mutation.ObjectID] = cloneDocument(mutation.Document)
+	state.Workflows[workflowKey(mutation.ObjectType, mutation.ObjectID)] = mutation.Workflow
+	state.Audits = append(state.Audits, mutation.Audit)
+	state.MutationOutbox = append(state.MutationOutbox, mutation.OutboxEvents...)
+	receipt := MutationReceipt{
+		ObjectType:     mutation.ObjectType,
+		ObjectID:       mutation.ObjectID,
+		Intent:         mutation.Intent,
+		PayloadDigest:  mutation.PayloadDigest,
+		IdempotencyKey: mutation.IdempotencyKey,
+		CommittedAt:    committedAt,
+	}
+	state.MutationReceipts[key] = receipt
+	if err := s.writeLocked(state); err != nil {
+		return MutationReceipt{}, err
+	}
+	return receipt, nil
+}
+
+func (s *FileStore) GetMutationReceipt(
+	objectType string,
+	objectID string,
+	idempotencyKey string,
+) (MutationReceipt, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, err := s.readLocked()
+	if err != nil {
+		return MutationReceipt{}, false, err
+	}
+	receipt, ok := state.MutationReceipts[mutationReceiptKey(
+		objectType,
+		objectID,
+		idempotencyKey,
+	)]
+	return receipt, ok, nil
+}
+
 func (s *FileStore) read() (FileState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -291,10 +382,12 @@ func (s *FileStore) readLocked() (FileState, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return FileState{
-				Documents: map[string]map[string]Document{},
-				Workflows: map[string]WorkflowState{},
-				Approvals: map[string][]ApprovalDecision{},
-				Audits:    []AuditEvent{},
+				Documents:        map[string]map[string]Document{},
+				Workflows:        map[string]WorkflowState{},
+				Approvals:        map[string][]ApprovalDecision{},
+				Audits:           []AuditEvent{},
+				MutationReceipts: map[string]MutationReceipt{},
+				MutationOutbox:   []MutationOutboxEvent{},
 			}, nil
 		}
 		return FileState{}, err
@@ -315,6 +408,12 @@ func (s *FileStore) readLocked() (FileState, error) {
 	if state.Audits == nil {
 		state.Audits = []AuditEvent{}
 	}
+	if state.MutationReceipts == nil {
+		state.MutationReceipts = map[string]MutationReceipt{}
+	}
+	if state.MutationOutbox == nil {
+		state.MutationOutbox = []MutationOutboxEvent{}
+	}
 	return state, nil
 }
 
@@ -328,6 +427,10 @@ func (s *FileStore) writeLocked(state FileState) error {
 
 func workflowKey(objectType, objectID string) string {
 	return objectType + ":" + objectID
+}
+
+func mutationReceiptKey(objectType, objectID, idempotencyKey string) string {
+	return objectType + ":" + objectID + ":" + idempotencyKey
 }
 
 func nowRFC3339() string {

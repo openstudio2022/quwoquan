@@ -1,0 +1,28 @@
+object: Location
+operations:
+  - GetNearbyLocations
+  - SearchLocations
+implementation:
+  domain_behavior:
+    - quwoquan_service/services/integration-service/internal/application/location_service.go
+  store: []
+  outbox: []
+  reader:
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/amap_client.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/baidu_client.go
+    - quwoquan_service/services/integration-service/internal/infrastructure/provider/mongo_catalog_client.go
+  transport:
+    - quwoquan_service/services/integration-service/internal/adapters/http/location_handler.go
+  app_client:
+    - quwoquan_app/lib/cloud/runtime/generated/integration/integration_location_metadata.g.dart
+    - quwoquan_app/lib/cloud/runtime/generated/integration/location_poi_dto.g.dart
+  page:
+    - quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
+tests:
+  local_contract:
+    - quwoquan_service/services/integration-service/internal/application/location_service__local_contract_test.go
+    - quwoquan_service/services/integration-service/internal/adapters/http/location_handler__local_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/integration/location/contract/location_poi_dto_contract__local_contract_test.dart
+  api_integration: []
+  user_acceptance: []
+environments: []

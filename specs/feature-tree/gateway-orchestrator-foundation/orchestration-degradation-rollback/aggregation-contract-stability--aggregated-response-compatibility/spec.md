@@ -1,4 +1,4 @@
-# L4 特性：aggregated-response-compatibility
+# L3 特性：aggregated-response-compatibility
 
 ## 功能说明
 - 待补充

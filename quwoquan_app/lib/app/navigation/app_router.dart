@@ -34,10 +34,18 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_account_security_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_privacy_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/blocked_keywords_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/my_reports_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/greeting_inbox_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_announcement_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
@@ -69,9 +77,9 @@ import 'package:quwoquan_app/ui/user/pages/phone_contacts_page.dart';
 import 'package:quwoquan_app/ui/user/pages/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
-import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_footprint_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
+import 'package:quwoquan_app/ui/user/pages/blocked_users_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -90,8 +98,10 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 part 'app_router_create_entry_route.dart';
 part 'app_router_contact_routes.dart';
 part 'app_router_helpers.dart';
+part 'app_router_legal_routes.dart';
 part 'app_router_profile_routes.dart';
 part 'app_router_recovery_page.dart';
+part 'app_router_rtc_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -189,46 +199,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      GoRoute(
-        path: AppRoutePaths.legalUserAgreement,
-        pageBuilder: (context, state) => CupertinoPage<void>(
-          key: state.pageKey,
-          child: LegalDocumentPage(
-            title: UITextConstants.userAgreement,
-            url: AuthLegalConfig.userAgreementUrl,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoutePaths.legalPrivacyPolicy,
-        pageBuilder: (context, state) => CupertinoPage<void>(
-          key: state.pageKey,
-          child: LegalDocumentPage(
-            title: UITextConstants.privacyPolicy,
-            url: AuthLegalConfig.privacyPolicyUrl,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoutePaths.legalPermissions,
-        pageBuilder: (context, state) => CupertinoPage<void>(
-          key: state.pageKey,
-          child: LegalDocumentPage(
-            title: UITextConstants.permissionsStatement,
-            url: AuthLegalConfig.permissionsUrl,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoutePaths.legalThirdPartySdkList,
-        pageBuilder: (context, state) => CupertinoPage<void>(
-          key: state.pageKey,
-          child: LegalDocumentPage(
-            title: UITextConstants.thirdPartySdkList,
-            url: AuthLegalConfig.thirdPartySdkListUrl,
-          ),
-        ),
-      ),
+      ..._legalDocumentRoutes(),
       ShellRoute(
         builder: (context, state, child) {
           return AppNativeBackScope(
@@ -424,6 +395,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               recommendationTraceId: extra?.recommendationTraceId ?? '',
               experimentBucket: extra?.experimentBucket ?? '',
               rolloutCohort: extra?.rolloutCohort ?? '',
+              initialTabTarget: extra?.initialTabTarget,
             ),
           );
         },
@@ -650,6 +622,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra is MediaViewerExtra
               ? state.extra! as MediaViewerExtra
               : null;
+          final entryExtra = state.extra is WorkBrowserEntryRouteExtra
+              ? state.extra! as WorkBrowserEntryRouteExtra
+              : null;
 
           if (extra != null &&
               (extra.dtoPosts.isNotEmpty || extra.posts.isNotEmpty)) {
@@ -671,6 +646,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: WorkBrowserEntryPage(
               workId: workId,
               source: state.uri.queryParameters['source'] ?? 'workBrowser',
+              referralSource:
+                  entryExtra?.referralSource ??
+                  _referralSourceFromRoute(
+                    state.uri.queryParameters['source'] ?? '',
+                  ),
+              feedRequestId: entryExtra?.feedRequestId,
               sourceAppearanceMode: uiErrorAppearanceModeFromRouteValue(
                 state.uri.queryParameters['sourceTheme'],
               ),
@@ -750,6 +731,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: AppRoutePaths.blockedUsersSegment,
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const BlockedUsersPage(),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.blockedKeywordsSegment,
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const BlockedKeywordsPage(),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.myReportsSegment,
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const MyReportsPage(),
+              );
+            },
+          ),
+          GoRoute(
             path: AppRoutePaths.settingsDarkModeSegment,
             pageBuilder: (context, state) {
               return appRoutePage<void>(
@@ -757,6 +765,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 child: const SettingsDarkModePage(),
               );
             },
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsNotificationsSegment,
+            pageBuilder: (context, state) => appRoutePage<void>(
+              state: state,
+              child: const SettingsNotificationsPage(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsPrivacySegment,
+            pageBuilder: (context, state) => appRoutePage<void>(
+              state: state,
+              child: const SettingsPrivacyPage(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsCallsSegment,
+            pageBuilder: (context, state) => appRoutePage<void>(
+              state: state,
+              child: const SettingsCallsPage(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsAccountSecuritySegment,
+            pageBuilder: (context, state) => appRoutePage<void>(
+              state: state,
+              child: const SettingsAccountSecurityPage(),
+            ),
           ),
           GoRoute(
             path: AppRoutePaths.settingsAboutSegment,
@@ -784,13 +820,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => appRoutePage<void>(
           state: state,
           child: const PersonaManagementPage(),
-        ),
-      ),
-      GoRoute(
-        path: AppRoutePaths.profileComments,
-        pageBuilder: (context, state) => appRoutePage<void>(
-          state: state,
-          child: const ProfileCommentsPage(),
         ),
       ),
       GoRoute(
@@ -828,6 +857,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state: state,
           child: MyFootprintPage(type: state.uri.queryParameters['type'] ?? ''),
         ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.greetingInbox,
+        pageBuilder: (context, state) =>
+            appRoutePage<void>(state: state, child: const GreetingInboxPage()),
       ),
       GoRoute(
         path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
@@ -894,6 +928,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: AppRoutePaths.chatAnnouncementSegment,
+            pageBuilder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return appRoutePage<void>(
+                state: state,
+                child: ChatAnnouncementPage(conversationId: id),
+              );
+            },
+          ),
+          GoRoute(
             path: AppRoutePaths.chatAddMembersSegment,
             pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
@@ -944,73 +988,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      GoRoute(
-        path: AppRoutePaths.rtcOutgoingPathTemplate.replaceAll(
-          '{callId}',
-          ':callId',
-        ),
-        pageBuilder: (context, state) {
-          final callId = state.pathParameters['callId'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: OutgoingCallPage(callId: callId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.rtcIncomingPathTemplate.replaceAll(
-          '{callId}',
-          ':callId',
-        ),
-        pageBuilder: (context, state) {
-          final callId = state.pathParameters['callId'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: IncomingCallPage(callId: callId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.rtcVoicePathTemplate.replaceAll(
-          '{callId}',
-          ':callId',
-        ),
-        pageBuilder: (context, state) {
-          final callId = state.pathParameters['callId'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: VoiceCallPage(callId: callId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.rtcVideoPathTemplate.replaceAll(
-          '{callId}',
-          ':callId',
-        ),
-        pageBuilder: (context, state) {
-          final callId = state.pathParameters['callId'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: VideoCallPage(callId: callId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.rtcPickParticipants,
-        pageBuilder: (context, state) {
-          final extra = CallParticipantPickerRouteExtra.fromRouter(state.extra);
-          return appRoutePage<void>(
-            state: state,
-            child: CallParticipantPickerPage(
-              callId: extra.callId,
-              maxParticipants: extra.maxParticipants,
-              conversationId: extra.conversationId,
-              defaultSelectAll: extra.defaultSelectAll,
-            ),
-          );
-        },
-      ),
+      ..._rtcRoutes(),
     ],
   );
 });

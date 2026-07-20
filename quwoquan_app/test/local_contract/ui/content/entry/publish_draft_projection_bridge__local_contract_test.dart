@@ -336,13 +336,6 @@ void main() {
         title: '旧标题不应覆盖 nodes',
         body: '旧正文不应覆盖 nodes',
         articleDocument: document,
-        articleBlocks: const <CreateTextBlock>[
-          CreateTextBlock(
-            id: 'block_1',
-            type: CreateTextBlockType.paragraph,
-            text: 'blocks 不应进入 Markdown',
-          ),
-        ],
       );
 
       final markdown = buildArticleMarkdownForPayload(state);
@@ -354,7 +347,8 @@ void main() {
         contains(':::figure id="fig1" layout="wrapLeft" caption="节点图注"'),
       );
       expect(markdown, contains('节点正文第一段。'));
-      expect(markdown, isNot(contains('blocks 不应进入 Markdown')));
+      expect(markdown, isNot(contains('旧标题不应覆盖 nodes')));
+      expect(markdown, isNot(contains('旧正文不应覆盖 nodes')));
     });
 
     test(

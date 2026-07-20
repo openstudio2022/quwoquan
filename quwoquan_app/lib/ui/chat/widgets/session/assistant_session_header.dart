@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class AssistantSessionHeader extends StatelessWidget {
@@ -28,7 +29,7 @@ class AssistantSessionHeader extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          UITextConstants.assistantWelcomeHeadline,
+          AssistantText.assistantWelcomeHeadline,
           style: TextStyle(
             fontSize: AppTypography.xxl,
             fontWeight: FontWeight.w700,
@@ -38,5 +39,4 @@ class AssistantSessionHeader extends StatelessWidget {
       ),
     );
   }
-
 }

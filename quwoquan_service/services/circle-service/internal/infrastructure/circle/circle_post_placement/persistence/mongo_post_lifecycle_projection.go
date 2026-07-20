@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/circle-service/internal/application"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 )
 
@@ -20,9 +21,10 @@ const (
 )
 
 type MongoPostLifecycleProjection struct {
-	views    *mongo.Collection
-	inbox    *mongo.Collection
-	failures *mongo.Collection
+	views          *mongo.Collection
+	inbox          *mongo.Collection
+	failures       *mongo.Collection
+	closedSubjects *mongo.Collection
 }
 
 func NewMongoPostLifecycleProjection(database *mongo.Database) *MongoPostLifecycleProjection {
@@ -30,9 +32,10 @@ func NewMongoPostLifecycleProjection(database *mongo.Database) *MongoPostLifecyc
 		panic("Circle Post lifecycle projection requires database")
 	}
 	return &MongoPostLifecycleProjection{
-		views:    database.Collection(postOwnerProjectionCollection),
-		inbox:    database.Collection(contentPostInboxCollection),
-		failures: database.Collection(contentPostFailureCollection),
+		views:          database.Collection(postOwnerProjectionCollection),
+		inbox:          database.Collection(contentPostInboxCollection),
+		failures:       database.Collection(contentPostFailureCollection),
+		closedSubjects: database.Collection("circle_closed_account_subjects"),
 	}
 }
 
@@ -130,6 +133,20 @@ func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Contex
 	if ownerPersonaID == "" {
 		return fmt.Errorf("Content Post lifecycle event %q has no owner persona", event.EventID)
 	}
+	closed, err := projection.isClosedAccountSubject(ctx, ownerPersonaID)
+	if err != nil {
+		return err
+	}
+	if closed {
+		if !found {
+			return nil
+		}
+		_, err := projection.views.DeleteOne(
+			ctx,
+			bson.M{"_id": event.PostID},
+		)
+		return err
+	}
 	state := strings.TrimSpace(event.State)
 	if state == "" && found {
 		state = current.State
@@ -166,6 +183,29 @@ func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Contex
 		return fmt.Errorf("Post owner view version changed during projection")
 	}
 	return nil
+}
+
+func (projection *MongoPostLifecycleProjection) isClosedAccountSubject(
+	ctx context.Context,
+	subjectID string,
+) (bool, error) {
+	err := projection.closedSubjects.FindOne(
+		ctx,
+		bson.M{
+			"_id": application.UserAccountClosedSubjectID(subjectID),
+		},
+		options.FindOne().SetProjection(bson.M{"_id": 1}),
+	).Err()
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf(
+			"read Circle closed-account subject tombstone: %w",
+			err,
+		)
+	}
+	return true, nil
 }
 
 func (projection *MongoPostLifecycleProjection) RecordPostLifecycleFailure(ctx context.Context, streamID, eventID string, cause error) (int64, error) {

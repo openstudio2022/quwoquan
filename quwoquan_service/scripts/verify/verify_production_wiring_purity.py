@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""阻断生产服务装配中的 Memory/Noop/Mock 与静默降级。"""
+"""阻断生产服务装配中的 Memory/Noop/Mock 与静默降级。
+
+`NoopReceipt` 是幂等命令在目标态已满足时必须持久化的正式领域值对象，
+不是 Noop adapter；扫描器必须显式区分两者。
+"""
 
 from __future__ import annotations
 
@@ -12,9 +16,11 @@ SERVICE_ROOT = Path(__file__).resolve().parents[2]
 
 FORBIDDEN_SOURCE_PATTERNS = (
     re.compile(
-        r"\b(?:New)?(?:InMemory|Memory|Noop|Mock|Stub|Fake)[A-Za-z0-9_]*\s*\("
+        r"\b(?:New)?(?:InMemory|Memory|Noop(?!Receipt\b)|Mock|Stub|Fake)[A-Za-z0-9_]*\s*\("
     ),
-    re.compile(r"\b(?:InMemory|Memory|Noop|Mock|Stub|Fake)[A-Za-z0-9_]*\s*\{"),
+    re.compile(
+        r"\b(?:InMemory|Memory|Noop(?!Receipt\b)|Mock|Stub|Fake)[A-Za-z0-9_]*\s*\{"
+    ),
     re.compile(r'\bMode\s*:\s*"memory"'),
     re.compile(r"\bmode\s*:\s*memory\b", re.IGNORECASE),
 	# File-backed control-plane state and test adapters must remain physically

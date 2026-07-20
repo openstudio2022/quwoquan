@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -26,6 +28,7 @@ import (
 
 var (
 	testHandler      http.Handler
+	testOrchestrator *application.CallOrchestrator
 	mongoDB          *mongo.Database
 	mongoClient      *mongo.Client
 	integrationRedis *testinfra.RealRedis
@@ -34,6 +37,8 @@ var (
 
 var collections = []string{
 	"call_sessions",
+	"call_session_command_receipts",
+	"call_session_outbox",
 }
 
 func requireMongoDB(tb testing.TB) *mongo.Database {
@@ -96,8 +101,11 @@ func TestMain(m *testing.M) {
 	mongoDB = mongoClient.Database("rtc_test")
 
 	callStore := persistence.NewMongoCallStore(mongoDB)
+	if err := callStore.EnsureIndexes(ctx); err != nil {
+		panic("ensure rtc call session indexes: " + err.Error())
+	}
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
-	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
+	realtimePublisher := mq.NewRealtimePublisher(redisRouter.Scene("realtime"))
 	domainSvc := callsession.NewCallSessionService()
 	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
 	orchestrator := application.NewCallOrchestrator(
@@ -106,15 +114,29 @@ func TestMain(m *testing.M) {
 		domainSvc,
 		nil,
 		tokenIssuer,
-		eventPublisher,
 		application.AllowRelationshipGateForTest(),
-		nil,
+		"wss://livekit.test:7880",
 	)
+	testOrchestrator = orchestrator
+	outboxRelay := application.NewCallOutboxRelay(callStore, realtimePublisher)
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	var workerWG sync.WaitGroup
+	workerWG.Add(1)
+	go func() {
+		defer workerWG.Done()
+		_ = outboxRelay.Run(workerCtx, 10*time.Millisecond)
+	}()
 
-	testHandler = rtchttp.NewCallHandler(orchestrator, nil).Routes()
+	// 真实链路：auth middleware 从可信 Principal 派生 actor（不信任客户端 header），
+	// 命令级 Idempotency-Key 经 handler 注入 context。operation guard 的
+	// commercial 闸门属 Phase 7（commercial 翻 ready）后由生产 main.go 覆盖，
+	// 其鉴权行为由 runtime/auth 合同测试保证。
+	testHandler = withTrustedPrincipal(rtchttp.NewCallHandler(orchestrator).Routes())
 
 	code := m.Run()
 
+	cancelWorker()
+	workerWG.Wait()
 	_ = mongoClient.Disconnect(ctx)
 	if mongoContainer != nil {
 		_ = mongoContainer.Terminate(ctx)

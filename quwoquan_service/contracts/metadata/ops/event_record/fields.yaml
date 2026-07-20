@@ -16,6 +16,13 @@ fields:
   # 目录控制的强类型扩展字段。
   - { name: durationMs, source: durationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: result, source: result, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: callType, source: callType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: participantCount, source: participantCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: connectTimeMs, source: connectTimeMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: mediaConnected, source: mediaConnected, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: reconnectCount, source: reconnectCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: disconnectReason, source: disconnectReason, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: networkQuality, source: networkQuality, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: failReasonCode, source: failReasonCode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: errorCode, source: errorCode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: operationId, source: operationId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
@@ -31,6 +38,16 @@ fields:
   - { name: rebufferCount, source: rebufferCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: rebufferMs, source: rebufferMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: seekCount, source: seekCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: seekFailureCount, source: seekFailureCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: seekCommandMaxMs, source: seekCommandMaxMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: seekSettleMaxMs, source: seekSettleMaxMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: droppedFrames, source: droppedFrames, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: processedVideoFrames, source: processedVideoFrames, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: audioUnderrunCount, source: audioUnderrunCount, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: rendererMode, source: rendererMode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: decoderQueueMode, source: decoderQueueMode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: decoderFallbackEnabled, source: decoderFallbackEnabled, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+  - { name: seekEvidenceSource, source: seekEvidenceSource, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: declaredDurationMs, source: declaredDurationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: observedDurationMs, source: observedDurationMs, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
   - { name: durationMismatch, source: durationMismatch, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }

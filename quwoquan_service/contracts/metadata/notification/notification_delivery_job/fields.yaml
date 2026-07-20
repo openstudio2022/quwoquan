@@ -5,6 +5,7 @@ entities:
     description: Notification outbox 派生的外部投递生命周期；不承载通知正文真相。
     fields:
       - { name: id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: dedupeKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
       - { name: notificationId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
       - { name: channel, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
       - { name: destinationRef, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: drop, ops_exposure: drop }
@@ -12,5 +13,47 @@ entities:
       - { name: attemptCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
       - { name: nextAttemptAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
       - { name: externalInteractionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: eventId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: callId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: targetPersonaId, type: string, constraints: [NULLABLE], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: deviceId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: deliveryKey, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read }
+      - { name: callType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: callerName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: callerAvatarUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: sourceLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: trustRelation, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: expiresAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: ackDeadlineAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: realtimeDispatchedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: presentedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: pushQueuedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: sentUnconfirmedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancelledAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationEventId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationEventType, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationActorId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: drop, ops_exposure: drop }
+      - { name: cancellationOccurredAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationRealtimeDispatchedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationPushRequired, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationExternalInteractionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: cancellationPushSubmittedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: ackRaceCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: lastAckRaceAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+      - { name: version, type: long, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
       - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
       - { name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+
+  AckIncomingCallPresentationCommand:
+    description: App 表示指定 deliveryKey 已在当前 trusted device 展示来电 UI
+    fields:
+      - { name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read }
+
+  AckIncomingCallPresentationResult:
+    description: 设备级 presentation ACK 的 CAS 结果；迟到 ACK 只返回 raced=true
+    fields:
+      - { name: deliveryKey, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read }
+      - { name: deviceId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read }
+      - { name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: raced, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: acknowledgedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }

@@ -5,20 +5,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
+import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
 void main() {
-  test('alpha 环境契约要求端侧使用 mock repository', () {
-    final container = ProviderContainer();
+  test('alpha 测试组合根显式注入 mock repository', () {
+    final container = ProviderContainer(
+      overrides: [
+        homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
+      ],
+    );
     addTearDown(container.dispose);
 
     expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
@@ -28,7 +32,7 @@ void main() {
         .setMode(AppDataSourceMode.remote);
     expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
     expect(
-      container.read(homepageRepositoryProvider),
+      container.read(homepageFacetSetProvider),
       isA<MockHomepageRepository>(),
     );
   });
@@ -117,15 +121,19 @@ void main() {
   });
 
   test('alpha 视频播放 canary 可从默认契约 fixture 直达', () async {
+    final pack = loadContentScenarioPack();
+    final seedSet =
+        pack.seedSets['content_discovery_core'] as Map<String, dynamic>;
+    final expectedVideo = ((seedSet['posts'] as List?) ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .firstWhere((item) => item['postId'] == 'fixture_video_001');
     final repo = MockContentRepository();
 
     final detail = await repo.getPost(postId: 'fixture_video_001');
 
     expect(detail.post.id, 'fixture_video_001');
-    expect(
-      detail.post.mediaVideoUrl,
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
-    );
+    expect(detail.post.mediaVideoUrl, expectedVideo['videoUrl']);
   });
 
   test('circle mock repository 可由 contracts fixture 初始化', () async {
@@ -241,6 +249,23 @@ class ContractScenarioPack {
   final List<Map<String, dynamic>> scenarios;
 
   factory ContractScenarioPack.fromJson(Map<String, dynamic> json) {
+    final rawScenarios = json['scenarios'];
+    final scenarios = switch (rawScenarios) {
+      List<dynamic> values =>
+        values
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false),
+      Map<dynamic, dynamic> values =>
+        values.entries
+            .where((entry) => entry.value is Map)
+            .map((entry) {
+              final scenario = (entry.value as Map).cast<String, dynamic>();
+              return <String, dynamic>{'id': entry.key.toString(), ...scenario};
+            })
+            .toList(growable: false),
+      _ => const <Map<String, dynamic>>[],
+    };
     return ContractScenarioPack(
       repositoryExpectations:
           (json['repositoryExpectations'] as Map? ?? const <String, dynamic>{})
@@ -248,10 +273,7 @@ class ContractScenarioPack {
       seedSets:
           (json['seedSets'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
-      scenarios: ((json['scenarios'] as List?) ?? const <dynamic>[])
-          .whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false),
+      scenarios: scenarios,
     );
   }
 

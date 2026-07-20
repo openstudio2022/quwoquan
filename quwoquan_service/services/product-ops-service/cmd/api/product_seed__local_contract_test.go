@@ -2,88 +2,9 @@ package main
 
 import "testing"
 
+// seed 仅供 local_contract 测试构造 canonical 指标快照样例；生产 composition
+// 不 seed 控制面状态。治理/推荐骨架 namespace 已随假数据面退场，禁止回填。
 func (s *productService) seed() error {
-	defaultModerationCases := []moderationCase{
-		{
-			ID:            "case_post_901",
-			TargetType:    "post",
-			TargetID:      "post_901",
-			Reason:        "spam",
-			Status:        "reported",
-			AssignedQueue: "content-moderation",
-			EvidenceRefs:  []string{"evidence_img_1"},
-			UpdatedAt:     nowRFC3339(),
-		},
-	}
-	for _, item := range defaultModerationCases {
-		if err := s.putIfMissing("moderation_cases", item.ID, item); err != nil {
-			return err
-		}
-		if err := s.putWorkflowIfMissing("moderation_case", item.ID, "moderation_case_v1", item.Status); err != nil {
-			return err
-		}
-	}
-
-	defaultRecoveryCases := []recoveryCase{
-		{
-			ID:           "recovery_user_1827",
-			UserID:       "user_1827",
-			Status:       "evidence_verified",
-			EvidenceRefs: []string{"device_proof", "payment_receipt"},
-			UpdatedAt:    nowRFC3339(),
-		},
-	}
-	for _, item := range defaultRecoveryCases {
-		if err := s.putIfMissing("recovery_cases", item.ID, item); err != nil {
-			return err
-		}
-		if err := s.putWorkflowIfMissing("recovery_case", item.ID, "recovery_case_v1", item.Status); err != nil {
-			return err
-		}
-	}
-
-	defaultAppealCases := []appealCase{
-		{
-			ID:           "appeal_case_301",
-			TargetType:   "account",
-			TargetID:     "user_1827",
-			Status:       "under_review",
-			EvidenceRefs: []string{"appeal_form", "chat_snapshot"},
-			UpdatedAt:    nowRFC3339(),
-		},
-	}
-	for _, item := range defaultAppealCases {
-		if err := s.putIfMissing("appeal_cases", item.ID, item); err != nil {
-			return err
-		}
-		if err := s.putWorkflowIfMissing("appeal_case", item.ID, "appeal_case_v1", item.Status); err != nil {
-			return err
-		}
-	}
-
-	defaultPolicies := []recommendationPolicy{
-		{
-			ID:            "policy_discovery_rank_v12",
-			Name:          "发现流重排策略 v12",
-			Status:        "simulated",
-			PolicyVersion: "policy-2026.03.08",
-			GuardrailSnapshot: map[string]any{
-				"ctr":        8.9,
-				"complaints": 0.29,
-				"diversity":  69,
-			},
-			UpdatedAt: nowRFC3339(),
-		},
-	}
-	for _, item := range defaultPolicies {
-		if err := s.putIfMissing("recommendation_policies", item.ID, item); err != nil {
-			return err
-		}
-		if err := s.putWorkflowIfMissing("recommendation_policy", item.ID, "recommendation_policy_v1", item.Status); err != nil {
-			return err
-		}
-	}
-
 	defaultMetricSnapshots := []metricSnapshot{
 		{
 			ID:          "L1:beta",
@@ -216,7 +137,7 @@ func (s *productService) seed() error {
 	return nil
 }
 
-func TestProductSeedIsIdempotentAndCreatesWorkflowEvidence(t *testing.T) {
+func TestProductSeedIsIdempotentAndOnlyCoversMetricSnapshots(t *testing.T) {
 	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed product fixtures: %v", err)
@@ -224,16 +145,21 @@ func TestProductSeedIsIdempotentAndCreatesWorkflowEvidence(t *testing.T) {
 	if err := service.seed(); err != nil {
 		t.Fatalf("replay product fixtures: %v", err)
 	}
-	if _, found, err := service.store.GetDocument("moderation_cases", "case_post_901"); err != nil {
-		t.Fatalf("read seeded moderation case: %v", err)
+	if _, found, err := service.store.GetDocument("l1l4_metric_snapshots", "L1:beta"); err != nil {
+		t.Fatalf("read seeded metric snapshot: %v", err)
 	} else if !found {
-		t.Fatal("missing seeded moderation case")
+		t.Fatal("missing seeded metric snapshot")
 	}
-	workflow, found, err := service.store.GetWorkflow("moderation_case", "case_post_901")
-	if err != nil {
-		t.Fatalf("read seeded workflow: %v", err)
-	}
-	if !found || workflow.State != "reported" {
-		t.Fatalf("unexpected seeded workflow: found=%v workflow=%+v", found, workflow)
+	// 治理/推荐骨架 namespace 必须保持退场，防止假数据面回潮。
+	for _, namespace := range []string{
+		"moderation_cases", "recovery_cases", "appeal_cases", "recommendation_policies",
+	} {
+		items, err := service.store.ListDocuments(namespace)
+		if err != nil {
+			t.Fatalf("list %s: %v", namespace, err)
+		}
+		if len(items) != 0 {
+			t.Fatalf("namespace %s must stay empty after seed, got %d items", namespace, len(items))
+		}
 	}
 }

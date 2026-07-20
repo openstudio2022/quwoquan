@@ -1,8 +1,11 @@
-# 04 PR 轻量门禁占位：hosted gamma 预检已退役，远端验证统一收敛到 07 prod gray-initial。
-# 仅保留 profile 解析与门禁汇总，便于后续按需扩展非 gamma 的 PR 预检。
+# 04 PR 轻量门禁：pr_light 不访问远端；manual_full/mainline_auto_prod
+# 必须对显式 beta/prod URL 执行 canonical /search 商业信封探针。hosted gamma 预检保持退役。
 # 触发：pull_request(main) + workflow_dispatch
 # 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
 name: 04. Pre-Release Gate
+
+permissions:
+  contents: read
 
 on:
   pull_request:
@@ -19,6 +22,19 @@ on:
           - pr_light
           - manual_full
           - mainline_auto_prod
+      search_env:
+        description: 'manual_full/mainline_auto_prod 搜索探针环境'
+        required: false
+        default: beta
+        type: choice
+        options:
+          - beta
+          - prod
+      search_base_url:
+        description: 'manual_full/mainline_auto_prod 必填：待准出环境 API base URL'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: pre-release-${{ github.event.pull_request.number || github.ref }}
@@ -30,27 +46,58 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       profile: ${{ steps.resolve.outputs.profile }}
-      use_ecs_deploy: ${{ steps.resolve.outputs.use_ecs_deploy }}
     steps:
       - id: resolve
         name: Determine profile
         run: |
           PROFILE="${{ inputs.validation_profile || 'pr_light' }}"
           echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
-          if [ "${PROFILE}" = "manual_full" ] || [ "${PROFILE}" = "mainline_auto_prod" ]; then
-            echo "use_ecs_deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "use_ecs_deploy=false" >> "$GITHUB_OUTPUT"
+
+  search_runtime_smoke:
+    name: Pre-Release — Search /search Runtime Smoke
+    needs:
+      - resolve_profile
+    if: ${{ needs.resolve_profile.outputs.profile != 'pr_light' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Require explicit release environment URL
+        env:
+          SEARCH_BASE_URL: ${{ inputs.search_base_url || '' }}
+        run: |
+          if [ -z "${SEARCH_BASE_URL}" ]; then
+            echo "::error::manual_full/mainline_auto_prod requires search_base_url for the live /search probe"
+            exit 1
           fi
+      - name: Probe canonical /search commercial envelope
+        env:
+          SEARCH_ENV: ${{ inputs.search_env || 'beta' }}
+          SEARCH_BASE_URL: ${{ inputs.search_base_url || '' }}
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 \
+            quwoquan_ops/cli/probes/run_environment_integration_probe.py \
+            --env "${SEARCH_ENV}" \
+            --base-url "${SEARCH_BASE_URL}" \
+            --mode readonly \
+            --only-check global_search \
+            --report ".qwq_output/env/${SEARCH_ENV}/runs/pre-release/search-runtime-smoke.json"
+      - name: Upload search runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pre-release-search-runtime-smoke
+          path: .qwq_output/env/*/runs/pre-release/search-runtime-smoke.json
+          if-no-files-found: error
 
   release-evidence-summary:
     name: 04. Pre-Release Gate
     needs:
       - resolve_profile
+      - search_runtime_smoke
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: 输出 04 PR gate 摘要
         env:
           PROFILE: ${{ needs.resolve_profile.outputs.profile }}
@@ -60,16 +107,26 @@ jobs:
             --title "04. Pre-Release Gate (pr_light)" \
             --critical-path-seconds 0 \
             --phase profile_resolved=0 \
-            --note "hosted gamma 预检已退役；远端验证统一收敛到 07 prod gray-initial。04 仅保留 profile 解析与门禁占位。" \
+            --note "pr_light 不访问远端；manual_full/mainline_auto_prod 必须提供 beta/prod base URL 并通过 canonical /search 商业信封探针。hosted gamma 预检保持退役。" \
             --write-step-summary
       - name: 汇总并阻断失败项
         env:
           PROFILE: ${{ needs.resolve_profile.outputs.profile }}
           RESOLVE_RESULT: ${{ needs.resolve_profile.result }}
+          SEARCH_RESULT: ${{ needs.search_runtime_smoke.result }}
         run: |
           set -euo pipefail
           if [ "${RESOLVE_RESULT}" != "success" ]; then
             echo "::error::resolve_profile expected success, got ${RESOLVE_RESULT}."
+            exit 1
+          fi
+          if [ "${PROFILE}" = "pr_light" ]; then
+            if [ "${SEARCH_RESULT}" != "skipped" ]; then
+              echo "::error::search_runtime_smoke must be skipped for pr_light, got ${SEARCH_RESULT}."
+              exit 1
+            fi
+          elif [ "${SEARCH_RESULT}" != "success" ]; then
+            echo "::error::search_runtime_smoke expected success for ${PROFILE}, got ${SEARCH_RESULT}."
             exit 1
           fi
           echo "::notice::04. Pre-Release Gate passed with profile=${PROFILE}"

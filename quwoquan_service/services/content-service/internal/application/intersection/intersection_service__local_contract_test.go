@@ -158,6 +158,65 @@ func displayReadyFactReason(
 	}
 }
 
+// withDisplayStatement 把合成 fixture 补齐到「读模型预物化 reason」的真实可下发形态
+// （V2 合同：List/Summary 淘汰展示不完备 reason，排序/分桶 fixture 必须展示完备）：
+// 预置 primaryText 按对象名切出 object span（target=reason 对象），并补代表人锚点。
+func withDisplayStatement(
+	r IntersectionReasonView,
+	objectText string,
+	actorName string,
+	actorID string,
+) IntersectionReasonView {
+	r.RepresentativeActor = &IntersectionRepresentativeActorView{
+		ActorID:       actorID,
+		DisplayName:   actorName,
+		RelationLabel: "你关注的人",
+		PrivacyState:  "visible",
+		Target: &IntersectionTargetView{
+			ObjectType: "user",
+			ObjectID:   actorID,
+			ObjectKind: "person",
+			RouteID:    "userProfile",
+		},
+	}
+	if r.ActorEvidenceTotalCount == 0 {
+		r.ActorEvidenceTotalCount = 1
+	}
+	if r.ActorEvidenceCompleteness == "" {
+		r.ActorEvidenceCompleteness = "complete"
+	}
+	objectType := "homepage"
+	switch strings.TrimSpace(r.ObjectKind) {
+	case "person":
+		objectType = "user"
+	case "circle":
+		objectType = "circle"
+	case "content":
+		objectType = "post"
+	}
+	target := &IntersectionTargetView{
+		ObjectType: objectType,
+		ObjectID:   strings.TrimSpace(r.ActionTargetID),
+		ObjectKind: strings.TrimSpace(r.ObjectKind),
+		RouteID:    "homepageDetail",
+	}
+	text := strings.TrimSpace(r.PrimaryText)
+	idx := strings.Index(text, objectText)
+	if idx < 0 {
+		return r
+	}
+	spans := make([]IntersectionTextSpanView, 0, 3)
+	if idx > 0 {
+		spans = append(spans, IntersectionTextSpanView{Text: text[:idx], Role: "plain"})
+	}
+	spans = append(spans, IntersectionTextSpanView{Text: objectText, Role: "object", Target: target})
+	if tail := text[idx+len(objectText):]; tail != "" {
+		spans = append(spans, IntersectionTextSpanView{Text: tail, Role: "plain"})
+	}
+	r.PrimarySpans = spans
+	return r
+}
+
 func displayReadyAffinityReason(
 	id string,
 	dimension string,
@@ -176,10 +235,16 @@ func displayReadyAffinityReason(
 
 func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	// V2 合同：Summary 只计可展示 reason，fixture 必须是展示完备形态（R12：
+	// fixture 对齐真实可下发行为，裸 reason 会被 display_incomplete 淘汰）。
+	fresh := func(r IntersectionReasonView, at time.Time) IntersectionReasonView {
+		r.FreshAt = at.Format(time.RFC3339)
+		return r
+	}
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", FreshAt: now.Add(-time.Hour).Format(time.RFC3339), ActionTargetID: "u1"},
-		{IntersectionID: "b", Dimension: "identity", FreshAt: now.Add(-2 * time.Hour).Format(time.RFC3339), ActionTargetID: "u2"},
-		{IntersectionID: "c", Dimension: "content", FreshAt: now.Add(-time.Hour).Format(time.RFC3339), ActionTargetID: "p1"},
+		fresh(displayReadyFactReason("a", "identity", "sharedFollowees", "u1", "person", "陆衡", 2, 0.9), now.Add(-time.Hour)),
+		fresh(displayReadyFactReason("b", "identity", "sharedFollowees", "u2", "person", "沈行舟", 2, 0.8), now.Add(-2*time.Hour)),
+		fresh(displayReadyFactReason("c", "content", "coCommented", "p1", "content", "摄影路线", 2, 0.7), now.Add(-time.Hour)),
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -1139,29 +1204,17 @@ func TestIntersectionService_ObjectSharedTagSampleVagueSubjectFailsClosed(t *tes
 
 func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	// V2 合同：List 只下发展示完备 reason，fixture 用可下发形态（对齐真实读模型输出）。
+	fresh := func(r IntersectionReasonView, at time.Time, bucket string) IntersectionReasonView {
+		r.FreshAt = at.Format(time.RFC3339)
+		r.TimeBucket = bucket
+		return r
+	}
+	c := fresh(displayReadyFactReason("c", "location", "followeeVisited", "homepage_visit", "place", "横竖影像馆取景地", 5, 0.8), now.Add(-3*time.Hour), "last7Days")
 	src := stubSource{facts: []IntersectionReasonView{
-		{
-			IntersectionID: "a", IntersectionClass: "fact", Dimension: "relationship",
-			Strength: 0.9, FreshAt: now.Add(-1 * time.Hour).Format(time.RFC3339), TimeBucket: "today",
-			IntersectionPoints: []IntersectionPointView{
-				{PointID: "a1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 2, SampleText: "林清越", Visibility: "public"},
-			},
-		},
-		{
-			IntersectionID: "b", IntersectionClass: "fact", Dimension: "relationship",
-			Strength: 0.7, FreshAt: now.Add(-2 * time.Hour).Format(time.RFC3339), TimeBucket: "today",
-			IntersectionPoints: []IntersectionPointView{
-				{PointID: "b1", PointClass: "fact", Dimension: "relationship", SourceRef: "commonContact", Label: "共同联系人", Count: 1, SampleText: "周屿", Visibility: "public"},
-			},
-		},
-		{
-			IntersectionID: "c", IntersectionClass: "fact", Dimension: "location",
-			Strength: 0.8, FreshAt: now.Add(-3 * time.Hour).Format(time.RFC3339), TimeBucket: "last7Days",
-			DisplayName: "横竖影像馆取景地",
-			IntersectionPoints: []IntersectionPointView{
-				{PointID: "c1", PointClass: "fact", Dimension: "location", SourceRef: "followeeVisited", Label: "到访过", Count: 5, SampleText: "顾南", Visibility: "public"},
-			},
-		},
+		fresh(displayReadyFactReason("a", "relationship", "sharedFollowees", "u1", "person", "林清越", 2, 0.9), now.Add(-1*time.Hour), "today"),
+		fresh(displayReadyFactReason("b", "relationship", "commonContact", "u2", "person", "周屿", 1, 0.7), now.Add(-2*time.Hour), "today"),
+		c,
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -1216,7 +1269,7 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 		return out
 	}
 	dupe := func(id string, strength float64, bucket string, anchor float64, total int) IntersectionReasonView {
-		return IntersectionReasonView{
+		return withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     id,
 			IntersectionClass:  "fact",
 			Dimension:          "relationship",
@@ -1229,12 +1282,12 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionPoints: points(id, "relationship", total),
 			PrimaryText:        "你和林清越等8位用户都关注「胶片摄影」",
 			FreshAt:            now.Add(-time.Hour).Format(time.RFC3339),
-		}
+		}, "「胶片摄影」", "林清越", "u_lin")
 	}
 	src := stubSource{facts: []IntersectionReasonView{
 		dupe("low_strength_today", 0.7, "today", 0.9, 9),
 		dupe("winner_strength", 0.9, "last7Days", 0.1, 1),
-		{
+		withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     "bucket_today",
 			IntersectionClass:  "fact",
 			Dimension:          "location",
@@ -1247,8 +1300,8 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionPoints: points("bucket_today", "location", 1),
 			PrimaryText:        "你和王然等3位用户都去过「西湖」",
 			FreshAt:            now.Add(-2 * time.Hour).Format(time.RFC3339),
-		},
-		{
+		}, "「西湖」", "王然", "u_wang"),
+		withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     "bucket_last7",
 			IntersectionClass:  "fact",
 			Dimension:          "location",
@@ -1261,8 +1314,8 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionPoints: points("bucket_last7", "location", 10),
 			PrimaryText:        "你和6位用户都去过「798艺术区」",
 			FreshAt:            now.Add(-72 * time.Hour).Format(time.RFC3339),
-		},
-		{
+		}, "「798艺术区」", "顾南", "u_gu"),
+		withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     "anchor_winner",
 			IntersectionClass:  "fact",
 			Dimension:          "content",
@@ -1275,8 +1328,8 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionPoints: points("anchor_winner", "content", 2),
 			PrimaryText:        "你和周屿等4位用户参与了「周末街拍讨论」",
 			FreshAt:            now.Add(-26 * time.Hour).Format(time.RFC3339),
-		},
-		{
+		}, "「周末街拍讨论」", "周屿", "u_zhou"),
+		withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     "count_winner",
 			IntersectionClass:  "fact",
 			Dimension:          "content",
@@ -1289,7 +1342,7 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionPoints: points("count_winner", "content", 8),
 			PrimaryText:        "你和8位用户参与了「胶片相机推荐」讨论",
 			FreshAt:            now.Add(-28 * time.Hour).Format(time.RFC3339),
-		},
+		}, "「胶片相机推荐」", "沈行舟", "u_shen"),
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -1335,7 +1388,7 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 func TestIntersectionService_ListDerivesExclusiveTimeBuckets(t *testing.T) {
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 	item := func(id string, fresh time.Time) IntersectionReasonView {
-		return IntersectionReasonView{
+		return withDisplayStatement(IntersectionReasonView{
 			IntersectionID:    id,
 			IntersectionClass: "fact",
 			Dimension:         "location",
@@ -1345,7 +1398,7 @@ func TestIntersectionService_ListDerivesExclusiveTimeBuckets(t *testing.T) {
 			Strength:          0.5,
 			PrimaryText:       "你和3位用户都去过「西湖」",
 			FreshAt:           fresh.Format(time.RFC3339),
-		}
+		}, "「西湖」", "王然", "u_wang")
 	}
 	src := stubSource{facts: []IntersectionReasonView{
 		item("today", now.Add(-time.Hour)),

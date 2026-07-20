@@ -1,4 +1,4 @@
-# L4 特性：member-permission-audit
+# L3 特性：member-permission-audit
 
 ## 功能说明
 - 细化 member-permission-audit 特性的功能边界与端云协同行为。

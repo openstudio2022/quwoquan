@@ -39,7 +39,7 @@ func (b *recordingBulk) Bulk(_ context.Context, _ string, events []es.ChangeEven
 func mkPost(id, status, visibility string) postmodel.Post {
 	return postmodel.Post{
 		ID: id, Title: id, ContentType: "article",
-		Status: status, Visibility: visibility, AuthorId: "u1",
+		Status: status, Visibility: visibility, ModerationStatus: "approved", AuthorId: "u1",
 	}
 }
 

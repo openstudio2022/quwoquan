@@ -33,10 +33,18 @@ integration:
       timeout_ms: 2000
     push:
       enabled: false
-      provider: "vendor_push"
-      endpoint: ""
-      token: ""
-      timeout_ms: 2000
+      mode: "real"
+      timeout_ms: 5000
+      user_service_base_url: ""
+      apns:
+        environment: ""
+        key_file: ""
+        key_id: ""
+        team_id: ""
+        topic: ""
+      fcm:
+        service_account_file: ""
+        project_id: ""
 
 config:
   # Config release contract

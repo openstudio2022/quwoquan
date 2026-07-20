@@ -125,8 +125,17 @@ ArticleDocumentData _projectArticleDocument({
       assetManifest: _articleAssetManifestMap(raw),
     );
   }
+  final normalizedTitle = postTitle.trim();
   return ArticleDocumentData(
-    title: postTitle.trim(),
+    nodes: normalizedTitle.isEmpty
+        ? const <ArticleDocumentNode>[]
+        : <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'document_title',
+              type: ArticleDocumentNodeType.documentTitle,
+              text: normalizedTitle,
+            ),
+          ],
     template:
         raw[ArticleDetailWireKeys.articleTemplate]?.toString() ?? 'gentle',
     fontPreset:

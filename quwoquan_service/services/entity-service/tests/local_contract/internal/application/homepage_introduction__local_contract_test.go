@@ -58,7 +58,7 @@ func intakeThreeSegmentHomepage(t *testing.T, service *application.HomepageServi
 }
 
 func TestBuildIntroductionProjectsThreeSegmentPageMarkdown(t *testing.T) {
-	service := application.NewHomepageService()
+	service := newEmptyHomepageService()
 	homepage := intakeThreeSegmentHomepage(t, service)
 	introduction, err := service.GetHomepageIntroduction(context.Background(), homepage.ID)
 	if err != nil {
@@ -114,8 +114,8 @@ func TestBuildIntroductionProjectsThreeSegmentPageMarkdown(t *testing.T) {
 	}
 }
 
-func TestBuildIntroductionFallsBackToSynthesizedSectionsWithoutPageMarkdown(t *testing.T) {
-	service := application.NewHomepageService()
+func TestBuildIntroductionUsesOnlyRealFieldsWithoutPageMarkdown(t *testing.T) {
+	service := newEmptyHomepageService()
 	homepage, err := service.IntakeHomepageCandidate(
 		context.Background(),
 		application.HomepageInput{
@@ -134,17 +134,17 @@ func TestBuildIntroductionFallsBackToSynthesizedSectionsWithoutPageMarkdown(t *t
 		t.Fatalf("introduction failed: %v", err)
 	}
 	if len(introduction.Sections) == 0 {
-		t.Fatalf("fallback must synthesize sections")
+		t.Fatalf("real homepageType must produce keyFacts")
 	}
 	for _, section := range introduction.Sections {
 		if section.Kind == "body" || section.Kind == "relatedImages" {
-			t.Fatalf("fallback must not emit page.md projection kinds, got %q", section.Kind)
+			t.Fatalf("field-derived introduction must not emit page.md projection kinds, got %q", section.Kind)
 		}
 	}
 }
 
 func TestIntakeHomepageCandidatePersistsIntroductionProjection(t *testing.T) {
-	service := application.NewHomepageService()
+	service := newEmptyHomepageService()
 	homepage, err := service.IntakeHomepageCandidate(
 		t.Context(),
 		application.HomepageInput{

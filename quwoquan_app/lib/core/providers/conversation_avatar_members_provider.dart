@@ -45,7 +45,7 @@ class ConversationAvatarMembersNotifier
 
   @override
   Map<String, List<ChatConversationMemberDto>> build() {
-    ref.watch(chatRepositoryProvider);
+    ref.watch(chatMemberRepositoryProvider);
     ref.watch(currentUserIdProvider);
     _inflight.clear();
     return const <String, List<ChatConversationMemberDto>>{};
@@ -104,7 +104,7 @@ class ConversationAvatarMembersNotifier
   Future<List<ChatConversationMemberDto>> _loadMembers(
     String conversationId,
   ) async {
-    final repo = ref.read(chatRepositoryProvider);
+    final repo = ref.read(chatMemberRepositoryProvider);
     final currentUserId = ref.read(currentUserIdProvider);
     try {
       final members = await repo.listMembers(

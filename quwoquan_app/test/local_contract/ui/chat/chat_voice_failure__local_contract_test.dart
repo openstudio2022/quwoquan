@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 
 void main() {
   group('聊天语音失败 UX — 单一载体 contract', () {
@@ -16,9 +16,9 @@ void main() {
       final source = File(
         'lib/ui/chat/pages/chat_conversation_page.dart',
       ).readAsStringSync();
-      expect(source, contains('UITextConstants.chatVoicePendingRetry'));
+      expect(source, contains('ChatText.chatVoicePendingRetry'));
       expect(source, contains('UITextConstants.retry'));
-      expect(source, contains('voiceOfflineQueueProvider'));
+      expect(source, contains('chatSendOutboxProvider'));
       final failedBarSection = source.split('_buildVoiceSendStatusBar').last;
       expect(failedBarSection, isNot(contains('UITextConstants.gotIt')));
     });
@@ -26,8 +26,8 @@ void main() {
 
   group('文案 — chatVoicePendingRetry', () {
     test('用户向失败文案已登记', () {
-      expect(UITextConstants.chatVoicePendingRetry, contains('重试'));
-      expect(UITextConstants.chatVoicePendingRetry, isNotEmpty);
+      expect(ChatText.chatVoicePendingRetry, contains('重试'));
+      expect(ChatText.chatVoicePendingRetry, isNotEmpty);
     });
   });
 }

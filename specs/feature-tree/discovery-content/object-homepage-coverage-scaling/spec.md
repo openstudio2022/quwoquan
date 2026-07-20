@@ -19,9 +19,10 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
    同 worker 串行互相稀释。
 2. **静态资格漂移**：历史静态 ready 标记曾与实际抓取、版权和页面身份脱节，导致排产计划
    失真且失败归因滞后。
-3. **来源资格必须运行期确认**：两省主清单已扩展到 2899 项（浙江 922 / 四川 1977）；主清单
-   只保存稳定身份与分类，每个 execution 必须以对象本地来源目录和证据重新确认
-   `encyclopedia-primary` 资格。
+3. **候选与发布资格必须分开**：当前两省主清单只有 2899 项（浙江 922 / 四川 1977），
+   不能支撑 H10K。发现层必须先形成不少于 20,000 条原始候选，经 canonical identity
+   去重和旅行对象语义准入后保留不少于 12,000 个唯一候选；每省至少 6,000 个对象还要在
+   execution 内以对象本地来源目录和证据重新确认 `encyclopedia-primary` 资格。
 4. **放量硬前置未落**：entity-service 导入停服窗口（R-HSE02）、tag inverted 无祖先展开
   （省/市级聚合断链）、prod 磁盘 90% 未决策。
 
@@ -41,30 +42,36 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
    属诚实事实，不凑数）。
 4. **跨省地点单主归属**：跨省/跨市地点只在主归属省登记一次（`geoTagRef` 单主），次归属经
    `geoTagRefs` 数组表达（泸沽湖模式）。
-5. **来源发现饱和**：官方文旅、政府名录、OTA 公共索引、地图 POI、Wikidata/OSM 与百科
-   搜索可用于发现名称线索；主页正文、底稿、writing pack 与 `primaryEvidenceRef` 只允许
-   `encyclopedia-primary` 四百科闭集。Wikivoyage、360 与上述 discovery provider 均不得
-   投影正文或主证据。新一轮发现增量 < 5% 视为饱和。
-6. **数值目标（证据约束）**：当前唯一主清单为浙江 922、四川 1977、合计 2899 个叶子；
-   全覆盖准出按该主清单动态计算，不维护硬编码副本。后续扩容会自动提高准出目标。
+5. **来源发现饱和**：`wiki_category`、`wikidata_geo`、`osm_poi`、
+   `baidu_baike_search`、`toutiao_baike_search` 五路只发现名称和身份线索；主页正文、底稿、
+   writing pack 与 `primaryEvidenceRef` 只允许 Wikipedia、百度百科、今日头条百科三源
+   `encyclopedia-primary` 闭集。Wikivoyage、官方文旅、OTA、地图和其他 discovery
+   provider 均不得投影正文或主证据。矩阵每个 cell 都必须到 exhausted、saturated 或
+   typed blocked 终态，资源 limit 不得冒充饱和。
+6. **数值目标（证据约束）**：2899 项是 M3 历史基线，不是最终目标。H10K 准出要求
+   20,000 条以上原始发现候选、12,000 个以上去重且 source-ready 的唯一对象，以及浙江、
+   四川各自冻结 5,000 个不可替换目标；10,000 个目标必须全部 accepted、canonical、
+   immutable-release-bound 且 Gamma 可查询。
 
-## 里程碑准入门（M1/M2/M3）
+## 里程碑准入门（Canary / H200 / H1000 / M3 / H10K）
 
-- **M1 校准批**：WP5 尾部 3 分区（乐山沙湾区/市中区、舟山岱山县）补跑收口 + 两省各 100
-  地点校准批跑通，证明并发与平稳性改造（download/author 分段、Agent 池化并发 ≥4、
-  no-progress watchdog、跑批保护协议）生效；产出改造后吞吐基线（目标单机 ≥4-6 主页/h）。
-- **M2 扩量批**：M1 达标后，两省各 500 地点批；首过率（非放弃口径）≥85%。
-- **M3 全量批**：M2 达标后，两省全部主清单地点都执行动态来源资格核验；确认对象跑完成稿，
-  其余对象以 typed `GATE_BLOCK` 与归因留在该 execution，不得计入覆盖成功。
+- **Canary**：浙江固定普陀山、东钱湖，四川固定海螺沟；累计 3 个主页。
+- **H200（执行里程碑 `m1`）**：两省各新增 100，累计 203。真实 Cursor SDK author/reviewer、
+  Mongo+Redis ReliableTask、对象事务、首过率、权威成本和 accepted throughput 必须出数。
+- **H1000（执行里程碑 `m2`）**：两省各新增 500，累计 1203；冻结目标失败不得替换。
+- **M3**：执行现有 2899 项历史主清单，累计浙江 922、四川 1977；它是 H10K 的前序
+  immutable closure，不再是最终全覆盖口径。
+- **H10K**：在 M3 之后新增浙江 4078、四川 3023，累计每省 5000、总计 10,000；必须在
+  24 小时内达到至少 416.67 accepted homepage/h 并完成 canonical、immutable release、
+  Gamma import/API/App UAT、回滚与重放。
 
-准入约束：M1 未达标不得启动 M2；并发与平稳性改造未完成不得启动省级大批（>100）；
-放量硬前置（entity-service reload/import、tag 祖先展开、prod 存储决策）未完成前，
-省级大批只导 gamma，prod 只做受控小批窗口。
+下一档创建前必须复验上一档 `rollout_milestone_closure`。并发/队列、成本 kill switch、
+来源/权利闭包和环境回滚任一未通过时保持 `GATE_BLOCK`；Prod 未获显式审批前只导 Gamma。
 
 ## 功能范围
 
-1. **主清单扩容管线**（`qwq-data vertical coverage-*`）：发现候选 → 去重 → 类型/地理
-   打标 → 写回市州 YAML，自闭环、无总控 index。
+1. **主清单扩容管线**（`qwq-data governance coverage discover|merge`）：五路发现候选 →
+   canonical identity 去重 → 类型/地理/来源资格预筛 → 写回市州 YAML，自闭环、无总控 index。
 2. **execution 来源资格核验**：`sources/qualification/request.json` 只冻结选中目标身份；
    下载后由对象本地 `evidence/source_catalog.json` 和证据包产出
    `sources/qualification/result.json`，任何 blocked 对象不得进入 publish。
@@ -80,14 +87,18 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
    ship/import、API 与 App UAT 证据；环境回执写对应 env run。
 7. **App 消费 UAT**：标签页/搜索入口到实体主页消费路径（metadata route/surface +
    RemoteRepository）用户验收。
+8. **真实 worker 与成本治理**：对象作业经 Mongo+Redis ReliableTask 分发到 typed
+   Python worker；author/reviewer 的 Cursor SDK usage、真实 billed cost、重试成本和
+   `unitPassedCost` 进入权威账本，超 daily/batch/object cap 立即停止新派发。
 
 ## Out of Scope
 
 - 对象页视觉/交集体验升级（归 `object-homepage-network`）。
 - 主页认领、维护、下线治理（归 `shared-homepage-network`）。
-- 日产 10 万的云端弹性 worker 池专项（本能力交付单机流水线与并发改造，云端横向扩展
-  另列专项）。
+- 100,000/日实际生产；该档只允许依据真实 H10K 的 p50/p95、首过率、source-ready
+  capacity、队列滞后和权威成本 evaluate-only。
 - 浙江/四川以外省份的实跑（本能力交付可复制策略，下一省执行另开 Story）。
+- 未经审批的 Prod 写入。
 
 ## 约束
 
@@ -102,3 +113,6 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
   retired ready、迁移索引或 rollback 副本。
 - review 未批准的对象不得写入 canonical；批准对象只经 object transaction 原子写入，
   不维护第二套 promote 路径或新旧稿兼容裁决。
+- 任何 dry-run、候选数、控制面 task throughput、文件存在或 assembled release 都不等于
+  accepted content；只有通过 review、对象事务、immutable release 和 Gamma 消费闭包的
+  对象才计入 H200/H1000/M3/H10K。

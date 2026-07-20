@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
@@ -12,14 +12,12 @@ void main() {
     test('全部 tab 消费 ContactHome 聚合行', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
       final rows = await container.read(
-        chatContactsRowsForSubTabProvider(
-          UITextConstants.contactsTabAll,
-        ).future,
+        chatContactsRowsForSubTabProvider(ChatText.contactsTabAll).future,
       );
 
       expect(repo.requestedFilters, <String>['all']);
@@ -35,13 +33,13 @@ void main() {
     test('互相关注 tab 传递 mutual filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
       final rows = await container.read(
         chatContactsRowsForSubTabProvider(
-          UITextConstants.contactsTabMutualFollow,
+          ChatText.contactsTabMutualFollow,
         ).future,
       );
 
@@ -55,23 +53,19 @@ void main() {
     test('圈子和群聊 tab 使用 ContactHome kind，群聊仍请求 group filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
 
       final circleRows = await container.read(
-        chatContactsRowsForSubTabProvider(
-          UITextConstants.contactsTabCircles,
-        ).future,
+        chatContactsRowsForSubTabProvider(ChatText.contactsTabCircles).future,
       );
       final groupRows = await container.read(
-        chatContactsRowsForSubTabProvider(
-          UITextConstants.contactsTabGroups,
-        ).future,
+        chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
       );
 
       expect(repo.requestedFilters, <String>['circle', 'group']);
-      expect(UITextConstants.contactsTabGroups, '群聊');
+      expect(ChatText.contactsTabGroups, '群聊');
       expect(circleRows, hasLength(1));
       expect(circleRows.single.kind, ChatContactsRowKind.circle);
       expect(circleRows.single.id, 'circle_01');
@@ -79,6 +73,22 @@ void main() {
       expect(groupRows, hasLength(1));
       expect(groupRows.single.kind, ChatContactsRowKind.group);
       expect(groupRows.single.id, 'group_01');
+    });
+
+    test('无服务端事实交集时不从关系态或标题本地合成摘要', () {
+      final row = ChatContactsRow.fromContactHomeDto(
+        ContactHomeRowDto(
+          id: 'user_without_intersection',
+          kind: 'user',
+          objectId: 'user_without_intersection',
+          userId: 'user_without_intersection',
+          title: '普通联系人',
+          relationState: 'mutual',
+          summaryIntersections: const <String>[],
+        ),
+      );
+
+      expect(row.subtitle, isEmpty);
     });
   });
 }

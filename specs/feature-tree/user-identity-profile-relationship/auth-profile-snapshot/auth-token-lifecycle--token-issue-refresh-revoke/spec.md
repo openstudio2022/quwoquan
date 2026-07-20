@@ -1,4 +1,4 @@
-# L4 特性：token-issue-refresh-revoke
+# L3 特性：token-issue-refresh-revoke
 
 ## 功能说明
 - 细化 token-issue-refresh-revoke 特性的功能边界与端云协同行为。

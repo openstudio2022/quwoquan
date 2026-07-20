@@ -28,10 +28,7 @@ api_routes:
       scopes: [content.media.process]
       ownership_policy: processing_worker
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MEDIA_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 8000
       cancellation: supported
@@ -55,13 +52,13 @@ api_routes:
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.9
-    request_fields: [processingStatus, failureReason, processorProfile, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoPublicSliceKey, coverPublicSliceKey, previewTrackVersion, previewTrackManifestSliceKey]
-    response_fields: [assetId, version, processingStatus, accessPolicy, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, previewTrackVersion, replayed]
+    request_fields: [processingStatus, failureReason, processorProfile, imageWidth, imageHeight, imageDeliveryContentType, imageNormalizedObjectKey, imagePublicSliceKey, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, videoPublicSliceKey, coverPublicSliceKey, previewTrackVersion, previewTrackManifestSliceKey]
+    response_fields: [assetId, version, processingStatus, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, previewTrackVersion, replayed]
     security:
       auth_mode: required
       token_transport: bearer
       visibility: internal
-    description: 处理 worker 回写 processing、ready 或 rejected；ready 必须同时携带探测后的权威 descriptor 输出，owner 不能伪造处理结果。
+    description: 处理 worker 回写 ready 或 rejected；图片与视频 ready 均必须同时携带探测、归一化后的权威 descriptor，owner 不能伪造处理结果。
 
   - method: PATCH
     path: /internal/content/media/{mediaId}:access-policy
@@ -79,10 +76,7 @@ api_routes:
       principal: persona
       ownership_policy: asset_owner
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MEDIA_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -129,10 +123,7 @@ api_routes:
       principal: persona
       ownership_policy: asset_owner
     commercial:
-      status: blocked
-      block_reason: transport handler is intentionally not wired in this object slice
-      gap_id: CONTENT_MEDIA_TRANSPORT_WIRING
-      target_story: post-create-update
+      status: ready
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -154,7 +145,7 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, cdnUrl]
+    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
     security:
       auth_mode: required
       token_transport: bearer
@@ -249,7 +240,7 @@ api_routes:
       latency_p95_ms: 400
       availability_percent: 99.9
     query_params: [ownerPersonaId]
-    response_fields: [assetId, ownerPersonaId, processingStatus, mediaType, contentType, fileSize, cdnUrl]
+    response_fields: [assetId, ownerPersonaId, processingStatus, mediaType, contentType, fileSize, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
     security:
       auth_mode: required
       principal: service
@@ -296,7 +287,7 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, cdnUrl]
+    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
     client_contract:
       dart_import: ../content/media_contracts.dart
       request_type: GetContentMediaAssetQuery

@@ -55,20 +55,16 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc(generated.NearbyPath, h.handleNearby)
 	mux.HandleFunc(generated.SearchPath, h.handleSearch)
 	if h.external != nil {
-		mux.HandleFunc(externalRequestsPath, h.handleSubmitExternalRequest)
-		mux.HandleFunc(externalRequestsPath+"/dead-letters", h.handleExternalDeadLetters)
-		mux.HandleFunc(externalRequestsPath+"/dead-letters:recover", h.handleRecoverExternalDeadLetter)
-		mux.HandleFunc(externalRequestsPath+"/metrics:snapshot", h.handleExternalMetricsSnapshot)
-		mux.HandleFunc(externalRequestsPath+"/", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(generated.ExternalRequestsPath, h.handleSubmitExternalRequest)
+		mux.HandleFunc(generated.ExternalRequestDeadLettersPath, h.handleExternalDeadLetters)
+		mux.HandleFunc(generated.ExternalRequestDeadLetterRecoverPath, h.handleRecoverExternalDeadLetter)
+		mux.HandleFunc(generated.ExternalRequestMetricsSnapshotPath, h.handleExternalMetricsSnapshot)
+		mux.HandleFunc(generated.ExternalRequestsPath+"/", func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/attempts") {
 				h.handleExternalAttempts(w, r)
 				return
 			}
-			rerrors.WriteHTTPError(
-				w,
-				rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "路径不支持", r.URL.Path),
-				rerrors.HTTPWriteOptionsFromRequest(r),
-			)
+			h.handleGetExternalRequest(w, r)
 		})
 	}
 	return mux

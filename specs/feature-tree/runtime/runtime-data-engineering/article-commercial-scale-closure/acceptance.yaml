@@ -7,17 +7,15 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-data-engineering
 scope:
-  summary: 旅行/摄影文章来源 shared commercial pool、唯一文章商业执行分支、H100/H1000 真实闭环与 10k evaluate-only 验收范围。
+  summary: 浙江、四川旅行文章来源 shared commercial pool、唯一文章商业执行分支、Canary/H200/H1000/H10K 真实发布与 H100K evaluate-only 验收范围。
   in_scope:
-  - article/homepage shared commercial pool onboarding
-  - authoritative H100 article/homepage runtime evidence
-  - H1000 scale-up after H100
-  - TokenLedger/firstPassRate/sdk-monitoring/release-import-search-reco evidence
+  - article source onboarding 与文本/插图 typed role 权利闭包
+  - Canary/H200/H1000/H10K authoritative runtime evidence
+  - TokenLedger、成本 kill switch、firstPassRate、release/import/API/App UAT/rollback/replay evidence
   out_of_scope:
-  - Pinterest image-only lane
-  - video lane
+  - image/video lane 独立生产逻辑
   - creator pool新一轮扩池
-  - 10k/日实际生产放量交付
+  - 100,000/日实际生产
 gwt_acceptance:
   GWT1:
     title: open-ended article sources enter one onboarding contract and shared commercial pool
@@ -43,34 +41,33 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_data/tests/local_contract/governance/test_travel_source_registry__behavior__functional__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/core/test_content_plan_source_contract__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/core/test_auto_content_plan__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/source/test_auto_research_article_homepage__behavior__functional__local_contract_test.py
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: article_source_onboarding
         cases:
         - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt1.onboarding
         envs: [local]
   GWT2:
-    title: authoritative H100 article and homepage batch closes with real cursor_sdk evidence
+    title: authoritative article batches close with real Cursor SDK usage and spend evidence
     given:
-    - shared commercial pool 已筛出足够的 article/homepage source-ready capacity。
-    - "执行面统一使用 `cursor_sdk` 与默认最新 `composer`。"
+    - shared commercial pool 已筛出足够的 article source-ready capacity，并显式绑定同档已发布 homepage execution。
+    - author/reviewer 模型、pricing revision 与批次 token/USD cap 已冻结。
     when:
-    - 运营运行一条 H100 article+homepage 真实 batch，从 download 到 publish 全链闭环。
+    - 运营依次运行 Canary、H200、H1000 和 H10K article batch。
     then:
-    - "批次必须同时生成 `env_ready_report.json`、`execution_state.json`、`token_ledger.json`、`managed_batch_audit.json`、`sdk_monitoring_report.json` 与 `scale_readiness` 报告。"
-    - "H100 准出账本口径（2026-07-06 用户裁定）：本地 cursor_sdk bridge 尚不回传 usage 字段，`TokenLedger.measurementMode=estimated_from_artifacts` 在 H100 可准出，但必须通过 `verify scale-readiness --accept-estimated-token-ledger` 与 `verify sdk-monitoring --accept-estimated-token-ledger` 显式声明接受；门禁默认仍严格阻断，禁止静默放宽。authoritative usage 账本保留为后续升级项（见 backlog R-CS03）。"
-    - "`firstPassRate`、`objectsPerHour`、release/import/search/reco visibility 必须来自真实批次证据，而不是结构化注入。"
+    - 每次 turn 增量记录 resolved model、input/output/cache-read/cache-write、真实 billed cost、pricing revision 与 retry cost。
+    - "`budgetTokens` 与 USD cap 保持配置值；超 object/batch/day cap 后不得派发新 job，未知价格必须 GATE_BLOCK_COST_UNKNOWN。"
+    - "`firstPassRate`、accepted objectsPerHour、unitPassedCost、release/import/API/App UAT/rollback/replay 必须来自真实批次证据。"
     done_when:
-    - "H100 以真实批次证据通过（账本允许显式接受的 estimated 口径），且 `firstPassRate >= 0.9`、source sufficiency 与 text_only 口径下的 homepage closure 门同时满足。"
+    - H10K 每省 5,000、共 10,000 条 accepted/canonical/Gamma 可查询文章在 24 小时内完成，且所有成本字段权威可追溯。
     edge_cases:
     - "`allowPartialContent=true` 时允许失败对象诚实降级，但不得污染成功对象 release/import。"
-    - "`cursorStartup.ready=false`、`task_execution_state != succeeded` 或 `managedBatchAudit.failedLaneCount > 0` 时，必须 `GATE_BLOCK`。"
+    - estimated ledger、costUsd=0、model 为空或 budget 自动抬高都必须 `GATE_BLOCK`。
     contract_refs:
     - quwoquan_data/scripts/content/execution/controller/orchestrator.py
     - quwoquan_data/scripts/content/execution/controller/metrics.py
@@ -90,33 +87,38 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
-        suite: article_h100_contract
+        execution_profile: baseline
+        suite: article_authoritative_scale_contract
         cases:
-        - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt2.h100
+        - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt2.authoritative_scale
         envs: [local]
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: article_release_visibility
         cases:
         - api_integration.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt2.release_visibility
         envs: [beta, gamma]
       - layer: user_acceptance
+        execution_profile: release
         suite: article_operator_journey
         cases:
         - user_acceptance.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt2.operator
         envs: [gamma_local]
   GWT3:
-    title: article homepage source sufficiency and mixed-layout stay honest at commercial scale
+    title: article text and illustration roles close rights independently
     given:
     - article lane 允许 travel/photography 站点进入 shared pool，但必须保持 single-source-one-work、homepage closure 与 mixed-layout 同源。
     when:
     - batch 同时消费 homepage 与 article source，并尝试 materialize mixed-layout article。
     then:
-    - "article 不得因历史图文不同源旁路而静默退化成 `text_only`；但 H100 本轮（2026-07-06 用户裁定 R-CS10 收口）按显式声明的 `text_only` 文章准出口径执行：qunar 逐图 rights 缺失（全沙箱 2762 个 source unit assetCount=0），图文同源列为后续升级项。text_only 准出必须通过 `verify scale-readiness --accept-text-only-articles` 显式声明，门禁默认仍阻断 text_only release，禁止静默退化。"
+    - article 文本底稿与独立开放许可插图分别使用 typed source role，并各自保留 rights/provenance。
+    - 逐图权利不完整时不得使用 Qunar 等平台 UGC 原图，不得静默退化 `text_only` 冒充 mixed-layout。
+    - 去平台名、署名或水印不构成授权；`authorizationBasis` 与原始来源事实必须保留。
     - homepage 缺失时必须隔离对应 entityRefs，不得让 released post 出现 dangling homepage 引用。
     - source insufficiency 必须进入 partialDelivery / warning / blocker，而不是用 retired fallback 或 source reuse 冒充满足。
     done_when:
-    - "`R-CS01`、`R-CS07`、`R-CS10` 在 shared commercial pool 上有真实批次证据，而不是只剩结构验证。"
+    - 每篇 released article 的文本、插图、homepage binding 与 source-ready capacity 均有对象级可复验证据。
     edge_cases:
     - source-ready capacity 不足时允许诚实 shortfall，但不允许伪造 homepage/article 成功。
     - factual_reference_only 仍需经过底稿贴合度与 mixed-layout 同源门，不得用“站点多了”掩盖质量退化。
@@ -136,25 +138,26 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        execution_profile: baseline
         suite: article_sufficiency_and_mixed_layout
         cases:
         - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt3.sufficiency
         envs: [local]
   GWT4:
-    title: H1000 follows H100 and 10k stays evaluate-only
+    title: H10K is real and H100K stays evaluate-only
     given:
-    - H100 已 authoritative 通过。
-    - H1000 仍沿用同一 commercial branch、shared pool 与 acceptance contract。
+    - Canary、H200 与 H1000 已按同一 digest、模型、来源和 acceptance contract 通过。
+    - 用户已依据 H1000 实测批准 H10K spend cap。
     when:
-    - 运营把同一 article/homepage 商业线从 H100 放大到 H1000，并基于真实结果评估 10k/日。
+    - 运营运行 H10K article batch，并基于真实结果评估 100,000/日。
     then:
-    - H1000 只放大对象量，不得再次改写 contract、来源口径或 provider 口径。
-    - "10k/日结论只基于 H1000 的 `measured throughput`、`unitPassedCost`、`sourceReadyObjectCapacity`、`firstPassRate` 与下游 visibility 证据。"
-    - "若命中 `queueBackend=reliabletask`、吞吐或稳定性门槛，则只输出 `NO_GO / GATE_BLOCK`，不得提前承诺 10k 可达。"
+    - H10K 只放大对象量，不得改写 contract、来源、模型或权利口径。
+    - H10K 必须产生 10,000 条真实 accepted/canonical/immutable release/Gamma 可查询文章，accepted throughput 不低于 416.67/h。
+    - 100,000/日结论只基于 H10K 的 p50/p95、unitPassedCost、sourceReadyObjectCapacity、firstPassRate、queue lag、24h soak 和下游 visibility，并保留至少 20% 容量余量。
     done_when:
-    - H1000 的 throughput/queue stability/partialDelivery/creator load 证据齐全，且 10k 评估结论诚实可追溯。
+    - H10K 全链证据齐全，H100K 仅输出可追溯 GO/NO_GO 外推，不把估算冒充生产。
     edge_cases:
-    - "`R-CS02` 只在 H1000 后成为 10k evaluate 的硬门，不得反向阻断 H100 收口。"
+    - accepted throughput 为 0、source-ready 不足或任一 Gamma/UAT/rollback 证据缺失时保持 NO_GO。
     contract_refs:
     - quwoquan_data/scripts/content/execution/readiness_audit.py
     - specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md
@@ -170,12 +173,14 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
-        suite: article_h1000_and_10k_eval
+        execution_profile: baseline
+        suite: article_h10k_and_h100k_eval
         cases:
-        - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt4.h1000
+        - local_contract.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt4.h10k
         envs: [local]
       supporting:
       - layer: api_integration
+        execution_profile: integration
         suite: article_scale_runtime
         cases:
         - api_integration.runtime.runtime_data_engineering.article_commercial_scale_closure.gwt4.scale_runtime
@@ -184,5 +189,5 @@ execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
   - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
-  full_gate:
+  profile_gates:
   - make gate

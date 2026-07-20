@@ -51,9 +51,7 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
       fallback: post.commentCount,
     );
     final profileId = post.subAccountId;
-    if (profileId.isNotEmpty &&
-        (relationshipState.isFollowing(profileId) ||
-            discoveryState.followingUsers.contains(profileId))) {
+    if (profileId.isNotEmpty && relationshipState.isFollowing(profileId)) {
       followingUsers.add(profileId);
     }
   }
@@ -114,11 +112,7 @@ bool effectivePostLiked(WidgetRef ref, String postId) {
 }
 
 bool effectiveProfileFollowing(WidgetRef ref, String subAccountId) {
-  final relationshipState = ref.read(userRelationshipStateProvider);
-  if (relationshipState.hasRelationshipStateFor(subAccountId)) {
-    return relationshipState.isFollowing(subAccountId);
-  }
-  return ref.read(discoveryStateProvider).followingUsers.contains(subAccountId);
+  return ref.read(userRelationshipStateProvider).isFollowing(subAccountId);
 }
 
 int effectivePostLikeCount(
@@ -183,6 +177,7 @@ void syncProfileFollowIntent(
   required String subAccountId,
   required bool previousFollowing,
   required bool isFollowing,
+  required String sourceSurfaceId,
 }) {
   if (!ref.read(authSessionControllerProvider).isAuthenticated) {
     return;
@@ -192,10 +187,8 @@ void syncProfileFollowIntent(
     subAccountId: subAccountId,
     previousFollowing: previousFollowing,
     isFollowing: isFollowing,
+    sourceSurfaceId: sourceSurfaceId,
   );
-  ref
-      .read(discoveryStateProvider.notifier)
-      .setFollowState(subAccountId, isFollowing);
 }
 
 void syncPostCommentCount(

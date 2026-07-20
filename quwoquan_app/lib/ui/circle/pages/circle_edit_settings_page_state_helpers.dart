@@ -339,4 +339,68 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
       ],
     );
   }
+
+  Widget _buildSwitchTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required Color fg,
+    required Color fgSecondary,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: fgSecondary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: AppSpacing.buttonHeight,
+            height: AppSpacing.buttonHeight,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+            ),
+            child: Icon(
+              icon,
+              color: AppColors.primaryColor,
+              size: AppSpacing.iconMedium,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: AppTypography.base,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs / 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: fgSecondary,
+                    fontSize: AppTypography.sm,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CupertinoSwitch(
+            value: value,
+            activeTrackColor: AppColors.primaryColor,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
 }

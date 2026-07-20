@@ -165,6 +165,7 @@ void syncProfileFollowIntent(
   required String subAccountId,
   required bool previousFollowing,
   required bool isFollowing,
+  required String sourceSurfaceId,
 }) {
   if (!ref.read(authSessionControllerProvider).isAuthenticated) {
     return;
@@ -178,6 +179,7 @@ void syncProfileFollowIntent(
         subAccountId: subAccountId,
         currentFollowing: previousFollowing,
         shouldFollow: isFollowing,
+        sourceSurfaceId: sourceSurfaceId,
       );
 }
 

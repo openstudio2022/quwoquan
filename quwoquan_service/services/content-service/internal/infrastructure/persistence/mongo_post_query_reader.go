@@ -46,6 +46,35 @@ func NewMongoPostQueryReader(coll *mongo.Collection) *MongoPostQueryReader {
 	return &MongoPostQueryReader{coll: coll}
 }
 
+func (r *MongoPostQueryReader) FindPostRevision(
+	ctx context.Context,
+	postID postports.PostID,
+) (postports.PostRevisionSlice, bool, error) {
+	if err := r.ready(); err != nil {
+		return postports.PostRevisionSlice{}, false, err
+	}
+	if strings.TrimSpace(string(postID)) == "" {
+		return postports.PostRevisionSlice{}, false, errors.New("post revision query requires post id")
+	}
+
+	var revision postports.PostRevisionSlice
+	err := r.coll.FindOne(
+		ctx,
+		bson.D{
+			{Key: "_id", Value: string(postID)},
+			{Key: "status", Value: bson.D{{Key: "$ne", Value: "deleted"}}},
+		},
+		options.FindOne().SetProjection(postRevisionProjection()),
+	).Decode(&revision)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return postports.PostRevisionSlice{}, false, nil
+	}
+	if err != nil {
+		return postports.PostRevisionSlice{}, false, fmt.Errorf("decode post revision slice: %w", err)
+	}
+	return revision, true, nil
+}
+
 func (r *MongoPostQueryReader) FindPostDetail(
 	ctx context.Context,
 	postID postports.PostID,
@@ -171,6 +200,7 @@ func (r *MongoPostQueryReader) FindPublishedFeedPost(
 			{Key: "_id", Value: string(postID)},
 			{Key: "status", Value: "published"},
 			{Key: "visibility", Value: "public"},
+			{Key: "moderationStatus", Value: "approved"},
 		},
 		options.FindOne().SetProjection(postFeedProjection()),
 	).Decode(&document)
@@ -181,6 +211,57 @@ func (r *MongoPostQueryReader) FindPublishedFeedPost(
 		return postports.PostFeedItemSlice{}, false, fmt.Errorf("decode published feed post slice: %w", err)
 	}
 	return normalizePostFeedDocument(document), true, nil
+}
+
+// FindPublishedFeedPosts 单次 $in 批量取回（N3-1）：与单条读同一可见性谓词
+// （published/public/approved），未命中的 id 缺席于返回 map。
+func (r *MongoPostQueryReader) FindPublishedFeedPosts(
+	ctx context.Context,
+	postIDs []postports.PostID,
+) (map[postports.PostID]postports.PostFeedItemSlice, error) {
+	if err := r.ready(); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(postIDs))
+	seen := make(map[string]bool, len(postIDs))
+	for _, id := range postIDs {
+		trimmed := strings.TrimSpace(string(id))
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		ids = append(ids, trimmed)
+	}
+	out := make(map[postports.PostID]postports.PostFeedItemSlice, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	cursor, err := r.coll.Find(
+		ctx,
+		bson.D{
+			{Key: "_id", Value: bson.M{"$in": ids}},
+			{Key: "status", Value: "published"},
+			{Key: "visibility", Value: "public"},
+			{Key: "moderationStatus", Value: "approved"},
+		},
+		options.Find().SetProjection(postFeedProjection()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("batch find published feed posts: %w", err)
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var document postFeedDocument
+		if decodeErr := cursor.Decode(&document); decodeErr != nil {
+			return nil, fmt.Errorf("decode published feed post slice: %w", decodeErr)
+		}
+		slice := normalizePostFeedDocument(document)
+		out[slice.PostID] = slice
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate published feed posts: %w", err)
+	}
+	return out, nil
 }
 
 func (r *MongoPostQueryReader) ListPublishedFeedPosts(
@@ -208,6 +289,7 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 	filter := bson.D{
 		{Key: "status", Value: "published"},
 		{Key: "visibility", Value: "public"},
+		{Key: "moderationStatus", Value: "approved"},
 	}
 	if identity != "" {
 		filter = append(filter, bson.E{Key: "contentIdentity", Value: identity})
@@ -325,6 +407,7 @@ func authorPostFilter(request postports.AuthorPostReadRequest) (bson.D, error) {
 			filter,
 			bson.E{Key: "status", Value: "published"},
 			bson.E{Key: "visibility", Value: "public"},
+			bson.E{Key: "moderationStatus", Value: "approved"},
 		)
 	case postports.AuthorPostAccessOwner:
 		// Owner 可读取自己的 draft/published 和所有 visibility；删除记录不属于
@@ -422,6 +505,7 @@ func postDetailProjection() bson.D {
 		{Key: "primaryHomepageSnapshot", Value: 1},
 		{Key: "status", Value: 1},
 		{Key: "visibility", Value: 1},
+		{Key: "moderationStatus", Value: 1},
 		{Key: "assistantUsePolicy", Value: 1},
 		{Key: "sourcePostId", Value: 1},
 		{Key: "sourceType", Value: 1},
@@ -437,6 +521,14 @@ func postDetailProjection() bson.D {
 		{Key: "publishedAt", Value: 1},
 		{Key: "lastActiveAt", Value: 1},
 		{Key: "sourceTaskId", Value: 1},
+	}
+}
+
+func postRevisionProjection() bson.D {
+	return bson.D{
+		{Key: "_id", Value: 1},
+		{Key: "version", Value: 1},
+		{Key: "contentDigest", Value: 1},
 	}
 }
 
@@ -507,7 +599,8 @@ func postFeedProjection() bson.D {
 }
 
 var (
-	_ postports.PostDetailReader = (*MongoPostQueryReader)(nil)
-	_ postports.AuthorPostReader = (*MongoPostQueryReader)(nil)
-	_ postports.PostFeedReader   = (*MongoPostQueryReader)(nil)
+	_ postports.PostRevisionSliceReader = (*MongoPostQueryReader)(nil)
+	_ postports.PostDetailReader        = (*MongoPostQueryReader)(nil)
+	_ postports.AuthorPostReader        = (*MongoPostQueryReader)(nil)
+	_ postports.PostFeedReader          = (*MongoPostQueryReader)(nil)
 )

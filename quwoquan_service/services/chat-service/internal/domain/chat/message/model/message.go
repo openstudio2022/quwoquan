@@ -6,8 +6,9 @@ import (
 )
 
 var (
-	ErrMessageNotFound            = errors.New("message not found")
-	ErrMessageIdempotencyConflict = errors.New("message idempotency conflict")
+	ErrMessageNotFound             = errors.New("message not found")
+	ErrMessageIdempotencyConflict  = errors.New("message idempotency conflict")
+	ErrMessageReceiptAlreadyExists = errors.New("message receipt already exists")
 )
 
 // Message is the aggregate root for one immutable send followed by an optional
@@ -64,6 +65,8 @@ func (m Message) PreviewText() string {
 		return "[视频]"
 	case "file":
 		return "[文件]"
+	case "system_call_log":
+		return "[通话]"
 	default:
 		runes := []rune(m.Content)
 		if len(runes) > 100 {

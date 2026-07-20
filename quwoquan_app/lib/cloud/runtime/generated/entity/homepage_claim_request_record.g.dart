@@ -4,7 +4,7 @@
 class HomepageClaimRequestRecord {
   final String id;
   final String homepageId;
-  final String requesterUserId;
+  final String requesterPersonaId;
   final String claimTier;
   final String status;
   final String? reviewNote;
@@ -14,7 +14,7 @@ class HomepageClaimRequestRecord {
   HomepageClaimRequestRecord({
     this.id = '',
     this.homepageId = '',
-    this.requesterUserId = '',
+    this.requesterPersonaId = '',
     this.claimTier = '',
     this.status = '',
     this.reviewNote,
@@ -26,7 +26,7 @@ class HomepageClaimRequestRecord {
     return HomepageClaimRequestRecord(
       id: m['id']?.toString() ?? '',
       homepageId: m['homepageId']?.toString() ?? '',
-      requesterUserId: m['requesterUserId']?.toString() ?? '',
+      requesterPersonaId: m['requesterPersonaId']?.toString() ?? '',
       claimTier: m['claimTier']?.toString() ?? '',
       status: m['status']?.toString() ?? '',
       reviewNote: m['reviewNote']?.toString() ?? null,
@@ -39,7 +39,7 @@ class HomepageClaimRequestRecord {
     return <String, dynamic>{
       'id': id,
       'homepageId': homepageId,
-      'requesterUserId': requesterUserId,
+      'requesterPersonaId': requesterPersonaId,
       'claimTier': claimTier,
       'status': status,
       'reviewNote': reviewNote,
@@ -51,7 +51,7 @@ class HomepageClaimRequestRecord {
   HomepageClaimRequestRecord copyWith({
     String? id,
     String? homepageId,
-    String? requesterUserId,
+    String? requesterPersonaId,
     String? claimTier,
     String? status,
     String? reviewNote,
@@ -61,7 +61,7 @@ class HomepageClaimRequestRecord {
     return HomepageClaimRequestRecord(
       id: id ?? this.id,
       homepageId: homepageId ?? this.homepageId,
-      requesterUserId: requesterUserId ?? this.requesterUserId,
+      requesterPersonaId: requesterPersonaId ?? this.requesterPersonaId,
       claimTier: claimTier ?? this.claimTier,
       status: status ?? this.status,
       reviewNote: reviewNote ?? this.reviewNote,

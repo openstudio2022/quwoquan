@@ -1,4 +1,4 @@
-# L4 对象任务：assistant-stream-and-chat-push
+# L3 对象任务：assistant-stream-and-chat-push
 
 ## 功能说明
 - **助手流式输出**：QA Runner 生成回复时，通过 SSEServer 逐 chunk 推送给对应用户；事件类型 assistant.chunk。

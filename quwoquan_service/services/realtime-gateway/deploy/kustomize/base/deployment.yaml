@@ -24,7 +24,7 @@ spec:
               app.kubernetes.io/name: realtime-gateway
       containers:
         - name: realtime-gateway
-          image: realtime-gateway/realtime-gateway:latest
+          image: realtime-gateway/realtime-gateway:v0.0.0-unpackaged
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

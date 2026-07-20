@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
@@ -133,8 +134,8 @@ void main() {
       );
       expect(
         semantic.title,
-        UITextConstants.permissionSettingsGateTitle(
-          UITextConstants.permissionMicrophoneLabel,
+        ChatText.permissionSettingsGateTitle(
+          ChatText.permissionMicrophoneLabel,
         ),
       );
     });
@@ -142,12 +143,9 @@ void main() {
 
   group('AppPermissionCoordinator surface jit', () {
     test('JIT 默认不展示 L2 primer 文案矛盾', () {
+      expect(ChatText.chatVoicePermissionPrimerMessage, contains('系统弹窗'));
       expect(
-        UITextConstants.chatVoicePermissionPrimerMessage,
-        contains('系统弹窗'),
-      );
-      expect(
-        UITextConstants.chatVoicePermissionPrimerMessage,
+        ChatText.chatVoicePermissionPrimerMessage,
         isNot(contains('请点「允许」')),
       );
     });
@@ -167,14 +165,8 @@ void main() {
 
   group('文案 — UAT 验收口径', () {
     test('分步设置路径包含应用名与权限名', () {
-      expect(
-        UITextConstants.permissionStillDeniedMessage('麦克风'),
-        contains('设置'),
-      );
-      expect(
-        UITextConstants.permissionStillDeniedMessage('麦克风'),
-        contains('趣我圈'),
-      );
+      expect(ChatText.permissionStillDeniedMessage('麦克风'), contains('设置'));
+      expect(ChatText.permissionStillDeniedMessage('麦克风'), contains('趣我圈'));
     });
   });
 }
