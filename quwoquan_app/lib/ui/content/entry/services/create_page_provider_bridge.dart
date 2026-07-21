@@ -5,7 +5,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -43,9 +45,36 @@ Future<void> reportCreateEditorSurfaceEvent(
   String event, [
   Map<String, Object?> extras = const {},
   String surfaceId = 'create_editor',
-]) async {
+]) {
+  return _reportCreateEditorSurfaceEvent(
+    ref.read(appTelemetryReporterProvider),
+    event,
+    extras,
+    surfaceId,
+  );
+}
+
+Future<void> reportCreateEditorProviderEvent(
+  Ref ref,
+  String event, [
+  Map<String, Object?> extras = const {},
+  String surfaceId = 'create_editor',
+]) {
+  return _reportCreateEditorSurfaceEvent(
+    ref.read(appTelemetryReporterProvider),
+    event,
+    extras,
+    surfaceId,
+  );
+}
+
+Future<void> _reportCreateEditorSurfaceEvent(
+  AppTelemetryRecorder reporter,
+  String event,
+  Map<String, Object?> extras,
+  String surfaceId,
+) async {
   try {
-    final reporter = ref.read(appTelemetryReporterProvider);
     final contentType = _publicationContentType(extras['contentType']);
     final publication = _publicationTelemetryFor(
       event,
@@ -56,6 +85,7 @@ Future<void> reportCreateEditorSurfaceEvent(
           ? (extras['durationMs'] as num).toInt()
           : null,
       correlationHash: extras['correlationHash']?.toString(),
+      backgroundRetryTerminal: extras['backgroundRetryTerminal']?.toString(),
     );
     final payload =
         publication ??
@@ -91,6 +121,7 @@ AppTelemetryPayload? _publicationTelemetryFor(
   String? failReasonCode,
   int? durationMs,
   String? correlationHash,
+  String? backgroundRetryTerminal,
 }) {
   final (stage, state, result) = switch (event) {
     'create_editor_ready' => ('editor_ready', 'draft', 'ready'),
@@ -98,6 +129,17 @@ AppTelemetryPayload? _publicationTelemetryFor(
     'create_draft_restored' => ('draft_restored', 'draft', 'success'),
     'create_publish_started' => ('submit_started', 'submitting', 'started'),
     'create_publish_queued' => ('queued', 'retry_wait', 'queued'),
+    'create_publish_retry_scheduled' => (
+      'retry_scheduled',
+      'retry_wait',
+      'queued',
+    ),
+    'create_publish_retry_exhausted' => (
+      'retry_exhausted',
+      'blocked',
+      'failure',
+    ),
+    'create_publish_cancelled' => ('cancelled', 'cancelled', 'cancelled'),
     'create_publish_failure' => ('blocked', 'blocked', 'failure'),
     'create_publish_pending_review' => (
       'pending_review',
@@ -119,6 +161,7 @@ AppTelemetryPayload? _publicationTelemetryFor(
     durationMs: durationMs,
     failReasonCode: failReasonCode,
     correlationHash: correlationHash,
+    backgroundRetryTerminal: backgroundRetryTerminal,
   );
 }
 
@@ -141,8 +184,13 @@ attachActivePersonaToPostPublicationCommand(
   WidgetRef ref,
   PreparedPostPublicationPayload prepared, {
   required String localDraftId,
+  ActivePersonaContextViewData? activePersona,
 }) async {
-  final activeContext = await ref.read(activePersonaContextProvider.future);
+  final activeContext =
+      activePersona ?? await ref.read(activePersonaContextProvider.future);
+  if (activeContext == null) {
+    throw ActivePersonaContextUnavailableFailure();
+  }
   if (ref
           .read(contentConfigRepositoryProvider)
           .requiresResolvedPersonaForMutations &&

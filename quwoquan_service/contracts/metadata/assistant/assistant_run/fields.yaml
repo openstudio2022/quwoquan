@@ -1,6 +1,47 @@
 aggregate: AssistantRun
 
 entities:
+  CitationDestination:
+    description: |
+      助手与搜索引用的唯一跳转目标。internal 只由 canonical object type/id
+      组成并在 App 以 link_templates codegen 解析；external 仅允许校验后的 HTTPS URL。
+      未知对象、缺失目标或非 HTTPS 外链不得构造成可点击引用。
+    fields:
+      - name: kind
+        source: kind
+        type: enum
+        enum_ref: CitationDestinationKind
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectTypeRef
+        source: objectTypeRef
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectId
+        source: objectId
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+      - name: url
+        source: url
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: external destination 仅允许规范化 HTTPS URL。
+
   AssistantSearchCitationView:
     description: 小趣搜结果中的引用条目
     fields:
@@ -87,25 +128,14 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: url
-        source: url
-        type: string
-        constraints: [NULLABLE]
+      - name: destination
+        source: destination
+        type: CitationDestination
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 可点击引用 URL；站内对象可为空并由 deepLink 承载。
-
-      - name: deepLink
-        source: deepLink
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 站内对象 deep link。
 
       - name: score
         source: score
@@ -552,6 +582,56 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+  AssistantIntersectionEvidenceRef:
+    description: |
+      App 交集入口提交的最小不可解释引用。客户端只能声明此引用，assistant-service
+      必须以当前 actor 向 content 的公开 Reader 回查当前事实后，才可写入 prompt、
+      evidence ledger 或 citation；禁止信任客户端传入的标题、结论、URL 或样本。
+    fields:
+      - name: intersectionId
+        source: intersectionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: evidenceId
+        source: evidenceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+        description: IntersectionReason.pointSummarySnapshotId；回查结果不一致即视为失效。
+      - name: sourceRef
+        source: sourceRef
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 交集 kind；必须命中 recommendation/rec_model/intersection_kind_registry.yaml。
+      - name: objectTypeRef
+        source: objectTypeRef
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 对齐 _shared/search_objects.yaml object_types.id 的 canonical object type。
+      - name: objectId
+        source: objectId
+        type: string
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+
   AssistantContextSnapshot:
     description: 小趣统一上下文快照；作为页面、搜索、群聊和主动服务 grounding 的单一强类型入口。
     fields:
@@ -667,12 +747,12 @@ entities:
         log_policy: mask
         api_exposure: read_write
         ops_exposure: read
-      - name: intersectionRefs
-        source: intersectionRefs
-        type: "[]string"
+      - name: intersectionEvidenceRefs
+        source: intersectionEvidenceRefs
+        type: "[]AssistantIntersectionEvidenceRef"
         constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
+        classification: SENSITIVE
+        log_policy: mask
         api_exposure: read_write
         ops_exposure: read
       - name: recentSearchQuery

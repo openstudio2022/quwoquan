@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:livekit_client/livekit_client.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
 class ParticipantTile extends StatelessWidget {
@@ -21,7 +21,7 @@ class ParticipantTile extends StatelessWidget {
   final bool isActiveSpeaker;
   final bool showName;
   final BorderRadius? borderRadius;
-  final VideoTrack? videoTrack;
+  final RtcVideoTrack? videoTrack;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +57,7 @@ class ParticipantTile extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (participant.isCameraOn && effectiveTrack != null)
-            VideoTrackRenderer(effectiveTrack)
+            RtcVideoTrackRenderer(track: effectiveTrack)
           else if (participant.isCameraOn && effectiveTrack == null)
             Container(
               color: AppColors.overlayMedium,
@@ -73,8 +73,7 @@ class ParticipantTile extends StatelessWidget {
             Center(
               child: CircleAvatar(
                 radius: AppSpacing.xl,
-                backgroundColor:
-                    AppColors.primaryColor.withValues(alpha: 0.3),
+                backgroundColor: AppColors.primaryColor.withValues(alpha: 0.3),
                 backgroundImage: participant.avatarUrl != null
                     ? NetworkImage(participant.avatarUrl!)
                     : null,
@@ -103,8 +102,9 @@ class ParticipantTile extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.overlayMedium,
-                  borderRadius:
-                      BorderRadius.circular(AppSpacing.smallBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
                 ),
                 child: Text(
                   participant.displayName,
@@ -129,8 +129,9 @@ class ParticipantTile extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.warning.withValues(alpha: 0.85),
-                  borderRadius:
-                      BorderRadius.circular(AppSpacing.smallBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

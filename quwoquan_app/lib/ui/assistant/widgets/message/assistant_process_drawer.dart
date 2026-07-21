@@ -527,7 +527,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     return GestureDetector(
       onTap: url.isNotEmpty
           ? () => widget.onReferenceTap?.call(
-              AssistantCitation(
+              AssistantCitation.external(
                 url: url,
                 title: reference.title,
                 source: reference.source,

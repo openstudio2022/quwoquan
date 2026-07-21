@@ -27,6 +27,7 @@ enum AuthGateReason {
   greet,
   comment,
   like,
+  wishlist,
   follow,
   followingFeed,
   share,
@@ -88,9 +89,9 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
     title: UITextConstants.authGateTitleProfile,
     subtitle: UITextConstants.authGateSubtitleProfile,
     prompt: UITextConstants.authGatePromptProfile,
-    requiredOperations: <String>[
-      AppCloudOperationIds.userUserProfileGetSubAccountProfile,
-    ],
+    // 个人页读取契约允许游客查看其他公开资料；「我的」tab 的登录门是产品
+    // 导航决策，不得错误绑定 optional 的 GetSubAccountProfile operation。
+    requiredOperations: <String>[],
   ),
   AuthGateReason.createPost: AuthGateEntry(
     reason: AuthGateReason.createPost,
@@ -135,6 +136,18 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
     subtitle: UITextConstants.authGateSubtitleLike,
     prompt: UITextConstants.authGatePromptLike,
     requiredOperations: <String>[],
+  ),
+  // 「想去」需要读取账号私有的状态投影；行为写入仍复用 public ReportBehaviors
+  // 的 persona/device actor 语义，因此用状态查询这一 required operation 作为 gate
+  // 契约锚点，不能复用关注关系的 FollowUser operation。
+  AuthGateReason.wishlist: AuthGateEntry(
+    reason: AuthGateReason.wishlist,
+    title: UITextConstants.authGateTitleWishlist,
+    subtitle: UITextConstants.authGateSubtitleWishlist,
+    prompt: UITextConstants.authGatePromptWishlist,
+    requiredOperations: <String>[
+      AppCloudOperationIds.contentPostGetEntityWishlistState,
+    ],
   ),
   AuthGateReason.follow: AuthGateEntry(
     reason: AuthGateReason.follow,
@@ -319,6 +332,9 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.blockedKeywords) {
     return AuthGateReason.settingsAccount;
   }
+  if (loc == AppRoutePaths.assistantManagement) {
+    return AuthGateReason.settingsAccount;
+  }
   if (loc == AppRoutePaths.myReports) {
     return AuthGateReason.report;
   }
@@ -462,6 +478,11 @@ LoginReasonCopy loginReasonCopyForPromptReason(AuthPromptReason reason) {
     AuthPromptReason.sessionExpired => const LoginReasonCopy(
       title: UITextConstants.loginTitleReturn,
       subtitle: UITextConstants.loginSubtitleSessionExpired,
+      source: LoginReasonCopySource.localSession,
+    ),
+    AuthPromptReason.accountSuspended => const LoginReasonCopy(
+      title: UITextConstants.loginTitleActionRequired,
+      subtitle: UITextConstants.loginAccountSuspended,
       source: LoginReasonCopySource.localSession,
     ),
     AuthPromptReason.actionRequired => const LoginReasonCopy(

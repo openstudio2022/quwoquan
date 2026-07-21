@@ -30,6 +30,12 @@ FORBIDDEN_CONTRACT_TOKENS = (
     "package:http",
     "package:riverpod",
 )
+FORBIDDEN_MOCK_TOKENS = (
+    "package:quwoquan_app/",
+    "package:flutter/",
+    "package:flutter_",
+    "package:riverpod",
+)
 
 
 def load_yaml(path: Path) -> dict:
@@ -129,6 +135,17 @@ def verify_contracts_purity(catalog: dict[str, tuple[Path, dict]]) -> None:
             )
 
 
+def verify_mock_package_boundary() -> None:
+    for source in sorted((MOCK / "lib").rglob("*.dart")):
+        text = source.read_text(encoding="utf-8")
+        found = [token for token in FORBIDDEN_MOCK_TOKENS if token in text]
+        if found:
+            raise AssertionError(
+                "alpha Mock package 不得反向依赖 App: "
+                f"{source.relative_to(ROOT)} -> {found}"
+            )
+
+
 def verify_composition_graph(
     graph: dict[str, set[str]],
     production_graph: dict[str, set[str]],
@@ -207,6 +224,7 @@ def main() -> int:
     production_graph = local_dependency_graph(catalog, include_dev=False)
     verify_acyclic(graph)
     verify_contracts_purity(catalog)
+    verify_mock_package_boundary()
     verify_composition_graph(graph, production_graph)
     verify_override_sync()
     verify_fixture_rebuild()

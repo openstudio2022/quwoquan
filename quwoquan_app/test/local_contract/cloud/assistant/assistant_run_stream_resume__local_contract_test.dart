@@ -11,21 +11,18 @@ void main() {
       _sseFrame(
         id: 'resume-token-1',
         seq: 1,
-        eventType: 'partial_answer',
+        eventType: 'answer_delta',
         payload: const <String, Object?>{'text': '第一段'},
       ),
       [
         _sseFrame(
           id: 'resume-token-2',
           seq: 2,
-          eventType: 'final_answer',
-          payload: const <String, Object?>{'text': '完整回答'},
-        ),
-        _sseFrame(
-          id: 'resume-token-3',
-          seq: 3,
-          eventType: 'turn_completed',
-          payload: const <String, Object?>{'status': 'completed'},
+          eventType: 'completed',
+          payload: const <String, Object?>{
+            'status': 'completed',
+            'finalAnswer': '完整回答',
+          },
         ),
       ].join(),
     ]);
@@ -38,11 +35,10 @@ void main() {
         .watchAssistantRunEvents(runId: 'run-resume-test')
         .toList();
 
-    expect(events.map((event) => event.seq), <int>[1, 2, 3]);
+    expect(events.map((event) => event.seq), <int>[1, 2]);
     expect(events.map((event) => event.eventType), <String>[
-      'partial_answer',
-      'final_answer',
-      'turn_completed',
+      'answer_delta',
+      'completed',
     ]);
     expect(transport.requests, hasLength(2));
     final resumed = transport.requests.last;

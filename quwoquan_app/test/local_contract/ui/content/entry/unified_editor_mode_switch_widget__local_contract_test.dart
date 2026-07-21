@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -22,7 +22,7 @@ Widget _buildCreatePageApp({
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),

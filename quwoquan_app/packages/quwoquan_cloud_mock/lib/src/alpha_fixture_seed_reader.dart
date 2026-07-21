@@ -38,9 +38,7 @@ final class AlphaFixtureSeedReader {
     if (raw is! Map<Object?, Object?>) {
       throw FormatException('$domain/$ref alpha fixture must be an object');
     }
-    final result = raw.map(
-      (key, value) => MapEntry(key.toString(), value),
-    );
+    final result = raw.map((key, value) => MapEntry(key.toString(), value));
     _cache[key] = result;
     return result;
   }
@@ -59,6 +57,9 @@ final class AlphaFixtureSeedReader {
   Map<String, Object?>? contentSeedSet([
     String ref = 'content_discovery_core',
   ]) => seedSet('content', ref);
+
+  Map<String, Object?>? entitySeedSet([String ref = 'entity_homepage_core']) =>
+      seedSet('entity', ref);
 }
 
 final AlphaFixtureSeedReader alphaFixtureSeedReader = AlphaFixtureSeedReader();

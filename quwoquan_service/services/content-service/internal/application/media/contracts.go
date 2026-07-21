@@ -33,6 +33,30 @@ type RecordMediaProcessingResultCommand struct {
 	Descriptor    mediamodel.MediaProcessingDescriptor
 }
 
+// ActivateReprocessedImageDescriptorCommand is internal-only. The caller must
+// first validate the candidate baseline and public slice readback; this command
+// performs the MediaAsset version-CAS activation.
+type ActivateReprocessedImageDescriptorCommand struct {
+	AssetID    string
+	RunID      string
+	Descriptor mediamodel.ImageProcessingDescriptor
+}
+
+type RollbackReprocessedImageDescriptorCommand struct {
+	AssetID           string
+	RunID             string
+	PreviousRevision  int
+	ActivatedRevision int
+}
+
+type ImageDescriptorActivationResult struct {
+	AssetID           string
+	Version           int64
+	PreviousRevision  int
+	ActivatedRevision int
+	Replayed          bool
+}
+
 type UpdateMediaAssetAccessPolicyCommand struct {
 	AssetID      string
 	OwnerID      string
@@ -95,27 +119,31 @@ type MediaUploadSessionCommandResult struct {
 }
 
 type MediaAssetCommandResult struct {
-	AssetID                  string                      `json:"assetId"`
-	Version                  int64                       `json:"version"`
-	ProcessingStatus         mediamodel.ProcessingStatus `json:"processingStatus"`
-	AccessPolicy             mediamodel.AccessPolicy     `json:"accessPolicy"`
-	CoverStrategy            string                      `json:"coverStrategy"`
-	ManualCoverAssetID       string                      `json:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs         int64                       `json:"coverFrameTimeMs"`
-	ImageWidth               int                         `json:"imageWidth,omitempty"`
-	ImageHeight              int                         `json:"imageHeight,omitempty"`
-	ImageDeliveryContentType string                      `json:"imageDeliveryContentType,omitempty"`
-	VerifiedDurationMs       int64                       `json:"verifiedDurationMs,omitempty"`
-	VideoWidth               int                         `json:"videoWidth,omitempty"`
-	VideoHeight              int                         `json:"videoHeight,omitempty"`
-	VideoCodec               string                      `json:"videoCodec,omitempty"`
-	VideoContainer           string                      `json:"videoContainer,omitempty"`
-	VideoAudioCodec          string                      `json:"videoAudioCodec,omitempty"`
-	VideoKeyframeIntervalMs  int                         `json:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart           bool                        `json:"videoFastStart,omitempty"`
-	PreviewTrackVersion      int                         `json:"previewTrackVersion,omitempty"`
-	CoverURL                 string                      `json:"coverUrl,omitempty"`
-	Replayed                 bool                        `json:"replayed"`
+	AssetID                      string                      `json:"assetId"`
+	Version                      int64                       `json:"version"`
+	ProcessingStatus             mediamodel.ProcessingStatus `json:"processingStatus"`
+	AccessPolicy                 mediamodel.AccessPolicy     `json:"accessPolicy"`
+	CoverStrategy                string                      `json:"coverStrategy"`
+	ManualCoverAssetID           string                      `json:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs             int64                       `json:"coverFrameTimeMs"`
+	ImageWidth                   int                         `json:"imageWidth,omitempty"`
+	ImageHeight                  int                         `json:"imageHeight,omitempty"`
+	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
+	ImageDominantColor           string                      `json:"imageDominantColor,omitempty"`
+	ImageLQIP                    string                      `json:"imageLqip,omitempty"`
+	ImageContentProfile          string                      `json:"imageContentProfile,omitempty"`
+	ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion,omitempty"`
+	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
+	VideoWidth                   int                         `json:"videoWidth,omitempty"`
+	VideoHeight                  int                         `json:"videoHeight,omitempty"`
+	VideoCodec                   string                      `json:"videoCodec,omitempty"`
+	VideoContainer               string                      `json:"videoContainer,omitempty"`
+	VideoAudioCodec              string                      `json:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart               bool                        `json:"videoFastStart,omitempty"`
+	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`
+	CoverURL                     string                      `json:"coverUrl,omitempty"`
+	Replayed                     bool                        `json:"replayed"`
 }
 
 // MediaUploadSessionSlice contains the owner-scoped projection. The expected
@@ -168,6 +196,7 @@ type MediaObjectGateway interface {
 	PrepareUpload(context.Context, PrepareUploadParams) (UploadGrant, error)
 	UploadURL(context.Context, string, string, string, time.Time) (string, error)
 	CompleteUpload(context.Context, CompleteUploadParams) (CompletedUploadObject, error)
+	DeleteTemporaryUpload(context.Context, string) error
 	PublishPublicSlice(context.Context, string, string) error
 	DeliveryURL(context.Context, string) (string, error)
 	DeliveryURLUntil(context.Context, string, time.Time) (string, error)
@@ -198,6 +227,10 @@ type MediaAssetSlice struct {
 	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
 	ImageNormalizedObjectKey     string                      `json:"-"`
 	ImagePublicSliceKey          string                      `json:"-"`
+	ImageDominantColor           string                      `json:"imageDominantColor,omitempty"`
+	ImageLQIP                    string                      `json:"imageLqip,omitempty"`
+	ImageContentProfile          string                      `json:"imageContentProfile,omitempty"`
+	ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion,omitempty"`
 	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
 	VideoWidth                   int                         `json:"videoWidth,omitempty"`
 	VideoHeight                  int                         `json:"videoHeight,omitempty"`
@@ -239,6 +272,10 @@ type MediaAssetDeliveryReferenceSlice struct {
 	ImageWidth                   int                         `json:"imageWidth,omitempty"`
 	ImageHeight                  int                         `json:"imageHeight,omitempty"`
 	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
+	ImageDominantColor           string                      `json:"imageDominantColor,omitempty"`
+	ImageLQIP                    string                      `json:"imageLqip,omitempty"`
+	ImageContentProfile          string                      `json:"imageContentProfile,omitempty"`
+	ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion,omitempty"`
 	VerifiedDurationMs           int64                       `json:"verifiedDurationMs,omitempty"`
 	VideoWidth                   int                         `json:"videoWidth,omitempty"`
 	VideoHeight                  int                         `json:"videoHeight,omitempty"`
@@ -265,6 +302,15 @@ type MediaAssetOwnerReader interface {
 		ctx context.Context,
 		assetID string,
 		ownerID string,
+	) (MediaAssetSlice, bool, error)
+}
+
+// MediaAssetOriginalAccessReader 是原图授权的内部 named reader。它不按
+// caller owner 过滤，调用方必须先使用 Post 可见性和 asset policy 进行授权。
+type MediaAssetOriginalAccessReader interface {
+	FindMediaAssetForOriginalAccess(
+		ctx context.Context,
+		assetID string,
 	) (MediaAssetSlice, bool, error)
 }
 

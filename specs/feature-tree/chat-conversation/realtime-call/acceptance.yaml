@@ -70,8 +70,10 @@ sit_acceptance:
     - 强网通话建立 ≤3s；来电在线推送到达 ≤1s。
     tests:
       planned:
+      - file: quwoquan_app/test/api_integration/cloud/rtc/rtc_api_contract_runner.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_provider_lifecycle__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_facets_remote__local_contract_test.dart
       - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
     status: partial
     test_evidence:
@@ -97,7 +99,11 @@ sit_acceptance:
         cases:
         - local_contract.chat_conversation.realtime_call.sit2_call_lifecycle.sit2_call_lifecycle_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - Gamma runner 通过 generated Remote client 创建三份短期匿名会话、建立 mutual
+      relationship，验证 Initiate→Answer→Join→Connected→媒体控制→Hangup/查询回读，
+      并断言非参与者 GetCall 返回 RTC.USER.not_participant。它必须携带受控 gateway
+      URL 执行；本地静态分析或文件存在不计为 Gamma evidence。
   SIT3_multiparty_invite_trust:
     title: 多人房间、通话中加人与信任两态提示
     story_refs:
@@ -319,6 +325,7 @@ sit_acceptance:
     - 开始/停止 command P95 遵循 metadata 300ms；首个共享画面时延另由媒体 QoE 记录。
     tests:
       planned:
+      - file: quwoquan_app/test/api_integration/cloud/rtc/rtc_api_contract_runner.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_signal_consume__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/rtc_screen_share_track_wiring__local_contract_test.dart
@@ -370,7 +377,6 @@ sit_acceptance:
       - file: quwoquan_ops/tests/local_contract/test_rtc_media_qoe_observability__observability_reliability__local_contract_test.py
       - file: quwoquan_service/services/product-ops-service/tests/local_contract/rtc_media_qoe_summary__observability__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/tests/api_integration/rtc_media_qoe_summary__observability__api_integration_test.go
-      - file: quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs
     status: partial
     test_evidence:
       primary:
@@ -397,6 +403,7 @@ sit_acceptance:
     - 权威查询 Facade、metadata-derived route、Product Portal 24 小时窗口与本地告警
       readback 已落地；Gamma/Prod 真实 SLS series、真机弱网/重连/异常中断 readback
       与告警触发→通知→恢复→回滚证据仍缺，因此保持 partial。
+    - '[migrated_from_recorded_reference] quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

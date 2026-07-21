@@ -2259,7 +2259,10 @@
       "authorPostIds": [
         "fixture_photo_001",
         "fixture_photo_002",
-        "fixture_post_photography_001"
+        "fixture_post_photography_001",
+        "fixture_post_photography_011",
+        "fixture_post_photography_021",
+        "fixture_post_photography_031"
       ],
       "commentIds": [
         "fixture_comment_photo_001"

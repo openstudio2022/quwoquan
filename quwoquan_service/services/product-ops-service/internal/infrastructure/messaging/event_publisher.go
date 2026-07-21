@@ -8,20 +8,26 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	rtredis "quwoquan_service/runtime/redis"
 )
 
 type RedisEventPublisher struct {
-	redis   rtredis.Client
-	service string
-	logger  *slog.Logger
+	transport runtimemessaging.MessageTransport
+	service   string
+	logger    *slog.Logger
 }
 
-func NewRedisEventPublisher(redis rtredis.Client, serviceName string, logger *slog.Logger) *RedisEventPublisher {
+func NewRedisEventPublisherWithTransport(
+	transport runtimemessaging.MessageTransport,
+	serviceName string,
+	logger *slog.Logger,
+) *RedisEventPublisher {
+	if transport == nil {
+		panic("product-ops event publisher requires a message transport")
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &RedisEventPublisher{redis: redis, service: serviceName, logger: logger}
+	return &RedisEventPublisher{transport: transport, service: serviceName, logger: logger}
 }
 
 func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessaging.DomainEvent) error {
@@ -47,7 +53,10 @@ func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessagin
 	if err != nil {
 		return fmt.Errorf("marshal ops event: %w", err)
 	}
-	if err := p.redis.Publish(ctx, channel, string(data)); err != nil {
+	if err := p.transport.PublishEphemeral(ctx, runtimemessaging.EphemeralMessage{
+		Channel: channel,
+		Payload: data,
+	}); err != nil {
 		p.logger.Warn("ops event publish failed", "channel", channel, "err", err)
 		return fmt.Errorf("publish ops event: %w", err)
 	}

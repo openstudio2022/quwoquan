@@ -1,8 +1,57 @@
 import '../operation_request_payload.dart';
+import '../operation_cancellation.dart';
 import '../structured_value.dart';
 import 'homepage_models.dart';
 
 export 'homepage_models.dart';
+
+/// Homepage 查询目标不存在时的纯契约失败。
+///
+/// alpha/test adapter 以此表达 fixture 缺失，App projection 再映射为 metadata
+/// 生成的实体错误码，避免 mock package 反向依赖 App runtime。
+final class HomepageQueryNotFoundException implements Exception {
+  const HomepageQueryNotFoundException(this.homepageId);
+
+  final String homepageId;
+}
+
+/// Homepage 读模型的对象级 typed port。
+///
+/// Remote adapter 与 alpha/test adapter 均只实现此 pure-contract 边界；
+/// App 再将 projection 映射为页面 DTO。
+abstract interface class HomepageQueryFacet {
+  Future<HomepageSearchSlice> searchHomepages(
+    HomepageSearchQuery query, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  });
+
+  Future<HomepageDetailProjection> getHomepageDetail(String homepageId);
+
+  Future<HomepageShellProjection> getHomepageShell(String homepageId);
+
+  Future<HomepageObjectPageBundleProjection> getObjectPageBundle(
+    HomepageObjectPageBundleQuery query,
+  );
+
+  Future<HomepageReviewSummaryProjection> getHomepageReviewSummary(
+    String homepageId,
+  );
+
+  Future<HomepageImpactSummaryProjection> getEntityImpact(String homepageId);
+
+  Future<HomepageRelatedGroupsSlice> getHomepageRelatedGroups(
+    String homepageId,
+  );
+}
+
+/// Homepage 介绍页的独立 typed query port。
+abstract interface class HomepageIntroductionQuery {
+  Future<HomepageIntroductionProjection> getHomepageIntroduction(
+    String homepageId, {
+    CloudOperationCancellationSignal? cancellation,
+  });
+}
 
 final class HomepageSearchQuery {
   const HomepageSearchQuery({

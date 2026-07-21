@@ -10,7 +10,7 @@ fields:
   - { name: skillId, type: string, required: true }
   - { name: domainId, type: string, default: '' }
   - { name: tagRefs, type: list<string>, default: [] }
-  - { name: status, type: string, default: active }
+  - { name: status, type: enum, enum_ref: SkillSubscriptionStatus, default: active }
   - { name: searchQueryPlan, type: object, ref: search_query_plan, default: {} }
   - { name: trigger, type: object, ref: subscription_trigger, default: {} }
   - { name: destination, type: object, ref: subscription_destination, default: {} }

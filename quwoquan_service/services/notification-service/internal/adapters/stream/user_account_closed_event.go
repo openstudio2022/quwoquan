@@ -7,18 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/notification-service/internal/application"
 )
 
 func decodeNotificationUserAccountClosed(
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) (application.UserAccountClosedEvent, error) {
-	values := message.Values
+	values := durableFieldsToMap(message.Fields)
 	eventName := strings.TrimSpace(values["eventName"])
 	if eventName == "" {
 		return application.UserAccountClosedEvent{},
@@ -121,11 +122,12 @@ func normalizeUserAccountClosedPersonaIDs(values []string) []string {
 	return normalized
 }
 
-func userAccountClosedDeadLetterValues(
-	message rtredis.StreamMessage,
+func userAccountClosedDeadLetterFields(
+	message runtimemessaging.StreamDelivery,
 	cause error,
 	attempts int64,
-) map[string]string {
+) []runtimemessaging.DurableField {
+	messageValues := durableFieldsToMap(message.Fields)
 	values := map[string]string{
 		"sourceStream":   UserAccountEventStream,
 		"sourceStreamId": message.ID,
@@ -141,9 +143,42 @@ func userAccountClosedDeadLetterValues(
 		"payload",
 		"occurredAt",
 	} {
-		values[key] = message.Values[key]
+		values[key] = messageValues[key]
+	}
+	return durableFieldsFromMap(values)
+}
+
+func durableFieldsToMap(fields []runtimemessaging.DurableField) map[string]string {
+	values := make(map[string]string, len(fields))
+	for _, field := range fields {
+		values[field.Name] = field.Value
 	}
 	return values
+}
+
+func durableFieldValue(fields []runtimemessaging.DurableField, name string) string {
+	for _, field := range fields {
+		if field.Name == name {
+			return field.Value
+		}
+	}
+	return ""
+}
+
+func durableFieldsFromMap(values map[string]string) []runtimemessaging.DurableField {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	fields := make([]runtimemessaging.DurableField, 0, len(keys))
+	for _, key := range keys {
+		fields = append(fields, runtimemessaging.DurableField{
+			Name:  key,
+			Value: values[key],
+		})
+	}
+	return fields
 }
 
 func irreversibleStreamDigest(value string) string {

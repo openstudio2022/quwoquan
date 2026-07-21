@@ -164,16 +164,25 @@ abstract class _ChatConversationPageActionsState
     if (selected != null && mounted) {
       unawaited(
         ref
-            .read(journeyEventTrackerProvider)
-            .trackAction(
-              journey: 'chat_conversation',
-              action: 'mention_member_selected',
-              pageName: 'chat_conversation',
-              targetType: selected.kind.name,
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.mentionSelect,
+              outcome: ChatInteractionOutcome.succeeded,
+              mentionScope: _mentionScopeFor(selected.kind),
+              pageName: PageNames.chatDetail,
+              surfaceId: AppUiSurfaces.chatDetail.id,
             ),
       );
     }
     return selected;
+  }
+
+  ChatMentionScope _mentionScopeFor(ChatInputMentionKind kind) {
+    return switch (kind) {
+      ChatInputMentionKind.member => ChatMentionScope.member,
+      ChatInputMentionKind.assistant => ChatMentionScope.assistant,
+      ChatInputMentionKind.all => ChatMentionScope.all,
+    };
   }
 
   Future<bool> _resolveCanMentionAll(String currentUserId) async {
@@ -634,9 +643,25 @@ abstract class _ChatConversationPageActionsState
     if (text.isEmpty) return;
     if (draftText == null) _inputController.clear();
     final resolvedMentions = _resolveMentions(mentions);
-    ref
+    final sent = await ref
         .read(chatMessageProvider(widget.conversationId).notifier)
         .sendMessage('text', text, mentions: resolvedMentions);
+    if (resolvedMentions != null) {
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.mentionSend,
+              outcome: sent
+                  ? ChatInteractionOutcome.succeeded
+                  : ChatInteractionOutcome.failed,
+              mentionScope: _mentionScopeForResolvedIds(resolvedMentions),
+              memberCount: resolvedMentions.length,
+              pageName: PageNames.chatDetail,
+              surfaceId: AppUiSurfaces.chatDetail.id,
+            ),
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -661,6 +686,12 @@ abstract class _ChatConversationPageActionsState
       }
     }
     return values.isEmpty ? null : List<String>.unmodifiable(values);
+  }
+
+  ChatMentionScope _mentionScopeForResolvedIds(List<String> mentions) {
+    if (mentions.contains('__all__')) return ChatMentionScope.all;
+    if (mentions.contains('assistant')) return ChatMentionScope.assistant;
+    return ChatMentionScope.member;
   }
 
   List<ChatInputExtraPanelItem> _buildCallPanelItems() {

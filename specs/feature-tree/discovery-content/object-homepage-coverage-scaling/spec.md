@@ -105,6 +105,10 @@ WP5 省级批量跑已验证 `decompose → fanout by-partition → leaf` 全链
 - 正文生成一律经 Cursor SDK，provider/model 读取受版本控制的 runtime profile，禁止
   会话模型、脚本拼接或 fixture 代写实体主页正文。
 - data CLI-first：新能力一律 `qwq-data` 子命令化，禁止新增可直跑 `__main__` 业务脚本。
+- ReliableTask 的 author / publish 幂等身份必须包含 `executionId + entityRef + carrier +
+  sourceRevision + stage`：同一 immutable execution 的重复声明可合并；`retryOf` 建立的新
+  execution 即使复用同一来源版本，也必须建立自己的任务、作者证据与终态，绝不能绑定旧
+  execution 的成功、死信或发布输入。
 - 每个 execution 只能发布动态资格核验 confirmed 的对象；无权威主源等失败必须以稳定
   `DataIssue` 归因落账，不能回写静态主清单。
 - 来源、阶段结果、失败隔离与 review 证据只归当前 execution 工作包；approved

@@ -33,14 +33,19 @@ func HandleUserAvatarUpdated(
 	cursor := ""
 	seen := map[string]struct{}{}
 	for {
-		states, err := storage.UserStates.ListUserStates(ctx, userID, userAvatarRefreshBatchSize, cursor)
+		page, err := storage.UserStates.ListUserStatePage(
+			ctx,
+			userID,
+			userAvatarRefreshBatchSize,
+			cursor,
+		)
 		if err != nil {
 			return err
 		}
-		if len(states) == 0 {
+		if len(page.Items) == 0 {
 			return nil
 		}
-		for _, state := range states {
+		for _, state := range page.Items {
 			conversationID := strings.TrimSpace(state.ConversationId)
 			if conversationID == "" {
 				continue
@@ -62,10 +67,7 @@ func HandleUserAvatarUpdated(
 				return err
 			}
 		}
-		if len(states) < userAvatarRefreshBatchSize {
-			return nil
-		}
-		nextCursor := strings.TrimSpace(states[len(states)-1].ConversationId)
+		nextCursor := strings.TrimSpace(page.NextCursor)
 		if nextCursor == "" || nextCursor == cursor {
 			return nil
 		}

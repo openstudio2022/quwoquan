@@ -93,6 +93,7 @@ func normalizeAndValidateCatalog(
 
 	normalizedCategories := make([]FilterCategoryDefinition, len(categories))
 	categoryByID := make(map[string]FilterCategoryDefinition, len(categories))
+	categorySorts := make(map[int]string, len(categories))
 	for index, category := range categories {
 		if !validCanonicalText(category.CategoryID) ||
 			!validCanonicalText(category.DisplayNameZhHans) ||
@@ -110,6 +111,16 @@ func normalizeAndValidateCatalog(
 				category.CategoryID,
 			)
 		}
+		if existingID, duplicated := categorySorts[category.Sort]; duplicated {
+			return canonicalCatalogPayload{}, fmt.Errorf(
+				"%w: categories %q and %q share sort %d",
+				ErrInvalidArgument,
+				existingID,
+				category.CategoryID,
+				category.Sort,
+			)
+		}
+		categorySorts[category.Sort] = category.CategoryID
 		categoryByID[category.CategoryID] = category
 		normalizedCategories[index] = category
 	}

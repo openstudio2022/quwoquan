@@ -88,7 +88,7 @@ func ProjectInteractionNotification(
 		return single(projectGreetingSent(event))
 	case "CircleMembershipJoined":
 		return single(projectCircleJoined(event))
-	case "CircleMembershipRequested", "CircleMembershipRejected":
+	case "CircleMembershipRequested", "CircleMembershipApproved", "CircleMembershipRejected":
 		return single(projectCircleMembershipDecision(event))
 	case "CircleGroupMembershipRequested",
 		"CircleGroupMembershipActivated",
@@ -188,15 +188,15 @@ func projectReportResult(
 	event InteractionStreamEvent,
 ) (*CreateAppMessageCommand, error) {
 	var payload struct {
-		ReportID   string `json:"reportId"`
-		ReporterID string `json:"reporterId"`
+		ReportID          string `json:"reportId"`
+		ReporterAccountID string `json:"reporterAccountId"`
 	}
 	if err := decodeInteractionPayload(event.Payload, &payload); err != nil {
 		return nil, fmt.Errorf("decode report result payload: %w", err)
 	}
 	reportID := strings.TrimSpace(payload.ReportID)
-	reporterID := strings.TrimSpace(payload.ReporterID)
-	if reportID == "" || reporterID == "" {
+	reporterAccountID := strings.TrimSpace(payload.ReporterAccountID)
+	if reportID == "" || reporterAccountID == "" {
 		return nil, fmt.Errorf("report result identity is incomplete")
 	}
 	summary := "你提交的举报已处理，可查看最新进度"
@@ -205,7 +205,7 @@ func projectReportResult(
 	}
 	return interactionCommand(
 		event,
-		reporterID,
+		reporterAccountID,
 		"content",
 		"report_result",
 		reportID,
@@ -431,7 +431,7 @@ func projectCircleJoined(event InteractionStreamEvent) (*CreateAppMessageCommand
 }
 
 // projectCircleMembershipDecision 处理圈子级审批双向通知：
-// Requested → 通知圈主有新申请；Rejected → 通知申请人结果。
+// Requested → 通知圈主有新申请；Approved/Rejected → 通知申请人结果。
 func projectCircleMembershipDecision(event InteractionStreamEvent) (*CreateAppMessageCommand, error) {
 	var payload struct {
 		ID                   string `json:"id"`
@@ -453,7 +453,11 @@ func projectCircleMembershipDecision(event InteractionStreamEvent) (*CreateAppMe
 	recipient := owner
 	title := interactionTitleCircleRequest
 	summary := "申请加入你的圈子"
-	if event.EventType == "CircleMembershipRejected" {
+	if event.EventType == "CircleMembershipApproved" {
+		recipient = applicant
+		title = interactionTitleCircleResult
+		summary = "你的圈子加入申请已通过"
+	} else if event.EventType == "CircleMembershipRejected" {
 		recipient = applicant
 		title = interactionTitleCircleResult
 		summary = "你的圈子加入申请未通过"

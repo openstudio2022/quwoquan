@@ -528,6 +528,66 @@ func TestBindMediaAssetsToCommentIsOwnerScopedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestCommentRejectsMoreThanNineAttachments(t *testing.T) {
+	service, _ := newCommentAggregateService()
+	overLimit := []string{
+		"media-1",
+		"media-2",
+		"media-3",
+		"media-4",
+		"media-5",
+		"media-6",
+		"media-7",
+		"media-8",
+		"media-9",
+		"media-10",
+	}
+	_, err := service.CreateComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-attachment-limit-create"),
+		commentapp.CreateCommentCommand{
+			PostID:             "post-comment-owner",
+			ActorID:            "persona-comment-author",
+			Content:            "附件数超限",
+			AttachmentMediaIDs: overLimit,
+		},
+	)
+	if err == nil {
+		t.Fatal("CreateComment must reject more than nine attachment media IDs")
+	}
+	assertCommentRuntimeErrorCode(
+		t,
+		err,
+		contentgenerated.AppErrorFromCommentAttachmentLimitExceeded(""),
+	)
+
+	created := createComment(
+		t,
+		service,
+		"comment-attachment-limit-bind-create",
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: "绑定附件数超限",
+		},
+	)
+	_, err = service.BindAttachments(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-attachment-limit-bind"),
+		commentapp.BindCommentAttachmentsCommand{
+			CommentID:          created.ID,
+			ActorID:            "persona-comment-author",
+			AttachmentMediaIDs: overLimit,
+		},
+	)
+	if err == nil {
+		t.Fatal("BindAttachments must reject more than nine attachment media IDs")
+	}
+	assertCommentRuntimeErrorCode(
+		t,
+		err,
+		contentgenerated.AppErrorFromCommentAttachmentLimitExceeded(""),
+	)
+}
+
 func TestHideCommentModerationLifecycle(t *testing.T) {
 	service, store := newCommentAggregateService()
 	created := createComment(

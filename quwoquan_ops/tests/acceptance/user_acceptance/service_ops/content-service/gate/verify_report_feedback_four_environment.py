@@ -73,30 +73,35 @@ def _latest_report(environment: str, profile: str) -> tuple[Path, dict[str, obje
     return max(candidates, key=lambda item: str(item[1].get("startedAt", "")))
 
 
-def _latest_feature_report(
+def _feature_report_for_stack_run(
+    stack_report_path: Path,
     environment: str,
     mode: str,
 ) -> tuple[Path, dict[str, object]]:
-    candidates: list[tuple[Path, dict[str, object]]] = []
-    runs = OUTPUT_ROOT / environment / "runs"
-    for report_path in runs.glob("*/report-feedback-lifecycle.json"):
-        try:
-            payload = json.loads(report_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        environment_payload = payload.get("environment")
-        if (
-            payload.get("schema") == FEATURE_PROBE_SCHEMA
-            and payload.get("mode") == mode
-            and isinstance(environment_payload, dict)
-            and environment_payload.get("env") == environment
-        ):
-            candidates.append((report_path, payload))
-    if not candidates:
+    report_path = stack_report_path.parent / "report-feedback-lifecycle.json"
+    if not report_path.is_file():
         raise AssertionError(
-            f"{environment} 缺少举报反馈对象级探针 mode={mode} 报告"
+            f"{environment} stackctl verify 报告缺少同次运行的举报反馈对象级探针 "
+            f"mode={mode}"
         )
-    return max(candidates, key=lambda item: str(item[1].get("startedAt", "")))
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AssertionError(
+            f"{environment} 举报反馈对象级探针报告不可解析: "
+            f"{report_path.relative_to(ROOT)}"
+        ) from exc
+    environment_payload = payload.get("environment")
+    if (
+        payload.get("schema") != FEATURE_PROBE_SCHEMA
+        or payload.get("mode") != mode
+        or not isinstance(environment_payload, dict)
+        or environment_payload.get("env") != environment
+    ):
+        raise AssertionError(
+            f"{environment} stackctl verify 同次举报反馈探针契约不匹配"
+        )
+    return report_path, payload
 
 
 def _passed_steps(report: dict[str, object]) -> frozenset[str]:
@@ -168,7 +173,11 @@ def verify() -> dict[str, dict[str, str]]:
         if mode is None:
             continue
         try:
-            feature_path, feature_report = _latest_feature_report(environment, mode)
+            feature_path, feature_report = _feature_report_for_stack_run(
+                report_path,
+                environment,
+                mode,
+            )
         except AssertionError as exc:
             failures.append(str(exc))
             continue

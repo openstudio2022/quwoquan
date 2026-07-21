@@ -205,6 +205,12 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	if detailRecorder.Code != http.StatusOK {
 		t.Fatalf("get report status=%d body=%s", detailRecorder.Code, detailRecorder.Body.String())
 	}
+	if bytes.Contains(detailRecorder.Body.Bytes(), []byte(`"reporterAccountId"`)) {
+		t.Fatalf(
+			"operator report detail leaked reporter account identity: %s",
+			detailRecorder.Body.String(),
+		)
+	}
 
 	writeOperator := rtauth.TokenSubject{
 		AccountID:   "review-operator",
@@ -326,6 +332,18 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	for _, event := range store.OutboxEvents() {
 		if event.EventType == "content.report.resolved" {
 			resolvedEvents++
+			var payload map[string]any
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				t.Fatalf("decode resolved report event: %v", err)
+			}
+			if got, _ := payload["reporterAccountId"].(string); got != reporter.AccountID {
+				t.Fatalf(
+					"resolved event reporterAccountId=%q want trusted account %q; payload=%#v",
+					got,
+					reporter.AccountID,
+					payload,
+				)
+			}
 		}
 	}
 	if resolvedEvents != 1 {

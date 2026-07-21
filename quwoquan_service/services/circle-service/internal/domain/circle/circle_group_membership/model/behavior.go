@@ -10,6 +10,7 @@ var (
 	ErrInvalidChange       = errors.New("invalid CircleGroupMembership change")
 	ErrNotFound            = errors.New("CircleGroupMembership not found")
 	ErrAlreadyActive       = errors.New("CircleGroupMembership already active")
+	ErrGroupFull           = errors.New("CircleGroupMembership active-member capacity reached")
 	ErrStateConflict       = errors.New("CircleGroupMembership state conflict")
 	ErrOwnerCannotLeave    = errors.New("CircleGroup owner cannot leave")
 	ErrOwnerCannotRemove   = errors.New("CircleGroup owner cannot be removed")
@@ -17,6 +18,11 @@ var (
 	ErrVersionConflict     = errors.New("CircleGroupMembership version conflict")
 	ErrIdempotencyConflict = errors.New("CircleGroupMembership idempotency conflict")
 )
+
+// MaxActiveMembersPerGroup is the fixed CircleGroup human-member ceiling.
+// The persistence transaction serializes every active-state transition against
+// this invariant; it is never a projected or client-supplied value.
+const MaxActiveMembersPerGroup int64 = 1000
 
 type ChangeKind string
 
@@ -166,5 +172,21 @@ func (change ChangeSet) Apply(current *CircleGroupMembership) (CircleGroupMember
 		return next, "CircleGroupMembershipRoleChanged", nil
 	default:
 		return CircleGroupMembership{}, "", ErrInvalidChange
+	}
+}
+
+// ActiveMembershipDelta returns the authoritative capacity-counter adjustment
+// for a committed state transition. Pending, rejected, left and removed
+// memberships never consume a CircleGroup human-member slot.
+func ActiveMembershipDelta(current *CircleGroupMembership, next CircleGroupMembership) int64 {
+	wasActive := current != nil && current.State == CircleGroupMembershipStateActive
+	isActive := next.State == CircleGroupMembershipStateActive
+	switch {
+	case !wasActive && isActive:
+		return 1
+	case wasActive && !isActive:
+		return -1
+	default:
+		return 0
 	}
 }

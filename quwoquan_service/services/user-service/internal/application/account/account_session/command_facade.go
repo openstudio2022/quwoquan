@@ -209,6 +209,10 @@ func revocationAlreadyComplete(err error) bool {
 
 func mapSessionStoreError(err error) error {
 	switch {
+	case errors.Is(err, sessionports.ErrSessionAccountSuspended):
+		return generated.AppErrorFromAccountSuspended(
+			"account session was revoked because the account is suspended",
+		)
 	case errors.Is(err, sessionports.ErrSessionNotFound),
 		errors.Is(err, sessionports.ErrSessionRevoked):
 		return generated.AppErrorFromUnauthorized(

@@ -42,6 +42,44 @@ void main() {
       expect(code, ContentErrorCode.invalidArgument);
     });
 
+    test('parse_interaction_type_invalid → interactionTypeInvalid', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_type_invalid',
+      );
+      expect(code, ContentErrorCode.interactionTypeInvalid);
+    });
+
+    test('parse_interaction_cursor_invalid → interactionCursorInvalid', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_cursor_invalid',
+      );
+      expect(code, ContentErrorCode.interactionCursorInvalid);
+    });
+
+    test('parse_interaction_owner_forbidden → interactionOwnerForbidden', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.interaction_owner_forbidden',
+      );
+      expect(code, ContentErrorCode.interactionOwnerForbidden);
+    });
+
+    test(
+      'parse_interaction_read_model_unavailable → interactionReadModelUnavailable',
+      () {
+        final code = ContentErrorCode.fromCode(
+          'CONTENT.SYSTEM.interaction_read_model_unavailable',
+        );
+        expect(code, ContentErrorCode.interactionReadModelUnavailable);
+      },
+    );
+
+    test('parse_publication_rejected → publicationRejected', () {
+      final code = ContentErrorCode.fromCode(
+        'CONTENT.USER.publication_rejected',
+      );
+      expect(code, ContentErrorCode.publicationRejected);
+    });
+
     test('parse_invalid_content_type → invalidContentType', () {
       final code = ContentErrorCode.fromCode(
         'CONTENT.USER.invalid_content_type',
@@ -135,6 +173,11 @@ void main() {
       'CONTENT.USER.forbidden_delete': 403,
       'CONTENT.USER.unauthorized': 401,
       'CONTENT.USER.invalid_argument': 400,
+      'CONTENT.USER.interaction_type_invalid': 400,
+      'CONTENT.USER.interaction_cursor_invalid': 400,
+      'CONTENT.USER.interaction_owner_forbidden': 403,
+      'CONTENT.SYSTEM.interaction_read_model_unavailable': 503,
+      'CONTENT.USER.publication_rejected': 422,
       'CONTENT.USER.invalid_content_type': 400,
       'CONTENT.USER.rate_limited': 429,
       'CONTENT.USER.content_too_long': 400,
@@ -156,6 +199,10 @@ void main() {
         'CONTENT.USER.forbidden_delete': 403,
         'CONTENT.USER.unauthorized': 401,
         'CONTENT.USER.invalid_argument': 400,
+        'CONTENT.USER.interaction_type_invalid': 400,
+        'CONTENT.USER.interaction_cursor_invalid': 400,
+        'CONTENT.USER.interaction_owner_forbidden': 403,
+        'CONTENT.USER.publication_rejected': 422,
         'CONTENT.USER.invalid_content_type': 400,
         'CONTENT.USER.rate_limited': 429,
         'CONTENT.USER.content_too_long': 400,
@@ -177,6 +224,7 @@ void main() {
         'CONTENT.SYSTEM.storage_write_failed': 500,
         'CONTENT.SYSTEM.storage_read_failed': 500,
         'CONTENT.SYSTEM.internal_error': 500,
+        'CONTENT.SYSTEM.interaction_read_model_unavailable': 503,
       };
       for (final entry in systemErrors.entries) {
         expect(

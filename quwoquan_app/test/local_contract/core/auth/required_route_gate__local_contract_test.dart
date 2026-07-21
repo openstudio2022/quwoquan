@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 
 /// 直达路由守卫真相源回归测试。
 ///
@@ -54,6 +55,17 @@ void main() {
       );
     });
 
+    test('私助管理页需要登录且关闭登录页回到安全页', () {
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.assistantManagement),
+        AuthGateReason.settingsAccount,
+      );
+      expect(
+        safeLoginDismissFallback(redirect: AppRoutePaths.assistantManagement),
+        AppRoutePaths.home,
+      );
+    });
+
     test('防死循环：buildLoginRouteLocation 显式编码安全关闭策略', () {
       final loc = buildLoginRouteLocation(
         reasonName: AuthGateReason.openChat.name,
@@ -81,6 +93,38 @@ void main() {
         ),
         AppRoutePaths.home,
       );
+    });
+
+    test('账号受限登录可保留成功续接，但关闭必回安全首页', () {
+      final loc = buildLoginRouteLocation(
+        reasonName: AuthPromptReason.accountSuspended.name,
+        redirect: AppRoutePaths.chat,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      );
+      final uri = Uri.parse(loc);
+      expect(
+        uri.queryParameters['reason'],
+        AuthPromptReason.accountSuspended.name,
+      );
+      expect(uri.queryParameters['redirect'], AppRoutePaths.chat);
+      expect(
+        loginDismissPolicyFromQuery(
+          uri.queryParameters[loginGuestDismissPopQueryParam],
+        ),
+        LoginDismissPolicy.safeFallback,
+      );
+      expect(
+        safeLoginDismissFallback(
+          redirect: AppRoutePaths.chat,
+          dismissFallback: AppRoutePaths.home,
+        ),
+        AppRoutePaths.home,
+      );
+      final copy = loginReasonCopyForPromptReason(
+        AuthPromptReason.accountSuspended,
+      );
+      expect(copy.subtitle, contains('限制'));
     });
 
     test('行内动作门默认允许 guest pop（登录关闭原路返回可浏览页）', () {

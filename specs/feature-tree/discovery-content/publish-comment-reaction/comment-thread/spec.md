@@ -48,7 +48,7 @@ active/hidden --PostDeleted 级联--> tombstoned（终态）
 
 - `hidden`：治理隐藏，前台一律不可见；作者在「我的评论」中可见状态标记；仅 operator 可恢复。
 - `tombstoned`：宿主 Post 删除后的级联终态，前台不可见，保留审计事实；不可恢复。
-- `deleted` 保持 V3 语义（作者 CAS 软删）。
+- `deleted` 保持 V3 语义（作者触发、服务端内部 CAS 的软删）。
 - 状态迁移只允许上述边；任何非法迁移返回稳定 conflict 错误。
 
 ### 2.3 层级与顺序
@@ -69,10 +69,10 @@ active/hidden --PostDeleted 级联--> tombstoned（终态）
 | F1 | 一级评论 | 首屏与追加页返回 typed `CommentPageSlice`，默认 20 条；`sort=hot\|latest` 两档。 |
 | F2 | 回复 | 一级项携带 `replyCount/replyPreview/replyNextCursor`；展开使用 typed `ReplyPageSlice`。 |
 | F3 | 创建 | 命令携带正文、reply target、media ids、typed mentions 与 persona 快照；必须有 actor 和幂等键；服务端捕获客户端 IP 解析 `authorIpLocation` 快照（解析不出为空、不展示，绝不臆造）。 |
-| F4 | 删除 | 作者使用 aggregate version 做 CAS 软删除；陈旧 version 返回稳定冲突错误。 |
+| F4 | 删除 | 作者提交命名删除意图；服务端以内部 CAS 和有界重放完成软删，重复意图按幂等 receipt 返回原结果，不向调用方公开 aggregate version。 |
 | F5 | 赞踩 | `like/dislike/none` 三态互斥；服务端返回精确计数，列表重入以 `viewerReaction` 为准。 |
-| F6 | 置顶 | 仅 Post owner 可置顶未删除的一级 Comment；pin/unpin 使用 aggregate version；置顶变更通知评论作者。 |
-| F7 | 附件 | Comment 只持有 media id；查询投影返回 typed attachment 与 available 状态。 |
+| F6 | 置顶 | 仅 Post owner 可置顶未删除的一级 Comment；pin/unpin 以服务端内部 CAS 的命名状态迁移执行，置顶变更通知评论作者。 |
+| F7 | 附件 | Comment 只持有 media id；`attachmentMediaIds` 至多 9 个，创建和后绑定均在服务端拒绝超限并返回 `comment_attachment_limit_exceeded`；查询投影返回 typed attachment 与 available 状态。后绑定是命名状态迁移，由服务端内部 CAS 有界重放，调用方不携带 aggregate version。 |
 | F8 | @ | 输入、登录续接、command 全程使用 `ContentCommentMention`；候选来自我的关注（typed relationship Facet），被 @ 用户收到通知。 |
 | F9 | 登录续接 | 保留 post、reply target、正文、附件和 mentions；目标不一致时不得误提交。 |
 | F10 | 个人互动 | “我的评论”“收到的评论”和互动深链使用 typed Facet，携带 post/comment/parent identity；「我的评论」可见 hidden 状态标记。 |
@@ -116,7 +116,7 @@ active/hidden --PostDeleted 级联--> tombstoned（终态）
 
 ## 6. 一致性、安全与性能
 
-- Command 必须有 authenticated persona actor、Idempotency-Key 和需要时的 expected version；治理命令必须有 operator actor 与权限校验。
+- Comment 的删除、置顶/取消置顶、附件绑定、隐藏和恢复均是命名状态迁移：客户端只提交 authenticated actor 与 Idempotency-Key，服务端读取当前 aggregate version，以内部 CAS 和最多三次纯技术冲突重放完成意图；不得向调用方暴露 `expectedVersion`/`If-Match`。治理命令还必须有 operator actor 与权限校验。
 - 相同 actor + idempotency key + digest 重放返回原 receipt；不同 digest 返回稳定 idempotency conflict。
 - Comment 与 outbox 原子；ContentReaction 与 outbox 原子；投影消费者按 event id 去重；hotScore 投影收敛滞后有 SLI。
 - 一级/回复/热评 keyset 查询必须命中声明索引，无 `COLLSCAN` 和阻塞排序。

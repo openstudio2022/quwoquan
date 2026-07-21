@@ -16,6 +16,7 @@ import (
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	"quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
 	rthealth "quwoquan_service/runtime/health"
@@ -287,6 +288,49 @@ func TestReportRuntimeLogBatchAcceptsOnlyCanonicalAppDiagnostics(t *testing.T) {
 	server.ServeHTTP(response, newRuntimeLogBatchRequest(t, []map[string]any{invalid}))
 	if response.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("versioned runtime log must be rejected, status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestProductOpsInternalRuntimeLogIngestBypassesObservedHandler(t *testing.T) {
+	internalCalls := 0
+	observedCalls := 0
+	handler := withProductOpsInternalRuntimeLogIngestBypass(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			internalCalls++
+			w.WriteHeader(http.StatusAccepted)
+		}),
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			observedCalls++
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+
+	internalResponse := httptest.NewRecorder()
+	handler.ServeHTTP(
+		internalResponse,
+		httptest.NewRequest(http.MethodPost, "/ops/internal/runtime-logs:ingest", nil),
+	)
+	if internalResponse.Code != http.StatusAccepted || internalCalls != 1 || observedCalls != 0 {
+		t.Fatalf(
+			"internal runtime log ingest must avoid observed handler: status=%d internal=%d observed=%d",
+			internalResponse.Code,
+			internalCalls,
+			observedCalls,
+		)
+	}
+
+	publicResponse := httptest.NewRecorder()
+	handler.ServeHTTP(
+		publicResponse,
+		httptest.NewRequest(http.MethodGet, "/ops/events/summary", nil),
+	)
+	if publicResponse.Code != http.StatusOK || internalCalls != 1 || observedCalls != 1 {
+		t.Fatalf(
+			"normal product request must retain observed handler: status=%d internal=%d observed=%d",
+			publicResponse.Code,
+			internalCalls,
+			observedCalls,
+		)
 	}
 }
 
@@ -565,6 +609,18 @@ func TestInternalRuntimeLogIngestTokenGate(t *testing.T) {
 	if accepted.Code != http.StatusOK {
 		t.Fatalf("internal ingest status=%d body=%s", accepted.Code, accepted.Body.String())
 	}
+	replayed := httptest.NewRecorder()
+	server.ServeHTTP(replayed, newIngest([]map[string]string{serviceRecord}, "test-ingest-token-32bytes-machine"))
+	if replayed.Code != http.StatusOK {
+		t.Fatalf("internal ingest replay status=%d body=%s", replayed.Code, replayed.Body.String())
+	}
+	var replayAck application.EventBatchAck
+	if err := json.Unmarshal(replayed.Body.Bytes(), &replayAck); err != nil {
+		t.Fatalf("decode internal ingest replay ack: %v", err)
+	}
+	if !replayAck.DuplicateBatch || replayAck.AcceptedCount != 1 {
+		t.Fatalf("internal ingest replay must use the runtime ledger: %+v", replayAck)
+	}
 
 	from := now.Add(-time.Minute).Format(time.RFC3339Nano)
 	to := now.Add(time.Minute).Format(time.RFC3339Nano)
@@ -578,7 +634,7 @@ func TestInternalRuntimeLogIngestTokenGate(t *testing.T) {
 	if err := json.Unmarshal(queryResponse.Body.Bytes(), &drilldown); err != nil {
 		t.Fatalf("decode service log drilldown: %v", err)
 	}
-	if len(drilldown.Items) != 1 || drilldown.Items[0].Message != "downstream dependency failed" {
+	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].Message != "downstream dependency failed" {
 		t.Fatalf("service log must be queryable after internal ingest: %#v", drilldown.Items)
 	}
 }
@@ -608,6 +664,25 @@ func setTestSLSConfig(cfg *config) {
 	cfg.SLS.RuntimeLogstore = "runtime-diagnostics-raw"
 	cfg.SLS.AggregateLogstore = "app-product-telemetry-hourly"
 	cfg.SLS.TimeoutMS = 1200
+}
+
+func TestResolveSLSBindingFailsClosedWhenReleaseDescriptorIsBlocked(t *testing.T) {
+	_, err := resolveSLSBinding(
+		config{},
+		"beta",
+		runtimeconfig.MapRuntimeConfigProvider{
+			Values: map[string]string{
+				"ALIBABA_CLOUD_ACCESS_KEY_ID":     "sls-access-key",
+				"ALIBABA_CLOUD_ACCESS_KEY_SECRET": "sls-access-secret",
+			},
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "binding is unavailable") {
+		t.Fatalf("blocked SLS binding error = %v", err)
+	}
+	if strings.Contains(err.Error(), "sls-access-secret") {
+		t.Fatalf("SLS binding failure leaked secret: %v", err)
+	}
 }
 
 func TestValidateRequiredRuntimeConfigRejectsMissingPostgres(t *testing.T) {
@@ -849,6 +924,73 @@ func TestEventEndpoints(t *testing.T) {
 			removedVPNResp.Code,
 			removedVPNResp.Body.String(),
 		)
+	}
+}
+
+func TestEventSummaryAndDrilldownFilterByResult(t *testing.T) {
+	service := newTestProductService(t)
+	server := newTestServerMux(service)
+	occurredAt := time.Now().UTC().Add(-2 * time.Hour)
+	detected := telemetryEvent("app_anr_outcome", "event", occurredAt)
+	detected["detectionSource"] = "dart_event_loop_watchdog"
+	detected["result"] = "detected"
+	ignored := telemetryEvent("app_anr_outcome", "event", occurredAt.Add(time.Second))
+	ignored["detectionSource"] = "dart_event_loop_watchdog"
+	ignored["result"] = "ignored"
+	recordResponse := httptest.NewRecorder()
+	server.ServeHTTP(
+		recordResponse,
+		newTelemetryBatchRequest(t, []map[string]any{detected, ignored}),
+	)
+	if recordResponse.Code != http.StatusOK {
+		t.Fatalf("record ANR telemetry status=%d body=%s", recordResponse.Code, recordResponse.Body.String())
+	}
+
+	window := "from=" + occurredAt.Add(-time.Minute).Format(time.RFC3339Nano) +
+		"&to=" + occurredAt.Add(time.Hour).Format(time.RFC3339Nano)
+	summaryResponse := httptest.NewRecorder()
+	server.ServeHTTP(
+		summaryResponse,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/ops/events/summary?eventType=app_anr_outcome&result=detected&"+window,
+			nil,
+		),
+	)
+	if summaryResponse.Code != http.StatusOK {
+		t.Fatalf("ANR summary status=%d body=%s", summaryResponse.Code, summaryResponse.Body.String())
+	}
+	var summary struct {
+		TotalCount   int64 `json:"totalCount"`
+		SessionCount int64 `json:"sessionCount"`
+	}
+	if err := json.Unmarshal(summaryResponse.Body.Bytes(), &summary); err != nil {
+		t.Fatalf("unmarshal ANR summary: %v", err)
+	}
+	if summary.TotalCount != 1 || summary.SessionCount != 1 {
+		t.Fatalf("result-filtered summary must only include detected ANR: %+v", summary)
+	}
+
+	drilldownResponse := httptest.NewRecorder()
+	server.ServeHTTP(
+		drilldownResponse,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/ops/events/drilldown?eventType=app_anr_outcome&result=detected&"+window,
+			nil,
+		),
+	)
+	if drilldownResponse.Code != http.StatusOK {
+		t.Fatalf("ANR drilldown status=%d body=%s", drilldownResponse.Code, drilldownResponse.Body.String())
+	}
+	var drilldown struct {
+		TotalCount int64 `json:"totalCount"`
+	}
+	if err := json.Unmarshal(drilldownResponse.Body.Bytes(), &drilldown); err != nil {
+		t.Fatalf("unmarshal ANR drilldown: %v", err)
+	}
+	if drilldown.TotalCount != 1 {
+		t.Fatalf("result-filtered drilldown must only include detected ANR: %+v", drilldown)
 	}
 }
 
@@ -1466,10 +1608,10 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 		Freshness string `json:"freshness"`
 		Window    string `json:"window"`
 		Coverage  struct {
-			TotalMetrics    int `json:"totalMetrics"`
-			LiveMetrics     int `json:"liveMetrics"`
-			FallbackMetrics int `json:"fallbackMetrics"`
-			EventSignals    int `json:"eventSignals"`
+			TotalMetrics       int `json:"totalMetrics"`
+			LiveMetrics        int `json:"liveMetrics"`
+			UnavailableMetrics int `json:"unavailableMetrics"`
+			EventSignals       int `json:"eventSignals"`
 		} `json:"coverage"`
 		Alerts []struct {
 			ID          string `json:"id"`
@@ -1496,6 +1638,9 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	if payload.Coverage.TotalMetrics == 0 {
 		t.Fatalf("expected coverage totals, got %+v", payload.Coverage)
 	}
+	if payload.Coverage.UnavailableMetrics != 0 {
+		t.Fatalf("L3 Prometheus metrics must not fall back to snapshots: %+v", payload.Coverage)
+	}
 	if len(payload.Items) == 0 {
 		t.Fatalf("expected l1l4 metric items")
 	}
@@ -1515,6 +1660,42 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	}
 	if payload.Alerts[0].RepairEntry == "" || payload.Alerts[0].AlertID == "" || payload.Alerts[0].Owner == "" {
 		t.Fatalf("expected alert repair semantics, got %+v", payload.Alerts[0])
+	}
+}
+
+func TestL1L4MetricsEndpointDoesNotSynthesizeUnavailableValues(t *testing.T) {
+	service := newTestProductService(t)
+	if err := service.seed(); err != nil {
+		t.Fatalf("seed service: %v", err)
+	}
+	server := newTestServerMux(service)
+
+	req := httptest.NewRequest(http.MethodGet, "/control-plane/product/metrics/l1l4?env=beta&level=L1", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("l1l4 no-data status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		Source    string `json:"source"`
+		Freshness string `json:"freshness"`
+		Coverage  struct {
+			TotalMetrics       int `json:"totalMetrics"`
+			LiveMetrics        int `json:"liveMetrics"`
+			UnavailableMetrics int `json:"unavailableMetrics"`
+		} `json:"coverage"`
+		Items []metricSnapshot `json:"items"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal l1l4 no-data payload: %v", err)
+	}
+	if payload.Source != "no-data" || payload.Freshness != "unavailable" {
+		t.Fatalf("no data must be explicit rather than snapshot-backed: %+v", payload)
+	}
+	if payload.Coverage.TotalMetrics != 1 || payload.Coverage.LiveMetrics != 0 ||
+		payload.Coverage.UnavailableMetrics != 1 || len(payload.Items) != 0 {
+		t.Fatalf("unexpected no-data coverage: %+v items=%+v", payload.Coverage, payload.Items)
 	}
 }
 

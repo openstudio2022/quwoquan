@@ -1,7 +1,7 @@
 id: CR-20260719-121-rtc-realtime-commercial-closure
 title: B10 实时与通话商用闭环（服务端 packet + realtime-gateway 第一方实现）
 slug: rtc-realtime-commercial-closure
-revision: 1
+revision: 2
 status: in_progress
 
 affected_nodes:
@@ -17,7 +17,7 @@ entries:
 
       metadata：删除 call_recording 对象与 CallSession 的 isRecording/recordingUrl/
       录制事件/recording_not_allowed；call_session 状态机统一（initiated→ringing→
-      connecting→in_call→ended），14 个 operation 补齐 idempotency/errors/telemetry/slo；
+      connecting→in_call→ended），15 个 operation 补齐 idempotency/errors/telemetry/slo；
       新增 realtime connection IssueConnectionTicket operation、ticket 二态错误码、
       lease/fencing/ticket redis 键；chat conversation 事件的 realtime_channel 由
       rt:conversation 改为 rt:user per-user fan-out（授权留在拥有成员数据的发布端）；
@@ -245,3 +245,38 @@ entries:
       通过（143 rules）；QoE Dart local_contract 5 例与 Ops Python contract 通过。
       全局 ops event schema gate 当前被并发内容发布改动中的 legacy `surfaceId` 阻断，
       该字段不属于本 RTC 切片，未越权修改。
+  - timestamp: "2026-07-21T04:09:58+08:00"
+    summary: |
+      修正 RTC operation 级 commercial status 与 capability 级商用准出混淆。CallSession
+      的 15 个 API route 显式标为 ready，允许 App generated executor 和服务端 generated
+      operation guard 在受控 beta/gamma 环境执行已完成的授权、CAS、幂等、错误与
+      Remote API 集成验证；服务级默认 blocked 仍覆盖未来未显式准入 route。
+
+      L2 realtime-call 的真实商用准出不随之翻绿：R-RTC01 的真实 APNs/FCM 凭据、后台/
+      锁屏/被杀真机 readback，R-RTC02 的 Gamma/Prod QoE series、弱网演练和
+      gray_initial 回滚证据仍保持 partial/GATE_BLOCK，并继续由 acceptance、stackctl
+      release verify 与环境凭据门控制。
+    reason: |
+      默认 blocked 被同时用于 App executor 与服务 operation guard，导致合法的
+      Remote 调用在网络前被拒绝，形成“没有环境证据便无法执行环境验证”的循环。
+      operation 可执行性与 capability 的发布准出是不同层级；前者以 metadata 的完整
+      command/query 合同和分层测试为门，后者以真实环境、provider、真机和回滚证据为门。
+    change_type:
+      - metadata
+      - codegen
+      - app
+      - service
+      - api_integration
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_app/test/local_contract/cloud/rtc/rtc_facets_remote__local_contract_test.dart
+          - quwoquan_service/runtime/auth/operation_guard__security__local_contract_test.go
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_app/test/api_integration/cloud/rtc/rtc_api_contract_runner.dart
+    notes: |
+      ContractGraph handoff 必须产生显式 breaking report；该 report 仅批准 descriptor
+      从 blocked 到 ready 的执行性变更，绝不作为 Gamma/Prod 商用 readback 或发布批准。

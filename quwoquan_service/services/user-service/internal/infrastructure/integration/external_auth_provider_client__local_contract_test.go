@@ -13,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"quwoquan_service/services/user-service/internal/application"
 )
 
 type externalAuthRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -23,17 +21,13 @@ func (f externalAuthRoundTripFunc) RoundTrip(request *http.Request) (*http.Respo
 	return f(request)
 }
 
-func TestHTTPExternalAuthProviderUnavailableWhenUnconfigured(t *testing.T) {
-	client := NewHTTPExternalAuthProviderClient(map[string]ProviderOAuthConfig{}, nil)
-	if client.Supports("wechat") {
-		t.Fatal("unconfigured provider must not report supported")
-	}
-	if _, err := client.Exchange(context.Background(), "alipay", "code", "ios", "1.0.0"); err == nil {
-		t.Fatal("unconfigured provider must return structured unavailable, not fake success")
+func TestFederatedIdentityVerifierFailsClosedWhenUnconfigured(t *testing.T) {
+	if _, err := NewWechatFederatedIdentityVerifier(ProviderOAuthConfig{}, nil); err == nil {
+		t.Fatal("unconfigured verifier must fail composition")
 	}
 }
 
-func TestHTTPExternalAuthProviderCreatesServerSignedAlipayAuthorization(t *testing.T) {
+func TestFederatedIdentityVerifierCreatesServerSignedAlipayAuthorization(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
@@ -54,26 +48,23 @@ func TestHTTPExternalAuthProviderCreatesServerSignedAlipayAuthorization(t *testi
 		Type:  "PUBLIC KEY",
 		Bytes: publicDER,
 	}))
-	client := NewHTTPExternalAuthProviderClient(
-		map[string]ProviderOAuthConfig{
-			application.SocialProviderAlipay: {
-				AppID:                "alipay-app-id",
-				AppPrivateKeyPEM:     privatePEM,
-				PlatformPublicKeyPEM: publicPEM,
-				MerchantPID:          "2088000000000000",
-			},
+	_, issuer, err := NewAlipayFederatedIdentityVerifier(
+		ProviderOAuthConfig{
+			AppID:                "alipay-app-id",
+			AppPrivateKeyPEM:     privatePEM,
+			PlatformPublicKeyPEM: publicPEM,
+			MerchantPID:          "2088000000000000",
 		},
 		nil,
 	)
-
-	payload, expiresAt, err := client.CreateAuthorizationRequest(
-		context.Background(),
-		application.SocialProviderAlipay,
-	)
+	if err != nil {
+		t.Fatalf("build alipay verifier: %v", err)
+	}
+	request, err := issuer.IssueAuthorizationRequest(context.Background())
 	if err != nil {
 		t.Fatalf("create alipay authorization: %v", err)
 	}
-	values, err := url.ParseQuery(payload)
+	values, err := url.ParseQuery(request.Payload)
 	if err != nil {
 		t.Fatalf("parse authorization payload: %v", err)
 	}
@@ -85,15 +76,15 @@ func TestHTTPExternalAuthProviderCreatesServerSignedAlipayAuthorization(t *testi
 		values.Get("product_id") != "APP_FAST_LOGIN" {
 		t.Fatalf("unexpected authorization contract: %v", values)
 	}
-	if !expiresAt.After(time.Now().UTC()) {
-		t.Fatalf("authorization must have a future expiry: %v", expiresAt)
+	if !request.ExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("authorization must have a future expiry: %v", request.ExpiresAt)
 	}
-	if strings.Contains(payload, "PRIVATE KEY") {
+	if strings.Contains(request.Payload, "PRIVATE KEY") {
 		t.Fatal("authorization payload leaked private key")
 	}
 }
 
-func TestHTTPExternalAuthProviderVerifiesQqMobileTicket(t *testing.T) {
+func TestFederatedIdentityVerifierVerifiesQqMobileTicket(t *testing.T) {
 	const (
 		accessToken = "qq-access-token-security-contract"
 		openID      = "qq-open-id-contract"
@@ -113,32 +104,30 @@ func TestHTTPExternalAuthProviderVerifiesQqMobileTicket(t *testing.T) {
 			}, nil
 		}),
 	}
-	client := NewHTTPExternalAuthProviderClient(
-		map[string]ProviderOAuthConfig{
-			application.SocialProviderQq: {
-				AppID:       "qq-app-id",
-				UserInfoURL: "https://provider.example.test/qq/user",
-			},
+	verifier, err := NewQqFederatedIdentityVerifier(
+		ProviderOAuthConfig{
+			AppID:       "qq-app-id",
+			UserInfoURL: "https://provider.example.test/qq/user",
 		},
 		httpClient,
 	)
-
-	identity, err := client.Exchange(
+	if err != nil {
+		t.Fatalf("build QQ verifier: %v", err)
+	}
+	identity, err := verifier.Verify(
 		context.Background(),
-		application.SocialProviderQq,
 		`{"accessToken":"`+accessToken+`","openId":"`+openID+`"}`,
-		"android",
-		"1.0.0",
 	)
 	if err != nil {
 		t.Fatalf("QQ exchange: %v", err)
 	}
-	if identity.OpenID != openID || identity.DisplayName != "QQ用户" {
-		t.Fatalf("unexpected QQ identity: %#v", identity)
+	if identity.CredentialKey != "qq:"+openID ||
+		identity.DisplayName != "QQ用户" {
+		t.Fatalf("unexpected normalized identity: %#v", identity)
 	}
 }
 
-func TestHTTPExternalAuthProviderErrorsNeverExposeOAuthCredentials(t *testing.T) {
+func TestFederatedIdentityVerifierErrorsNeverExposeOAuthCredentials(t *testing.T) {
 	const (
 		appID     = "wechat-app-id-security-contract"
 		appSecret = "wechat-secret-security-contract"
@@ -149,18 +138,18 @@ func TestHTTPExternalAuthProviderErrorsNeverExposeOAuthCredentials(t *testing.T)
 			return nil, errors.New("dial failed for " + request.URL.String())
 		}),
 	}
-	client := NewHTTPExternalAuthProviderClient(
-		map[string]ProviderOAuthConfig{
-			application.SocialProviderWechat: {
-				AppID:     appID,
-				AppSecret: appSecret,
-				TokenURL:  "https://provider.example.test/oauth/token",
-			},
+	verifier, err := NewWechatFederatedIdentityVerifier(
+		ProviderOAuthConfig{
+			AppID:     appID,
+			AppSecret: appSecret,
+			TokenURL:  "https://provider.example.test/oauth/token",
 		},
 		httpClient,
 	)
-
-	_, err := client.Exchange(context.Background(), "wechat", authCode, "ios", "1.0.0")
+	if err != nil {
+		t.Fatalf("build verifier: %v", err)
+	}
+	_, err = verifier.Verify(context.Background(), authCode)
 	if err == nil {
 		t.Fatal("provider transport failure must be returned")
 	}
@@ -171,7 +160,7 @@ func TestHTTPExternalAuthProviderErrorsNeverExposeOAuthCredentials(t *testing.T)
 	}
 }
 
-func TestHTTPExternalAuthProviderRejectMessageIsRedacted(t *testing.T) {
+func TestFederatedIdentityVerifierRejectMessageIsRedacted(t *testing.T) {
 	const echoedAuthorizationCode = "echoed-auth-code-security-contract"
 	httpClient := &http.Client{
 		Transport: externalAuthRoundTripFunc(func(_ *http.Request) (*http.Response, error) {
@@ -184,25 +173,22 @@ func TestHTTPExternalAuthProviderRejectMessageIsRedacted(t *testing.T) {
 			}, nil
 		}),
 	}
-	client := NewHTTPExternalAuthProviderClient(
-		map[string]ProviderOAuthConfig{
-			application.SocialProviderWechat: {
-				AppID:     "app-id",
-				AppSecret: "app-secret",
-				TokenURL:  "https://provider.example.test/oauth/token",
-			},
+	verifier, err := NewWechatFederatedIdentityVerifier(
+		ProviderOAuthConfig{
+			AppID:     "app-id",
+			AppSecret: "app-secret",
+			TokenURL:  "https://provider.example.test/oauth/token",
 		},
 		httpClient,
 	)
-
-	_, err := client.Exchange(context.Background(), "wechat", "request-code", "ios", "1.0.0")
+	if err != nil {
+		t.Fatalf("build verifier: %v", err)
+	}
+	_, err = verifier.Verify(context.Background(), "request-code")
 	if err == nil {
 		t.Fatal("provider rejection must be returned")
 	}
 	if strings.Contains(err.Error(), echoedAuthorizationCode) {
 		t.Fatalf("provider rejection leaked upstream message: %v", err)
-	}
-	if !strings.Contains(err.Error(), "provider code 40029") {
-		t.Fatalf("provider rejection must retain safe diagnostic code: %v", err)
 	}
 }

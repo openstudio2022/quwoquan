@@ -26,7 +26,9 @@ gwt_acceptance:
     - 服务端在分页前按 source=group|circle 过滤，私建群结果 circleId 为空，圈子结果 circleId 非空。
     - 两类来源复用同一 ListSelectableGroupContactMembers 互关成员链，不加载非互关、屏蔽、非 user 成员。
     - 所有来源选择结果进入同一 wizard，并按稳定 userId 去重、支持删除。
-    - 打开与完成来源选择分别记录 source_group|circle_open 与 source_group|circle_selection_applied。
+    - 打开与完成来源选择分别记录 `chat_interaction_outcome` 的
+      candidate_source_open 与 candidate_source_select；来源只使用 chatSource=group|circle，
+      不得写入群、圈子或用户 ID。
     done_when:
     - Remote、Alpha Mock、Provider 与页面 local_contract 对 source、circleId、计数和成员交集行为一致。
     edge_cases:
@@ -44,7 +46,10 @@ gwt_acceptance:
       - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/chat/alpha_group_selection__local_contract_test.dart
       - quwoquan_app/test/local_contract/ui/chat/providers/start_group_from_group_provider__local_contract_test.dart
       - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
-      recorded: []
+      recorded:
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/chat/alpha_group_selection__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/providers/start_group_from_group_provider__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -91,7 +96,11 @@ gwt_acceptance:
       - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
       - quwoquan_service/services/chat-service/tests/api_integration/selectable_group_contract__api_integration_test.go
       - quwoquan_service/services/chat-service/tests/api_integration/group_governance_authorization__security__api_integration_test.go
-      recorded: []
+      recorded:
+      - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/selectable_group_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/group_governance_authorization__security__api_integration_test.go
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/chat/alpha_group_selection__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -124,7 +133,9 @@ gwt_acceptance:
     - App 只使用返回的 conversationId 进入聊天详情，不合成本地临时 ID。
     - 新群可从服务端 Inbox 回读，发起页与消息列表 Provider 同步刷新。
     - 提交失败保留选择并展示 RuntimeFailure 结构化恢复动作。
-    - create_success|create_failed 的 result 记录匿名来源组合，并可与服务端 HTTP 黄金信号交叉验证。
+    - group_create 的 chatOutcome、chatSource 与 memberCountBucket 记录到
+      `chat_interaction_outcome`，并可与服务端 HTTP 黄金信号交叉验证；不得上传
+      conversationId、成员 ID 或来源组合字符串。
     done_when:
     - user_acceptance 覆盖“圈子来源 -> 选成员 -> 建群 -> 进入详情 -> Inbox 回读”，beta/gamma/prod smoke 均留证。
     edge_cases:
@@ -143,12 +154,20 @@ gwt_acceptance:
       - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_create_journey__user_acceptance_test.dart
       - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
       - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py
-      recorded: []
+      recorded:
+      - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_create_journey__user_acceptance_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+      - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py
+      - quwoquan_ops/tests/local_contract/test_chat_group_lifecycle_probe__local_contract_test.py
+      - quwoquan_app/test/local_contract/core/trackers/chat_interaction_telemetry_tracker__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/telemetry/app_telemetry_outbox__local_contract_test.dart
+      - quwoquan_service/services/chat-service/internal/application/commercial_metrics__local_contract_test.go
+      - quwoquan_ops/tests/local_contract/test_chat_group_observability__local_contract_test.py
     status: pending
     test_evidence:
       primary:
       - layer: user_acceptance
-        execution_profile: release
+        execution_profile: smoke
         suite: chat_group_create_journey
         cases:
         - user_acceptance.chat.group_create.circle_source_to_inbox
@@ -164,7 +183,7 @@ gwt_acceptance:
         envs:
         - local
       - layer: api_integration
-        execution_profile: environment
+        execution_profile: integration
         suite: chat_group_lifecycle_api_probe
         cases:
         - api_integration.chat.group_create.source_split
@@ -172,9 +191,22 @@ gwt_acceptance:
         envs:
         - beta
         - gamma
+      - layer: api_integration
+        execution_profile: release
+        suite: chat_group_lifecycle_prod_readonly_probe
+        cases:
+        - api_integration.chat.group_create.source_split
+        envs:
         - prod
     notes:
-    - Alpha UAT 已本地通过；beta/gamma 使用 mutating probe，prod 使用只读独立验收账号，三者均留证前不得标记 completed。
+    - 2026-07-21：chat_interaction_outcome 已经 metadata/codegen 进入 Product Ops 严格解码；
+      客户端密封批次 400/422 时逐条隔离，合法事件确认后删除、仅坏事件进入加密 DLQ。
+      SLS chat_funnel、服务端 mention/watermark/Inbox 投影指标及对应告警均已登记。
+    - beta/gamma 使用 stackctl verify 的 mutating probe，prod 使用 stackctl verify 的只读独立验收账号；
+      三者均留证前不得标记 completed。
+    - mainline_auto_prod 在 beta-local 启动并健康检查后，必须执行
+      stackctl verify --env beta --kind all --profile integration；该 profile 以阻断方式执行
+      chat_group_lifecycle probe，防止验证套件只登记而未进入 CI。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

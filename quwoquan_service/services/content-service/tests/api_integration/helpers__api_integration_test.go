@@ -282,7 +282,11 @@ func createReadyPublicationMediaAsset(
 				"imageHeight":960,
 				"imageDeliveryContentType":"image/jpeg",
 				"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
-				"imagePublicSliceKey":%q
+				"imagePublicSliceKey":%q,
+				"imageDominantColor":"#1A2B3C",
+				"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
+				"imageContentProfile":"photographic",
+				"imageDerivativePolicyVersion":1
 			}`, assetID, imagePublicSliceKey),
 			ownerID,
 			fmt.Sprintf("media-processing-%d", sequence),

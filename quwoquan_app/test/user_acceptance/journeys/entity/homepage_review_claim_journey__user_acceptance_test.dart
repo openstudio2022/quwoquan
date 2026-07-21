@@ -10,7 +10,8 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
@@ -18,6 +19,7 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
+        EntityWishlistState,
         HomepageReviewListQuery;
 import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
@@ -58,6 +60,7 @@ void main() {
       activePersonaId: 'persona_entity_uat',
       clock: () => DateTime.utc(2026, 7, 20, 10),
     );
+    const wishlistStateReader = _NoWishlistStateReader();
     final telemetry = RecordingAppTelemetryRecorder();
     final router = GoRouter(
       initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
@@ -77,9 +80,8 @@ void main() {
             '{id}',
             ':id',
           ),
-          builder: (_, state) => HomepageClaimPage(
-            homepageId: state.pathParameters['id'] ?? '',
-          ),
+          builder: (_, state) =>
+              HomepageClaimPage(homepageId: state.pathParameters['id'] ?? ''),
         ),
       ],
     );
@@ -105,6 +107,9 @@ void main() {
           homepageIntroductionRepositoryProvider.overrideWithValue(
             const _EmptyIntroductionRepository(),
           ),
+          homepageDetailEntityWishlistStateReaderProvider.overrideWithValue(
+            wishlistStateReader,
+          ),
           homepageReviewQueryProvider.overrideWithValue(reviews),
           homepageReviewCommandWriterProvider.overrideWithValue(reviews),
           appTelemetryReporterProvider.overrideWithValue(telemetry),
@@ -121,10 +126,7 @@ void main() {
     final opinion = find.byKey(
       const ValueKey<String>('homepage-content-filter-option-opinion'),
     );
-    await Scrollable.ensureVisible(
-      opinion.evaluate().single,
-      alignment: 0.35,
-    );
+    await Scrollable.ensureVisible(opinion.evaluate().single, alignment: 0.35);
     await tester.pumpAndSettle();
     await tester.tap(opinion);
     await tester.pumpAndSettle();
@@ -158,7 +160,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomepageClaimPage), findsOneWidget);
 
-    await tester.enterText(find.byType(CupertinoTextField).first, '13800000000');
+    await tester.enterText(
+      find.byType(CupertinoTextField).first,
+      '13800000000',
+    );
     await tester.tap(find.text(UITextConstants.homepageClaimSubmit));
     await tester.pumpAndSettle();
 
@@ -216,6 +221,22 @@ final class _EmptyIntroductionRepository
   }) async {
     cancellation?.throwIfCancelled();
     return null;
+  }
+}
+
+final class _NoWishlistStateReader implements ContentEntityWishlistStateReader {
+  const _NoWishlistStateReader();
+
+  @override
+  Future<EntityWishlistState> getEntityWishlistState({
+    required String objectId,
+    required String objectKind,
+  }) async {
+    return EntityWishlistState(
+      objectId: objectId,
+      objectKind: objectKind,
+      wishlisted: false,
+    );
   }
 }
 

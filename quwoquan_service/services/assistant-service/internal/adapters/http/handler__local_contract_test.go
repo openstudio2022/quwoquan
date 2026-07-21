@@ -474,10 +474,10 @@ func TestHandleConversationTurnStream(t *testing.T) {
 		t.Fatalf("turn stream status=%d body=%s", streamResp.Code, streamResp.Body.String())
 	}
 	body := streamResp.Body.String()
-	if !bytes.Contains([]byte(body), []byte("event: assistant.turn.started")) {
+	if !bytes.Contains([]byte(body), []byte("event: run_started")) {
 		t.Fatalf("stream missing turn started: %s", body)
 	}
-	if !bytes.Contains([]byte(body), []byte("event: assistant.answer.final")) {
+	if !bytes.Contains([]byte(body), []byte("event: completed")) {
 		t.Fatalf("stream missing final answer: %s", body)
 	}
 	if !bytes.Contains([]byte(body), []byte(`"seq":4`)) {
@@ -539,35 +539,37 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	}
 	body := streamResp.Body.String()
 	for _, expected := range []string{
-		"event: assistant.turn.started",
-		"event: assistant.trace",
-		"event: assistant.journey.updated",
-		"event: assistant.process_timeline.updated",
-		"event: assistant.skill.selected",
-		"event: assistant.reasoning.started",
-		"event: assistant.model.delta",
-		"event: assistant.tool.requested",
-		"event: assistant.tool.completed",
-		"event: assistant.answer.delta",
-		"event: assistant.answer.final",
-		"event: assistant.turn.completed",
+		"event: run_started",
+		"event: process_replace",
+		"event: process_append",
+		"event: process_commit",
+		"event: answer_delta",
+		"event: completed",
 	} {
 		if !bytes.Contains([]byte(body), []byte(expected)) {
 			t.Fatalf("stream missing %s: %s", expected, body)
 		}
 	}
 	for _, expected := range []string{
-		"event: assistant.plan.updated",
-		"event: assistant.search_query.generated",
-		"event: assistant.observation.assessed",
 		`"toolName":"app_search"`,
 	} {
 		if !bytes.Contains([]byte(body), []byte(expected)) {
 			t.Fatalf("stream missing %s: %s", expected, body)
 		}
 	}
-	if !bytes.Contains([]byte(body), []byte(`"text":"日程待办助手已生成会议与提醒方案`)) {
+	if !bytes.Contains([]byte(body), []byte(`"finalAnswer":"日程待办助手已生成会议与提醒方案`)) {
 		t.Fatalf("stream missing final text payload: %s", body)
+	}
+	for _, forbidden := range []string{
+		"assistant.model.interaction",
+		"assistant.model.delta",
+		"debugTrace",
+		`"reasoning"`,
+		"assistant.search_query.generated",
+	} {
+		if bytes.Contains([]byte(body), []byte(forbidden)) {
+			t.Fatalf("stream leaked internal payload %q: %s", forbidden, body)
+		}
 	}
 	getTurnReq := httptest.NewRequest(http.MethodGet, "/assistant/runs/"+turnID, nil)
 	getTurnReq.Header.Set("X-Client-User-Id", "user_m5_http")
@@ -614,13 +616,20 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.ID, func(t *testing.T) {
 			body := createM11TurnAndStream(t, handler, tc.ID, tc.SkillID, tc.DomainID, tc.Question)
-			wantBody := append([]string{"final_answer"}, tc.RemoteAnswerFragments()...)
+			wantBody := append([]string{"completed"}, tc.RemoteAnswerFragments()...)
 			for _, want := range wantBody {
 				if !strings.Contains(body, want) {
 					t.Fatalf("stream body missing %q: %s", want, body)
 				}
 			}
-			for _, eventType := range tc.RemoteEventTypes() {
+			for _, eventType := range []string{
+				"run_started",
+				"process_replace",
+				"process_append",
+				"process_commit",
+				"answer_delta",
+				"completed",
+			} {
 				if !strings.Contains(body, eventType) {
 					t.Fatalf("stream missing event %q: %s", eventType, body)
 				}
@@ -847,11 +856,8 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 		t.Fatalf("stream status=%d body=%s", streamResp.Code, streamResp.Body.String())
 	}
 	body := streamResp.Body.String()
-	if !bytes.Contains([]byte(body), []byte("event: assistant.failure")) {
-		t.Fatalf("stream missing assistant.failure: %s", body)
-	}
-	if !bytes.Contains([]byte(body), []byte("event: assistant.turn.failed")) {
-		t.Fatalf("stream missing assistant.turn.failed: %s", body)
+	if !bytes.Contains([]byte(body), []byte("event: failed")) {
+		t.Fatalf("stream missing failed terminal event: %s", body)
 	}
 	if !bytes.Contains([]byte(body), []byte(`"runtimeFailure"`)) {
 		t.Fatalf("stream missing runtimeFailure: %s", body)

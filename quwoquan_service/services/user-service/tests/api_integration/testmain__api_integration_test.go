@@ -20,6 +20,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/otpseal"
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
@@ -95,6 +96,22 @@ var (
 	testAccessVerifier = mustAccessVerifier(testAccessConfig)
 	testOTPCodeSealer  = mustOTPCodeSealer()
 )
+
+type staticCarrierPhoneResolver map[string]string
+
+func (resolver staticCarrierPhoneResolver) ResolvePhone(
+	_ context.Context,
+	carrierToken string,
+) (application.VerifiedCarrierPhone, error) {
+	phone := strings.TrimSpace(resolver[strings.TrimSpace(carrierToken)])
+	if phone == "" {
+		return application.VerifiedCarrierPhone{}, fmt.Errorf("test carrier token is unknown")
+	}
+	return application.VerifiedCarrierPhone{
+		Phone:        phone,
+		DisplayLabel: "180****3901",
+	}, nil
+}
 
 func mustOTPCodeSealer() *otpseal.Sealer {
 	sealer, err := otpseal.NewFromBase64("test-k1", map[string]string{
@@ -355,7 +372,16 @@ func rebuildTestHandler(ctx context.Context) error {
 		pgPool,
 		profileCache,
 	)
-	userEventPublisher := mq.NewEventPublisher(redisClient)
+	messageTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"user-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		redisClient,
+		redisClient,
+	)
+	if err != nil {
+		return err
+	}
+	userEventPublisher := mq.NewEventPublisher(messageTransport)
 	userSyncService := runtimesync.NewService(redisClient, redisClient)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
@@ -441,6 +467,10 @@ func rebuildTestHandler(ctx context.Context) error {
 		defer integrationRelayRunners.Done()
 		_ = greetingRelay.Run(relationshipRelayContext, 10*time.Millisecond)
 	}()
+	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
+	if err != nil {
+		return err
+	}
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
@@ -455,9 +485,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		application.WithAuthenticationChallenges(authenticationChallenges),
 		application.WithOTPCodeSealer(testOTPCodeSealer),
 		application.WithExternalInteractionClient(externalInteractionRuntime.client),
-		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
-		application.WithOneTapPhoneResolver(application.StaticOneTapPhoneResolver{
+		application.WithAccountSecurityReader(accountEnforcementStore),
+		application.WithCarrierPhoneResolver(staticCarrierPhoneResolver{
 			"carrier_token_new":      "+8618013813901",
 			"carrier_token_existing": "+8618013813902",
 		}),
@@ -496,8 +526,8 @@ func rebuildTestHandler(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	accountCloseOutboxStore, err :=
-		useraccountpersistence.NewCloseOutboxStore(pgPool)
+	accountOutboxStore, err :=
+		useraccountpersistence.NewUserAccountOutboxStore(pgPool)
 	if err != nil {
 		return err
 	}
@@ -512,16 +542,16 @@ func rebuildTestHandler(ctx context.Context) error {
 			useraccountprojection.NewMongoCleanupProjector(mongoDB),
 		)
 	}
-	accountCloseFanout, err := mq.NewUserAccountClosedFanout(
+	accountEventFanout, err := mq.NewUserAccountEventFanout(
 		userEventPublisher,
 		accountCloseProjections,
 	)
 	if err != nil {
 		return err
 	}
-	accountCloseOutboxRelay, err := useraccountapp.NewCloseOutboxRelay(
-		accountCloseOutboxStore,
-		accountCloseFanout,
+	accountOutboxRelay, err := useraccountapp.NewUserAccountOutboxRelay(
+		accountOutboxStore,
+		accountEventFanout,
 		"user-service-api-integration",
 	)
 	if err != nil {
@@ -533,12 +563,14 @@ func rebuildTestHandler(ctx context.Context) error {
 	integrationRelayRunners.Add(1)
 	go func() {
 		defer integrationRelayRunners.Done()
-		accountCloseOutboxRelay.Run(accountCloseRelayContext)
+		accountOutboxRelay.Run(accountCloseRelayContext)
 	}()
 	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
 		accountCloseStore,
 		useraccountcache.NewClosedAccountCache(redisClient),
 	)
+	accountEnforcementFacade :=
+		useraccountapp.NewAccountEnforcementCommandFacade(accountEnforcementStore)
 	userHandler, err := httpadapter.NewUserHandler(
 		profileService, searchService, relationshipService, greetingService,
 		userSettingsCommands, userSettingsQueries,
@@ -555,6 +587,25 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 	userHandler.WithAccountLifecycle(closeAccountFacade)
+	userHandler.WithAccountEnforcement(accountEnforcementFacade)
+	userHandler.WithAccountSecurityReader(accountEnforcementStore)
+	userHandler.WithFederatedLogins(
+		application.NewFederatedLoginFacade(
+			authService,
+			externalProviderRuntime.wechat,
+			nil,
+		),
+		application.NewFederatedLoginFacade(
+			authService,
+			externalProviderRuntime.alipay,
+			externalProviderRuntime.alipayIssue,
+		),
+		application.NewFederatedLoginFacade(
+			authService,
+			externalProviderRuntime.qq,
+			nil,
+		),
+	)
 	authorized := rtauth.EnforceGeneratedOperationAuthorization(
 		operationsecurity.ForDomain("user"),
 	)(userHandler.Routes())

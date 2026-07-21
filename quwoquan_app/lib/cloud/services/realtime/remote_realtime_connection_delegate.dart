@@ -48,7 +48,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }) : _config = config ?? RealtimeConfig.fromGateway(),
        _longPollFactory = longPollFactory ?? _defaultLongPollFactory,
        _webSocketFactory = webSocketFactory ?? _defaultWebSocketFactory {
-    _handler = RealtimeMessageHandler(read, invalidate: invalidate);
+    _handler = RealtimeMessageHandler(
+      read,
+      invalidate: invalidate,
+      currentUserIdResolver: currentUserIdResolver,
+    );
   }
 
   static LongPollTransport _defaultLongPollFactory({

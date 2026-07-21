@@ -15,7 +15,6 @@ import (
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	"quwoquan_service/services/rtc-service/internal/generated"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
 )
 
@@ -24,15 +23,12 @@ func newGateTestOrchestrator(t *testing.T, gate application.RelationshipGate) *a
 	callStore := persistence.NewMongoCallStore(requireMongoDB(t))
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
 	domainSvc := callsession.NewCallSessionService()
-	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
 	return application.NewCallOrchestrator(
 		callStore,
 		callCache,
 		domainSvc,
-		nil,
-		tokenIssuer,
+		newTestMediaRoomProvider(),
 		gate,
-		"wss://livekit.test:7880",
 	)
 }
 

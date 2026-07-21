@@ -39,9 +39,6 @@ type UserFeatureVector struct {
 	SearchTopObjectAffinities map[string]float64 `json:"searchTopObjectAffinities,omitempty"`
 	SearchTermHeat            float64            `json:"searchTermHeat,omitempty"`
 
-	// Source distribution
-	SourceDistribution map[string]int `json:"sourceDistribution,omitempty"`
-
 	// Social features
 	CircleTagAffinities map[string]float64 `json:"circleTagAffinities,omitempty"`
 	SocialInterestScore float64            `json:"socialInterestScore"`

@@ -59,8 +59,14 @@ APP_RUNTIME_ENV="$env_name" CDN_DOMAIN="$cdn_domain" bash quwoquan_ops/cli/share
 
 python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py >/dev/null
 
-QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
-out_dir="${QWQ_OUTPUT_ROOT}/env/${env_name}/release/app"
+out_dir="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.output_paths import app_deployment_package_dir
+
+print(app_deployment_package_dir(sys.argv[1]))
+PY
+)"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "quwoquan_app/configs/default/app_runtime.yaml" "$out_dir/default_app_runtime.yaml"

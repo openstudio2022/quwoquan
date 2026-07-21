@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -18,20 +19,22 @@ const (
 )
 
 type ConversationService struct {
-	transactions         TransactionRunner
-	conversations        ConversationStore
-	members              MemberStore
-	userStates           UserStateStore
-	conversationCommands AggregateCommandStore
-	userStateCommands    AggregateCommandStore
-	cache                ConversationCache
-	publisher            EventPublisher
-	profiles             ProfileSnapshotResolver
-	relationships        RelationshipGate
-	media                GroupAvatarAssetizer
-	syncPublisher        UserSyncPublisher
-	scheduler            GroupAvatarTaskScheduler
-	announcementSender   AnnouncementMessageSender
+	transactions                      TransactionRunner
+	conversations                     ConversationStore
+	circleGroupConversations          CircleGroupConversationReader
+	circleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
+	members                           MemberStore
+	userStates                        UserStateStore
+	conversationCommands              AggregateCommandStore
+	userStateCommands                 AggregateCommandStore
+	cache                             ConversationCache
+	publisher                         EventPublisher
+	profiles                          ProfileSnapshotResolver
+	relationships                     RelationshipGate
+	media                             GroupAvatarAssetizer
+	syncPublisher                     UserSyncPublisher
+	scheduler                         GroupAvatarTaskScheduler
+	announcementSender                AnnouncementMessageSender
 }
 
 func NewConversationService(
@@ -53,40 +56,53 @@ func NewConversationService(
 	}
 	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	return &ConversationService{
-		transactions:         storage.Transactions,
-		conversations:        storage.Conversations,
-		members:              storage.Members,
-		userStates:           storage.UserStates,
-		conversationCommands: storage.ConversationCommands,
-		userStateCommands:    storage.UserStateCommands,
-		cache:                cache,
-		publisher:            publisher,
-		profiles:             profiles,
-		relationships:        relationships,
-		media:                media,
-		syncPublisher:        sync,
-		scheduler:            scheduler,
+		transactions:                      storage.Transactions,
+		conversations:                     storage.Conversations,
+		circleGroupConversations:          storage.CircleGroupConversations,
+		circleGroupChatBindingProjections: storage.CircleGroupChatBindingProjections,
+		members:                           storage.Members,
+		userStates:                        storage.UserStates,
+		conversationCommands:              storage.ConversationCommands,
+		userStateCommands:                 storage.UserStateCommands,
+		cache:                             cache,
+		publisher:                         publisher,
+		profiles:                          profiles,
+		relationships:                     relationships,
+		media:                             media,
+		syncPublisher:                     sync,
+		scheduler:                         scheduler,
 	}
 }
 
 type CreateConversationRequest struct {
-	Type             string
-	Title            string
-	CircleId         string
-	CircleGroupId    string
-	EntityId         string
-	OriginType       string
-	BindingType      string
-	LifecyclePolicy  string
-	MaxGroupSize     int
-	CreatorId        string
-	InitialMemberIds []string
+	Type                     string
+	Title                    string
+	CircleId                 string
+	CircleGroupId            string
+	EntityId                 string
+	OriginType               string
+	BindingType              string
+	LifecyclePolicy          string
+	CircleGroupSourceEventID string
+	MaxGroupSize             int
+	CreatorId                string
+	InitialMemberIds         []string
 }
 
 // CreateConversation 是公开创建命令：direct/encrypted 会话按参与者对唯一
 // （重复创建返回既有会话），group 创建以 actor-scoped Idempotency-Key 回执
 // 保证重放返回首个会话；事件在同一事务写入 conversations_outbox。
 func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (*model.Conversation, error) {
+	if isCircleBoundCreateRequest(req) ||
+		strings.TrimSpace(req.EntityId) != "" ||
+		strings.TrimSpace(req.OriginType) != "" ||
+		strings.TrimSpace(req.BindingType) != "" ||
+		strings.TrimSpace(req.LifecyclePolicy) != "" ||
+		strings.TrimSpace(req.CircleGroupSourceEventID) != "" {
+		return nil, generated.AppErrorFromCircleGroupBindingWriteForbidden(
+			"public CreateConversation must not supply circle binding or source fields",
+		)
+	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.CreatorId)
 	if err != nil {
 		return nil, err
@@ -112,6 +128,93 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		return nil, err
 	}
 	return created, nil
+}
+
+// CircleGroupConversationProvisioningRequest 是 CircleGroupCreated durable event
+// 的受信任输入。它绝不能由 HTTP 或客户端 DTO 构造。
+type CircleGroupConversationProvisioningRequest struct {
+	SourceEventID  string
+	CircleID       string
+	CircleGroupID  string
+	OwnerPersonaID string
+	Title          string
+}
+
+// ProvisionCircleGroupConversation 将 CircleGroupCreated 投影为唯一的 Chat
+// Conversation。事件回执、Conversation、owner 名册/UserState 与反向绑定 outbox
+// 同一事务提交；因此在 ACK 前崩溃时重放会返回相同绑定，而不会创建第二会话。
+func (s *ConversationService) ProvisionCircleGroupConversation(
+	ctx context.Context,
+	req CircleGroupConversationProvisioningRequest,
+) (*model.Conversation, error) {
+	req.SourceEventID = strings.TrimSpace(req.SourceEventID)
+	req.CircleID = strings.TrimSpace(req.CircleID)
+	req.CircleGroupID = strings.TrimSpace(req.CircleGroupID)
+	req.OwnerPersonaID = strings.TrimSpace(req.OwnerPersonaID)
+	req.Title = strings.TrimSpace(req.Title)
+	if req.SourceEventID == "" || req.CircleID == "" || req.CircleGroupID == "" ||
+		req.OwnerPersonaID == "" || req.Title == "" {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"圈群创建事件不完整",
+			"CircleGroupCreated requires event, circle, group, owner and name",
+		)
+	}
+	if s.circleGroupConversations == nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleChat,
+			"圈群会话投影不可用",
+			"circle group conversation reader is not configured",
+		)
+	}
+	if existing, err := s.circleGroupConversations.FindConversationByCircleGroupID(
+		ctx, req.CircleGroupID,
+	); err == nil {
+		if existing.CircleId != req.CircleID || existing.CreatorId != req.OwnerPersonaID {
+			return nil, generated.AppErrorFromCircleGroupBindingConflict(
+				"existing circle group conversation binding does not match source fact",
+			)
+		}
+		return existing, nil
+	} else if !isConversationNotFound(err) {
+		return nil, err
+	}
+
+	receiptKey := "system:circle-group-provision:" + req.SourceEventID
+	internalCreate := CreateConversationRequest{
+		Type:                     conversationTypeGroup,
+		Title:                    req.Title,
+		CircleId:                 req.CircleID,
+		CircleGroupId:            req.CircleGroupID,
+		OriginType:               "circle_group",
+		BindingType:              "circle_group",
+		LifecyclePolicy:          "bound_to_circle_group",
+		CircleGroupSourceEventID: req.SourceEventID,
+		MaxGroupSize:             maxGroupSizeLimit,
+		CreatorId:                req.OwnerPersonaID,
+	}
+	digest, err := chatCommandDigest("ProvisionCircleGroupConversation", internalCreate)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx,
+		s.conversationCommands,
+		receiptKey,
+		"ProvisionCircleGroupConversation",
+		digest,
+		&replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
+	return s.createDirectConversation(ctx, internalCreate, true, &commandReceiptSpec{
+		ScopedKey:     receiptKey,
+		CommandName:   "ProvisionCircleGroupConversation",
+		CommandDigest: digest,
+	})
 }
 
 // commandReceiptSpec 携带公开命令的幂等回执材料；内部复用路径传 nil。
@@ -307,6 +410,23 @@ func (s *ConversationService) createDirectConversation(
 			},
 		},
 	}
+	if conv.CircleGroupId != "" {
+		outboxEvents = append(outboxEvents, AggregateOutboxEvent{
+			EventID:        chatAggregateEventID(eventSeed, string(conversationevent.CircleGroupConversationProvisioned)),
+			EventType:      string(conversationevent.CircleGroupConversationProvisioned),
+			AggregateID:    conv.ID,
+			ConversationID: conv.ID,
+			ActorID:        req.CreatorId,
+			Payload: map[string]any{
+				"conversationId":      conv.ID,
+				"circleId":            conv.CircleId,
+				"circleGroupId":       conv.CircleGroupId,
+				"creatorId":           conv.CreatorId,
+				"sourceCircleEventId": req.CircleGroupSourceEventID,
+				"createdAt":           conv.CreatedAt.UTC(),
+			},
+		})
+	}
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.conversations.CreateConversation(txCtx, conv); err != nil {
 			return err
@@ -360,6 +480,25 @@ func (s *ConversationService) createDirectConversation(
 		}
 		return nil
 	}); err != nil {
+		if errors.Is(err, model.ErrCircleGroupConversationAlreadyBound) &&
+			strings.TrimSpace(conv.CircleGroupId) != "" &&
+			s.circleGroupConversations != nil {
+			existing, findErr := s.circleGroupConversations.FindConversationByCircleGroupID(
+				ctx,
+				conv.CircleGroupId,
+			)
+			if findErr == nil {
+				if existing.CircleId != conv.CircleId || existing.CreatorId != conv.CreatorId {
+					return nil, generated.AppErrorFromCircleGroupBindingConflict(
+						"concurrent circle group conversation binding differs from source fact",
+					)
+				}
+				return existing, nil
+			}
+			if !isConversationNotFound(findErr) {
+				return nil, findErr
+			}
+		}
 		return nil, err
 	}
 	return conv, nil
@@ -388,12 +527,8 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 	if err != nil {
 		return err
 	}
-	if IsCircleBoundConversation(*conv) {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"圈子群不可解散",
-			"circle conversation cannot be dissolved",
-		)
+	if err := rejectCircleGroupManaged(conv, "DissolveConversation"); err != nil {
+		return err
 	}
 	owner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil || owner.Role != "owner" {
@@ -451,6 +586,10 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 // contacts. The 发起群聊 hand-pick flow never sets these fields.
 func isCircleBoundCreateRequest(req CreateConversationRequest) bool {
 	return strings.TrimSpace(req.CircleId) != "" || strings.TrimSpace(req.CircleGroupId) != ""
+}
+
+func isConversationNotFound(err error) bool {
+	return errors.Is(err, model.ErrConversationNotFound)
 }
 
 // validateGroupInitialMembers enforces, server-side, that every hand-picked
@@ -578,6 +717,9 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectCircleGroupManaged(conv, "UpdateConversationTitle"); err != nil {
+		return nil, err
+	}
 	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil {
 		return nil, chatConversationNotFoundForNonMember(
@@ -686,6 +828,9 @@ func (s *ConversationService) UpdateAnnouncement(ctx context.Context, req Update
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectCircleGroupManaged(conv, "UpdateAnnouncement"); err != nil {
+		return nil, err
+	}
 	if conv.Type != "group" {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -789,6 +934,9 @@ func (s *ConversationService) UpdateGroupGovernanceSettings(
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectCircleGroupManaged(conv, "UpdateGroupGovernanceSettings"); err != nil {
+		return nil, err
+	}
 	if conv.Type != "group" {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -888,7 +1036,25 @@ type ListConversationsRequest struct {
 }
 
 func (s *ConversationService) ListConversations(ctx context.Context, req ListConversationsRequest) ([]model.Conversation, error) {
-	return s.conversations.ListConversationsByUser(ctx, req.UserId, req.Limit, req.Cursor)
+	page, err := s.ListConversationPage(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+// ListConversationPage is the remote query facet; it retains the opaque
+// keyset continuation generated by the Conversation reader.
+func (s *ConversationService) ListConversationPage(
+	ctx context.Context,
+	req ListConversationsRequest,
+) (model.ConversationPage, error) {
+	return s.conversations.ListConversationPageByUser(
+		ctx,
+		req.UserId,
+		req.Limit,
+		req.Cursor,
+	)
 }
 
 type UpdateSettingsRequest struct {
@@ -899,6 +1065,15 @@ type UpdateSettingsRequest struct {
 }
 
 func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSettingsRequest) error {
+	if _, _, err := requireActiveConversationMember(
+		ctx,
+		s.conversations,
+		s.members,
+		req.ConversationId,
+		req.UserId,
+	); err != nil {
+		return err
+	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.UserId)
 	if err != nil {
 		return err

@@ -1,0 +1,157 @@
+id: CR-20260720-133-external-provider-governance-and-commercial-readiness
+title: 外部 Provider 解耦、统一 Conformance 与商用准出
+slug: external-provider-governance-and-commercial-readiness
+revision: 2
+status: in_progress
+affected_nodes:
+  - specs/feature-tree/runtime
+  - specs/feature-tree/runtime/runtime-external-integration
+  - specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite
+  - specs/feature-tree/runtime/runtime-external-integration/capability-provider-commercial-readiness-gate
+  - specs/feature-tree/chat-conversation/realtime-call
+entries:
+  - timestamp: "2026-07-21T18:30:00+08:00"
+    summary: |
+      runtime.message.transport 从仅资产登记迁移为 release-required Redis 共享消息能力。
+      Capability 使用单轨 binding_scope 与 binding_roots；所有实际 Redis 组合根使用同一
+      受控 Binding、root-scoped descriptor 与启动 preflight。NATS/DNS 明确
+      production_consumption=none，不参与 Binding 或 readiness。
+    reason: |
+      Redis Streams/PubSub 已承载 chat、assistant、notification 等跨服务事件。原先单 owner
+      composition 无法覆盖全部 producer/consumer，也不能证明消息 scene、消费组和实际
+      Redis 健康，存在发布链路失联却被 registry 静态登记掩盖的风险。
+    decisions:
+      - Pub/Sub 仅用于瞬时提示；跨服务业务事实必须使用 Stream、ACK、reclaim 与 DLQ。
+      - shared_multi_consumer Capability 的 Adapter consumers 与 binding_roots 严格相等；
+        缺少任一 root descriptor、root 未执行 preflight 或非真实 Redis Adapter 均 fail-closed。
+      - SIT 以真实 Redis producer-to-consumer 链路为主，UAT 以 chat @ assistant 的 Remote
+        journey 为主；Gamma 证据须与 Push、LiveKit、SLS 绑定同一 commit/config/image。
+    change_type:
+      - specification
+      - metadata
+      - implementation
+      - local_contract
+      - api_integration
+      - user_acceptance
+      - reliability
+      - observability
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_service/runtime/messaging/redis_message_transport_binding__local_contract_test.go
+          - quwoquan_ops/tests/local_contract/external_provider_governance__local_contract_test.py
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_ops/environments/provider_conformance_prerequisites/message_transport_chat_assistant_remote_uat.yaml
+    rollout:
+      stages: [alpha, beta, gamma, prod_gray_initial]
+      rollback:
+        - Redis health、pending lag、DLQ 或 consumer ACK 越界时停止 rollout，回退到 registry
+          内已 attested 的 last-good config+image；不得回退到 NATS、memory Redis 或直连。
+    notes: |
+      本 CR 仍保持 in_progress。受控 Gamma Redis/CI HMAC、SLS、LiveKit、Push 凭据和真实
+      iOS/Android 设备证据缺失时 release verify 必须保持 GATE_BLOCK。
+  - timestamp: "2026-07-21T10:00:00+08:00"
+    summary: |
+      BindingCompiler 改为按 binding root 生成 checked-in Go descriptor，并将
+      descriptor 输出、composition entrypoint 与 resolver symbol 纳入静态一致性门禁。
+      content embedding、user one-tap/social、integration location/SMS/Push、assistant
+      model、RTC room 与 product-ops SLS 均通过 root-scoped descriptor 执行启动 fail-closed
+      preflight；NATS/DNS 因尚无 provider-neutral boundary 与真实 consumer，降为仅资产
+      登记，不再声明 release-required Binding/readiness。
+    reason: |
+      旧 compiler 只覆盖 assistant、integration location 和 RTC，其他 required capability
+      虽有 registry Binding 却不能证明服务组合根消费，NATS/DNS 的 blocked descriptor 也
+      会制造“已接入”的错误信号。
+    decisions:
+      - Go descriptor 由 registry 的 binding_scope + binding_roots 投影；共享能力为每个实际
+        composition root 生成 descriptor，禁止 capability prefix、运行时 registry 扫描和字符串选厂。
+      - 凭据缺失或 Binding blocked 时对应 release binding root 在启动时 fail-closed；本变更只提供
+        credential-less local contract，真实 Beta/Gamma 证据仍待环境凭据与远端调用。
+    change_type:
+      - metadata
+      - implementation
+      - local_contract
+      - reliability
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_ops/tests/local_contract/external_provider_governance__local_contract_test.py
+          - quwoquan_service/services/integration-service/internal/infrastructure/providerbinding
+          - quwoquan_service/services/content-service/cmd/api
+          - quwoquan_service/services/user-service/cmd/api
+    rollout:
+      stages: [alpha, beta, gamma, prod]
+      rollback:
+        - required root-scoped descriptor 或 startup preflight 失败时停止 rollout，不回退到 direct
+          environment lookup、Mock 或未登记 Adapter。
+    notes: |
+      商用 readiness 仍为未完成状态：SLS/SMS/Push/one-tap/social/model 等 Binding 在无凭据
+      环境保持 blocked，必须取得真实 provider API integration、观测 readback 与回滚证据。
+  - timestamp: "2026-07-21T03:40:00+08:00"
+    summary: |
+      将第三方 SDK、endpoint、鉴权、错误、回调 DTO、重试与限流差异收口到能力专属
+      typed Port 和登记的 Provider Adapter；建立 Capability/Adapter/环境 Binding 单轨、
+      公共与专项 Conformance Suite、Alpha/Beta/Gamma × 三层测试九格证据、双层
+      readiness、启动 fail-closed、切换回滚与 output/Secret 隔离。
+    reason: |
+      当前 Port/Adapter 只在局部存在，外部服务登记表未驱动 composition 和 gate；
+      production 图仍有 Mock/SDK 越层，Beta/Gamma 存在 fixture/fixed-test/deterministic
+      漂移，且没有可证明全部执行的统一九格证据。若继续按厂商逐点接入，业务合同、错误、
+      观测、隐私和回滚会持续分叉。
+    decisions:
+      - runtime 是 external integration 的 L1；integration-service 是独立机制进程，
+        不新增 integration L1，也不作为所有外部能力的万能代理。
+      - Adapter 采用 central_integration、domain_owned_adapter、client_platform_adapter、
+        data_pipeline_adapter 四种访问策略；豁免不绕过 typed Port、登记、测试和准出。
+      - Gamma 使用 production-grade Adapter 连接隔离租户；Prod 只在
+        prod-hosted/gray_initial 做低风险真实租户验证。
+      - local_contract 永不出网；Beta/Gamma 对对应 production Adapter 类运行本地协议/
+        故障 harness，真实远端 TLS、鉴权、回调与 readback 归 api_integration。
+      - Adapter 与 Capability 独立计算 readiness，替代 Provider 通过不得提升目标 Adapter。
+      - .qwq_output 只保存可删除运行产物；配置、环境 Binding、schema、policy、Secret、
+        endpoint 值、渲染 .env 和 TLS material 不得进入 output。
+      - 为 AppRoot message-social-connection 新增
+        message-call-and-offline-delivery Scenario，回链 RTC、Push 与 Provider 商用门。
+    change_type:
+      - specification
+      - metadata
+      - implementation
+      - local_contract
+      - api_integration
+      - user_acceptance
+      - reliability
+      - security
+    tests:
+      - layer: local_contract
+        intent: GWT
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_output_paths_layout__local_contract_test.py
+          - quwoquan_ops/tests/local_contract/external_provider_governance__local_contract_test.py
+      - layer: api_integration
+        intent: SIT
+        evidence:
+          - quwoquan_ops/tests/acceptance/api_integration/external_provider_governance__api_integration_test.py
+          - quwoquan_service/services/integration-service/tests/api_integration
+          - quwoquan_service/services/rtc-service/tests/api_integration
+      - layer: user_acceptance
+        intent: UAT
+        evidence:
+          - quwoquan_ops/tests/acceptance/user_acceptance/external_provider_governance__user_acceptance_test.py
+    rollout:
+      stages: [alpha, beta, gamma_local, prod_gray_initial, prod_full]
+      rollback:
+        - 仅回滚到 registry 中 adapter_ready=true 的 last-good config+image 对。
+        - required 能力无 ready Provider 时阻断 rollout；optional 能力结构化关闭，不切 Mock。
+        - 保留失败 run ID、观测引用与 callback/队列水位，修复后按幂等合同重放。
+    notes: |
+      本 CR 在仓内 compiler、gate、测试和 Adapter 迁移完成后仍保持 in_progress，直到真实
+      Beta/Gamma 凭据、远端调用、设备/运营旅程、logs/traces/metrics readback 与回滚证据
+      全部取得；不得用静态检查或替代 Provider 冒充商用完成。

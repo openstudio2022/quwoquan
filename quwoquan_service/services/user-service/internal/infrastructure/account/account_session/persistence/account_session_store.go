@@ -118,20 +118,29 @@ func (s *AccountSessionPostgresStore) RotateSession(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var (
-		sessionID string
-		accountID string
-		deviceID  string
-		lineageID string
-		status    string
-		expiresDB time.Time
-		version   int64
+		sessionID    string
+		accountID    string
+		deviceID     string
+		lineageID    string
+		status       string
+		revokeReason string
+		expiresDB    time.Time
+		version      int64
 	)
 	err = tx.QueryRow(ctx, `
-SELECT session_id, account_id, device_id, lineage_id, status, expires_at, version
+SELECT session_id, account_id, device_id, lineage_id, status,
+       COALESCE(revoke_reason, ''), expires_at, version
 FROM account_sessions
 WHERE refresh_token_hash=$1
 FOR UPDATE`, currentTokenHash).Scan(
-		&sessionID, &accountID, &deviceID, &lineageID, &status, &expiresDB, &version,
+		&sessionID,
+		&accountID,
+		&deviceID,
+		&lineageID,
+		&status,
+		&revokeReason,
+		&expiresDB,
+		&version,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return sessionports.IssuedSession{}, sessionports.ErrSessionNotFound
@@ -164,6 +173,10 @@ WHERE session_id=$1`, sessionID); err != nil {
 		}
 		return sessionports.IssuedSession{}, sessionports.ErrSessionReplayed
 	case "revoked":
+		if strings.TrimSpace(revokeReason) == "account_suspended" {
+			return sessionports.IssuedSession{},
+				sessionports.ErrSessionAccountSuspended
+		}
 		return sessionports.IssuedSession{}, sessionports.ErrSessionRevoked
 	default:
 		return sessionports.IssuedSession{}, sessionports.ErrSessionExpired

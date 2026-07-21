@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/notification-service/internal/application"
 )
 
@@ -77,7 +77,7 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 }
 
 type UserAccountClosedConsumer struct {
-	redis      rtredis.Client
+	transport  DurableMessageTransport
 	projection application.UserAccountClosedProjection
 	failures   UserAccountClosedFailureStore
 	consumer   string
@@ -90,16 +90,16 @@ type UserAccountClosedConsumer struct {
 }
 
 func NewUserAccountClosedConsumer(
-	redis rtredis.Client,
+	transport DurableMessageTransport,
 	projection application.UserAccountClosedProjection,
 	failures UserAccountClosedFailureStore,
 	consumer string,
 	logger *slog.Logger,
 	config UserAccountClosedConsumerConfig,
 ) (*UserAccountClosedConsumer, error) {
-	if redis == nil || projection == nil || failures == nil {
+	if transport == nil || projection == nil || failures == nil {
 		return nil, errors.New(
-			"notification UserAccountClosed consumer requires redis, projection, and failure store",
+			"notification UserAccountClosed consumer requires message transport, projection, and failure store",
 		)
 	}
 	consumer = strings.TrimSpace(consumer)
@@ -112,7 +112,7 @@ func NewUserAccountClosedConsumer(
 		logger = slog.Default()
 	}
 	return &UserAccountClosedConsumer{
-		redis:      redis,
+		transport:  transport,
 		projection: projection,
 		failures:   failures,
 		consumer:   consumer,
@@ -122,12 +122,12 @@ func NewUserAccountClosedConsumer(
 }
 
 func (consumer *UserAccountClosedConsumer) EnsureGroup(ctx context.Context) error {
-	if consumer == nil || consumer.redis == nil {
+	if consumer == nil || consumer.transport == nil {
 		return errors.New(
 			"notification UserAccountClosed consumer is not configured",
 		)
 	}
-	if err := consumer.redis.XGroupCreateMkStream(
+	if err := consumer.transport.EnsureDurableConsumerGroup(
 		ctx,
 		UserAccountEventStream,
 		UserAccountClosedConsumerGroup,
@@ -145,7 +145,7 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 	ctx context.Context,
 ) (int, error) {
 	if consumer == nil ||
-		consumer.redis == nil ||
+		consumer.transport == nil ||
 		consumer.projection == nil ||
 		consumer.failures == nil {
 		return 0, errors.New(
@@ -156,7 +156,7 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	claimed, _, err := consumer.redis.XAutoClaim(
+	claimed, _, err := consumer.transport.ReclaimDurable(
 		ctx,
 		UserAccountEventStream,
 		UserAccountClosedConsumerGroup,
@@ -173,13 +173,15 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	fresh, err := consumer.redis.XReadGroup(
+	fresh, err := consumer.transport.ReadDurable(
 		ctx,
-		UserAccountClosedConsumerGroup,
-		consumer.consumer,
-		map[string]string{UserAccountEventStream: ">"},
-		consumer.config.BatchSize,
-		100*time.Millisecond,
+		runtimemessaging.StreamReadRequest{
+			Stream:   UserAccountEventStream,
+			Group:    UserAccountClosedConsumerGroup,
+			Consumer: consumer.consumer,
+			Count:    consumer.config.BatchSize,
+			Block:    100 * time.Millisecond,
+		},
 	)
 	if err != nil {
 		err = fmt.Errorf("read notification UserAccountClosed events: %w", err)
@@ -259,7 +261,7 @@ func (consumer *UserAccountClosedConsumer) Healthy(
 
 func (consumer *UserAccountClosedConsumer) processMessage(
 	ctx context.Context,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) error {
 	startedAt := time.Now()
 	event, err := decodeNotificationUserAccountClosed(message)
@@ -293,7 +295,7 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		ctx,
 		UserAccountEventStream,
 		message.ID,
-		message.Values["eventId"],
+		durableFieldValue(message.Fields, "eventId"),
 		err,
 	)
 	if recordErr != nil {
@@ -311,17 +313,19 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 			err,
 		)
 	}
-	if _, dlqErr := consumer.redis.XAdd(
+	if _, dlqErr := consumer.transport.AppendDurable(
 		ctx,
-		UserAccountClosedDeadLetterStream,
-		userAccountClosedDeadLetterValues(message, err, attempts),
+		runtimemessaging.DurableMessage{
+			Stream: UserAccountClosedDeadLetterStream,
+			Fields: userAccountClosedDeadLetterFields(message, err, attempts),
+		},
 	); dlqErr != nil {
 		return fmt.Errorf(
 			"append notification UserAccountClosed DLQ: %w",
 			dlqErr,
 		)
 	}
-	if expireErr := consumer.redis.Expire(
+	if expireErr := consumer.transport.SetDurableRetention(
 		ctx,
 		UserAccountClosedDeadLetterStream,
 		userAccountClosedDeadLetterTimeout,
@@ -348,7 +352,7 @@ func (consumer *UserAccountClosedConsumer) ackAndClear(
 	ctx context.Context,
 	messageID string,
 ) error {
-	if err := consumer.redis.XAck(
+	if err := consumer.transport.AckDurable(
 		ctx,
 		UserAccountEventStream,
 		UserAccountClosedConsumerGroup,
@@ -373,10 +377,10 @@ func (consumer *UserAccountClosedConsumer) ackAndClear(
 }
 
 func uniqueUserAccountClosedMessages(
-	groups ...[]rtredis.StreamMessage,
-) []rtredis.StreamMessage {
+	groups ...[]runtimemessaging.StreamDelivery,
+) []runtimemessaging.StreamDelivery {
 	seen := make(map[string]struct{})
-	messages := make([]rtredis.StreamMessage, 0)
+	messages := make([]runtimemessaging.StreamDelivery, 0)
 	for _, group := range groups {
 		for _, message := range group {
 			if _, exists := seen[message.ID]; exists {

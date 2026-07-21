@@ -40,6 +40,50 @@ func TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay(t *tes
 	}
 }
 
+func TestCompletedMediaUploadSessionQueryRecoversAssetIdentity(t *testing.T) {
+	owner := "media-session-completion-recovery-owner"
+	initialized := performMediaCommand(
+		t,
+		http.MethodPost,
+		"/content/media/uploads:init",
+		`{"mediaType":"video","contentType":"video/mp4","fileSize":64,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`,
+		owner,
+		"media-session-completion-recovery-init",
+	)
+	sessionID := asTestString(initialized["sessionId"])
+	if sessionID == "" {
+		t.Fatalf("init result has no sessionId: %#v", initialized)
+	}
+
+	completed := performMediaCommand(
+		t,
+		http.MethodPost,
+		"/content/media/uploads/"+sessionID+":complete",
+		`{"accessPolicy":"owner_only"}`,
+		owner,
+		"media-session-completion-recovery-complete",
+	)
+	assetID := asTestString(completed["assetId"])
+	if assetID == "" {
+		t.Fatalf("complete result has no assetId: %#v", completed)
+	}
+
+	recovered := performMediaQuery(
+		t,
+		"/content/media/uploads/"+sessionID,
+		owner,
+		http.StatusOK,
+	)
+	if recovered["sessionId"] != sessionID ||
+		recovered["status"] != "completed" ||
+		recovered["assetId"] != assetID {
+		t.Fatalf(
+			"completed session must retain recoverable asset identity: %#v",
+			recovered,
+		)
+	}
+}
+
 func TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersistence(
 	t *testing.T,
 ) {
@@ -112,15 +156,42 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 			"imageHeight":960,
 			"imageDeliveryContentType":"image/png",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.png",
-			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png"
+			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png",
+			"imageDominantColor":"#1A2B3C",
+			"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
+			"imageContentProfile":"alpha_graphic",
+			"imageDerivativePolicyVersion":1
 		}`, publicAsset, publicAsset),
 		owner,
 		"media-image-processing-ready",
 	)
 	publicView := performMediaQuery(t, "/content/media/"+publicAsset, "", http.StatusOK)
-	if publicView["assetId"] != publicAsset || publicView["accessPolicy"] != "public" || publicView["status"] != "ready" {
+	if publicView["assetId"] != publicAsset ||
+		publicView["accessPolicy"] != "public" ||
+		publicView["status"] != "ready" ||
+		publicView["imageDominantColor"] != "#1A2B3C" ||
+		publicView["imageContentProfile"] != "alpha_graphic" ||
+		publicView["imageDerivativePolicyVersion"] != float64(1) {
 		t.Fatalf("public MediaAsset slice drift: %#v", publicView)
 	}
+
+	ownedView := performMediaQuery(
+		t,
+		"/internal/content/media/"+publicAsset,
+		owner,
+		http.StatusOK,
+	)
+	if ownedView["assetId"] != publicAsset ||
+		ownedView["accessPolicy"] != "public" ||
+		ownedView["status"] != "ready" {
+		t.Fatalf("owner MediaAsset slice drift: %#v", ownedView)
+	}
+	performMediaQuery(
+		t,
+		"/internal/content/media/"+publicAsset,
+		"other-media-asset-owner",
+		http.StatusNotFound,
+	)
 
 	videoAsset := completeMediaForHTTPPacket(t, owner, "video", "video/mp4", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "owner_only")
 	performMediaCommand(t, http.MethodPost, "/internal/content/media/"+videoAsset+":processing-result",

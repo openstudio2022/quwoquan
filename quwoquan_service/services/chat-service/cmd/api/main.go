@@ -28,6 +28,7 @@ import (
 	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemedia "quwoquan_service/runtime/media"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
@@ -198,6 +199,39 @@ func main() {
 	if err := router.PingAll(ctx); err != nil {
 		log.Fatalf("chat-service redis dependency unavailable: %v", err)
 	}
+	resolvedMessageTransport, err := requireChatMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		map[string]string{
+			"general":  cfg.Redis.General.Mode,
+			"realtime": cfg.Redis.Realtime.Mode,
+		},
+	)
+	if err != nil {
+		log.Fatalf("chat-service message transport preflight failed: %v", err)
+	}
+	realtimeTransport, ok := resolvedMessageTransport.Scene("realtime")
+	if !ok {
+		log.Fatal("chat-service message transport missing realtime scene")
+	}
+	durableTransport, ok := resolvedMessageTransport.Scene("general")
+	if !ok {
+		log.Fatal("chat-service message transport missing general scene")
+	}
+	messageAdapterID := runtimemessaging.RedisMessageTransportAdapter
+	if appEnv == "alpha" {
+		messageAdapterID = runtimemessaging.RedisMessageTransportFixture
+	}
+	messageTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api",
+		messageAdapterID,
+		realtimeTransport,
+		durableTransport,
+	)
+	if err != nil {
+		log.Fatalf("chat-service message transport construction failed: %v", err)
+	}
 	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "chat-service")
 	defer func() {
 		cancelRuntime()
@@ -230,6 +264,10 @@ func main() {
 			log.Fatalf("chat-service aggregate command indexes unavailable: %v", err)
 		}
 	}
+	circleGroupChatSyncFailures := persistence.NewMongoCircleGroupChatSyncFailureStore(mongoDB)
+	if err := circleGroupChatSyncFailures.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service CircleGroup sync failure indexes unavailable: %v", err)
+	}
 	userAccountClosedProjection := persistence.NewMongoUserAccountClosedProjection(
 		mongoDB,
 		router.Scene("general"),
@@ -253,16 +291,19 @@ func main() {
 	}
 	projectionCheckpoints := persistence.NewMongoProjectionCheckpointStore(mongoDB)
 	chatStorage := application.ChatStoragePorts{
-		Transactions:         chatStore,
-		Conversations:        chatStore,
-		Messages:             chatStore,
-		MessageProjection:    chatStore,
-		Members:              chatStore,
-		UserStates:           chatStore,
-		Receipts:             chatStore,
-		ConversationCommands: conversationCommands,
-		MembershipCommands:   membershipCommands,
-		UserStateCommands:    userStateCommands,
+		Transactions:                      chatStore,
+		Conversations:                     chatStore,
+		CircleGroupConversations:          chatStore,
+		Messages:                          chatStore,
+		MessageProjection:                 chatStore,
+		Members:                           chatStore,
+		UserStates:                        chatStore,
+		Receipts:                          chatStore,
+		ConversationCommands:              conversationCommands,
+		MembershipCommands:                membershipCommands,
+		UserStateCommands:                 userStateCommands,
+		CircleGroupMembershipProjections:  chatStore,
+		CircleGroupChatBindingProjections: chatStore,
 	}
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
 	// 实时扇出接收者必须分页拉全量成员：单页上限截断会让大群
@@ -292,11 +333,14 @@ func main() {
 					return ids, nil
 				}
 				last := members[len(members)-1]
-				cursor = persistence.EncodeMemberListNextCursorJoined(last.JoinedAt, last.ID)
+				cursor = application.EncodeMemberListNextCursorJoined(last.JoinedAt, last.ID)
 			}
 		},
 	)
-	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"), recipientResolver)
+	eventPublisher := mq.NewEventPublisherWithTransport(
+		messageTransport,
+		recipientResolver,
+	)
 	messageOutboxRelay := application.NewMessageOutboxRelay(
 		chatStore,
 		chatStore,
@@ -344,6 +388,17 @@ func main() {
 			}
 		}(spec.consumer, relay)
 	}
+	circleGroupBindingOutboxRelay := application.NewAggregateOutboxRelay(
+		conversationCommands,
+		projectionCheckpoints,
+		mq.NewCircleGroupConversationProvisionedStreamPublisher(router.Scene("general")),
+		"chat-circle-group-conversation-binding-stream",
+	)
+	go func() {
+		if err := circleGroupBindingOutboxRelay.Run(ctx, 100*time.Millisecond); err != nil {
+			logger.Error("chat CircleGroup binding outbox relay stopped", "err", err)
+		}
+	}()
 	// ChatInbox 未读/排序投影：独立 checkpoint 消费 Message outbox。
 	inboxProjector := application.NewInboxProjector(
 		chatStore, projectionCheckpoints, chatStore, chatStore,
@@ -502,6 +557,40 @@ func main() {
 		application.WithSocialContactResolver(socialContactResolver),
 		application.WithCircleListResolver(circleListResolver),
 	)
+	circleGroupChatSyncService := application.NewCircleGroupChatSyncService(
+		conversationSvc,
+		memberSvc,
+	)
+	circleGroupProvisioner, err := mq.NewCircleGroupChatSyncConsumer(
+		router.Scene("general"),
+		circleGroupChatSyncService,
+		circleGroupChatSyncFailures,
+		"chat-circle-group-provisioner:"+instanceID,
+		logger,
+		mq.DefaultCircleGroupProvisionerConsumerConfig(),
+	)
+	if err != nil {
+		log.Fatalf("chat CircleGroup provisioner init failed: %v", err)
+	}
+	circleGroupMembershipProjector, err := mq.NewCircleGroupChatSyncConsumer(
+		router.Scene("general"),
+		circleGroupChatSyncService,
+		circleGroupChatSyncFailures,
+		"chat-circle-group-membership-projector:"+instanceID,
+		logger,
+		mq.DefaultCircleGroupMembershipConsumerConfig(),
+	)
+	if err != nil {
+		log.Fatalf("chat CircleGroup membership projector init failed: %v", err)
+	}
+	for _, consumer := range []*mq.CircleGroupChatSyncConsumer{
+		circleGroupProvisioner,
+		circleGroupMembershipProjector,
+	} {
+		if err := consumer.EnsureGroup(ctx); err != nil {
+			log.Fatalf("chat CircleGroup sync consumer group unavailable: %v", err)
+		}
+	}
 	inboxSvc := application.NewInboxService(chatStorage)
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
 		router.Scene("general"),
@@ -520,12 +609,29 @@ func main() {
 		defer close(userAccountClosedStopped)
 		userAccountClosedConsumer.Run(ctx)
 	}()
+	circleGroupSyncStopped := make(chan struct{}, 2)
+	for _, consumer := range []*mq.CircleGroupChatSyncConsumer{
+		circleGroupProvisioner,
+		circleGroupMembershipProjector,
+	} {
+		go func(consumer *mq.CircleGroupChatSyncConsumer) {
+			defer func() { circleGroupSyncStopped <- struct{}{} }()
+			consumer.Run(ctx)
+		}(consumer)
+	}
 	defer func() {
 		cancelRuntime()
 		select {
 		case <-userAccountClosedStopped:
 		case <-time.After(5 * time.Second):
 			logger.Error("chat UserAccountClosed consumer shutdown timed out")
+		}
+		for range 2 {
+			select {
+			case <-circleGroupSyncStopped:
+			case <-time.After(5 * time.Second):
+				logger.Error("chat CircleGroup sync consumer shutdown timed out")
+			}
 		}
 	}()
 	healthChecker := rthealth.NewChecker()
@@ -544,11 +650,20 @@ func main() {
 			return relay.Healthy(5 * time.Second)
 		})
 	}
+	healthChecker.Register("circle_group_conversation_binding_stream", func(context.Context) error {
+		return circleGroupBindingOutboxRelay.Healthy(30 * time.Second)
+	})
 	healthChecker.Register("inbox_projection", func(context.Context) error {
 		return inboxProjector.Healthy(5 * time.Second)
 	})
 	healthChecker.Register("user_account_closed_consumer", func(context.Context) error {
 		return userAccountClosedConsumer.Healthy(15 * time.Second)
+	})
+	healthChecker.Register("circle_group_conversation_provisioner", func(context.Context) error {
+		return circleGroupProvisioner.Healthy(30 * time.Second)
+	})
+	healthChecker.Register("circle_group_membership_projector", func(context.Context) error {
+		return circleGroupMembershipProjector.Healthy(30 * time.Second)
 	})
 
 	chatRoutes := httpadapter.NewChatHandler(
@@ -697,7 +812,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}

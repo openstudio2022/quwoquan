@@ -3,6 +3,8 @@ package http
 import (
 	"net/http"
 	"time"
+
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 func (h *UserHandler) handleCreateAlipayAuthorizationRequest(w http.ResponseWriter, r *http.Request) {
@@ -10,13 +12,23 @@ func (h *UserHandler) handleCreateAlipayAuthorizationRequest(w http.ResponseWrit
 		writeInvalidArg(w, r, "invalid body")
 		return
 	}
-	payload, expiresAt, err := h.auth.CreateSocialAuthorizationRequest(r.Context(), "alipay")
+	if h.alipayLogin == nil {
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromSocialProviderUnavailable(
+				"federated authorization capability unavailable",
+			),
+		)
+		return
+	}
+	request, err := h.alipayLogin.IssueAuthorizationRequest(r.Context())
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"authorizationPayload": payload,
-		"expiresAt":            expiresAt.UTC().Format(time.RFC3339),
+		"authorizationPayload": request.Payload,
+		"expiresAt":            request.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }

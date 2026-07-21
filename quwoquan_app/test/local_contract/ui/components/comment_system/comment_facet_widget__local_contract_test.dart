@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
 
@@ -102,6 +103,73 @@ void main() {
     expect(find.byType(AppSectionErrorState), findsOneWidget);
   });
 
+  testWidgets('Comment provider 不跨会话容器复用静态快照', (tester) async {
+    const postId = 'post-session-isolation';
+    final firstComments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'first-session-comment',
+          postId: postId,
+          content: '前一会话的评论',
+        ),
+      ],
+    );
+    final firstContainer = ProviderContainer(
+      overrides: [
+        workBrowserContentCommentFacetProvider.overrideWithValue(firstComments),
+        commentRemoteConfigProvider.overrideWithValue(
+          const CommentRemoteConfig(),
+        ),
+      ],
+    );
+    final firstListener = firstContainer.listen(
+      commentProviderFamily(postId),
+      (_, _) {},
+    );
+    await firstContainer
+        .read(commentProviderFamily(postId).notifier)
+        .loadComments();
+    expect(
+      firstContainer
+          .read(commentProviderFamily(postId))
+          .comments
+          .single
+          .content,
+      '前一会话的评论',
+    );
+    firstListener.close();
+    firstContainer.dispose();
+    await tester.pump();
+
+    final secondComments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[
+        testCommentItem(
+          id: 'second-session-comment',
+          postId: postId,
+          content: '当前会话的评论',
+        ),
+      ],
+    );
+    final secondContainer = ProviderContainer(
+      overrides: [
+        workBrowserContentCommentFacetProvider.overrideWithValue(
+          secondComments,
+        ),
+        commentRemoteConfigProvider.overrideWithValue(
+          const CommentRemoteConfig(),
+        ),
+      ],
+    );
+
+    expect(
+      secondContainer.read(commentProviderFamily(postId)).comments,
+      isEmpty,
+      reason: '新的会话必须从 Remote 权威投影加载，不能复用上一会话的 Comment 快照',
+    );
+    secondContainer.dispose();
+    await tester.pump();
+  });
+
   testWidgets('点赞经 typed reaction command 并用结果更新页态', (tester) async {
     final comments = TestContentCommentFacet(
       items: <ContentCommentListItem>[
@@ -142,7 +210,7 @@ void main() {
     testCommentReactionThreeStateWidget,
   );
 
-  testWidgets('置顶操作携带当前 aggregate version', (tester) async {
+  testWidgets('置顶操作经 typed 命名命令执行', (tester) async {
     final comments = TestContentCommentFacet(
       items: <ContentCommentListItem>[
         testCommentItem(

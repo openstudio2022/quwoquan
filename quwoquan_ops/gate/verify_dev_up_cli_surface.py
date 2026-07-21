@@ -359,16 +359,16 @@ def main() -> int:
         issues.append("iOS alpha prepare script must start the alpha HTTPS stack")
     if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip" not in ios_prepare_alpha:
         issues.append("iOS alpha prepare script must skip macOS login keychain trust to avoid repeated password prompts")
-    if "legal_static_release_dir(self.runtime_env)" not in mock_public_plane:
-        issues.append("alpha mock public plane must resolve legal-static through output_paths")
+    if "legal_static_deployment_package_dir(self.runtime_env)" not in mock_public_plane:
+        issues.append("alpha mock public plane must resolve legal-static deployment packages through output_paths")
     if "utf8.decode(response.bodyBytes)" not in legal_document_page:
         issues.append("legal document page must decode response bytes as UTF-8")
     if "loadHtmlString(html, baseUrl: uri.toString())" not in legal_document_page:
         issues.append("legal document page must render the explicitly decoded HTML string")
     if "loadRequest(uri)" in legal_document_page:
         issues.append("legal document page must not regress to charset-dependent WebView loadRequest")
-    if 'BETA_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/beta/release/legal-static/current/public"' not in beta_manual:
-        issues.append("beta manual stack must mount the canonical legal-static release output")
+    if 'legal_static_deployment_package_dir("beta")' not in beta_manual:
+        issues.append("beta manual stack must mount the canonical legal-static deployment package")
     if 'stackctl.py" package --env beta --kind legal-static' not in beta_manual:
         issues.append("beta manual stack must package legal-static before starting its TLS gateway")
     if 'handle /legal/manifest.json {' not in beta_manual or 'handle /legal/* {' not in beta_manual:
@@ -383,8 +383,8 @@ def main() -> int:
         or '"趣我圈隐私政策"' not in beta_manual
     ):
         issues.append("beta manual startup must verify UTF-8 agreement and privacy-policy content")
-    if 'PROD_SIM_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/prod/release/legal-static/current/public"' not in prod_sim:
-        issues.append("prod-sim must mount the canonical prod legal-static release output")
+    if 'legal_static_deployment_package_dir(' not in prod_sim or '"prod"' not in prod_sim:
+        issues.append("prod-sim must mount the canonical prod legal-static deployment package")
     if 'stackctl.py" package --env prod --kind legal-static' not in prod_sim:
         issues.append("prod-sim must gate startup on a valid prod legal-static package")
     if 'handle /legal/manifest.json {' not in prod_sim or 'handle /legal/* {' not in prod_sim:

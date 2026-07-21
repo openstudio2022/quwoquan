@@ -211,7 +211,7 @@ beta_manual_stop_stack() {
   local owner_filter="${2:-}"
   local controller_pid=""
   beta_manual_init
-  for name in flutter-run gateway entity-service assistant-service chat-service media-static media-origin media-edge; do
+  for name in flutter-run gateway entity-service assistant-service chat-service notification-service media-static media-origin media-edge; do
     beta_manual_stop_process_file "$(beta_manual_process_file "$name")" "$owner_filter"
   done
   if [[ -z "$owner_filter" && -f "$BETA_MANUAL_STATE_DIR/stack.env" ]]; then

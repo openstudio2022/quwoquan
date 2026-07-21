@@ -29,6 +29,16 @@ fields:
     api_exposure: read
     ops_exposure: read
 
+  - name: reporterAccountId
+    source: reporterAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PII
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 举报创建时可信 principal 的账户归属；仅用于将结案通知投递至账户 Inbox，不得由客户端提供或回显。
+
   - name: targetType
     source: targetType
     type: enum

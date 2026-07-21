@@ -5,10 +5,10 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential
+    block_reason: gamma full cold-start and media transport adapter runtime evidence blocked by missing controlled product telemetry SLS credential
     gap_id: RTC_CALL_SESSION_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
-  description: 实时音视频通话信令编排、LiveKit Room 管理、Token 签发、屏幕共享控制
+  description: 实时音视频通话信令编排、媒体房间管理、媒体访问凭据签发、屏幕共享控制
 
 api_routes:
   # ── 通话生命周期 ──────────────────────────────────
@@ -17,6 +17,8 @@ api_routes:
 
     operation: InitiateCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallLifecycleCommandFacet
@@ -24,9 +26,9 @@ api_routes:
       aggregate_owner: CallSession
       mutation_target: CallSession
       invariant_target: CallSession
-    description: 发起通话（一次创建：CallSession + LiveKit Room + 发起方 Token + 来电通知；同 actor 活跃通话唯一约束防双呼）
+    description: 发起通话（一次创建：CallSession + 媒体房间 + 发起方媒体访问凭据 + 来电通知；同 actor 活跃通话唯一约束防双呼）
     request_fields: [callType, inviteeIds, conversationId, circleId, maxParticipants]
-    response_fields: [session, token, livekitUrl]
+    response_fields: [session, mediaAccess]
     client_contract:
       dart_import: ../rtc/call_session_contracts.dart
       request_type: RtcInitiateCallCommand
@@ -46,8 +48,7 @@ api_routes:
       - RTC.USER.blocked
       - RTC.USER.idempotency_conflict
       - RTC.USER.rate_limited
-      - RTC.SYSTEM.livekit_unavailable
-      - RTC.SYSTEM.token_generation_failed
+      - RTC.SYSTEM.media_transport_unavailable
       - RTC.SYSTEM.internal_error
     privacy:
       request_classification: INTERNAL
@@ -74,6 +75,8 @@ api_routes:
 
     operation: AnswerCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallLifecycleCommandFacet
@@ -81,8 +84,8 @@ api_routes:
       aggregate_owner: CallSession
       mutation_target: CallSession
       invariant_target: CallSession
-    description: 接听通话（命名状态迁移；签发接听方 Token）
-    response_fields: [session, token, roomId, livekitUrl]
+    description: 接听通话（命名状态迁移；签发接听方媒体访问凭据）
+    response_fields: [session, mediaAccess]
     client_contract:
       dart_import: ../rtc/call_session_contracts.dart
       request_type: RtcCallIdCommand
@@ -102,8 +105,7 @@ api_routes:
       - RTC.USER.call_ended
       - RTC.USER.version_conflict
       - RTC.USER.idempotency_conflict
-      - RTC.SYSTEM.livekit_unavailable
-      - RTC.SYSTEM.token_generation_failed
+      - RTC.SYSTEM.media_transport_unavailable
       - RTC.SYSTEM.internal_error
     privacy:
       request_classification: INTERNAL
@@ -130,6 +132,8 @@ api_routes:
 
     operation: RejectCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallLifecycleCommandFacet
@@ -182,6 +186,8 @@ api_routes:
 
     operation: CancelCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallLifecycleCommandFacet
@@ -234,6 +240,8 @@ api_routes:
 
     operation: HangupCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallLifecycleCommandFacet
@@ -287,6 +295,8 @@ api_routes:
 
     operation: JoinCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallParticipantCommandFacet
@@ -294,8 +304,8 @@ api_routes:
       aggregate_owner: CallSession
       mutation_target: CallSession
       invariant_target: CallSession
-    description: 加入多人通话（收到邀请后主动加入，签发 Token）
-    response_fields: [session, token, livekitUrl]
+    description: 加入多人通话（收到邀请后主动加入，签发媒体访问凭据）
+    response_fields: [session, mediaAccess]
     client_contract:
       dart_import: ../rtc/call_session_contracts.dart
       request_type: RtcCallIdCommand
@@ -315,8 +325,7 @@ api_routes:
       - RTC.USER.call_ended
       - RTC.USER.version_conflict
       - RTC.USER.idempotency_conflict
-      - RTC.SYSTEM.livekit_unavailable
-      - RTC.SYSTEM.token_generation_failed
+      - RTC.SYSTEM.media_transport_unavailable
       - RTC.SYSTEM.internal_error
     privacy:
       request_classification: INTERNAL
@@ -343,6 +352,8 @@ api_routes:
 
     operation: LeaveCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallParticipantCommandFacet
@@ -395,6 +406,8 @@ api_routes:
 
     operation: ReportMediaConnected
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallParticipantCommandFacet
@@ -402,7 +415,7 @@ api_routes:
       aggregate_owner: CallSession
       mutation_target: CallSession
       invariant_target: CallSession
-    description: 报告媒体建连成功（LiveKit 首帧媒体连通后由端侧上报；≥2 人 connected 时会话进入 in_call 并记录 startedAt；目标状态已满足时按 no-op receipt 幂等）
+    description: 报告媒体建连成功（首帧媒体连通后由端侧上报；≥2 人 connected 时会话进入 in_call 并记录 startedAt；目标状态已满足时按 no-op receipt 幂等）
     client_contract:
       dart_import: ../rtc/call_session_contracts.dart
       request_type: RtcCallIdCommand
@@ -447,6 +460,8 @@ api_routes:
 
     operation: InviteToCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallParticipantCommandFacet
@@ -503,6 +518,8 @@ api_routes:
 
     operation: GetCall
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: CallQueryFacet
@@ -552,6 +569,8 @@ api_routes:
 
     operation: ListCalls
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: query
       facet: CallQueryFacet
@@ -601,6 +620,8 @@ api_routes:
 
     operation: ToggleMute
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallMediaControlCommandFacet
@@ -654,6 +675,8 @@ api_routes:
 
     operation: ToggleCamera
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallMediaControlCommandFacet
@@ -708,6 +731,8 @@ api_routes:
 
     operation: StartScreenShare
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallScreenShareCommandFacet
@@ -761,6 +786,8 @@ api_routes:
 
     operation: StopScreenShare
     actor: persona
+    commercial:
+      status: ready
     application:
       kind: command
       facet: CallScreenShareCommandFacet
@@ -867,7 +894,7 @@ contract_test:
           assertions: [status_200, only_missed_calls]
 
     service_side:
-      description: 使用真实测试数据库与 operation guard 在链的鉴权中间件，LiveKit 通过 mock adapter
+      description: 使用真实测试数据库与 operation guard 在链的鉴权中间件，媒体房间通过 mock adapter
       real_engines:
         mongodb: testcontainers (mongo:7)
         redis: miniredis/v2

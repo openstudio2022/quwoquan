@@ -238,12 +238,13 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_publication_intent__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_recovery__local_contract_test.dart
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_media_publication_lifecycle_probe.py
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_intent_queue__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_publication_intent__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_recovery__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -308,7 +309,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_hifi_layout__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/capture_camera_photo_video_independence__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_media_refs__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
@@ -317,8 +318,8 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_capture_flow__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_hifi_layout__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/create/capture_camera_photo_video_independence__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
-    status: completed
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_media_refs__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -397,7 +398,7 @@ gwt_acceptance:
     - 未手工选封面时默认 `coverStrategy=first_frame` 且 `coverFrameTimeMs=0`。
     - 手工选封面时 `coverStrategy=manual`，`coverFrameTimeMs` 与当前预览帧一致。
     - 最终 `SubmitPostPublication` 只携带服务端 MediaAsset 引用、`durationMs`、可得的 `width/height` 和封面策略，不包含本地文件路径、客户端 URL 或 expectedVersion。
-    - "`thumbnailUrl` 与 `coverUrl` 由服务端根据视频资产及封面资产派生；无真实转码 worker 时由 App 本地选帧并作为 MediaAsset 上传。"
+    - "`thumbnailUrl` 与 `coverUrl` 只由服务端基于受信视频处理产物派生；worker 不可用时发布保持 processing 或返回结构化不可用，禁止 App 本地选帧伪造 ready。"
     done_when:
     - Mock/Remote 的视频 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明创建与回读闭环。
     edge_cases:
@@ -411,7 +412,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_media_publication_lifecycle_probe.py
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
     status: pending
@@ -435,7 +436,7 @@ gwt_acceptance:
         execution_profile: release
         suite: video_creation_journey
         cases:
-        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.video_creation_publish_roundtrip
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.video_processing_publish_readback
         envs:
         - gamma_local
     notes:

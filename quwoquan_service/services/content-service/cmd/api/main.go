@@ -4,14 +4,13 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
-	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimelearning "quwoquan_service/runtime/learning"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtotel "quwoquan_service/runtime/otel"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
@@ -38,6 +37,7 @@ import (
 	outboundshareinfra "quwoquan_service/services/content-service/internal/infrastructure/content/outbound_share_fact/persistence"
 	postgovernance "quwoquan_service/services/content-service/internal/infrastructure/content/post/governance"
 	profileinteractioninfra "quwoquan_service/services/content-service/internal/infrastructure/content/profile_interaction/persistence"
+	embeddinginfra "quwoquan_service/services/content-service/internal/infrastructure/embedding"
 	"quwoquan_service/services/content-service/internal/infrastructure/feedmetrics"
 	"quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics"
 	learninginfra "quwoquan_service/services/content-service/internal/infrastructure/learning"
@@ -100,12 +100,45 @@ func main() {
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: content-service redis ping: %v", err)
 	}
+	resolvedMessageTransport, err := requireContentMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		map[string]string{
+			"general":  cfg.Redis.General.Mode,
+			"realtime": cfg.Redis.Realtime.Mode,
+		},
+	)
+	if err != nil {
+		log.Fatalf("content-service message transport preflight failed: %v", err)
+	}
+	realtimeTransport, ok := resolvedMessageTransport.Scene("realtime")
+	if !ok {
+		log.Fatal("content-service message transport missing realtime scene")
+	}
+	durableTransport, ok := resolvedMessageTransport.Scene("general")
+	if !ok {
+		log.Fatal("content-service message transport missing general scene")
+	}
+	messageAdapterID := runtimemessaging.RedisMessageTransportAdapter
+	if appEnv == "alpha" {
+		messageAdapterID = runtimemessaging.RedisMessageTransportFixture
+	}
+	messageTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"content-service-api",
+		messageAdapterID,
+		realtimeTransport,
+		durableTransport,
+	)
+	if err != nil {
+		log.Fatalf("content-service message transport construction failed: %v", err)
+	}
 	subjectClosureGuard := newDeferredSubjectClosureGuard()
 	hotPath := rtrec.NewHotPath(
 		rtredis.NewRecAdapter(router.Scene("rec")),
 		rtrec.WithSubjectClosureGuard(subjectClosureGuard),
 	)
-	eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
+	eventPub := messaging.NewRedisEventPublisherWithTransport(messageTransport, "content-service", logger)
 
 	// Read path: SessionCache wraps HotPath with L1 cache + singleflight
 	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 10000)
@@ -688,22 +721,15 @@ func main() {
 		// API → posts.embedding，独立 outbox relay checkpoint + 每日成本护栏）随
 		// cfg.Embedding.Enabled 开启；向量召回读通道另由 VectorRecallEnabled 控制
 		// （S0 flag-off，S1 内容池阈值达标后开启，开启不需要重构）。
-		// N2-3 env-first 覆盖：部署 secret 经 EMBEDDING_ENDPOINT/EMBEDDING_API_KEY/
-		// EMBEDDING_ENABLED 注入（committed config 不落 secret，与 OSS 同模式）。
-		cfg.Embedding.Endpoint = getenvOrDefault("EMBEDDING_ENDPOINT", cfg.Embedding.Endpoint)
-		cfg.Embedding.APIKey = getenvOrDefault("EMBEDDING_API_KEY", cfg.Embedding.APIKey)
-		if parseBoolEnv("EMBEDDING_ENABLED", cfg.Embedding.Enabled) {
-			cfg.Embedding.Enabled = true
-		}
-		if cfg.Embedding.Enabled && cfg.Embedding.Endpoint != "" {
-			embCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
-			embClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, embCB)
-			var embOpts []rtrec.RemoteEmbeddingOption
-			embOpts = append(embOpts, rtrec.WithEmbeddingClient(embClient))
-			if cfg.Embedding.Model != "" {
-				embOpts = append(embOpts, rtrec.WithEmbeddingModel(cfg.Embedding.Model))
+		if cfg.Embedding.Enabled {
+			embeddingBinding, err := resolveContentEmbeddingBinding(appEnv)
+			if err != nil {
+				log.Fatalf("content-service embedding binding invalid: %v", err)
 			}
-			embedder := rtrec.NewRemoteEmbeddingService(cfg.Embedding.Endpoint, cfg.Embedding.APIKey, embOpts...)
+			embedder, err := embeddinginfra.NewOpenAICompatibleGateway(embeddingBinding)
+			if err != nil {
+				log.Fatalf("content-service embedding gateway assembly failed: %v", err)
+			}
 			embeddingProjector := recinfra.NewEmbeddingProjector(
 				db, embedder, router.Scene("rec"), logger,
 			)
@@ -712,11 +738,11 @@ func main() {
 					&projectorAdapter{embedding: embeddingProjector},
 				)),
 				"content-embedding-projection", "post_outbox_embedding", healthChecker, logger)
-			log.Printf("content-service embedding write pipeline enabled endpoint=%s budget=%d/day", cfg.Embedding.Endpoint, recinfra.EmbeddingDailyBudgetDefault)
+			log.Printf("content-service embedding write pipeline enabled adapter=ext.embed.openai_compatible budget=%d/day", recinfra.EmbeddingDailyBudgetDefault)
 			if cfg.Embedding.VectorRecallEnabled {
 				vectorSource := recinfra.NewVectorRecallWithEmbedding(db, embedder)
 				mongoCandidateSources = append(mongoCandidateSources, vectorSource)
-				log.Printf("content-service vector recall enabled endpoint=%s", cfg.Embedding.Endpoint)
+				log.Printf("content-service vector recall enabled adapter=ext.embed.openai_compatible")
 			} else {
 				log.Printf("content-service vector recall flag-off (S0); write pipeline keeps materializing embeddings")
 			}
@@ -853,16 +879,19 @@ func main() {
 		ctx,
 		cfg,
 		appEnv,
+		instanceID,
 		logger,
 		healthChecker,
 		mediaStore,
 		commentDataAdapter,
 		reactionStore,
 		recDB,
+		postQueryReader,
 		viewerBlockReader,
 	)
 	defer closeMediaRuntime()
 	mediaService := mediaRuntime.mediaService
+	mediaImageReprocessService := mediaRuntime.mediaImageReprocessService
 	mediaObjectGateway := mediaRuntime.mediaObjectGateway
 	commentServiceCore = mediaRuntime.commentServiceCore
 
@@ -1010,6 +1039,13 @@ func main() {
 	}
 	handlerOpts = append(handlerOpts, httpadapter.WithModerationService(moderationFacades))
 	handlerOpts = append(handlerOpts, httpadapter.WithMediaService(mediaService))
+	if mediaImageReprocessService == nil {
+		log.Fatal("content-service MediaImageReprocessRun object composition is not configured")
+	}
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithMediaImageReprocessService(mediaImageReprocessService),
+	)
 	if bulkImportService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
 	}

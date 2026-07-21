@@ -130,7 +130,7 @@ func TestCircleMembershipRealMongoTransactionReplayProjectionAndStream(t *testin
 	assertCircleMemberCount(t, "circle-membership", 0)
 
 	streamRelay := membershipapp.NewOutboxRelay(
-		store, store, messaging.NewCircleMembershipStreamPublisher(redisRouter.Scene("general")),
+		store, store, messaging.NewCircleMembershipStreamPublisher(circleMessageTransport),
 		"circle-membership-stream-test",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 2 {
@@ -313,7 +313,7 @@ func seedMembershipCircleWithPolicy(t *testing.T, circleID, ownerPersonaID strin
 }
 
 // GWT1（member-role-permission）：approval 圈子 Join 进 pending；
-// Approve→active 发 Joined 且 memberCount 收敛 +1；Reject→rejected 可再申请；
+// Approve→active 发 Approved 且 memberCount 收敛 +1；Reject→rejected 可再申请；
 // 审批命令与 pending 队列仅 owner/active admin 可达。
 func TestCircleMembershipApprovalLifecycle(t *testing.T) {
 	cleanCollections(t)
@@ -350,7 +350,7 @@ func TestCircleMembershipApprovalLifecycle(t *testing.T) {
 		t.Fatalf("non-moderator approve drift: status=%d body=%s", deniedApprove.Code, deniedApprove.Body.String())
 	}
 
-	// owner approve → active、version+1、发 CircleMembershipJoined。
+	// owner approve → active、version+1、发 CircleMembershipApproved。
 	approveRecorder := executeMembershipCommand(t, http.MethodPost, "/circles/circle-approval/memberships/persona-applicant:approve", nil, "approve-key-1", "", "persona-owner", "ApproveCircleMember")
 	if approveRecorder.Code != http.StatusOK {
 		t.Fatalf("approve failed: status=%d body=%s", approveRecorder.Code, approveRecorder.Body.String())
@@ -380,10 +380,10 @@ func TestCircleMembershipApprovalLifecycle(t *testing.T) {
 		t.Fatalf("reapply after reject drift: status=%d body=%s", reapply.Code, reapply.Body.String())
 	}
 
-	// outbox 事件形态：Requested×3（两位申请 + 再申请）、Joined×1、Rejected×1。
+	// outbox 事件形态：Requested×3（两位申请 + 再申请）、Approved×1、Rejected×1。
 	for eventType, want := range map[string]int64{
 		"CircleMembershipRequested": 3,
-		"CircleMembershipJoined":    1,
+		"CircleMembershipApproved":  1,
 		"CircleMembershipRejected":  1,
 	} {
 		count, err := mongoDB.Collection("circle_membership_outbox").CountDocuments(ctx, bson.M{"eventType": eventType})
@@ -392,7 +392,7 @@ func TestCircleMembershipApprovalLifecycle(t *testing.T) {
 		}
 	}
 
-	// memberCount 投影只对 Joined 收敛 +1（pending/rejected 不计数）。
+	// memberCount 投影只对 Joined/Approved 收敛 +1（pending/rejected 不计数）。
 	store := membershippersistence.NewMongoAggregateStore(mongoDB)
 	countRelay := membershipapp.NewOutboxRelay(
 		store, store,

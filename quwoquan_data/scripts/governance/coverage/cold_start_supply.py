@@ -3,17 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import json
 from pathlib import Path
 from typing import Mapping
 
 import yaml
 
-from core.io import read_json
 from core.paths import PUBLISH_ROOT, REPO_DATA_ROOT
 from core.schema import assert_valid
 from core.control_types import ContentType, EXECUTION_MILESTONES, RolloutMilestone
+from core.source_digest import SourceDigest, SourceDigestError
 from content.execution.identity import ExecutionIdentity, parse_execution_id
-from content.execution.workspace import execution_root
 
 
 COLD_START_SUPPLY_POLICY_PATH = (
@@ -207,7 +207,13 @@ def _homepage_execution_target_names(
     homepage_execution_id: str,
     contract: object,
 ) -> tuple[str, ...]:
-    """Bind a post batch to the exact frozen and published homepage batch."""
+    """Bind a post batch to one durable canonical homepage closure.
+
+    Execution workspaces are disposable by contract, so an already published
+    homepage cannot depend on ``tasks/<executionId>/target_set.json`` to bind
+    later cold-start lanes.  The canonical objects' execution identity is the
+    single durable closure after publish; no workspace fallback is permitted.
+    """
     homepage_identity = parse_execution_id(homepage_execution_id)
     if (
         homepage_identity.vertical,
@@ -226,78 +232,71 @@ def _homepage_execution_target_names(
             "homepage execution binding must identify the matching travel homepage "
             "coverage scope and milestone"
         )
-    root = execution_root(homepage_execution_id)
-    target_set_path = root / "0.plan/target_set.json"
-    publish_ref_path = root / "publish_ref.json"
-    try:
-        target_set = read_json(target_set_path)
-        publish_ref = read_json(publish_ref_path)
-        assert_valid(
-            target_set,
-            "execution",
-            "target_set",
-            label=f"homepage target set:{homepage_execution_id}",
-        )
-        assert_valid(
-            publish_ref,
-            "execution",
-            "publish_ref",
-            label=f"homepage publish ref:{homepage_execution_id}",
-        )
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise ValueError(
-            f"homepage target set or publish closure is unavailable: {homepage_execution_id}: {exc}"
-        ) from exc
-    if (
-        target_set.get("executionId") != homepage_execution_id
-        or publish_ref.get("executionId") != homepage_execution_id
-    ):
-        raise ValueError("homepage execution binding identity drift")
-    targets = target_set.get("targets")
-    target_refs = target_set.get("targetRefs")
-    published = publish_ref.get("publishedRefs")
-    if (
-        not isinstance(targets, list)
-        or not isinstance(target_refs, list)
-        or not isinstance(published, Mapping)
-    ):
-        raise ValueError("homepage execution binding has invalid target or publish refs")
-    published_refs = published.get("entities")
-    published_posts = published.get("posts")
-    if not isinstance(published_refs, list) or published_posts != []:
-        raise ValueError("homepage execution binding must publish entities only")
-    if set(str(item) for item in published_refs) != set(str(item) for item in target_refs):
-        raise ValueError("homepage execution publish refs drift from its frozen target set")
     province_contract = contract.province_for_scope(identity.scope)
     expected_count = contract.batch_count(identity.milestone, province_contract)
-    if len(targets) != expected_count or len(target_refs) != expected_count:
-        raise ValueError(
-            f"homepage execution target count {len(targets)} != rollout batch {expected_count}"
-        )
-    names = tuple(
-        str(row.get("name") or "").strip()
-        for row in targets
-        if isinstance(row, Mapping)
+    target_refs = _canonical_homepage_refs_for_execution(
+        homepage_execution_id=homepage_execution_id,
     )
-    if len(names) != len(targets) or not all(names) or len(set(names)) != len(names):
-        raise ValueError("homepage execution frozen target names are invalid")
-    if (
-        identity.milestone is RolloutMilestone.CANARY
-        and names != province_contract.canary_targets
-    ):
-        raise ValueError("canary homepage execution does not equal the fixed canary targets")
-    missing: list[str] = []
-    for ref in target_refs:
-        object_root = PUBLISH_ROOT / "entities" / str(ref)
-        if not (object_root / "page.md").is_file() or not (
-            object_root / "manifest.json"
-        ).is_file():
-            missing.append(str(ref))
-    if missing:
+    if len(target_refs) != expected_count:
         raise ValueError(
-            "bound homepage execution has non-canonical entities: " + ", ".join(missing)
+            f"canonical homepage closure count {len(target_refs)} != rollout batch {expected_count}"
         )
-    return names
+    if identity.milestone is RolloutMilestone.CANARY:
+        if set(target_refs) != set(province_contract.canary_entity_refs):
+            raise ValueError(
+                "canary homepage execution does not equal the fixed canary targets"
+            )
+        return province_contract.canary_targets
+    return tuple(ref.rsplit("/", 1)[-1] for ref in target_refs)
+
+
+def _canonical_homepage_refs_for_execution(
+    *,
+    homepage_execution_id: str,
+) -> tuple[str, ...]:
+    entities_root = PUBLISH_ROOT / "entities"
+    if not entities_root.is_dir():
+        raise ValueError("canonical homepage entities are unavailable")
+    refs: list[str] = []
+    for manifest_path in sorted(entities_root.rglob("manifest.json")):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"canonical homepage manifest is unreadable: {manifest_path}"
+            ) from exc
+        if not isinstance(manifest, Mapping):
+            raise ValueError(
+                f"canonical homepage manifest must be an object: {manifest_path}"
+            )
+        if str(manifest.get("executionId") or "") != homepage_execution_id:
+            continue
+        try:
+            SourceDigest.from_document(manifest.get("sourceDigest"))
+        except SourceDigestError as exc:
+            raise ValueError(
+                f"canonical homepage lacks valid sourceDigest: {manifest_path}"
+            ) from exc
+        ref = manifest_path.parent.relative_to(entities_root).as_posix()
+        entity_ref = str(manifest.get("entityRef") or "").removeprefix("/entity/")
+        if entity_ref and entity_ref != ref:
+            raise ValueError(
+                f"canonical homepage entityRef drift: {manifest_path}"
+            )
+        if not (manifest_path.parent / "page.md").is_file():
+            raise ValueError(
+                f"canonical homepage content is unavailable: {manifest_path.parent}"
+            )
+        refs.append(ref)
+    if not refs:
+        raise ValueError(
+            f"canonical homepage closure is unavailable: {homepage_execution_id}"
+        )
+    if len(refs) != len(set(refs)):
+        raise ValueError(
+            f"canonical homepage closure contains duplicate refs: {homepage_execution_id}"
+        )
+    return tuple(sorted(refs))
 
 
 def cold_start_execution_parameters(

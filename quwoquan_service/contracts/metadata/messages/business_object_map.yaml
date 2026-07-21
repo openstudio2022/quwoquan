@@ -42,6 +42,7 @@ objects:
     - maxGroupSize
     - receiptEnabled
     - lastMessagePreview
+    - lastMessageType
     - lastMessageTime
     - messageCount
     - status

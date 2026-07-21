@@ -114,6 +114,78 @@ func TestProbeTimeoutRemainsRetryableInfrastructureFailure(t *testing.T) {
 	}
 }
 
+func TestFFmpegCommandExitRemainsRetryableInfrastructureFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	failingProbe := filepath.Join(tempDir, "failing-ffprobe")
+	if err := os.WriteFile(
+		failingProbe,
+		[]byte("#!/bin/sh\nexit 1\n"),
+		0o755,
+	); err != nil {
+		t.Fatalf("write failing ffprobe fixture: %v", err)
+	}
+	processor := &FFmpegMediaProcessor{
+		objects: runtimeObjectStoreStub{},
+		config:  Config{FFprobePath: failingProbe},
+	}
+
+	_, err := processor.probe(context.Background(), filepath.Join(tempDir, "source.mp4"))
+	if err == nil {
+		t.Fatal("failed ffprobe command must fail")
+	}
+	var rejection *mediaprocessing.RejectionError
+	if errors.As(err, &rejection) {
+		t.Fatalf("ffprobe runtime failure must remain retryable: %v", err)
+	}
+	if !strings.Contains(err.Error(), "ffprobe execution failed") {
+		t.Fatalf("ffprobe failure classification drift: %v", err)
+	}
+}
+
+func TestFFprobeUndecodableSourceDiagnosticIsRejected(t *testing.T) {
+	tempDir := t.TempDir()
+	failingProbe := filepath.Join(tempDir, "invalid-source-ffprobe")
+	if err := os.WriteFile(
+		failingProbe,
+		[]byte(
+			"#!/bin/sh\n"+
+				"echo 'moov atom not found' >&2\n"+
+				"echo 'Invalid data found when processing input' >&2\n"+
+				"exit 1\n",
+		),
+		0o755,
+	); err != nil {
+		t.Fatalf("write invalid source ffprobe fixture: %v", err)
+	}
+	processor := &FFmpegMediaProcessor{
+		objects: runtimeObjectStoreStub{},
+		config:  Config{FFprobePath: failingProbe},
+	}
+
+	_, err := processor.probe(context.Background(), filepath.Join(tempDir, "source.mp4"))
+	var rejection *mediaprocessing.RejectionError
+	if !errors.As(err, &rejection) {
+		t.Fatalf("undecodable source must reject, got %v", err)
+	}
+	if rejection.Reason != "uploaded media cannot be decoded" {
+		t.Fatalf("rejection reason=%q", rejection.Reason)
+	}
+}
+
+func TestWorkDirCapacityGuardFailsBeforeStartingMediaJob(t *testing.T) {
+	processor := &FFmpegMediaProcessor{
+		objects: runtimeObjectStoreStub{},
+		config: Config{
+			WorkDir:             t.TempDir(),
+			MinWorkDirFreeBytes: int64(^uint64(0) >> 1),
+		},
+	}
+
+	if _, err := processor.createWorkDir("capacity-guard-"); err == nil {
+		t.Fatal("insufficient workdir capacity must block a new media job")
+	}
+}
+
 type runtimeObjectStoreStub struct{}
 
 func (runtimeObjectStoreStub) GetObject(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -8,6 +9,13 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
+OBJECT_STORAGE_LIFECYCLE_FILE = (
+    ROOT
+    / "quwoquan_ops"
+    / "environments"
+    / "compose"
+    / "object-storage-lifecycle.json"
+)
 START_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
 T3_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_t3.py"
 
@@ -109,6 +117,40 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn("SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt", service_block)
         self.assertIn("/etc/ssl/local-ca/object-storage-ca.crt:ro", service_block)
 
+    def test_temporary_upload_lifecycle_is_bootstrapped_before_content_service(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        init_block = compose.split("  object-storage-init:\n", 1)[1].split(
+            "\n  rec-model-service:\n", 1
+        )[0]
+        content_service_block = compose.split("  content-service:\n", 1)[1].split(
+            "\n  chat-service:\n", 1
+        )[0]
+        lifecycle = json.loads(OBJECT_STORAGE_LIFECYCLE_FILE.read_text(encoding="utf-8"))
+
+        self.assertIn(
+            "./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro",
+            init_block,
+        )
+        self.assertIn(
+            "mc ilm rule import \"qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}\" < "
+            "/etc/qwq-object-storage/lifecycle.json",
+            init_block,
+        )
+        self.assertIn("object-storage-init:\n        condition: service_completed_successfully", content_service_block)
+        self.assertEqual(
+            lifecycle,
+            {
+                "Rules": [
+                    {
+                        "ID": "expire-content-temporary-uploads-after-24h",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": "uploads/"},
+                        "Expiration": {"Days": 1},
+                    }
+                ]
+            },
+        )
+
     def test_local_single_node_search_is_not_blocked_by_colima_build_cache_watermark(self) -> None:
         content = COMPOSE_FILE.read_text(encoding="utf-8")
         service_block = content.split("  elasticsearch:\n", 1)[1].split(
@@ -150,7 +192,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
 
         self.assertIn('ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-}"', service_block)
         self.assertIn(
-            'PERSONAL_ASSISTANT_MIMO_API_KEY: "${PERSONAL_ASSISTANT_MIMO_API_KEY:-}"',
+            'ASSISTANT_MODEL_API_KEY: "${ASSISTANT_MODEL_API_KEY:-}"',
             service_block,
         )
         self.assertNotIn(
@@ -236,6 +278,34 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertNotIn("compose_up_failed", source)
         self.assertNotIn("ensure_docker_gamma_proxy_started || true\nfi", source)
+
+    def test_gamma_config_root_uses_canonical_release_snapshot_layout(self) -> None:
+        source = START_SCRIPT.read_text(encoding="utf-8")
+        services = (
+            "content-service",
+            "chat-service",
+            "user-service",
+            "assistant-service",
+            "product-ops-service",
+            "platform-ops-service",
+            "recommendation-service",
+            "tag-service",
+            "search-service",
+            "entity-service",
+            "circle-service",
+            "integration-service",
+            "notification-service",
+        )
+
+        for service in services:
+            with self.subTest(service=service):
+                self.assertIn(f'"$out/releases/config/{service}"', source)
+                self.assertIn(
+                    f'"$out/releases/config/{service}/${{CONFIG_VERSION}}.yaml"',
+                    source,
+                )
+
+        self.assertNotIn("$out/quwoquan_service/services/", source)
 
 
 if __name__ == "__main__":

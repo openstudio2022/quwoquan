@@ -1,19 +1,28 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:quwoquan_app/application/content/media/video_preview_track_query.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   RemoteVideoPreviewTrackQuery({
     required CloudHttpClient httpClient,
     required MediaDeliveryResolver mediaDeliveryResolver,
-  }) : this._(httpClient, mediaDeliveryResolver);
+    required AppTelemetryRecorder telemetry,
+  }) : this._(httpClient, mediaDeliveryResolver, telemetry);
 
-  RemoteVideoPreviewTrackQuery._(this._httpClient, this._mediaDeliveryResolver);
+  RemoteVideoPreviewTrackQuery._(
+    this._httpClient,
+    this._mediaDeliveryResolver,
+    this._telemetry,
+  );
 
   final CloudHttpClient _httpClient;
   final MediaDeliveryResolver _mediaDeliveryResolver;
+  final AppTelemetryRecorder _telemetry;
   final LinkedHashMap<String, Future<VideoPreviewTrackManifest>>
   _manifestCache = LinkedHashMap<String, Future<VideoPreviewTrackManifest>>();
 
@@ -41,6 +50,26 @@ final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   }
 
   Future<VideoPreviewTrackManifest> _fetchManifest(
+    VideoPreviewTrackDescriptor descriptor,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final manifest = await _decodeManifest(descriptor);
+      unawaited(_recordLoadOutcome('success', stopwatch.elapsedMilliseconds));
+      return manifest;
+    } catch (error) {
+      unawaited(
+        _recordLoadOutcome(
+          'failure',
+          stopwatch.elapsedMilliseconds,
+          failReasonCode: error.runtimeType.toString(),
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<VideoPreviewTrackManifest> _decodeManifest(
     VideoPreviewTrackDescriptor descriptor,
   ) async {
     final decoded = await _httpClient.getJson(
@@ -151,6 +180,20 @@ final class RemoteVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
       frameIntervalMs: frameIntervalMs,
       sprites: sprites.values.toList(growable: false),
       frames: frames,
+    );
+  }
+
+  Future<void> _recordLoadOutcome(
+    String result,
+    int durationMs, {
+    String? failReasonCode,
+  }) async {
+    await _telemetry.record(
+      AppTelemetryPayload.videoPreviewTrackLoad(
+        result: result,
+        durationMs: durationMs,
+        failReasonCode: failReasonCode,
+      ),
     );
   }
 

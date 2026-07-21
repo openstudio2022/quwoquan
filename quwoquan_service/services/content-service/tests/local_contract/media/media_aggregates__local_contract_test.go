@@ -2,14 +2,17 @@ package media_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 	mediacontract "quwoquan_service/services/content-service/internal/testsupport/media_contract"
 )
 
@@ -99,6 +102,81 @@ func TestMediaUploadSessionOwnerExpiryAndStateContracts(t *testing.T) {
 		},
 	); err == nil {
 		t.Fatal("expired upload must reject complete transition")
+	}
+}
+
+func TestAbortMediaUploadDeletesTemporaryObjectBeforePersistingAbort(t *testing.T) {
+	now := time.Date(2030, time.January, 2, 3, 4, 5, 0, time.UTC)
+	service, _, _, objects := newMediaServiceWithObjectGateway(now)
+	created, err := service.InitMediaUpload(
+		mediaContext("init-abort-cleanup"),
+		mediaapp.InitMediaUploadCommand{
+			OwnerID:        "persona-owner",
+			MediaType:      "image",
+			ContentType:    "image/jpeg",
+			FileSize:       128,
+			ExpectedSHA256: digestOwner,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init upload: %v", err)
+	}
+	if _, err := service.AbortMediaUpload(
+		mediaContext("abort-cleanup"),
+		mediaapp.AbortMediaUploadCommand{
+			SessionID: created.SessionID,
+			OwnerID:   "persona-owner",
+		},
+	); err != nil {
+		t.Fatalf("abort upload: %v", err)
+	}
+	if len(objects.deletedTemporaryObjectKeys) != 1 ||
+		objects.deletedTemporaryObjectKeys[0] != created.ObjectKey {
+		t.Fatalf(
+			"abort must delete exactly its temporary object: deleted=%v objectKey=%q",
+			objects.deletedTemporaryObjectKeys,
+			created.ObjectKey,
+		)
+	}
+}
+
+func TestAbortMediaUploadRetainsPendingSessionWhenTemporaryCleanupFails(t *testing.T) {
+	now := time.Date(2030, time.January, 2, 3, 4, 5, 0, time.UTC)
+	service, store, _, objects := newMediaServiceWithObjectGateway(now)
+	created, err := service.InitMediaUpload(
+		mediaContext("init-abort-cleanup-failure"),
+		mediaapp.InitMediaUploadCommand{
+			OwnerID:        "persona-owner",
+			MediaType:      "image",
+			ContentType:    "image/jpeg",
+			FileSize:       128,
+			ExpectedSHA256: digestOwner,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init upload: %v", err)
+	}
+	objects.deleteTemporaryUploadErr = errors.New("object storage unavailable")
+	if _, err := service.AbortMediaUpload(
+		mediaContext("abort-cleanup-failure"),
+		mediaapp.AbortMediaUploadCommand{
+			SessionID: created.SessionID,
+			OwnerID:   "persona-owner",
+		},
+	); err == nil {
+		t.Fatal("abort must fail when temporary object cleanup cannot be confirmed")
+	}
+	session, found, err := store.LoadUploadSession(context.Background(), created.SessionID)
+	if err != nil || !found || session.Status() != mediamodel.UploadSessionPending {
+		t.Fatalf(
+			"cleanup failure must retain a retryable pending session: found=%t session=%+v err=%v",
+			found,
+			session,
+			err,
+		)
+	}
+	if len(store.OutboxEvents()) != 1 {
+		t.Fatalf("cleanup failure must not append an abort fact: events=%+v", store.OutboxEvents())
 	}
 }
 
@@ -448,32 +526,124 @@ func TestOriginalMediaAccessAppendsOneFactAndKeepsAbsoluteExpiryOnReplay(t *test
 		t.Fatalf("signed URL and response must share the absolute expiry: %+v", first)
 	}
 	facts := store.OriginalAccessFacts()
-	if len(facts) != 1 || facts[0].AuditID != first.AuditID || facts[0].Purpose != "save" {
+	if len(facts) != 1 ||
+		facts[0].AuditID != first.AuditID ||
+		facts[0].Purpose != "save" ||
+		facts[0].Outcome != "granted" ||
+		facts[0].Reason != "authorized" {
 		t.Fatalf("expected exactly one durable original access fact, got %+v", facts)
+	}
+}
+
+func TestOriginalMediaAccessRateLimitsByViewerAssetAndPurpose(t *testing.T) {
+	now := time.Date(2030, time.March, 4, 5, 6, 7, 0, time.UTC)
+	service, store, _ := newMediaService(now)
+	created, err := service.InitMediaUpload(
+		mediaContext("init-original-access-limit"),
+		mediaapp.InitMediaUploadCommand{
+			OwnerID: "persona-owner", MediaType: "image", ContentType: "image/jpeg",
+			FileSize: 256, ExpectedSHA256: digestAtomic,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init upload: %v", err)
+	}
+	completed, err := service.CompleteMediaUpload(
+		mediaContext("complete-original-access-limit"),
+		mediaapp.CompleteMediaUploadCommand{
+			SessionID: created.SessionID, OwnerID: "persona-owner",
+			AccessPolicy: mediamodel.AccessPolicyOwnerOnly,
+		},
+	)
+	if err != nil {
+		t.Fatalf("complete upload: %v", err)
+	}
+	if _, err := service.RecordMediaProcessingResult(
+		mediaContext("ready-original-access-limit"),
+		mediaapp.RecordMediaProcessingResultCommand{
+			AssetID: completed.AssetID, Processing: mediamodel.ProcessingStatusReady,
+			Descriptor: imageProcessingDescriptor(completed.AssetID, 2),
+		},
+	); err != nil {
+		t.Fatalf("ready image: %v", err)
+	}
+	for attempt := 0; attempt < 6; attempt++ {
+		if _, err := service.RequestOriginalMediaAccess(
+			mediaContext(fmt.Sprintf("original-access-limit-%d", attempt)),
+			mediaapp.RequestOriginalMediaAccessCommand{
+				AssetID: completed.AssetID, ViewerID: "persona-owner", Purpose: "view",
+			},
+		); err != nil {
+			t.Fatalf("grant %d: %v", attempt, err)
+		}
+	}
+	_, err = service.RequestOriginalMediaAccess(
+		mediaContext("original-access-limit-rejected"),
+		mediaapp.RequestOriginalMediaAccessCommand{
+			AssetID: completed.AssetID, ViewerID: "persona-owner", Purpose: "view",
+		},
+	)
+	var appError *rterr.AppError
+	if !errors.As(err, &appError) ||
+		appError.Code.String() != contentgenerated.AppErrorFromOriginalAccessRateLimited("").Code.String() {
+		t.Fatalf("expected viewer/media/purpose rate limit, got %v", err)
+	}
+	facts := store.OriginalAccessFacts()
+	rateLimitedAudits := 0
+	for _, fact := range facts {
+		if fact.Outcome == "rate_limited" && fact.Reason == "rate_limit_exhausted" {
+			rateLimitedAudits++
+		}
+	}
+	if rateLimitedAudits != 1 {
+		t.Fatalf("rate-limited request must append one audit fact, got %+v", facts)
 	}
 }
 
 func newMediaService(
 	now time.Time,
 ) (*mediaapp.MediaService, *mediacontract.MediaStore, *time.Time) {
+	service, store, current, _ := newMediaServiceWithObjectGateway(now)
+	return service, store, current
+}
+
+func newMediaServiceWithObjectGateway(
+	now time.Time,
+) (*mediaapp.MediaService, *mediacontract.MediaStore, *time.Time, *mediaObjectGateway) {
 	store := mediacontract.NewMediaStore()
 	current := new(time.Time)
 	*current = now
 	identifier := 0
+	objects := &mediaObjectGateway{now: func() time.Time { return *current }}
 	service := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(store),
-		&mediaObjectGateway{now: func() time.Time { return *current }},
+		objects,
+		mediaapp.WithOriginalAccessPostVisibilityReader(
+			alwaysVisibleMediaReader{},
+		),
 		mediaapp.WithClock(func() time.Time { return *current }),
 		mediaapp.WithIdentifierGenerator(func(prefix string) (string, error) {
 			identifier++
 			return prefix + "-" + string(rune('0'+identifier)), nil
 		}),
 	)
-	return service, store, current
+	return service, store, current, objects
+}
+
+type alwaysVisibleMediaReader struct{}
+
+func (alwaysVisibleMediaReader) CanViewerAccessPublishedMedia(
+	context.Context,
+	string,
+	string,
+) (bool, error) {
+	return true, nil
 }
 
 type mediaObjectGateway struct {
-	now func() time.Time
+	now                        func() time.Time
+	deletedTemporaryObjectKeys []string
+	deleteTemporaryUploadErr   error
 }
 
 func (g *mediaObjectGateway) PrepareUpload(_ context.Context, params mediaapp.PrepareUploadParams) (mediaapp.UploadGrant, error) {
@@ -497,6 +667,17 @@ func (g *mediaObjectGateway) CompleteUpload(_ context.Context, params mediaapp.C
 		SHA256:      params.ExpectedSHA256,
 		DeliveryURL: "https://cdn.example.test/media",
 	}, nil
+}
+
+func (g *mediaObjectGateway) DeleteTemporaryUpload(
+	_ context.Context,
+	objectKey string,
+) error {
+	if g.deleteTemporaryUploadErr != nil {
+		return g.deleteTemporaryUploadErr
+	}
+	g.deletedTemporaryObjectKeys = append(g.deletedTemporaryObjectKeys, objectKey)
+	return nil
 }
 
 func (g *mediaObjectGateway) PublishPublicSlice(

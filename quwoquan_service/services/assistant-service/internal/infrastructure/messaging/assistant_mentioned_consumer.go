@@ -2,21 +2,25 @@ package messaging
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/assistant-service/internal/application"
 )
 
 const (
-	AssistantMentionedStream        = "events.chat.assistant_mentions"
-	AssistantMentionedDeadLetter    = "events.chat.assistant_mentions.dlq"
-	AssistantMentionedConsumerGroup = "assistant-service"
-	assistantMentionDedupTTL        = 24 * time.Hour
+	AssistantMentionedStream         = "events.chat.assistant_mentions"
+	AssistantMentionedDeadLetter     = "events.chat.assistant_mentions.dlq"
+	AssistantMentionedConsumerGroup  = "assistant-service"
+	assistantMentionDedupTTL         = 24 * time.Hour
+	assistantMentionDeadLetterTTL    = 7 * 24 * time.Hour
+	assistantMentionDeadLetterReason = "handler_failed"
 )
 
 type AssistantMentionHandler interface {
@@ -24,13 +28,21 @@ type AssistantMentionHandler interface {
 }
 
 type AssistantMentionedConsumer struct {
-	redis    rtredis.Client
-	handler  AssistantMentionHandler
-	consumer string
-	logger   *slog.Logger
+	transport runtimemessaging.DurableDeliveryTransport
+	handler   AssistantMentionHandler
+	consumer  string
+	logger    *slog.Logger
 }
 
-func NewAssistantMentionedConsumer(redis rtredis.Client, handler AssistantMentionHandler, consumer string, logger *slog.Logger) *AssistantMentionedConsumer {
+// NewAssistantMentionedConsumerWithTransport consumes the object-owned stream
+// through the preflighted runtime transport. The stream and consumer-group
+// identifiers remain assistant-owned constants.
+func NewAssistantMentionedConsumerWithTransport(
+	transport runtimemessaging.DurableDeliveryTransport,
+	handler AssistantMentionHandler,
+	consumer string,
+	logger *slog.Logger,
+) *AssistantMentionedConsumer {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -38,30 +50,42 @@ func NewAssistantMentionedConsumer(redis rtredis.Client, handler AssistantMentio
 	if consumer == "" {
 		consumer = "assistant-worker"
 	}
-	return &AssistantMentionedConsumer{redis: redis, handler: handler, consumer: consumer, logger: logger}
+	return &AssistantMentionedConsumer{
+		transport: transport,
+		handler:   handler,
+		consumer:  consumer,
+		logger:    logger,
+	}
 }
 
 func (c *AssistantMentionedConsumer) EnsureGroup(ctx context.Context) error {
-	if c == nil || c.redis == nil {
-		return fmt.Errorf("assistant mentioned consumer redis not configured")
+	if c == nil || c.transport == nil {
+		return fmt.Errorf("assistant mentioned consumer transport not configured")
 	}
-	return c.redis.XGroupCreateMkStream(ctx, AssistantMentionedStream, AssistantMentionedConsumerGroup, "0")
+	return c.transport.EnsureDurableConsumerGroup(
+		ctx,
+		AssistantMentionedStream,
+		AssistantMentionedConsumerGroup,
+		"0",
+	)
 }
 
 func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, error) {
-	if c == nil || c.redis == nil || c.handler == nil {
+	if c == nil || c.transport == nil || c.handler == nil {
 		return 0, fmt.Errorf("assistant mentioned consumer not configured")
 	}
 	if err := c.EnsureGroup(ctx); err != nil {
 		return 0, err
 	}
-	messages, err := c.redis.XReadGroup(
+	messages, err := c.transport.ReadDurable(
 		ctx,
-		AssistantMentionedConsumerGroup,
-		c.consumer,
-		map[string]string{AssistantMentionedStream: ">"},
-		10,
-		200*time.Millisecond,
+		runtimemessaging.StreamReadRequest{
+			Stream:   AssistantMentionedStream,
+			Group:    AssistantMentionedConsumerGroup,
+			Consumer: c.consumer,
+			Count:    10,
+			Block:    200 * time.Millisecond,
+		},
 	)
 	if err != nil {
 		return 0, err
@@ -70,12 +94,22 @@ func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, erro
 	for _, msg := range messages {
 		dedupKey := assistantMentionDedupKey(msg)
 		if dedupKey != "" {
-			claimed, err := c.redis.SetNX(ctx, dedupKey, msg.ID, assistantMentionDedupTTL)
+			claimed, err := c.transport.ClaimDurableDelivery(
+				ctx,
+				dedupKey,
+				msg.ID,
+				assistantMentionDedupTTL,
+			)
 			if err != nil {
 				return processed, err
 			}
 			if !claimed {
-				if err := c.redis.XAck(ctx, AssistantMentionedStream, AssistantMentionedConsumerGroup, msg.ID); err != nil {
+				if err := c.transport.AckDurable(
+					ctx,
+					AssistantMentionedStream,
+					AssistantMentionedConsumerGroup,
+					msg.ID,
+				); err != nil {
 					return processed, err
 				}
 				processed++
@@ -83,17 +117,53 @@ func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, erro
 			}
 		}
 		if err := c.processMessage(ctx, msg); err != nil {
-			c.logger.Error("assistant mentioned consume failed", "streamId", msg.ID, "err", err)
+			c.logger.Error(
+				"assistant mentioned consume failed",
+				"streamId",
+				msg.ID,
+				"errorDigest",
+				assistantMentionErrorDigest(err),
+			)
 			if dedupKey != "" {
-				_ = c.redis.Del(ctx, dedupKey)
+				_ = c.transport.ReleaseDurableDelivery(ctx, dedupKey)
 			}
-			if _, dlqErr := c.redis.XAdd(ctx, AssistantMentionedDeadLetter, deadLetterValues(msg, err)); dlqErr != nil {
+			if _, dlqErr := c.transport.PublishDeadLetter(
+				ctx,
+				runtimemessaging.DeadLetterMessage{
+					SourceStream:      AssistantMentionedStream,
+					DestinationStream: AssistantMentionedDeadLetter,
+					SourceID:          msg.ID,
+					Reason:            assistantMentionDeadLetterReason,
+					Fields:            deadLetterFields(msg, err),
+				},
+			); dlqErr != nil {
 				return processed, fmt.Errorf("assistant mentioned dlq: %w", dlqErr)
 			}
+			if expireErr := c.transport.SetDurableRetention(
+				ctx,
+				AssistantMentionedDeadLetter,
+				assistantMentionDeadLetterTTL,
+			); expireErr != nil {
+				return processed, fmt.Errorf("retain assistant mentioned dlq: %w", expireErr)
+			}
+			if ackErr := c.transport.AckDurable(
+				ctx,
+				AssistantMentionedStream,
+				AssistantMentionedConsumerGroup,
+				msg.ID,
+			); ackErr != nil {
+				return processed, fmt.Errorf("ack dead-lettered assistant mention: %w", ackErr)
+			}
+			application.RecordAssistantMentionedConsumerDLQ()
 			processed++
 			continue
 		}
-		if err := c.redis.XAck(ctx, AssistantMentionedStream, AssistantMentionedConsumerGroup, msg.ID); err != nil {
+		if err := c.transport.AckDurable(
+			ctx,
+			AssistantMentionedStream,
+			AssistantMentionedConsumerGroup,
+			msg.ID,
+		); err != nil {
 			return processed, err
 		}
 		processed++
@@ -128,27 +198,49 @@ func (c *AssistantMentionedConsumer) Run(ctx context.Context, interval time.Dura
 	}
 }
 
-func (c *AssistantMentionedConsumer) processMessage(ctx context.Context, msg rtredis.StreamMessage) error {
+func (c *AssistantMentionedConsumer) processMessage(
+	ctx context.Context,
+	msg runtimemessaging.StreamDelivery,
+) error {
 	return c.handler.HandleAssistantMentioned(ctx, application.AssistantMentionedEvent{
-		ConversationID:    msg.Values["conversationId"],
-		MessageID:         msg.Values["messageId"],
-		Seq:               int64Value(msg.Values["seq"]),
-		SenderID:          firstNonEmpty(msg.Values["senderId"], msg.Values["actorId"]),
-		Content:           msg.Values["content"],
-		AssistantMemberID: msg.Values["assistantMemberId"],
-		AssistantSkillID:  msg.Values["assistantSkillId"],
+		ConversationID:    durableFieldValue(msg.Fields, "conversationId"),
+		MessageID:         durableFieldValue(msg.Fields, "messageId"),
+		Seq:               int64Value(durableFieldValue(msg.Fields, "seq")),
+		SenderID:          firstNonEmpty(durableFieldValue(msg.Fields, "senderId"), durableFieldValue(msg.Fields, "actorId")),
+		Content:           durableFieldValue(msg.Fields, "content"),
+		AssistantMemberID: durableFieldValue(msg.Fields, "assistantMemberId"),
+		AssistantSkillID:  durableFieldValue(msg.Fields, "assistantSkillId"),
 	})
 }
 
-func deadLetterValues(msg rtredis.StreamMessage, err error) map[string]string {
-	values := map[string]string{
-		"streamId": msg.ID,
-		"error":    err.Error(),
+func deadLetterFields(
+	msg runtimemessaging.StreamDelivery,
+	err error,
+) []runtimemessaging.DurableField {
+	fields := make([]runtimemessaging.DurableField, 0, len(msg.Fields)+1)
+	for _, field := range msg.Fields {
+		switch field.Name {
+		case "error", "errorDigest", "reason", "sourceId":
+			continue
+		default:
+			fields = append(fields, field)
+		}
 	}
-	for key, value := range msg.Values {
-		values[key] = value
+	return append(
+		fields,
+		runtimemessaging.DurableField{
+			Name:  "errorDigest",
+			Value: assistantMentionErrorDigest(err),
+		},
+	)
+}
+
+func assistantMentionErrorDigest(err error) string {
+	if err == nil {
+		return ""
 	}
-	return values
+	sum := sha256.Sum256([]byte(err.Error()))
+	return hex.EncodeToString(sum[:])
 }
 
 func int64Value(raw string) int64 {
@@ -165,14 +257,23 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func assistantMentionDedupKey(msg rtredis.StreamMessage) string {
-	messageID := strings.TrimSpace(msg.Values["messageId"])
+func assistantMentionDedupKey(msg runtimemessaging.StreamDelivery) string {
+	messageID := strings.TrimSpace(durableFieldValue(msg.Fields, "messageId"))
 	if messageID == "" {
 		return ""
 	}
-	conversationID := strings.TrimSpace(msg.Values["conversationId"])
+	conversationID := strings.TrimSpace(durableFieldValue(msg.Fields, "conversationId"))
 	if conversationID == "" {
 		return "assistant:mention:processed:" + messageID
 	}
 	return "assistant:mention:processed:" + conversationID + ":" + messageID
+}
+
+func durableFieldValue(fields []runtimemessaging.DurableField, name string) string {
+	for _, field := range fields {
+		if field.Name == name {
+			return field.Value
+		}
+	}
+	return ""
 }

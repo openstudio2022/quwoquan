@@ -25,11 +25,14 @@ implementation:
     - quwoquan_service/services/content-service/internal/application/post/post_service.go
     - quwoquan_service/services/content-service/internal/application/post/post_publication.go
     - quwoquan_service/services/content-service/internal/application/post/query_facade.go
+    - quwoquan_service/services/content-service/internal/application/embedding/embedding_gateway.go
   store:
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_store.go
   outbox:
     - quwoquan_service/services/content-service/internal/application/post/outbox_relay.go
     - quwoquan_service/services/content-service/internal/infrastructure/messaging/post_lifecycle_stream_publisher.go
+    - quwoquan_service/services/content-service/internal/infrastructure/embedding/openai_compatible_gateway.go
+    - quwoquan_service/services/content-service/internal/infrastructure/recommendation/embedding_projector.go
   reader:
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_query_reader.go
   transport:
@@ -44,6 +47,9 @@ implementation:
 tests:
   local_contract:
     - quwoquan_service/services/content-service/internal/application/post/post_publication__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/infrastructure/recommendation/embedding_projector__local_contract_test.go
+    - quwoquan_service/services/content-service/internal/infrastructure/embedding/openai_compatible_gateway__local_contract_test.go
+    - quwoquan_service/services/content-service/cmd/api/main__local_contract_test.go
     - quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_query_facet__local_contract_test.go
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/mongo_post_store__local_contract_test.go
     - quwoquan_app/test/local_contract/cloud/content/post/contract/post_dto_contract__local_contract_test.dart
@@ -56,5 +62,6 @@ tests:
     - quwoquan_service/services/content-service/tests/api_integration/author_impact_evidence_contract__api_integration_test.go
   user_acceptance:
     - quwoquan_app/test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
-    - quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/patrol/content/content_draft_preservation_e2e__user_acceptance_test.dart
+    - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_media_publication_lifecycle_probe.py
 environments: []

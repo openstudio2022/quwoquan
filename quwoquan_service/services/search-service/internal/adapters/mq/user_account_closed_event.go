@@ -12,16 +12,16 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/search-service/internal/application"
 )
 
 var errUnsupportedUserAccountEvent = errors.New("unsupported user account event")
 
 func decodeUserAccountClosed(
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) (application.UserAccountClosedEvent, error) {
-	values := message.Values
+	values := durableFieldsToMap(message.Fields)
 	eventName := strings.TrimSpace(values["eventName"])
 	if eventName != application.UserAccountClosedEventName {
 		return application.UserAccountClosedEvent{}, fmt.Errorf(
@@ -117,12 +117,13 @@ func normalizePersonaIDs(values []string) []string {
 	return normalized
 }
 
-func userAccountClosedDeadLetterValues(
-	message rtredis.StreamMessage,
+func userAccountClosedDeadLetterFields(
+	message runtimemessaging.StreamDelivery,
 	cause error,
 	attempts int64,
-) map[string]string {
-	values := map[string]string{
+) []runtimemessaging.DurableField {
+	values := durableFieldsToMap(message.Fields)
+	deadLetterValues := map[string]string{
 		"sourceStream":   UserAccountEventStream,
 		"sourceStreamId": message.ID,
 		"attempts":       strconv.FormatInt(attempts, 10),
@@ -137,9 +138,45 @@ func userAccountClosedDeadLetterValues(
 		"payload",
 		"occurredAt",
 	} {
-		values[key] = message.Values[key]
+		deadLetterValues[key] = values[key]
+	}
+	fields := make([]runtimemessaging.DurableField, 0, len(deadLetterValues))
+	for _, key := range []string{
+		"sourceStream",
+		"sourceStreamId",
+		"attempts",
+		"errorDigest",
+		"deadLetteredAt",
+		"eventId",
+		"eventName",
+		"accountId",
+		"accountVersion",
+		"payload",
+		"occurredAt",
+	} {
+		fields = append(fields, runtimemessaging.DurableField{
+			Name:  key,
+			Value: deadLetterValues[key],
+		})
+	}
+	return fields
+}
+
+func durableFieldsToMap(fields []runtimemessaging.DurableField) map[string]string {
+	values := make(map[string]string, len(fields))
+	for _, field := range fields {
+		values[field.Name] = field.Value
 	}
 	return values
+}
+
+func durableFieldValue(fields []runtimemessaging.DurableField, name string) string {
+	for _, field := range fields {
+		if field.Name == name {
+			return field.Value
+		}
+	}
+	return ""
 }
 
 func irreversibleStreamDigest(value string) string {

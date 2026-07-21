@@ -11,7 +11,7 @@ fields:
   - { name: conversationId, type: string, required: true }
   - { name: turnId, type: string, required: true }
   - { name: seq, type: int, required: true }
-  - { name: eventType, type: string, required: true }
+  - { name: eventType, type: enum, enum_ref: AssistantStreamEventType, required: true }
   - { name: traceId, type: string, default: '' }
   - { name: payload, type: map, default: {} }
   - { name: runtimeFailure, type: object, ref: RuntimeFailureWire }

@@ -30,9 +30,10 @@
 
 - 群是圈子或组织主页中的子单元；群内默认开启 `交流`，交流复用 chat 域 Conversation 能力。
 - 群分为 `公共群` 与 `自建群`。
-- 小型群组默认 1 个公共群；大型群组在 500 人限制下支持多个公共群。
+- 单个 CircleGroup 的 active 成员上限与其绑定 Chat Conversation 统一为 **1000**；大型群组通过多个命名公共群或组织节点分流，禁止以异步投影静默丢失第 1001 名成员。
 - 组织型群组优先通过组织节点分流，而不是简单生成“大厅 2 / 大厅 3”。
-- 加入群组后默认加入 1 个公共群；退出群组后默认退出对应公共群，允许由上位治理者关闭自动同步。
+- CircleGroup 是成员、角色与归档生命周期的唯一写入者。它的 transactional outbox 依次驱动 Chat 名册投影，Chat 反向以 durable binding event 回写 `CircleGroup.conversationId`；不得由页面、同步 RPC 或 Chat HTTP 命令直接拼装/篡改绑定。
+- `CircleGroupMembership.active / left / removed / role_changed` 必须分别同步为 Chat 的成员加入、离群清理、角色更新；`CircleGroupArchived` 必须终止绑定会话并清理所有 ChatInbox 可达性。
 
 ### L3: circle-publishing-zone（群组层内容发布区）
 
@@ -52,6 +53,9 @@
 
 - 资料能力仍由 `contracts/metadata/social/circle_file/` 下的 typed contract 驱动；列表、单项读取和命令回执分别使用 `CircleFilePageSlice`、`CircleFileSlice` 和 `CircleFileCommandResult`，禁止以聚合存储模型或单项切片替代分页响应。
 - 群交流同步必须通过事件驱动而非同步 RPC。
+- 事件链必须是可重放的 Redis Stream + consumer group：`CircleGroupCreated/Archived` 和 `CircleGroupMembership*` 由 circle-service outbox relay 投递；chat-service 成功持久化后才 ACK；Chat 的 `CircleGroupConversationProvisioned` 由独立 durable relay 回写 circle-service。失败不得 ACK，达到受控重试上限必须写入有 TTL 的 DLQ 并触发健康检查/告警。
+- Chat 的普通 `AddMembers / RemoveMember / LeaveConversation / TransferOwnership / UpdateMemberRole / DissolveConversation` 不得成为圈群成员或角色的写入口；圈群场景统一返回 metadata 定义的“由圈群管理”结构化错误。Chat 可以保留消息级设置，但不得反向改变 CircleGroup 权威成员集合。
+- 绑定会话一律使用 `Conversation.circleGroupId` 作为唯一索引；`Circle.conversationId` 不是群绑定真相源。
 - 公共群由圈级或组织级治理者管理，自建群由成员发起并由群主治理。
 - 文件上传必须有大小校验和类型白名单。
 - 群协作能力必须与 `发布内容 + 笔记/作品/提问/口碑` 的群组层内容模型保持边界清晰。
@@ -59,5 +63,5 @@
 ## 验收重点
 
 - A1~A2：资料能力与权限模型可用。
-- A3~A5：公共群 / 自建群 / 自动同步规则可用。
+- A3~A5：公共群 / 自建群 / 自动同步规则可用；创建、成员激活、离开/移除、角色变更、归档、重复投递和乱序到达均能收敛到同一 Chat 名册与 CircleGroup 绑定。
 - A6：群组层公开内容发布区与群层协作边界清晰。

@@ -13,6 +13,7 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
+	circlecache "quwoquan_service/services/circle-service/internal/infrastructure/cache"
 )
 
 const placementProjectionInboxCollection = "circle_post_placement_projection_inbox"
@@ -111,6 +112,9 @@ func (projector *MongoPostCountProjector) Publish(ctx context.Context, event pla
 func (projector *MongoPostCountProjector) invalidateCircleCache(ctx context.Context, circleID string) error {
 	if err := projector.redis.Del(ctx, "cache:circle:"+strings.TrimSpace(circleID)); err != nil {
 		return fmt.Errorf("invalidate Circle post-count cache: %w", err)
+	}
+	if err := circlecache.InvalidateCircleDiscoveryFeed(ctx, projector.redis); err != nil {
+		return fmt.Errorf("invalidate Circle placement discovery cache: %w", err)
 	}
 	return nil
 }

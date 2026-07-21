@@ -46,8 +46,8 @@ scenarios:
         description: "Specific entity instance -> weighted affinity (e.g. places, brands)"
       - name: avgEngagementDepth
         type: float
-        source: rm_recommend_feature.userFeatures.avgEngagementDepth
-        description: "Running average of engagement depth level (0-4)"
+        derived: "engagementDepthSum / engagementDepthCount; 0 when count is zero"
+        description: "由宽表的原子累计 depth sum/count 在 FeatureStore 读时派生；禁止持久化单次 relay 覆盖的平均值"
       - name: sharedFolloweesCount
         type: int
         source: rm_recommend_feature.socialFeatures.intersection.sharedFolloweesCount
@@ -95,8 +95,8 @@ scenarios:
         description: "Combined social interest density"
       - name: typeENER
         type: map_float
-        source: rm_recommend_feature.userFeatures.typeENER
-        description: "Exposure-Normalized Engagement Rate per content type"
+        derived: "typeEngagements / typeImpressions"
+        description: "由宽表原子累计的曝光/互动计数在 FeatureStore 读时派生的内容类型 ENER"
         nullable: true
     item_features:
       - name: contentId

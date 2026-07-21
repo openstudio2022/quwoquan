@@ -8,6 +8,11 @@ mongo:
   database: "quwoquan_content"
   collection: "posts"
 
+# gamma-local 的 MinIO edge 启用内部 CA TLS；若沿用 default 的 HTTP，会生成
+# http presign URL 并在 object-storage 的 TLS listener 上得到 400。
+oss:
+  use_ssl: true
+
 redis:
   rec:
     mode: standalone
@@ -19,16 +24,11 @@ rec_model_service:
   timeout_ms: 100
   enabled: true
 
-# N2-3 gamma embedding 配置路径：写入管线（PostPublished → posts.embedding）
-# 的 endpoint/api_key/enabled 由部署 env 注入（EMBEDDING_ENDPOINT /
-# EMBEDDING_API_KEY / EMBEDDING_ENABLED，main.go env-first 解析），committed
-# config 不落 secret；未注入时保持 disabled 安全跳过。向量召回读通道
-# （vector_recall_enabled）保持 S0 flag-off（S1 内容池阈值达标后开启）。
+# gamma embedding 写入管线（PostPublished → posts.embedding）由唯一
+# content.embedding.EmbeddingGateway Binding 提供。endpoint 与凭据只在
+# infrastructure adapter 中读取；缺失时启动前检查必须失败。
 embedding:
-  endpoint: ""
-  api_key: ""
-  model: "text-embedding-3-small"
-  enabled: false
+  enabled: true
   vector_recall_enabled: false
 
 # gamma runs the dedicated ES cluster; endpoints are injected via SEARCH_ES_ENDPOINTS

@@ -23,9 +23,9 @@ func TestCredentialBindingFacadeUsesUniqueConstraintForConflictAndNoop(t *testin
 		bindingapp.WithClock(func() time.Time { return now }),
 	)
 	command := bindingapp.BindCredentialCommand{
-		CredentialType: bindingmodel.CredentialTypeWechat,
-		CredentialKey:  "wechat-subject-ref",
-		DisplayLabel:   "微信",
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+		CredentialKey:  "federated-subject-ref",
+		DisplayLabel:   "联邦账号",
 	}
 
 	first, err := facade.BindVerifiedCredential(
@@ -67,9 +67,9 @@ func TestCredentialBindingFacadeUsesUniqueConstraintForConflictAndNoop(t *testin
 		context.Background(),
 		"account-1",
 		bindingapp.BindCredentialCommand{
-			CredentialType: bindingmodel.CredentialTypeWechat,
-			CredentialKey:  "another-wechat-subject-ref",
-			DisplayLabel:   "另一个微信",
+			CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+			CredentialKey:  "another-federated-subject-ref",
+			DisplayLabel:   "另一个联邦账号",
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "USER.AUTH.credential_conflict") {
@@ -110,15 +110,15 @@ func TestCredentialBindingFacadeProtectsLastCredentialAndRetriesCAS(t *testing.T
 	}
 
 	if _, err := facade.BindVerifiedCredential(context.Background(), "account-1", bindingapp.BindCredentialCommand{
-		CredentialType: bindingmodel.CredentialTypeWechat,
-		CredentialKey:  "wechat-subject-ref",
-		DisplayLabel:   "微信",
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+		CredentialKey:  "federated-subject-ref",
+		DisplayLabel:   "联邦账号",
 	}); err != nil {
 		t.Fatalf("绑定第二种可恢复凭证: %v", err)
 	}
 	store.failNextRevokeCAS()
 	revoked, err := facade.UnbindCredential(ctx, bindingapp.UnbindCredentialCommand{
-		CredentialType: bindingmodel.CredentialTypeWechat,
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
 	})
 	if err != nil {
 		t.Fatalf("CAS 重试后吊销第二凭证: %v", err)
@@ -135,7 +135,7 @@ func TestCredentialBindingFacadeProtectsLastCredentialAndRetriesCAS(t *testing.T
 	}
 
 	replayed, err := facade.UnbindCredential(ctx, bindingapp.UnbindCredentialCommand{
-		CredentialType: bindingmodel.CredentialTypeWechat,
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
 	})
 	if err != nil {
 		t.Fatalf("重复吊销: %v", err)
@@ -148,14 +148,14 @@ func TestCredentialBindingFacadeProtectsLastCredentialAndRetriesCAS(t *testing.T
 	}
 
 	_, err = facade.BindVerifiedCredential(context.Background(), "account-1", bindingapp.BindCredentialCommand{
-		CredentialType: bindingmodel.CredentialTypeWechat,
-		CredentialKey:  "wechat-subject-ref",
-		DisplayLabel:   "微信",
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+		CredentialKey:  "federated-subject-ref",
+		DisplayLabel:   "联邦账号",
 	})
 	if err == nil || !strings.Contains(err.Error(), "USER.AUTH.credential_conflict") {
 		t.Fatalf("revoked identity 不得被重新激活，得到: %v", err)
 	}
-	if store.mustLoad(t, "account-1", bindingmodel.CredentialTypeWechat).
+	if store.mustLoad(t, "account-1", bindingmodel.CredentialTypeFederatedSlotA).
 		Snapshot().Status != bindingmodel.StatusRevoked {
 		t.Fatal("重绑失败后原 identity 必须保持 revoked")
 	}
@@ -179,11 +179,11 @@ func TestCredentialBindingFacadeKeepsEventTimeMonotonicAcrossClockSkew(
 			BoundAt:        databaseNow,
 		},
 		{
-			ID:             "binding-wechat",
+			ID:             "binding-federated",
 			OwnerID:        "account-clock-skew",
-			CredentialType: bindingmodel.CredentialTypeWechat,
-			CredentialKey:  "wechat-clock-skew",
-			EventID:        "event-wechat-bound",
+			CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+			CredentialKey:  "federated-clock-skew",
+			EventID:        "event-federated-bound",
 			BoundAt:        databaseNow,
 		},
 	} {
@@ -203,7 +203,7 @@ func TestCredentialBindingFacadeKeepsEventTimeMonotonicAcrossClockSkew(
 	result, err := facade.UnbindCredential(
 		credentialActorContext("account-clock-skew"),
 		bindingapp.UnbindCredentialCommand{
-			CredentialType: bindingmodel.CredentialTypeWechat,
+			CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
 		},
 	)
 	if err != nil {

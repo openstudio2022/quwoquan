@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """构建运维运营 Portal 的不可变生产静态包。
 
-产物落 `QWQ_OUTPUT_ROOT/env/prod/release/ops-portal/<version>/dist`，并把
+产物落 `QWQ_DEPLOY_WORK_ROOT/prod-hosted/packages/ops-portal/<version>/dist`，并把
 `current` 符号链接指向该版本；`render_prod_plane_stack.py` 渲染 service plane
 时会将 `current/dist` 复制进 `runtime/portal` 随发布同步到远端。
 
@@ -25,7 +25,11 @@ ROOT = Path(__file__).resolve().parents[3]
 PORTAL_DIR = ROOT / "quwoquan_ops" / "portal"
 sys.path.insert(0, str(ROOT / "quwoquan_ops" / "cli"))
 
-from lib.output_paths import output_root as resolve_output_root  # noqa: E402
+from lib.output_paths import (  # noqa: E402
+    deployment_target_for_env,
+    deployment_work_root,
+    portal_deployment_package_dir,
+)
 
 
 def main() -> int:
@@ -39,6 +43,7 @@ def main() -> int:
     parser.add_argument("--oidc-audience", required=True, help="生产控制面 API audience")
     parser.add_argument("--oidc-scope", required=True, help="IdP 登记的 Portal 最小 scope 集")
     parser.add_argument("--skip-install", action="store_true", help="跳过 npm install（CI 已缓存依赖时使用）")
+    parser.add_argument("--target", default="", help="prod deployment target（默认 prod-hosted）")
     args = parser.parse_args()
 
     version = args.version.strip()
@@ -55,6 +60,10 @@ def main() -> int:
         raise SystemExit("FAIL: --oidc-client-id and --oidc-audience are required")
     if "openid" not in scopes or len(scopes) < 2:
         raise SystemExit("FAIL: --oidc-scope must include openid and operator scopes")
+    try:
+        target_name = deployment_target_for_env("prod", target=args.target)
+    except ValueError as exc:
+        raise SystemExit(f"FAIL: {exc}") from exc
 
     if not args.skip_install:
         subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd=PORTAL_DIR, check=True)
@@ -62,6 +71,10 @@ def main() -> int:
     env = dict(os.environ)
     env.update(
         {
+            "QWQ_DEPLOY_WORK_ROOT": str(
+                deployment_work_root(target_name).parent
+            ),
+            "QWQ_DEPLOY_TARGET": target_name,
             "VITE_PRODUCT_OPS_BASE_URL": args.ops_base_url,
             "VITE_PLATFORM_OPS_BASE_URL": args.ops_base_url,
             "VITE_CONTENT_SERVICE_BASE_URL": args.content_base_url,
@@ -75,13 +88,11 @@ def main() -> int:
     )
     subprocess.run(["npm", "run", "build"], cwd=PORTAL_DIR, check=True, env=env)
 
-    build_dist = (
-        resolve_output_root() / "env" / "repo" / "local" / "ops-portal" / "process" / "dist"
-    )
+    build_dist = deployment_work_root(target_name) / "build" / "ops-portal"
     if not build_dist.is_dir():
         raise SystemExit(f"FAIL: vite build output missing: {build_dist}")
 
-    release_root = resolve_output_root() / "env" / "prod" / "release" / "ops-portal"
+    release_root = portal_deployment_package_dir("prod", target=target_name)
     version_dir = release_root / version
     if version_dir.exists():
         raise SystemExit(f"FAIL: release version already exists (immutable): {version_dir}")

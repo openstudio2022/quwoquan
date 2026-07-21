@@ -9,6 +9,17 @@ events:
     payload_entity: Conversation
     payload_fields: [conversationId, type, creatorId, circleId, circleGroupId, maxGroupSize, receiptEnabled, createdAt]
 
+  - name: CircleGroupConversationProvisioned
+    description: |
+      chat-service 已为 CircleGroup 成功持久化唯一 Conversation 的绑定事实。
+      circle-service consumer 必须以 eventId 幂等回写 CircleGroup.conversationId；未持久化
+      或投递失败时不得确认 source event，禁止用同步 RPC 或客户端字段替代此链路。
+    producer: chat-service
+    consumers: [circle-group-conversation-binding-projector]
+    channel: transactional_outbox
+    payload_entity: Conversation
+    payload_fields: [conversationId, circleId, circleGroupId, creatorId, createdAt]
+
   - name: ConversationRosterUpdated
     description: |
       会话成员或群资料变更后的合并刷新信号。客户端以

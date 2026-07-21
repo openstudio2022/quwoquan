@@ -1,25 +1,14 @@
 package model
 
-import "context"
-
-type Provider string
-
-const (
-	ProviderBaidu   Provider = "baidu"
-	ProviderAMap    Provider = "amap"
-	ProviderCatalog Provider = "catalog"
-)
-
 type POI struct {
-	ID             string   `json:"id"`
-	Provider       Provider `json:"provider"`
-	Name           string   `json:"name"`
-	Address        string   `json:"address,omitempty"`
-	Latitude       float64  `json:"latitude"`
-	Longitude      float64  `json:"longitude"`
-	DistanceMeters int      `json:"distanceMeters,omitempty"`
-	CityCode       string   `json:"cityCode,omitempty"`
-	AdCode         string   `json:"adCode,omitempty"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Address        string  `json:"address,omitempty"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	DistanceMeters int     `json:"distanceMeters,omitempty"`
+	CityCode       string  `json:"cityCode,omitempty"`
+	AdCode         string  `json:"adCode,omitempty"`
 }
 
 type NearbyQuery struct {
@@ -35,10 +24,4 @@ type SearchQuery struct {
 	Lat      float64
 	Lng      float64
 	Limit    int
-}
-
-type ProviderClient interface {
-	Name() Provider
-	Nearby(ctx context.Context, q NearbyQuery) ([]POI, error)
-	Search(ctx context.Context, q SearchQuery) ([]POI, error)
 }

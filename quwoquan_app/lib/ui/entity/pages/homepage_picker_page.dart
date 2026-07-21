@@ -523,7 +523,16 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             if ((summary.address ?? '').trim().isNotEmpty)
               summary.address!.trim(),
           ].join(' · ');
-    return detail.isEmpty ? typeLabel : '$typeLabel · $detail';
+    final rating = summary.averageRating;
+    final ratingSummary = rating == null || summary.ratingCount <= 0
+        ? ''
+        : '${rating.toStringAsFixed(1)} · '
+            '${UITextConstants.homepageRatingCount(summary.ratingCount)}';
+    return <String>[
+      typeLabel,
+      if (detail.isNotEmpty) detail,
+      if (ratingSummary.isNotEmpty) ratingSummary,
+    ].join(' · ');
   }
 
   Future<void> _openSuggestPage() async {

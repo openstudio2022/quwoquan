@@ -13,33 +13,33 @@ import (
 	accountports "quwoquan_service/services/user-service/internal/domain/account/user_account/ports"
 )
 
-// CloseOutboxStore 持久化 UserAccountClosed 的租约与投递结果。
-type CloseOutboxStore struct {
+// UserAccountOutboxStore 持久化 UserAccount 生命周期事件的租约与投递结果。
+type UserAccountOutboxStore struct {
 	pool *pgxpool.Pool
 }
 
-func NewCloseOutboxStore(pool *pgxpool.Pool) (*CloseOutboxStore, error) {
+func NewUserAccountOutboxStore(pool *pgxpool.Pool) (*UserAccountOutboxStore, error) {
 	if pool == nil {
-		return nil, errors.New("UserAccount close outbox store requires PostgreSQL")
+		return nil, errors.New("UserAccount outbox store requires PostgreSQL")
 	}
-	return &CloseOutboxStore{pool: pool}, nil
+	return &UserAccountOutboxStore{pool: pool}, nil
 }
 
-var _ accountports.CloseOutboxStore = (*CloseOutboxStore)(nil)
+var _ accountports.UserAccountOutboxStore = (*UserAccountOutboxStore)(nil)
 
-func (store *CloseOutboxStore) ClaimReady(
+func (store *UserAccountOutboxStore) ClaimReady(
 	ctx context.Context,
 	owner string,
 	now time.Time,
 	lease time.Duration,
-) (accountports.CloseOutboxEvent, bool, error) {
+) (accountports.UserAccountOutboxEvent, bool, error) {
 	owner = strings.TrimSpace(owner)
 	if owner == "" || lease <= 0 {
-		return accountports.CloseOutboxEvent{}, false, errors.New(
-			"UserAccount close outbox claim requires owner and positive lease",
+		return accountports.UserAccountOutboxEvent{}, false, errors.New(
+			"UserAccount outbox claim requires owner and positive lease",
 		)
 	}
-	var event accountports.CloseOutboxEvent
+	var event accountports.UserAccountOutboxEvent
 	err := store.pool.QueryRow(ctx, `
 WITH candidate AS (
   SELECT event_id
@@ -78,18 +78,18 @@ RETURNING
 		&event.DeliveryAttempt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return accountports.CloseOutboxEvent{}, false, nil
+		return accountports.UserAccountOutboxEvent{}, false, nil
 	}
 	if err != nil {
-		return accountports.CloseOutboxEvent{}, false, fmt.Errorf(
-			"claim UserAccount close outbox: %w",
+		return accountports.UserAccountOutboxEvent{}, false, fmt.Errorf(
+			"claim UserAccount outbox: %w",
 			err,
 		)
 	}
 	return event, true, nil
 }
 
-func (store *CloseOutboxStore) MarkPublished(
+func (store *UserAccountOutboxStore) MarkPublished(
 	ctx context.Context,
 	eventID string,
 	owner string,
@@ -107,15 +107,15 @@ WHERE event_id=$1 AND lease_owner=$2 AND published_at IS NULL`,
 		publishedAt.UTC(),
 	)
 	if err != nil {
-		return fmt.Errorf("mark UserAccount close outbox published: %w", err)
+		return fmt.Errorf("mark UserAccount outbox published: %w", err)
 	}
 	if tag.RowsAffected() != 1 {
-		return errors.New("UserAccount close outbox lease lost before publish ack")
+		return errors.New("UserAccount outbox lease lost before publish ack")
 	}
 	return nil
 }
 
-func (store *CloseOutboxStore) MarkFailed(
+func (store *UserAccountOutboxStore) MarkFailed(
 	ctx context.Context,
 	eventID string,
 	owner string,
@@ -139,10 +139,10 @@ WHERE event_id=$1 AND lease_owner=$2 AND published_at IS NULL`,
 		lastError,
 	)
 	if err != nil {
-		return fmt.Errorf("mark UserAccount close outbox failed: %w", err)
+		return fmt.Errorf("mark UserAccount outbox failed: %w", err)
 	}
 	if tag.RowsAffected() != 1 {
-		return errors.New("UserAccount close outbox lease lost before failure ack")
+		return errors.New("UserAccount outbox lease lost before failure ack")
 	}
 	return nil
 }

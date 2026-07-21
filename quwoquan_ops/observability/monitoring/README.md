@@ -41,3 +41,19 @@ podman compose -f quwoquan_ops/observability/monitoring/docker-compose.prod.yml 
   对应告警在 `quwoquan_l4_infrastructure` 组（整体负荷 + 毛刺双阈值）。
 
 告警规则的阈值与业务 SLO 仍以各自 metadata/policy 为准；本目录不复制阈值。
+
+## 媒体发布处置
+
+- `Media processing SLI` 面板按 `media_type`、`input_size_class`、`result` 查看处理量，
+  并用 `complete_to_ready`、outbox 最旧事件年龄与 DLQ 准入年龄定位发布不可见问题。
+- outbox oldest-event age 或 complete-to-ready 告警触发时，先确认
+  `content_media_processing_worker` readiness、checkpoint lease、工作目录剩余空间、
+  MinIO 与 FFmpeg；基础设施故障必须保留 checkpoint 重试，不能把资产置为 rejected。
+- DLQ 告警只允许按持久化的 source identity、cursor、reason 修复后受控重放；DLQ 中
+  不含原始 payload，禁止通过临时旁路重建事件。
+- 发布漏斗和预览轨道的小时权威数据来自
+  `app-product-telemetry-content-publication-funnel-hourly` 与
+  `app-product-telemetry-video-preview-track-load-hourly`。`correlationHash` 仅用于
+  SLS raw 明细关联，禁止加入 Prometheus 标签或聚合维度。
+- beta/gamma/prod 的 SLS 读回需要已注入对应凭据和部署审批；缺少真实 series 时保持
+  `unavailable`，不得把本地 Prometheus 或 Mock 结果当作环境准出证据。

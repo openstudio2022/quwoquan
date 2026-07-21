@@ -29,3 +29,25 @@ func TestCircleFileFixtureMappingUsesCurrentMediaAssetContract(t *testing.T) {
 		t.Fatalf("fixture timestamps must be parsed: %#v", file)
 	}
 }
+
+func TestContentFixtureSeedsActiveCirclePostPlacement(t *testing.T) {
+	post := contentFixturePost{
+		PostID:    "fixture_post_tech_001",
+		CircleIDs: []string{"fixture_circle_tech_01"},
+		CreatedAt: "2026-07-21T00:00:00Z",
+		UpdatedAt: "2026-07-21T00:01:00Z",
+	}
+
+	placementID, placement := circlePlacementDocFromFixture(
+		post,
+		"fixture_circle_tech_01",
+	)
+	if placementID != "fixture_placement_fixture_circle_tech_01_fixture_post_tech_001" {
+		t.Fatalf("unexpected deterministic placement id %q", placementID)
+	}
+	if placement["circleId"] != "fixture_circle_tech_01" ||
+		placement["postId"] != "fixture_post_tech_001" ||
+		placement["state"] != "active" {
+		t.Fatalf("fixture placement must be feed-readable: %#v", placement)
+	}
+}

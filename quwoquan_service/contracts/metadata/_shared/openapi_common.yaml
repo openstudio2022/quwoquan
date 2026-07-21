@@ -265,9 +265,11 @@ components:
             - USER
             - CHAT
             - RTC
+            - REALTIME
             - OPS
             - ASSISTANT
             - NOTIFICATION
+            - TAG
             - DB
             - MQ
             - CACHE

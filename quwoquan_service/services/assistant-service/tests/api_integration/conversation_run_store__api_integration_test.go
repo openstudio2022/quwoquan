@@ -47,6 +47,64 @@ func assistantAPIRequest(
 	return recorder
 }
 
+type assistantSSEEventFrame struct {
+	id        string
+	seq       int
+	eventType string
+}
+
+func parseAssistantSSEEventFrames(
+	t *testing.T,
+	body string,
+) []assistantSSEEventFrame {
+	t.Helper()
+	frames := make([]assistantSSEEventFrame, 0)
+	for _, rawFrame := range strings.Split(body, "\n\n") {
+		frame := strings.TrimSpace(rawFrame)
+		if frame == "" {
+			continue
+		}
+		var eventID string
+		dataLines := make([]string, 0)
+		for _, line := range strings.Split(frame, "\n") {
+			switch {
+			case strings.HasPrefix(line, "id:"):
+				eventID = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
+			case strings.HasPrefix(line, "data:"):
+				dataLines = append(
+					dataLines,
+					strings.TrimSpace(strings.TrimPrefix(line, "data:")),
+				)
+			}
+		}
+		if eventID == "" || len(dataLines) == 0 {
+			t.Fatalf("invalid assistant SSE frame: %q", rawFrame)
+		}
+		var envelope struct {
+			Seq       int    `json:"seq"`
+			EventType string `json:"eventType"`
+		}
+		if err := json.Unmarshal(
+			[]byte(strings.Join(dataLines, "\n")),
+			&envelope,
+		); err != nil {
+			t.Fatalf("decode assistant SSE frame: %v", err)
+		}
+		if envelope.Seq <= 0 || envelope.EventType == "" {
+			t.Fatalf("invalid assistant SSE envelope: %#v", envelope)
+		}
+		frames = append(frames, assistantSSEEventFrame{
+			id:        eventID,
+			seq:       envelope.Seq,
+			eventType: envelope.EventType,
+		})
+	}
+	if len(frames) == 0 {
+		t.Fatalf("assistant SSE response has no frames: %q", body)
+	}
+	return frames
+}
+
 // TestAssistantConversationCreatePersistedAndIdempotent 验证一次创建：
 // 会话持久化到 assistant_conversations，相同 clientRequestId 重放返回首个会话，
 // 新服务实例（模拟重启）仍可读。
@@ -215,6 +273,7 @@ func TestAssistantRunStreamResumeSemantics(t *testing.T) {
 	if stream.Code != http.StatusOK || !strings.Contains(stream.Body.String(), "event:") {
 		t.Fatalf("first stream status=%d body=%s", stream.Code, stream.Body.String())
 	}
+	initialEvents := parseAssistantSSEEventFrames(t, stream.Body.String())
 	var stored assistant.AssistantTurn
 	if err := integrationMongoDB.Collection("assistant_runs").
 		FindOne(ctx, bson.M{"_id": run.TurnID}).Decode(&stored); err != nil {
@@ -231,7 +290,40 @@ func TestAssistantRunStreamResumeSemantics(t *testing.T) {
 	}
 	if !strings.Contains(resume.Body.String(), stored.StreamState.ResumeToken) &&
 		!strings.Contains(resume.Body.String(), run.TurnID) {
-		t.Fatalf("resume must replay persisted terminal event: body=%s", resume.Body.String())
+		t.Fatalf("terminal replay must include its persisted identity: body=%s", resume.Body.String())
+	}
+
+	// 使用服务端签发的首个 event id 重新建连。该请求必须只返回严格更大的
+	// 序号，证明 Mongo event journal、HTTP Last-Event-ID 和单次 run 的
+	// SSE transport 共同满足断点续传语义。
+	resumeRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/assistant/runs/"+run.TurnID+"/events",
+		nil,
+	)
+	resumeRequest.Header.Set("X-Client-User-Id", "user-sse")
+	resumeRequest.Header.Set("Last-Event-ID", initialEvents[0].id)
+	resumedRecorder := httptest.NewRecorder()
+	restarted.ServeHTTP(resumedRecorder, resumeRequest)
+	if resumedRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"Last-Event-ID resume status=%d body=%s",
+			resumedRecorder.Code,
+			resumedRecorder.Body.String(),
+		)
+	}
+	resumedEvents := parseAssistantSSEEventFrames(
+		t,
+		resumedRecorder.Body.String(),
+	)
+	for _, event := range resumedEvents {
+		if event.seq <= initialEvents[0].seq {
+			t.Fatalf(
+				"resumed event must advance strictly: resumeAfter=%d event=%#v",
+				initialEvents[0].seq,
+				event,
+			)
+		}
 	}
 }
 

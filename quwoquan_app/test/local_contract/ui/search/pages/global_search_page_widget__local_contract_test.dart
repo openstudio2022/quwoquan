@@ -13,9 +13,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -110,7 +110,7 @@ Widget _buildApp({
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
       ),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       assistantXiaoquSearchFacetProvider.overrideWithValue(
         _FakeAssistantRepository(),
       ),

@@ -1,0 +1,8 @@
+read_model: ChatMessageSyncSlice
+description: Ordered incremental message synchronization envelope after a client sequence watermark.
+storage_backend: mongodb
+collection: messages
+source_entities: [Message]
+fields:
+  - {name: messages, type: array}
+  - {name: hasMore, type: bool}

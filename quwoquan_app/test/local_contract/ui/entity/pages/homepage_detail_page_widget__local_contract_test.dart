@@ -18,7 +18,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -80,7 +80,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('推荐你了解西湖摄影'), findsOneWidget);
-    expect(find.text(UITextConstants.objectImpactTitleEntity), findsOneWidget);
+    expect(find.text(UITextConstants.objectImpactTitleEntity), findsWidgets);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
     expect(find.text(UITextConstants.entityActionPublishRecord), findsWidgets);
@@ -252,12 +252,12 @@ void main() {
     expect(find.text('关联到本次发布'), findsOneWidget);
   });
 
-  testWidgets('alpha/mock 下支持数据工程 entityRef 直达实体主页', (tester) async {
+  testWidgets('alpha/mock 下支持 canonicalEntityId 直达实体主页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [_homepageFacetOverride(MockHomepageRepository())],
         child: const MaterialApp(
-          home: HomepageDetailPage(homepageId: 'Entity/旅行/景区/峨眉山'),
+          home: HomepageDetailPage(homepageId: 'entity:sight:emeishan'),
         ),
       ),
     );

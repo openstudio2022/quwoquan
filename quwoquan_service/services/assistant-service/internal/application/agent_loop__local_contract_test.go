@@ -148,8 +148,8 @@ func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 	if failure != nil {
 		t.Fatalf("failure=%#v", failure)
 	}
-	if len(events) < 20 {
-		t.Fatalf("events=%d, want at least 20", len(events))
+	if len(events) < 10 {
+		t.Fatalf("events=%d, want at least 10", len(events))
 	}
 	for i, event := range events {
 		if event.Seq != uint64(i+1) {
@@ -160,31 +160,21 @@ func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 		}
 	}
 	wantEvents := []string{
-		"assistant.turn.started",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.trace",
-		"assistant.journey.updated",
-		"assistant.process_timeline.updated",
-		"assistant.skill.selected",
-		"assistant.reasoning.started",
-		"assistant.plan.updated",
-		"assistant.model.delta",
-		"assistant.search_query.generated",
-		"assistant.tool.requested",
-		"assistant.tool.completed",
-		"assistant.observation.assessed",
-		"assistant.answer.delta",
+		string(AssistantStreamEventRunStarted),
+		string(AssistantStreamEventProcessReplace),
+		string(AssistantStreamEventProcessAppend),
+		string(AssistantStreamEventProcessCommit),
+		string(AssistantStreamEventProcessAppend),
+		string(AssistantStreamEventProcessCommit),
+		string(AssistantStreamEventAnswerDelta),
+		string(AssistantStreamEventProcessCommit),
+		string(AssistantStreamEventCompleted),
 	}
 	cursor := 0
 	for _, want := range wantEvents {
 		found := false
 		for cursor < len(events) {
-			if events[cursor].Event == want {
+			if events[cursor].EventType == want {
 				found = true
 				cursor++
 				break
@@ -203,25 +193,23 @@ func TestAgentLoop_RunTurnStream_CompletesNarrativeAnswer(t *testing.T) {
 	}
 	finalText := ""
 	for _, event := range events {
-		if event.Event == "assistant.answer.final" {
-			finalText, _ = event.Payload["text"].(string)
+		if event.EventType == string(AssistantStreamEventCompleted) {
+			finalText, _ = event.Payload["finalAnswer"].(string)
 		}
 	}
 	if !strings.Contains(finalText, "最终回答") {
 		t.Fatalf("final text=%q", finalText)
 	}
-	var toolUse assistant.ToolUse
 	for _, event := range events {
-		if event.Event == "assistant.tool.requested" {
-			toolUse, _ = event.Payload["toolUse"].(assistant.ToolUse)
-			break
+		if _, exists := event.Payload["debugTrace"]; exists {
+			t.Fatalf("stream event %q must not expose debugTrace", event.EventType)
 		}
-	}
-	if toolUse.ToolName == "" {
-		t.Fatalf("toolUse payload missing")
-	}
-	if toolUse.Status != "requested" {
-		t.Fatalf("toolUse=%#v", toolUse)
+		if _, exists := event.Payload["reasoning"]; exists {
+			t.Fatalf("stream event %q must not expose reasoning", event.EventType)
+		}
+		if _, exists := event.Payload["toolUse"]; exists {
+			t.Fatalf("stream event %q must not expose toolUse", event.EventType)
+		}
 	}
 }
 
@@ -246,7 +234,7 @@ func TestAgentLoopEmitsProviderTextDeltasWithoutSyntheticChunking(t *testing.T) 
 	}
 	deltas := []string{}
 	for _, event := range events {
-		if event.EventType == "partial_answer" {
+		if event.EventType == string(AssistantStreamEventAnswerDelta) {
 			deltas = append(deltas, stringValue(event.Payload["text"]))
 		}
 	}
@@ -288,7 +276,7 @@ func TestAgentLoop_RunTurnStream_ToolFailureReturnsRuntimeFailure(t *testing.T) 
 	if failure == nil {
 		t.Fatal("expected failure")
 	}
-	if got := events[len(events)-1].Event; got != "assistant.turn.failed" {
+	if got := events[len(events)-1].EventType; got != string(AssistantStreamEventFailed) {
 		t.Fatalf("last event=%q", got)
 	}
 	if events[len(events)-1].RuntimeFailure == nil {
@@ -302,26 +290,26 @@ func TestBuildRetrievalProcessing_MergesModelAndToolAcceptedReferences(t *testin
 		Tool: ToolExecution{Completed: assistant.ToolUse{Result: map[string]any{
 			"reliable": true,
 			"references": []map[string]any{
-				{"title": "forecast", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_forecast"},
-				{"title": "geocoding", "url": "https://open-meteo.com/en/docs/geocoding-api", "source": "open_meteo_geocoding"},
-				{"title": "docs", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_docs"},
+				{"title": "forecast", "url": "https://www.weather.com.cn/", "source": "weather_com_cn"},
+				{"title": "geocoding", "url": "https://www.nmc.cn/", "source": "national_meteorological_center"},
+				{"title": "docs", "url": "https://www.cma.gov.cn/", "source": "china_meteorological_administration"},
 			},
 		}}},
 		EvidenceStructuredDelta: map[string]any{
 			"retrievalProcessing": map[string]any{
 				"processingSummary": "模型只接纳 forecast 作为可展示证据。",
 				"acceptedReferences": []map[string]any{
-					{"title": "forecast", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_forecast"},
+					{"title": "forecast", "url": "https://www.weather.com.cn/", "source": "weather_com_cn"},
 				},
 			},
 		},
 	}
 	result := buildRetrievalProcessingForStep(step)
-	if result["searchedDocumentCount"] != 3 || result["processedDocumentCount"] != 3 || result["acceptedDocumentCount"] != 2 {
+	if result["searchedDocumentCount"] != 3 || result["processedDocumentCount"] != 3 || result["acceptedDocumentCount"] != 3 {
 		t.Fatalf("counts=%#v", result)
 	}
 	refs, ok := result["acceptedReferences"].([]map[string]any)
-	if !ok || len(refs) != 2 {
+	if !ok || len(refs) != 3 {
 		t.Fatalf("accepted refs=%#v", result["acceptedReferences"])
 	}
 }
@@ -738,7 +726,7 @@ func (r staticSkillRuntime) SelectSkill(context.Context, assistant.AssistantTurn
 	return r.selection, nil
 }
 
-func TestAgentLoop_RunTurnStream_DeviceActionEmitsConfirmation(t *testing.T) {
+func TestAgentLoop_RunTurnStream_UnwiredDeviceActionFailsClosed(t *testing.T) {
 	now := time.Date(2026, 4, 29, 5, 20, 0, 0, time.UTC)
 	loop := NewAgentLoop(
 		staticSkillRuntime{selection: SkillSelection{
@@ -775,23 +763,18 @@ func TestAgentLoop_RunTurnStream_DeviceActionEmitsConfirmation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunTurn() error = %v", err)
 	}
-	if failure != nil {
-		t.Fatalf("unexpected failure: %#v", failure)
+	if failure == nil {
+		t.Fatal("unwired device action must fail closed")
 	}
-	found := false
 	for _, event := range events {
-		if event.EventType == "user_confirmation_requested" {
-			found = true
-			toolUse, ok := event.Payload["toolUse"].(assistant.ToolUse)
-			if !ok {
-				t.Fatalf("toolUse payload type=%T", event.Payload["toolUse"])
-			}
-			if toolUse.Placement != "device_action" || !toolUse.RequiresConfirmation {
-				t.Fatalf("toolUse=%#v", toolUse)
+		if event.EventType == string(AssistantStreamEventFailed) &&
+			event.RuntimeFailure == nil {
+			t.Fatalf("failed event missing runtime failure: %#v", event)
+		}
+		for _, blocked := range []string{"actionType", "routeId", "toolUse"} {
+			if _, exists := event.Payload[blocked]; exists {
+				t.Fatalf("user stream leaked device-action field %q: %#v", blocked, event.Payload)
 			}
 		}
-	}
-	if !found {
-		t.Fatalf("missing user_confirmation_requested event in %#v", events)
 	}
 }

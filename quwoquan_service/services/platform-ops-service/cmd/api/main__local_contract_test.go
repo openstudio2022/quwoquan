@@ -332,13 +332,13 @@ func TestPlatformGrayRoutingPolicyIsReadOnlySnapshot(t *testing.T) {
 	}
 	var payload struct {
 		Policy struct {
-			Enabled    bool `json:"enabled"`
-			Dimensions struct {
+			Enabled         bool `json:"enabled"`
+			StageDimensions map[string]struct {
 				AppVersions []string `json:"appVersions"`
-				UserIds     []string `json:"userIds"`
+				UserIDs     []string `json:"userIds"`
 				Provinces   []string `json:"provinces"`
 				Carriers    []string `json:"carriers"`
-			} `json:"dimensions"`
+			} `json:"stageDimensions"`
 		} `json:"policy"`
 		SourcePath string `json:"sourcePath"`
 		RawYaml    string `json:"rawYaml"`
@@ -349,9 +349,16 @@ func TestPlatformGrayRoutingPolicyIsReadOnlySnapshot(t *testing.T) {
 	if payload.SourcePath == "" || payload.RawYaml == "" {
 		t.Fatalf("policy must expose IaC source path and raw yaml: %+v", payload)
 	}
-	if payload.Policy.Dimensions.AppVersions == nil || payload.Policy.Dimensions.UserIds == nil ||
-		payload.Policy.Dimensions.Provinces == nil || payload.Policy.Dimensions.Carriers == nil {
-		t.Fatalf("policy must expose all four gray dimensions: %s", getResp.Body.String())
+	for _, stage := range []string{"gray-initial", "carry-on", "full"} {
+		dimensions, exists := payload.Policy.StageDimensions[stage]
+		if !exists || dimensions.AppVersions == nil || dimensions.UserIDs == nil ||
+			dimensions.Provinces == nil || dimensions.Carriers == nil {
+			t.Fatalf(
+				"policy must expose all four stageDimensions for %s: %s",
+				stage,
+				getResp.Body.String(),
+			)
+		}
 	}
 
 	postReq := httptest.NewRequest(http.MethodPost, "/control-plane/platform/rollout/routing-policy", nil)

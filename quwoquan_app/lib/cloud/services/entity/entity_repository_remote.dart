@@ -1,31 +1,22 @@
 part of 'entity_repository.dart';
 
-typedef HomepageCommandInvocationContextFactory =
-    CloudOperationInvocationContext Function(
-      String clientPageId,
-      AppUiSurface surface,
-    );
+/// 将 pure-contract Homepage facets 投影为 App 页面 DTO。
+///
+/// 它不包含 transport、fixture 或运行环境分支，因此 production 可注入 Remote
+/// facets，alpha/test 则在 production 图外注入 `quwoquan_cloud_mock` 的 typed
+/// adapter。页面始终只消费 [HomepageQuery] / [HomepageCommandWriter]。
+class HomepageFacetProjectionAdapter implements HomepageFacetSet {
+  HomepageFacetProjectionAdapter({
+    required this.query,
+    required this.candidateWriter,
+    required this.claimRequestWriter,
+    required this.statusReportWriter,
+  });
 
-/// Production-only adapter：查询经 RemoteHomepageQueryAdapter，
-/// 写操作经 generated typed client；无裸 HTTP、无 fixture 回退。
-class RemoteHomepageRepository implements HomepageFacetSet {
-  factory RemoteHomepageRepository({
-    required RemoteHomepageQueryAdapter queryAdapter,
-    required GeneratedCloudOperationClient client,
-    required HomepageCommandInvocationContextFactory commandContext,
-  }) {
-    return RemoteHomepageRepository._(queryAdapter, client, commandContext);
-  }
-
-  RemoteHomepageRepository._(
-    this.queryAdapter,
-    this._client,
-    this._commandContext,
-  );
-
-  final RemoteHomepageQueryAdapter queryAdapter;
-  final GeneratedCloudOperationClient _client;
-  final HomepageCommandInvocationContextFactory _commandContext;
+  final HomepageQueryFacet query;
+  final HomepageCandidateCommandWriter candidateWriter;
+  final HomepageClaimRequestCommandWriter claimRequestWriter;
+  final HomepageStatusReportCommandWriter statusReportWriter;
 
   @override
   Future<List<HomepageSummary>> searchHomepages({
@@ -37,16 +28,18 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    final page = await queryAdapter.searchHomepages(
-      HomepageSearchQuery(
-        query: query,
-        homepageType: homepageType,
-        city: city,
-        status: status,
-        limit: limit,
+    final page = await _execute(
+      () => this.query.searchHomepages(
+        HomepageSearchQuery(
+          query: query,
+          homepageType: homepageType,
+          city: city,
+          status: status,
+          limit: limit,
+        ),
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
       ),
-      cancellation: cancellation,
-      deadlineAt: deadlineAt,
     );
     return page.items.map(homepageSummaryFromContract).toList(growable: false);
   }
@@ -54,14 +47,14 @@ class RemoteHomepageRepository implements HomepageFacetSet {
   @override
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
     return homepageDetailFromContract(
-      await queryAdapter.getHomepageDetail(homepageId),
+      await _execute(() => query.getHomepageDetail(homepageId)),
     );
   }
 
   @override
   Future<HomepageShellData> getHomepageShell(String homepageId) async {
     return homepageShellFromContract(
-      await queryAdapter.getHomepageShell(homepageId),
+      await _execute(() => query.getHomepageShell(homepageId)),
     );
   }
 
@@ -75,14 +68,16 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     String rolloutCohort = '',
   }) async {
     return objectPageBundleFromContract(
-      await queryAdapter.getObjectPageBundle(
-        HomepageObjectPageBundleQuery(
-          homepageId: homepageId,
-          referralSource: referralSource,
-          feedRequestId: feedRequestId,
-          recommendationTraceId: recommendationTraceId,
-          experimentBucket: experimentBucket,
-          rolloutCohort: rolloutCohort,
+      await _execute(
+        () => query.getObjectPageBundle(
+          HomepageObjectPageBundleQuery(
+            homepageId: homepageId,
+            referralSource: referralSource,
+            feedRequestId: feedRequestId,
+            recommendationTraceId: recommendationTraceId,
+            experimentBucket: experimentBucket,
+            rolloutCohort: rolloutCohort,
+          ),
         ),
       ),
     );
@@ -93,14 +88,14 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     String homepageId,
   ) async {
     return homepageReviewSummaryFromContract(
-      await queryAdapter.getHomepageReviewSummary(homepageId),
+      await _execute(() => query.getHomepageReviewSummary(homepageId)),
     );
   }
 
   @override
   Future<EntityImpactSummary> getEntityImpact(String homepageId) async {
     return homepageImpactFromContract(
-      await queryAdapter.getEntityImpact(homepageId),
+      await _execute(() => query.getEntityImpact(homepageId)),
     );
   }
 
@@ -109,7 +104,7 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     String homepageId,
   ) async {
     return homepageRelatedGroupsFromContract(
-      await queryAdapter.getHomepageRelatedGroups(homepageId),
+      await _execute(() => query.getHomepageRelatedGroups(homepageId)),
     );
   }
 
@@ -117,20 +112,18 @@ class RemoteHomepageRepository implements HomepageFacetSet {
   Future<HomepageDetail> suggestHomepageCandidate({
     required HomepageSuggestionDraft draft,
   }) async {
-    final projection = await _client.entityHomepageSuggestHomepageCandidate(
-      SuggestHomepageCandidateCommand(
-        title: draft.title,
-        homepageType: draft.homepageType,
-        subtitle: draft.subtitle,
-        categoryTags: draft.categoryTags,
-        coverUrl: draft.coverUrl,
-        address: draft.address,
-        city: draft.city,
-        location: _geoPointInput(draft.location),
-      ),
-      context: _commandContext(
-        EntityRequestPageIds.suggestHomepageCandidate,
-        AppUiSurfaces.suggestHomepage,
+    final projection = await _execute(
+      () => candidateWriter.suggest(
+        SuggestHomepageCandidateCommand(
+          title: draft.title,
+          homepageType: draft.homepageType,
+          subtitle: draft.subtitle,
+          categoryTags: draft.categoryTags,
+          coverUrl: draft.coverUrl,
+          address: draft.address,
+          city: draft.city,
+          location: _geoPointInput(draft.location),
+        ),
       ),
     );
     return homepageDetailFromContract(projection);
@@ -141,22 +134,19 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     required String homepageId,
     required HomepageClaimRequestDraft draft,
   }) async {
-    final view = await _client
-        .entityHomepageClaimRequestCreateHomepageClaimRequest(
-          CreateHomepageClaimRequestCommand(
-            homepageId: homepageId,
-            claimTier: draft.claimTier,
-            businessLicenseUrl: draft.businessLicenseUrl,
-            contactPhone: draft.contactPhone,
-            identityCardFrontUrl: draft.identityCardFrontUrl,
-            identityCardBackUrl: draft.identityCardBackUrl,
-            note: draft.note,
-          ),
-          context: _commandContext(
-            EntityRequestPageIds.createHomepageClaimRequest,
-            AppUiSurfaces.homepageClaim,
-          ),
-        );
+    final view = await _execute(
+      () => claimRequestWriter.createClaimRequest(
+        CreateHomepageClaimRequestCommand(
+          homepageId: homepageId,
+          claimTier: draft.claimTier,
+          businessLicenseUrl: draft.businessLicenseUrl,
+          contactPhone: draft.contactPhone,
+          identityCardFrontUrl: draft.identityCardFrontUrl,
+          identityCardBackUrl: draft.identityCardBackUrl,
+          note: draft.note,
+        ),
+      ),
+    );
     return HomepageClaimRequestRecord(
       id: view.claimRequestId,
       homepageId: view.homepageId,
@@ -174,20 +164,18 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     required String homepageId,
     required HomepageBasicDraft draft,
   }) async {
-    final projection = await _client.entityHomepageUpdateClaimedHomepageBasics(
-      UpdateClaimedHomepageBasicsCommand(
-        homepageId: homepageId,
-        title: draft.title,
-        subtitle: draft.subtitle,
-        categoryTags: draft.categoryTags,
-        coverUrl: draft.coverUrl,
-        address: draft.address,
-        city: draft.city,
-        location: _geoPointInput(draft.location),
-      ),
-      context: _commandContext(
-        EntityRequestPageIds.updateClaimedHomepageBasics,
-        AppUiSurfaces.homepageMaintenance,
+    final projection = await _execute(
+      () => candidateWriter.updateClaimedBasics(
+        UpdateClaimedHomepageBasicsCommand(
+          homepageId: homepageId,
+          title: draft.title,
+          subtitle: draft.subtitle,
+          categoryTags: draft.categoryTags,
+          coverUrl: draft.coverUrl,
+          address: draft.address,
+          city: draft.city,
+          location: _geoPointInput(draft.location),
+        ),
       ),
     );
     return homepageDetailFromContract(projection);
@@ -198,19 +186,16 @@ class RemoteHomepageRepository implements HomepageFacetSet {
     required String homepageId,
     required HomepageStatusReportDraft draft,
   }) async {
-    final view = await _client
-        .entityHomepageStatusReportCreateHomepageStatusReport(
-          CreateHomepageStatusReportCommand(
-            homepageId: homepageId,
-            reason: draft.reason,
-            description: draft.description,
-            evidenceUrls: draft.evidenceUrls,
-          ),
-          context: _commandContext(
-            EntityRequestPageIds.createHomepageStatusReport,
-            AppUiSurfaces.homepageStatusReport,
-          ),
-        );
+    final view = await _execute(
+      () => statusReportWriter.createStatusReport(
+        CreateHomepageStatusReportCommand(
+          homepageId: homepageId,
+          reason: draft.reason,
+          description: draft.description,
+          evidenceUrls: draft.evidenceUrls,
+        ),
+      ),
+    );
     return HomepageStatusReportRecord(
       id: view.reportId,
       homepageId: view.homepageId,
@@ -224,9 +209,50 @@ class RemoteHomepageRepository implements HomepageFacetSet {
       reviewedAt: view.reviewedAt,
     );
   }
+
+  Future<T> _execute<T>(Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } on HomepageQueryNotFoundException catch (error) {
+      throw _homepageNotFoundCloudException(error);
+    }
+  }
 }
 
 HomepageGeoPointInput? _geoPointInput(HomepageGeoPoint? location) {
   if (location == null) return null;
   return HomepageGeoPointInput(lat: location.latitude, lng: location.longitude);
+}
+
+CloudException _homepageNotFoundCloudException(
+  HomepageQueryNotFoundException error,
+) {
+  final code = EntityErrorCode.homepageNotFound;
+  final failure = RuntimeFailure(
+    code: code.code,
+    transportStatus: code.httpStatus,
+    origin: RuntimeFailureOrigin.localClient,
+    kind: RuntimeFailureKind.notFound,
+    nature: RuntimeFailureNature.permanent,
+    location: const RuntimeFailureLocation(
+      businessObject: 'entity.homepage',
+      functionModule: 'homepage_facet_projection_adapter',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'homepageId', value: error.homepageId),
+      ],
+    ),
+    recovery: const RuntimeRecoveryDirective.none(),
+  );
+  return CloudException(
+    type: CloudErrorType.notFound,
+    message: code.defaultMessage,
+    statusCode: code.httpStatus,
+    code: code.code,
+    domainErrorCode: DomainErrorCodeRegistry.fromCode(code.code),
+    runtimeFailure: failure,
+    userMessage: code.defaultMessage,
+    cause: error,
+  );
 }

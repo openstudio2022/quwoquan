@@ -328,7 +328,7 @@ func (s *MemoryTelemetryStore) GetEventSummary(_ context.Context, query applicat
 	}
 	sessions := map[string]struct{}{}
 	for _, event := range s.events {
-		if !matches(event, query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode, query.From, query.To) {
+		if !matches(event, query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.Result, query.ErrorCode, query.From, query.To) {
 			continue
 		}
 		out.TotalCount++
@@ -362,7 +362,7 @@ func (s *MemoryTelemetryStore) GetEventDrilldown(_ context.Context, query applic
 	defer s.mu.Unlock()
 	matched := make([]application.EventRecord, 0)
 	for _, event := range s.events {
-		if matches(event, query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode, query.From, query.To) &&
+		if matches(event, query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.Result, query.ErrorCode, query.From, query.To) &&
 			(query.SessionID == "" || event.SessionID == query.SessionID) {
 			matched = append(matched, event)
 		}
@@ -467,7 +467,7 @@ func (s *MemoryTelemetryStore) ListDistinctSessions(
 	return out, totalEvents, nil
 }
 
-func matches(event application.EventRecord, logType, eventType, pageName, appVersion, networkClass, errorCode string, from, to time.Time) bool {
+func matches(event application.EventRecord, logType, eventType, pageName, appVersion, networkClass, result, errorCode string, from, to time.Time) bool {
 	occurredAt, err := time.Parse(time.RFC3339Nano, event.OccurredAt)
 	if err != nil {
 		return false
@@ -476,6 +476,9 @@ func matches(event application.EventRecord, logType, eventType, pageName, appVer
 		return false
 	}
 	if logType != "" && event.LogType != logType || eventType != "" && event.EventType != eventType || pageName != "" && event.PageName != pageName || appVersion != "" && event.AppVersion != appVersion || networkClass != "" && event.NetworkClass != networkClass {
+		return false
+	}
+	if result != "" && (event.Result == nil || *event.Result != result) {
 		return false
 	}
 	return errorCode == "" || event.ErrorCode != nil && *event.ErrorCode == errorCode

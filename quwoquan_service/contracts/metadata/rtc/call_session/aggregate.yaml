@@ -5,7 +5,7 @@ object_kind: aggregate_root
 description: |
   实时通话会话聚合。支持 1v1 和多人（≤32人）音视频通话。
   CallSession 为聚合根，管理通话生命周期（状态机）和参与者列表。
-  媒体传输通过 LiveKit SFU 转发，rtc-service 负责信令编排。
+  媒体传输由注册的房间传输 Provider 转发，rtc-service 负责信令编排。
   MongoDB 存储通话记录，Redis 缓存活跃通话状态。
 
 storage_backend: mongodb
@@ -21,7 +21,7 @@ vector_enabled: false
 business_rules:
   - initiator 必须是 trusted persona 且满足 Relationship capability
   - participants 只能由 CallSession 行为修改且最多 32 个
-  - LiveKit token 必须短期有效并绑定 roomId、participantId 与 grants
+  - 媒体访问凭据必须短期有效并绑定 roomId、participantId 与授予权限
   - 所有命令由服务端加载当前 version 执行内部 CAS 并对纯竞态做有限重放；公开请求不携带版本字段
   - InitiateCall 是一次创建命令，同一 actor 的活跃通话由存储唯一约束防止并发双呼
   - ReportMediaConnected 只允许 connecting 参与者进入 connected；至少两人 connected 时首次进入 in_call 并写 startedAt
@@ -49,12 +49,3 @@ ddd_layer_mapping:
   application: internal/application
   adapter_rest: internal/adapters/http
   adapter_event: internal/adapters/mq
-
-livekit_integration:
-  description: |
-    LiveKit Room 与 CallSession 一一映射。
-    Token 由 rtc-service 签发（JWT，含 roomName + participantId + grants）。
-    连接地址 livekitUrl 由服务端配置下发（Initiate/Answer/Join 响应），端侧禁止硬编码。
-  room_name_pattern: "rtc-room-{callId}"
-  token_ttl_seconds: 21600
-  max_participants: 32

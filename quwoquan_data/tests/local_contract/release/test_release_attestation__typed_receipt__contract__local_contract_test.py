@@ -33,7 +33,7 @@ def _receipt() -> ReleaseAttestation:
         creator_count=3,
         tag_count=0,
         canonical_merkle="sha256:" + "a" * 64,
-        source_digest=current_source_digest(),
+        source_digests=(current_source_digest(),),
         payload_sha256="sha256:" + "b" * 64,
         recorded_at="2026-07-18T00:00:00Z",
     )
@@ -63,6 +63,22 @@ def test_release_attestation__allows_post_only_lane_release__contract__local_con
 
     assert receipt.entity_count == 0
     assert receipt.post_count == 100
+
+
+def test_release_attestation__retains_all_frozen_execution_source_digests__contract() -> None:
+    document = _receipt().to_document()
+    second_digest = dict(document["sourceDigests"][0])
+    second_digest["digest"] = "sha256:" + "c" * 64
+    document["sourceDigests"] = sorted(
+        [document["sourceDigests"][0], second_digest],
+        key=lambda item: item["digest"],
+    )
+
+    receipt = ReleaseAttestation.from_document(document)
+
+    assert [item.digest for item in receipt.source_digests] == [
+        item["digest"] for item in document["sourceDigests"]
+    ]
 
 
 def test_release_attestation__rejects_content_without_objects__contract__local_contract() -> None:

@@ -69,17 +69,3 @@ func memberListCursorFilterDisplayName(cursor string) (bson.M, error) {
 		},
 	}, nil
 }
-
-// EncodeMemberListNextCursorJoined encodes a keyset cursor for joined_asc pagination.
-func EncodeMemberListNextCursorJoined(joinedAt time.Time, id string) string {
-	c := cursorJoinedAsc{T: joinedAt.UTC().UnixNano(), I: id}
-	b, _ := json.Marshal(c)
-	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-// EncodeMemberListNextCursorDisplayName encodes a keyset cursor for display_name_asc pagination.
-func EncodeMemberListNextCursorDisplayName(displayName, userID string) string {
-	c := cursorDisplayNameAsc{D: displayName, U: userID}
-	b, _ := json.Marshal(c)
-	return base64.RawURLEncoding.EncodeToString(b)
-}

@@ -11,13 +11,9 @@ part 'comment_provider_state.dart';
 part 'comment_provider_reply_tree.dart';
 part 'comment_provider_counts_sync.dart';
 
-
 class CommentNotifier extends Notifier<CommentState>
     with _CommentCountsSyncMixin {
   CommentNotifier(this.postId);
-
-  static final Map<String, _CommentPageCacheEntry> _commentPageCache =
-      <String, _CommentPageCacheEntry>{};
 
   @override
   final String postId;
@@ -32,13 +28,7 @@ class CommentNotifier extends Notifier<CommentState>
       ref.read(workBrowserContentCommentFacetProvider);
 
   @override
-  CommentState build() {
-    final cached = _commentPageCache[postId]?.state;
-    if (cached != null) {
-      return cached.copyWith(sessionLoadVersion: 0);
-    }
-    return const CommentState();
-  }
+  CommentState build() => const CommentState();
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final requiresResolvedPersonaForMutations = ref
@@ -82,7 +72,6 @@ class CommentNotifier extends Notifier<CommentState>
         status: CommentListStatus.idle,
       );
       _syncConfirmedCommentTotal(page.total);
-      _storeSnapshot();
       _trackLatency(
         metricName: CommentMetricNames.listLoadMs,
         stopwatch: stopwatch,
@@ -181,7 +170,6 @@ class CommentNotifier extends Notifier<CommentState>
         status: CommentListStatus.idle,
       );
       _syncConfirmedCommentTotal(page.total);
-      _storeSnapshot();
       _lifecycleObservability.recordAppend(
         pageName: 'comment_thread',
         result: 'success',
@@ -313,7 +301,6 @@ class CommentNotifier extends Notifier<CommentState>
           : {...state.expandedReplyCommentIds, parentCommentId},
     );
     _syncConfirmedCommentTotal(page.total);
-    _storeSnapshot();
     final visible = _findComment(createdCommentId);
     if (visible != null) return visible;
     if (parentCommentId == null) {
@@ -347,7 +334,6 @@ class CommentNotifier extends Notifier<CommentState>
           )
           .toList(growable: false),
     );
-    _storeSnapshot();
     return created;
   }
 
@@ -708,25 +694,6 @@ class CommentNotifier extends Notifier<CommentState>
     }
     return null;
   }
-
-  void _storeSnapshot() {
-    _commentPageCache[postId] = _CommentPageCacheEntry(
-      state: state.copyWith(
-        sessionLoadVersion: 0,
-        status: CommentListStatus.idle,
-        failure: () => null,
-        appendFailure: () => null,
-      ),
-      cachedAt: DateTime.now(),
-    );
-  }
-}
-
-class _CommentPageCacheEntry {
-  const _CommentPageCacheEntry({required this.state, required this.cachedAt});
-
-  final CommentState state;
-  final DateTime cachedAt;
 }
 
 final commentProviderFamily = NotifierProvider.autoDispose

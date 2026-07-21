@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,12 +17,9 @@ import (
 )
 
 type fakeProviderClient struct {
-	name     model.Provider
 	nearbyFn func(model.NearbyQuery) ([]model.POI, error)
 	searchFn func(model.SearchQuery) ([]model.POI, error)
 }
-
-func (f *fakeProviderClient) Name() model.Provider { return f.name }
 
 func (f *fakeProviderClient) Nearby(_ context.Context, q model.NearbyQuery) ([]model.POI, error) {
 	return f.nearbyFn(q)
@@ -31,6 +27,15 @@ func (f *fakeProviderClient) Nearby(_ context.Context, q model.NearbyQuery) ([]m
 
 func (f *fakeProviderClient) Search(_ context.Context, q model.SearchQuery) ([]model.POI, error) {
 	return f.searchFn(q)
+}
+
+func newLocationService(t *testing.T, provider *fakeProviderClient) *application.Service {
+	t.Helper()
+	service, err := application.NewService(provider)
+	if err != nil {
+		t.Fatalf("construct location service: %v", err)
+	}
+	return service
 }
 
 type testExternalProvider struct{}
@@ -87,12 +92,10 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 	if err != nil {
 		t.Fatalf("construct external interaction service: %v", err)
 	}
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{},
-		nil,
-	)
+	svc := newLocationService(t, &fakeProviderClient{
+		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) { return nil, nil },
+		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+	})
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2, external).Routes()
 	body := []byte(`{
 		"requestId":"req-sms-1",
@@ -133,23 +136,15 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 
 func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {
 	var got model.NearbyQuery
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{
-			model.ProviderBaidu: &fakeProviderClient{
-				name: model.ProviderBaidu,
-				nearbyFn: func(q model.NearbyQuery) ([]model.POI, error) {
-					got = q
-					return []model.POI{{Name: "x", Latitude: q.Lat, Longitude: q.Lng}}, nil
-				},
-				searchFn: func(model.SearchQuery) ([]model.POI, error) {
-					return nil, nil
-				},
-			},
+	svc := newLocationService(t, &fakeProviderClient{
+		nearbyFn: func(q model.NearbyQuery) ([]model.POI, error) {
+			got = q
+			return []model.POI{{Name: "x", Latitude: q.Lat, Longitude: q.Lng}}, nil
 		},
-		nil,
-	)
+		searchFn: func(model.SearchQuery) ([]model.POI, error) {
+			return nil, nil
+		},
+	})
 
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath+"?"+generated.QueryParamLimit+"=1", nil)
@@ -165,12 +160,10 @@ func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {
 }
 
 func TestSearchEmptyQueryReturnsBadRequest(t *testing.T) {
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{},
-		nil,
-	)
+	svc := newLocationService(t, &fakeProviderClient{
+		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) { return nil, nil },
+		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+	})
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, generated.SearchPath, nil)
 	rr := httptest.NewRecorder()
@@ -185,83 +178,42 @@ func TestSearchEmptyQueryReturnsBadRequest(t *testing.T) {
 	}
 }
 
-func TestNearbyBothProvidersFailReturns500WithIntegrationErrorCode(t *testing.T) {
+func TestNearbyProviderFailureReturnsStructuredUnavailableError(t *testing.T) {
 	fail := &fakeProviderClient{
-		name: model.ProviderBaidu,
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
-			return nil, errors.New("down")
+			return nil, generated.AppErrorFromLocationProviderUnavailable(
+				"location provider request failed",
+			)
 		},
 		searchFn: func(model.SearchQuery) ([]model.POI, error) {
 			return nil, nil
 		},
 	}
-	backup := &fakeProviderClient{
-		name: model.ProviderAMap,
-		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
-			return nil, errors.New("down2")
-		},
-		searchFn: func(model.SearchQuery) ([]model.POI, error) {
-			return nil, nil
-		},
-	}
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{
-			model.ProviderBaidu: fail,
-			model.ProviderAMap:  backup,
-		},
-		nil,
-	)
+	svc := newLocationService(t, fail)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("status=%d, want=500 body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want=503 body=%s", rr.Code, rr.Body.String())
 	}
 	var body map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &body)
-	if body["code"] != generated.ErrInternalError.Error() {
-		t.Fatalf("code=%v, want %s", body["code"], generated.ErrInternalError.Error())
-	}
-}
-
-func TestNearbyNoProvidersReturns400WithLocationUnavailableCode(t *testing.T) {
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{},
-		nil,
-	)
-	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
-	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d, want=400 body=%s", rr.Code, rr.Body.String())
-	}
-	var body map[string]any
-	_ = json.Unmarshal(rr.Body.Bytes(), &body)
-	if body["code"] != generated.ErrLocationUnavailable.Error() {
-		t.Fatalf("code=%v, want %s", body["code"], generated.ErrLocationUnavailable.Error())
+	if body["code"] != generated.ErrLocationProviderUnavailable.Error() {
+		t.Fatalf("code=%v, want %s", body["code"], generated.ErrLocationProviderUnavailable.Error())
 	}
 }
 
 func TestNearbyTimeoutReturns504WithUpstreamTimeoutCode(t *testing.T) {
 	timeoutClient := &fakeProviderClient{
-		name: model.ProviderBaidu,
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
-			return nil, context.DeadlineExceeded
+			return nil, generated.AppErrorFromUpstreamTimeout(
+				"location provider request timed out",
+			)
 		},
 		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
 	}
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{model.ProviderBaidu: timeoutClient},
-		nil,
-	)
+	svc := newLocationService(t, timeoutClient)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
 	rr := httptest.NewRecorder()

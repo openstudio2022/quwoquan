@@ -3,15 +3,23 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_user_state_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/message_home_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
@@ -44,27 +52,118 @@ void main() {
     final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
     final contentPostReader = RemoteContentPostReaderAdapter(
       client: generatedClient,
-      invocationContext: (clientPageId) => CloudOperationInvocationContext(
-        surfaceId: AppUiSurfaces.workBrowser.id,
-        routeId: AppUiSurfaces.workBrowser.routeId,
-        clientPageId: clientPageId,
-        actor: const CloudOperationActorContext(),
-      ),
-    );
-    const currentUserId = 'fixture_user_current';
-    final chatRepository = RemoteChatRepository(
-      baseUrl: baseUrl,
-      mergeRequestContext: (base) async {
-        return CloudRequestHeaders.withOwnerSubAccountContext(
-          base,
-          ownerUserId: currentUserId,
-          subAccountId: currentUserId,
+      invocationContext: (clientPageId) {
+        final surface = clientPageId == ContentRequestPageIds.listUserPosts
+            ? AppUiSurfaces.userProfile
+            : AppUiSurfaces.workBrowser;
+        return CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(),
         );
       },
     );
-    final circleRepository = RemoteCircleRepository(
-      httpClient: httpClient,
-      baseUrl: baseUrl,
+    const currentUserId = 'fixture_user_current';
+    CloudOperationInvocationContext chatContext(
+      AppUiSurface surface,
+      String clientPageId, {
+      String? idempotencyKey,
+    }) {
+      return CloudOperationInvocationContext(
+        surfaceId: surface.id,
+        routeId: surface.routeId,
+        clientPageId: clientPageId,
+        actor: const CloudOperationActorContext(
+          accountId: currentUserId,
+          personaId: currentUserId,
+        ),
+        idempotencyKey: idempotencyKey,
+      );
+    }
+
+    final conversationQuery = RemoteChatConversationQuery(
+      client: generatedClient,
+      invocationContext: (clientPageId) =>
+          chatContext(AppUiSurfaces.chatList, clientPageId),
+    );
+    final contactQuery = RemoteChatContactQuery(
+      client: generatedClient,
+      invocationContext: (clientPageId) =>
+          chatContext(AppUiSurfaces.chatList, clientPageId),
+    );
+    final membershipQuery = RemoteChatConversationMembershipQuery(
+      client: generatedClient,
+      invocationContext: (clientPageId) =>
+          chatContext(AppUiSurfaces.chatManage, clientPageId),
+    );
+    final chatRepository = RemoteChatRepository(
+      conversationQuery: conversationQuery,
+      conversationCommandWriter: RemoteChatConversationCommandWriter(
+        client: generatedClient,
+        invocationContext: (clientPageId, idempotencyKey) => chatContext(
+          AppUiSurfaces.chatManage,
+          clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      ),
+      contactQuery: contactQuery,
+      inboxQuery: contactQuery,
+      messageHomeQuery: RemoteChatMessageHomeQuery(
+        client: generatedClient,
+        invocationContext: (clientPageId) =>
+            chatContext(AppUiSurfaces.chatList, clientPageId),
+      ),
+      membershipQuery: membershipQuery,
+      membershipCommandWriter: RemoteChatConversationMembershipCommandWriter(
+        client: generatedClient,
+        invocationContext: (clientPageId, idempotencyKey) => chatContext(
+          AppUiSurfaces.chatSettings,
+          clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      ),
+      userStateCommandWriter: RemoteChatConversationUserStateCommandWriter(
+        client: generatedClient,
+        invocationContext: (clientPageId, idempotencyKey) => chatContext(
+          AppUiSurfaces.chatDetail,
+          clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      ),
+      messageQuery: RemoteChatMessageQuery(
+        client: generatedClient,
+        invocationContext: (clientPageId) =>
+            chatContext(AppUiSurfaces.chatDetail, clientPageId),
+      ),
+      messageMutationWriter: RemoteChatMessageMutationWriter(
+        client: generatedClient,
+        invocationContext: (clientPageId, idempotencyKey) => chatContext(
+          AppUiSurfaces.chatDetail,
+          clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      ),
+    );
+    final circleQuery = RemoteCircleQueryReader(
+      client: generatedClient,
+      invocationContext: (clientPageId, {required command}) {
+        final surface =
+            clientPageId == CircleRequestPageIds.listCircles ||
+                clientPageId == CircleRequestPageIds.searchCircles ||
+                clientPageId == CircleRequestPageIds.listCircleDiscoveryFeed
+            ? AppUiSurfaces.circlesList
+            : AppUiSurfaces.circleDetail;
+        return CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(
+            accountId: currentUserId,
+            personaId: currentUserId,
+          ),
+        );
+      },
     );
     final userProfileQuery = RemoteUserProfileQueryFacet(
       client: generatedClient,
@@ -205,9 +304,14 @@ void main() {
       contains('fixture_conv_group'),
     );
 
-    final circles = await circleRepository.listCircles(limit: 20);
+    final circles = (await circleQuery.list(
+      const CircleListQuery(limit: 20),
+    )).items;
     expect(circles.length, greaterThanOrEqualTo(6));
-    expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
+    expect(
+      circles.map((item) => item.circleId),
+      contains('fixture_circle_photo'),
+    );
     expect(
       circles.every(
         (item) =>
@@ -216,23 +320,19 @@ void main() {
       ),
       isTrue,
     );
-    final circle = await circleRepository.getCircle('fixture_circle_photo');
-    expect(circle.circle.id, 'fixture_circle_photo');
-    final circleHomeFeed = await circleRepository.listHomeCircleDiscoveryFeed(
-      limit: 20,
+    final circle = await circleQuery.get(
+      const CircleDetailQuery(circleId: 'fixture_circle_photo'),
     );
-    expect(
-      circleHomeFeed.map((item) => item.id),
-      contains('fixture_photo_001'),
-    );
-    expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
-    expect(
-      circleHomeFeed.every(
-        (item) => item.primaryVisualUrl.contains(
-          'media/image/s/archived-image/post/',
+    expect(circle.circleId, 'fixture_circle_photo');
+    await expectLater(
+      circleQuery.listDiscoveryFeed(const CircleDiscoveryFeedQuery(limit: 20)),
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.runtimeFailure,
+          'runtimeFailure',
+          isNotNull,
         ),
       ),
-      isTrue,
     );
 
     final currentUser = await profileQuery.getUserProfile(
@@ -243,12 +343,11 @@ void main() {
     expect(activePersonaContext.subAccountId, currentUserId);
     expect(currentUser.displayName, matches(_defaultNicknamePattern));
     expect(
-      currentUser.backgroundUrl.contains(
-        'media/background/s/archived-avatar/user/',
-      ),
-      isTrue,
+      currentUser.backgroundUrl,
+      isEmpty,
+      reason: '未注入媒体交付 endpoint 时，不得把 object key 当作可加载 URL',
     );
-    final userPostsPage = await contentRepository.listUserPosts(
+    final userPostsPage = await contentPostReader.listUserPosts(
       userId: 'fixture_user_current',
       limit: 20,
     );
@@ -256,12 +355,11 @@ void main() {
     expect(userPosts.length, greaterThanOrEqualTo(4));
     expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
     expect(
-      userPosts.every(
-        (item) => item.primaryVisualUrl.contains(
-          'media/image/s/archived-image/post/',
-        ),
-      ),
-      isTrue,
+      userPosts
+          .firstWhere((item) => item.id == 'fixture_moment_001')
+          .primaryVisualUrl,
+      isEmpty,
+      reason: '未注入媒体交付 endpoint 时，不得把 post object key 当作可加载 URL',
     );
     final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
     expect(
@@ -291,9 +389,13 @@ void main() {
     );
 
     final calls = await _getJsonList('$baseUrl/rtc/calls', 'items');
+    final expectedRtcSessionId =
+        ((fixtures.rtcSeed['sessions'] as List<dynamic>).first
+                as Map<String, dynamic>)['sessionId']
+            as String;
     expect(
       calls.map((item) => item['sessionId']),
-      contains('fixture_call_voice'),
+      contains(expectedRtcSessionId),
     );
   });
 }
@@ -457,7 +559,13 @@ class _ContractSeedHttpServer {
         return;
       }
       if (path == '/content/posts/fixture_photo_001') {
-        _writeJson(request, _contentPost('fixture_photo_001'));
+        final post = _contentPost('fixture_photo_001');
+        _writeJson(request, <String, dynamic>{
+          ...post,
+          'status':
+              post['status'] ??
+              (post['publishedAt'] == null ? 'draft' : 'published'),
+        });
         return;
       }
       if (path == '/chat/inbox') {
@@ -469,7 +577,7 @@ class _ContractSeedHttpServer {
         return;
       }
       if (path == '/chat/contacts') {
-        _writeJson(request, {'items': _fixtures.chatContactsSeed['contacts']});
+        _writeJson(request, {'items': _contactRows()});
         return;
       }
       if (path == '/chat/message-home') {
@@ -501,7 +609,7 @@ class _ContractSeedHttpServer {
         final members =
             (_fixtures.chatSeed['members'] as Map<String, dynamic>)[convId] ??
             const <dynamic>[];
-        _writeJson(request, {'items': members});
+        _writeJson(request, {'items': _memberRows(members as List<dynamic>)});
         return;
       }
       if (path == '/circles') {
@@ -509,7 +617,7 @@ class _ContractSeedHttpServer {
         return;
       }
       if (path == '/circles/fixture_circle_photo') {
-        _writeJson(request, {'data': _circle('fixture_circle_photo')});
+        _writeJson(request, _circle('fixture_circle_photo'));
         return;
       }
       if (path.startsWith('/circles/') && path.endsWith('/feed')) {
@@ -658,6 +766,7 @@ class _ContractSeedHttpServer {
             'id': item['id'],
             'kind': 'conversation',
             'conversationId': item['id'],
+            'notificationId': '',
             'conversationType': item['type'],
             'title': item['title'],
             'summary': item['lastMessagePreview'],
@@ -668,6 +777,7 @@ class _ContractSeedHttpServer {
             'mentionUnreadCount': item['mentionUnreadCount'] ?? 0,
             'muted': item['muted'] ?? false,
             'pinned': item['pinned'] ?? false,
+            'notificationType': '',
             'read': (item['unreadCount'] as num? ?? 0) == 0,
           },
         )
@@ -747,11 +857,72 @@ class _ContractSeedHttpServer {
         });
       }
     }
+    if (filter == 'all' || filter == 'group') {
+      final membersByConversation =
+          _fixtures.chatSeed['members'] as Map<String, dynamic>;
+      for (final conversation in _inboxRows()) {
+        if (conversation['type'] != 'group') {
+          continue;
+        }
+        final conversationId = conversation['id'].toString();
+        final members =
+            membersByConversation[conversationId] as List? ?? const <dynamic>[];
+        rows.add(<String, dynamic>{
+          'id': conversationId,
+          'kind': 'group',
+          'objectId': conversationId,
+          'conversationId': conversationId,
+          'circleId': conversation['circleId'] ?? '',
+          'title': conversation['title'],
+          'subtitle': conversation['lastMessagePreview'],
+          'avatarUrl': conversation['avatarUrl'],
+          'memberCount': members.length,
+          'lastActiveAt': conversation['lastMessageTime'],
+        });
+      }
+    }
     final limit = int.tryParse(query['limit'] ?? '');
     if (limit != null && rows.length > limit) {
       return rows.take(limit).toList(growable: false);
     }
     return rows;
+  }
+
+  List<Map<String, dynamic>> _contactRows() {
+    return (_fixtures.chatContactsSeed['contacts'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(
+          (contact) => <String, dynamic>{
+            'userId': contact['userId'],
+            'displayName': contact['displayName'] ?? '',
+            'avatarUrl': contact['avatarUrl'] ?? '',
+            'bio': contact['bio'] ?? '',
+            'metFrom': contact['metFrom'] ?? '',
+            'lastInteraction': contact['lastInteraction'] ?? '',
+            'relationState': contact['relationState'] ?? 'not_following',
+            'source': contact['source'] ?? '',
+            'isStarred': contact['isStarred'] ?? false,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _memberRows(List<dynamic> members) {
+    return members
+        .cast<Map<String, dynamic>>()
+        .map(
+          (member) => <String, dynamic>{
+            'userId': member['userId'],
+            'displayName': member['displayName'] ?? '',
+            'avatarUrl': member['avatarUrl'] ?? '',
+            'role': member['role'] ?? 'member',
+            'memberType': member['memberType'] ?? 'user',
+            'assistantSkillId': member['assistantSkillId'],
+            'joinedAt': member['joinedAt'],
+            'isCurrentUser': member['isCurrentUser'] ?? false,
+          },
+        )
+        .toList(growable: false);
   }
 
   Map<String, dynamic> _circle(String id) {
@@ -827,7 +998,7 @@ class _ContractSeedHttpServer {
   }
 
   bool _requiresClientUserId(String path) {
-    return path.startsWith('/chat') || path == '/user/personas/active';
+    return path.startsWith('/chat');
   }
 
   bool _hasClientUserId(HttpRequest request) {

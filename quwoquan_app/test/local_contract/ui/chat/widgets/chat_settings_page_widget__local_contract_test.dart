@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
@@ -445,6 +446,33 @@ void main() {
       );
     });
 
+    testWidgets('圈群绑定会话隐藏 Chat 成员治理入口并保留跳转提示', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _CircleGroupManagedChatRepository()),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(
+        find.byKey(const ValueKey('chat_settings_remove_member_entry')),
+        findsNothing,
+      );
+      expect(find.text(ChatText.circleGroupManagedNotice), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text(ChatText.openCircleGroupManagement),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(find.text(ChatText.openCircleGroupManagement), findsOneWidget);
+      expect(find.text(ChatText.exitGroupChat), findsNothing);
+    });
+
     testWidgets('退出群聊经 LeaveConversation 而非 removeMember(self)', (
       tester,
     ) async {
@@ -556,6 +584,29 @@ class _MemberRoleAdminOnlyNameRepository extends _MemberRoleChatRepository {
     return ChatGroupSettingsDto(
       nameEditableByAdminOnly: true,
       conversationType: 'group',
+    );
+  }
+}
+
+class _CircleGroupManagedChatRepository extends MockChatRepository {
+  @override
+  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
+    return ChatGroupSettingsDto(
+      conversationType: 'group',
+      circleId: 'fixture_circle',
+      circleGroupId: 'fixture_circle_group',
+    );
+  }
+
+  @override
+  Future<GroupHomeDto> getGroupHome(String conversationId) async {
+    return GroupHomeDto(
+      conversationId: conversationId,
+      title: '圈群',
+      circleId: 'fixture_circle',
+      circleGroupId: 'fixture_circle_group',
+      memberCount: 3,
+      capabilities: const <String>['voice_call'],
     );
   }
 }

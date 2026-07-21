@@ -16,9 +16,8 @@ enum RtcErrorCode {
   versionConflict('RTC.USER.version_conflict', '通话状态已变更，请刷新后重试', 409),
   idempotencyConflict('RTC.USER.idempotency_conflict', '请求重复且内容不一致，请重新发起', 409),
   rateLimited('RTC.USER.rate_limited', '操作太频繁，请稍后重试', 429),
-  livekitUnavailable('RTC.SYSTEM.livekit_unavailable', '通话服务暂时不可用，请稍后重试', 503),
-  internalError('RTC.SYSTEM.internal_error', '通话服务异常，请稍后重试', 500),
-  tokenGenerationFailed('RTC.SYSTEM.token_generation_failed', '连接通话服务失败，请重试', 500);
+  mediaTransportUnavailable('RTC.SYSTEM.media_transport_unavailable', '通话服务暂时不可用，请稍后重试', 503),
+  internalError('RTC.SYSTEM.internal_error', '通话服务异常，请稍后重试', 500);
 
   final String code;
   final String defaultMessage;

@@ -30,6 +30,39 @@ entities:
         recommend_feature: false
         description: 账号生命周期状态：anonymous | active | suspended | closed（closed 为注销终态）
 
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+        recommend_feature: false
+        description: 账号安全代次；Suspend/Restore/Close 递增，认证、refresh 和服务鉴权拒绝旧 epoch token
+
+      - name: suspensionCaseRef
+        source: suspensionCaseRef
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: read
+        recommend_feature: false
+        description: 当前有效限制对应的不透明运营 case 引用；禁止写入审核理由、证据或用户可见响应
+
+      - name: suspendedAt
+        source: suspendedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+        recommend_feature: false
+        description: 当前 suspended 状态首次生效时间；Restore 后保留仅供审计，不作为公开资料字段
+
       - name: identityOrigin
         source: identityOrigin
         type: string
@@ -39,7 +72,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: false
-        description: 首次创建来源：anonymous_device | phone | wechat | alipay | qq | apple | passkey | migrated_seed
+        description: 首次创建来源：anonymous_device | phone | federated | apple | passkey | migrated_seed
 
       - name: logicalShard
         source: logicalShard
@@ -787,6 +820,140 @@ entities:
         log_policy: allow
         api_exposure: drop
         ops_exposure: read
+
+  AccountEnforcementDecisionWire:
+    description: >
+      Product Ops 受信审批后的内部执行决策；主体、审批人与证据在 OIDC claims 和审计链中
+      验证，本 wire 只承载最小且不透明的决策引用，禁止携带审核理由或证据正文。
+    fields:
+      - name: decisionId
+        source: decisionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+
+      - name: caseRef
+        source: caseRef
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: write
+        ops_exposure: read
+
+      - name: decisionDigest
+        source: decisionDigest
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: read
+
+      - name: approvedAt
+        source: approvedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+
+  AccountEnforcementResultWire:
+    description: 受信封禁或恢复命令结果；只返回账号安全状态与幂等回执，不返回运营审核事实
+    fields:
+      - name: accountState
+        source: accountState
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+
+      - name: decisionId
+        source: decisionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+
+  UserAccountEnforcementPayload:
+    description: Suspend/Restore durable 事件最小载荷；下游仅据此维护可逆 restriction projection
+    fields:
+      - name: userId
+        source: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: hash
+
+      - name: personaIds
+        source: personaIds
+        type: "[]string"
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: metadata_only
+
+      - name: accountState
+        source: accountState
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: metadata_only
+
+      - name: decisionRef
+        source: decisionRef
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: mask
+
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
 
   UserAuth:
     description: 认证凭证（安全隔离，不缓存到 Redis）

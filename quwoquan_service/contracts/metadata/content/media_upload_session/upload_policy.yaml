@@ -1,6 +1,7 @@
 schema: content_media_upload_policy
 
-# 首发 Post 视频以 60 秒移动端 UGC 为产品边界；所有文件均走流式 PUT。
+# 相机入口以 60 秒自动停录保障移动端创作体验；相册导入与服务端处理上限仍以
+# MediaAsset 的 1 小时视频契约为准。所有文件均走流式 PUT。
 # Post 图片/视频 50 MiB 上限让失败重传成本可控，因此当前不暴露未实现的
 # multipart/resume 契约；audio/file 保留聊天附件已有上限。
 streaming_required: true

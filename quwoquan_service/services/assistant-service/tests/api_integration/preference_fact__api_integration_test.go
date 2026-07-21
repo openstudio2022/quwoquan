@@ -70,6 +70,21 @@ func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {
 	if fact.PreferenceID == "" || fact.Status != preferencemodel.StatusActive {
 		t.Fatalf("preference = %#v", fact)
 	}
+	foreignSet := assistantAPIRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/preferences",
+		"preference-intruder",
+		setBody,
+	)
+	if foreignSet.Code != http.StatusNotFound {
+		t.Fatalf(
+			"foreign session preference set status=%d body=%s",
+			foreignSet.Code,
+			foreignSet.Body.String(),
+		)
+	}
 
 	replayed := assistantAPIRequest(
 		t,
@@ -159,6 +174,34 @@ func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {
 	if len(activeView.Items) != 0 {
 		t.Fatalf("revoked preference leaked into active list: %#v", activeView.Items)
 	}
+	revokedRun := assistantAPIRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/conversations/"+conversation.ConversationID+"/runs",
+		"preference-owner",
+		map[string]any{
+			"input":           map[string]any{"text": "撤销后不应注入"},
+			"clientRequestId": "preference-run-revoked",
+		},
+	)
+	if revokedRun.Code != http.StatusCreated {
+		t.Fatalf(
+			"start revoked-preference run status=%d body=%s",
+			revokedRun.Code,
+			revokedRun.Body.String(),
+		)
+	}
+	var revokedTurn assistant.AssistantTurn
+	if err := json.Unmarshal(revokedRun.Body.Bytes(), &revokedTurn); err != nil {
+		t.Fatalf("decode revoked-preference turn: %v", err)
+	}
+	if len(revokedTurn.SessionPreferenceFacts) != 0 {
+		t.Fatalf(
+			"revoked preference leaked into run snapshot: %#v",
+			revokedTurn.SessionPreferenceFacts,
+		)
+	}
 
 	restore := assistantAPIRequest(
 		t,
@@ -186,5 +229,34 @@ func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {
 	if len(activeView.Items) != 1 ||
 		activeView.Items[0].PreferenceID != fact.PreferenceID {
 		t.Fatalf("restored preference did not survive restart: %#v", activeView.Items)
+	}
+	restoredRun := assistantAPIRequest(
+		t,
+		restarted,
+		http.MethodPost,
+		"/assistant/conversations/"+conversation.ConversationID+"/runs",
+		"preference-owner",
+		map[string]any{
+			"input":           map[string]any{"text": "恢复后重新注入"},
+			"clientRequestId": "preference-run-restored",
+		},
+	)
+	if restoredRun.Code != http.StatusCreated {
+		t.Fatalf(
+			"start restored-preference run status=%d body=%s",
+			restoredRun.Code,
+			restoredRun.Body.String(),
+		)
+	}
+	var restoredTurn assistant.AssistantTurn
+	if err := json.Unmarshal(restoredRun.Body.Bytes(), &restoredTurn); err != nil {
+		t.Fatalf("decode restored-preference turn: %v", err)
+	}
+	if len(restoredTurn.SessionPreferenceFacts) != 1 ||
+		restoredTurn.SessionPreferenceFacts[0].PreferenceID != fact.PreferenceID {
+		t.Fatalf(
+			"restored preference missing from run snapshot: %#v",
+			restoredTurn.SessionPreferenceFacts,
+		)
 	}
 }

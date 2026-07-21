@@ -11,7 +11,6 @@ allowed:
   - cloud/media/media_download_cache.dart
   - cloud/runtime/contract_fixture_runtime_loader.dart
   - cloud/services/behavior/behavior_repository.dart
-  - cloud/services/user/profile_media_upload_gateway.dart
   - components/media/app_media_image.dart
   - components/media/camera/camera_capture_page.dart
   - components/media/image/editor/image_editor_page.dart
@@ -24,7 +23,6 @@ allowed:
   - ui/chat/widgets/voice/voice_recorder.dart
   - ui/content/entry/pages/create_page.dart
   - ui/content/entry/pages/video_editor_page.dart
-  - ui/content/entry/services/ios_video_editing_service.dart
   - ui/content/entry/widgets/article_editor.dart
   - ui/content/share/content_share_actions.dart
   - ui/content/widgets/article_content_block_renderer.dart

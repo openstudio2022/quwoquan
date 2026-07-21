@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_provider_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -56,6 +58,7 @@ final class LocalPostPublicationIntent {
     this.lastErrorCode,
     this.blockReason,
     this.blocked = false,
+    this.preparedMediaAssets = const <ContentMediaPreparationCheckpoint>[],
   });
 
   final SubmitContentPostPublicationCommand command;
@@ -72,6 +75,7 @@ final class LocalPostPublicationIntent {
   final String? lastErrorCode;
   final LocalPostPublicationBlockReason? blockReason;
   final bool blocked;
+  final List<ContentMediaPreparationCheckpoint> preparedMediaAssets;
 
   bool get publicationAccepted =>
       postId?.trim().isNotEmpty == true &&
@@ -97,6 +101,7 @@ final class LocalPostPublicationIntent {
     LocalPostPublicationBlockReason? blockReason,
     bool clearBlockReason = false,
     bool? blocked,
+    List<ContentMediaPreparationCheckpoint>? preparedMediaAssets,
   }) {
     return LocalPostPublicationIntent(
       command: command ?? this.command,
@@ -115,6 +120,7 @@ final class LocalPostPublicationIntent {
           : (lastErrorCode ?? this.lastErrorCode),
       blockReason: clearBlockReason ? null : (blockReason ?? this.blockReason),
       blocked: blocked ?? this.blocked,
+      preparedMediaAssets: preparedMediaAssets ?? this.preparedMediaAssets,
     );
   }
 
@@ -125,10 +131,11 @@ final class LocalPostPublicationIntent {
     return LocalPostPublicationIntent(
       command: command,
       authorPersonaId: (map['authorPersonaId'] ?? '').toString().trim(),
-      circleIds: (map['circleIds'] as List? ?? const <Object?>[])
-          .map((value) => value.toString().trim())
-          .where((value) => value.isNotEmpty)
-          .toList(growable: false),
+      circleIds: _normalizedCircleIds(
+        (map['circleIds'] as List? ?? const <Object?>[]).map(
+          (value) => value.toString(),
+        ),
+      ),
       createdAt:
           DateTime.tryParse(map['createdAt']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
@@ -148,6 +155,9 @@ final class LocalPostPublicationIntent {
       blocked:
           map['blocked'] == true ||
           _hasUnsupportedPublicationState(map['publicationState']),
+      preparedMediaAssets: _preparedMediaAssetsFromStorage(
+        map['preparedMediaAssets'],
+      ),
     );
   }
 
@@ -167,6 +177,9 @@ final class LocalPostPublicationIntent {
       'lastErrorCode': lastErrorCode,
       'blockReason': blockReason?.name,
       'blocked': blocked,
+      'preparedMediaAssets': preparedMediaAssets
+          .map((checkpoint) => checkpoint.toStorageMap())
+          .toList(growable: false),
     };
   }
 }
@@ -200,7 +213,7 @@ final class PostPublicationIntentQueueNotifier
     return const PostPublicationIntentQueueState();
   }
 
-  Future<void> beginMediaPreparation({
+  Future<LocalPostPublicationIntent> beginMediaPreparation({
     required SubmitContentPostPublicationCommand command,
     required String authorPersonaId,
     Iterable<String> circleIds = const <String>[],
@@ -231,10 +244,36 @@ final class PostPublicationIntentQueueNotifier
       createdAt: existing?.createdAt ?? now,
       nextAttemptAt: now,
       stage: LocalPostPublicationStage.preparingMedia,
+      preparedMediaAssets:
+          existing?.preparedMediaAssets ??
+          const <ContentMediaPreparationCheckpoint>[],
     );
     _replace(intent);
     await _persist();
     _scheduleRetry();
+    return intent;
+  }
+
+  /// Records one fully completed upload before the next source slot starts.
+  /// A restart can therefore compare the current source digest to this durable
+  /// checkpoint and reuse the authoritative MediaAsset identity.
+  Future<void> recordPreparedMediaAsset(
+    String localDraftId,
+    ContentMediaPreparationCheckpoint checkpoint,
+  ) async {
+    await _hydrated.future;
+    final intent = _intentForDraft(localDraftId);
+    if (intent == null || !intent.requiresMediaPreparation) {
+      throw StateError('media preparation intent is unavailable');
+    }
+    final updated = <ContentMediaPreparationCheckpoint>[
+      ...intent.preparedMediaAssets.where(
+        (item) => item.slot != checkpoint.slot,
+      ),
+      checkpoint,
+    ];
+    _replace(intent.copyWith(preparedMediaAssets: updated));
+    await _persist();
   }
 
   Future<ContentPostPublicationReceipt> submit({
@@ -341,8 +380,44 @@ final class PostPublicationIntentQueueNotifier
     if (intent.publicationAccepted) {
       throw StateError('accepted publication cannot be cancelled locally');
     }
+    if (intent.requiresMediaPreparation) {
+      final coordinator = ContentMediaUploadCoordinator(
+        media: ref.read(createContentMediaFacetProvider),
+      );
+      final reconciled = <ContentMediaPreparationCheckpoint>[];
+      for (var index = 0; index < intent.preparedMediaAssets.length; index++) {
+        final checkpoint = intent.preparedMediaAssets[index];
+        if (checkpoint.isCompleted ||
+            checkpoint.phase == ContentMediaPreparationPhase.aborted) {
+          reconciled.add(checkpoint);
+          continue;
+        }
+        final resolved = await coordinator.cancelPreparedCheckpoint(checkpoint);
+        if (resolved.phase == ContentMediaPreparationPhase.cancelling) {
+          _replace(
+            intent.copyWith(
+              preparedMediaAssets: <ContentMediaPreparationCheckpoint>[
+                ...reconciled,
+                resolved,
+                ...intent.preparedMediaAssets.skip(index + 1),
+              ],
+            ),
+          );
+          await _persist();
+          throw StateError('media upload cancellation requires reconciliation');
+        }
+        reconciled.add(resolved);
+      }
+      _replace(intent.copyWith(preparedMediaAssets: reconciled));
+      await _persist();
+    }
     _remove(intent.command.localDraftId);
     await _persist();
+    await _reportBackgroundRetryTerminal(
+      intent,
+      event: 'create_publish_cancelled',
+      terminal: 'cancelled',
+    );
     _scheduleRetry();
   }
 
@@ -370,6 +445,9 @@ final class PostPublicationIntentQueueNotifier
 
   Future<void> flushNow() async {
     await _hydrated.future;
+    if (!ref.mounted) {
+      return;
+    }
     if (_flushing) {
       return;
     }
@@ -469,7 +547,7 @@ final class PostPublicationIntentQueueNotifier
       if (!hydration.isCompleted) {
         hydration.complete();
       }
-      if (scopeKey == _activeScopeKey) {
+      if (ref.mounted && scopeKey == _activeScopeKey) {
         _scheduleRetry(immediate: true);
       }
     }
@@ -502,6 +580,17 @@ final class PostPublicationIntentQueueNotifier
     );
     _replace(accepted);
     await _persist();
+    if (intent.retryCount > 0) {
+      await _reportBackgroundRetryTerminal(
+        accepted,
+        event: publicationState == ContentPostPublicationState.published
+            ? 'create_publish_success'
+            : 'create_publish_pending_review',
+        terminal: publicationState == ContentPostPublicationState.published
+            ? 'published'
+            : 'pending_review',
+      );
+    }
     if (publicationState == ContentPostPublicationState.published) {
       await _finishAcceptedIntent(accepted);
     } else {
@@ -648,7 +737,37 @@ final class PostPublicationIntentQueueNotifier
       ),
     );
     await _persist();
+    if (intent.retryCount > 0) {
+      await _reportBackgroundRetryTerminal(
+        intent,
+        event: retryable
+            ? 'create_publish_retry_scheduled'
+            : 'create_publish_retry_exhausted',
+        terminal: retryable ? 'retry_scheduled' : 'retry_exhausted',
+        failReasonCode: errorCode,
+      );
+    }
     _scheduleRetry();
+  }
+
+  Future<void> _reportBackgroundRetryTerminal(
+    LocalPostPublicationIntent intent, {
+    required String event,
+    required String terminal,
+    String? failReasonCode,
+  }) {
+    return reportCreateEditorProviderEvent(ref, event, <String, Object?>{
+      'contentType': intent.command.contentType.name,
+      'correlationHash': publicationCorrelationHash(
+        intent.command.publishIntentId,
+      ),
+      'backgroundRetryTerminal': terminal,
+      'failReasonCode': failReasonCode,
+      'durationMs': DateTime.now()
+          .toUtc()
+          .difference(intent.createdAt)
+          .inMilliseconds,
+    }, 'local_drafts');
   }
 
   Duration? _retryAfter(CloudException error) {
@@ -707,8 +826,13 @@ final class PostPublicationIntentQueueNotifier
   }
 
   void _scheduleRetry({bool immediate = false}) {
+    if (!ref.mounted) {
+      return;
+    }
     _retryTimer?.cancel();
-    final pending = state.intents.where((intent) => !intent.blocked).toList();
+    final pending = state.intents
+        .where((intent) => !intent.blocked && !intent.requiresMediaPreparation)
+        .toList();
     if (pending.isEmpty) {
       return;
     }
@@ -719,7 +843,9 @@ final class PostPublicationIntentQueueNotifier
         ? Duration.zero
         : nextAttemptAt.difference(DateTime.now().toUtc());
     _retryTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
-      unawaited(flushNow());
+      if (ref.mounted) {
+        unawaited(flushNow());
+      }
     });
   }
 
@@ -795,6 +921,24 @@ String? _optionalStorageText(Object? value) {
   return normalized.isEmpty ? null : normalized;
 }
 
+LocalPostPublicationStage _optionalPublicationStage(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  for (final stage in LocalPostPublicationStage.values) {
+    if (stage.name == normalized) {
+      return stage;
+    }
+  }
+  return LocalPostPublicationStage.submitting;
+}
+
+List<String> _normalizedCircleIds(Iterable<String> values) {
+  final seen = <String>{};
+  return values
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty && seen.add(value))
+      .toList(growable: false);
+}
+
 ContentPostPublicationState? _optionalPublicationState(Object? value) {
   final normalized = value?.toString().trim() ?? '';
   if (normalized.isEmpty) {
@@ -822,4 +966,18 @@ LocalPostPublicationBlockReason? _optionalBlockReason(Object? value) {
   return normalized.isEmpty
       ? null
       : LocalPostPublicationBlockReason.invalidReceipt;
+}
+
+List<ContentMediaPreparationCheckpoint> _preparedMediaAssetsFromStorage(
+  Object? value,
+) {
+  if (value is! List) {
+    return const <ContentMediaPreparationCheckpoint>[];
+  }
+  final seenSlots = <String>{};
+  return value
+      .map(ContentMediaPreparationCheckpoint.tryParse)
+      .whereType<ContentMediaPreparationCheckpoint>()
+      .where((checkpoint) => seenSlots.add(checkpoint.slot))
+      .toList(growable: false);
 }

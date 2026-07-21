@@ -80,8 +80,8 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	service := newIntegrationAssistantService(
 		application.WithChatGroundingClient(chatclient.NewClient(chatHTTP.Client(), chatHTTP.URL)),
 	)
-	consumer := messaging.NewAssistantMentionedConsumer(
-		integrationRedisClient,
+	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+		newIntegrationMessageTransport(),
 		service,
 		"e2e-worker",
 		nil,

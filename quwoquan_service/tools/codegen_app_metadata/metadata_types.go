@@ -457,12 +457,12 @@ type telemetryEventDef struct {
 }
 
 type telemetryEventCatalogFile struct {
-	LogTypes        []string                         `yaml:"log_types"`
-	NetworkClasses  []string                         `yaml:"network_classes"`
-	CommonFields    []string                         `yaml:"common_fields"`
-	ContextExtensions []string                       `yaml:"context_extensions"`
-	ExtensionFields map[string]telemetryExtensionDef `yaml:"extension_fields"`
-	Events          []telemetryEventDef              `yaml:"events"`
+	LogTypes          []string                         `yaml:"log_types"`
+	NetworkClasses    []string                         `yaml:"network_classes"`
+	CommonFields      []string                         `yaml:"common_fields"`
+	ContextExtensions []string                         `yaml:"context_extensions"`
+	ExtensionFields   map[string]telemetryExtensionDef `yaml:"extension_fields"`
+	Events            []telemetryEventDef              `yaml:"events"`
 }
 
 type contentPublicationPolicyFile struct {
@@ -519,6 +519,20 @@ type contentMediaUploadTypeDef struct {
 type contentMediaUploadErrorDef struct {
 	FileTooLarge    string `yaml:"file_too_large"`
 	UnsupportedType string `yaml:"unsupported_type"`
+}
+
+type contentImageVariantPolicyFile struct {
+	Schema                  string                                   `yaml:"schema"`
+	DerivativePolicyVersion int                                      `yaml:"derivative_policy_version"`
+	Profiles                map[string]contentImageVariantProfileDef `yaml:"profiles"`
+}
+
+type contentImageVariantProfileDef struct {
+	Width      int    `yaml:"width"`
+	Format     string `yaml:"format"`
+	Quality    int    `yaml:"quality"`
+	Scene      string `yaml:"scene"`
+	Processing string `yaml:"processing"`
 }
 
 type searchNamedValueDef struct {

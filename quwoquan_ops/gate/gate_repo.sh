@@ -64,6 +64,8 @@ python3 quwoquan_ops/tests/local_contract/test_content_page_funnel_coverage__obs
 python3 quwoquan_ops/gate/verify_runtime_log_governance.py
 python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_output_path_source_contract.py
+python3 quwoquan_ops/gate/verify_external_provider_governance.py
+python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
 python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
 python3 quwoquan_ops/gate/verify_markdown_local_links.py
 # 丢弃误写入源码树的 Python 缓存，再跑 root layout（缓存只允许落在 .qwq_output）。
@@ -80,6 +82,7 @@ run_service() {
   echo "[gate] quwoquan_service"
   bash quwoquan_ops/gate/scaffold/verify_feature_traceability.sh
   python3 quwoquan_ops/gate/verify_stackctl_args_contract.py
+  python3 quwoquan_ops/gate/verify_stackctl_provider_readiness_contract.py
 python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
 python3 quwoquan_ops/gate/verify_api_path_unversioned.py
 python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
@@ -121,10 +124,13 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   python3 quwoquan_ops/environments/verify/verify_gray_routing_policy.py
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
+  python3 quwoquan_ops/gate/verify_runtime_config_release_layout.py
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
   python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
+  python3 quwoquan_ops/tests/local_contract/test_content_b2_test_integrity__local_contract_test.py
+  python3 quwoquan_service/scripts/verify/verify_content_b2_test_integrity.py
   python3 quwoquan_ops/tests/local_contract/test_content_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
   python3 quwoquan_service/scripts/verify/verify_content_object_alert_coverage.py
   python3 quwoquan_service/scripts/verify/verify_entity_object_alert_coverage.py
@@ -134,6 +140,8 @@ python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
   bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
   make verify-env-packaging
+  # 环境包生成后再次断言，防止 package/renderer 旁路把配置或 payload 写回 output。
+  python3 quwoquan_ops/gate/verify_output_layout.py
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart

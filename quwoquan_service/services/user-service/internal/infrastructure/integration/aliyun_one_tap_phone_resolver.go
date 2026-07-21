@@ -10,6 +10,7 @@ import (
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
 	"quwoquan_service/services/user-service/internal/application"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const aliyunDypnsEndpoint = "dypnsapi.aliyuncs.com"
@@ -62,18 +63,19 @@ func newAliyunOneTapPhoneResolverWithClient(
 
 func (r *AliyunOneTapPhoneResolver) ResolvePhone(
 	ctx context.Context,
-	_ string,
 	carrierToken string,
-) (string, string, error) {
+) (application.VerifiedCarrierPhone, error) {
 	if err := ctx.Err(); err != nil {
-		return "", "", err
+		return application.VerifiedCarrierPhone{}, mapAliyunResolverFailure(err)
 	}
 	carrierToken = strings.TrimSpace(carrierToken)
 	if carrierToken == "" {
-		return "", "", errors.New("carrier token invalid")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierTokenInvalid("carrier token is required")
 	}
 	if r == nil || r.client == nil {
-		return "", "", errors.New("aliyun one tap resolver unavailable")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierUnavailable("carrier identity adapter unavailable")
 	}
 	runtime := (&util.RuntimeOptions{}).
 		SetAutoretry(false).
@@ -85,41 +87,49 @@ func (r *AliyunOneTapPhoneResolver) ResolvePhone(
 		runtime,
 	)
 	if err != nil {
-		return "", "", sanitizedAliyunResolverError(err)
+		return application.VerifiedCarrierPhone{}, mapAliyunResolverFailure(err)
 	}
 	if response == nil || response.Body == nil {
-		return "", "", errors.New("aliyun one tap response invalid")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierUnavailable("carrier identity response invalid")
 	}
 	code := strings.TrimSpace(stringValue(response.Body.Code))
 	if code != "OK" {
 		if code == "" {
-			return "", "", errors.New("aliyun one tap response invalid")
+			return application.VerifiedCarrierPhone{},
+				generated.AppErrorFromCarrierUnavailable("carrier identity response invalid")
 		}
-		return "", "", errors.New("carrier token invalid")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierTokenInvalid("carrier token rejected")
 	}
 	dto := response.Body.GetMobileResultDTO
 	if dto == nil {
-		return "", "", errors.New("aliyun one tap response invalid")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierUnavailable("carrier identity response invalid")
 	}
 	phone := normalizeAliyunPhone(stringValue(dto.Mobile))
 	if phone == "" {
-		return "", "", errors.New("aliyun one tap response invalid")
+		return application.VerifiedCarrierPhone{},
+			generated.AppErrorFromCarrierUnavailable("carrier identity response invalid")
 	}
-	return phone, maskAliyunPhone(phone), nil
+	return application.VerifiedCarrierPhone{
+		Phone:        phone,
+		DisplayLabel: maskAliyunPhone(phone),
+	}, nil
 }
 
-func sanitizedAliyunResolverError(err error) error {
+func mapAliyunResolverFailure(err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
-		return context.Canceled
+		return generated.AppErrorFromCarrierUnavailable("carrier identity request cancelled")
 	case errors.Is(err, context.DeadlineExceeded):
-		return context.DeadlineExceeded
+		return generated.AppErrorFromCarrierProviderTimeout("carrier identity request timed out")
 	}
 	text := strings.ToLower(err.Error())
 	if strings.Contains(text, "timeout") || strings.Contains(text, "deadline") {
-		return context.DeadlineExceeded
+		return generated.AppErrorFromCarrierProviderTimeout("carrier identity request timed out")
 	}
-	return errors.New("aliyun one tap provider unavailable")
+	return generated.AppErrorFromCarrierUnavailable("carrier identity adapter unavailable")
 }
 
 func normalizeAliyunPhone(value string) string {
@@ -151,4 +161,4 @@ func stringValue(value *string) string {
 	return *value
 }
 
-var _ application.OneTapPhoneResolver = (*AliyunOneTapPhoneResolver)(nil)
+var _ application.CarrierPhoneResolver = (*AliyunOneTapPhoneResolver)(nil)

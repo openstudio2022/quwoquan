@@ -58,6 +58,8 @@ policy:
     sourceFetchTimeoutSeconds: 20
     sourceFetchMaxRetries: 4
     ocrTimeoutSeconds: 8
+    videoProbeTimeoutSeconds: 60
+    videoTranscodeTimeoutSeconds: 300
     mediawikiFallbackRetries: 2
     mediawikiWikitextMaxRetries: 2
     queueLeaseTtlSeconds: 1800

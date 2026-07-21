@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/bootstrap_recovery.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
@@ -907,7 +908,8 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       if (!mounted) {
         return;
       }
-      if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      final currentSession = ref.read(authSessionControllerProvider);
+      if (!currentSession.isAuthenticated) {
         ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
         if (!isAppRouterLibraryLoaded) {
           return;
@@ -915,11 +917,16 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         final router = ref.read(deferredAppRouterProvider);
         final currentLocation = router.routerDelegate.currentConfiguration.uri
             .toString();
+        final suspended =
+            currentSession.promptReason == AuthPromptReason.accountSuspended;
+        final safeLocation = suspended ? AppRoutePaths.home : currentLocation;
         router.go(
           buildLoginRouteLocation(
-            reasonName: AuthPromptReason.sessionExpired.name,
+            reasonName:
+                (currentSession.promptReason ?? AuthPromptReason.sessionExpired)
+                    .name,
             redirect: currentLocation,
-            dismissFallback: currentLocation,
+            dismissFallback: safeLocation,
             dismissPolicy: LoginDismissPolicy.safeFallback,
           ),
         );

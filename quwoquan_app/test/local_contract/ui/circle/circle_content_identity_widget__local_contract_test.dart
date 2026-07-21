@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
@@ -13,13 +11,16 @@ import 'typed_circle_query_test_double.dart';
 
 Widget _buildApp(
   Widget child, {
-  CircleRepository? repository,
+  CircleQueryReader? circleQuery,
   CircleFeedQueryReader? feedQuery,
 }) {
   return ProviderScope(
     overrides: [
-      circleRepositoryProvider.overrideWithValue(
-        repository ?? MockCircleRepository(),
+      circleDetailQueryProvider.overrideWithValue(
+        circleQuery ?? CircleQueryReaderTestDouble(),
+      ),
+      circlesListQueryProvider.overrideWithValue(
+        circleQuery ?? CircleQueryReaderTestDouble(),
       ),
       circleDetailFeedQueryProvider.overrideWithValue(
         feedQuery ??
@@ -78,7 +79,7 @@ void main() {
   });
 
   testWidgets('圈子作品切到长文后，列表标签与筛选口径保持一致', (tester) async {
-    final repository = _ArticleFixtureCircleRepository();
+    final circleQuery = _ArticleFixtureCircleQuery();
     await tester.pumpWidget(
       _buildApp(
         const SizedBox(
@@ -89,7 +90,7 @@ void main() {
             role: CircleRole.owner,
           ),
         ),
-        repository: repository,
+        circleQuery: circleQuery,
         feedQuery: CircleFeedQueryTestDouble(_articleFeedFixture),
       ),
     );
@@ -167,19 +168,17 @@ CircleFeedPageSlice _articleFeedFixture(CircleFeedQuery query) {
   );
 }
 
-class _ArticleFixtureCircleRepository extends MockCircleRepository {
+class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
-    return CircleDetailPayload.fromWire(<String, dynamic>{
-      'id': circleId,
-      'name': '契约摄影社',
-      'ownerId': 'fixture_user_owner',
-      'category': 'photography',
-      'visibility': 'public',
-      'joinPolicy': 'approval',
-      'createdAt': '2026-05-06T00:00:00Z',
-      'updatedAt': '2026-05-06T00:00:00Z',
-      'sectionConfig': const <Map<String, dynamic>>[],
-    });
-  }
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      CircleProjection(
+        circleId: query.circleId,
+        name: '契约摄影社',
+        ownerId: 'fixture_user_owner',
+        category: 'photography',
+        visibility: 'public',
+        joinPolicy: 'approval',
+        createdAt: DateTime.utc(2026, 5, 6),
+        updatedAt: DateTime.utc(2026, 5, 6),
+      );
 }

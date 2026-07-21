@@ -1,0 +1,5 @@
+schema: content_media_original_access_policy
+grant_ttl_seconds: 300
+rate_limit:
+  max_grants: 6
+  window_seconds: 300

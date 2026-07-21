@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
-import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
+import 'package:quwoquan_app/core/platform/callkit_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

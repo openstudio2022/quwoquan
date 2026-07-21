@@ -47,6 +47,7 @@ scene_routing:
         - "events.content."
         - "events.circle."
         - "events.search."
+        - "events.chat."
         - "page_ctx:"
         - "content_analysis:"
         - "content:publication-rate:"
@@ -310,6 +311,24 @@ key_patterns:
       搜索 → 推荐在线特征流。search-service 在查询响应后 best-effort XADD，
       content-service 消费组 content-service 投影到 rm_recommend_feature.userFeatures.search*。
       消费失败进入 events.search.recommendation_signals.dlq；主搜索路径不被阻塞。
+
+  - pattern: "events.chat.assistant_mentions"
+    redis_scene: general
+    ttl_seconds: null
+    type: stream
+    description: |
+      chat-service 发布的 @小趣 可靠事实流。assistant-service 使用独立 consumer group
+      拉取对话上下文并经 chat-service 回帖；重复投递必须由 conversationId + messageId
+      幂等键抑制，Redis Stream 仅承载可重放传输，不替代 chat 消息权威存储。
+
+  - pattern: "events.chat.assistant_mentions.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      assistant-service 处理 @小趣 事实失败后的可重放死信。仅在原消息成功写入本流、
+      刷新七天保留期且已从源 consumer group ACK 后计入
+      assistant_mentioned_consumer_dlq_total；保留重放所需事件字段与错误摘要，不写入原始错误。
 
   - pattern: "events.content.post_lifecycle"
     redis_scene: general

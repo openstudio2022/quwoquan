@@ -65,6 +65,15 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
 
+  /// 媒体房间连接地址，仅由受控环境包注入平台媒体 adapter。
+  ///
+  /// 通过 `--dart-define=RTC_MEDIA_CONNECTION_URL=...` 注入；它绝不能由
+  /// CallSession operation 响应透传。
+  static const String rtcMediaConnectionUrl = String.fromEnvironment(
+    'RTC_MEDIA_CONNECTION_URL',
+    defaultValue: '',
+  );
+
   /// Web 顶部安装提示：移动/Pad 端直接下载 App 或打开商店落地页。
   ///
   /// 生产环境通过 `--dart-define=WEB_APP_MOBILE_DOWNLOAD_URL=...` 注入；
@@ -166,6 +175,8 @@ class CloudRuntimeConfig {
       if (!_isValidHttpsBaseUrl(mediaVideoCdnBaseUrl))
         'MEDIA_VIDEO_CDN_BASE_URL',
       if (!_isValidHttpsBaseUrl(mediaUploadBaseUrl)) 'MEDIA_UPLOAD_BASE_URL',
+      if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl))
+        'RTC_MEDIA_CONNECTION_URL',
     ];
     return List<String>.unmodifiable(invalid);
   }
@@ -193,6 +204,7 @@ class CloudRuntimeConfig {
       mediaImageCdnBaseUrl: mediaImageCdnBaseUrl,
       mediaVideoCdnBaseUrl: mediaVideoCdnBaseUrl,
       mediaUploadBaseUrl: mediaUploadBaseUrl,
+      rtcMediaConnectionUrl: rtcMediaConnectionUrl,
     );
   }
 
@@ -204,6 +216,7 @@ class CloudRuntimeConfig {
     required String mediaImageCdnBaseUrl,
     required String mediaVideoCdnBaseUrl,
     required String mediaUploadBaseUrl,
+    required String rtcMediaConnectionUrl,
   }) {
     final endpoints = <String, String>{
       'CLOUD_GATEWAY_BASE_URL': gatewayBaseUrl,
@@ -216,6 +229,9 @@ class CloudRuntimeConfig {
         .where((entry) => !_isValidHttpsBaseUrl(entry.value))
         .map((entry) => entry.key)
         .toList(growable: false);
+    if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl)) {
+      invalidEndpoints.add('RTC_MEDIA_CONNECTION_URL');
+    }
     final validRuntimeEnv =
         runtimeEnv == 'alpha' ||
         runtimeEnv == 'beta' ||
@@ -237,6 +253,15 @@ class CloudRuntimeConfig {
     final uri = Uri.tryParse(raw.trim());
     return uri != null &&
         uri.scheme.toLowerCase() == 'https' &&
+        uri.host.isNotEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+  }
+
+  static bool _isValidSecureWebSocketUrl(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    return uri != null &&
+        uri.scheme.toLowerCase() == 'wss' &&
         uri.host.isNotEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;

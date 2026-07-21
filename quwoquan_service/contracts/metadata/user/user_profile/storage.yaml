@@ -8,6 +8,9 @@ tables:
     columns:
       - { name: user_id, type: VARCHAR(96), constraints: [PK] }
       - { name: account_state, type: VARCHAR(32), constraints: [NOT_NULL], default: "'active'" }
+      - { name: auth_epoch, type: BIGINT, constraints: [NOT_NULL], default: 1 }
+      - { name: suspension_case_ref, type: VARCHAR(128) }
+      - { name: suspended_at, type: TIMESTAMPTZ }
       - { name: identity_origin, type: VARCHAR(32), constraints: [NOT_NULL], default: "'phone'" }
       - { name: logical_shard, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: anonymous_retention_policy, type: VARCHAR(32), constraints: [NOT_NULL], default: "'preserve'" }
@@ -40,6 +43,7 @@ tables:
       - { name: idx_user_profiles_nickname, columns: [nickname] }
       - { name: idx_user_profiles_phone, columns: [phone] }
       - { name: idx_user_profiles_status, columns: [status] }
+      - { name: idx_user_profiles_account_state, columns: [account_state] }
     search_indexes:
       - { name: gin_user_profiles_search, columns: [nickname, bio], type: GIN_TRGM }
 

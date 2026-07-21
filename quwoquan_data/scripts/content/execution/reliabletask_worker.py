@@ -1,7 +1,6 @@
 """Typed Python worker boundary for Mongo+Redis ReliableTask content jobs."""
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from dataclasses import dataclass, replace
@@ -230,7 +229,11 @@ def _execute_author(
             [prompt],
             [job_outcome],
         )
-        if not finalized or not finalized[0].succeeded:
+        if (
+            not finalized
+            or not finalized[0].succeeded
+            or finalized[0].gate_issues
+        ):
             issues = finalized[0].gate_issues if finalized else ("missing outcome",)
             raise ValueError(
                 "ReliableTask homepage finalize failed: " + "; ".join(issues)
@@ -311,7 +314,8 @@ def execute_work_item(
     )
 
 
-def handle_execute_object_worker(_args: argparse.Namespace) -> None:
+def run_process_worker() -> None:
+    """Private Go-to-Python process boundary; not a public Data CLI command."""
     try:
         request = json.load(sys.stdin)
         assert_valid(
@@ -336,26 +340,13 @@ def handle_execute_object_worker(_args: argparse.Namespace) -> None:
         )
     except Exception as exc:  # noqa: BLE001
         print(
-            f"[task execute-object-worker] {type(exc).__name__}: {exc}",
+            f"[data-content-worker] {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
         raise SystemExit(1) from exc
     print(json.dumps(response, ensure_ascii=False, separators=(",", ":")))
-
-
-def register_execute_object_worker_parser(
-    subparsers: argparse._SubParsersAction,
-) -> None:
-    parser = subparsers.add_parser(
-        "execute-object-worker",
-        help="ReliableTask 内部强类型对象 worker（stdin/stdout JSON）",
-    )
-    parser.set_defaults(handler=handle_execute_object_worker)
-
-
 __all__ = [
     "DataContentWorkItem",
     "execute_work_item",
-    "handle_execute_object_worker",
-    "register_execute_object_worker_parser",
+    "run_process_worker",
 ]

@@ -1,12 +1,14 @@
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef HomepageCommandInvocationContextFactory =
     CloudOperationInvocationContext Function(
-      String clientPageId, {
-      required bool command,
-    });
+      String clientPageId,
+      AppUiSurface surface,
+    );
 
+/// Production Remote command adapter for the Homepage object.
 final class RemoteHomepageCommandWriter
     implements
         HomepageCandidateCommandWriter,
@@ -25,7 +27,10 @@ final class RemoteHomepageCommandWriter
     SuggestHomepageCandidateCommand command,
   ) => client.entityHomepageSuggestHomepageCandidate(
     command,
-    context: _context(EntityRequestPageIds.suggestHomepageCandidate),
+    context: _context(
+      EntityRequestPageIds.suggestHomepageCandidate,
+      AppUiSurfaces.suggestHomepage,
+    ),
   );
 
   @override
@@ -33,7 +38,10 @@ final class RemoteHomepageCommandWriter
     UpdateClaimedHomepageBasicsCommand command,
   ) => client.entityHomepageUpdateClaimedHomepageBasics(
     command,
-    context: _context(EntityRequestPageIds.updateClaimedHomepageBasics),
+    context: _context(
+      EntityRequestPageIds.updateClaimedHomepageBasics,
+      AppUiSurfaces.homepageMaintenance,
+    ),
   );
 
   @override
@@ -41,7 +49,10 @@ final class RemoteHomepageCommandWriter
     CreateHomepageClaimRequestCommand command,
   ) => client.entityHomepageClaimRequestCreateHomepageClaimRequest(
     command,
-    context: _context(EntityRequestPageIds.createHomepageClaimRequest),
+    context: _context(
+      EntityRequestPageIds.createHomepageClaimRequest,
+      AppUiSurfaces.homepageClaim,
+    ),
   );
 
   @override
@@ -49,9 +60,14 @@ final class RemoteHomepageCommandWriter
     CreateHomepageStatusReportCommand command,
   ) => client.entityHomepageStatusReportCreateHomepageStatusReport(
     command,
-    context: _context(EntityRequestPageIds.createHomepageStatusReport),
+    context: _context(
+      EntityRequestPageIds.createHomepageStatusReport,
+      AppUiSurfaces.homepageStatusReport,
+    ),
   );
 
-  CloudOperationInvocationContext _context(String clientPageId) =>
-      invocationContext(clientPageId, command: true);
+  CloudOperationInvocationContext _context(
+    String clientPageId,
+    AppUiSurface surface,
+  ) => invocationContext(clientPageId, surface);
 }

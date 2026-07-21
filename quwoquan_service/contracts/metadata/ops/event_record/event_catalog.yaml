@@ -71,9 +71,10 @@ extension_fields:
   durationMismatch: { type: bool }
   devicePlatform: { type: string, enum: [android, ios, ohos, web, desktop] }
   playbackMode: { type: string, max_length: 32 }
-  publicationStage: { type: string, enum: [editor_ready, draft_saved, draft_restored, submit_started, queued, blocked, published] }
+  publicationStage: { type: string, enum: [editor_ready, draft_saved, draft_restored, submit_started, queued, retry_scheduled, retry_exhausted, pending_review, cancelled, blocked, published] }
   contentType: { type: string, enum: [micro, article, image, video, unknown] }
-  objectState: { type: string, enum: [draft, submitting, retry_wait, blocked, published] }
+  objectState: { type: string, enum: [draft, submitting, retry_wait, pending_review, blocked, published, cancelled] }
+  backgroundRetryTerminal: { type: string, enum: [not_applicable, retry_scheduled, retry_exhausted, published, pending_review, rejected, cancelled] }
   surfaceId: { type: string, max_length: 128 }
   correlationHash: { type: string, max_length: 64 }
   detectionSource: { type: string, enum: [dart_event_loop_watchdog, android_application_exit_info, ios_metric_kit] }
@@ -90,6 +91,20 @@ extension_fields:
   targetType: { type: string, max_length: 64 }
   targetId: { type: string, max_length: 256 }
   environment: { type: string, enum: [alpha, beta, gamma, prod] }
+  catalogSource: { type: string, enum: [remote, verified_cache, bootstrap_replica] }
+  releaseIdHash: { type: string, max_length: 64 }
+  digestMatch: { type: bool }
+  cacheAgeBucket: { type: string, enum: [not_applicable, under_1h, one_to_24h, over_24h] }
+  # 群聊商业漏斗只接受受限枚举与分桶，禁止写入 conversation/message/user ID、
+  # 正文、昵称、搜索词或任意请求载荷。
+  chatAction: { type: string, enum: [candidate_source_open, candidate_source_select, group_create, member_add, mention_select, mention_send, read_watermark, group_governance] }
+  chatOutcome: { type: string, enum: [succeeded, failed, rejected, cancelled, unchanged] }
+  chatSource: { type: string, enum: [contacts, group, circle, roster, composer, conversation, settings] }
+  mentionScope: { type: string, enum: [none, member, all, assistant] }
+  governanceAction: { type: string, enum: [none, announcement_update, admin_assign, admin_revoke, ownership_transfer, member_remove, member_leave] }
+  watermarkResult: { type: string, enum: [none, advanced, already_current, rejected, failed] }
+  memberCountBucket: { type: string, enum: [zero, one, two_to_five, six_to_fifty, fifty_one_to_five_hundred, five_hundred_one_to_one_thousand] }
+  unreadCountBucket: { type: string, enum: [zero, one, two_to_five, six_to_fifty, fifty_one_to_five_hundred, five_hundred_one_to_one_thousand] }
 
 events:
   - event_type: page_open
@@ -189,6 +204,15 @@ events:
     normal_sample_rate: 1.0
     internal_priority: critical
 
+  # 群聊漏斗的唯一业务事实。每条记录只含闭集动作、结果和低基数分桶；
+  # conversation/message/user ID 与正文绝不可作为 telemetry extension 或 SLS 维度。
+  - event_type: chat_interaction_outcome
+    log_type: event
+    required_extensions: [chatAction, chatOutcome]
+    optional_extensions: [chatSource, mentionScope, governanceAction, watermarkResult, memberCountBucket, unreadCountBucket, surfaceId, durationMs, failReasonCode, recoveryAction]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
   - event_type: performance_sample
     log_type: event
     required_extensions: [operationId, durationMs]
@@ -203,10 +227,25 @@ events:
     normal_sample_rate: 1.0
     internal_priority: critical
 
+  # 滤镜目录只记录受校验目录的来源、release 哈希与 cache 年龄桶；不得记录用户身份、图片内容或原始 releaseId。
+  - event_type: filter_catalog_load
+    log_type: event
+    required_extensions: [catalogSource, releaseIdHash, digestMatch, cacheAgeBucket, result]
+    optional_extensions: [durationMs, failReasonCode]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
   - event_type: content_publication
     log_type: event
     required_extensions: [publicationStage, contentType, objectState, surfaceId, result]
-    optional_extensions: [durationMs, failReasonCode, correlationHash, recoveryAction, requestId, traceId]
+    optional_extensions: [durationMs, failReasonCode, correlationHash, backgroundRetryTerminal, recoveryAction, requestId, traceId]
+    normal_sample_rate: 1.0
+    internal_priority: critical
+
+  - event_type: video_preview_track_load
+    log_type: event
+    required_extensions: [result]
+    optional_extensions: [durationMs, failReasonCode]
     normal_sample_rate: 1.0
     internal_priority: critical
 

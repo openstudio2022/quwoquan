@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/circle-service/internal/application"
 )
 
@@ -80,7 +80,7 @@ func normalizeUserAccountClosedConsumerConfig(
 }
 
 type UserAccountClosedConsumer struct {
-	redis      rtredis.Client
+	transport  runtimemessaging.DurableDeliveryTransport
 	projection application.UserAccountClosedProjection
 	failures   UserAccountClosedFailureStore
 	consumer   string
@@ -93,14 +93,14 @@ type UserAccountClosedConsumer struct {
 }
 
 func NewUserAccountClosedConsumer(
-	redis rtredis.Client,
+	transport runtimemessaging.DurableDeliveryTransport,
 	projection application.UserAccountClosedProjection,
 	failures UserAccountClosedFailureStore,
 	consumer string,
 	logger *slog.Logger,
 ) (*UserAccountClosedConsumer, error) {
 	return NewUserAccountClosedConsumerWithConfig(
-		redis,
+		transport,
 		projection,
 		failures,
 		consumer,
@@ -110,16 +110,16 @@ func NewUserAccountClosedConsumer(
 }
 
 func NewUserAccountClosedConsumerWithConfig(
-	redis rtredis.Client,
+	transport runtimemessaging.DurableDeliveryTransport,
 	projection application.UserAccountClosedProjection,
 	failures UserAccountClosedFailureStore,
 	consumer string,
 	logger *slog.Logger,
 	config UserAccountClosedConsumerConfig,
 ) (*UserAccountClosedConsumer, error) {
-	if redis == nil || projection == nil || failures == nil {
+	if transport == nil || projection == nil || failures == nil {
 		return nil, errors.New(
-			"circle UserAccountClosed consumer requires Redis, projection, and failure store",
+			"circle UserAccountClosed consumer requires transport, projection, and failure store",
 		)
 	}
 	consumer = strings.TrimSpace(consumer)
@@ -132,7 +132,7 @@ func NewUserAccountClosedConsumerWithConfig(
 		logger = slog.Default()
 	}
 	return &UserAccountClosedConsumer{
-		redis:      redis,
+		transport:  transport,
 		projection: projection,
 		failures:   failures,
 		consumer:   consumer,
@@ -144,12 +144,12 @@ func NewUserAccountClosedConsumerWithConfig(
 func (consumer *UserAccountClosedConsumer) EnsureGroup(
 	ctx context.Context,
 ) error {
-	if consumer == nil || consumer.redis == nil {
+	if consumer == nil || consumer.transport == nil {
 		return errors.New(
 			"circle UserAccountClosed consumer is not configured",
 		)
 	}
-	if err := consumer.redis.XGroupCreateMkStream(
+	if err := consumer.transport.EnsureDurableConsumerGroup(
 		ctx,
 		UserAccountEventStream,
 		userAccountClosedGroup,
@@ -167,7 +167,7 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 	ctx context.Context,
 ) (int, error) {
 	if consumer == nil ||
-		consumer.redis == nil ||
+		consumer.transport == nil ||
 		consumer.projection == nil ||
 		consumer.failures == nil {
 		return 0, errors.New(
@@ -178,7 +178,7 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	claimed, _, err := consumer.redis.XAutoClaim(
+	claimed, _, err := consumer.transport.ReclaimDurable(
 		ctx,
 		UserAccountEventStream,
 		userAccountClosedGroup,
@@ -195,13 +195,19 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	fresh, err := consumer.redis.XReadGroup(
+	readBlock := consumer.config.ReadBlock
+	if readBlock <= 0 {
+		readBlock = time.Millisecond
+	}
+	fresh, err := consumer.transport.ReadDurable(
 		ctx,
-		userAccountClosedGroup,
-		consumer.consumer,
-		map[string]string{UserAccountEventStream: ">"},
-		consumer.config.BatchSize,
-		consumer.config.ReadBlock,
+		runtimemessaging.StreamReadRequest{
+			Stream:   UserAccountEventStream,
+			Group:    userAccountClosedGroup,
+			Consumer: consumer.consumer,
+			Count:    consumer.config.BatchSize,
+			Block:    readBlock,
+		},
 	)
 	if err != nil {
 		err = fmt.Errorf("read circle UserAccountClosed events: %w", err)
@@ -230,10 +236,11 @@ func (consumer *UserAccountClosedConsumer) ProcessOnce(
 
 func (consumer *UserAccountClosedConsumer) processMessage(
 	ctx context.Context,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) error {
 	startedAt := time.Now()
-	event, err := decodeUserAccountClosed(message.Values)
+	values := durableFieldValues(message.Fields)
+	event, err := decodeUserAccountClosed(values)
 	if errors.Is(err, errUnsupportedUserAccountEvent) {
 		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
 			return ackErr
@@ -261,7 +268,7 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 	attempts, recordErr := consumer.failures.RecordUserAccountClosedFailure(
 		ctx,
 		message.ID,
-		message.Values["eventId"],
+		values["eventId"],
 		err,
 	)
 	if recordErr != nil {
@@ -280,17 +287,22 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		)
 	}
 	errorDigest := irreversibleDigest(err.Error())
-	if _, dlqErr := consumer.redis.XAdd(
+	if _, dlqErr := consumer.transport.PublishDeadLetter(
 		ctx,
-		UserAccountClosedDLQ,
-		userAccountClosedDLQValues(message, errorDigest, attempts),
+		runtimemessaging.DeadLetterMessage{
+			SourceStream:      UserAccountEventStream,
+			DestinationStream: UserAccountClosedDLQ,
+			SourceID:          message.ID,
+			Reason:            "user_account_closed_projection_failed",
+			Fields:            userAccountClosedDLQFields(message, errorDigest, attempts),
+		},
 	); dlqErr != nil {
 		return fmt.Errorf(
 			"append circle UserAccountClosed DLQ: %w",
 			dlqErr,
 		)
 	}
-	if expireErr := consumer.redis.Expire(
+	if expireErr := consumer.transport.SetDurableRetention(
 		ctx,
 		UserAccountClosedDLQ,
 		userAccountClosedDLQTTL,
@@ -327,7 +339,7 @@ func (consumer *UserAccountClosedConsumer) ackAndClear(
 			err,
 		)
 	}
-	if err := consumer.redis.XAck(
+	if err := consumer.transport.AckDurable(
 		ctx,
 		UserAccountEventStream,
 		userAccountClosedGroup,

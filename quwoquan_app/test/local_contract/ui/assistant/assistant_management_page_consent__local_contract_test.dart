@@ -75,6 +75,8 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
 
   final List<AssistantPreferenceFact> _items;
   int listFailuresRemaining;
+  final List<AssistantPreferenceStatus> requestedStatuses =
+      <AssistantPreferenceStatus>[];
 
   @override
   Future<List<AssistantPreferenceFact>> listAssistantPreferences({
@@ -86,6 +88,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
       listFailuresRemaining -= 1;
       throw StateError('preferences unavailable');
     }
+    requestedStatuses.add(status);
     return _items
         .where(
           (item) =>
@@ -369,9 +372,15 @@ void main() {
 
     await tester.tap(find.text(AssistantText.assistantPreferenceForget));
     await tester.pumpAndSettle();
+    // 已撤销的事实不进入管理列表；仅当前操作保留临时恢复入口。
+    expect(find.text(AssistantText.assistantPreferenceConcise), findsOneWidget);
     expect(find.text(AssistantText.assistantPreferenceForgot), findsOneWidget);
     expect(find.text(AssistantText.assistantPreferenceUndo), findsOneWidget);
     expect(find.text(AssistantText.assistantPreferenceForget), findsNothing);
+    expect(
+      preferenceFacet.requestedStatuses,
+      everyElement(AssistantPreferenceStatus.active),
+    );
 
     await tester.tap(find.text(AssistantText.assistantPreferenceUndo));
     await tester.pumpAndSettle();
@@ -379,10 +388,7 @@ void main() {
       find.text(AssistantText.assistantPreferenceConcise),
       findsNWidgets(2),
     );
-    expect(
-      find.text(AssistantText.assistantPreferenceForget),
-      findsOneWidget,
-    );
+    expect(find.text(AssistantText.assistantPreferenceForget), findsOneWidget);
   });
 
   testWidgets('授权加载失败可见且可重试', (tester) async {

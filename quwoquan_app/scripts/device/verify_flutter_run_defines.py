@@ -25,12 +25,14 @@ REQUIRED_DEFINE_KEYS = frozenset(
         "MEDIA_IMAGE_CDN_BASE_URL",
         "MEDIA_VIDEO_CDN_BASE_URL",
         "MEDIA_UPLOAD_BASE_URL",
+        "RTC_MEDIA_CONNECTION_URL",
     }
 )
 ENDPOINT_DEFINE_KEYS = frozenset(
     REQUIRED_DEFINE_KEYS
-    - {"APP_RUNTIME_ENV"}
+    - {"APP_RUNTIME_ENV", "RTC_MEDIA_CONNECTION_URL"}
 )
+WEBSOCKET_ENDPOINT_DEFINE_KEYS = frozenset({"RTC_MEDIA_CONNECTION_URL"})
 
 
 def parse_dart_define_args(args: Sequence[str]) -> dict[str, str]:
@@ -86,6 +88,15 @@ def validate_flutter_run_defines(
                 or parsed.fragment
             ):
                 issues.append(f"{key} must be an HTTPS origin without query/fragment")
+        if key in WEBSOCKET_ENDPOINT_DEFINE_KEYS:
+            parsed = urlparse(value)
+            if (
+                parsed.scheme.lower() != "wss"
+                or not parsed.hostname
+                or parsed.query
+                or parsed.fragment
+            ):
+                issues.append(f"{key} must be a WSS origin without query/fragment")
 
     if platform and platform not in {"android", "ios", "web"}:
         issues.append(f"unsupported launch platform {platform}")

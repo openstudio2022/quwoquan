@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
@@ -11,6 +14,7 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
@@ -60,9 +64,32 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       await ref
           .read(conversationMembersProvider(widget.conversationId).notifier)
           .removeMember(userId);
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.succeeded,
+              governanceAction: ChatGovernanceAction.memberRemove,
+              pageName: PageNames.chatSettings,
+              surfaceId: AppUiSurfaces.chatSettings.id,
+            ),
+      );
       if (!mounted) return;
       AppToast.show(context, ChatText.removeMemberSuccess);
     } catch (error) {
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.failed,
+              governanceAction: ChatGovernanceAction.memberRemove,
+              pageName: PageNames.chatSettings,
+              surfaceId: AppUiSurfaces.chatSettings.id,
+              error: error,
+            ),
+      );
       if (!mounted) return;
       final resolved = runtimeErrorSemantic(
         context,
@@ -106,12 +133,35 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       await ref
           .read(conversationMembersProvider(widget.conversationId).notifier)
           .leaveConversation();
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.succeeded,
+              governanceAction: ChatGovernanceAction.memberLeave,
+              pageName: PageNames.chatSettings,
+              surfaceId: AppUiSurfaces.chatSettings.id,
+            ),
+      );
       if (!mounted) return;
       ref.invalidate(conversationMembersProvider(widget.conversationId));
       ref.invalidate(groupHomeProvider(widget.conversationId));
       AppToast.show(context, ChatText.exitGroupChatSuccess);
       context.go(AppRoutePaths.chat);
     } catch (error) {
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.failed,
+              governanceAction: ChatGovernanceAction.memberLeave,
+              pageName: PageNames.chatSettings,
+              surfaceId: AppUiSurfaces.chatSettings.id,
+              error: error,
+            ),
+      );
       if (!mounted) return;
       final resolved = runtimeErrorSemantic(
         context,
@@ -300,6 +350,16 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         ? groupHome!.title.trim()
         : ChatText.groupNameHint;
     final announcement = groupHome?.announcement.trim() ?? '';
+    final circleGroupID = groupHome?.circleGroupId.trim().isNotEmpty == true
+        ? groupHome!.circleGroupId.trim()
+        : membersState.groupSettings.circleGroupId.trim();
+    final circleID = groupHome?.circleId.trim().isNotEmpty == true
+        ? groupHome!.circleId.trim()
+        : membersState.groupSettings.circleId.trim();
+    final isCircleGroupManaged = circleGroupID.isNotEmpty;
+    final VoidCallback? openCircleGroupManagement = circleID.isEmpty
+        ? null
+        : () => context.go(AppRoutePaths.circleDetail(id: circleID));
 
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final borderColor = AppColorsFunctional.getColor(
@@ -370,7 +430,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     LayoutBuilder(
                       builder: (context, constraints) {
                         // owner/admin 追加「−」移出成员入口格（对齐微信成员网格治理语义）。
-                        final actionCells = isAdminOrOwner ? 2 : 1;
+                        final actionCells = isCircleGroupManaged
+                            ? 0
+                            : (isAdminOrOwner ? 2 : 1);
                         final totalCells = visibleMemberCount + actionCells;
                         final gridGap = AppSpacing.sm;
                         final availableWidth = constraints.maxWidth.isFinite
@@ -448,6 +510,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             // 服务端为强制门（owner 不可移出、admin 仅可移出普通成员）；
                             // UI 侧同源预判避免必败请求。
                             final removable =
+                                !isCircleGroupManaged &&
                                 _removeMemberMode &&
                                 !m.isCurrentUser &&
                                 m.role != 'owner' &&
@@ -575,7 +638,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           ),
                         ],
                       ),
-                      onTap: _showEditGroupNameDialog,
+                      onTap: isCircleGroupManaged
+                          ? openCircleGroupManagement
+                          : _showEditGroupNameDialog,
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
                     SettingsInsetFormRow(
@@ -608,25 +673,33 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           ),
                         ],
                       ),
-                      onTap: () => context.push(
-                        AppRoutePaths.chatAnnouncement(
-                          id: widget.conversationId,
-                        ),
-                      ),
+                      onTap: isCircleGroupManaged
+                          ? openCircleGroupManagement
+                          : () => context.push(
+                              AppRoutePaths.chatAnnouncement(
+                                id: widget.conversationId,
+                              ),
+                            ),
                     ),
-                    if (isAdminOrOwner) ...[
+                    if (isCircleGroupManaged || isAdminOrOwner) ...[
                       SettingsInsetFormSectionDivider(isDark: isDark),
                       SettingsInsetFormRow(
                         isDark: isDark,
-                        label: ChatText.groupManagement,
+                        label: isCircleGroupManaged
+                            ? ChatText.circleGroupManagedNotice
+                            : ChatText.groupManagement,
                         trailing: Icon(
                           CupertinoIcons.chevron_forward,
                           size: AppSpacing.iconMedium,
                           color: chevronColor,
                         ),
-                        onTap: () => context.push(
-                          AppRoutePaths.chatManage(id: widget.conversationId),
-                        ),
+                        onTap: isCircleGroupManaged
+                            ? openCircleGroupManagement
+                            : () => context.push(
+                                AppRoutePaths.chatManage(
+                                  id: widget.conversationId,
+                                ),
+                              ),
                       ),
                     ],
                   ],
@@ -670,9 +743,13 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 density: SettingsInsetSectionDensity.compact,
                 child: SettingsInsetCenteredActionRow(
                   isDark: isDark,
-                  label: ChatText.exitGroupChat,
-                  isDestructive: true,
-                  onTap: _confirmExitGroup,
+                  label: isCircleGroupManaged
+                      ? ChatText.openCircleGroupManagement
+                      : ChatText.exitGroupChat,
+                  isDestructive: !isCircleGroupManaged,
+                  onTap: isCircleGroupManaged
+                      ? () => openCircleGroupManagement?.call()
+                      : _confirmExitGroup,
                 ),
               ),
             ],

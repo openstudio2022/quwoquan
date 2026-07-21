@@ -6,6 +6,7 @@ kind: runtime_persistence_contract
 imports:
   - package:quwoquan_app/assistant/contracts/assistant_journey.dart
   - package:quwoquan_app/assistant/contracts/runtime_enums.dart
+  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
 fields:
   - { name: machineEnvelope, type: string, default: '' }
   - { name: displayMarkdown, type: string, default: '' }
@@ -120,7 +121,7 @@ subcontracts:
       - { name: dimensionLabel, type: string, default: '' }
       - { name: searchPlanId, type: string, default: '' }
       - { name: title, type: string, default: '' }
-      - { name: url, type: string, default: '' }
+      - { name: destination, type: object, ref: CitationDestination, required: true }
       - { name: source, type: string, default: '' }
       - { name: sourceHost, type: string, default: '' }
       - { name: sourceTier, type: string, default: '' }
@@ -137,7 +138,7 @@ subcontracts:
       - { name: label, type: string, default: '' }
       - { name: claim, type: string, default: '' }
       - { name: evidenceId, type: string, default: '' }
-      - { name: url, type: string, default: '' }
+      - { name: destination, type: object, ref: CitationDestination, required: true }
       - { name: title, type: string, default: '' }
       - { name: source, type: string, default: '' }
       - { name: snippet, type: string, default: '' }

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -89,6 +91,18 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
         hosts = render._prod_public_hosts()
         self.assertEqual(hosts["api"], "api.quwoquan.com")
         self.assertTrue(all(not host.endswith(".test") for host in hosts.values()))
+
+    def test_render_rejects_disposable_output_as_deployment_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            disposable_output = Path(temporary) / ".qwq_output"
+            deployment_output = disposable_output / "env/prod/local/prod-hosted/process/service"
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_OUTPUT_ROOT": str(disposable_output)},
+                clear=False,
+            ):
+                with self.assertRaisesRegex(SystemExit, "QWQ_DEPLOY_WORK_ROOT"):
+                    render._require_external_deployment_root(deployment_output)
 
 
 if __name__ == "__main__":

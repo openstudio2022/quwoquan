@@ -170,6 +170,8 @@ def digest_test_vector() -> dict[str, object]:
     cinema = dict(zero)
     cinema["temperature"] = Decimal("-12.5")
     cinema["contrast"] = Decimal("8.25")
+    cinema["grain"] = Decimal("0.0000001")
+    cinema["fade"] = Decimal("-0.000")
     categories = [
         {
             "categoryId": "camera_photo",
@@ -197,7 +199,7 @@ def digest_test_vector() -> dict[str, object]:
             "displayNameEn": "Cinema",
             "sort": 2,
             "enabled": True,
-            "defaultStrength": Decimal("80.5"),
+            "defaultStrength": Decimal("80.500"),
             "adjustments": cinema,
         },
     ]

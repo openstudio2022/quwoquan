@@ -529,17 +529,24 @@ class AssistantAnswerContent extends StatelessWidget {
     if (bindings.isNotEmpty) {
       for (var index = 0; index < bindings.length; index++) {
         final binding = bindings[index];
-        if (binding.url.trim().isEmpty) continue;
+        final url = binding.destination.url?.trim() ?? '';
+        final citation = AssistantCitation(
+          destination: binding.destination,
+          title: binding.title,
+          source: binding.source,
+          snippet: binding.snippet,
+        );
         items.add(
           _AssistantReferenceItem(
             index: index + 1,
             title: binding.title.trim().isNotEmpty
                 ? binding.title.trim()
-                : binding.url,
-            url: binding.url.trim(),
+                : (url.isNotEmpty ? url : binding.label.trim()),
+            url: url,
             source: binding.source.trim(),
             snippet: binding.snippet.trim(),
             label: binding.label.trim(),
+            citation: citation,
           ),
         );
       }
@@ -561,6 +568,12 @@ class AssistantAnswerContent extends StatelessWidget {
           source: (reference['source'] as String?)?.trim() ?? '',
           snippet: (reference['snippet'] as String?)?.trim() ?? '',
           label: '[${index + 1}]',
+          citation: AssistantCitation.external(
+            url: url,
+            title: (reference['title'] as String?)?.trim() ?? '',
+            source: (reference['source'] as String?)?.trim() ?? '',
+            snippet: (reference['snippet'] as String?)?.trim() ?? '',
+          ),
         ),
       );
     }
@@ -597,7 +610,7 @@ class AssistantAnswerContent extends StatelessWidget {
       return matched.toCitation();
     }
     final title = text.trim().isNotEmpty ? text.trim() : fallbackTitle;
-    return AssistantCitation(url: href, title: title);
+    return AssistantCitation.external(url: href, title: title);
   }
 
   static _AssistantReferenceItem? _matchReference({
@@ -729,6 +742,7 @@ class _AssistantReferenceItem {
     required this.source,
     required this.snippet,
     required this.label,
+    required this.citation,
   });
 
   final int index;
@@ -737,6 +751,7 @@ class _AssistantReferenceItem {
   final String source;
   final String snippet;
   final String label;
+  final AssistantCitation citation;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -746,17 +761,11 @@ class _AssistantReferenceItem {
       'source': source,
       'snippet': snippet,
       'label': label,
+      'destination': citation.destination.toJson(),
     };
   }
 
-  AssistantCitation toCitation() {
-    return AssistantCitation(
-      url: url,
-      title: title,
-      source: source,
-      snippet: snippet,
-    );
-  }
+  AssistantCitation toCitation() => citation;
 }
 
 bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {

@@ -1,0 +1,85 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+groups:
+  - name: quwoquan_content_contract_filter_catalog_release
+    rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/internal/content/filter-catalog-releases/[^/]+:activate$"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.ActivateFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_activate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/internal/content/filter-catalog-releases/[^/]+:activate$"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.ActivateFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_activate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/filter-catalog"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.GetActiveFilterCatalog"
+          contract_metric: "content_filter_catalog_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/filter-catalog"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.GetActiveFilterCatalog"
+          contract_metric: "content_filter_catalog_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/internal/content/filter-catalog-releases/[^/]+:rollback$"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.RollbackFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_rollback"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/internal/content/filter-catalog-releases/[^/]+:rollback$"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.RollbackFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_rollback"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/filter-catalog-releases"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.StageFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_stage"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/filter-catalog-releases"})
+        labels:
+          service: "content-service"
+          operation: "content.filter_catalog_release.StageFilterCatalogRelease"
+          contract_metric: "content_filter_catalog_stage"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"

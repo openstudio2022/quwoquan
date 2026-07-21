@@ -67,10 +67,12 @@ class UserRequestPageIds {
     'ResolveOneTapLoginHint': 'user.resolve.one.tap.login.hint',
     'ResolveProfileQrToken': 'user.profile.qr.resolve',
     'ResolvePushEndpointSecret': 'user.resolve.push.endpoint.secret',
+    'RestoreAccount': 'user.restore.account',
     'RetirePersona': 'user.personas.retire',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
     'SendOtp': 'user.send.otp',
+    'SuspendAccount': 'user.suspend.account',
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
     'UnfollowSubject': 'user.unfollow.subject',
@@ -146,10 +148,12 @@ class UserRequestPageIds {
   static const String resolveOneTapLoginHint = 'user.resolve.one.tap.login.hint';
   static const String resolveProfileQrToken = 'user.profile.qr.resolve';
   static const String resolvePushEndpointSecret = 'user.resolve.push.endpoint.secret';
+  static const String restoreAccount = 'user.restore.account';
   static const String retirePersona = 'user.personas.retire';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
   static const String sendOtp = 'user.send.otp';
+  static const String suspendAccount = 'user.suspend.account';
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
   static const String unfollowSubject = 'user.unfollow.subject';

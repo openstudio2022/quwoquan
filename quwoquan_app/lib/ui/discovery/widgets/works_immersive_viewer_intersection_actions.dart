@@ -85,7 +85,10 @@ extension _WorksImmersiveViewerIntersectionActions
       dimension: primary.dimension,
       entityId: post.id,
       objectType: 'post',
-      intersectionRefs: _intersectionRefsForReasons(reasons),
+      intersectionEvidenceRefs: _intersectionEvidenceRefsForReasons(
+        post,
+        reasons,
+      ),
       visitTarget: target,
       experienceLevel: ref
           .read(visitRecorderServiceProvider)
@@ -100,21 +103,31 @@ extension _WorksImmersiveViewerIntersectionActions
     context.push(AppRoutePaths.assistantPersonal, extra: openContext);
   }
 
-  List<String> _intersectionRefsForReasons(List<IntersectionReason> reasons) {
-    final refs = <String>{};
+  List<AssistantIntersectionEvidenceRef> _intersectionEvidenceRefsForReasons(
+    PostBaseDto post,
+    List<IntersectionReason> reasons,
+  ) {
+    final refs = <String, AssistantIntersectionEvidenceRef>{};
     for (final reason in reasons) {
-      final id = reason.intersectionId.trim();
-      if (id.isNotEmpty) {
-        refs.add('intersection:$id');
+      final intersectionId = reason.intersectionId.trim();
+      final evidenceId = reason.pointSummarySnapshotId.trim();
+      final sourceRef = reason.kind.trim();
+      if (intersectionId.isEmpty || evidenceId.isEmpty || sourceRef.isEmpty) {
+        continue;
       }
-      for (final tag in reason.tagRefs) {
-        final normalized = tag.trim();
-        if (normalized.isNotEmpty) {
-          refs.add(normalized);
-        }
-      }
+      final ref = AssistantIntersectionEvidenceRef(
+        intersectionId: intersectionId,
+        evidenceId: evidenceId,
+        sourceRef: sourceRef,
+        objectTypeRef: 'post',
+        objectId: post.id,
+      );
+      refs.putIfAbsent(
+        '$intersectionId:$evidenceId:$sourceRef:${post.id}',
+        () => ref,
+      );
     }
-    return refs.toList(growable: false);
+    return refs.values.toList(growable: false);
   }
 
   void _openIntersectionSpan(

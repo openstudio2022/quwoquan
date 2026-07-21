@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_propagation_path.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -18,6 +17,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
 import 'package:quwoquan_app/ui/entity/providers/entity_impact_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 对象页「打动」预览卡目标（实体 homepage / 圈子 circle）。
 enum ObjectImpactTarget { homepage, circle }
@@ -114,7 +114,7 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
         .toList(growable: false);
   }
 
-  List<_ObjectImpactLine> _linesFromCircle(CircleImpactSummary summary) {
+  List<_ObjectImpactLine> _linesFromCircle(CircleImpactSlice summary) {
     return summary.items
         .where((item) => item.primaryText.trim().isNotEmpty)
         .take(maxItems)
@@ -246,20 +246,96 @@ class _ObjectImpactLine {
     );
   }
 
-  factory _ObjectImpactLine.fromCircle(CircleImpactItem item) {
+  factory _ObjectImpactLine.fromCircle(CircleImpactItemProjection item) {
     return _ObjectImpactLine(
       primaryText: item.primaryText,
       subtitleText: item.subtitleText,
-      primarySpans: item.primarySpans,
-      sampleVisuals: item.sampleVisuals,
+      primarySpans: item.primarySpans
+          .map(_circleSpanToViewData)
+          .toList(growable: false),
+      sampleVisuals: item.sampleVisuals
+          .map(_circleVisualToViewData)
+          .toList(growable: false),
       iconKey: item.iconKey,
       source: item.source,
       intersectionDimension: item.intersectionDimension,
       tagRef: item.tagRef,
       evidenceSnapshotId: item.evidenceSnapshotId,
       count: item.count,
-      actionHints: item.actionHints,
-      propagationPath: item.propagationPath,
+      actionHints: item.actionHints
+          .map(_circleActionHintToViewData)
+          .toList(growable: false),
+      propagationPath: _circlePropagationPathToViewData(item.propagationPath),
+    );
+  }
+
+  static IntersectionTarget? _circleTargetToViewData(
+    CircleIntersectionTargetProjection? target,
+  ) {
+    if (target == null) {
+      return null;
+    }
+    return IntersectionTarget(
+      objectType: target.objectType,
+      objectId: target.objectId,
+      objectKind: target.objectKind,
+      routeId: target.routeId,
+    );
+  }
+
+  static IntersectionVisual _circleVisualToViewData(
+    CircleIntersectionVisualProjection visual,
+  ) {
+    return IntersectionVisual(
+      assetKind: visual.assetKind,
+      imageUrl: visual.imageUrl,
+      displayName: visual.displayName,
+      target: _circleTargetToViewData(visual.target),
+    );
+  }
+
+  static IntersectionTextSpan _circleSpanToViewData(
+    CircleIntersectionTextSpanProjection span,
+  ) {
+    return IntersectionTextSpan(
+      text: span.text,
+      role: span.role,
+      target: _circleTargetToViewData(span.target),
+      visual: span.visual == null
+          ? null
+          : _circleVisualToViewData(span.visual!),
+    );
+  }
+
+  static IntersectionActionHint _circleActionHintToViewData(
+    CircleIntersectionActionHintProjection hint,
+  ) {
+    return IntersectionActionHint(
+      actionKey: hint.actionKey,
+      label: hint.label,
+      target: _circleTargetToViewData(hint.target),
+      isPrimary: hint.isPrimary,
+      priority: hint.priority,
+      actionTier: hint.actionTier,
+      requiredGates: hint.requiredGates,
+      targetAvailability: hint.targetAvailability,
+      dispatch: hint.dispatch,
+    );
+  }
+
+  static IntersectionPropagationPath? _circlePropagationPathToViewData(
+    CircleIntersectionPropagationPathProjection? path,
+  ) {
+    if (path == null) {
+      return null;
+    }
+    return IntersectionPropagationPath(
+      pathKind: path.pathKind,
+      hopCount: path.hopCount,
+      secondarySpreadCount: path.secondarySpreadCount,
+      summaryText: path.summaryText,
+      summaryTarget: _circleTargetToViewData(path.summaryTarget),
+      nodes: path.nodes.map(_circleVisualToViewData).toList(growable: false),
     );
   }
 }

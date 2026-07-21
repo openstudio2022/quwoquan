@@ -45,5 +45,5 @@ tests:
     - quwoquan_service/services/content-service/tests/api_integration/moderation_case_contract__api_integration_test.go
     - quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go
   user_acceptance:
-    - quwoquan_app/test/user_acceptance/pages/settings/my_reports/my_reports_page__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/patrol/settings/my_reports_page__user_acceptance_test.dart
 environments: []

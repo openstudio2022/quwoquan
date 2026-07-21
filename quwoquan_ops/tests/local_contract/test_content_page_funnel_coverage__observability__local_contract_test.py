@@ -31,7 +31,7 @@ class ContentPageFunnelCoverageTest(unittest.TestCase):
 
         self.assertEqual(
             {funnel.journey for funnel in funnels},
-            {"content_share", "profile_interaction"},
+            {"content_report", "content_share", "profile_interaction"},
         )
 
     def test_missing_failure_dimension_is_blocked(self) -> None:

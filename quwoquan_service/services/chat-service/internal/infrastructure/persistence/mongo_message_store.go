@@ -538,6 +538,7 @@ func (s *MongoChatStore) ProjectCommittedMessage(ctx context.Context, message me
 				"maxSeq":             message.Seq,
 				"lastMessageId":      message.ID,
 				"lastMessagePreview": preview,
+				"lastMessageType":    message.Type,
 				"lastMessageTime":    message.Timestamp.UTC(),
 				"updatedAt":          message.Timestamp.UTC(),
 			},

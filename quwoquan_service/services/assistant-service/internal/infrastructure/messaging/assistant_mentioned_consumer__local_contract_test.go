@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
 )
@@ -23,7 +24,12 @@ func TestAssistantMentionedConsumerProcessesAndAcks(t *testing.T) {
 	ctx := context.Background()
 	redis := rtredis.NewMemoryClient()
 	handler := &mentionHandlerSpy{}
-	consumer := NewAssistantMentionedConsumer(redis, handler, "worker-1", nil)
+	consumer := NewAssistantMentionedConsumerWithTransport(
+		newTestMessageTransport(t, redis),
+		handler,
+		"worker-1",
+		nil,
+	)
 
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
@@ -67,7 +73,12 @@ func TestAssistantMentionedConsumerDeadLettersFailedMessage(t *testing.T) {
 	ctx := context.Background()
 	redis := rtredis.NewMemoryClient()
 	handler := &mentionHandlerSpy{err: errors.New("boom")}
-	consumer := NewAssistantMentionedConsumer(redis, handler, "worker-1", nil)
+	consumer := NewAssistantMentionedConsumerWithTransport(
+		newTestMessageTransport(t, redis),
+		handler,
+		"worker-1",
+		nil,
+	)
 
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
@@ -79,6 +90,7 @@ func TestAssistantMentionedConsumerDeadLettersFailedMessage(t *testing.T) {
 		"senderId":          "user-a",
 		"content":           "@小趣 总结",
 		"assistantMemberId": "assistant",
+		"error":             "private upstream detail",
 	}); err != nil {
 		t.Fatalf("XAdd: %v", err)
 	}
@@ -100,15 +112,18 @@ func TestAssistantMentionedConsumerDeadLettersFailedMessage(t *testing.T) {
 	if len(dlq) != 1 {
 		t.Fatalf("dlq=%d, want 1", len(dlq))
 	}
-	if dlq[0].Values["error"] != "boom" {
-		t.Fatalf("dlq error=%s", dlq[0].Values["error"])
+	if dlq[0].Values["errorDigest"] == "" {
+		t.Fatalf("dlq must retain an error digest: %#v", dlq[0].Values)
+	}
+	if _, containsRawError := dlq[0].Values["error"]; containsRawError {
+		t.Fatalf("dlq must not retain raw error: %#v", dlq[0].Values)
 	}
 	pending, err := redis.XReadGroup(ctx, AssistantMentionedConsumerGroup, "worker-1", map[string]string{AssistantMentionedStream: "0"}, 10, 0)
 	if err != nil {
 		t.Fatalf("read pending: %v", err)
 	}
-	if len(pending) != 1 {
-		t.Fatalf("pending=%d, want 1 for retry", len(pending))
+	if len(pending) != 0 {
+		t.Fatalf("pending=%d, want 0 after durable DLQ ACK", len(pending))
 	}
 }
 
@@ -116,7 +131,12 @@ func TestAssistantMentionedConsumerDeduplicatesByConversationMessage(t *testing.
 	ctx := context.Background()
 	redis := rtredis.NewMemoryClient()
 	handler := &mentionHandlerSpy{}
-	consumer := NewAssistantMentionedConsumer(redis, handler, "worker-1", nil)
+	consumer := NewAssistantMentionedConsumerWithTransport(
+		newTestMessageTransport(t, redis),
+		handler,
+		"worker-1",
+		nil,
+	)
 
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
@@ -151,4 +171,21 @@ func TestAssistantMentionedConsumerDeduplicatesByConversationMessage(t *testing.
 	if len(pending) != 0 {
 		t.Fatalf("pending=%d, want 0", len(pending))
 	}
+}
+
+func newTestMessageTransport(
+	t *testing.T,
+	client rtredis.Client,
+) *runtimemessaging.RedisMessageTransport {
+	t.Helper()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"assistant-service-test",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("NewRedisMessageTransportForRoot() error = %v", err)
+	}
+	return transport
 }

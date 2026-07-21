@@ -23,7 +23,7 @@ dto_scenarios:
     description: CallParticipant wire 仅承载信令字段（userId/role/status/isMuted/isCameraOn/joinedAt/leftAt/inviteStatus/invitedBy）
     assertions:
       - 展示信息（昵称/头像）不在服务端 wire 中，由端侧组合 user 域数据
-      - 运行时媒体信号（音量/说话中/连接质量）由 LiveKit 端侧事件承载
+      - 运行时媒体信号（音量/说话中/连接质量）由平台媒体 adapter 事件承载
 
 facet_scenarios:
   - name: lifecycle_facet_alpha_remote_parity

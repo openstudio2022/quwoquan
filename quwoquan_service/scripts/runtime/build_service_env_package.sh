@@ -123,8 +123,14 @@ if service == "chat-service":
             raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
 PY
 
-QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
-out_dir="${QWQ_OUTPUT_ROOT}/env/${env_name}/release/service/${service}"
+out_dir="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$service" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
+
+print(service_deployment_package_dir(sys.argv[1], sys.argv[2]))
+PY
+)"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "$default_cfg" "$out_dir/default_config.yaml"

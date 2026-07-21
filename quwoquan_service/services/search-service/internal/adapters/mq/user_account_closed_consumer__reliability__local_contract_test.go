@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/search-service/internal/application"
 )
@@ -120,8 +121,12 @@ func newConsumerFixture(
 	config := DefaultUserAccountClosedConsumerConfig()
 	config.MinIdle = 0
 	config.MaxAttempts = maxAttempts
+	transport, err := runtimemessaging.NewRedisMessageTransport(client, client)
+	if err != nil {
+		t.Fatalf("create message transport: %v", err)
+	}
 	consumer, err := NewUserAccountClosedConsumer(
-		client,
+		transport,
 		projection,
 		newFailureStoreStub(),
 		"search-account-closure-test",

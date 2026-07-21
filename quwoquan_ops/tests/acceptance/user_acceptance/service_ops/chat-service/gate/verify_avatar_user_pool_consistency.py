@@ -788,6 +788,17 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
     missing_posts = sorted(required_posts - content_posts)
     if missing_posts:
         fail(errors, f"gamma curated content posts missing core coverage: {missing_posts}")
+    image_post_count = sum(
+        1
+        for item in gamma_docs["content"]["seedSets"]["content_discovery_core"].get("posts", [])
+        if str(item.get("contentType") or "").strip() == "image"
+    )
+    if image_post_count < 21:
+        fail(
+            errors,
+            "gamma curated content must retain at least 21 image posts for "
+            f"the limit=20 feed cursor contract, got {image_post_count}",
+        )
 
     user_profiles = {
         str(item.get("userId") or "")

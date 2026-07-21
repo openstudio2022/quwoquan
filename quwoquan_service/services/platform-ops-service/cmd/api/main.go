@@ -145,7 +145,7 @@ func main() {
 	)
 	outerMux.Handle(
 		"/",
-		rtauth.RequireGeneratedOperationAuthorization(
+		rtauth.EnforceGeneratedOperationAuthorization(
 			append(
 				operationsecurity.ForDomain("ops"),
 				generatedcontrolplane.PlatformOperationSecurityDescriptors...,

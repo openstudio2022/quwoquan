@@ -10,7 +10,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.AbortMediaUpload"
           contract_metric: "content_media_upload_abort"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -20,7 +20,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.AbortMediaUpload"
           contract_metric: "content_media_upload_abort"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
@@ -30,7 +30,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.CompleteMediaUpload"
           contract_metric: "content_media_upload_complete"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1200"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -40,7 +40,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.CompleteMediaUpload"
           contract_metric: "content_media_upload_complete"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1200"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
@@ -50,7 +50,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.GetMediaUploadSession"
           contract_metric: "content_media_upload_session_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -60,7 +60,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.GetMediaUploadSession"
           contract_metric: "content_media_upload_session_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
@@ -70,7 +70,7 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.InitMediaUpload"
           contract_metric: "content_media_upload_init"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -80,6 +80,6 @@ groups:
           service: "content-service"
           operation: "content.media_upload_session.InitMediaUpload"
           contract_metric: "content_media_upload_init"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"

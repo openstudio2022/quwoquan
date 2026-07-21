@@ -11,6 +11,25 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// ClosedAccountAudit domain model.
+type ClosedAccountAudit struct {
+	ID             string    `json:"id" bson:"_id"`
+	EventDigest    string    `json:"eventDigest" bson:"eventDigest"`
+	AccountVersion int64     `json:"accountVersion" bson:"accountVersion"`
+	SubjectCount   int64     `json:"subjectCount" bson:"subjectCount"`
+	ClosedAt       time.Time `json:"closedAt" bson:"closedAt"`
+	RecordedAt     time.Time `json:"recordedAt" bson:"recordedAt"`
+}
+
+// ClosedAccountSubjectTombstone domain model.
+type ClosedAccountSubjectTombstone struct {
+	ID             string    `json:"id" bson:"_id"`
+	EventDigest    string    `json:"eventDigest" bson:"eventDigest"`
+	AccountVersion int64     `json:"accountVersion" bson:"accountVersion"`
+	ClosedAt       time.Time `json:"closedAt" bson:"closedAt"`
+	RecordedAt     time.Time `json:"recordedAt" bson:"recordedAt"`
+}
+
 // DeletedPostTombstone domain model.
 type DeletedPostTombstone struct {
 	ID        string    `json:"id" bson:"_id"`
@@ -94,4 +113,36 @@ type Post struct {
 	LastActiveAt              time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
 	SourceTaskId              string         `json:"sourceTaskId" bson:"sourceTaskId"`
 	DeletedAt                 time.Time      `json:"deletedAt" bson:"deletedAt"`
+}
+
+// UserAccountClosedProjectionFailure domain model.
+type UserAccountClosedProjectionFailure struct {
+	ID           string    `json:"id" bson:"_id"`
+	EventDigest  string    `json:"eventDigest" bson:"eventDigest"`
+	ErrorDigest  string    `json:"errorDigest" bson:"errorDigest"`
+	Attempts     int64     `json:"attempts" bson:"attempts"`
+	CreatedAt    time.Time `json:"createdAt" bson:"createdAt"`
+	LastFailedAt time.Time `json:"lastFailedAt" bson:"lastFailedAt"`
+	ExpireAt     time.Time `json:"expireAt" bson:"expireAt"`
+}
+
+// UserAccountClosedProjectionInbox domain model.
+type UserAccountClosedProjectionInbox struct {
+	ID             string    `json:"id" bson:"_id"`
+	EventDigest    string    `json:"eventDigest" bson:"eventDigest"`
+	AccountVersion int64     `json:"accountVersion" bson:"accountVersion"`
+	MongoAppliedAt time.Time `json:"mongoAppliedAt" bson:"mongoAppliedAt"`
+	CompletedAt    time.Time `json:"completedAt" bson:"completedAt"`
+}
+
+// UserAccountClosedSearchWork domain model.
+type UserAccountClosedSearchWork struct {
+	ID          string    `json:"id" bson:"_id"`
+	EventId     string    `json:"eventId" bson:"eventId"`
+	CanonicalId string    `json:"canonicalId" bson:"canonicalId"`
+	ObjectType  string    `json:"objectType" bson:"objectType"`
+	ObjectId    string    `json:"objectId" bson:"objectId"`
+	CreatedAt   time.Time `json:"createdAt" bson:"createdAt"`
+	DoneAt      time.Time `json:"doneAt" bson:"doneAt"`
+	ExpireAt    time.Time `json:"expireAt" bson:"expireAt"`
 }

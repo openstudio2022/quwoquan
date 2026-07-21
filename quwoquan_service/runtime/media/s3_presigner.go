@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 // PresignClient abstracts presigned URL generation and object existence checks,
@@ -21,6 +23,7 @@ type PresignClient interface {
 	StatObject(ctx context.Context, bucket, key string) (*ObjectInfo, error)
 	PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error
 	CopyObject(ctx context.Context, bucket, sourceKey, targetKey string) error
+	DeleteObject(ctx context.Context, bucket, key string) error
 }
 
 type PutObjectConstraints struct {
@@ -84,7 +87,14 @@ func (c *S3PresignClient) StatObject(ctx context.Context, bucket, key string) (*
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return &ObjectInfo{Exists: false}, nil
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			switch apiErr.ErrorCode() {
+			case "NotFound", "NoSuchKey", "NoSuchObject":
+				return &ObjectInfo{Exists: false}, nil
+			}
+		}
+		return nil, fmt.Errorf("s3 stat object: %w", err)
 	}
 	sha256Hex := ""
 	if resp.ChecksumSHA256 != nil && *resp.ChecksumSHA256 != "" {
@@ -147,6 +157,21 @@ func (c *S3PresignClient) CopyObject(
 	})
 	if err != nil {
 		return fmt.Errorf("s3 copy public slice: %w", err)
+	}
+	return nil
+}
+
+// DeleteObject 按 key 删除对象。S3 删除语义幂等：临时上传对象已不存在时仍视为清理成功。
+func (c *S3PresignClient) DeleteObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+) error {
+	if _, err := c.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}); err != nil {
+		return fmt.Errorf("s3 delete object: %w", err)
 	}
 	return nil
 }

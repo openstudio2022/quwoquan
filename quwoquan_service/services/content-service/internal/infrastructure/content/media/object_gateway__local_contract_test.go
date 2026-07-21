@@ -106,11 +106,35 @@ func TestObjectGatewayRejectsMismatchedUploadedBytes(t *testing.T) {
 	}
 }
 
+func TestObjectGatewayDeletesOnlyTemporaryUploads(t *testing.T) {
+	client := &objectClientStub{}
+	gateway, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", CDNDomain: "cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, client)
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	const temporaryKey = "uploads/owner/session-1.jpg"
+	if err := gateway.DeleteTemporaryUpload(context.Background(), temporaryKey); err != nil {
+		t.Fatalf("delete temporary upload: %v", err)
+	}
+	if client.deletedKey != temporaryKey {
+		t.Fatalf("temporary upload deletion used wrong key: %q", client.deletedKey)
+	}
+	if err := gateway.DeleteTemporaryUpload(
+		context.Background(),
+		"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+	); err == nil {
+		t.Fatal("canonical CAS objects must never be deleted through temporary cleanup")
+	}
+}
+
 type objectClientStub struct {
 	info       *runtimemedia.ObjectInfo
 	promotedTo string
 	copiedFrom string
 	copiedTo   string
+	deletedKey string
 }
 
 func (s *objectClientStub) PresignPutObject(_ context.Context, _ string, key string, _ runtimemedia.PutObjectConstraints, _ time.Duration) (string, error) {
@@ -129,5 +153,10 @@ func (s *objectClientStub) PromoteObject(_ context.Context, _ string, _ string, 
 func (s *objectClientStub) CopyObject(_ context.Context, _ string, source string, target string) error {
 	s.copiedFrom = source
 	s.copiedTo = target
+	return nil
+}
+
+func (s *objectClientStub) DeleteObject(_ context.Context, _ string, key string) error {
+	s.deletedKey = key
 	return nil
 }

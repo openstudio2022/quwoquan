@@ -18,16 +18,7 @@ redis:
   general:
     mode: standalone
     addr: "127.0.0.1:6379"
-    db: 1
-
-model_provider:
-  provider: deterministic
-  model: deterministic-alpha
-  timeout_ms: 30000
-
-search_provider:
-  provider: duckduckgo_html
-  timeout_ms: 30000
+    db: 0
 
 # alpha 单机验证：app_search 直连本地 search-service canonical SearchQuery。
 search_service:

@@ -13,7 +13,9 @@ scenarios:
   - name: consent_grant_use_revoke_journey
     description: 管理页授权 personal_content_access → 助手使用个人数据回答 → 撤权后再次执行被拒
     test_type: ui_journey
-    patrol_flow: test/user_acceptance/pages/assistant/assistant_settings_page__user_acceptance_test.dart
+    status: blocked
+    block_reason: 录制 Facet 的 widget 测试不能充当 production Remote Patrol；待 beta/gamma
+      受控账号、真实 consent endpoint 与设备回读可用后补真机流程。
     actors:
       app: lib/ui/assistant/pages/assistant_management_page.dart
       service: assistant-service /assistant/skills/{skillId}/consent + agent loop consent gate

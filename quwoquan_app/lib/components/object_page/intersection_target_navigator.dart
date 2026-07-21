@@ -1,15 +1,18 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantIntersectionEvidenceRef;
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 
 const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
@@ -252,6 +255,8 @@ class IntersectionTargetNavigator {
     IntersectionActionHint hint, {
     String sourceRef = '',
     IntersectionNavAttribution? attribution,
+    IntersectionReason? evidenceReason,
+    IntersectionTarget? contextObjectTarget,
   }) {
     if (hint.targetAvailability.trim() == 'deferred') {
       return const IntersectionActionDispatchResult(
@@ -261,7 +266,11 @@ class IntersectionTargetNavigator {
 
     switch (hint.dispatch.trim()) {
       case 'assistant':
-        return _openAssistant(context);
+        return _openAssistant(
+          context,
+          reason: evidenceReason,
+          contextObjectTarget: contextObjectTarget,
+        );
       case 'navigate':
         return open(
               context,
@@ -305,15 +314,56 @@ class IntersectionTargetNavigator {
     }
   }
 
-  IntersectionActionDispatchResult _openAssistant(BuildContext context) {
+  IntersectionActionDispatchResult _openAssistant(
+    BuildContext context, {
+    required IntersectionReason? reason,
+    required IntersectionTarget? contextObjectTarget,
+  }) {
     final router = GoRouter.maybeOf(context);
     if (router == null) {
       return const IntersectionActionDispatchResult(
         IntersectionActionDispatchStatus.missingRouter,
       );
     }
+    if (reason == null || contextObjectTarget == null) {
+      return const IntersectionActionDispatchResult(
+        IntersectionActionDispatchStatus.missingTarget,
+      );
+    }
+    final intersectionId = reason.intersectionId.trim();
+    final evidenceId = reason.pointSummarySnapshotId.trim();
+    final sourceRef = reason.kind.trim();
+    final objectTypeRef = contextObjectTarget.objectType.trim();
+    final objectId = contextObjectTarget.objectId.trim();
+    if (intersectionId.isEmpty ||
+        evidenceId.isEmpty ||
+        sourceRef.isEmpty ||
+        objectTypeRef.isEmpty ||
+        objectId.isEmpty) {
+      return const IntersectionActionDispatchResult(
+        IntersectionActionDispatchStatus.missingTarget,
+      );
+    }
     router.push(
-      AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
+      AppRoutePaths.assistantPersonal,
+      extra: AssistantOpenContext(
+        source: AssistantSource.profile,
+        entityId: objectId,
+        objectType: objectTypeRef,
+        visitTarget: VisitTarget.page(
+          'intersection_assistant_${objectTypeRef}_$objectId',
+        ),
+        experienceLevel: ExperienceLevel.returning,
+        intersectionEvidenceRefs: <AssistantIntersectionEvidenceRef>[
+          AssistantIntersectionEvidenceRef(
+            intersectionId: intersectionId,
+            evidenceId: evidenceId,
+            sourceRef: sourceRef,
+            objectTypeRef: objectTypeRef,
+            objectId: objectId,
+          ),
+        ],
+      ),
     );
     return const IntersectionActionDispatchResult(
       IntersectionActionDispatchStatus.opened,

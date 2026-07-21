@@ -15,7 +15,7 @@
 ## 约束
 
 - 法律文本与版本是上架硬阻断项；`/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list` 任一 URL 不可达即 No-Go。
-- 协议正文不得放入其他业务领域服务代码，不随 App、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/services/legal-static/`，发布包为 `.qwq_output/env/<env>/release/legal-static/<version>/`。
+- 协议正文不得放入其他业务领域服务代码，不随 App、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/services/legal-static/`，发布包为 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static/<version>/`。
 - alpha / `flutter run` 的 mock gateway 必须同样挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 mock 404 HTML 或业务 API mock 路由。
 - 隐私相关文案与同意版本以 `auth_legal_config.dart` + 登录契约为准，不得在业务代码硬编码第二套版本。
 - 协议页 URL 不可达、HTTP 非成功或 WebView 资源失败时，App 必须展示原生错误态与重试/返回动作；该错误不阻断用户返回登录页、勾选协议与继续验证码登录。

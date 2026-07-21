@@ -238,13 +238,14 @@ pages:
     surface_ids: [assistantManagement]
     experience_owner: assistant
     data_owners: [assistant, app]
-    object_ids: [assistant.assistant_run, assistant.skill_consent]
+    object_ids:
+      - assistant.assistant_preference_fact
+      - assistant.skill_consent
     query_slices:
-      - assistant.assistant_run.aggregate
+      - assistant.assistant_preference_fact.aggregate
       - assistant.skill_consent.entity
-      - local.assistant_management_preferences
-    typed_presentation: [PersonalContentAccessState]
-    auth_requirement: optional
+    typed_presentation: [PersonalContentAccessState, AssistantPreferenceFact]
+    auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.management, lifecycle: [enter, exit, update, failure] }
     entry_widget: AssistantManagementPage
@@ -765,6 +766,16 @@ pages:
           aggregate_row_kind: product_action_funnel
           alerts:
             - product-content-share-action-failure-rate-high
+        - journey: content_report
+          telemetry_page_name: home_multi_form_feed
+          object_ids: [content.report]
+          actions: [submit_report]
+          instrumentation_evidence:
+            - lib/ui/discovery/widgets/home_multi_form_feed_report_actions.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-report-action-failure-rate-high
     entry_widget: HomePage
     route_registration_evidence:
       - lib/app/navigation/app_router.dart
@@ -792,7 +803,20 @@ pages:
     typed_presentation: [PostReadPresentation, WorkBrowserItemDto]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.content.media_viewer, lifecycle: [enter, exit, depth, interaction, failure] }
+    telemetry_descriptor:
+      event_namespace: page.content.media_viewer
+      lifecycle: [enter, exit, depth, interaction, failure]
+      product_actions:
+        - journey: content_report
+          telemetry_page_name: works_immersive_viewer
+          object_ids: [content.report]
+          actions: [submit_report]
+          instrumentation_evidence:
+            - lib/ui/discovery/widgets/works_immersive_viewer_engagement_actions.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-report-action-failure-rate-high
     entry_widget: UnifiedMediaViewerPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
@@ -1544,6 +1568,16 @@ pages:
           aggregate_row_kind: product_action_funnel
           alerts:
             - product-profile-interaction-state-failure-rate-high
+        - journey: content_report
+          telemetry_page_name: user_profile_shell
+          object_ids: [content.report]
+          actions: [submit_report]
+          instrumentation_evidence:
+            - lib/ui/user/widgets/profile_shell_builders_more.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-report-action-failure-rate-high
     entry_widget: MyProfilePage
     route_registration_evidence:
       - lib/app/shell/main_app_shell.dart

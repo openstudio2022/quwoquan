@@ -39,22 +39,33 @@ void main() {
       startsWith('https://'),
     );
 
-    final modelInteractions = secondState.events
-        .where((event) => event.eventType == 'assistant.model.interaction')
-        .toList(growable: false);
     expect(
-      modelInteractions.any(
-        (event) => (event.payload['contextTurnCount'] as num? ?? 0) >= 2,
-      ),
-      isTrue,
+      secondState.transcript.length,
+      greaterThanOrEqualTo(4),
+      reason: '第二轮必须保留首轮用户问题与回答，供服务端会话上下文续接',
     );
     expect(
-      modelInteractions.every(
+      secondState.events.map((event) => event.eventType),
+      everyElement(
+        isIn(<String>[
+          'run_started',
+          'process_replace',
+          'process_append',
+          'process_commit',
+          'answer_delta',
+          'completed',
+          'failed',
+          'cancelled',
+        ]),
+      ),
+    );
+    expect(
+      secondState.events.every(
         (event) =>
-            event.payload['contentRedactionApplied'] == true &&
-            !event.payload.containsKey('requestUserPrompt') &&
-            !event.payload.containsKey('responseText') &&
-            !event.payload.containsKey('structuredDelta'),
+            !event.payload.containsKey('debugTrace') &&
+            !event.payload.containsKey('reasoning') &&
+            !event.payload.containsKey('toolUse') &&
+            !event.payload.containsKey('toolInput'),
       ),
       isTrue,
     );

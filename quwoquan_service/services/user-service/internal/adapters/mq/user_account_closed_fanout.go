@@ -8,34 +8,34 @@ import (
 	accountports "quwoquan_service/services/user-service/internal/domain/account/user_account/ports"
 )
 
-// UserAccountClosedFanout 以 durable stream 为提交条件；本服务的
+// UserAccountEventFanout 以 durable stream 为提交条件；本服务的
 // search/tag/realtime 投影随后执行，失败会使 outbox 保持未确认并重放。
-type UserAccountClosedFanout struct {
+type UserAccountEventFanout struct {
 	stream      *EventPublisher
 	projections application.UserEventPublisher
 }
 
-func NewUserAccountClosedFanout(
+func NewUserAccountEventFanout(
 	stream *EventPublisher,
 	projections application.UserEventPublisher,
-) (*UserAccountClosedFanout, error) {
+) (*UserAccountEventFanout, error) {
 	if stream == nil || projections == nil {
 		return nil, errors.New(
-			"UserAccountClosed fanout requires stream and projection publishers",
+			"UserAccount event fanout requires stream and projection publishers",
 		)
 	}
-	return &UserAccountClosedFanout{
+	return &UserAccountEventFanout{
 		stream:      stream,
 		projections: projections,
 	}, nil
 }
 
-func (fanout *UserAccountClosedFanout) PublishUserAccountClosed(
+func (fanout *UserAccountEventFanout) PublishUserAccountEvent(
 	ctx context.Context,
-	event accountports.CloseOutboxEvent,
+	event accountports.UserAccountOutboxEvent,
 	payload map[string]any,
 ) error {
-	if err := fanout.stream.AppendUserAccountClosed(
+	if err := fanout.stream.AppendUserAccountEvent(
 		ctx,
 		event,
 		payload,

@@ -18,42 +18,49 @@ import (
 )
 
 type mediaAssetDocument struct {
-	ID                           string                      `bson:"_id"`
-	Version                      int64                       `bson:"version"`
-	OwnerID                      string                      `bson:"ownerId"`
-	SourceSessionID              string                      `bson:"sourceSessionId"`
-	ObjectKey                    string                      `bson:"objectKey"`
-	SHA256                       string                      `bson:"sha256"`
-	MediaType                    string                      `bson:"mediaType"`
-	ContentType                  string                      `bson:"contentType"`
-	FileSize                     int64                       `bson:"fileSize"`
-	AccessPolicy                 mediamodel.AccessPolicy     `bson:"accessPolicy"`
-	ProcessingStatus             mediamodel.ProcessingStatus `bson:"processingStatus"`
-	ProcessingFailureReason      string                      `bson:"processingFailureReason,omitempty"`
-	ProcessorProfile             string                      `bson:"processorProfile,omitempty"`
-	ImageWidth                   int                         `bson:"imageWidth,omitempty"`
-	ImageHeight                  int                         `bson:"imageHeight,omitempty"`
-	ImageDeliveryContentType     string                      `bson:"imageDeliveryContentType,omitempty"`
-	ImageNormalizedObjectKey     string                      `bson:"imageNormalizedObjectKey,omitempty"`
-	ImagePublicSliceKey          string                      `bson:"imagePublicSliceKey,omitempty"`
-	VerifiedDurationMs           int64                       `bson:"verifiedDurationMs,omitempty"`
-	VideoWidth                   int                         `bson:"videoWidth,omitempty"`
-	VideoHeight                  int                         `bson:"videoHeight,omitempty"`
-	VideoCodec                   string                      `bson:"videoCodec,omitempty"`
-	VideoContainer               string                      `bson:"videoContainer,omitempty"`
-	VideoAudioCodec              string                      `bson:"videoAudioCodec,omitempty"`
-	VideoKeyframeIntervalMs      int                         `bson:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart               bool                        `bson:"videoFastStart,omitempty"`
-	VideoPublicSliceKey          string                      `bson:"videoPublicSliceKey,omitempty"`
-	CoverPublicSliceKey          string                      `bson:"coverPublicSliceKey,omitempty"`
-	PreviewTrackVersion          int                         `bson:"previewTrackVersion,omitempty"`
-	PreviewTrackManifestSliceKey string                      `bson:"previewTrackManifestSliceKey,omitempty"`
-	CoverStrategy                string                      `bson:"coverStrategy"`
-	ManualCoverAssetID           string                      `bson:"manualCoverAssetId,omitempty"`
-	CoverFrameTimeMs             int64                       `bson:"coverFrameTimeMs"`
-	CreatedAt                    time.Time                   `bson:"createdAt"`
-	UpdatedAt                    time.Time                   `bson:"updatedAt"`
-	ProcessedAt                  *time.Time                  `bson:"processedAt,omitempty"`
+	ID                            string                               `bson:"_id"`
+	Version                       int64                                `bson:"version"`
+	OwnerID                       string                               `bson:"ownerId"`
+	SourceSessionID               string                               `bson:"sourceSessionId"`
+	ObjectKey                     string                               `bson:"objectKey"`
+	SHA256                        string                               `bson:"sha256"`
+	MediaType                     string                               `bson:"mediaType"`
+	ContentType                   string                               `bson:"contentType"`
+	FileSize                      int64                                `bson:"fileSize"`
+	AccessPolicy                  mediamodel.AccessPolicy              `bson:"accessPolicy"`
+	ProcessingStatus              mediamodel.ProcessingStatus          `bson:"processingStatus"`
+	ProcessingVersion             int64                                `bson:"processingVersion,omitempty"`
+	ProcessingFailureReason       string                               `bson:"processingFailureReason,omitempty"`
+	ProcessorProfile              string                               `bson:"processorProfile,omitempty"`
+	ImageWidth                    int                                  `bson:"imageWidth,omitempty"`
+	ImageHeight                   int                                  `bson:"imageHeight,omitempty"`
+	ImageDeliveryContentType      string                               `bson:"imageDeliveryContentType,omitempty"`
+	ImageNormalizedObjectKey      string                               `bson:"imageNormalizedObjectKey,omitempty"`
+	ImagePublicSliceKey           string                               `bson:"imagePublicSliceKey,omitempty"`
+	ImageDominantColor            string                               `bson:"imageDominantColor,omitempty"`
+	ImageLQIP                     string                               `bson:"imageLqip,omitempty"`
+	ImageContentProfile           string                               `bson:"imageContentProfile,omitempty"`
+	ImageDerivativePolicyVersion  int                                  `bson:"imageDerivativePolicyVersion,omitempty"`
+	ActiveImageDescriptorRevision int                                  `bson:"activeImageDescriptorRevision,omitempty"`
+	ImageDescriptorRevisions      []mediamodel.ImageDescriptorRevision `bson:"imageDescriptorRevisions,omitempty"`
+	VerifiedDurationMs            int64                                `bson:"verifiedDurationMs,omitempty"`
+	VideoWidth                    int                                  `bson:"videoWidth,omitempty"`
+	VideoHeight                   int                                  `bson:"videoHeight,omitempty"`
+	VideoCodec                    string                               `bson:"videoCodec,omitempty"`
+	VideoContainer                string                               `bson:"videoContainer,omitempty"`
+	VideoAudioCodec               string                               `bson:"videoAudioCodec,omitempty"`
+	VideoKeyframeIntervalMs       int                                  `bson:"videoKeyframeIntervalMs,omitempty"`
+	VideoFastStart                bool                                 `bson:"videoFastStart,omitempty"`
+	VideoPublicSliceKey           string                               `bson:"videoPublicSliceKey,omitempty"`
+	CoverPublicSliceKey           string                               `bson:"coverPublicSliceKey,omitempty"`
+	PreviewTrackVersion           int                                  `bson:"previewTrackVersion,omitempty"`
+	PreviewTrackManifestSliceKey  string                               `bson:"previewTrackManifestSliceKey,omitempty"`
+	CoverStrategy                 string                               `bson:"coverStrategy"`
+	ManualCoverAssetID            string                               `bson:"manualCoverAssetId,omitempty"`
+	CoverFrameTimeMs              int64                                `bson:"coverFrameTimeMs"`
+	CreatedAt                     time.Time                            `bson:"createdAt"`
+	UpdatedAt                     time.Time                            `bson:"updatedAt"`
+	ProcessedAt                   *time.Time                           `bson:"processedAt,omitempty"`
 }
 
 type mediaAssetReceiptDocument struct {
@@ -101,43 +108,7 @@ func (s *MongoMediaStore) FindMediaAssetForOwner(
 			{Key: "_id", Value: strings.TrimSpace(assetID)},
 			{Key: "ownerId", Value: strings.TrimSpace(ownerID)},
 		},
-		options.FindOne().SetProjection(bson.D{
-			{Key: "_id", Value: 1},
-			{Key: "version", Value: 1},
-			{Key: "ownerId", Value: 1},
-			{Key: "sourceSessionId", Value: 1},
-			{Key: "objectKey", Value: 1},
-			{Key: "sha256", Value: 1},
-			{Key: "mediaType", Value: 1},
-			{Key: "contentType", Value: 1},
-			{Key: "fileSize", Value: 1},
-			{Key: "accessPolicy", Value: 1},
-			{Key: "processingStatus", Value: 1},
-			{Key: "processorProfile", Value: 1},
-			{Key: "imageWidth", Value: 1},
-			{Key: "imageHeight", Value: 1},
-			{Key: "imageDeliveryContentType", Value: 1},
-			{Key: "imageNormalizedObjectKey", Value: 1},
-			{Key: "imagePublicSliceKey", Value: 1},
-			{Key: "verifiedDurationMs", Value: 1},
-			{Key: "videoWidth", Value: 1},
-			{Key: "videoHeight", Value: 1},
-			{Key: "videoCodec", Value: 1},
-			{Key: "videoContainer", Value: 1},
-			{Key: "videoAudioCodec", Value: 1},
-			{Key: "videoKeyframeIntervalMs", Value: 1},
-			{Key: "videoFastStart", Value: 1},
-			{Key: "videoPublicSliceKey", Value: 1},
-			{Key: "coverPublicSliceKey", Value: 1},
-			{Key: "previewTrackVersion", Value: 1},
-			{Key: "previewTrackManifestSliceKey", Value: 1},
-			{Key: "coverStrategy", Value: 1},
-			{Key: "manualCoverAssetId", Value: 1},
-			{Key: "coverFrameTimeMs", Value: 1},
-			{Key: "createdAt", Value: 1},
-			{Key: "updatedAt", Value: 1},
-			{Key: "processedAt", Value: 1},
-		}),
+		options.FindOne().SetProjection(mediaAssetReadProjection()),
 	).Decode(&document)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return mediaapp.MediaAssetSlice{}, false, nil
@@ -149,6 +120,72 @@ func (s *MongoMediaStore) FindMediaAssetForOwner(
 		)
 	}
 	return mediaAssetSliceFromDocument(document), true, nil
+}
+
+func (s *MongoMediaStore) FindMediaAssetForOriginalAccess(
+	ctx context.Context,
+	assetID string,
+) (mediaapp.MediaAssetSlice, bool, error) {
+	var document mediaAssetDocument
+	err := s.assets.FindOne(
+		ctx,
+		bson.D{{Key: "_id", Value: strings.TrimSpace(assetID)}},
+		options.FindOne().SetProjection(mediaAssetReadProjection()),
+	).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return mediaapp.MediaAssetSlice{}, false, nil
+	}
+	if err != nil {
+		return mediaapp.MediaAssetSlice{}, false, fmt.Errorf(
+			"find media asset original access projection: %w",
+			err,
+		)
+	}
+	return mediaAssetSliceFromDocument(document), true, nil
+}
+
+func mediaAssetReadProjection() bson.D {
+	return bson.D{
+		{Key: "_id", Value: 1},
+		{Key: "version", Value: 1},
+		{Key: "ownerId", Value: 1},
+		{Key: "sourceSessionId", Value: 1},
+		{Key: "objectKey", Value: 1},
+		{Key: "sha256", Value: 1},
+		{Key: "mediaType", Value: 1},
+		{Key: "contentType", Value: 1},
+		{Key: "fileSize", Value: 1},
+		{Key: "accessPolicy", Value: 1},
+		{Key: "processingStatus", Value: 1},
+		{Key: "processorProfile", Value: 1},
+		{Key: "imageWidth", Value: 1},
+		{Key: "imageHeight", Value: 1},
+		{Key: "imageDeliveryContentType", Value: 1},
+		{Key: "imageNormalizedObjectKey", Value: 1},
+		{Key: "imagePublicSliceKey", Value: 1},
+		{Key: "imageDominantColor", Value: 1},
+		{Key: "imageLqip", Value: 1},
+		{Key: "imageContentProfile", Value: 1},
+		{Key: "imageDerivativePolicyVersion", Value: 1},
+		{Key: "verifiedDurationMs", Value: 1},
+		{Key: "videoWidth", Value: 1},
+		{Key: "videoHeight", Value: 1},
+		{Key: "videoCodec", Value: 1},
+		{Key: "videoContainer", Value: 1},
+		{Key: "videoAudioCodec", Value: 1},
+		{Key: "videoKeyframeIntervalMs", Value: 1},
+		{Key: "videoFastStart", Value: 1},
+		{Key: "videoPublicSliceKey", Value: 1},
+		{Key: "coverPublicSliceKey", Value: 1},
+		{Key: "previewTrackVersion", Value: 1},
+		{Key: "previewTrackManifestSliceKey", Value: 1},
+		{Key: "coverStrategy", Value: 1},
+		{Key: "manualCoverAssetId", Value: 1},
+		{Key: "coverFrameTimeMs", Value: 1},
+		{Key: "createdAt", Value: 1},
+		{Key: "updatedAt", Value: 1},
+		{Key: "processedAt", Value: 1},
+	}
 }
 
 func (s *MongoMediaStore) FindMediaAssetsByIDs(
@@ -228,6 +265,10 @@ func mediaAssetSliceFromDocument(document mediaAssetDocument) mediaapp.MediaAsse
 		ImageDeliveryContentType:     document.ImageDeliveryContentType,
 		ImageNormalizedObjectKey:     document.ImageNormalizedObjectKey,
 		ImagePublicSliceKey:          document.ImagePublicSliceKey,
+		ImageDominantColor:           document.ImageDominantColor,
+		ImageLQIP:                    document.ImageLQIP,
+		ImageContentProfile:          document.ImageContentProfile,
+		ImageDerivativePolicyVersion: document.ImageDerivativePolicyVersion,
 		VerifiedDurationMs:           document.VerifiedDurationMs,
 		VideoWidth:                   document.VideoWidth,
 		VideoHeight:                  document.VideoHeight,
@@ -519,42 +560,49 @@ func validateMediaAssetCommit(commit mediaports.MediaAssetCommit) error {
 func mediaAssetDocumentFromModel(asset *mediamodel.MediaAsset) mediaAssetDocument {
 	snapshot := asset.Snapshot()
 	return mediaAssetDocument{
-		ID:                           snapshot.ID,
-		Version:                      snapshot.Version,
-		OwnerID:                      snapshot.OwnerID,
-		SourceSessionID:              snapshot.SourceSessionID,
-		ObjectKey:                    snapshot.ObjectKey,
-		SHA256:                       snapshot.SHA256,
-		MediaType:                    snapshot.MediaType,
-		ContentType:                  snapshot.ContentType,
-		FileSize:                     snapshot.FileSize,
-		AccessPolicy:                 snapshot.AccessPolicy,
-		ProcessingStatus:             snapshot.ProcessingStatus,
-		ProcessingFailureReason:      snapshot.ProcessingFailureReason,
-		ProcessorProfile:             snapshot.ProcessorProfile,
-		ImageWidth:                   snapshot.ImageWidth,
-		ImageHeight:                  snapshot.ImageHeight,
-		ImageDeliveryContentType:     snapshot.ImageDeliveryContentType,
-		ImageNormalizedObjectKey:     snapshot.ImageNormalizedObjectKey,
-		ImagePublicSliceKey:          snapshot.ImagePublicSliceKey,
-		VerifiedDurationMs:           snapshot.VerifiedDurationMs,
-		VideoWidth:                   snapshot.VideoWidth,
-		VideoHeight:                  snapshot.VideoHeight,
-		VideoCodec:                   snapshot.VideoCodec,
-		VideoContainer:               snapshot.VideoContainer,
-		VideoAudioCodec:              snapshot.VideoAudioCodec,
-		VideoKeyframeIntervalMs:      snapshot.VideoKeyframeIntervalMs,
-		VideoFastStart:               snapshot.VideoFastStart,
-		VideoPublicSliceKey:          snapshot.VideoPublicSliceKey,
-		CoverPublicSliceKey:          snapshot.CoverPublicSliceKey,
-		PreviewTrackVersion:          snapshot.PreviewTrackVersion,
-		PreviewTrackManifestSliceKey: snapshot.PreviewTrackManifestSliceKey,
-		CoverStrategy:                snapshot.CoverStrategy,
-		ManualCoverAssetID:           snapshot.ManualCoverAssetID,
-		CoverFrameTimeMs:             snapshot.CoverFrameTimeMs,
-		CreatedAt:                    snapshot.CreatedAt,
-		UpdatedAt:                    snapshot.UpdatedAt,
-		ProcessedAt:                  cloneMediaTime(snapshot.ProcessedAt),
+		ID:                            snapshot.ID,
+		Version:                       snapshot.Version,
+		OwnerID:                       snapshot.OwnerID,
+		SourceSessionID:               snapshot.SourceSessionID,
+		ObjectKey:                     snapshot.ObjectKey,
+		SHA256:                        snapshot.SHA256,
+		MediaType:                     snapshot.MediaType,
+		ContentType:                   snapshot.ContentType,
+		FileSize:                      snapshot.FileSize,
+		AccessPolicy:                  snapshot.AccessPolicy,
+		ProcessingStatus:              snapshot.ProcessingStatus,
+		ProcessingVersion:             snapshot.ProcessingVersion,
+		ProcessingFailureReason:       snapshot.ProcessingFailureReason,
+		ProcessorProfile:              snapshot.ProcessorProfile,
+		ImageWidth:                    snapshot.ImageWidth,
+		ImageHeight:                   snapshot.ImageHeight,
+		ImageDeliveryContentType:      snapshot.ImageDeliveryContentType,
+		ImageNormalizedObjectKey:      snapshot.ImageNormalizedObjectKey,
+		ImagePublicSliceKey:           snapshot.ImagePublicSliceKey,
+		ImageDominantColor:            snapshot.ImageDominantColor,
+		ImageLQIP:                     snapshot.ImageLQIP,
+		ImageContentProfile:           snapshot.ImageContentProfile,
+		ImageDerivativePolicyVersion:  snapshot.ImageDerivativePolicyVersion,
+		ActiveImageDescriptorRevision: snapshot.ActiveImageDescriptorRevision,
+		ImageDescriptorRevisions:      snapshot.ImageDescriptorRevisions,
+		VerifiedDurationMs:            snapshot.VerifiedDurationMs,
+		VideoWidth:                    snapshot.VideoWidth,
+		VideoHeight:                   snapshot.VideoHeight,
+		VideoCodec:                    snapshot.VideoCodec,
+		VideoContainer:                snapshot.VideoContainer,
+		VideoAudioCodec:               snapshot.VideoAudioCodec,
+		VideoKeyframeIntervalMs:       snapshot.VideoKeyframeIntervalMs,
+		VideoFastStart:                snapshot.VideoFastStart,
+		VideoPublicSliceKey:           snapshot.VideoPublicSliceKey,
+		CoverPublicSliceKey:           snapshot.CoverPublicSliceKey,
+		PreviewTrackVersion:           snapshot.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey:  snapshot.PreviewTrackManifestSliceKey,
+		CoverStrategy:                 snapshot.CoverStrategy,
+		ManualCoverAssetID:            snapshot.ManualCoverAssetID,
+		CoverFrameTimeMs:              snapshot.CoverFrameTimeMs,
+		CreatedAt:                     snapshot.CreatedAt,
+		UpdatedAt:                     snapshot.UpdatedAt,
+		ProcessedAt:                   cloneMediaTime(snapshot.ProcessedAt),
 	}
 }
 
@@ -562,42 +610,49 @@ func mediaAssetFromDocument(
 	document mediaAssetDocument,
 ) (*mediamodel.MediaAsset, error) {
 	asset, err := mediamodel.RestoreMediaAsset(mediamodel.MediaAssetSnapshot{
-		ID:                           document.ID,
-		Version:                      document.Version,
-		OwnerID:                      document.OwnerID,
-		SourceSessionID:              document.SourceSessionID,
-		ObjectKey:                    document.ObjectKey,
-		SHA256:                       document.SHA256,
-		MediaType:                    document.MediaType,
-		ContentType:                  document.ContentType,
-		FileSize:                     document.FileSize,
-		AccessPolicy:                 document.AccessPolicy,
-		ProcessingStatus:             document.ProcessingStatus,
-		ProcessingFailureReason:      document.ProcessingFailureReason,
-		ProcessorProfile:             document.ProcessorProfile,
-		ImageWidth:                   document.ImageWidth,
-		ImageHeight:                  document.ImageHeight,
-		ImageDeliveryContentType:     document.ImageDeliveryContentType,
-		ImageNormalizedObjectKey:     document.ImageNormalizedObjectKey,
-		ImagePublicSliceKey:          document.ImagePublicSliceKey,
-		VerifiedDurationMs:           document.VerifiedDurationMs,
-		VideoWidth:                   document.VideoWidth,
-		VideoHeight:                  document.VideoHeight,
-		VideoCodec:                   document.VideoCodec,
-		VideoContainer:               document.VideoContainer,
-		VideoAudioCodec:              document.VideoAudioCodec,
-		VideoKeyframeIntervalMs:      document.VideoKeyframeIntervalMs,
-		VideoFastStart:               document.VideoFastStart,
-		VideoPublicSliceKey:          document.VideoPublicSliceKey,
-		CoverPublicSliceKey:          document.CoverPublicSliceKey,
-		PreviewTrackVersion:          document.PreviewTrackVersion,
-		PreviewTrackManifestSliceKey: document.PreviewTrackManifestSliceKey,
-		CoverStrategy:                document.CoverStrategy,
-		ManualCoverAssetID:           document.ManualCoverAssetID,
-		CoverFrameTimeMs:             document.CoverFrameTimeMs,
-		CreatedAt:                    document.CreatedAt,
-		UpdatedAt:                    document.UpdatedAt,
-		ProcessedAt:                  cloneMediaTime(document.ProcessedAt),
+		ID:                            document.ID,
+		Version:                       document.Version,
+		OwnerID:                       document.OwnerID,
+		SourceSessionID:               document.SourceSessionID,
+		ObjectKey:                     document.ObjectKey,
+		SHA256:                        document.SHA256,
+		MediaType:                     document.MediaType,
+		ContentType:                   document.ContentType,
+		FileSize:                      document.FileSize,
+		AccessPolicy:                  document.AccessPolicy,
+		ProcessingStatus:              document.ProcessingStatus,
+		ProcessingVersion:             document.ProcessingVersion,
+		ProcessingFailureReason:       document.ProcessingFailureReason,
+		ProcessorProfile:              document.ProcessorProfile,
+		ImageWidth:                    document.ImageWidth,
+		ImageHeight:                   document.ImageHeight,
+		ImageDeliveryContentType:      document.ImageDeliveryContentType,
+		ImageNormalizedObjectKey:      document.ImageNormalizedObjectKey,
+		ImagePublicSliceKey:           document.ImagePublicSliceKey,
+		ImageDominantColor:            document.ImageDominantColor,
+		ImageLQIP:                     document.ImageLQIP,
+		ImageContentProfile:           document.ImageContentProfile,
+		ImageDerivativePolicyVersion:  document.ImageDerivativePolicyVersion,
+		ActiveImageDescriptorRevision: document.ActiveImageDescriptorRevision,
+		ImageDescriptorRevisions:      document.ImageDescriptorRevisions,
+		VerifiedDurationMs:            document.VerifiedDurationMs,
+		VideoWidth:                    document.VideoWidth,
+		VideoHeight:                   document.VideoHeight,
+		VideoCodec:                    document.VideoCodec,
+		VideoContainer:                document.VideoContainer,
+		VideoAudioCodec:               document.VideoAudioCodec,
+		VideoKeyframeIntervalMs:       document.VideoKeyframeIntervalMs,
+		VideoFastStart:                document.VideoFastStart,
+		VideoPublicSliceKey:           document.VideoPublicSliceKey,
+		CoverPublicSliceKey:           document.CoverPublicSliceKey,
+		PreviewTrackVersion:           document.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey:  document.PreviewTrackManifestSliceKey,
+		CoverStrategy:                 document.CoverStrategy,
+		ManualCoverAssetID:            document.ManualCoverAssetID,
+		CoverFrameTimeMs:              document.CoverFrameTimeMs,
+		CreatedAt:                     document.CreatedAt,
+		UpdatedAt:                     document.UpdatedAt,
+		ProcessedAt:                   cloneMediaTime(document.ProcessedAt),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("restore media asset: %w", err)

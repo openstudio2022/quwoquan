@@ -38,6 +38,15 @@ scenarios:
       - archived_state_receipt_outbox_same_transaction
       - repeat_dissolve_replays_original_receipt
 
+  - name: circle_group_provisioning_and_binding
+    command: CircleGroupCreated / CircleGroupArchived durable events
+    assertions:
+      - ordinary_CreateConversation_rejects_circle_binding_fields
+      - CircleGroupCreated_provisions_exactly_one_unique_circleGroupId_conversation
+      - Chat_outbox_publishes_CircleGroupConversationProvisioned_after_durable_commit
+      - CircleGroupArchived_dissolves_bound_conversation_and_evicts_all_inbox_rows
+      - duplicate_or_out_of_order_source_events_are_idempotent
+
   - name: conversation_events_via_outbox
     command: CreateConversation / UpdateConversationTitle
     assertions:

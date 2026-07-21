@@ -20,16 +20,11 @@ import (
 	"time"
 
 	"quwoquan_service/services/user-service/internal/application"
+	credentialmodel "quwoquan_service/services/user-service/internal/domain/account/credential_binding/model"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
-// allKnownProviders 是当前迭代支持的社交提供方（不含 Apple/Passkey）。
-var allKnownProviders = []string{
-	application.SocialProviderWechat,
-	application.SocialProviderAlipay,
-	application.SocialProviderQq,
-}
-
-// ProviderOAuthConfig 是单个社交提供方的真实 OAuth 应用配置（prod 注入）。
+// ProviderOAuthConfig 是一个已绑定认证适配器的运行配置。
 type ProviderOAuthConfig struct {
 	AppID                string
 	AppSecret            string
@@ -40,76 +35,107 @@ type ProviderOAuthConfig struct {
 	UserInfoURL          string
 }
 
-// HTTPExternalAuthProviderClient 为 prod 提供真实票据置换。
-// 微信走标准 code->access_token(openid/unionid)->userinfo 流程；支付宝/QQ 需各自签名/令牌流程，
-// 未注入完整配置时返回结构化 unavailable，绝不伪造成功（honest，不打桩）。
-type HTTPExternalAuthProviderClient struct {
-	configs map[string]ProviderOAuthConfig
-	client  *http.Client
+type providerKind string
+
+const (
+	providerWechat providerKind = "wechat"
+	providerAlipay providerKind = "alipay"
+	providerQq     providerKind = "qq"
+)
+
+// HTTPFederatedIdentityVerifier binds exactly one concrete protocol
+// implementation. There is deliberately no runtime provider selector.
+type HTTPFederatedIdentityVerifier struct {
+	kind   providerKind
+	config ProviderOAuthConfig
+	client *http.Client
 }
 
-func NewHTTPExternalAuthProviderClient(configs map[string]ProviderOAuthConfig, client *http.Client) *HTTPExternalAuthProviderClient {
+func NewWechatFederatedIdentityVerifier(
+	config ProviderOAuthConfig,
+	client *http.Client,
+) (application.FederatedIdentityVerifier, error) {
+	return newHTTPFederatedIdentityVerifier(providerWechat, config, client)
+}
+
+func NewAlipayFederatedIdentityVerifier(
+	config ProviderOAuthConfig,
+	client *http.Client,
+) (application.FederatedIdentityVerifier, application.FederatedAuthorizationIssuer, error) {
+	verifier, err := newHTTPFederatedIdentityVerifier(providerAlipay, config, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	return verifier, verifier, nil
+}
+
+func NewQqFederatedIdentityVerifier(
+	config ProviderOAuthConfig,
+	client *http.Client,
+) (application.FederatedIdentityVerifier, error) {
+	return newHTTPFederatedIdentityVerifier(providerQq, config, client)
+}
+
+func newHTTPFederatedIdentityVerifier(
+	kind providerKind,
+	config ProviderOAuthConfig,
+	client *http.Client,
+) (*HTTPFederatedIdentityVerifier, error) {
+	if !isConfigured(kind, config) {
+		return nil, fmt.Errorf("federated identity adapter is not configured")
+	}
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}
 	}
-	normalized := make(map[string]ProviderOAuthConfig, len(configs))
-	for k, v := range configs {
-		if key, ok := application.NormalizeSocialProvider(k); ok {
-			normalized[key] = v
-		}
-	}
-	return &HTTPExternalAuthProviderClient{configs: normalized, client: client}
+	return &HTTPFederatedIdentityVerifier{
+		kind:   kind,
+		config: config,
+		client: client,
+	}, nil
 }
 
-func (c *HTTPExternalAuthProviderClient) Supports(provider string) bool {
-	key, ok := application.NormalizeSocialProvider(provider)
-	if !ok {
+func isConfigured(kind providerKind, config ProviderOAuthConfig) bool {
+	if strings.TrimSpace(config.AppID) == "" {
 		return false
 	}
-	cfg, ok := c.configs[key]
-	if !ok || strings.TrimSpace(cfg.AppID) == "" {
-		return false
-	}
-	switch key {
-	case application.SocialProviderWechat:
-		return strings.TrimSpace(cfg.AppSecret) != ""
-	case application.SocialProviderAlipay:
-		return strings.TrimSpace(cfg.AppPrivateKeyPEM) != "" &&
-			strings.TrimSpace(cfg.PlatformPublicKeyPEM) != "" &&
-			strings.TrimSpace(cfg.MerchantPID) != ""
-	case application.SocialProviderQq:
+	switch kind {
+	case providerWechat:
+		return strings.TrimSpace(config.AppSecret) != ""
+	case providerAlipay:
+		return strings.TrimSpace(config.AppPrivateKeyPEM) != "" &&
+			strings.TrimSpace(config.PlatformPublicKeyPEM) != "" &&
+			strings.TrimSpace(config.MerchantPID) != ""
+	case providerQq:
 		return true
 	default:
 		return false
 	}
 }
 
-// CreateAuthorizationRequest 生成支付宝 authV2 所需签名串；App 只能拿到短期
-// authorizationPayload，拿不到商户私钥。
-func (c *HTTPExternalAuthProviderClient) CreateAuthorizationRequest(
+func (c *HTTPFederatedIdentityVerifier) IssueAuthorizationRequest(
 	_ context.Context,
-	provider string,
-) (string, time.Time, error) {
-	key, ok := application.NormalizeSocialProvider(provider)
-	if !ok || key != application.SocialProviderAlipay || !c.Supports(key) {
-		return "", time.Time{}, errors.New("social provider authorization unavailable")
+) (application.FederatedAuthorizationRequest, error) {
+	if c == nil || c.kind != providerAlipay {
+		return application.FederatedAuthorizationRequest{},
+			generated.AppErrorFromSocialProviderUnavailable("federated authorization unavailable")
 	}
-	cfg := c.configs[key]
-	privateKey, err := parseRSAPrivateKey(cfg.AppPrivateKeyPEM)
+	privateKey, err := parseRSAPrivateKey(c.config.AppPrivateKeyPEM)
 	if err != nil {
-		return "", time.Time{}, errors.New("social provider authorization unavailable")
+		return application.FederatedAuthorizationRequest{},
+			generated.AppErrorFromSocialProviderUnavailable("federated authorization unavailable")
 	}
 	nonce := make([]byte, 24)
 	if _, err := rand.Read(nonce); err != nil {
-		return "", time.Time{}, errors.New("social provider authorization unavailable")
+		return application.FederatedAuthorizationRequest{},
+			generated.AppErrorFromSocialProviderUnavailable("federated authorization unavailable")
 	}
 	values := url.Values{
 		"apiname":    {"com.alipay.account.auth"},
 		"method":     {"alipay.open.auth.sdk.code.get"},
-		"app_id":     {cfg.AppID},
+		"app_id":     {c.config.AppID},
 		"app_name":   {"mc"},
 		"biz_type":   {"openservice"},
-		"pid":        {cfg.MerchantPID},
+		"pid":        {c.config.MerchantPID},
 		"product_id": {"APP_FAST_LOGIN"},
 		"scope":      {"kuaijie"},
 		"target_id":  {base64.RawURLEncoding.EncodeToString(nonce)},
@@ -118,35 +144,104 @@ func (c *HTTPExternalAuthProviderClient) CreateAuthorizationRequest(
 	}
 	signature, err := signAlipayValues(values, privateKey)
 	if err != nil {
-		return "", time.Time{}, errors.New("social provider authorization unavailable")
+		return application.FederatedAuthorizationRequest{},
+			generated.AppErrorFromSocialProviderUnavailable("federated authorization unavailable")
 	}
 	values.Set("sign", signature)
-	return values.Encode(), time.Now().UTC().Add(5 * time.Minute), nil
+	return application.FederatedAuthorizationRequest{
+		Payload:   values.Encode(),
+		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
+	}, nil
 }
 
-func (c *HTTPExternalAuthProviderClient) Exchange(ctx context.Context, provider, authCode, _, _ string) (application.ExternalIdentity, error) {
-	key, ok := application.NormalizeSocialProvider(provider)
-	if !ok {
-		return application.ExternalIdentity{}, fmt.Errorf("unsupported provider %q", provider)
+func (c *HTTPFederatedIdentityVerifier) Verify(
+	ctx context.Context,
+	authorizationCode string,
+) (application.VerifiedFederatedIdentity, error) {
+	if c == nil {
+		return application.VerifiedFederatedIdentity{},
+			generated.AppErrorFromSocialProviderUnavailable("federated identity adapter unavailable")
 	}
-	cfg, ok := c.configs[key]
-	if !ok || !c.Supports(key) {
-		return application.ExternalIdentity{}, fmt.Errorf("%s provider unavailable: oauth app not configured", key)
-	}
-	switch key {
-	case application.SocialProviderWechat:
-		return c.exchangeWechat(ctx, cfg, strings.TrimSpace(authCode))
-	case application.SocialProviderAlipay:
-		return c.exchangeAlipay(ctx, cfg, strings.TrimSpace(authCode))
-	case application.SocialProviderQq:
-		return c.exchangeQq(ctx, cfg, strings.TrimSpace(authCode))
+	var (
+		identity providerIdentity
+		err      error
+	)
+	switch c.kind {
+	case providerWechat:
+		identity, err = c.exchangeWechat(ctx, c.config, strings.TrimSpace(authorizationCode))
+	case providerAlipay:
+		identity, err = c.exchangeAlipay(ctx, c.config, strings.TrimSpace(authorizationCode))
+	case providerQq:
+		identity, err = c.exchangeQq(ctx, c.config, strings.TrimSpace(authorizationCode))
 	default:
-		return application.ExternalIdentity{}, fmt.Errorf("unsupported provider %q", key)
+		return application.VerifiedFederatedIdentity{},
+			generated.AppErrorFromSocialProviderUnavailable("federated identity adapter unavailable")
+	}
+	if err != nil {
+		return application.VerifiedFederatedIdentity{}, c.mapVerificationFailure(err)
+	}
+	return c.normalizeIdentity(identity)
+}
+
+type providerIdentity struct {
+	OpenID      string
+	UnionID     string
+	AppID       string
+	DisplayName string
+	AvatarURL   string
+}
+
+func (c *HTTPFederatedIdentityVerifier) normalizeIdentity(
+	identity providerIdentity,
+) (application.VerifiedFederatedIdentity, error) {
+	stableID := firstNonEmpty(identity.UnionID, identity.OpenID)
+	if stableID == "" {
+		return application.VerifiedFederatedIdentity{},
+			c.mapVerificationFailure(errors.New("provider response identity missing"))
+	}
+	var credentialType credentialmodel.CredentialType
+	switch c.kind {
+	case providerWechat:
+		credentialType = credentialmodel.CredentialTypeFederatedSlotA
+	case providerAlipay:
+		credentialType = credentialmodel.CredentialTypeFederatedSlotB
+	case providerQq:
+		credentialType = credentialmodel.CredentialTypeFederatedSlotC
+	default:
+		return application.VerifiedFederatedIdentity{},
+			generated.AppErrorFromSocialProviderUnavailable("federated identity adapter unavailable")
+	}
+	return application.VerifiedFederatedIdentity{
+		CredentialType: credentialType,
+		CredentialKey:  string(c.kind) + ":" + stableID,
+		DisplayName:    identity.DisplayName,
+		AvatarURL:      identity.AvatarURL,
+	}, nil
+}
+
+func (c *HTTPFederatedIdentityVerifier) mapVerificationFailure(err error) error {
+	if errors.Is(err, context.Canceled) || strings.Contains(strings.ToLower(err.Error()), "cancel") {
+		return generated.AppErrorFromSocialProviderCancelled("federated authorization cancelled")
+	}
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(strings.ToLower(err.Error()), "timeout") ||
+		strings.Contains(strings.ToLower(err.Error()), "unavailable") {
+		return generated.AppErrorFromSocialProviderUnavailable("federated identity adapter unavailable")
+	}
+	switch c.kind {
+	case providerWechat:
+		return generated.AppErrorFromWechatAuthFailed("federated authorization verification failed")
+	case providerAlipay:
+		return generated.AppErrorFromAlipayAuthFailed("federated authorization verification failed")
+	case providerQq:
+		return generated.AppErrorFromQqAuthFailed("federated authorization verification failed")
+	default:
+		return generated.AppErrorFromSocialProviderUnavailable("federated identity adapter unavailable")
 	}
 }
 
 // exchangeWechat 实现微信开放平台 code 换 openid/unionid 的标准流程。
-func (c *HTTPExternalAuthProviderClient) exchangeWechat(ctx context.Context, cfg ProviderOAuthConfig, code string) (application.ExternalIdentity, error) {
+func (c *HTTPFederatedIdentityVerifier) exchangeWechat(ctx context.Context, cfg ProviderOAuthConfig, code string) (providerIdentity, error) {
 	tokenURL := strings.TrimSpace(cfg.TokenURL)
 	if tokenURL == "" {
 		tokenURL = "https://api.weixin.qq.com/sns/oauth2/access_token"
@@ -165,20 +260,18 @@ func (c *HTTPExternalAuthProviderClient) exchangeWechat(ctx context.Context, cfg
 		ErrMsg      string `json:"errmsg"`
 	}
 	if err := c.getJSON(ctx, tokenURL+"?"+q.Encode(), &tokenResp); err != nil {
-		return application.ExternalIdentity{}, fmt.Errorf("wechat token exchange failed: %w", err)
+		return providerIdentity{}, fmt.Errorf("wechat token exchange failed: %w", err)
 	}
 	if tokenResp.ErrCode != 0 {
-		return application.ExternalIdentity{}, fmt.Errorf(
+		return providerIdentity{}, fmt.Errorf(
 			"wechat token exchange rejected with provider code %d",
 			tokenResp.ErrCode,
 		)
 	}
-	identity := application.ExternalIdentity{
-		Provider: application.SocialProviderWechat,
-		OpenID:   tokenResp.OpenID,
-		UnionID:  tokenResp.UnionID,
-		AppID:    cfg.AppID,
-		Scope:    tokenResp.Scope,
+	identity := providerIdentity{
+		OpenID:  tokenResp.OpenID,
+		UnionID: tokenResp.UnionID,
+		AppID:   cfg.AppID,
 	}
 	userInfoURL := strings.TrimSpace(cfg.UserInfoURL)
 	if userInfoURL == "" {
@@ -204,13 +297,13 @@ func (c *HTTPExternalAuthProviderClient) exchangeWechat(ctx context.Context, cfg
 }
 
 // exchangeAlipay 使用支付宝 OpenAPI RSA2 网关完成 authCode 置换，并校验响应签名。
-func (c *HTTPExternalAuthProviderClient) exchangeAlipay(
+func (c *HTTPFederatedIdentityVerifier) exchangeAlipay(
 	ctx context.Context,
 	cfg ProviderOAuthConfig,
 	authCode string,
-) (application.ExternalIdentity, error) {
+) (providerIdentity, error) {
 	if authCode == "" {
-		return application.ExternalIdentity{}, errors.New("alipay authorization code required")
+		return providerIdentity{}, errors.New("alipay authorization code required")
 	}
 	gatewayURL := strings.TrimSpace(cfg.TokenURL)
 	if gatewayURL == "" {
@@ -227,7 +320,7 @@ func (c *HTTPExternalAuthProviderClient) exchangeAlipay(
 		},
 	)
 	if err != nil {
-		return application.ExternalIdentity{}, err
+		return providerIdentity{}, err
 	}
 	var token struct {
 		AccessToken string `json:"access_token"`
@@ -237,15 +330,13 @@ func (c *HTTPExternalAuthProviderClient) exchangeAlipay(
 	if err := json.Unmarshal(tokenPayload, &token); err != nil ||
 		strings.TrimSpace(token.AccessToken) == "" ||
 		(strings.TrimSpace(token.UserID) == "" && strings.TrimSpace(token.OpenID) == "") {
-		return application.ExternalIdentity{}, errors.New("alipay provider response invalid")
+		return providerIdentity{}, errors.New("alipay provider response invalid")
 	}
 
-	identity := application.ExternalIdentity{
-		Provider: application.SocialProviderAlipay,
-		UnionID:  strings.TrimSpace(token.UserID),
-		OpenID:   firstNonEmpty(strings.TrimSpace(token.OpenID), strings.TrimSpace(token.UserID)),
-		AppID:    cfg.AppID,
-		Scope:    "auth_user",
+	identity := providerIdentity{
+		UnionID: strings.TrimSpace(token.UserID),
+		OpenID:  firstNonEmpty(strings.TrimSpace(token.OpenID), strings.TrimSpace(token.UserID)),
+		AppID:   cfg.AppID,
 	}
 	userInfoURL := strings.TrimSpace(cfg.UserInfoURL)
 	if userInfoURL == "" {
@@ -273,14 +364,14 @@ func (c *HTTPExternalAuthProviderClient) exchangeAlipay(
 
 // exchangeQq 校验移动 SDK 返回的 accessToken+openId 票据。QQ OpenAPI 的
 // get_user_info 同时消费两者，ret=0 才证明该 token 可访问该 openId。
-func (c *HTTPExternalAuthProviderClient) exchangeQq(
+func (c *HTTPFederatedIdentityVerifier) exchangeQq(
 	ctx context.Context,
 	cfg ProviderOAuthConfig,
 	authCode string,
-) (application.ExternalIdentity, error) {
+) (providerIdentity, error) {
 	token, openID, err := parseQqMobileTicket(authCode)
 	if err != nil {
-		return application.ExternalIdentity{}, err
+		return providerIdentity{}, err
 	}
 	userInfoURL := strings.TrimSpace(cfg.UserInfoURL)
 	if userInfoURL == "" {
@@ -298,18 +389,16 @@ func (c *HTTPExternalAuthProviderClient) exchangeQq(
 		FigureURL string `json:"figureurl_qq_2"`
 	}
 	if err := c.getJSON(ctx, userInfoURL+"?"+q.Encode(), &profile); err != nil {
-		return application.ExternalIdentity{}, err
+		return providerIdentity{}, err
 	}
 	if profile.Ret != 0 {
-		return application.ExternalIdentity{}, errors.New("qq provider authorization rejected")
+		return providerIdentity{}, errors.New("qq provider authorization rejected")
 	}
-	return application.ExternalIdentity{
-		Provider:    application.SocialProviderQq,
+	return providerIdentity{
 		OpenID:      openID,
 		AppID:       cfg.AppID,
 		DisplayName: strings.TrimSpace(profile.Nickname),
 		AvatarURL:   strings.TrimSpace(profile.FigureURL),
-		Scope:       "get_user_info",
 	}, nil
 }
 
@@ -338,7 +427,7 @@ func parseQqMobileTicket(ticket string) (accessToken string, openID string, err 
 	return accessToken, openID, nil
 }
 
-func (c *HTTPExternalAuthProviderClient) postAlipayGateway(
+func (c *HTTPFederatedIdentityVerifier) postAlipayGateway(
 	ctx context.Context,
 	cfg ProviderOAuthConfig,
 	endpoint string,
@@ -469,7 +558,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func (c *HTTPExternalAuthProviderClient) postFormJSON(
+func (c *HTTPFederatedIdentityVerifier) postFormJSON(
 	ctx context.Context,
 	endpoint string,
 	values url.Values,
@@ -496,7 +585,7 @@ func (c *HTTPExternalAuthProviderClient) postFormJSON(
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func (c *HTTPExternalAuthProviderClient) getJSON(ctx context.Context, fullURL string, out any) error {
+func (c *HTTPFederatedIdentityVerifier) getJSON(ctx context.Context, fullURL string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return errors.New("provider request configuration invalid")

@@ -116,6 +116,20 @@ def test_agent_reexec_keeps_bytecode_out_of_the_source_tree(
     assert env["PYTHONDONTWRITEBYTECODE"] == "1"
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["cli.py", "task", "execute"], True),
+        (["cli.py", "task", "preflight"], False),
+    ],
+)
+def test_agent_runtime_commands_are_explicitly_bootstrapped(
+    argv: list[str],
+    expected: bool,
+) -> None:
+    assert python_environment.agent_command_needs_bootstrap(argv) is expected
+
+
 def test_data_python_tool_cache_is_rebuilt_from_repo_truth(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

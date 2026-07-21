@@ -11,23 +11,22 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrCallNotFound          = errors.New("RTC.USER.call_not_found")
-	ErrUnauthorized          = errors.New("RTC.USER.unauthorized")
-	ErrAlreadyInCall         = errors.New("RTC.USER.already_in_call")
-	ErrCallFull              = errors.New("RTC.USER.call_full")
-	ErrCallEnded             = errors.New("RTC.USER.call_ended")
-	ErrNotParticipant        = errors.New("RTC.USER.not_participant")
-	ErrNotMutual             = errors.New("RTC.USER.not_mutual")
-	ErrBlocked               = errors.New("RTC.USER.blocked")
-	ErrCannotAnswer          = errors.New("RTC.USER.cannot_answer")
-	ErrInvalidCallAction     = errors.New("RTC.USER.invalid_call_action")
-	ErrScreenShareConflict   = errors.New("RTC.USER.screen_share_conflict")
-	ErrVersionConflict       = errors.New("RTC.USER.version_conflict")
-	ErrIdempotencyConflict   = errors.New("RTC.USER.idempotency_conflict")
-	ErrRateLimited           = errors.New("RTC.USER.rate_limited")
-	ErrLivekitUnavailable    = errors.New("RTC.SYSTEM.livekit_unavailable")
-	ErrInternalError         = errors.New("RTC.SYSTEM.internal_error")
-	ErrTokenGenerationFailed = errors.New("RTC.SYSTEM.token_generation_failed")
+	ErrCallNotFound              = errors.New("RTC.USER.call_not_found")
+	ErrUnauthorized              = errors.New("RTC.USER.unauthorized")
+	ErrAlreadyInCall             = errors.New("RTC.USER.already_in_call")
+	ErrCallFull                  = errors.New("RTC.USER.call_full")
+	ErrCallEnded                 = errors.New("RTC.USER.call_ended")
+	ErrNotParticipant            = errors.New("RTC.USER.not_participant")
+	ErrNotMutual                 = errors.New("RTC.USER.not_mutual")
+	ErrBlocked                   = errors.New("RTC.USER.blocked")
+	ErrCannotAnswer              = errors.New("RTC.USER.cannot_answer")
+	ErrInvalidCallAction         = errors.New("RTC.USER.invalid_call_action")
+	ErrScreenShareConflict       = errors.New("RTC.USER.screen_share_conflict")
+	ErrVersionConflict           = errors.New("RTC.USER.version_conflict")
+	ErrIdempotencyConflict       = errors.New("RTC.USER.idempotency_conflict")
+	ErrRateLimited               = errors.New("RTC.USER.rate_limited")
+	ErrMediaTransportUnavailable = errors.New("RTC.SYSTEM.media_transport_unavailable")
+	ErrInternalError             = errors.New("RTC.SYSTEM.internal_error")
 )
 
 // AppErrorFromCallNotFound returns *AppError for RTC.USER.call_not_found (user_message from errors.yaml).
@@ -114,9 +113,9 @@ func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 5)
 }
 
-// AppErrorFromLivekitUnavailable returns *AppError for RTC.SYSTEM.livekit_unavailable (user_message from errors.yaml).
-func AppErrorFromLivekitUnavailable(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrLivekitUnavailable.Error()))
+// AppErrorFromMediaTransportUnavailable returns *AppError for RTC.SYSTEM.media_transport_unavailable (user_message from errors.yaml).
+func AppErrorFromMediaTransportUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrMediaTransportUnavailable.Error()))
 	return rerrors.NewAppError(code, "通话服务暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_error", 503).WithRecovery("retry", 3)
 }
 
@@ -124,10 +123,4 @@ func AppErrorFromLivekitUnavailable(debugMessage string) *rerrors.AppError {
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
 	return rerrors.NewAppError(code, "通话服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
-}
-
-// AppErrorFromTokenGenerationFailed returns *AppError for RTC.SYSTEM.token_generation_failed (user_message from errors.yaml).
-func AppErrorFromTokenGenerationFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrTokenGenerationFailed.Error()))
-	return rerrors.NewAppError(code, "连接通话服务失败，请重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 2)
 }

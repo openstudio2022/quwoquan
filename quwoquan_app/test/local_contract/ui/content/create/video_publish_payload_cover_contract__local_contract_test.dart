@@ -36,6 +36,7 @@ void main() {
       final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         state: state,
+        mediaPreparationIdentity: 'video-cover-payload-draft',
         sourceReader: _MemoryContentMediaSourceReader(fileStorage.bytesByPath),
         uploadStream:
             (
@@ -75,18 +76,47 @@ void main() {
       expect(prepared.payload['width'], 1080);
       expect(prepared.payload['height'], 1920);
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
-      final mediaItems =
-          prepared.payload['mediaItems'] as List<Map<String, Object?>>;
-      expect(mediaItems.single['mediaId'], 'video_asset_1');
-      expect(mediaItems.single['coverAssetId'], 'image_asset_2');
-      expect(mediaItems.single, isNot(contains('url')));
-      expect(mediaItems.single, isNot(contains('coverUrl')));
-      expect(media.selectedManualCovers, isEmpty);
+      expect(prepared.payload, isNot(contains('mediaItems')));
+      expect(media.selectedManualCovers, hasLength(1));
+      expect(media.selectedManualCovers.single.mediaId, 'video_asset_1');
+      expect(media.selectedManualCovers.single.coverAssetId, 'image_asset_2');
       expect(media.selectedAutoCoverMediaIds, isEmpty);
       expect(
         prepared.payload.values.toString(),
         isNot(contains('cdn.quwoquan.test')),
       );
+    });
+
+    test('首次发布媒体准备意图不持久化本地路径或未生成的媒体引用', () {
+      final state =
+          CreateEditorState.initial(
+            editorKind: CreateEditorKind.media,
+          ).copyWith(
+            mediaKind: CreateMediaKind.video,
+            videoPath: '/tmp/clip.mp4',
+            videoThumbnail: '/tmp/cover.jpg',
+            videoDurationMs: 12345,
+            videoCoverTimeMs: 3200,
+            videoCoverStrategy: 'manual',
+            videoWidth: 1080,
+            videoHeight: 1920,
+            title: '视频作品',
+          );
+
+      final preparation = buildPostPublicationMediaPreparationPayload(state);
+
+      expect(preparation.mediaAssetIds, isEmpty);
+      expect(preparation.payload, isNot(contains('mediaUrls')));
+      expect(preparation.payload, isNot(contains('videoUrl')));
+      expect(preparation.payload, isNot(contains('thumbnailUrl')));
+      expect(preparation.payload, isNot(contains('coverUrl')));
+      expect(preparation.payload, isNot(contains('mediaItems')));
+      expect(preparation.payload.values.toString(), isNot(contains('/tmp/')));
+      expect(preparation.payload['coverStrategy'], 'manual');
+      expect(preparation.payload['coverFrameTimeMs'], 3200);
+      expect(preparation.payload['durationMs'], 12345);
+      expect(preparation.payload['width'], 1080);
+      expect(preparation.payload['height'], 1920);
     });
 
     test('封面上传失败会 abort 封面 session 且不返回半成品 payload', () async {
@@ -109,6 +139,7 @@ void main() {
         buildPostPublicationPayloadWithRemoteMedia(
           media: media,
           state: state,
+          mediaPreparationIdentity: 'video-cover-failure-draft',
           sourceReader: _MemoryContentMediaSourceReader(
             fileStorage.bytesByPath,
           ),

@@ -96,6 +96,46 @@ void main() {
     expect(state.promptReason, AuthPromptReason.sessionExpired);
   });
 
+  test('静默 refresh 返回 account_suspended 时清除凭证并保留受限原因', () async {
+    final store = _MemoryAuthSessionStore.authenticated();
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            throw CloudException(
+              type: CloudErrorType.forbidden,
+              message: 'account restricted',
+              code: 'USER.AUTH.account_suspended',
+              statusCode: 403,
+              runtimeFailure: testRuntimeFailure(
+                code: 'USER.AUTH.account_suspended',
+                kind: RuntimeFailureKind.auth,
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final refreshed = await container
+        .read(authSessionControllerProvider.notifier)
+        .refreshSessionIfNeeded(force: true);
+
+    expect(refreshed, isFalse);
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountSuspended);
+    expect(state.errorMessage, isNotEmpty);
+    final persisted = await store.read();
+    expect(persisted.accessToken, isEmpty);
+    expect(persisted.refreshToken, isEmpty);
+  });
+
   test('静默 refresh 网络失败时保留登录态，避免误登出', () async {
     final store = _MemoryAuthSessionStore.authenticated();
     final container = ProviderContainer(

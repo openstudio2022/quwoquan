@@ -18,11 +18,12 @@ func TestReportCommandAndQueryFacetsStaySeparated(t *testing.T) {
 	store := testsupport.NewReportStore()
 	service := reportapp.NewReportService(reportapp.BindDataPorts(store))
 	createCommand := reportapp.CreateReportCommand{
-		ReporterID:  "persona-reporter",
-		TargetType:  reportmodel.TargetPost,
-		TargetID:    "post-1",
-		Reason:      reportmodel.ReasonSpam,
-		Description: "重复广告",
+		ReporterID:        "persona-reporter",
+		ReporterAccountID: "account-reporter",
+		TargetType:        reportmodel.TargetPost,
+		TargetID:          "post-1",
+		Reason:            reportmodel.ReasonSpam,
+		Description:       "重复广告",
 	}
 
 	createContext := commandmeta.WithIdempotencyKey(
@@ -45,11 +46,12 @@ func TestReportCommandAndQueryFacetsStaySeparated(t *testing.T) {
 	_, err = service.CreateReport(
 		createContext,
 		reportapp.CreateReportCommand{
-			ReporterID:  createCommand.ReporterID,
-			TargetType:  createCommand.TargetType,
-			TargetID:    createCommand.TargetID,
-			Reason:      createCommand.Reason,
-			Description: "不同的命令摘要",
+			ReporterID:        createCommand.ReporterID,
+			ReporterAccountID: createCommand.ReporterAccountID,
+			TargetType:        createCommand.TargetType,
+			TargetID:          createCommand.TargetID,
+			Reason:            createCommand.Reason,
+			Description:       "不同的命令摘要",
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "idempotency_conflict") {
@@ -167,10 +169,11 @@ func TestDismissReportClosesLifecycleAndObservesSLO(t *testing.T) {
 	created, err := service.CreateReport(
 		commandmeta.WithIdempotencyKey(context.Background(), "dismiss-create"),
 		reportapp.CreateReportCommand{
-			ReporterID: "persona-reporter",
-			TargetType: reportmodel.TargetPost,
-			TargetID:   "post-dismiss",
-			Reason:     reportmodel.ReasonSpam,
+			ReporterID:        "persona-reporter",
+			ReporterAccountID: "account-reporter",
+			TargetType:        reportmodel.TargetPost,
+			TargetID:          "post-dismiss",
+			Reason:            reportmodel.ReasonSpam,
 		},
 	)
 	if err != nil {
@@ -233,11 +236,12 @@ func TestReportNoopIntentPersistsReceiptBeforeLaterStateChange(t *testing.T) {
 	created, err := service.CreateReport(
 		commandmeta.WithIdempotencyKey(context.Background(), "noop-report-create"),
 		reportapp.CreateReportCommand{
-			ReporterID:  "persona-reporter",
-			TargetType:  reportmodel.TargetPost,
-			TargetID:    "post-noop",
-			Reason:      reportmodel.ReasonSpam,
-			Description: "no-op receipt 契约",
+			ReporterID:        "persona-reporter",
+			ReporterAccountID: "account-reporter",
+			TargetType:        reportmodel.TargetPost,
+			TargetID:          "post-noop",
+			Reason:            reportmodel.ReasonSpam,
+			Description:       "no-op receipt 契约",
 		},
 	)
 	if err != nil {
@@ -310,10 +314,11 @@ func TestReportCommandRequiresTransportIdempotencyContext(t *testing.T) {
 	_, err := service.CreateReport(
 		context.Background(),
 		reportapp.CreateReportCommand{
-			ReporterID: "persona-reporter",
-			TargetType: reportmodel.TargetPost,
-			TargetID:   "post-1",
-			Reason:     reportmodel.ReasonSpam,
+			ReporterID:        "persona-reporter",
+			ReporterAccountID: "account-reporter",
+			TargetType:        reportmodel.TargetPost,
+			TargetID:          "post-1",
+			Reason:            reportmodel.ReasonSpam,
 		},
 	)
 	if err == nil {
@@ -331,10 +336,11 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 		if _, err := service.CreateReport(
 			commandmeta.WithIdempotencyKey(context.Background(), key),
 			reportapp.CreateReportCommand{
-				ReporterID: reporterID,
-				TargetType: reportmodel.TargetPost,
-				TargetID:   targetID,
-				Reason:     reportmodel.ReasonSpam,
+				ReporterID:        reporterID,
+				ReporterAccountID: "account-" + reporterID,
+				TargetType:        reportmodel.TargetPost,
+				TargetID:          targetID,
+				Reason:            reportmodel.ReasonSpam,
 			},
 		); err != nil {
 			t.Fatalf("create report %s: %v", targetID, err)

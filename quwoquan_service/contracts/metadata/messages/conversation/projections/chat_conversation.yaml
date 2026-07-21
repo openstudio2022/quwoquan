@@ -1,0 +1,70 @@
+read_model: ChatConversation
+description: Canonical full Conversation wire projection shared by detail, create, mutation readback, batch and keyset list responses.
+storage_backend: mongodb
+collection: conversations
+source_entities: [Conversation]
+fields:
+  - {name: id, type: string}
+  - {name: conversationId, type: string}
+  - {name: type, type: string}
+  - {name: title, type: string}
+  - {name: avatarUrl, type: string}
+  - {name: groupAvatarVersion, type: int64}
+  - {name: creatorId, type: string}
+  - {name: circleId, type: string}
+  - {name: circleGroupId, type: string}
+  - {name: entityId, type: string}
+  - {name: originType, type: string}
+  - {name: bindingType, type: string}
+  - {name: lifecyclePolicy, type: string}
+  - {name: maxSeq, type: int64}
+  - {name: memberCount, type: int}
+  - {name: membersRosterRevision, type: int64}
+  - {name: maxGroupSize, type: int}
+  - {name: receiptEnabled, type: bool}
+  - {name: announcement, type: string}
+  - {name: announcementUpdatedBy, type: string}
+  - {name: announcementUpdatedAt, type: timestamp}
+  - {name: nameEditableByAdminOnly, type: bool}
+  - {name: lastMessageId, type: string}
+  - {name: lastMessagePreview, type: string}
+  - {name: lastMessageTime, type: timestamp}
+  - {name: messageCount, type: int64}
+  - {name: status, type: string}
+  - {name: createdAt, type: timestamp}
+  - {name: updatedAt, type: timestamp}
+client_projection:
+  dart_class: ChatConversationWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_conversation_wire_dto.g.dart
+  strict: true
+  fields:
+    - {name: id, dart_type: String, nullable: false, source: id, default: "''"}
+    - {name: conversationId, dart_type: String, nullable: false, source: conversationId, default: "''"}
+    - {name: type, dart_type: String, nullable: false, source: type, default: "''"}
+    - {name: title, dart_type: String, nullable: false, source: title, default: "''"}
+    - {name: avatarUrl, dart_type: String, nullable: false, source: avatarUrl, default: "''"}
+    - {name: groupAvatarVersion, dart_type: int, nullable: false, source: groupAvatarVersion, default: "0"}
+    - {name: creatorId, dart_type: String, nullable: false, source: creatorId, default: "''"}
+    - {name: circleId, dart_type: String, nullable: false, source: circleId, default: "''"}
+    - {name: circleGroupId, dart_type: String, nullable: false, source: circleGroupId, default: "''"}
+    - {name: entityId, dart_type: String, nullable: false, source: entityId, default: "''"}
+    - {name: originType, dart_type: String, nullable: false, source: originType, default: "''"}
+    - {name: bindingType, dart_type: String, nullable: false, source: bindingType, default: "''"}
+    - {name: lifecyclePolicy, dart_type: String, nullable: false, source: lifecyclePolicy, default: "''"}
+    - {name: maxSeq, dart_type: int, nullable: false, source: maxSeq, default: "0"}
+    - {name: memberCount, dart_type: int, nullable: false, source: memberCount, default: "0"}
+    - {name: membersRosterRevision, dart_type: int, nullable: false, source: membersRosterRevision, default: "0"}
+    - {name: maxGroupSize, dart_type: int, nullable: false, source: maxGroupSize, default: "0"}
+    - {name: receiptEnabled, dart_type: bool, nullable: false, source: receiptEnabled, default: "false"}
+    - {name: announcement, dart_type: String, nullable: false, source: announcement, default: "''"}
+    - {name: announcementUpdatedBy, dart_type: String, nullable: false, source: announcementUpdatedBy, default: "''"}
+    - {name: announcementUpdatedAt, dart_type: DateTime, nullable: true, source: announcementUpdatedAt, default: "null"}
+    - {name: nameEditableByAdminOnly, dart_type: bool, nullable: false, source: nameEditableByAdminOnly, default: "false"}
+    - {name: lastMessageId, dart_type: String, nullable: false, source: lastMessageId, default: "''"}
+    - {name: lastMessagePreview, dart_type: String, nullable: false, source: lastMessagePreview, default: "''"}
+    - {name: lastMessageTime, dart_type: DateTime, nullable: true, source: lastMessageTime, default: "null"}
+    - {name: messageCount, dart_type: int, nullable: false, source: messageCount, default: "0"}
+    - {name: status, dart_type: String, nullable: false, source: status, default: "''"}
+    - {name: createdAt, dart_type: DateTime, nullable: false, source: createdAt, default: "DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)"}
+    - {name: updatedAt, dart_type: DateTime, nullable: false, source: updatedAt, default: "DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)"}

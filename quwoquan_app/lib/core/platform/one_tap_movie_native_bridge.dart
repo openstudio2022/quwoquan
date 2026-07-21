@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/core/platform/ios_video_editing_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class OneTapMovieNativeComposeResult {
@@ -24,7 +25,7 @@ abstract interface class OneTapMovieNativeBridge {
 
 class MethodChannelOneTapMovieNativeBridge implements OneTapMovieNativeBridge {
   const MethodChannelOneTapMovieNativeBridge({
-    this.channel = const MethodChannel('quwoquan/video_editing'),
+    this.channel = videoEditingMethodChannel,
   });
 
   final MethodChannel channel;

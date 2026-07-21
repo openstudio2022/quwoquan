@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,7 +22,6 @@ import (
 
 func (s *AuthService) LoginWithOneTap(
 	ctx context.Context,
-	vendor string,
 	carrierToken string,
 	deviceID string,
 	platform string,
@@ -32,22 +30,22 @@ func (s *AuthService) LoginWithOneTap(
 	privacyVersion string,
 ) (_ *LoginResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithOneTap",
-		attribute.String("one_tap.vendor", strings.TrimSpace(vendor)),
 		attribute.String("platform", strings.TrimSpace(platform)))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	resolver := s.oneTapResolver
+	resolver := s.carrierPhoneResolver
 	if resolver == nil {
-		return nil, generated.AppErrorFromInternalError("one tap resolver unavailable")
+		return nil, generated.AppErrorFromCarrierUnavailable("carrier identity capability unavailable")
 	}
-	phone, displayLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	verifiedPhone, err := resolver.ResolvePhone(ctx, carrierToken)
 	if err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("resolve one tap phone: %v", err))
+		return nil, err
 	}
-	phone = normalizePhoneCredentialKey(phone)
+	phone := normalizePhoneCredentialKey(verifiedPhone.Phone)
 	if phone == "" {
-		return nil, generated.AppErrorFromInvalidArgument("one tap phone is empty")
+		return nil, generated.AppErrorFromCarrierTokenInvalid("carrier identity is empty")
 	}
+	displayLabel := strings.TrimSpace(verifiedPhone.DisplayLabel)
 	if strings.TrimSpace(displayLabel) == "" {
 		displayLabel = maskPhoneForDisplay(phone)
 	}
@@ -69,29 +67,28 @@ func (s *AuthService) LoginWithOneTap(
 
 func (s *AuthService) ResolveOneTapLoginHint(
 	ctx context.Context,
-	vendor string,
 	carrierToken string,
 	deviceID string,
 	platform string,
 	appVersion string,
 ) (_ *OneTapLoginHint, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.ResolveOneTapLoginHint",
-		attribute.String("one_tap.vendor", strings.TrimSpace(vendor)),
 		attribute.String("platform", strings.TrimSpace(platform)))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	resolver := s.oneTapResolver
+	resolver := s.carrierPhoneResolver
 	if resolver == nil {
-		return nil, generated.AppErrorFromCarrierUnavailable("one tap resolver unavailable")
+		return nil, generated.AppErrorFromCarrierUnavailable("carrier identity capability unavailable")
 	}
-	phone, displayLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	verifiedPhone, err := resolver.ResolvePhone(ctx, carrierToken)
 	if err != nil {
-		return nil, mapCarrierResolverError(err)
+		return nil, err
 	}
-	phone = normalizePhoneCredentialKey(phone)
+	phone := normalizePhoneCredentialKey(verifiedPhone.Phone)
 	if phone == "" {
-		return nil, generated.AppErrorFromCarrierTokenInvalid("one tap phone is empty")
+		return nil, generated.AppErrorFromCarrierTokenInvalid("carrier identity is empty")
 	}
+	displayLabel := strings.TrimSpace(verifiedPhone.DisplayLabel)
 	if strings.TrimSpace(displayLabel) == "" {
 		displayLabel = maskPhoneForDisplay(phone)
 	}
@@ -274,7 +271,7 @@ func (s *AuthService) BindPhoneCredential(
 
 func (s *AuthService) BindCarrierPhoneCredential(
 	ctx context.Context,
-	ownerID, vendor, carrierToken, deviceID, platform, displayLabel string,
+	ownerID, carrierToken, deviceID, platform, displayLabel string,
 ) (result credentialapp.CommandResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
@@ -283,22 +280,22 @@ func (s *AuthService) BindCarrierPhoneCredential(
 	)
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	resolver := s.oneTapResolver
+	resolver := s.carrierPhoneResolver
 	if resolver == nil {
 		return credentialapp.CommandResult{},
-			generated.AppErrorFromCarrierUnavailable("one tap resolver unavailable")
+			generated.AppErrorFromCarrierUnavailable("carrier identity capability unavailable")
 	}
-	phone, resolvedLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	verifiedPhone, err := resolver.ResolvePhone(ctx, carrierToken)
 	if err != nil {
-		return credentialapp.CommandResult{}, mapCarrierResolverError(err)
+		return credentialapp.CommandResult{}, err
 	}
-	normalized := normalizePhoneCredentialKey(phone)
+	normalized := normalizePhoneCredentialKey(verifiedPhone.Phone)
 	if normalized == "" {
 		return credentialapp.CommandResult{},
-			generated.AppErrorFromCarrierTokenInvalid("one tap phone is empty")
+			generated.AppErrorFromCarrierTokenInvalid("carrier identity is empty")
 	}
 	if strings.TrimSpace(displayLabel) == "" {
-		displayLabel = strings.TrimSpace(resolvedLabel)
+		displayLabel = strings.TrimSpace(verifiedPhone.DisplayLabel)
 	}
 	if strings.TrimSpace(displayLabel) == "" {
 		displayLabel = maskPhoneForDisplay(normalized)
@@ -375,61 +372,6 @@ func (s *AuthService) persistConsentRecord(ctx context.Context, ownerID, agreeme
 		Platform:         strings.TrimSpace(platform),
 		SourceOperation:  strings.TrimSpace(sourceOperation),
 	})
-}
-
-func mapCarrierResolverError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return generated.AppErrorFromCarrierProviderTimeout(err.Error())
-	}
-	text := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(text, "timeout"):
-		return generated.AppErrorFromCarrierProviderTimeout(err.Error())
-	case strings.Contains(text, "unavailable"):
-		return generated.AppErrorFromCarrierUnavailable(err.Error())
-	case strings.Contains(text, "invalid"), strings.Contains(text, "not recognized"):
-		return generated.AppErrorFromCarrierTokenInvalid(err.Error())
-	default:
-		return generated.AppErrorFromCarrierUnavailable(err.Error())
-	}
-}
-
-// TokenEncodedOneTapPhoneResolver is a local/dev resolver boundary. Production
-// deployments should replace it with a carrier vendor resolver through
-// WithOneTapPhoneResolver; the App still only receives AuthLoginResult.
-type TokenEncodedOneTapPhoneResolver struct{}
-
-func (TokenEncodedOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
-	token := strings.TrimSpace(carrierToken)
-	if token == "" {
-		return "", "", generated.AppErrorFromInvalidArgument("carrierToken is required")
-	}
-	if strings.HasPrefix(token, "phone:") {
-		phone := normalizePhoneCredentialKey(strings.TrimPrefix(token, "phone:"))
-		return phone, maskPhoneForDisplay(phone), nil
-	}
-	return "", "", generated.AppErrorFromInternalError("one tap resolver requires carrier server exchange")
-}
-
-// UnavailableOneTapPhoneResolver 在尚未接入真实运营商置换的环境（如 prod 过渡期、gamma 无沙箱号段）
-// 统一返回结构化不可用，杜绝 dev 解码后门进入生产。
-type UnavailableOneTapPhoneResolver struct{}
-
-func (UnavailableOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, _ string) (string, string, error) {
-	return "", "", generated.AppErrorFromCarrierUnavailable("one tap carrier resolver not provisioned")
-}
-
-type StaticOneTapPhoneResolver map[string]string
-
-func (r StaticOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
-	phone := normalizePhoneCredentialKey(r[strings.TrimSpace(carrierToken)])
-	if phone == "" {
-		return "", "", generated.AppErrorFromInvalidArgument("carrierToken not recognized")
-	}
-	return phone, maskPhoneForDisplay(phone), nil
 }
 
 func hashInstallID(installID string) string {

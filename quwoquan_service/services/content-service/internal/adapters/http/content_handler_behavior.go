@@ -47,7 +47,11 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 	if strings.TrimSpace(batch.SessionID) == "" {
 		batch.SessionID = resolveSessionID(r)
 	}
+	personaID := resolvePersonaID(r)
 	for i := range batch.Events {
+		// persona 只来自已验证主体（或隔离 transport fixture 的 header 回退），
+		// 不从客户端行为 body 读取。
+		batch.Events[i].PersonaID = personaID
 		if strings.TrimSpace(batch.Events[i].UserID) == "" {
 			batch.Events[i].UserID = batch.UserID
 		}

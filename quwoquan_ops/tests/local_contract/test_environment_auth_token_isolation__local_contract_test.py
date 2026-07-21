@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import runpy
 import sys
@@ -53,6 +54,54 @@ def test_environment_specific_token_still_takes_precedence() -> None:
         assert stackctl._resolve_test_auth_token("gamma") == "gamma-secret"
 
 
+def test_local_report_account_backfill_uses_only_canonical_acceptance_identity(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "report-account-backfill.json"
+
+    with mock.patch.object(
+        local_environment_auth,
+        "_load_acceptance_principal",
+        return_value=("fixture-account", "fixture-persona"),
+    ):
+        payload = local_environment_auth.write_local_report_account_backfill(
+            "beta",
+            "beta-local",
+            output_path,
+        )
+
+    assert payload == {
+        "kind": "content.reporter_account_backfill",
+        "entries": [
+            {
+                "reporterId": "fixture-persona",
+                "accountId": "fixture-account",
+            }
+        ],
+    }
+    assert json.loads(output_path.read_text(encoding="utf-8")) == payload
+    assert output_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_local_report_account_backfill_can_intentionally_remain_empty(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "report-account-backfill.json"
+
+    payload = local_environment_auth.write_local_report_account_backfill(
+        "gamma",
+        "gamma-local",
+        output_path,
+        include_acceptance_principal=False,
+    )
+
+    assert payload == {
+        "kind": "content.reporter_account_backfill",
+        "entries": [],
+    }
+    assert json.loads(output_path.read_text(encoding="utf-8")) == payload
+
+
 def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None:
     module = runpy.run_path(str(INTERSECTION_SMOKE_RUNNER))
     session = SimpleNamespace(
@@ -73,18 +122,22 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
     ):
         assert module["main"]() == 0
 
-    assert len(run.call_args_list) == 2
-    seed_call, smoke_call = run.call_args_list
-    seed_command = seed_call.args[0]
+    expected_seeds = module["REQUIRED_SEEDS"]
+    assert len(run.call_args_list) == len(expected_seeds) + 1
+    seed_calls = run.call_args_list[:-1]
+    smoke_call = run.call_args_list[-1]
     smoke_command = smoke_call.args[0]
     child_environment = smoke_call.kwargs["env"]
 
-    assert any(
-        argument.endswith("apply_content_moment_channel_seed.py")
-        for argument in seed_command
-    )
-    assert "--report" in seed_command
-    assert "--viewer-id" in seed_command
+    for seed_call, (_, seed_script, requires_viewer) in zip(
+        seed_calls,
+        expected_seeds,
+        strict=True,
+    ):
+        seed_command = seed_call.args[0]
+        assert str(seed_script) in seed_command
+        assert "--report" in seed_command
+        assert ("--viewer-id" in seed_command) is requires_viewer
     assert all(
         "secret-acceptance-token" not in argument
         for call in run.call_args_list

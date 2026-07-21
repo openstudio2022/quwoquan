@@ -39,9 +39,18 @@
 - 冻结组织节点二级页面与通用群主页的差异化规则。
 - 保持群组内助理上下文、内容发布、成员摘要和降级策略的一致性。
 
+### 圈子频道聚合读模型
+
+- 圈子频道默认只读取 `recommended` 聚合切片；已认证用户主动切换后才读取 `mine`，匿名状态不得请求或推导成员范围。
+- `ListCircleDiscoveryFeed` 是分类、成员范围、展示位与内容的唯一聚合读接口；客户端不得以 `listCircles` 后逐圈读取内容重建频道。
+- 频道使用服务端 keyset cursor、稳定排序和强类型 `CircleDiscoveryFeedPageSlice`；端侧只保存 cursor 并追加既有顺序，不能重排或以本地过滤改变服务端 scope。
+- 聚合读模型缓存 TTL 固定 60 秒；Circle、Membership、Post、Placement 变更须使相关 persona/scope/category/sort/cursor 切片失效。
+- 聚合查询的目标为 10k/100k fixture 数据规模 P95 小于等于 800ms，索引与 explain 是能力验收的一部分。
+
 ## 不做什么（Out of Scope）
 
 - 不实现推荐算法训练流水线，仅冻结对象边界、排序规则与降级口径。
+- 不在客户端补造 Circle、Membership、Post 或 Placement 的内容、关系或展示字段；Remote 空态与失败必须保持结构化空态/恢复面。
 - 不修改个人助理引擎核心，只在路由层传入群组领域上下文。
 - 不在本 L2 内冻结具体事物主档、抓取、归一和展示模型。
 

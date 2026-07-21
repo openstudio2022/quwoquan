@@ -22,7 +22,7 @@ api_routes:
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: active_circle_member_self_group_membership }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_member, CIRCLE.USER.group_not_found, CIRCLE.USER.group_archived, CIRCLE.USER.group_membership_already_active, CIRCLE.USER.group_membership_idempotency_conflict, CIRCLE.SYSTEM.group_membership_storage_write_failed]
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_member, CIRCLE.USER.group_not_found, CIRCLE.USER.group_archived, CIRCLE.USER.group_membership_already_active, CIRCLE.USER.group_membership_full, CIRCLE.USER.group_membership_idempotency_conflict, CIRCLE.SYSTEM.group_membership_storage_write_failed]
     privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
     telemetry: { metric: circle_group_membership_apply, trace: true, attributes: [outcome, state] }
     slo: { latency_p95_ms: 650, availability_percent: 99.9 }
@@ -121,7 +121,7 @@ api_routes:
     response_entity: CircleGroupMembershipCommandResult
     authorization: { principal: persona, ownership_policy: group_owner_or_manager }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required }
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.permission_denied, CIRCLE.USER.group_membership_not_found, CIRCLE.USER.group_membership_state_conflict, CIRCLE.USER.group_membership_version_conflict, CIRCLE.USER.group_membership_idempotency_conflict, CIRCLE.SYSTEM.group_membership_storage_write_failed]
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.permission_denied, CIRCLE.USER.group_membership_not_found, CIRCLE.USER.group_membership_state_conflict, CIRCLE.USER.group_membership_full, CIRCLE.USER.group_membership_version_conflict, CIRCLE.USER.group_membership_idempotency_conflict, CIRCLE.SYSTEM.group_membership_storage_write_failed]
     privacy: { request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only }
     telemetry: { metric: circle_group_membership_approve, trace: true, attributes: [outcome] }
     slo: { latency_p95_ms: 650, availability_percent: 99.9 }

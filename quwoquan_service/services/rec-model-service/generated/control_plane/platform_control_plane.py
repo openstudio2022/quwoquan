@@ -54,6 +54,25 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
     },
     {
       "deployment_profile": "audit_heavy",
+      "label": "生产平面访问隔离投影",
+      "object_kind": "snapshot",
+      "object_type": "prod_plane_access_isolation",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "GetProdPlaneAccessIsolation",
+          "path": "/control-plane/platform/topology/prod-plane-access-isolation",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "ProdPlaneAccessIsolation",
+      "view_model": "ProdPlaneAccessIsolationSnapshot"
+    },
+    {
+      "deployment_profile": "audit_heavy",
       "label": "领域接入状态",
       "object_kind": "snapshot",
       "object_type": "onboarding_domain",
@@ -276,9 +295,11 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "active_alert",
       "operations": [
         {
+          "auth_mode": "machine_token",
           "method": "POST",
           "operation": "IngestAlertmanagerWebhook",
           "path": "/control-plane/platform/alerts/ingest",
+          "principal": "alertmanager",
           "scopes": [
             "ops.platform.observability.write"
           ]

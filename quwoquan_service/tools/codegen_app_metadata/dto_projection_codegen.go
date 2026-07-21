@@ -211,6 +211,9 @@ func buildStrictProjectionResolver(f projectionFieldDef) string {
 	case "String", "int", "double", "bool":
 		return fmt.Sprintf("m['%s'] as %s%s", key, dartType, nullableSuffix)
 	case "DateTime":
+		if !f.Nullable {
+			return fmt.Sprintf("DateTime.parse(m['%s'] as String)", key)
+		}
 		return fmt.Sprintf("m['%s'] == null ? null : DateTime.parse(m['%s'] as String)", key, key)
 	case "List<String>":
 		if f.Nullable {

@@ -208,7 +208,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCircleFeedResponse'
+                                $ref: '#/components/schemas/CircleFeedPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1657,7 +1657,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCircleStatsResponse'
+                                $ref: '#/components/schemas/CircleStatsWire'
                 default:
                     description: Runtime failure
                     content:
@@ -1721,7 +1721,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleDiscoveryFeedView'
+                                $ref: '#/components/schemas/CircleDiscoveryFeedPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1822,10 +1822,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleCommandResult
             x-contract-placeholder: true
-        CircleDiscoveryFeedView:
+        CircleDiscoveryFeedPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CircleDiscoveryFeedView
+            x-contract-entity: CircleDiscoveryFeedPageSlice
+            x-contract-placeholder: true
+        CircleFeedPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleFeedPageSlice
             x-contract-placeholder: true
         CircleFileCommandResult:
             type: object
@@ -1892,6 +1897,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleSectionConfig
             x-contract-placeholder: true
+        CircleStatsWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleStatsWire
+            x-contract-placeholder: true
         CreateCircleFileRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1901,16 +1911,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateCircleGroupRequest
-            x-contract-placeholder: true
-        GetCircleFeedResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetCircleFeedResponse
-            x-contract-placeholder: true
-        GetCircleStatsResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetCircleStatsResponse
             x-contract-placeholder: true
         JoinCircleRequest:
             type: object

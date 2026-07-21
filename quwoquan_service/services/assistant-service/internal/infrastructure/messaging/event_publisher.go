@@ -8,21 +8,29 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	rtredis "quwoquan_service/runtime/redis"
 )
 
 // RedisEventPublisher publishes assistant learning events for downstream consumers.
 type RedisEventPublisher struct {
-	redis   rtredis.Client
-	service string
-	logger  *slog.Logger
+	transport runtimemessaging.MessageTransport
+	service   string
+	logger    *slog.Logger
 }
 
-func NewRedisEventPublisher(redis rtredis.Client, serviceName string, logger *slog.Logger) *RedisEventPublisher {
+// NewRedisEventPublisherWithTransport accepts the preflighted runtime transport
+// so composition roots never select a Redis scene for assistant event delivery.
+func NewRedisEventPublisherWithTransport(
+	transport runtimemessaging.MessageTransport,
+	serviceName string,
+	logger *slog.Logger,
+) *RedisEventPublisher {
+	if transport == nil {
+		panic("assistant event publisher requires a message transport")
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &RedisEventPublisher{redis: redis, service: serviceName, logger: logger}
+	return &RedisEventPublisher{transport: transport, service: serviceName, logger: logger}
 }
 
 func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessaging.DomainEvent) error {
@@ -49,7 +57,10 @@ func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessagin
 		p.logger.Error("assistant event marshal failed", "event", event.Type, "err", err)
 		return fmt.Errorf("marshal assistant event: %w", err)
 	}
-	if err := p.redis.Publish(ctx, channel, string(data)); err != nil {
+	if err := p.transport.PublishEphemeral(ctx, runtimemessaging.EphemeralMessage{
+		Channel: channel,
+		Payload: data,
+	}); err != nil {
 		p.logger.Warn("assistant event publish failed", "channel", channel, "err", err)
 		return fmt.Errorf("publish to %s: %w", channel, err)
 	}

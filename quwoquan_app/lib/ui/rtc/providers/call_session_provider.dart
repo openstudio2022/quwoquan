@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/call_participant_presentation.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
@@ -11,6 +11,7 @@ import 'package:quwoquan_app/application/rtc/call_session/rtc_media_qoe_tracker.
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_session_signal_projection.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_session_state.dart';
@@ -23,8 +24,10 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 export 'package:quwoquan_app/ui/rtc/models/call_session_state.dart';
 
-final liveKitRoomServiceProvider = Provider<LiveKitRoomService>((ref) {
-  final service = LiveKitRoomService();
+final rtcRoomServiceProvider = Provider<RtcRoomService>((ref) {
+  final service = RtcRoomService(
+    connectionUrl: CloudRuntimeConfig.rtcMediaConnectionUrl,
+  );
   ref.onDispose(() => service.dispose());
   return service;
 });
@@ -33,14 +36,13 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   Timer? _timeoutTimer;
   StreamSubscription<void>? _participantsSub;
   StreamSubscription<RtcSignalEvent>? _signalSub;
-  LiveKitRoomService? _connectionListenerRoom;
+  RtcRoomService? _connectionListenerRoom;
   String? _mediaConnectedReportedCallId;
   final RtcMediaQoeTracker _mediaQoe = RtcMediaQoeTracker();
   int _signalRefreshGeneration = 0;
   String? _mediaCredentialsCallId;
-  String _liveKitToken = '';
-  String _liveKitUrl = '';
-  bool _liveKitEnableVideo = false;
+  String _mediaAccessToken = '';
+  bool _mediaAccessEnableVideo = false;
   bool _mediaConnectInFlight = false;
 
   @override
@@ -157,7 +159,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         );
   }
 
-  LiveKitRoomService get _lkRoom => ref.read(liveKitRoomServiceProvider);
+  RtcRoomService get _lkRoom => ref.read(rtcRoomServiceProvider);
   AppUiSurface get _activeCallSurface =>
       state.callType.isVideo ? AppUiSurfaces.rtcVideo : AppUiSurfaces.rtcVoice;
 
@@ -270,14 +272,14 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     if (state.session?.callId == callId &&
         state.status != CallStatus.ended &&
         _mediaCredentialsCallId == callId &&
-        _liveKitToken.isNotEmpty) {
+        _mediaAccessToken.isNotEmpty) {
       if (_lkRoom.connectionState.value == RtcConnectionState.disconnected) {
-        await _connectToLiveKit(
-          _liveKitToken,
-          url: _liveKitUrl,
-          enableVideo: _liveKitEnableVideo,
+        await _connectMediaTransport(
+          _mediaAccessToken,
+          enableVideo: _mediaAccessEnableVideo,
         );
-      } else if (_lkRoom.connectionState.value == RtcConnectionState.connected) {
+      } else if (_lkRoom.connectionState.value ==
+          RtcConnectionState.connected) {
         // 媒体已经连通但 ReportMediaConnected 曾耗尽重试时，不重建房间；
         // 复用同一 call 的显式重试入口重新提交聚合事实。
         _reportMediaConnectedOnce();
@@ -380,9 +382,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      await _connectToLiveKit(
-        result.token,
-        url: result.livekitUrl,
+      await _connectMediaTransport(
+        result.mediaAccess.accessToken,
         enableVideo: callTypeStr == 'video',
       );
 
@@ -410,9 +411,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       // the answer response must not silently override it (e.g., mock data
       // may always return a 'video' session regardless of actual type).
       final type = state.callType;
-      final token = answer.token;
-
-      // 接听后进入 connecting；媒体连通（_connectToLiveKit 成功 +
+      // 接听后进入 connecting；媒体连通（_connectMediaTransport 成功 +
       // ReportMediaConnected）才推进 in_call，与服务端状态机同源。
       state = state.copyWith(
         session: session,
@@ -431,9 +430,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      await _connectToLiveKit(
-        token,
-        url: answer.livekitUrl,
+      await _connectMediaTransport(
+        answer.mediaAccess.accessToken,
         enableVideo: type.isVideo,
       );
     } catch (e) {
@@ -514,7 +512,6 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final creds = await ref
           .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
           .joinCall(RtcCallIdCommand(callId: callId));
-      final token = creds.token;
       final session = creds.session;
       final type = CallType.fromString(session.callType);
 
@@ -535,9 +532,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             participants: session.participants,
           );
 
-      await _connectToLiveKit(
-        token,
-        url: creds.livekitUrl,
+      await _connectMediaTransport(
+        creds.mediaAccess.accessToken,
         enableVideo: type.isVideo,
       );
     } catch (e) {
@@ -951,24 +947,22 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     );
   }
 
-  Future<void> _connectToLiveKit(
-    String token, {
-    required String url,
+  Future<void> _connectMediaTransport(
+    String accessToken, {
     bool enableVideo = false,
   }) async {
     if (_mediaConnectInFlight) return;
     final callId = state.session?.callId ?? '';
     _mediaCredentialsCallId = callId;
-    _liveKitToken = token.trim();
-    _liveKitUrl = url.trim();
-    _liveKitEnableVideo = enableVideo;
+    _mediaAccessToken = accessToken.trim();
+    _mediaAccessEnableVideo = enableVideo;
     _beginMediaQoeAttempt();
     // 服务端未下发媒体凭据时 fail-fast（禁止端侧硬拼地址或伪造本地成功）。
-    if (_liveKitToken.isEmpty || _liveKitUrl.isEmpty) {
+    if (_mediaAccessToken.isEmpty) {
       _mediaQoe.markDisconnect(RtcMediaDisconnectReason.endpointUnavailable);
       state = state.copyWith(
         failure: _failureFrom(
-          StateError('rtc livekit credentials are unavailable'),
+          StateError('rtc media access token is unavailable'),
         ),
       );
       return;
@@ -982,8 +976,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     _mediaConnectInFlight = true;
     try {
       await _lkRoom.connect(
-        url: _liveKitUrl,
-        token: _liveKitToken,
+        accessToken: _mediaAccessToken,
         enableVideo: enableVideo,
         enableAudio: true,
       );
@@ -1093,19 +1086,24 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   void _onQualityChanged() {
-    final q = _lkRoom.connectionQuality.value;
-    final quality = q.toNetworkQuality();
+    final quality = _lkRoom.connectionQuality.value;
     _mediaQoe.updateNetworkQuality(switch (quality) {
-      NetworkQuality.good => RtcMediaNetworkQuality.excellent,
-      NetworkQuality.slight => RtcMediaNetworkQuality.good,
-      NetworkQuality.weak || NetworkQuality.poor => RtcMediaNetworkQuality.poor,
+      RtcNetworkQuality.excellent => RtcMediaNetworkQuality.excellent,
+      RtcNetworkQuality.good => RtcMediaNetworkQuality.good,
+      RtcNetworkQuality.poor ||
+      RtcNetworkQuality.weak => RtcMediaNetworkQuality.poor,
     });
-    ref.read(callQualityProvider.notifier).update(quality);
+    ref.read(callQualityProvider.notifier).update(switch (quality) {
+      RtcNetworkQuality.excellent => NetworkQuality.good,
+      RtcNetworkQuality.good => NetworkQuality.slight,
+      RtcNetworkQuality.poor => NetworkQuality.poor,
+      RtcNetworkQuality.weak => NetworkQuality.weak,
+    });
   }
 
   void _onParticipantsChanged() {
     final dtos = state.session?.participants ?? const <CallParticipantDto>[];
-    ref.read(callParticipantsProvider.notifier).syncFromLiveKit(_lkRoom, dtos);
+    ref.read(callParticipantsProvider.notifier).syncFromRtcRoom(_lkRoom, dtos);
   }
 
   void _endCallState({bool clearActiveCall = true}) {
@@ -1118,9 +1116,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     _reportMediaQoeOnce();
     _reportCallOutcome();
     _mediaCredentialsCallId = null;
-    _liveKitToken = '';
-    _liveKitUrl = '';
-    _liveKitEnableVideo = false;
+    _mediaAccessToken = '';
+    _mediaAccessEnableVideo = false;
     _mediaConnectInFlight = false;
     state = state.copyWith(
       status: CallStatus.ended,

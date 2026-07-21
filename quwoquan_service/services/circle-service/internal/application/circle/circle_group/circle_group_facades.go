@@ -192,9 +192,9 @@ func (facade *CommandFacade) requireGroupModerator(ctx context.Context, circleID
 	if err != nil {
 		return groupmodel.CircleGroup{}, generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
-	allowed := found && membership.State == "joined" && membership.Role == "owner"
+	allowed := found && membership.State == "active" && membership.Role == "owner"
 	if !ownerOnly {
-		allowed = allowed || (found && membership.State == "joined" && membership.Role == "manager")
+		allowed = allowed || (found && membership.State == "active" && membership.Role == "manager")
 	}
 	if !allowed {
 		return groupmodel.CircleGroup{}, generated.AppErrorFromPermissionDenied("CircleGroup owner or manager role is required")

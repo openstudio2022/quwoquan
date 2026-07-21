@@ -23,6 +23,7 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
         AssistantInteractionReportBatchAck,
+        AssistantIntersectionEvidenceRef,
         AssistantPolicyView,
         AssistantPreferenceFact,
         AssistantPreferenceFactListView,
@@ -147,8 +148,10 @@ Map<String, dynamic> assistantContextSnapshotFromOpenContext(
             'snippet': context.hints['snippet'].toString().trim(),
         },
       ],
-    if (context.intersectionRefs.isNotEmpty)
-      'intersectionRefs': context.intersectionRefs,
+    if (context.intersectionEvidenceRefs.isNotEmpty)
+      'intersectionEvidenceRefs': context.intersectionEvidenceRefs
+          .map((ref) => ref.toJson())
+          .toList(growable: false),
     if ((context.tab ?? '').trim().isNotEmpty)
       'matchedSegments': <String>[context.tab!.trim()],
     if ((context.dimension ?? '').trim().isNotEmpty)
@@ -228,6 +231,8 @@ abstract class AssistantConversationRunFacet {
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
+    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
+        const <AssistantIntersectionEvidenceRef>[],
   });
 
   Future<AssistantTurnEnvelopeWire> getAssistantRun({required String runId});

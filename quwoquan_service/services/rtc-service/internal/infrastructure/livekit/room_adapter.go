@@ -3,6 +3,7 @@ package livekit
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,25 +14,29 @@ import (
 	"quwoquan_service/services/rtc-service/internal/application"
 )
 
-var _ application.RoomManager = (*LiveKitRoomAdapter)(nil)
+const AdapterID = "infra.livekit_sfu"
 
-// LiveKitRoomAdapter 通过 LiveKit TWIRP API 实现应用层房间端口。
+var _ application.MediaRoomProvider = (*LiveKitRoomAdapter)(nil)
+
+// LiveKitRoomAdapter 通过 LiveKit TWIRP API 实现中立媒体房间端口。
 type LiveKitRoomAdapter struct {
-	httpURL   string
-	apiKey    string
-	apiSecret string
-	client    *http.Client
+	connectionURL string
+	httpURL       string
+	apiKey        string
+	apiSecret     string
+	client        *http.Client
 }
 
-func NewLiveKitRoomAdapter(livekitURL, apiKey, apiSecret string, opts ...func(*LiveKitRoomAdapter)) *LiveKitRoomAdapter {
-	httpURL := livekitURL
+func NewLiveKitRoomAdapter(connectionURL, apiKey, apiSecret string, opts ...func(*LiveKitRoomAdapter)) *LiveKitRoomAdapter {
+	httpURL := connectionURL
 	httpURL = strings.Replace(httpURL, "ws://", "http://", 1)
 	httpURL = strings.Replace(httpURL, "wss://", "https://", 1)
 	a := &LiveKitRoomAdapter{
-		httpURL:   httpURL,
-		apiKey:    apiKey,
-		apiSecret: apiSecret,
-		client:    &http.Client{Timeout: 10 * time.Second},
+		connectionURL: strings.TrimSpace(connectionURL),
+		httpURL:       httpURL,
+		apiKey:        apiKey,
+		apiSecret:     apiSecret,
+		client:        &http.Client{Timeout: 10 * time.Second},
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -101,6 +106,26 @@ func (a *LiveKitRoomAdapter) RemoveParticipant(ctx context.Context, roomName str
 	return err
 }
 
+func (a *LiveKitRoomAdapter) IssueParticipantAccess(
+	_ context.Context,
+	roomName string,
+	participantIdentity string,
+) (application.MediaSessionAccess, error) {
+	token, err := GenerateAccessToken(
+		a.apiKey,
+		a.apiSecret,
+		roomName,
+		participantIdentity,
+		6*time.Hour,
+	)
+	if err != nil {
+		return application.MediaSessionAccess{}, fmt.Errorf("generate participant access: %w", err)
+	}
+	return application.MediaSessionAccess{
+		AccessToken: token,
+	}, nil
+}
+
 func (a *LiveKitRoomAdapter) twirpCall(ctx context.Context, path string, body map[string]any) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -132,7 +157,13 @@ func (a *LiveKitRoomAdapter) twirpCall(ctx context.Context, path string, body ma
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("livekit error %d: %s", resp.StatusCode, string(respBody))
+		bodyDigest := sha256.Sum256(respBody)
+		return nil, fmt.Errorf(
+			"livekit request rejected: status=%d body_bytes=%d body_digest=%x",
+			resp.StatusCode,
+			len(respBody),
+			bodyDigest[:8],
+		)
 	}
 	return respBody, nil
 }

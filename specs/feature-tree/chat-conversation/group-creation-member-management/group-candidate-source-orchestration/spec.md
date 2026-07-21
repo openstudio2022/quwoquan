@@ -21,6 +21,7 @@
 - `friendMemberCount == 0` 的群由云侧过滤，不下发。
 - 候选跨来源按 `userId` 去重由发起页 ViewModel 承担；互关/拉黑校验最终由 `CreateConversation` / `AddMembers` 服务端强制（见 member-add-remove-policy）。
 - 已在群成员在加人模式（`chatAddMembers`）下由候选源锁定不可再选。
+- 图四与图五必须消费服务端 keyset 分页的 `items + nextCursor`。`source` 与 `query` 过滤必须先于分页；端侧只可追加同一 `CursorPage` 的后续页，不得以首屏结果作本地全集再过滤。
 
 ## 2. 页面承载
 
@@ -36,7 +37,7 @@
 
 ### api_integration
 
-- `ListGroupCandidates` / `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers` 契约（互关过滤、成员排除、query 过滤）。
+- `ListGroupCandidates` / `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers` 契约（互关过滤、成员排除、query 过滤、跨页无漏项/无重复）。
 
 ### user_acceptance
 

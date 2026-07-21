@@ -106,7 +106,7 @@ entries:
       - layer: user_acceptance
         intent: UAT
         evidence:
-          - quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart
   - timestamp: "2026-07-19T23:50:00+08:00"
     summary: |
       B11 集成与通知 6 对象商用闭环收口。规格：新建 L3 story

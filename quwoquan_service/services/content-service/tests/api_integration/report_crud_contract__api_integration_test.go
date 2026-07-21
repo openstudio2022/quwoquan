@@ -47,13 +47,17 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 		t.Fatalf("expected empty create response body, got %q", createRec.Body.String())
 	}
 	var reportID string
+	var reporterAccountID string
 	if err := suite.PG.QueryRow(
-		`SELECT id FROM reports WHERE reporter_id = $1 AND target_type = $2 AND target_id = $3`,
+		`SELECT id, reporter_account_id FROM reports WHERE reporter_id = $1 AND target_type = $2 AND target_id = $3`,
 		"persona-reporter",
 		"post",
 		"post_123",
-	).Scan(&reportID); err != nil {
+	).Scan(&reportID, &reporterAccountID); err != nil {
 		t.Fatalf("query created report ID: %v", err)
+	}
+	if reporterAccountID != "account-persona-reporter" {
+		t.Fatalf("reporter account=%q want trusted account", reporterAccountID)
 	}
 
 	report, ok, err := reportRepo.FindByID(context.Background(), reportID)
@@ -84,10 +88,164 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	if len(events) != 1 || events[0].EventID == "" || events[0].AggregateID != reportID {
 		t.Fatalf("stable Report fact not dispatched: %+v", events)
 	}
+	if got, _ := events[0].Payload["reporterAccountId"].(string); got != reporterAccountID {
+		t.Fatalf(
+			"published report fact account=%q want persisted trusted account %q",
+			got,
+			reporterAccountID,
+		)
+	}
 	if count, err := relay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("replay Report outbox: %v", err)
 	} else if count != 0 || len(dispatched.EventsOfType("content.report.created")) != 1 {
 		t.Fatalf("Report checkpoint replay duplicated delivery: count=%d events=%d", count, len(dispatched.EventsOfType("content.report.created")))
+	}
+}
+
+func TestReportStoreBackfillsOnlyVerifiedLegacyReporterAccountOwnership(t *testing.T) {
+	suite := testinfra.NewSuite(t, testinfra.WithPostgres())
+	defer suite.TearDown(t)
+	suite.CleanPG(t)
+
+	if _, err := persistence.NewPGReportStore(suite.PG); err != nil {
+		t.Fatalf("initialize report schema: %v", err)
+	}
+	if _, err := suite.PG.Exec(
+		`ALTER TABLE reports ALTER COLUMN reporter_account_id DROP NOT NULL`,
+	); err != nil {
+		t.Fatalf("make legacy account column nullable: %v", err)
+	}
+	now := time.Now().UTC()
+	if _, err := suite.PG.Exec(`
+INSERT INTO reports (
+  id, version, reporter_id, reporter_account_id, target_type, target_id,
+  reason, description, status, created_at, updated_at
+) VALUES ($1, 1, $2, NULL, 'post', 'legacy-target', 'spam',
+  'legacy report', 'pending', $3, $3)`,
+		"legacy-report-1",
+		"legacy-persona",
+		now,
+	); err != nil {
+		t.Fatalf("insert legacy report: %v", err)
+	}
+	if _, err := suite.PG.Exec(`
+INSERT INTO report_outbox (
+  event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
+) VALUES ($1, $2, 1, 'content.report.created', $3::jsonb, $4)`,
+		"legacy-report-event-1",
+		"legacy-report-1",
+		`{"reportId":"legacy-report-1","reporterId":"legacy-persona"}`,
+		now,
+	); err != nil {
+		t.Fatalf("insert legacy report outbox: %v", err)
+	}
+	if _, err := suite.PG.Exec(`
+INSERT INTO report_command_receipts (
+  idempotency_key, aggregate_id, aggregate_version, command_name, command_digest,
+  result_json, created_at, expires_at
+) VALUES ($1, $2, 1, 'CreateReport', 'legacy-digest', $3::jsonb, $4, $5)`,
+		"legacy-report-receipt-1",
+		"legacy-report-1",
+		`{"id":"legacy-report-1","reporterId":"legacy-persona"}`,
+		now,
+		now.Add(time.Hour),
+	); err != nil {
+		t.Fatalf("insert legacy report receipt: %v", err)
+	}
+
+	if _, err := persistence.NewPGReportStore(suite.PG); err == nil ||
+		!strings.Contains(err.Error(), "requires a verified account backfill") {
+		t.Fatalf("legacy report without mapping error=%v; want fail-closed backfill error", err)
+	}
+
+	store, err := persistence.NewPGReportStore(
+		suite.PG,
+		persistence.WithReporterAccountBackfills(
+			[]persistence.ReporterAccountBackfill{
+				{ReporterID: "legacy-persona", AccountID: "legacy-account"},
+			},
+		),
+	)
+	if err != nil {
+		t.Fatalf("apply verified report account backfill: %v", err)
+	}
+	if result := store.ReporterAccountBackfillResult(); result.ReportsBackfilled != 1 ||
+		result.OutboxPayloadsBackfilled != 1 || result.ReceiptsBackfilled != 1 {
+		t.Fatalf("unexpected report account backfill result: %#v", result)
+	}
+
+	var reporterAccountID string
+	if err := suite.PG.QueryRow(
+		`SELECT reporter_account_id FROM reports WHERE id = $1`,
+		"legacy-report-1",
+	).Scan(&reporterAccountID); err != nil {
+		t.Fatalf("read backfilled report account: %v", err)
+	}
+	if reporterAccountID != "legacy-account" {
+		t.Fatalf("reporter account=%q want verified legacy account", reporterAccountID)
+	}
+	var outboxAccountID string
+	if err := suite.PG.QueryRow(
+		`SELECT payload_json ->> 'reporterAccountId' FROM report_outbox WHERE event_id = $1`,
+		"legacy-report-event-1",
+	).Scan(&outboxAccountID); err != nil {
+		t.Fatalf("read backfilled report outbox: %v", err)
+	}
+	if outboxAccountID != "legacy-account" {
+		t.Fatalf("outbox account=%q want verified legacy account", outboxAccountID)
+	}
+	var receiptAccountID string
+	if err := suite.PG.QueryRow(
+		`SELECT result_json ->> 'reporterAccountId' FROM report_command_receipts WHERE idempotency_key = $1`,
+		"legacy-report-receipt-1",
+	).Scan(&receiptAccountID); err != nil {
+		t.Fatalf("read backfilled report receipt: %v", err)
+	}
+	if receiptAccountID != "legacy-account" {
+		t.Fatalf("receipt account=%q want verified legacy account", receiptAccountID)
+	}
+}
+
+func TestReportStoreRejectsBackfillThatConflictsWithPersistedOwnership(t *testing.T) {
+	suite := testinfra.NewSuite(t, testinfra.WithPostgres())
+	defer suite.TearDown(t)
+	suite.CleanPG(t)
+
+	if _, err := persistence.NewPGReportStore(suite.PG); err != nil {
+		t.Fatalf("initialize report schema: %v", err)
+	}
+	if _, err := suite.PG.Exec(`
+INSERT INTO reports (
+  id, version, reporter_id, reporter_account_id, target_type, target_id,
+  reason, status, created_at, updated_at
+) VALUES ($1, 1, $2, $3, 'post', 'owned-target', 'spam', 'pending', $4, $4)`,
+		"owned-report-1",
+		"owned-persona",
+		"persisted-account",
+		time.Now().UTC(),
+	); err != nil {
+		t.Fatalf("insert persisted report ownership: %v", err)
+	}
+
+	if _, err := persistence.NewPGReportStore(
+		suite.PG,
+		persistence.WithReporterAccountBackfills(
+			[]persistence.ReporterAccountBackfill{
+				{ReporterID: "owned-persona", AccountID: "conflicting-account"},
+			},
+		),
+	); err == nil || !strings.Contains(err.Error(), "conflicts with persisted report ownership") {
+		t.Fatalf("conflicting account backfill error=%v; want fail-closed ownership conflict", err)
+	}
+	var persistedAccountID string
+	if err := suite.PG.QueryRow(
+		`SELECT reporter_account_id FROM reports WHERE id = $1`,
+		"owned-report-1",
+	).Scan(&persistedAccountID); err != nil {
+		t.Fatalf("read persisted account ownership: %v", err)
+	}
+	if persistedAccountID != "persisted-account" {
+		t.Fatalf("persisted account=%q must not be overwritten", persistedAccountID)
 	}
 }
 
@@ -181,14 +339,18 @@ func TestCreateReportPersistsVerifiedPersonaInsteadOfClientHeaders(t *testing.T)
 		)
 	}
 	var reporterID string
+	var reporterAccountID string
 	if err := suite.PG.QueryRow(
-		`SELECT reporter_id FROM reports WHERE target_id = $1`,
+		`SELECT reporter_id, reporter_account_id FROM reports WHERE target_id = $1`,
 		"post_trusted_actor",
-	).Scan(&reporterID); err != nil {
+	).Scan(&reporterID, &reporterAccountID); err != nil {
 		t.Fatalf("query trusted report: %v", err)
 	}
 	if reporterID != trustedPersonaID {
 		t.Fatalf("reporter id=%q want %q", reporterID, trustedPersonaID)
+	}
+	if reporterAccountID != "trusted-account" {
+		t.Fatalf("reporter account=%q want trusted-account", reporterAccountID)
 	}
 }
 

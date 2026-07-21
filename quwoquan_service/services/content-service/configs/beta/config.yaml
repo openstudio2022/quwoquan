@@ -17,8 +17,16 @@ rec_model_service:
   enabled: true
   timeout_ms: 200
 
-# beta runs against local mock data (no mongo): the search-index projector stays a
-# no-op. Flip to enabled once a beta ES cluster is provisioned (endpoints via env).
+# beta 的 content embedding 由受控 Binding 注入；缺 endpoint 或凭据时启动失败。
+embedding:
+  enabled: true
+  vector_recall_enabled: false
+
+oss:
+  use_ssl: true
+
+# Beta uses the real local content data plane but does not provision an ES cluster;
+# the search-index projector therefore remains disabled until an ES endpoint is set.
 es:
   enabled: false
   endpoints: []

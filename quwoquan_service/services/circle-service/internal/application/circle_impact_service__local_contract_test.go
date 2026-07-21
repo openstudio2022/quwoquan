@@ -86,7 +86,8 @@ func TestGetCircleStatsReturnsTypedWire(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCircleStats returned error: %v", err)
 	}
-	if stats.TotalMembers != 12 || stats.WeeklyActive != 3 || stats.TotalPosts != 5 ||
+	if stats.CircleID != "circle_1" || stats.MemberCount != 12 || stats.WeeklyActiveCount != 3 ||
+		stats.PostCount != 5 || stats.DiscussionCount != 0 || stats.LikeCount != 0 ||
 		stats.StorageUsedBytes != 1024 || stats.StorageQuotaBytes != 2048 {
 		t.Fatalf("stats wire drift: %+v", stats)
 	}

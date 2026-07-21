@@ -219,12 +219,20 @@ sit_acceptance:
     title: 配置 ACK、可信灰度维度与真实 Portal 数据
     given:
       - 全部 governed workloads 使用同一 ConfigSnapshot/ACK 契约。
+      - 发布包 config-root 仅保留
+        releases/config/<service>/<configVersion>.yaml；服务 loader 与
+        Platform ConfigSnapshot 读取同一工件。
       - 可信边缘可解析 province/carrier。
+      - gray_routing_policy 的 stageDimensions 是唯一灰度匹配集；
+        gray-initial/carry-on 有显式四维规则，full 四维均为空。
     when:
       - 发布高版本并按 appVersion/userId/province/carrier 分流。
     then:
       - 所有实例 ACK 收敛，drift 为零。
+      - 版本配置文件缺失或无法解析时 beta/gamma/prod 不能启动；不得回退仓库形状路径、
+        空配置或默认配置。
       - 客户端伪造 province/carrier 被覆盖，未知维度不命中。
+      - 未知 rollout stage 被拒绝，不能回退全局 dimensions 或静默退化为稳定流量。
       - Portal 页面只展示真实控制面、SLS、Prometheus 或业务投影数据。
     done_when:
       - 四维分流、ACK 矩阵和 Portal 数据源对账 UAT 全绿。
@@ -239,6 +247,7 @@ sit_acceptance:
       recorded:
         - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
         - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
+        - file: quwoquan_ops/tests/acceptance/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
     status: pending
     test_evidence:
       primary:

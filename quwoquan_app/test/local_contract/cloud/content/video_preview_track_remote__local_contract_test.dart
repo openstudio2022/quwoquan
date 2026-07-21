@@ -7,8 +7,11 @@ import 'package:quwoquan_app/application/content/media/video_preview_track_query
 import 'package:quwoquan_app/cloud/remote/content/media/video_preview_track_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
+import '../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
+  final telemetry = RecordingAppTelemetryRecorder();
+
   test('manifest 与 asset/version/track 绑定并按 descriptor 缓存', () async {
     var requestCount = 0;
     final resolver = _resolver();
@@ -22,6 +25,7 @@ void main() {
         }),
       ),
       mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
     );
 
     final first = await query.loadManifest(descriptor);
@@ -35,6 +39,8 @@ void main() {
     expect(first.sprites.single.reference.version, 2);
     expect(first.frameFor(const Duration(seconds: 9)).timeMs, 5000);
     expect(first.frameFor(const Duration(hours: 2)).timeMs, 10000);
+    expect(telemetry.recorded.single.eventType, 'video_preview_track_load');
+    expect(telemetry.recorded.single.extensions['result'], 'success');
   });
 
   test('落后于描述符的 manifest 版本合法（发布前封面命令会推进聚合版本）', () async {
@@ -51,6 +57,7 @@ void main() {
         ),
       ),
       mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
     );
     final manifest = await laggingQuery.loadManifest(descriptor);
     expect(manifest.assetVersion, 1);
@@ -70,6 +77,7 @@ void main() {
         ),
       ),
       mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
     );
     await expectLater(
       aheadQuery.loadManifest(descriptor),
@@ -85,6 +93,7 @@ void main() {
         ),
       ),
       mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
     );
     await expectLater(
       trackQuery.loadManifest(descriptor),
@@ -101,6 +110,7 @@ void main() {
         ),
       ),
       mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
     );
     await expectLater(
       cropQuery.loadManifest(descriptor),

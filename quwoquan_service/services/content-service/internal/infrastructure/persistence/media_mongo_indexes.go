@@ -68,9 +68,47 @@ func (s *MongoMediaStore) EnsureIndexes(ctx context.Context) error {
 	}
 	if _, err := s.originalAccessFacts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "assetId", Value: 1}, {Key: "grantedAt", Value: -1}}, Options: options.Index().SetName("idx_media_original_access_asset_time")},
+		{Keys: bson.D{{Key: "viewerId", Value: 1}, {Key: "assetId", Value: 1}, {Key: "purpose", Value: 1}, {Key: "grantedAt", Value: -1}}, Options: options.Index().SetName("idx_media_original_access_viewer_asset_purpose_time")},
 		{Keys: bson.D{{Key: "viewerId", Value: 1}, {Key: "idempotencyKey", Value: 1}}, Options: options.Index().SetName("idx_media_original_access_dedupe").SetUnique(true)},
 	}); err != nil {
 		return fmt.Errorf("create media original access fact indexes: %w", err)
+	}
+	if _, err := s.originalAccessRateLimits.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+		Options: options.Index().SetName("idx_media_original_access_rate_limit_expire").SetExpireAfterSeconds(0),
+	}); err != nil {
+		return fmt.Errorf("create media original access rate limit indexes: %w", err)
+	}
+	if _, err := s.processingDeadLetters.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "consumer", Value: 1}, {Key: "quarantinedAt", Value: -1}},
+			Options: options.Index().SetName(
+				"idx_media_processing_dead_letters_consumer_time",
+			),
+		},
+		{
+			Keys: bson.D{{Key: "aggregateId", Value: 1}, {Key: "quarantinedAt", Value: -1}},
+			Options: options.Index().SetName(
+				"idx_media_processing_dead_letters_aggregate_time",
+			),
+		},
+	}); err != nil {
+		return fmt.Errorf("create media processing dead-letter indexes: %w", err)
+	}
+	if _, err := s.imageReprocessRuns.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: 1}}, Options: options.Index().SetName("idx_media_image_reprocess_run_status_updated")},
+		{Keys: bson.D{{Key: "_id", Value: 1}, {Key: "version", Value: 1}}, Options: options.Index().SetName("idx_media_image_reprocess_run_version").SetUnique(true)},
+	}); err != nil {
+		return fmt.Errorf("create media image reprocess run indexes: %w", err)
+	}
+	if err := ensureMediaReceiptIndexes(ctx, s.imageReprocessReceipts, "idx_media_image_reprocess_run_receipts"); err != nil {
+		return err
+	}
+	if _, err := s.imageReprocessLeases.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "leaseUntil", Value: 1}},
+		Options: options.Index().SetName("idx_media_image_reprocess_run_lease_until"),
+	}); err != nil {
+		return fmt.Errorf("create media image reprocess run lease indexes: %w", err)
 	}
 	return nil
 }

@@ -19,6 +19,22 @@ scenarios:
       - 同一 Idempotency-Key 重放返回首个裁决，不产生第二个 case
       - approved 后 GetPostPublicationEligibility 返回可发布
 
+  - name: moderation_review_claims_single_reviewer
+    operation: ReviewPostModerationCase
+    go_func: TestConcurrentModerationCommandsConvergeToSingleTargetTransitions
+    evidence: local_contract
+    assertions:
+      - 只有 pending case 可迁移到 reviewed，reviewer 成为后续决定唯一操作者
+      - concurrent review 收敛为同一 reviewed 状态，不重复产生 outbox 或审计记录
+
+  - name: moderation_supersede_converges_once
+    operation: SupersedePostModerationCase
+    go_func: TestConcurrentModerationCommandsConvergeToSingleTargetTransitions
+    evidence: local_contract
+    assertions:
+      - concurrent supersede 收敛为单一 superseded 状态
+      - open/review/decide/supersede 各只产生一条 outbox 与审计记录
+
   - name: rejected_post_remains_ineligible
     operation: GetPostPublicationEligibility
     go_func: TestRejectedPostRemainsPublicationIneligible

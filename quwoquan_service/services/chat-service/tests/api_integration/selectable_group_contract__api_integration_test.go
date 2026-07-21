@@ -3,6 +3,7 @@ package api_integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -260,6 +261,19 @@ func TestListSelectableGroupConversations_ReturnsGroupsWithFriendCount(t *testin
 	if len(items) != 1 || items[0].(map[string]any)["conversationId"] != "conv_sg_circle" {
 		t.Fatalf("circle source did not isolate circle-bound rows: %#v", items)
 	}
+
+	code, payload = getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations?source=unsupported&limit=50",
+		viewer,
+	)
+	if code != http.StatusBadRequest {
+		t.Fatalf("invalid source expected 400, got %d: %#v", code, payload)
+	}
+	if payload["code"] != "CHAT.USER.invalid_argument" {
+		t.Fatalf("invalid source must return structured invalid_argument: %#v", payload)
+	}
 }
 
 // TestListSelectableGroupContactMembers_IntersectsMutualMembers 验证图五成员列表：
@@ -301,6 +315,147 @@ func TestListSelectableGroupContactMembers_IntersectsMutualMembers(t *testing.T)
 	}
 	if got[viewer] || got["stranger_x"] {
 		t.Fatalf("viewer/stranger must be excluded, got %#v", got)
+	}
+}
+
+func TestListSelectableGroupSources_KeysetPagination(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const viewer = "viewer_selectable_page"
+	mutual := make(map[string]bool, 51)
+	contacts := make([]string, 0, 51)
+	for index := 0; index < 51; index++ {
+		id := fmt.Sprintf("friend_selectable_%03d", index)
+		mutual[id] = true
+		contacts = append(contacts, id)
+		seedSelectableGroup(
+			t,
+			fmt.Sprintf("conversation_selectable_%03d", index),
+			viewer,
+			fmt.Sprintf("分页群 %03d", index),
+			[]string{id},
+		)
+	}
+
+	handler := newSelectableGroupHandler(t, viewer, mutual, contacts...)
+	code, firstPage := getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations?limit=50",
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("first page expected 200, got %d: %#v", code, firstPage)
+	}
+	firstItems := firstPage["items"].([]any)
+	if len(firstItems) != 50 {
+		t.Fatalf("first page expected 50 items, got %d: %#v", len(firstItems), firstItems)
+	}
+	nextCursor, ok := firstPage["nextCursor"].(string)
+	if !ok || nextCursor == "" {
+		t.Fatalf("full first page must return nextCursor: %#v", firstPage)
+	}
+
+	code, secondPage := getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations?limit=50&cursor="+nextCursor,
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("second page expected 200, got %d: %#v", code, secondPage)
+	}
+	secondItems := secondPage["items"].([]any)
+	if len(secondItems) != 1 {
+		t.Fatalf("second page expected 1 remaining item, got %d: %#v", len(secondItems), secondItems)
+	}
+	if _, exists := secondPage["nextCursor"]; exists {
+		t.Fatalf("terminal page must not advertise another cursor: %#v", secondPage)
+	}
+	seen := make(map[string]struct{}, 51)
+	for _, raw := range append(firstItems, secondItems...) {
+		id := raw.(map[string]any)["conversationId"].(string)
+		if _, duplicate := seen[id]; duplicate {
+			t.Fatalf("keyset pagination duplicated conversation %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != 51 {
+		t.Fatalf("keyset pagination omitted selectable groups: got=%d want=51", len(seen))
+	}
+}
+
+func TestListSelectableGroupContactMembers_KeysetPaginationAndMembership(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const viewer = "viewer_selectable_members_page"
+	mutual := make(map[string]bool, 102)
+	contacts := make([]string, 0, 102)
+	for index := 0; index < 102; index++ {
+		id := fmt.Sprintf("friend_member_%03d", index)
+		mutual[id] = true
+		contacts = append(contacts, id)
+	}
+	seedSelectableGroup(
+		t,
+		"conversation_member_pages",
+		viewer,
+		"可分页群成员",
+		contacts,
+	)
+	handler := newSelectableGroupHandler(t, viewer, mutual, contacts...)
+
+	code, firstPage := getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations/conversation_member_pages/contact-members?limit=100",
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("first member page expected 200, got %d: %#v", code, firstPage)
+	}
+	firstItems := firstPage["items"].([]any)
+	if len(firstItems) != 100 {
+		t.Fatalf("first member page expected 100 items, got %d", len(firstItems))
+	}
+	nextCursor, ok := firstPage["nextCursor"].(string)
+	if !ok || nextCursor == "" {
+		t.Fatalf("full member page must return nextCursor: %#v", firstPage)
+	}
+
+	code, secondPage := getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations/conversation_member_pages/contact-members?limit=100&cursor="+nextCursor,
+		viewer,
+	)
+	if code != http.StatusOK {
+		t.Fatalf("second member page expected 200, got %d: %#v", code, secondPage)
+	}
+	secondItems := secondPage["items"].([]any)
+	if len(secondItems) != 2 {
+		t.Fatalf("second member page expected 2 remaining items, got %d", len(secondItems))
+	}
+	seen := make(map[string]struct{}, 102)
+	for _, raw := range append(firstItems, secondItems...) {
+		id := raw.(map[string]any)["userId"].(string)
+		if _, duplicate := seen[id]; duplicate {
+			t.Fatalf("keyset pagination duplicated member %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != 102 {
+		t.Fatalf("keyset pagination omitted mutual group members: got=%d want=102", len(seen))
+	}
+
+	code, payload := getSelectableJSON(
+		t,
+		handler,
+		"/chat/selectable-group-conversations/conversation_member_pages/contact-members?limit=100",
+		"not_a_member",
+	)
+	if code != http.StatusNotFound || payload["code"] != "CHAT.USER.conversation_not_found" {
+		t.Fatalf("non-member must not enumerate group roster: code=%d payload=%#v", code, payload)
 	}
 }
 

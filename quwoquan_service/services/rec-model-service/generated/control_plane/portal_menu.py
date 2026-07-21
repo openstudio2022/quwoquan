@@ -175,7 +175,7 @@ _PORTAL_MENU_JSON = r'''{
       ],
       "order": 33,
       "parent_menu_id": "product-ops",
-      "permission_scope": "ops.entity_homepage.read",
+      "permission_scope": "ops.case.read",
       "route_path": "/product/entity-homepage-governance"
     },
     {

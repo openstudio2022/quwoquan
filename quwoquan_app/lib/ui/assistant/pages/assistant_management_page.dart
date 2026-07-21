@@ -40,6 +40,7 @@ class _AssistantManagementPageState
     extends ConsumerState<AssistantManagementPage> {
   Object? _preferenceMutationError;
   bool _preferenceMutationInFlight = false;
+  AssistantPreferenceFact? _revokedPreferenceForUndo;
 
   @override
   void initState() {
@@ -300,14 +301,7 @@ class _AssistantManagementPageState
                       AssistantPreferenceStatus.active.wireName,
                 )
                 .toList(growable: false);
-            final revocable = preferences
-                .where(
-                  (preference) =>
-                      preference.status ==
-                      AssistantPreferenceStatus.revoked.wireName,
-                )
-                .toList(growable: false);
-            if (active.isEmpty && revocable.isEmpty) {
+            if (active.isEmpty && !_hasRevocationUndo) {
               return Padding(
                 padding: EdgeInsets.all(AppSpacing.md),
                 child: Text(
@@ -321,16 +315,12 @@ class _AssistantManagementPageState
             }
             return Column(
               children: <Widget>[
-                ...revocable.map(
-                  (preference) => _preferenceRow(
-                    preference,
+                if (_hasRevocationUndo)
+                  _buildRevocationUndo(
+                    _revokedPreferenceForUndo!,
                     fgPrimary: fgPrimary,
                     fgSecondary: fgSecondary,
-                    statusLabel: AssistantText.assistantPreferenceForgot,
-                    actionLabel: AssistantText.assistantPreferenceUndo,
-                    onAction: () => _restorePreference(preference),
                   ),
-                ),
                 ...active.map(
                   (preference) => _preferenceRow(
                     preference,
@@ -346,6 +336,52 @@ class _AssistantManagementPageState
           },
         ),
       ],
+    );
+  }
+
+  bool get _hasRevocationUndo {
+    final preference = _revokedPreferenceForUndo;
+    if (preference == null ||
+        preference.status != AssistantPreferenceStatus.revoked.wireName) {
+      return false;
+    }
+    final deadline = DateTime.tryParse(
+      preference.revocationDeadline?.trim() ?? '',
+    );
+    return deadline != null && deadline.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
+  Widget _buildRevocationUndo(
+    AssistantPreferenceFact preference, {
+    required Color fgPrimary,
+    required Color fgSecondary,
+  }) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.interGroupSm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${_preferenceTitle(preference)} · '
+              '${AssistantText.assistantPreferenceForgot}',
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+            ),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupSm),
+            onPressed: _preferenceMutationInFlight
+                ? null
+                : () => _restorePreference(preference),
+            child: Text(
+              AssistantText.assistantPreferenceUndo,
+              style: TextStyle(color: fgPrimary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -458,47 +494,55 @@ class _AssistantManagementPageState
     AssistantPreferenceKind kind,
     String value,
   ) async {
-    await _runPreferenceMutation(() async {
-      await ref
+    await _runPreferenceMutation(
+      () => ref
           .read(assistantPreferenceFactFacetProvider)
           .setAssistantPreference(
             scope: AssistantPreferenceScope.longTerm,
             kind: kind,
             value: value,
             sourceType: AssistantPreferenceSourceType.management,
-          );
-    });
+          ),
+    );
   }
 
   Future<void> _revokePreference(AssistantPreferenceFact preference) async {
-    await _runPreferenceMutation(() async {
-      await ref
+    final revoked = await _runPreferenceMutation(
+      () => ref
           .read(assistantPreferenceFactFacetProvider)
-          .revokeAssistantPreference(preferenceId: preference.preferenceId);
-    });
+          .revokeAssistantPreference(preferenceId: preference.preferenceId),
+    );
+    if (revoked != null && mounted) {
+      setState(() => _revokedPreferenceForUndo = revoked);
+    }
   }
 
   Future<void> _restorePreference(AssistantPreferenceFact preference) async {
-    await _runPreferenceMutation(() async {
-      await ref
+    final restored = await _runPreferenceMutation(
+      () => ref
           .read(assistantPreferenceFactFacetProvider)
-          .restoreAssistantPreference(preferenceId: preference.preferenceId);
-    });
+          .restoreAssistantPreference(preferenceId: preference.preferenceId),
+    );
+    if (restored != null && mounted) {
+      setState(() => _revokedPreferenceForUndo = null);
+    }
   }
 
-  Future<void> _runPreferenceMutation(Future<void> Function() action) async {
+  Future<T?> _runPreferenceMutation<T>(Future<T> Function() action) async {
     if (_preferenceMutationInFlight) {
-      return;
+      return null;
     }
     setState(() {
       _preferenceMutationInFlight = true;
       _preferenceMutationError = null;
     });
     try {
-      await action();
+      final result = await action();
       ref.invalidate(assistantPreferencesProvider);
+      return result;
     } catch (error) {
       _preferenceMutationError = error;
+      return null;
     } finally {
       if (mounted) {
         setState(() => _preferenceMutationInFlight = false);

@@ -187,9 +187,10 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     assert author_request["jobs"] == [
         {
             "entityRef": "/entity/地点/景区/都江堰",
-            "carrier": "article",
-            "sourceRevision": "sha256:" + ("1" * 64),
-            "jobId": job.job_id,
+                "carrier": "article",
+                "sourceRevision": "sha256:" + ("1" * 64),
+                "idempotencyKey": payload["idempotencyKey"],
+                "jobId": job.job_id,
             "executionId": EXECUTION_ID,
             "ref": ref,
             "stage": "author",
@@ -277,9 +278,10 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     assert publish_request["jobs"] == [
         {
             "entityRef": "/entity/地点/景区/都江堰",
-            "carrier": "article",
-            "sourceRevision": "sha256:" + ("4" * 64),
-            "jobId": publish_job.job_id,
+                "carrier": "article",
+                "sourceRevision": "sha256:" + ("4" * 64),
+                "idempotencyKey": publish_payload["idempotencyKey"],
+                "jobId": publish_job.job_id,
             "executionId": EXECUTION_ID,
             "ref": ref,
             "stage": "publish",

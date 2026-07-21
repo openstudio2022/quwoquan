@@ -87,6 +87,17 @@ object_types:
     execution_strategy: remote_only
     provider: location_remote
 
+# CitationDestination 是搜索、助手 grounding 与回答引用共用的唯一落点形态。
+# internal 只承载 canonical object type/id，由 link_templates.yaml codegen 生成路由；
+# external 只承载经过 HTTPS 校验的 URL。未知对象或缺失落点必须不渲染为可点击引用。
+citation_destination:
+  internal:
+    object_type_source: _shared/link_templates.yaml#citation_destinations
+    required_fields: [objectTypeRef, objectId]
+  external:
+    required_fields: [url]
+    allowed_schemes: [https]
+
 # AI/App-facing target taxonomy. These are the ONLY object names exposed on the
 # retrieve contract; internal object_types stay implementation details.
 ai_targets:

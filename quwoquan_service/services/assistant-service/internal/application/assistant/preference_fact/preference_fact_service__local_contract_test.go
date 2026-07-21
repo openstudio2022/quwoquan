@@ -182,6 +182,23 @@ func TestPreferenceFactSessionLifecycleAndOwnerIsolation(t *testing.T) {
 	commands.now = func() time.Time { return now }
 	queries := NewQueryFacade(store)
 
+	if _, err := commands.SetPreference(t.Context(), SetPreferenceCommand{
+		UserID:         "another-persona",
+		Scope:          "session",
+		ConversationID: "acv-owned",
+		Kind:           "reply_length",
+		Value:          "concise",
+		SourceType:     "explicit_rewrite",
+	}); err == nil {
+		t.Fatal("non-owner session preference set must fail")
+	} else {
+		var appErr *rterr.AppError
+		if !errors.As(err, &appErr) ||
+			!strings.Contains(appErr.Code.String(), "preference_not_found") {
+			t.Fatalf("non-owner set error = %v", err)
+		}
+	}
+
 	fact, err := commands.SetPreference(t.Context(), SetPreferenceCommand{
 		UserID:         "persona-owner",
 		Scope:          "session",

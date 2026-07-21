@@ -3,7 +3,8 @@
 ## 领域契约
 
 - `MediaAsset` 只允许 `processing → ready|rejected|deleted`；终态不可逆。
-- `ready` 必须同时具备主视频 slice、封面 slice、有效尺寸/时长和探测 descriptor。
+- 图片 `ready` 必须具备归一化私有对象、canonical image slice、有效尺寸和交付格式。
+- 视频 `ready` 必须同时具备主视频 slice、封面 slice、有效尺寸/时长和探测 descriptor。
 - 视频必须为 H.264/AAC、progressive MP4、fast-start、最长关键帧间隔 2 秒。
 - `RecordProcessingResult` 以 outbox event id 形成稳定幂等键。
 

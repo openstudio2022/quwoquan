@@ -278,10 +278,17 @@ def main() -> int:
     )
     require(
         profile_object_uploader,
-        "http.StreamedRequest",
-        "response.stream.drain<void>()",
+        "ContentMediaUploadCoordinator",
+        "ContentMediaSourceReader",
+        "ContentMediaStreamObjectUpload",
+        "uploadPreparedSource",
+        "ContentMediaAccessPolicy.ownerOnly",
     )
-    forbid(profile_object_uploader, "readAsBytes(")
+    forbid(
+        profile_object_uploader,
+        "readAsBytes(",
+        "package:http/http.dart",
+    )
     require(
         "quwoquan_app/lib/cloud/remote/content/media/local_media_upload_source.dart",
         "prepareLocalFileByteSource",

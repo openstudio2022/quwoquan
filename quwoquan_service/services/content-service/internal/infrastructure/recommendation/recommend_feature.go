@@ -219,7 +219,6 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	entityInc := map[string]float64{}
 	entityInstanceInc := map[string]float64{}
 	depthDist := map[string]int{}
-	sourceDist := map[string]int{}
 	depthSum := 0
 	depthCount := 0
 
@@ -299,10 +298,6 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 			depthSum += depth
 			depthCount++
 		}
-		if source != "" {
-			sourceKey := "userFeatures.sourceDistribution." + source
-			sourceDist[sourceKey]++
-		}
 	}
 
 	inc := bson.M{}
@@ -313,6 +308,12 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		inc["userFeatures.authorInteraction."+author] = count
 	}
 	inc["userFeatures.totalEvents"] = len(events)
+	if depthCount > 0 {
+		// 单条 relay 事件必须累加充分统计量；不能把当前事件的均值
+		// 直接覆盖历史 avg，否则每个新行为都会抹掉此前样本。
+		inc["userFeatures.engagementDepthSum"] = depthSum
+		inc["userFeatures.engagementDepthCount"] = depthCount
+	}
 
 	for k, v := range topicInc {
 		inc["userFeatures.topicAffinities."+k] = v
@@ -332,9 +333,6 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	for k, v := range depthDist {
 		inc[k] = v
 	}
-	for k, v := range sourceDist {
-		inc[k] = v
-	}
 	for ct, cnt := range typeImpressions {
 		inc["userFeatures.typeImpressions."+ct] = cnt
 	}
@@ -349,9 +347,6 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		"userId":                   userID,
 		"behaviorProjectionLastId": event.ID,
 		"updatedAt":                time.Now().UTC(),
-	}
-	if depthCount > 0 {
-		setFields["userFeatures.avgEngagementDepth"] = float64(depthSum) / float64(depthCount)
 	}
 
 	update := bson.M{
@@ -378,7 +373,7 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 
 // applyBehaviorUpdate 用每条 rm_behavior_events ObjectID 的十六进制全序作为
 // 用户特征文档水位，使 $inc 与去重标记在同一原子 UpdateOne 中提交。
-// relay checkpoint 保存失败或多副本并发重扫时，旧/同一事件均成为 no-op。
+// relay lease 负责全局顺序；checkpoint 保存失败重放时，旧/同一事件成为 no-op。
 func (p *RecommendFeatureProjector) applyBehaviorUpdate(
 	ctx context.Context,
 	userID, eventID string,
@@ -637,9 +632,9 @@ type UserFeatures struct {
 	AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
 	FormatAffinities         map[string]float64 `bson:"formatAffinities"`
 	EntityAffinities         map[string]float64 `bson:"entityAffinities"`
-	AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
+	EngagementDepthSum       int                `bson:"engagementDepthSum"`
+	EngagementDepthCount     int                `bson:"engagementDepthCount"`
 	DepthDistribution        map[string]int     `bson:"depthDistribution"`
-	SourceDistribution       map[string]int     `bson:"sourceDistribution"`
 	SearchTermAffinities     map[string]float64 `bson:"searchTermAffinity"`
 	SearchTopObjectAffinity  map[string]float64 `bson:"searchTopObjectAffinity"`
 	SearchTermHeat           float64            `bson:"searchTermHeat"`
@@ -676,9 +671,9 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 			AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
 			FormatAffinities         map[string]float64 `bson:"formatAffinities"`
 			EntityAffinities         map[string]float64 `bson:"entityAffinities"`
-			AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
+			EngagementDepthSum       int                `bson:"engagementDepthSum"`
+			EngagementDepthCount     int                `bson:"engagementDepthCount"`
 			DepthDistribution        map[string]int     `bson:"depthDistribution"`
-			SourceDistribution       map[string]int     `bson:"sourceDistribution"`
 			SearchTermAffinities     map[string]float64 `bson:"searchTermAffinity"`
 			SearchTopObjectAffinity  map[string]float64 `bson:"searchTopObjectAffinity"`
 			SearchTermHeat           float64            `bson:"searchTermHeat"`
@@ -712,9 +707,9 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		AudienceAffinities:       doc.UserFeatures.AudienceAffinities,
 		FormatAffinities:         doc.UserFeatures.FormatAffinities,
 		EntityAffinities:         doc.UserFeatures.EntityAffinities,
-		AvgEngagementDepth:       doc.UserFeatures.AvgEngagementDepth,
+		EngagementDepthSum:       doc.UserFeatures.EngagementDepthSum,
+		EngagementDepthCount:     doc.UserFeatures.EngagementDepthCount,
 		DepthDistribution:        doc.UserFeatures.DepthDistribution,
-		SourceDistribution:       doc.UserFeatures.SourceDistribution,
 		SearchTermAffinities:     doc.UserFeatures.SearchTermAffinities,
 		SearchTopObjectAffinity:  doc.UserFeatures.SearchTopObjectAffinity,
 		SearchTermHeat:           doc.UserFeatures.SearchTermHeat,
@@ -750,6 +745,10 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 	var engagementRate float64
 	if raw.TotalEvents > 0 {
 		engagementRate = float64(raw.TotalLikes+raw.TotalShares) / float64(raw.TotalEvents)
+	}
+	avgEngagementDepth := 0.0
+	if raw.EngagementDepthCount > 0 {
+		avgEngagementDepth = float64(raw.EngagementDepthSum) / float64(raw.EngagementDepthCount)
 	}
 
 	depthDist := make(map[string]int, len(raw.DepthDistribution))
@@ -789,9 +788,8 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		EntityAffinities:          raw.EntityAffinities,
 		EntityInstanceAffinities:  raw.EntityInstanceAffinities,
 		TypeENER:                  typeENER,
-		AvgEngagementDepth:        raw.AvgEngagementDepth,
+		AvgEngagementDepth:        avgEngagementDepth,
 		DepthDistribution:         depthDist,
-		SourceDistribution:        raw.SourceDistribution,
 		SearchTermAffinities:      searchTermAffinities,
 		SearchTopObjectAffinities: searchTopObjectAffinities,
 		SearchTermHeat:            searchTermHeat,

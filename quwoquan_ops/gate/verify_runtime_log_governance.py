@@ -37,7 +37,7 @@ def main() -> int:
     )
     _require_text(
         ROOT / "quwoquan_service/services/product-ops-service/cmd/api/main.go",
-        ("NewRuntimeLogExportWriter", "exportServiceRuntimeLogs"),
+        ("NewRuntimeLogExportWriter", "NewProcessTraceLogger"),
         issues,
     )
     _require_text(

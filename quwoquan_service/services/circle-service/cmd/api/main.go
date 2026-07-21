@@ -159,8 +159,17 @@ func run() error {
 	groupMembershipReaders := groupmembershippersistence.NewMongoReaders(db)
 
 	// Redis (via runtime Router)
-	router := buildRedisRouter(cfg)
+	router, messageTransportSceneModes := buildRedisRouter(cfg)
 	defer router.Close()
+	messageTransport, err := requireCircleAPIMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		messageTransportSceneModes,
+	)
+	if err != nil {
+		return fmt.Errorf("circle-service message transport preflight failed: %w", err)
+	}
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: circle-service redis ping: %v", err)
 	}
@@ -174,6 +183,10 @@ func run() error {
 	if err := discoveryFeedReader.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle discovery feed indexes failed: %v", err)
 	}
+	cachedDiscoveryFeedReader := cache.NewCachedCircleDiscoveryFeedReader(
+		discoveryFeedReader,
+		redisClient,
+	)
 	placementStore := placementpersistence.NewMongoAggregateStore(db)
 	if err := placementStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle post placement indexes failed: %v", err)
@@ -214,7 +227,7 @@ func run() error {
 	circleService := application.NewCircleService(
 		circleStorage,
 		application.WithFeedStore(feedStore),
-		application.WithDiscoveryFeedReader(discoveryFeedReader),
+		application.WithDiscoveryFeedReader(cachedDiscoveryFeedReader),
 	)
 	circleCommands := application.NewCircleCommandFacade(
 		circleAggregateStore,
@@ -242,6 +255,11 @@ func run() error {
 	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
 	groupCommands := groupapp.NewCommandFacade(groupStore, groupReaders)
 	groupQueries := groupapp.NewQueryFacade(groupReaders, groupReaders)
+	groupConversationBindingProjector := groupapp.NewConversationBindingProjector(groupStore)
+	groupConversationBindingFailures := groupersistence.NewMongoConversationBindingFailureStore(db)
+	if err := groupConversationBindingFailures.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle group conversation binding failure indexes failed: %v", err)
+	}
 	groupMembershipCommands := groupmembershipapp.NewCommandFacade(
 		groupMembershipStore, groupMembershipReaders, groupMembershipReaders, groupMembershipReaders,
 	)
@@ -259,8 +277,8 @@ func run() error {
 		instanceID = "circle-service"
 	}
 	contentPostConsumer := messaging.NewContentPostConsumer(
-		redisClient, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
-	)
+		messageTransport, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
+	).WithDiscoveryFeedCache(redisClient)
 	accountClosedProjection := persistence.NewMongoUserAccountClosedProjection(
 		db,
 		redisClient,
@@ -269,7 +287,7 @@ func run() error {
 		log.Fatalf("circle UserAccountClosed projection indexes failed: %v", err)
 	}
 	accountClosedConsumer, err := messaging.NewUserAccountClosedConsumer(
-		redisClient,
+		messageTransport,
 		accountClosedProjection,
 		accountClosedProjection,
 		instanceID,
@@ -281,6 +299,19 @@ func run() error {
 	if err := accountClosedConsumer.EnsureGroup(ctx); err != nil {
 		log.Fatalf("circle UserAccountClosed consumer group failed: %v", err)
 	}
+	groupConversationBindingConsumer, err := messaging.NewCircleGroupConversationBindingConsumer(
+		messageTransport,
+		groupConversationBindingProjector,
+		groupConversationBindingFailures,
+		"circle-group-conversation-binding-projector:"+instanceID,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("circle group conversation binding consumer init failed: %v", err)
+	}
+	if err := groupConversationBindingConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("circle group conversation binding consumer group failed: %v", err)
+	}
 	placementCountRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
 		placementpersistence.NewMongoPostCountProjector(db, redisClient),
@@ -288,7 +319,7 @@ func run() error {
 	)
 	placementStreamRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
-		messaging.NewCirclePostPlacementStreamPublisher(redisClient),
+		messaging.NewCirclePostPlacementStreamPublisher(messageTransport),
 		"circle-post-placement-stream",
 	)
 	membershipCountRelay := membershipapp.NewOutboxRelay(
@@ -298,7 +329,7 @@ func run() error {
 	)
 	membershipStreamRelay := membershipapp.NewOutboxRelay(
 		membershipStore, membershipStore,
-		messaging.NewCircleMembershipStreamPublisher(redisClient),
+		messaging.NewCircleMembershipStreamPublisher(messageTransport),
 		"circle-membership-stream",
 	)
 	behaviorWeeklyActiveRelay := behaviorfactapp.NewOutboxRelay(
@@ -308,12 +339,12 @@ func run() error {
 	)
 	behaviorStreamRelay := behaviorfactapp.NewOutboxRelay(
 		behaviorFactStore, behaviorFactStore,
-		messaging.NewCircleBehaviorFactStreamPublisher(redisClient),
+		messaging.NewCircleBehaviorFactStreamPublisher(messageTransport),
 		"circle-behavior-fact-stream",
 	)
 	groupStreamRelay := groupapp.NewOutboxRelay(
 		groupStore, groupStore,
-		messaging.NewCircleGroupStreamPublisher(redisClient),
+		messaging.NewCircleGroupStreamPublisher(messageTransport),
 		"circle-group-stream",
 	)
 	groupOwnerMembershipRelay := groupapp.NewOutboxRelay(
@@ -323,12 +354,12 @@ func run() error {
 	)
 	groupMembershipStreamRelay := groupmembershipapp.NewOutboxRelay(
 		groupMembershipStore, groupMembershipStore,
-		messaging.NewCircleGroupMembershipStreamPublisher(redisClient),
+		messaging.NewCircleGroupMembershipStreamPublisher(messageTransport),
 		"circle-group-membership-stream",
 	)
 	fileStreamRelay := fileapp.NewOutboxRelay(
 		fileStore, fileStore,
-		messaging.NewCircleFileStreamPublisher(redisClient),
+		messaging.NewCircleFileStreamPublisher(messageTransport),
 		"circle-file-stream",
 	)
 	var circleSearchRelay *application.CircleOutboxRelay
@@ -377,6 +408,9 @@ func run() error {
 	healthChecker.Register("user-account-closed-consumer", func(_ context.Context) error {
 		return accountClosedConsumer.Healthy(10 * time.Second)
 	})
+	healthChecker.Register("circle-group-conversation-binding-projector", func(_ context.Context) error {
+		return groupConversationBindingConsumer.Healthy(30 * time.Second)
+	})
 	healthChecker.Register("circle-post-count-projection", func(_ context.Context) error {
 		return placementCountRelay.Healthy(5 * time.Second)
 	})
@@ -417,6 +451,11 @@ func run() error {
 	go func() {
 		defer close(accountClosedConsumerDone)
 		accountClosedConsumer.Run(ctx)
+	}()
+	groupConversationBindingDone := make(chan struct{})
+	go func() {
+		defer close(groupConversationBindingDone)
+		groupConversationBindingConsumer.Run(ctx)
 	}()
 	go func() {
 		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
@@ -531,6 +570,11 @@ func run() error {
 	case <-time.After(5 * time.Second):
 		log.Printf("WARN: circle UserAccountClosed consumer shutdown timed out")
 	}
+	select {
+	case <-groupConversationBindingDone:
+	case <-time.After(5 * time.Second):
+		log.Printf("WARN: circle group conversation binding consumer shutdown timed out")
+	}
 	if serverErr != nil {
 		return serverErr
 	}
@@ -607,30 +651,45 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	if strings.TrimSpace(configRoot) != "" {
 		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
 		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		mergeConfigFile(&cfg, defaultFile)
-		mergeConfigFile(&cfg, envFile)
+		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
+			return config{}, fmt.Errorf("read default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, envFile); err != nil {
+			return config{}, fmt.Errorf("read env config: %w", err)
+		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			mergeConfigFile(&cfg, versionFile)
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			if err := mergeConfigFile(&cfg, versionFile); err != nil {
+				return config{}, fmt.Errorf("read version config: %w", err)
+			}
 		}
 		return cfg, nil
 	}
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	localEnv := filepath.Join("configs", appEnv, "config.yaml")
-	mergeConfigFile(&cfg, localDefault)
-	mergeConfigFile(&cfg, localEnv)
+	if err := mergeConfigFile(&cfg, localDefault); err != nil {
+		return config{}, fmt.Errorf("read local default config: %w", err)
+	}
+	if err := mergeConfigFile(&cfg, localEnv); err != nil {
+		return config{}, fmt.Errorf("read local env config: %w", err)
+	}
 	if strings.TrimSpace(configVersion) != "" {
-		mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml"))
+		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
+			return config{}, fmt.Errorf("read local version config: %w", err)
+		}
 	}
 	return cfg, nil
 }
 
-func mergeConfigFile(cfg *config, path string) {
+func mergeConfigFile(cfg *config, path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return
+		return err
 	}
-	yaml.Unmarshal(raw, cfg)
+	if err := yaml.Unmarshal(raw, cfg); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
 }
 
 func applyEnvOverrides(cfg *config) {
@@ -653,7 +712,7 @@ func applyEnvOverrides(cfg *config) {
 	}
 }
 
-func buildRedisRouter(cfg config) *rtredis.Router {
+func buildRedisRouter(cfg config) (*rtredis.Router, map[string]string) {
 	generalScene := toSceneConfig(cfg.Redis.General)
 	routerCfg := rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
@@ -664,7 +723,9 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
 		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
-	return platformredis.MustNewRouter(routerCfg)
+	return platformredis.MustNewRouter(routerCfg), map[string]string{
+		"general": generalScene.Mode,
+	}
 }
 
 func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {

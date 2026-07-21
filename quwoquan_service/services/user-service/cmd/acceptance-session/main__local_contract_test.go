@@ -45,6 +45,26 @@ func TestAcceptanceSubjectReportOperatorUsesFixedLeastPrivilegeProfile(t *testin
 	}
 }
 
+func TestAcceptanceSubjectFilterCatalogPublisherUsesServiceScopeOnly(t *testing.T) {
+	subject, err := acceptanceSubject(
+		"content-filter-catalog-publisher",
+		"publisher-account",
+		"publisher-persona",
+	)
+	if err != nil {
+		t.Fatalf("acceptanceSubject: %v", err)
+	}
+	if !slices.Equal(subject.Roles, []string{"service"}) {
+		t.Fatalf("publisher roles mismatch: %v", subject.Roles)
+	}
+	if !slices.Equal(subject.Scopes, []string{"content.filter_catalog.manage"}) {
+		t.Fatalf("publisher scopes mismatch: %v", subject.Scopes)
+	}
+	if len(subject.Permissions) != 0 {
+		t.Fatalf("publisher must not gain unrelated permissions: %v", subject.Permissions)
+	}
+}
+
 func TestAcceptanceSubjectRejectsUnknownProfile(t *testing.T) {
 	if _, err := acceptanceSubject(
 		"arbitrary-admin",

@@ -440,7 +440,6 @@
 - `quwoquan_app/lib/ui/content/entry/services/create_draft_session_controller.dart`
 - `quwoquan_app/lib/ui/content/entry/services/create_page_provider_bridge.dart`
 - `quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart`
-- `quwoquan_app/lib/ui/content/entry/services/ios_video_editing_service.dart`
 - `quwoquan_app/lib/ui/content/entry/services/publish_circle_services.dart`
 - `quwoquan_app/lib/ui/content/entry/widgets/article_editor.dart`
 - `quwoquan_app/lib/ui/content/entry/widgets/article_editor_accessory_controls.dart`

@@ -439,6 +439,25 @@ type PostDetailReader interface {
 	FindPostDetail(ctx context.Context, postID PostID) (PostDetailSlice, bool, error)
 }
 
+// MediaReferencedPostSlice 是原图授权所需的最小 Post 可见性投影。
+// 它不泄露正文或媒体 URL；调用方只能将其交给 Post 的可见性 facade 判定。
+type MediaReferencedPostSlice struct {
+	PostID           PostID         `bson:"_id"`
+	AuthorPersonaID  PersonaID      `bson:"authorId"`
+	Status           PostStatus     `bson:"status"`
+	Visibility       PostVisibility `bson:"visibility"`
+	ModerationStatus string         `bson:"moderationStatus"`
+}
+
+// MediaReferencedPostReader 按媒体引用读取候选 Post，供 Post application
+// 统一执行已发布、审核、拉黑和 viewer 可见性判定。它不是 MediaAsset 查询端口。
+type MediaReferencedPostReader interface {
+	ListPostsReferencingMedia(
+		ctx context.Context,
+		mediaAssetID string,
+	) ([]MediaReferencedPostSlice, error)
+}
+
 type AuthorPostReader interface {
 	ListAuthorPosts(ctx context.Context, request AuthorPostReadRequest) (AuthorPostPageSlice, error)
 }

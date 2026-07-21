@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
@@ -29,6 +30,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/microphone_permission_guard.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
@@ -113,6 +115,21 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     final notifier = ref.read(chatMessageProvider(conversationId).notifier);
     await notifier.loadMessages();
     final marked = await notifier.markConversationRead();
+    unawaited(
+      ref
+          .read(chatInteractionTelemetryTrackerProvider)
+          .track(
+            action: ChatInteractionAction.readWatermark,
+            outcome: marked
+                ? ChatInteractionOutcome.succeeded
+                : ChatInteractionOutcome.failed,
+            watermarkResult: marked
+                ? ChatWatermarkResult.advanced
+                : ChatWatermarkResult.failed,
+            pageName: PageNames.chatDetail,
+            surfaceId: AppUiSurfaces.chatDetail.id,
+          ),
+    );
     if (!marked || !mounted) {
       return;
     }

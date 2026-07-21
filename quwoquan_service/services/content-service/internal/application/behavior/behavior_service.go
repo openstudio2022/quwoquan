@@ -31,6 +31,8 @@ type BehaviorEventInput struct {
 	OccurredAt    string `json:"occurredAt"`
 	State         string `json:"state"`
 	UserID        string `json:"userId"`
+	// PersonaID 只由 HTTP verified principal 注入，禁止客户端通过行为 payload 伪造。
+	PersonaID     string `json:"-"`
 	DeviceActorID string `json:"deviceActorId"`
 	SessionID     string `json:"sessionId"`
 	FeedSessionID string `json:"feedSessionId"`
@@ -356,6 +358,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			ClientEventID:          clientEventID,
 			State:                  strings.TrimSpace(eventInput.State),
 			UserID:                 userID,
+			PersonaID:              strings.TrimSpace(eventInput.PersonaID),
 			DeviceActorID:          strings.TrimSpace(eventInput.DeviceActorID),
 			SessionID:              strings.TrimSpace(eventInput.SessionID),
 			FeedSessionID:          strings.TrimSpace(eventInput.FeedSessionID),
@@ -525,6 +528,12 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	}
 	if s.feedback != nil {
 		for _, signal := range signals {
+			if strings.TrimSpace(signal.FeedRequestID) == "" {
+				// 非推荐入口的行为没有与最终下发曝光关联的 requestId。
+				// 它仍已进入权威行为事实、实时 HotPath 和特征投影，但不能写入
+				// rec_learning_events 伪装为可训练反馈。
+				continue
+			}
 			if err := s.feedback.RecordEngagement(ctx, signal, 0); err != nil {
 				return err
 			}

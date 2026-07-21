@@ -23,14 +23,23 @@ def _read_object(path: Path, *, issues: list[str]) -> dict[str, object] | None:
     return value
 
 
-def _document_digest(
+def _document_digests(
     document: dict[str, object], *, path: Path, issues: list[str]
-) -> SourceDigest | None:
+) -> tuple[SourceDigest, ...] | None:
+    raw_value = document.get("sourceDigests")
+    if not isinstance(raw_value, list):
+        issues.append(f"{path}: sourceDigests must be an array")
+        return None
     try:
-        return SourceDigest.from_document(document.get("sourceDigest"))
+        source_digests = tuple(SourceDigest.from_document(item) for item in raw_value)
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")
         return None
+    values = tuple(item.digest for item in source_digests)
+    if not values or values != tuple(sorted(set(values))):
+        issues.append(f"{path}: sourceDigests must be sorted and contain no duplicates")
+        return None
+    return source_digests
 
 
 def source_digest_issues(
@@ -46,7 +55,11 @@ def source_digest_issues(
             manifest = _read_object(manifest_path, issues=issues)
             if manifest is None:
                 continue
-            digest = _document_digest(manifest, path=manifest_path, issues=issues)
+            try:
+                digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+            except SourceDigestError as exc:
+                issues.append(f"{manifest_path}: {exc}")
+                continue
             if digest is not None and digest != current:
                 issues.append(
                     f"{manifest_path}: sourceDigest drift; resume requires a new execution sequence"
@@ -61,10 +74,18 @@ def source_digest_issues(
             aggregate = _read_object(aggregate_path, issues=issues)
             if header is None or aggregate is None:
                 continue
-            digest = _document_digest(header, path=header_path, issues=issues)
-            aggregate_digest = _document_digest(aggregate, path=aggregate_path, issues=issues)
-            if digest is not None and aggregate_digest is not None and digest != aggregate_digest:
-                issues.append(f"{aggregate_path}: sourceDigest drift from release header")
+            digests = _document_digests(header, path=header_path, issues=issues)
+            aggregate_digests = _document_digests(
+                aggregate,
+                path=aggregate_path,
+                issues=issues,
+            )
+            if (
+                digests is not None
+                and aggregate_digests is not None
+                and digests != aggregate_digests
+            ):
+                issues.append(f"{aggregate_path}: sourceDigests drift from release header")
     return issues
 
 

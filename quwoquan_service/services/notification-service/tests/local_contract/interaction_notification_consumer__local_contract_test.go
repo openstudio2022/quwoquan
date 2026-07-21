@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
 	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
@@ -125,8 +126,12 @@ func newConsumerFixture(t *testing.T) (
 	if err != nil {
 		t.Fatalf("facade init: %v", err)
 	}
+	transport, err := runtimemessaging.NewRedisMessageTransport(redis, redis)
+	if err != nil {
+		t.Fatalf("message transport init: %v", err)
+	}
 	consumer, err := streamadapter.NewInteractionNotificationConsumer(
-		redis, facade, newMemoryFailureStore(), "test-consumer", nil,
+		transport, facade, newMemoryFailureStore(), "test-consumer", nil,
 	)
 	if err != nil {
 		t.Fatalf("consumer init: %v", err)

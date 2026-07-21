@@ -9,6 +9,7 @@ runtime:
   mediaImageCdnBaseUrl: https://cdn.quwoquan.com
   mediaVideoCdnBaseUrl: https://cdn.quwoquan.com
   mediaUploadBaseUrl: https://upload.quwoquan.com
+  rtcMediaConnectionUrl: wss://rtc.quwoquan.com
   currentUserId: ""
 seed:
   enabled: false

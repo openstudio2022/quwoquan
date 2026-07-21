@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
 )
 
 func insertPost(t *testing.T, doc bson.M) {
@@ -171,6 +175,250 @@ func TestListCircleDiscoveryFeed(t *testing.T) {
 	)
 }
 
+func TestListCircleDiscoveryFeed_IsReachableThroughGeneratedOperationGuard(t *testing.T) {
+	defer cleanCollections(t)
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/circles/discovery-feed?scope=recommended&sort=recommended&limit=20",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+	rtauth.RequireGeneratedOperationAuthorizationForRoute(
+		operationsecurity.ForDomain("circle"),
+		http.MethodGet,
+		"/circles/discovery-feed",
+	)(testHandler).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf(
+			"ready public discovery operation must pass generated guard, got %d: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+}
+
+func TestListCircleDiscoveryFeed_KeysetCursorAndCacheInvalidation(t *testing.T) {
+	defer cleanCollections(t)
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	circleIDs := []string{
+		createTestCircleAs(t, "缓存排序圈甲", "persona-owner-alpha"),
+		createTestCircleAs(t, "缓存排序圈乙", "persona-owner-beta"),
+		createTestCircleAs(t, "缓存排序圈丙", "persona-owner-gamma"),
+	}
+	for _, circleID := range circleIDs {
+		if _, err := mongoDB.Collection("circles").UpdateOne(
+			context.Background(),
+			bson.M{"_id": circleID},
+			bson.M{"$set": bson.M{
+				"category":          "campus",
+				"subCategory":       "photography",
+				"visibility":        "public",
+				"status":            "active",
+				"memberCount":       int64(42),
+				"weeklyActiveCount": int64(7),
+				"createdAt":         now,
+			}},
+		); err != nil {
+			t.Fatalf("prepare ordered discovery circle %s: %v", circleID, err)
+		}
+	}
+
+	path := "/circles/discovery-feed?category=campus&subCategory=photography&scope=recommended&sort=recommended&limit=1"
+	first := doCircleDiscoveryRequest(t, path, "persona-viewer")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first discovery page status=%d body=%s", first.Code, first.Body.String())
+	}
+	firstBody := decodeBody(t, first)
+	firstCircles := firstBody["circles"].([]any)
+	if len(firstCircles) != 1 {
+		t.Fatalf("first page circle count=%d", len(firstCircles))
+	}
+	firstCircle := firstCircles[0].(map[string]any)
+	firstID := fmt.Sprint(firstCircle["id"])
+	cursor := fmt.Sprint(firstBody["cursor"])
+	if cursor == "" {
+		t.Fatal("first page must return a keyset cursor")
+	}
+
+	second := doCircleDiscoveryRequest(t, path+"&cursor="+cursor, "persona-viewer")
+	if second.Code != http.StatusOK {
+		t.Fatalf("second discovery page status=%d body=%s", second.Code, second.Body.String())
+	}
+	secondBody := decodeBody(t, second)
+	secondCircles := secondBody["circles"].([]any)
+	if len(secondCircles) != 1 {
+		t.Fatalf("second page circle count=%d", len(secondCircles))
+	}
+	if got := fmt.Sprint(secondCircles[0].(map[string]any)["id"]); got == firstID {
+		t.Fatalf("keyset pagination duplicated circle %s", firstID)
+	}
+
+	if _, err := mongoDB.Collection("circles").UpdateOne(
+		context.Background(),
+		bson.M{"_id": firstID},
+		bson.M{"$set": bson.M{"name": "缓存失效后名称"}},
+	); err != nil {
+		t.Fatalf("mutate cached circle: %v", err)
+	}
+	cached := doCircleDiscoveryRequest(t, path, "persona-viewer")
+	if cached.Code != http.StatusOK {
+		t.Fatalf("cached discovery page status=%d body=%s", cached.Code, cached.Body.String())
+	}
+	cachedName := fmt.Sprint(
+		decodeBody(t, cached)["circles"].([]any)[0].(map[string]any)["name"],
+	)
+	if cachedName != fmt.Sprint(firstCircle["name"]) {
+		t.Fatalf("same cache key must return the cached slice before invalidation, got=%q", cachedName)
+	}
+
+	if err := cache.InvalidateCircleDiscoveryFeed(
+		context.Background(),
+		redisRouter.Scene("general"),
+	); err != nil {
+		t.Fatalf("invalidate discovery feed cache: %v", err)
+	}
+	invalidated := doCircleDiscoveryRequest(t, path, "persona-viewer")
+	if invalidated.Code != http.StatusOK {
+		t.Fatalf("invalidated discovery page status=%d body=%s", invalidated.Code, invalidated.Body.String())
+	}
+	invalidatedName := fmt.Sprint(
+		decodeBody(t, invalidated)["circles"].([]any)[0].(map[string]any)["name"],
+	)
+	if invalidatedName != "缓存失效后名称" {
+		t.Fatalf("cache invalidation did not reload source slice, got=%q", invalidatedName)
+	}
+}
+
+func TestListCircleDiscoveryFeed_CommercialScaleUsesIndexAndMeetsP95(t *testing.T) {
+	defer cleanCollections(t)
+
+	for _, scale := range []int{10_000, 100_000} {
+		t.Run(fmt.Sprintf("%d_circles", scale), func(t *testing.T) {
+			category := fmt.Sprintf("perf-%d", scale)
+			seedDiscoveryPerformanceCircles(t, category, scale)
+			assertDiscoveryRecommendedExplainUsesIndex(t, category)
+
+			durations := make([]time.Duration, 0, 20)
+			path := fmt.Sprintf(
+				"/circles/discovery-feed?category=%s&subCategory=scale&scope=recommended&sort=recommended&limit=20",
+				category,
+			)
+			for run := 0; run < 20; run++ {
+				if err := cache.InvalidateCircleDiscoveryFeed(
+					context.Background(),
+					redisRouter.Scene("general"),
+				); err != nil {
+					t.Fatalf("invalidate before source-read measurement: %v", err)
+				}
+				startedAt := time.Now()
+				response := doCircleDiscoveryRequest(t, path, "persona-performance")
+				durations = append(durations, time.Since(startedAt))
+				if response.Code != http.StatusOK {
+					t.Fatalf(
+						"scale=%d run=%d status=%d body=%s",
+						scale,
+						run,
+						response.Code,
+						response.Body.String(),
+					)
+				}
+			}
+			sort.Slice(durations, func(left, right int) bool {
+				return durations[left] < durations[right]
+			})
+			p95Index := (len(durations)*95 + 99) / 100
+			p95 := durations[p95Index-1]
+			if p95 > 800*time.Millisecond {
+				t.Fatalf("scale=%d discovery feed p95=%s exceeds 800ms", scale, p95)
+			}
+			t.Logf("scale=%d discovery feed source-read p95=%s", scale, p95)
+		})
+	}
+}
+
+func seedDiscoveryPerformanceCircles(t *testing.T, category string, count int) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const batchSize = 1_000
+	for start := 0; start < count; start += batchSize {
+		end := start + batchSize
+		if end > count {
+			end = count
+		}
+		documents := make([]any, 0, end-start)
+		for index := start; index < end; index++ {
+			documents = append(documents, bson.M{
+				"_id":               fmt.Sprintf("%s-%06d", category, index),
+				"name":              fmt.Sprintf("商业规模圈子-%06d", index),
+				"ownerId":           "persona-performance-owner",
+				"category":          category,
+				"subCategory":       "scale",
+				"status":            "active",
+				"visibility":        "public",
+				"memberCount":       int64(index % 100),
+				"weeklyActiveCount": int64(index % 50),
+				"createdAt":         now.Add(-time.Duration(index) * time.Second),
+				"updatedAt":         now,
+			})
+		}
+		if _, err := mongoDB.Collection("circles").InsertMany(ctx, documents); err != nil {
+			t.Fatalf(
+				"seed discovery scale %s[%d:%d]: %v",
+				category,
+				start,
+				end,
+				err,
+			)
+		}
+	}
+}
+
+func assertDiscoveryRecommendedExplainUsesIndex(t *testing.T, category string) {
+	t.Helper()
+	var explain bson.M
+	err := mongoDB.RunCommand(
+		context.Background(),
+		bson.D{{Key: "explain", Value: bson.D{
+			{Key: "find", Value: "circles"},
+			{Key: "filter", Value: bson.M{
+				"status":      "active",
+				"visibility":  "public",
+				"category":    category,
+				"subCategory": "scale",
+			}},
+			{Key: "sort", Value: bson.D{
+				{Key: "memberCount", Value: -1},
+				{Key: "weeklyActiveCount", Value: -1},
+				{Key: "_id", Value: -1},
+			}},
+		}}},
+	).Decode(&explain)
+	if err != nil {
+		t.Fatalf("explain discovery query: %v", err)
+	}
+	serialized, err := json.Marshal(explain)
+	if err != nil {
+		t.Fatalf("marshal discovery explain: %v", err)
+	}
+	plan := string(serialized)
+	if !contains(plan, `"stage":"IXSCAN"`) || contains(plan, `"stage":"COLLSCAN"`) {
+		t.Fatalf("discovery query must use declared index, explain=%s", plan)
+	}
+}
+
+func contains(value, fragment string) bool {
+	for index := 0; index+len(fragment) <= len(value); index++ {
+		if value[index:index+len(fragment)] == fragment {
+			return true
+		}
+	}
+	return false
+}
+
 func doCircleDiscoveryRequest(
 	t *testing.T,
 	path string,
@@ -243,6 +491,53 @@ func TestGetCircleFeed_Empty(t *testing.T) {
 	}
 	if cursor, ok := body["cursor"].(string); ok && cursor != "" {
 		t.Errorf("expected empty cursor, got %q", cursor)
+	}
+}
+
+func TestGetCircleFeed_HidesInactiveAndNonPublicCircles(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		updates bson.M
+	}{
+		{
+			name: "private",
+			updates: bson.M{
+				"visibility": "private",
+			},
+		},
+		{
+			name: "archived",
+			updates: bson.M{
+				"status": "archived",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer cleanCollections(t)
+			circleID := createTestCircle(t, "不可公开读取的圈子")
+			if _, err := mongoDB.Collection("circles").UpdateOne(
+				context.Background(),
+				bson.M{"_id": circleID},
+				bson.M{"$set": tc.updates},
+			); err != nil {
+				t.Fatalf("set non-public circle state: %v", err)
+			}
+
+			rec := doRequest(
+				t,
+				http.MethodGet,
+				fmt.Sprintf("/circles/%s/feed?limit=10", circleID),
+				nil,
+			)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf(
+					"public feed must not disclose %s circle, got %d: %s",
+					tc.name,
+					rec.Code,
+					rec.Body.String(),
+				)
+			}
+		})
 	}
 }
 

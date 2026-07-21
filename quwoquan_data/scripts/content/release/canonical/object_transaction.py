@@ -14,6 +14,7 @@ from core.tree_integrity import tree_integrity_stats
 from core.schema import assert_valid
 from core.release_layout import attestation_root, payload_digest, payload_file, payload_root
 from core.media_asset_url import build_release_media_manifest
+from core.source_digest import SourceDigest, SourceDigestError
 from content.release.canonical.object_transaction_contract import (
     PACKAGE_SCHEMA,
     DRY_RUN_SCHEMA,
@@ -145,6 +146,12 @@ def build_entity_object_transaction_package(
     execution_id = _execution_id(str(execution_manifest.get("executionId") or ""))
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
+    try:
+        source_digest = SourceDigest.from_document(execution_manifest.get("sourceDigest"))
+    except SourceDigestError as exc:
+        raise ObjectTransactionError(
+            f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
+        ) from exc
     rel = _safe_rel(object_ref.removeprefix("/entity/"), label="objectRef")
     if len(rel.parts) < 3:
         raise ObjectTransactionError("entity objectRef 必须包含 domain/type/name")
@@ -329,6 +336,7 @@ def build_entity_object_transaction_package(
                 "schema": "quwoquan_data.entity_object",
                 "entityRef": str(entity.get("entityRef") or ""),
                 "executionId": execution_id,
+                "sourceDigest": source_digest.to_document(),
                 "finalContentRef": "page.md",
                 "sourceCatalogRef": source_catalog_ref.as_posix(),
                 "rightsRef": rights_ref.as_posix(),

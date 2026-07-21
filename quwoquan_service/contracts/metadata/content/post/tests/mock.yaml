@@ -103,6 +103,37 @@ error_scenarios:
     input_status: 400
     expected_dart_const: invalidArgument
 
+  - name: parse_interaction_type_invalid
+    input_code: "CONTENT.USER.interaction_type_invalid"
+    input_status: 400
+    expected_dart_const: interactionTypeInvalid
+    expected_recovery_action: surface
+
+  - name: parse_interaction_cursor_invalid
+    input_code: "CONTENT.USER.interaction_cursor_invalid"
+    input_status: 400
+    expected_dart_const: interactionCursorInvalid
+    expected_recovery_action: refresh
+
+  - name: parse_interaction_owner_forbidden
+    input_code: "CONTENT.USER.interaction_owner_forbidden"
+    input_status: 403
+    expected_dart_const: interactionOwnerForbidden
+    expected_recovery_action: surface
+
+  - name: parse_interaction_read_model_unavailable
+    input_code: "CONTENT.SYSTEM.interaction_read_model_unavailable"
+    input_status: 503
+    expected_dart_const: interactionReadModelUnavailable
+    expected_recovery_action: retry
+    expected_recovery_after: 3
+
+  - name: parse_publication_rejected
+    input_code: "CONTENT.USER.publication_rejected"
+    input_status: 422
+    expected_dart_const: publicationRejected
+    expected_recovery_action: surface
+
   - name: parse_assistant_mention_context_missing
     input_code: "CONTENT.USER.assistant_mention_context_missing"
     input_status: 400

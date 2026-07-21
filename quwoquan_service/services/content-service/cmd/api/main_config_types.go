@@ -69,9 +69,6 @@ type config struct {
 	} `yaml:"rec_model_service"`
 
 	Embedding struct {
-		Endpoint string `yaml:"endpoint"`
-		APIKey   string `yaml:"api_key"`
-		Model    string `yaml:"model"`
 		// Enabled 开启 embedding 写入管线（PostPublished → posts.embedding）。
 		Enabled bool `yaml:"enabled"`
 		// VectorRecallEnabled 开启向量召回读通道（S0 flag-off；S1 内容池规模
@@ -95,11 +92,12 @@ type config struct {
 	// MediaProcessing 配置强制启用的进程内 Worker；它是 media outbox
 	// 唯一生产 consumer。
 	MediaProcessing struct {
-		IntervalMs   int    `yaml:"interval_ms"`
-		FFmpegPath   string `yaml:"ffmpeg_path"`
-		FFprobePath  string `yaml:"ffprobe_path"`
-		WorkDir      string `yaml:"work_dir"`
-		JobTimeoutMs int    `yaml:"job_timeout_ms"`
+		IntervalMs          int    `yaml:"interval_ms"`
+		FFmpegPath          string `yaml:"ffmpeg_path"`
+		FFprobePath         string `yaml:"ffprobe_path"`
+		WorkDir             string `yaml:"work_dir"`
+		JobTimeoutMs        int    `yaml:"job_timeout_ms"`
+		MinWorkDirFreeBytes int64  `yaml:"min_work_dir_free_bytes"`
 	} `yaml:"media_processing"`
 
 	// ES is the write side of the unified search index (content.search_index_worker).

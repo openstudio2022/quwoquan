@@ -19,9 +19,6 @@ type AMapClient struct {
 }
 
 func NewAMapClient(baseURL, key string, client *http.Client) *AMapClient {
-	if strings.TrimSpace(baseURL) == "" {
-		baseURL = "https://restapi.amap.com"
-	}
 	return &AMapClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		key:     key,
@@ -29,9 +26,13 @@ func NewAMapClient(baseURL, key string, client *http.Client) *AMapClient {
 	}
 }
 
-func (c *AMapClient) Name() model.Provider { return model.ProviderAMap }
-
-func (c *AMapClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.POI, error) {
+func (c *AMapClient) Nearby(
+	ctx context.Context,
+	q model.NearbyQuery,
+) (_ []model.POI, err error) {
+	defer func() {
+		err = normalizeLocationProviderError(ctx, err)
+	}()
 	if strings.TrimSpace(c.key) == "" {
 		return nil, fmt.Errorf("amap key is empty")
 	}
@@ -83,7 +84,6 @@ func (c *AMapClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.P
 		distance, _ := strconv.Atoi(poi.Distance)
 		items = append(items, model.POI{
 			ID:             poi.ID,
-			Provider:       model.ProviderAMap,
 			Name:           poi.Name,
 			Address:        poi.Address,
 			Latitude:       lat,
@@ -95,7 +95,13 @@ func (c *AMapClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.P
 	return items, nil
 }
 
-func (c *AMapClient) Search(ctx context.Context, q model.SearchQuery) ([]model.POI, error) {
+func (c *AMapClient) Search(
+	ctx context.Context,
+	q model.SearchQuery,
+) (_ []model.POI, err error) {
+	defer func() {
+		err = normalizeLocationProviderError(ctx, err)
+	}()
 	if strings.TrimSpace(c.key) == "" {
 		return nil, fmt.Errorf("amap key is empty")
 	}
@@ -146,7 +152,6 @@ func (c *AMapClient) Search(ctx context.Context, q model.SearchQuery) ([]model.P
 		lat, lng := parseLngLat(poi.Location)
 		items = append(items, model.POI{
 			ID:        poi.ID,
-			Provider:  model.ProviderAMap,
 			Name:      poi.Name,
 			Address:   poi.Address,
 			Latitude:  lat,

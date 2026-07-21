@@ -1,13 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:livekit_client/livekit_client.dart'
-    show VideoTrackRenderer, VideoViewFit;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
@@ -136,7 +135,10 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
     final speaker = widget.activeSpeaker;
     final videoTrack = speaker?.videoTrack;
     if (speaker?.isCameraOn == true && videoTrack != null) {
-      return VideoTrackRenderer(videoTrack, fit: VideoViewFit.cover);
+      return RtcVideoTrackRenderer(
+        track: videoTrack,
+        fit: RtcVideoViewFit.cover,
+      );
     }
 
     return Container(

@@ -19,7 +19,7 @@ scenarios:
     description: 来电经 realtime 单通道推送，接听建连后挂断，通话记录回读
     test_type: ui_journey
     user_acceptance_status: pending
-    user_acceptance_block_reason: 需要 Gamma production Remote、真实 LiveKit 媒体轨道与双设备 readback；禁止用 Provider override 或假 LiveKit 代替
+    user_acceptance_block_reason: 需要 Gamma production Remote、真实媒体传输 adapter 轨道与双设备 readback；禁止用 Provider override 或假 adapter 代替
     api_contract_flow: quwoquan_service/services/rtc-service/tests/api_integration/call_timeout_and_connected_contract__api_integration_test.go
     actors:
       app: lib/ui/rtc/pages/incoming_call_page.dart
@@ -29,8 +29,8 @@ scenarios:
     steps:
       - caller initiates a one-to-one call
       - callee receives call.ringing through rt:rtc:user channel
-      - callee answers, both join the LiveKit room via server-issued livekitUrl
-      - caller and callee invoke ReportMediaConnected after LiveKit media becomes connected
+      - callee answers, both join the media room via server-issued mediaAccess
+      - caller and callee invoke ReportMediaConnected after media transport becomes connected
       - caller hangs up and both ends observe call.ended
     assertions:
       - ringing arrives over the single realtime channel (no /rtc/signal endpoint)
@@ -43,7 +43,7 @@ scenarios:
     description: 建连成功后发生短暂抖动，RTC 服务恢复会话并保持控制面策略一致
     test_type: ui_journey
     user_acceptance_status: pending
-    user_acceptance_block_reason: 需要 Gamma production Remote 弱网注入、真实 LiveKit 重连与 QoE series readback
+    user_acceptance_block_reason: 需要 Gamma production Remote 弱网注入、真实媒体传输 adapter 重连与 QoE series readback
     api_contract_flow: quwoquan_service/services/rtc-service/tests/api_integration/call_timeout_and_connected_contract__api_integration_test.go
     actors:
       app: lib/ui/rtc/pages/voice_call_page.dart

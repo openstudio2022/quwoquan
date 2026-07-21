@@ -27,6 +27,7 @@ tests:
     - quwoquan_app/test/local_contract/ui/user/providers/share_interaction_provider__local_contract_test.dart
   api_integration:
     - quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
-  user_acceptance:
-    - quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+  # UpdateProfileInteractionState 是后台状态写入；其真实写入/幂等由
+  # api_integration 覆盖，不能把只读互动页面误记为 UAT 证据。
+  user_acceptance: []
 environments: []

@@ -12,18 +12,20 @@ func (h *ChatHandler) handleListSelectableGroupConversations(w http.ResponseWrit
 	limit := queryInt(r, "limit", 50)
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
 	source := strings.TrimSpace(r.URL.Query().Get("source"))
-	rows, err := h.memberService.ListSelectableGroupConversations(
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	page, err := h.memberService.ListSelectableGroupConversations(
 		r.Context(),
 		resolveUserID(r),
 		query,
 		source,
 		limit,
+		cursor,
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": rows, "cursor": ""})
+	writeJSON(w, http.StatusOK, page)
 }
 
 // handleListSelectableGroupContactMembers 处理
@@ -37,16 +39,18 @@ func (h *ChatHandler) handleListSelectableGroupContactMembers(w http.ResponseWri
 	)
 	limit := queryInt(r, "limit", 100)
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
-	items, err := h.memberService.ListSelectableGroupContactMembers(
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	page, err := h.memberService.ListSelectableGroupContactMembers(
 		r.Context(),
 		resolveUserID(r),
 		conversationID,
 		query,
 		limit,
+		cursor,
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": ""})
+	writeJSON(w, http.StatusOK, page)
 }

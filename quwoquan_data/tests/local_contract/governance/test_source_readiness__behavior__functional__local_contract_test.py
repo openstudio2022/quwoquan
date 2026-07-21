@@ -160,6 +160,32 @@ def test_balanced_freeze_round_robins_district_type_cells():
     assert [row["selection"]["provinceRank"] for row in frozen] == [1, 2, 3, 4]
 
 
+def test_wikipedia_candidate_resolves_location_and_reuses_readable_evidence():
+    import governance.coverage.source_readiness as mod
+
+    candidates = mod._dedupe_candidates(
+        [
+            {
+                "name": "中国湿地博物馆",
+                "province": "浙江省",
+                "source": "wiki_category",
+                "identityRefs": {"qid": "Q22100874", "wikipediaPageId": 1},
+                "typeTagRefs": ["Entity/地点/博物馆"],
+                "extract": "中国湿地博物馆位于浙江省杭州市西湖区。",
+            }
+        ],
+        provinces=["浙江省"],
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["city"] == "杭州市"
+    assert candidates[0]["district"] == "西湖区"
+    evidence = mod._wikipedia_evidence(candidates[0])
+    assert evidence is not None
+    assert evidence["sourceKind"] == "wikipedia"
+    assert evidence["matchConfidence"] == 1.0
+
+
 def test_wikipedia_discovery_candidate_resolves_location_and_reuses_fetch_evidence(
     monkeypatch,
 ):

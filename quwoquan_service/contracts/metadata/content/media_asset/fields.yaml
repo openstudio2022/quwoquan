@@ -106,6 +106,16 @@ fields:
     ops_exposure: read_write
     description: processing、ready、rejected 或 deleted。图片和视频均须经服务端验证与归一化，只有 ready 后可被发布和投影。
 
+  - name: processingVersion
+    source: processingVersion
+    type: int
+    constraints: [NULLABLE, POSITIVE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 图片/视频 descriptor 与 public slice 写入时的 MediaAsset 聚合版本。后续 accessPolicy 或 coverStrategy 变更可以推进 aggregate version，但不得重解释既有处理产物的 versioned slice key。
+
   - name: processorProfile
     source: processorProfile
     type: string
@@ -144,7 +154,67 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 图片归一化基线切片的真实 MIME；CDN 可再按 media_variant_profiles 动态转为 WebP。
+    description: 图片归一化基线切片的真实 MIME；CDN 只可按 image_variant_policy 生成的 profile 再转为 WebP。
+
+  - name: imageDominantColor
+    source: imageDominantColor
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 受信处理器从归一化基线生成的 #RRGGBB 主色，仅用于图片占位与骨架过渡。
+
+  - name: imageLqip
+    source: imageLqip
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: redact
+    api_exposure: read
+    ops_exposure: read
+    description: 受尺寸上限约束的低清 data URI 占位，不含原始 EXIF、对象 key 或用户身份。
+
+  - name: imageContentProfile
+    source: imageContentProfile
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 受信处理器输出的渲染内容画像（photographic 或 alpha_graphic），不承载安全审核结论。
+
+  - name: imageDerivativePolicyVersion
+    source: imageDerivativePolicyVersion
+    type: int
+    constraints: [NULLABLE, POSITIVE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 生成该 descriptor 的 image_variant_policy 版本；与 processingVersion 一起冻结可回滚交付语义。
+
+  - name: activeImageDescriptorRevision
+    source: activeImageDescriptorRevision
+    type: int
+    constraints: [NULLABLE, POSITIVE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 当前对外投影的图片 descriptor revision；切换只能由 MediaAsset CAS 激活或回滚。
+
+  - name: imageDescriptorRevisions
+    source: imageDescriptorRevisions
+    type: "[]ImageDescriptorRevision"
+    constraints: [NULLABLE, MAX_ITEMS_32]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 有界的图片 descriptor 历史；保留旧 normalized/public slice 身份以支持审计回滚，不创建 variant MediaAsset。
 
   - name: imageNormalizedObjectKey
     source: imageNormalizedObjectKey

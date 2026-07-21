@@ -82,10 +82,12 @@ uat_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/content-service/tests/api_integration/post_text_publication__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/post_publication_recovery__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/post_publication_recovery__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/media_processing_worker__data_consistency__api_integration_test.go
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_media_publication_lifecycle_probe.py
+      - file: quwoquan_app/test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -367,6 +369,7 @@ uat_acceptance:
     - message-direct-and-greeting-upgrade
     - message-group-entry-matrix
     - message-assistant-in-conversation
+    - message-call-and-offline-delivery
     done_when:
     - 互关用户从 TA 的主页点击消息，可创建或复用 direct conversation 并完成发送/接收。
     - 非互关用户只能先打招呼；对方回复后升级为正式 direct conversation；未回复前不进入普通会话列表。
@@ -374,6 +377,10 @@ uat_acceptance:
     - 用户可从兴趣圈子进入默认公共群或自建群；从学校组织主页进入院系/班级节点所绑定的班级群会话。
     - 用户可从共享主页的相关群组卡片进入真实 Circle/CircleGroup 绑定的群会话，主页本身不拥有 conversation。
     - 用户可在 1v1 或群会话中邀请小趣并 @小趣，收到 assistant_reply，且消息进入同一同步和审计链路。
+    - 合法关系或会话中的用户可发起、接听、拒绝、取消和结束音视频通话；在线事件与离线
+      ring/cancel 可靠送达，结束后回到原会话并产生 system_call_log。
+    - Provider 不可用、权限拒绝、弱网重连和超时均有结构化终态；Gamma/Prod 不以 Mock、
+      站内伪来电或固定成功替代真实 APNs/FCM/LiveKit 证据。
     experience_points:
     - 1v1 建聊规则可见，用户不需要通过报错猜测关系门。
     - 圈子、组织、群、会话、主页相关群的层级清晰，不混用“实体/圈子/群聊”。
@@ -382,6 +389,7 @@ uat_acceptance:
     - 1v1 消息发送到对端收到 p99 <= 200ms。
     - 群消息发送到在线成员收到 p99 <= 500ms。
     - 会话内 @小趣 首个可见响应 p95 <= 3s，失败时结构化降级。
+    - 在线来电到达 <= 1s，离线 Provider 到设备可见 <= 5s，强网媒体建立 <= 3s。
     tests:
       planned: []
       recorded:

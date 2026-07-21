@@ -50,6 +50,51 @@ domain_acceptance:
         - gamma
       supporting: []
     notes: []
+  DA2:
+    title: 圈子发现聚合读模型契约
+    done_when:
+    - ListCircleDiscoveryFeed 是圈子频道唯一聚合读接口；服务端完成 category、subCategory、scope、可见性和成员范围过滤，App 不得 listCircles 后逐圈拉取 feed。
+    - 默认 recommended 首屏只有一次 discovery-feed 请求；mine 仅由已认证 Persona 主动切换后按需请求，匿名 mine 不返回成员数据。
+    - CircleDiscoveryFeedPageSlice 与 CircleFeedPageSlice 均为 metadata 生成的强类型 Slice；排序、keyset cursor、同分 tie-breaker、placement 归属与必填字段可由 ContractGraph 验证。
+    - discovery feed 读缓存 TTL 为 60 秒，缓存键按 persona、scope、category、subCategory、sort、cursor 隔离；Circle、Membership、Post、Placement 变化会失效相关切片。
+    - 聚合查询具有索引/explain 与 10k/100k 数据集 P95 不超过 800ms 的证据，不得以单 HTTP 请求掩盖存储 N+1。
+    boundary_points:
+    - CircleDiscoveryFeed 只读 Circle、CircleMembership、Post、CirclePostPlacement 的投影，不加载 Circle 聚合或维护第二套成员/内容事实。
+    - GetCircleFeed 与 discovery feed 共用 CircleFeedItemView 的 placement/post 强类型表达；不得以 Post.toMap 或动态 wire map 补展示字段。
+    tests:
+      planned:
+      - quwoquan_service/services/circle-service/tests/local_contract/circle_discovery_feed_cache__local_contract_test.go
+      - quwoquan_service/services/circle-service/tests/api_integration/circle_discovery_feed__api_integration_test.go
+      - quwoquan_app/test/local_contract/ui/circle/pages/home_circles_hub_page__local_contract_test.dart
+      - quwoquan_app/test/api_integration/cloud/circle/circle_discovery_feed__api_integration_test.dart
+      - quwoquan_app/test/user_acceptance/patrol/circle/circle_commercial_visual_journey__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: da2_local_contract
+        cases:
+        - local_contract.circle_community.domain_service.da2.da2_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: da2_api_integration
+        cases:
+        - api_integration.circle_community.domain_service.da2.da2_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: da2_user_acceptance
+        cases:
+        - user_acceptance.circle_community.domain_service.da2.da2_user_acceptance
+        envs:
+        - gamma_local
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

@@ -11,12 +11,14 @@ import 'package:quwoquan_app/application/user/profile/profile_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
@@ -155,6 +157,36 @@ class _RecordingBlockWriter implements BlockCommandWriter {
       idempotentReplay: false,
       updatedAt: DateTime.utc(2026, 7, 20),
     );
+  }
+}
+
+class _EmptyIntersectionRepository implements IntersectionRepository {
+  const _EmptyIntersectionRepository();
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 20,
+  }) async {
+    return const <IntersectionReason>[];
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) async {
+    return const <IntersectionReason>[];
   }
 }
 
@@ -355,6 +387,9 @@ Widget _scopedApp({
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _ThrowingCapabilityRepository(),
+      ),
+      intersectionRepositoryProvider.overrideWithValue(
+        const _EmptyIntersectionRepository(),
       ),
       ...overrides,
     ],

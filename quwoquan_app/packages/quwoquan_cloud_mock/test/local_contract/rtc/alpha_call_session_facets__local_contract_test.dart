@@ -32,26 +32,23 @@ void main() {
       );
     });
 
-    test(
-      'lifecycle commands preserve typed response and livekit config',
-      () async {
-        final initiated = await facets.initiateCall(
-          RtcInitiateCallCommand(
-            callType: 'video',
-            inviteeIds: const <String>['fixture_user_friend'],
-            conversationId: 'fixture_conversation',
-          ),
-        );
+    test('lifecycle commands preserve typed media access', () async {
+      final initiated = await facets.initiateCall(
+        RtcInitiateCallCommand(
+          callType: 'video',
+          inviteeIds: const <String>['fixture_user_friend'],
+          conversationId: 'fixture_conversation',
+        ),
+      );
 
-        expect(initiated.session.status, 'ringing');
-        expect(initiated.livekitUrl, isNotEmpty);
-        final answered = await facets.answerCall(
-          RtcCallIdCommand(callId: initiated.session.callId),
-        );
-        expect(answered.session.status, 'in_call');
-        expect(answered.token, isNotEmpty);
-      },
-    );
+      expect(initiated.session.status, 'ringing');
+      expect(initiated.mediaAccess.accessToken, isNotEmpty);
+      final answered = await facets.answerCall(
+        RtcCallIdCommand(callId: initiated.session.callId),
+      );
+      expect(answered.session.status, 'in_call');
+      expect(answered.mediaAccess.accessToken, isNotEmpty);
+    });
 
     test(
       'participant and media facets update the same CallSession aggregate',

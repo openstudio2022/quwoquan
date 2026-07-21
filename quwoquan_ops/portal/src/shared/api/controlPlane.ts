@@ -531,6 +531,7 @@ export interface ProductEventQuery {
   pageName?: string;
   appVersion?: string;
   networkClass?: ProductTelemetryNetworkClass;
+  result?: string;
   errorCode?: string;
   sessionId?: string;
   from?: string;
@@ -612,7 +613,7 @@ export interface ProductL1L4AlertState {
 export interface ProductL1L4MetricsCoverage {
   totalMetrics: number;
   liveMetrics: number;
-  fallbackMetrics: number;
+  unavailableMetrics: number;
   eventSignals: number;
 }
 
@@ -1147,16 +1148,21 @@ export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
   return payload.items;
 }
 
+export type GrayRoutingStage = 'gray-initial' | 'carry-on' | 'full';
+
+export interface GrayRoutingStageDimensions {
+  appVersions: string[];
+  userIds: string[];
+  provinces: string[];
+  carriers: string[];
+}
+
 export interface GrayRoutingPolicyResponse {
   policy: {
     enabled: boolean;
     grayUpstream: string;
-    dimensions: {
-      appVersions: string[];
-      userIds: string[];
-      provinces: string[];
-      carriers: string[];
-    };
+    grayUpstreamTlsInsecureSkipVerify: boolean;
+    stageDimensions: Record<GrayRoutingStage, GrayRoutingStageDimensions>;
   };
   sourcePath: string;
   rawYaml: string;

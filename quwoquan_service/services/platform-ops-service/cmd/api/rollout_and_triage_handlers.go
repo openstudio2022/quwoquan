@@ -39,6 +39,32 @@ type releaseStateFile struct {
 	UpdatedAt  string
 }
 
+// grayRoutingPolicyFile 是灰度 IaC 的只读 wire model。全局 dimensions 已退场；
+// 所有消费者都只能按 rollout stage 读取 stageDimensions。
+type grayRoutingPolicyFile struct {
+	Policy grayRoutingPolicy `yaml:"policy" json:"policy"`
+}
+
+type grayRoutingPolicy struct {
+	Enabled                           bool                                  `yaml:"enabled" json:"enabled"`
+	GrayUpstream                      string                                `yaml:"grayUpstream" json:"grayUpstream"`
+	GrayUpstreamTLSInsecureSkipVerify bool                                  `yaml:"grayUpstreamTlsInsecureSkipVerify" json:"grayUpstreamTlsInsecureSkipVerify"`
+	StageDimensions                   map[string]grayRoutingStageDimensions `yaml:"stageDimensions" json:"stageDimensions"`
+}
+
+type grayRoutingStageDimensions struct {
+	AppVersions []string `yaml:"appVersions" json:"appVersions"`
+	UserIDs     []string `yaml:"userIds" json:"userIds"`
+	Provinces   []string `yaml:"provinces" json:"provinces"`
+	Carriers    []string `yaml:"carriers" json:"carriers"`
+}
+
+type grayRoutingPolicyResponse struct {
+	Policy     grayRoutingPolicy `json:"policy"`
+	SourcePath string            `json:"sourcePath"`
+	RawYAML    string            `json:"rawYaml"`
+}
+
 func (s *platformService) buildProjectionSummary() (platformProjectionSummaryResponse, error) {
 	approvals, err := s.store.ListAllApprovals()
 	if err != nil {
@@ -198,15 +224,15 @@ func (s *platformService) handleGetGrayRoutingPolicy(w http.ResponseWriter, r *h
 		if err != nil {
 			continue
 		}
-		var doc map[string]any
+		var doc grayRoutingPolicyFile
 		if err := s.readYAMLInto(path, &doc); err != nil {
 			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"policy":     doc["policy"],
-			"sourcePath": path,
-			"rawYaml":    string(raw),
+		writeJSON(w, http.StatusOK, grayRoutingPolicyResponse{
+			Policy:     doc.Policy,
+			SourcePath: path,
+			RawYAML:    string(raw),
 		})
 		return
 	}

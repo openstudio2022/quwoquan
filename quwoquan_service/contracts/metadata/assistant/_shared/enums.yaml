@@ -1,4 +1,77 @@
 enums:
+  - name: CitationDestinationKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: internal
+        wire: internal
+      - name: external
+        wire: external
+
+  - name: AssistantStreamEventType
+    values:
+      - name: unknown
+        wire: ''
+      - name: runStarted
+        wire: run_started
+      - name: processReplace
+        wire: process_replace
+      - name: processAppend
+        wire: process_append
+      - name: processCommit
+        wire: process_commit
+      - name: answerDelta
+        wire: answer_delta
+      - name: completed
+        wire: completed
+      - name: failed
+        wire: failed
+      - name: cancelled
+        wire: cancelled
+
+  - name: SkillSubscriptionStatus
+    values:
+      - name: unknown
+        wire: ''
+      - name: active
+        wire: active
+      - name: paused
+        wire: paused
+      - name: archived
+        wire: archived
+
+  - name: InteractionEventType
+    values:
+      - name: unknown
+        wire: ''
+      - name: query
+        wire: query
+      - name: response
+        wire: response
+      - name: feedback
+        wire: feedback
+      - name: actionClick
+        wire: action_click
+      - name: skillTrigger
+        wire: skill_trigger
+      - name: toolCall
+        wire: tool_call
+      - name: error
+        wire: error
+
+  - name: FeedbackType
+    values:
+      - name: unknown
+        wire: ''
+      - name: thumbsUp
+        wire: thumbs_up
+      - name: thumbsDown
+        wire: thumbs_down
+      - name: rating
+        wire: rating
+      - name: text
+        wire: text
+
   - name: ProblemClass
     values:
       - name: general

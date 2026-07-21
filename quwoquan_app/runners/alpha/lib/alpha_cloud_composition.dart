@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
@@ -10,8 +11,6 @@ import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -20,7 +19,6 @@ import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verifie
 import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 import 'alpha_chat_repository.dart';
-import 'alpha_circle_query_reader.dart';
 import 'alpha_content_adapters.dart';
 import 'alpha_intersection_repository.dart';
 import 'alpha_realtime_connection_delegate.dart';
@@ -34,14 +32,21 @@ List<Override> buildAlphaCloudOverrides() {
   final contentFixture = AlphaContentRepository();
   final filterCatalog = AlphaFilterCatalogQuery();
   final footprintFixture = AlphaFootprintRepository();
-  final homepages = MockHomepageRepository();
+  final homepageFacets = AlphaHomepageFacet();
+  final homepages = HomepageFacetProjectionAdapter(
+    query: homepageFacets,
+    candidateWriter: homepageFacets,
+    claimRequestWriter: homepageFacets,
+    statusReportWriter: homepageFacets,
+  );
   final homepageReviews = AlphaHomepageReviewFacet();
   final personaRelationships = AlphaPersonaRelationshipFacet();
   final subjectFollows = AlphaSubjectFollowFacet();
   final comments = AlphaContentCommentFacet();
-  final circles = MockCircleRepository();
   final circlePlacementStore = AlphaCirclePostPlacementStore();
-  final circleQueries = AlphaCircleQueryReader(circles, circlePlacementStore);
+  final circleQueries = AlphaCircleQueryReader(
+    placements: circlePlacementStore,
+  );
   final postReactions = AlphaContentPostReactionFacet();
   final postPublication = AlphaContentPostPublicationWriter();
   final appMessages = AlphaAppMessageAdapter();
@@ -110,8 +115,8 @@ List<Override> buildAlphaCloudOverrides() {
     intersectionRepositoryProvider.overrideWithValue(intersections),
     intersectionVisitWriterProvider.overrideWithValue(intersections),
     homepageFacetSetProvider.overrideWithValue(homepages),
-    homepageIntroductionRepositoryProvider.overrideWith(
-      (ref) => const MockHomepageIntroductionRepository(),
+    homepageIntroductionRepositoryProvider.overrideWithValue(
+      HomepageIntroductionProjectionAdapter(query: homepageFacets),
     ),
     homepageReviewCommandWriterProvider.overrideWithValue(homepageReviews),
     homepageReviewQueryProvider.overrideWithValue(homepageReviews),
@@ -122,7 +127,8 @@ List<Override> buildAlphaCloudOverrides() {
       (ref, surface) => personaRelationships,
     ),
     blockedListQueryProvider.overrideWithValue(personaRelationships),
-    circleRepositoryProvider.overrideWithValue(circles),
+    circlesListQueryProvider.overrideWithValue(circleQueries),
+    circleDetailQueryProvider.overrideWithValue(circleQueries),
     circlesListDiscoveryFeedQueryProvider.overrideWithValue(circleQueries),
     circleDetailFeedQueryProvider.overrideWithValue(circleQueries),
     // user/profile production 组合根为 Remote-only；alpha 显式注入 contract

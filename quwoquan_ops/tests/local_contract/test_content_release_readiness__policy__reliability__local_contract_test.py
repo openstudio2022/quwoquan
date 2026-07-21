@@ -87,6 +87,44 @@ def test_baseline_verify__does_not_read_disposable_release_output__local_contrac
     assert "verify_env_artifact_isolation.py" not in rendered
 
 
+def test_non_prod_verify__binds_prod_purity_to_prod_target__local_contract() -> None:
+    commands = stackctl._selected_verify_commands(
+        "all",
+        env_name="alpha",
+        target_name="alpha-local",
+        profile=VerificationProfile.SMOKE,
+    )
+
+    purity_command = next(
+        command
+        for command in commands
+        if any(
+            part.endswith("verify_prod_package_purity.py")
+            for part in command
+        )
+    )
+    assert purity_command[-2:] == ["--target", "prod-hosted"]
+
+
+def test_prod_verify__passes_prod_target_to_prod_purity__local_contract() -> None:
+    commands = stackctl._selected_verify_commands(
+        "all",
+        env_name="prod",
+        target_name="prod-hosted",
+        profile=VerificationProfile.RELEASE,
+    )
+
+    purity_command = next(
+        command
+        for command in commands
+        if any(
+            part.endswith("verify_prod_package_purity.py")
+            for part in command
+        )
+    )
+    assert purity_command[-2:] == ["--target", "prod-hosted"]
+
+
 _IMPORT_SCOPE_CHECKS = [
     {"name": "api-health", "scope": "edge"},
     {"name": "media-edge-health", "scope": "media"},

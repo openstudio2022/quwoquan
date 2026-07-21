@@ -41,6 +41,9 @@ const _apiContractEnv = String.fromEnvironment(
 const _kHomeSearchChrome = ValueKey<String>('home-search-chrome');
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
+const _kEditProfileNicknameRow = ValueKey<String>('edit-profile-nickname-row');
+const _kEditProfileTextSave = ValueKey<String>('edit-profile-text-save');
+const _kEditProfileSave = ValueKey<String>('edit-profile-save');
 
 // 用户主页壳层可命中骨架 key（profile_shell / profile_header 真相源）。
 const _kProfileKeys = <ValueKey<String>>[
@@ -76,7 +79,7 @@ void main() {
         reason: '我的主页必须渲染壳层骨架（头像/身份卡，真实 bundle 非空态）',
       );
 
-      // 编辑资料入口可达：进入编辑页并返回，旅程无断点。
+      // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
       final editEntry = find.text(UITextConstants.profileEditLabel);
       expect(editEntry.evaluate(), isNotEmpty, reason: '我的主页必须提供编辑资料入口');
       await $.tester.tap(editEntry.first);
@@ -88,7 +91,7 @@ void main() {
         timeout: const Duration(seconds: 12),
       );
       expect(reachedEdit, isTrue, reason: '编辑资料页应可从我的主页进入');
-      await patrolGoTo($, AppRoutePaths.profile);
+      await _editNicknameAndVerifyProfileRefresh($);
     },
   );
 
@@ -157,6 +160,44 @@ void main() {
 }
 
 // ───────────────────────── helpers ─────────────────────────
+
+Future<void> _editNicknameAndVerifyProfileRefresh(
+  PatrolIntegrationTester $,
+) async {
+  final updatedNickname =
+      'gamma${DateTime.now().millisecondsSinceEpoch % 1000000000}';
+  final nicknameRow = find.byKey(_kEditProfileNicknameRow);
+  expect(nicknameRow.evaluate(), isNotEmpty, reason: '编辑资料页必须提供昵称编辑项');
+  await $.tester.tap(nicknameRow.first);
+  await $.pump(const Duration(milliseconds: 300));
+
+  final textField = find.byType(CupertinoTextField);
+  final reachedTextEditor = await _waitForFinderInTree(
+    $,
+    textField,
+    timeout: const Duration(seconds: 10),
+  );
+  expect(reachedTextEditor, isTrue, reason: '昵称编辑页必须加载可编辑文本框');
+  await $.tester.enterText(textField.first, updatedNickname);
+  await $.tester.tap(find.byKey(_kEditProfileTextSave));
+  await $.pump(const Duration(milliseconds: 300));
+
+  final profileSave = find.byKey(_kEditProfileSave);
+  final returnedToEditProfile = await _waitForFinderInTree(
+    $,
+    profileSave,
+    timeout: const Duration(seconds: 10),
+  );
+  expect(returnedToEditProfile, isTrue, reason: '昵称编辑保存后必须返回编辑资料页');
+  await $.tester.tap(profileSave);
+
+  final refreshedProfile = await _waitForFinderInTree(
+    $,
+    find.text(updatedNickname),
+    timeout: const Duration(seconds: 15),
+  );
+  expect(refreshedProfile, isTrue, reason: '资料保存后主页必须回读远端昵称，不能只停留在本地编辑态');
+}
 
 Future<bool> _waitForKeyInTree(
   PatrolIntegrationTester $,

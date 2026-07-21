@@ -1,0 +1,194 @@
+version: 2
+node:
+  id: capability-provider-commercial-readiness-gate
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-external-integration/capability-provider-commercial-readiness-gate
+  title: Capability 与 Provider Adapter 双层商用准出
+  parent_domain_service: runtime
+  parent_business_capability: runtime-external-integration
+scope:
+  summary: >
+    由同一版本的真实证据计算 Adapter 和 Capability 两级 readiness，并以 fail-closed
+    启动、降级、切换、回滚和 Prod deploy gate 阻断假商用。
+  in_scope:
+  - Adapter/Capability 双层状态计算、启动 preflight 和 readiness
+  - required/optional 降级语义、Provider 切换、config+image 回滚
+  - Gamma 准出与 prod gray_initial 受控验证
+  out_of_scope:
+  - 人工修改 ready 状态
+  - 用替代 Adapter、Prod smoke 或历史 report 提升目标 Adapter
+  - 未实现 provider-neutral boundary、真实 consumer 与启动 preflight 的 NATS/DNS release readiness
+gwt_acceptance:
+  GWT1_double_readiness:
+    title: Adapter 与 Capability 状态独立且证据同版本
+    given:
+    - Registry 声明多个 Adapter，其中至少一个 production-grade。
+    when:
+    - readiness compiler 聚合 Conformance、九格、观测、切换和回滚证据。
+    then:
+    - 每个 Adapter 独立计算 adapter_ready；Capability 只在至少一个生产 Adapter ready 且
+      能力级条件全部满足时为 ready。
+    done_when:
+    - 替代 Adapter 通过、旧 digest、不同 commit/image/config 或缺目标厂商证据均不能
+      提升目标 adapter_ready。
+    edge_cases:
+    - 同一 Adapter ID 指向不同 digest、报告环境错配或 evidence URI 不可读时 fail-closed。
+    contract_refs:
+    - docs/external_service_registry.yaml
+    - quwoquan_ops/environments/external_provider_bindings.yaml
+    performance_points:
+    - 全注册表状态计算 P95 不超过 10 秒。
+    tests:
+      planned:
+      - quwoquan_ops/tests/local_contract/external_provider_governance__local_contract_test.py
+      - quwoquan_ops/tests/local_contract/provider_conformance_evidence__contract__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: provider_readiness_state
+        cases:
+        - local_contract.runtime.runtime_external_integration.commercial_readiness.double_readiness
+        envs: [local]
+        test_object: quality_gate
+        quality_facet: contract
+      supporting: []
+    notes: []
+  GWT2_fail_closed_startup:
+    title: required Provider 缺失或未就绪时启动失败
+    given:
+    - Gamma/Prod Binding 声明 required 与 optional Capability。
+    when:
+    - required Binding、Secret、Adapter 初始化或健康探针缺失，或 optional Provider 不可用。
+    then:
+    - required 失败阻止进程 ready；optional 只产生结构化 unavailable/degraded。
+    done_when:
+    - readiness 端点 `/readyz` 不泄露 endpoint/Secret，Remote 失败不返回 fixture/空集合/固定成功。
+    - 每项 required Capability 的 root-scoped descriptor、composition entrypoint 与 resolver symbol 经
+      BindingCompiler 静态校验；descriptor 缺失、漂移或未消费均阻断。
+    edge_cases:
+    - Noop/Fake/InMemory/fixed-test/deterministic、空 Secret 和仅配置未初始化均不得报告 ready。
+    contract_refs:
+    - quwoquan_ops/environments/external_provider_bindings.yaml
+    - specs/feature-tree/runtime/runtime-external-integration/design.md
+    performance_points:
+    - 启动 preflight 不超过服务启动预算。
+    tests:
+      planned:
+      - quwoquan_ops/tests/acceptance/api_integration/external_provider_governance__api_integration_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: provider_fail_closed_startup
+        cases:
+        - api_integration.runtime.runtime_external_integration.commercial_readiness.fail_closed_startup
+        envs: [beta, gamma]
+        test_object: observability
+        quality_facet: availability
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: provider_startup_contract
+        cases:
+        - local_contract.runtime.runtime_external_integration.commercial_readiness.startup_contract
+        envs: [local]
+        test_object: config_release
+        quality_facet: reliability
+    notes: []
+  GWT3_switch_and_rollback:
+    title: 只在 ready Adapter 间切换并原子回滚
+    given:
+    - Primary 与 secondary 均为 production-grade 且 adapter_ready。
+    when:
+    - 触发受控切换、故障演练或回滚。
+    then:
+    - 合同/数据/幂等/callback/指标兼容，旧流量收口，config+image 成对回滚到 last-good。
+    done_when:
+    - 用户 Journey 连续、数据结果一致、指标按 release/adapter 可查询，失败时无 Mock fallback。
+    edge_cases:
+    - Secondary 未 ready、旧 callback 未收口、指标口径漂移或只回滚 config/image 之一均阻断。
+    contract_refs:
+    - specs/feature-tree/runtime/runtime-external-integration/acceptance.yaml#SIT4_switch_degrade_rollback
+    performance_points:
+    - 切换 disruption 不超过能力 SLO 声明预算。
+    tests:
+      planned:
+      - quwoquan_ops/tests/acceptance/api_integration/external_provider_governance__api_integration_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: provider_switch_rollback
+        cases:
+        - api_integration.runtime.runtime_external_integration.commercial_readiness.switch_rollback
+        envs: [beta, gamma]
+        test_object: config_release
+        quality_facet: reliability
+      supporting:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: provider_switch_user_continuity
+        cases:
+        - user_acceptance.runtime.runtime_external_integration.commercial_readiness.user_continuity
+        envs: [gamma_local]
+        test_object: workflow
+        quality_facet: experience
+    notes: []
+  GWT4_release_gate:
+    title: Gamma 九格与真实观测是 Prod deploy 前置
+    given:
+    - 某 Capability 被产品声明为 Prod required。
+    when:
+    - 执行 prod-hosted gray_initial deploy gate。
+    then:
+    - 只有当前版本 Gamma 九格、真实 logs/traces/metrics、告警和回滚证据全绿才允许继续。
+    done_when:
+    - 缺凭据、设备、远端租户或审批时保持 blocked；Prod smoke 不反写 Gamma 或 Adapter 证据。
+    edge_cases:
+    - 历史报告、其他 Adapter 报告、NOT_RUN/skip/dry-run 和不可查询观测均阻断。
+    contract_refs:
+    - specs/03_TESTING_STRATEGY.md
+    - quwoquan_ops/environments/provider_conformance_manifest.yaml
+    performance_points: []
+    tests:
+      planned:
+      - quwoquan_ops/tests/acceptance/user_acceptance/external_provider_governance__user_acceptance_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: provider_commercial_release_gate
+        cases:
+        - user_acceptance.runtime.runtime_external_integration.commercial_readiness.release_gate
+        envs: [gamma_local, prod]
+        rollout_stages: [gray_initial]
+        test_object: deploy_gate
+        quality_facet: reliability
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: provider_release_evidence_contract
+        cases:
+        - local_contract.runtime.runtime_external_integration.commercial_readiness.release_evidence
+        envs: [local]
+        test_object: deploy_gate
+        quality_facet: contract
+    notes: []
+execution:
+  local_gate:
+  - python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+  - python3 quwoquan_ops/gate/verify_output_layout.py
+  profile_gates:
+  - make gate
+  - make gate-integration ENV=beta
+  - make gate-integration ENV=gamma
+  - make gate-release ENV=gamma

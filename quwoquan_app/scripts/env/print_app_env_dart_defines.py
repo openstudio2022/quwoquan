@@ -27,6 +27,7 @@ DEFINE_KEYS = {
     "mediaImageCdnBaseUrl": "MEDIA_IMAGE_CDN_BASE_URL",
     "mediaVideoCdnBaseUrl": "MEDIA_VIDEO_CDN_BASE_URL",
     "mediaUploadBaseUrl": "MEDIA_UPLOAD_BASE_URL",
+    "rtcMediaConnectionUrl": "RTC_MEDIA_CONNECTION_URL",
     "contractFixtureProfile": "CONTRACT_FIXTURE_PROFILE",
     "currentUserId": "APP_CURRENT_USER_ID",
     "appInstanceId": "APP_INSTANCE_ID",
@@ -73,6 +74,8 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         or os.environ.get("LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL", ""),
         "mediaUploadBaseUrl": args.media_upload_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", ""),
+        "rtcMediaConnectionUrl": args.rtc_media_connection_url
+        or os.environ.get("LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL", ""),
         "contractFixtureProfile": args.contract_fixture_profile
         or os.environ.get("CONTRACT_FIXTURE_PROFILE", ""),
         "currentUserId": args.current_user_id,
@@ -105,6 +108,7 @@ def main() -> int:
     parser.add_argument("--media-image-base-url", default="")
     parser.add_argument("--media-video-base-url", default="")
     parser.add_argument("--media-upload-base-url", default="")
+    parser.add_argument("--rtc-media-connection-url", default="")
     parser.add_argument("--contract-fixture-profile", default="")
     parser.add_argument("--current-user-id", default="")
     parser.add_argument("--app-instance-id", default="")
@@ -123,6 +127,7 @@ def main() -> int:
         "mediaImageCdnBaseUrl",
         "mediaVideoCdnBaseUrl",
         "mediaUploadBaseUrl",
+        "rtcMediaConnectionUrl",
     )
     missing = [key for key in required_endpoint_keys if not values.get(key, "").strip()]
     if missing:

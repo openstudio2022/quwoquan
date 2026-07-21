@@ -51,15 +51,17 @@ extension SearchCoordinatorExecution on SearchCoordinator {
 
   Future<List<SearchInspirationCardView>> _loadDiscoverCircles() async {
     try {
-      final circles = await _coordinatorRef
-          .read(circleRepositoryProvider)
-          .listCircles(limit: 9);
+      final circles =
+          (await _coordinatorRef
+                  .read(circlesListQueryProvider)
+                  .list(CircleListQuery(limit: 9)))
+              .items;
       return circles
           .where((item) => item.name.trim().isNotEmpty)
           .take(6)
           .map(
             (item) => SearchInspirationCardView(
-              id: item.id,
+              id: item.circleId,
               title: item.name,
               subtitle: UITextConstants.searchCircleInspirationSubtitle(
                 _positiveCount(item.memberCount, item.weeklyActiveCount),

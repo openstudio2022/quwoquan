@@ -32,7 +32,6 @@ import (
 	"quwoquan_service/services/content-service/internal/application/authorimpact"
 	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 // TestLikePost verifies persona/device actors occupy disjoint reaction identities.
@@ -583,16 +582,28 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 // 归因字段，验证其可随批次贯穿。
 func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.T) {
 	ctx := context.Background()
-	userID := "user_seven_state_001"
+	runID := fmt.Sprintf("%d", time.Now().UnixNano())
+	userID := "user_seven_state_" + runID
+	visibleID := "post_ss_visible_" + runID
+	impressedID := "post_ss_impressed_" + runID
+	clickID := "post_ss_click_" + runID
 	featureColl := mongoDB.Collection("rm_recommend_feature")
 	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": userID}); err != nil {
 		t.Fatalf("clean recommend feature: %v", err)
 	}
 	feedColl := mongoDB.Collection("rm_discovery_feed")
-	contentIDs := []string{"post_ss_visible", "post_ss_impressed", "post_ss_click"}
+	contentIDs := []string{visibleID, impressedID, clickID}
 	if _, err := feedColl.DeleteMany(ctx, bson.M{"postId": bson.M{"$in": contentIDs}}); err != nil {
 		t.Fatalf("clean DiscoveryFeed seven-state fixtures: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = featureColl.DeleteMany(context.Background(), bson.M{"userId": userID})
+		_, _ = feedColl.DeleteMany(context.Background(), bson.M{"postId": bson.M{"$in": contentIDs}})
+		_, _ = mongoDB.Collection("rm_behavior_events").DeleteMany(
+			context.Background(),
+			bson.M{"userId": userID},
+		)
+	})
 	fixtures := make([]any, 0, len(contentIDs))
 	for _, contentID := range contentIDs {
 		fixtures = append(fixtures, bson.M{"postId": contentID, "viewCount": int64(0)})
@@ -609,9 +620,9 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{ClientEventID: "evt-seven-visible-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-impressed-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-click-001", OccurredAt: occurredAt, UserID: userID, ContentID: "post_ss_click", Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 	})
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)
@@ -634,9 +645,9 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 		t.Fatalf("typeEngagements[image] want >=1 (click counted as CTR numerator), got %d", got.UserFeatures.TypeEngagements["image"])
 	}
 	wantViews := map[string]int64{
-		"post_ss_visible":   0,
-		"post_ss_impressed": 1,
-		"post_ss_click":     0,
+		visibleID:   0,
+		impressedID: 1,
+		clickID:     0,
 	}
 	for contentID, want := range wantViews {
 		var row struct {
@@ -887,17 +898,14 @@ func nilLogger() *slog.Logger {
 // 需要清空积压才能保证本测试新写入的事件已投影）。
 func drainBehaviorProjection(t *testing.T, ctx context.Context) {
 	t.Helper()
-	recommendProjector := recinfra.NewRecommendFeatureProjector(mongoDB)
-	if err := recommendProjector.EnsureIndexes(ctx); err != nil {
-		t.Fatalf("ensure recommendation feature indexes: %v", err)
+	if testBehaviorProjectionRelay == nil {
+		t.Fatal("content-service api_integration requires a behavior projection relay")
 	}
-	relay := recinfra.NewBehaviorProjectionRelay(
-		mongoDB,
-		recommendProjector,
-		recinfra.NewDiscoveryFeedProjector(mongoDB),
-	).WithWatermarkLag(0)
+	testBehaviorProjectionMu.Lock()
+	defer testBehaviorProjectionMu.Unlock()
+
 	for {
-		n, err := relay.Drain(ctx, 500)
+		n, err := testBehaviorProjectionRelay.Drain(ctx, 500)
 		if err != nil {
 			t.Fatalf("behavior projection relay drain: %v", err)
 		}

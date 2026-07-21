@@ -34,13 +34,36 @@ type SelectableGroupContactMemberRow struct {
 	Source        string `json:"source"`
 }
 
+type SelectableGroupConversationPage struct {
+	Items      []SelectableGroupConversationRow `json:"items"`
+	NextCursor string                           `json:"nextCursor,omitempty"`
+}
+
+type SelectableGroupContactMemberPage struct {
+	Items      []SelectableGroupContactMemberRow `json:"items"`
+	NextCursor string                            `json:"nextCursor,omitempty"`
+}
+
+const (
+	selectableGroupPageLimit       = 50
+	selectableGroupMemberPageLimit = 100
+	selectableGroupScanBatchSize   = 100
+	maxGroupSizeForCandidateScan   = 1000
+)
+
 // mutualContactIDSet 返回 viewer 的权威互关联系人 userId 集合（已排除屏蔽与自身）。
 func (s *MemberService) mutualContactIDSet(
 	ctx context.Context,
 	userID string,
 	limit int,
 ) (map[string]struct{}, error) {
-	hits, err := s.combinedContactHits(ctx, userID, "", limit)
+	hits, err := s.combinedContactHitsWithMaxLimit(
+		ctx,
+		userID,
+		"",
+		limit,
+		maxGroupSizeForCandidateScan,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -71,11 +94,12 @@ func (s *MemberService) ListSelectableGroupConversations(
 	query string,
 	source string,
 	limit int,
-) ([]SelectableGroupConversationRow, error) {
-	limit = clampSearchLimit(limit, 50)
+	cursor string,
+) (SelectableGroupConversationPage, error) {
+	limit = clampLimit(limit, selectableGroupPageLimit, selectableGroupPageLimit)
 	source = strings.TrimSpace(source)
 	if source != "" && source != "group" && source != "circle" {
-		return nil, rterr.NewInvalidArgument(
+		return SelectableGroupConversationPage{}, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
 			"群聊来源无效",
 			"selectable group source must be group or circle",
@@ -83,59 +107,90 @@ func (s *MemberService) ListSelectableGroupConversations(
 	}
 	rows := make([]SelectableGroupConversationRow, 0, limit)
 
-	mutual, err := s.mutualContactIDSet(ctx, userID, 100)
+	mutual, err := s.mutualContactIDSet(ctx, userID, maxGroupSizeForCandidateScan)
 	if err != nil {
-		return nil, err
+		return SelectableGroupConversationPage{}, err
 	}
 	if len(mutual) == 0 {
-		return rows, nil
+		return SelectableGroupConversationPage{Items: rows}, nil
 	}
 
-	conversations, err := s.conversations.ListConversationsByUser(ctx, userID, 500, "")
-	if err != nil {
-		return nil, err
-	}
 	viewer := strings.TrimSpace(userID)
 	normalizedQuery := normalizeSearchQuery(query)
-	for _, conv := range conversations {
-		if conv.Type != "group" {
-			continue
-		}
-		if conv.Status != "" && conv.Status != "active" {
-			continue
-		}
-		circleID := strings.TrimSpace(conv.CircleId)
-		if (source == "group" && circleID != "") ||
-			(source == "circle" && circleID == "") {
-			continue
-		}
-		if normalizedQuery != "" && !strings.Contains(strings.ToLower(conv.Title), normalizedQuery) {
-			continue
-		}
-		members, err := s.members.ListMembers(ctx, conv.ID, ListMembersQuery{
-			Limit: 1000,
-			Sort:  MemberListSortJoinedAsc,
-		})
+
+	for {
+		states, err := s.userStates.ListUserStatesByConversationID(
+			ctx,
+			userID,
+			selectableGroupScanBatchSize,
+			cursor,
+		)
 		if err != nil {
-			return nil, err
+			return SelectableGroupConversationPage{}, err
 		}
-		friendCount := countMutualMembers(members, mutual, viewer)
-		if friendCount == 0 {
-			continue
+		if len(states) == 0 {
+			return SelectableGroupConversationPage{Items: rows}, nil
 		}
-		rows = append(rows, SelectableGroupConversationRow{
-			ConversationID:    conv.ID,
-			Title:             conv.Title,
-			AvatarURL:         conv.AvatarUrl,
-			CircleID:          circleID,
-			FriendMemberCount: friendCount,
-			MemberCount:       conv.MemberCount,
-		})
-		if len(rows) >= limit {
-			break
+		ids := make([]string, 0, len(states))
+		for _, state := range states {
+			ids = append(ids, state.ConversationId)
+		}
+		conversations, err := s.conversations.FindConversationsByIDs(ctx, ids)
+		if err != nil {
+			return SelectableGroupConversationPage{}, err
+		}
+		byID := make(map[string]model.Conversation, len(conversations))
+		for _, conversation := range conversations {
+			byID[conversation.ID] = conversation
+		}
+
+		for _, state := range states {
+			cursor = state.ConversationId
+			conv, found := byID[state.ConversationId]
+			if !found ||
+				conv.Type != "group" ||
+				(conv.Status != "" && conv.Status != "active") {
+				continue
+			}
+			circleID := strings.TrimSpace(conv.CircleId)
+			if (source == "group" && circleID != "") ||
+				(source == "circle" && circleID == "") {
+				continue
+			}
+			if normalizedQuery != "" &&
+				!strings.Contains(strings.ToLower(conv.Title), normalizedQuery) {
+				continue
+			}
+			members, err := s.members.ListMembers(ctx, conv.ID, ListMembersQuery{
+				Limit: maxGroupSizeForCandidateScan,
+				Sort:  MemberListSortJoinedAsc,
+			})
+			if err != nil {
+				return SelectableGroupConversationPage{}, err
+			}
+			friendCount := countMutualMembers(members, mutual, viewer)
+			if friendCount == 0 {
+				continue
+			}
+			rows = append(rows, SelectableGroupConversationRow{
+				ConversationID:    conv.ID,
+				Title:             conv.Title,
+				AvatarURL:         conv.AvatarUrl,
+				CircleID:          circleID,
+				FriendMemberCount: friendCount,
+				MemberCount:       conv.MemberCount,
+			})
+			if len(rows) == limit {
+				return SelectableGroupConversationPage{
+					Items:      rows,
+					NextCursor: cursor,
+				}, nil
+			}
+		}
+		if len(states) < selectableGroupScanBatchSize {
+			return SelectableGroupConversationPage{Items: rows}, nil
 		}
 	}
-	return rows, nil
 }
 
 // ListSelectableGroupContactMembers 返回指定群成员中与当前用户互关的联系人。
@@ -146,72 +201,96 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 	conversationID string,
 	query string,
 	limit int,
-) ([]SelectableGroupContactMemberRow, error) {
-	limit = clampSearchLimit(limit, 100)
+	cursor string,
+) (SelectableGroupContactMemberPage, error) {
+	limit = clampLimit(
+		limit,
+		selectableGroupMemberPageLimit,
+		selectableGroupMemberPageLimit,
+	)
 	conversationID = strings.TrimSpace(conversationID)
 	if conversationID == "" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleChat, "缺少会话标识", "conversationId is required")
+		return SelectableGroupContactMemberPage{}, rterr.NewInvalidArgument(rterr.ModuleChat, "缺少会话标识", "conversationId is required")
 	}
 
 	conv, err := s.conversations.FindConversationByID(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, model.ErrConversationNotFound) {
-			return nil, generated.AppErrorFromConversationNotFound("conversation not found: " + conversationID)
+			return SelectableGroupContactMemberPage{}, generated.AppErrorFromConversationNotFound("conversation not found: " + conversationID)
 		}
-		return nil, err
+		return SelectableGroupContactMemberPage{}, err
 	}
 	if conv == nil {
-		return nil, generated.AppErrorFromConversationNotFound("conversation not found: " + conversationID)
+		return SelectableGroupContactMemberPage{}, generated.AppErrorFromConversationNotFound("conversation not found: " + conversationID)
+	}
+	if _, err := s.members.FindMember(ctx, conversationID, userID); err != nil {
+		if errors.Is(err, model.ErrMemberNotFound) {
+			return SelectableGroupContactMemberPage{}, generated.AppErrorFromConversationNotFound("viewer is not a conversation member")
+		}
+		return SelectableGroupContactMemberPage{}, err
 	}
 
-	mutual, err := s.mutualContactIDSet(ctx, userID, 200)
+	mutual, err := s.mutualContactIDSet(ctx, userID, maxGroupSizeForCandidateScan)
 	if err != nil {
-		return nil, err
-	}
-
-	members, err := s.members.ListMembers(ctx, conversationID, ListMembersQuery{
-		Limit: 1000,
-		Sort:  MemberListSortDisplayNameAsc,
-	})
-	if err != nil {
-		return nil, err
+		return SelectableGroupContactMemberPage{}, err
 	}
 
 	viewer := strings.TrimSpace(userID)
 	normalizedQuery := normalizeSearchQuery(query)
 	items := make([]SelectableGroupContactMemberRow, 0, limit)
 	seen := map[string]struct{}{}
-	for _, m := range members {
-		id := strings.TrimSpace(m.UserId)
-		if id == "" || id == viewer {
-			continue
-		}
-		if m.MemberType != "" && m.MemberType != "user" {
-			continue
-		}
-		if _, ok := mutual[id]; !ok {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		if normalizedQuery != "" && !strings.Contains(strings.ToLower(m.DisplayName), normalizedQuery) {
-			continue
-		}
-		seen[id] = struct{}{}
-		items = append(items, SelectableGroupContactMemberRow{
-			ContactID:     id,
-			UserID:        id,
-			DisplayName:   m.DisplayName,
-			AvatarURL:     m.AvatarUrl,
-			RelationState: "mutual",
-			Source:        "group",
+
+	for {
+		members, err := s.members.ListMembers(ctx, conversationID, ListMembersQuery{
+			Limit:  selectableGroupScanBatchSize,
+			Cursor: cursor,
+			Query:  normalizedQuery,
+			Sort:   MemberListSortDisplayNameAsc,
 		})
-		if len(items) >= limit {
-			break
+		if err != nil {
+			return SelectableGroupContactMemberPage{}, err
+		}
+		if len(members) == 0 {
+			return SelectableGroupContactMemberPage{Items: items}, nil
+		}
+		for _, member := range members {
+			cursor = EncodeMemberListNextCursorDisplayName(
+				member.DisplayName,
+				member.UserId,
+			)
+			id := strings.TrimSpace(member.UserId)
+			if id == "" || id == viewer {
+				continue
+			}
+			if member.MemberType != "" && member.MemberType != "user" {
+				continue
+			}
+			if _, ok := mutual[id]; !ok {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			items = append(items, SelectableGroupContactMemberRow{
+				ContactID:     id,
+				UserID:        id,
+				DisplayName:   member.DisplayName,
+				AvatarURL:     member.AvatarUrl,
+				RelationState: "mutual",
+				Source:        "group",
+			})
+			if len(items) == limit {
+				return SelectableGroupContactMemberPage{
+					Items:      items,
+					NextCursor: cursor,
+				}, nil
+			}
+		}
+		if len(members) < selectableGroupScanBatchSize {
+			return SelectableGroupContactMemberPage{Items: items}, nil
 		}
 	}
-	return items, nil
 }
 
 // countMutualMembers 统计成员中属于 mutual 集合的真实用户数（排除 viewer 自身与非 user 成员）。

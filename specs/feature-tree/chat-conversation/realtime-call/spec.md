@@ -8,7 +8,8 @@
 
 ## 0. Spec Entry
 
-- **AppRoot Journey / Scenario**：`message-social-connection` 的实时行动，以及
+- **AppRoot Journey / Scenario**：
+  `message-social-connection / message-call-and-offline-delivery`，以及
   `intersection-action-to-companionship` 中经关系门禁后的通话行动；RTC 不另造第二套关系旅程。
 - **L1_domain_service**：`chat-conversation`。
 - **L2_business_capability**：`realtime-call`。
@@ -132,8 +133,9 @@ CallParticipant 是 CallSession 内嵌 owned entity，不得建立独立 Store�
 
 关键约束：
 
-- `InitiateCall`、`AnswerCall`、`JoinCall` 在响应中直接返回短期 LiveKit token 与
-  `livekitUrl`；不设置独立 token 查询 operation。
+- `InitiateCall`、`AnswerCall`、`JoinCall` 在响应中直接返回 provider-neutral
+  `mediaAccess(accessToken)`；连接地址仅由 App 环境包注入平台媒体 adapter，不设置独立凭据
+  查询 operation，也不暴露 endpoint 或媒体传输 vendor 字段。
 - 屏幕共享使用
   `POST /rtc/calls/{callId}/screen-share/start|stop`；不存在旧的无动作后缀路径。
 - RTC 不提供私有 WebSocket endpoint。CallRinging、CallAnswered、CallConnected、CallEnded、
@@ -235,7 +237,8 @@ PiP/通话条必须支持点击回流；PiP 挂断必须调用 `HangupCall` 或�
 
 - command SLO：P95 300ms、availability 99.9%（以各 operation metadata 为准）。
 - query SLO：P95 500ms、availability 99.9%。
-- LiveKit token 绑定 roomId、participantId 与 grants，由服务端配置地址并短期签发。
+- `mediaAccess.accessToken` 绑定 roomId、participantId 与 grants，由受控媒体传输 binding
+  的 adapter 短期签发；应用 API 不暴露 vendor 配置。
 - 32 人是聚合与媒体共同上限；第 33 人返回 `RTC.USER.call_full`。
 - 网络恢复不得创建第二个 CallSession；重复命令由 receipt 幂等。
 
@@ -270,6 +273,13 @@ L2 `acceptance.yaml` 保持 `partial`，并显式规划：
 - 屏幕共享 start/stop、互斥、权限与平台降级；
 - RTC media QoE emitter、rollup、readback 与阈值；
 - Gamma / Prod 受控 SLS 与 LiveKit 运行证据。
+
+`quwoquan_app/test/api_integration/cloud/rtc/rtc_api_contract_runner.dart` 已提供受控
+Gamma Remote 执行器：它只经 generated client 创建三份短期匿名会话、建立 mutual
+relationship，并验证 video `Initiate → Answer → Join → ReportMediaConnected → media
+control → screen-share → Hangup → GetCall` 和非参与者 `GetCall` 的 BOLA 拒绝。执行时
+必须显式传入 `API_CONTRACT_BASE_URL`；未注入受控 gateway/凭据时直接失败，绝不 skip、
+Mock 或伪造环境成功。该 runner 尚未取得 Gamma 执行回执，不能改变本节的 `partial` 判断。
 
 已有测试文件只能证明其实际断言，不得用“文件存在”推导上述未覆盖项已通过。
 

@@ -18,9 +18,15 @@ CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/cache"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 REPORT="${QWQ_RUN_ROOT}/app-beta-manual-report.json"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
-BETA_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/beta/release/legal-static/current/public"
+BETA_LEGAL_STATIC_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
+
+print(legal_static_deployment_package_dir("beta") / "current" / "public")
+PY
+)"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_environment_auth --shell beta beta-local)"
 
 ASSISTANT_PORT="${ASSISTANT_PORT}"
 CHAT_PORT="${CHAT_PORT}"
@@ -53,8 +59,20 @@ BETA_BACKING_COMPOSE_PROJECT_NAME="${BETA_BACKING_COMPOSE_PROJECT_NAME:-quwoquan
 BETA_POSTGRES_PORT="${BETA_POSTGRES_PORT}"
 BETA_MONGO_PORT="${BETA_MONGO_PORT}"
 BETA_REDIS_PORT="${BETA_REDIS_PORT}"
+BETA_OBJECT_STORAGE_EDGE_PORT="${BETA_OBJECT_STORAGE_EDGE_PORT}"
+BETA_REC_MODEL_PORT="${BETA_REC_MODEL_PORT}"
+BETA_NOTIFICATION_PORT="${BETA_NOTIFICATION_PORT}"
+BETA_FIXTURE_GATEWAY_PORT="${BETA_FIXTURE_GATEWAY_PORT}"
 BETA_POSTGRES_DSN="postgres://quwoquan:quwoquan@127.0.0.1:${BETA_POSTGRES_PORT}/quwoquan?sslmode=disable"
+export CONTENT_PORT
 export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT
+BETA_SERVICE_CONFIG_ROOT="$RUNTIME_CONFIG_DIR/config-root"
+BETA_REPORT_ACCOUNT_BACKFILL_FILE="$BETA_SERVICE_CONFIG_ROOT/report-account-backfill.json"
+BETA_CONTENT_RELEASE_CONFIG_VERSION="${BETA_CONTENT_RELEASE_CONFIG_VERSION:-v2026.07.21.0}"
+BETA_MODEL_CACHE_ROOT="$CACHE_DIR/model"
+eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_beta_object_storage --shell "$BETA_OBJECT_STORAGE_EDGE_PORT")"
+export BETA_OBJECT_STORAGE_EDGE_PORT BETA_REC_MODEL_PORT BETA_NOTIFICATION_PORT \
+  BETA_FIXTURE_GATEWAY_PORT BETA_SERVICE_CONFIG_ROOT BETA_MODEL_CACHE_ROOT
 GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
@@ -66,7 +84,9 @@ MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-}"
 MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-}"
 MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-}"
 MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-}"
-INTERNAL_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
+FIXTURE_GATEWAY_BASE_URL="http://127.0.0.1:${BETA_FIXTURE_GATEWAY_PORT}"
+INTERNAL_GATEWAY_BASE_URL="$FIXTURE_GATEWAY_BASE_URL"
+INTERNAL_CONTENT_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
 INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 APP_CURRENT_USER_ID="${APP_CURRENT_USER_ID:-fixture_user_current}"
@@ -75,6 +95,7 @@ FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 SKIP_APP=0
 START_ASSISTANT=1
+CONTENT_RELEASE_ONLY=0
 KILL_EXISTING=1
 RESTART_STACK=1
 CLEAN_ENV=0
@@ -121,6 +142,7 @@ Options:
   --full-matrix              Equivalent to --seed-verify full --media-mode copy.
   --skip-app                 Start/check beta cloud stack only; do not start Flutter.
   --skip-assistant           Skip assistant-service for content-only validation.
+  --content-release          Start only the real Content/Notification release slice.
   --restart                  Stop a managed previous stack before starting (default on).
   --clean-env                Remove runtime pid/env state before starting.
   --kill-existing            Reclaim beta ports by killing listeners (default on).
@@ -183,6 +205,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-assistant)
       START_ASSISTANT=0
+      shift
+      ;;
+    --content-release)
+      CONTENT_RELEASE_ONLY=1
+      START_ASSISTANT=0
+      SKIP_APP=1
       shift
       ;;
     --kill-existing)
@@ -317,22 +345,85 @@ beta_manual_wait_redis_ready() {
   done
 }
 
-beta_manual_compose_up_chat_backing_services() {
+beta_manual_prepare_service_config_root() {
+  rm -rf "$BETA_SERVICE_CONFIG_ROOT"
+  local service default_config environment_config
+  for service in content-service rec-model-service; do
+    default_config="$ROOT_DIR/quwoquan_service/services/${service}/configs/default/config.yaml"
+    environment_config="$ROOT_DIR/quwoquan_service/services/${service}/configs/beta/config.yaml"
+    if [[ ! -f "$default_config" || ! -f "$environment_config" ]]; then
+      echo "beta runtime config is incomplete for ${service}" >&2
+      return 1
+    fi
+    mkdir -p "$BETA_SERVICE_CONFIG_ROOT/configs/${service}/default" \
+      "$BETA_SERVICE_CONFIG_ROOT/configs/${service}/beta"
+    cp "$default_config" "$BETA_SERVICE_CONFIG_ROOT/configs/${service}/default/config.yaml"
+    cp "$environment_config" "$BETA_SERVICE_CONFIG_ROOT/configs/${service}/beta/config.yaml"
+  done
+  if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then
+    local content_release_config="$ROOT_DIR/quwoquan_service/services/content-service/configs/releases/${BETA_CONTENT_RELEASE_CONFIG_VERSION}.yaml"
+    if [[ ! -f "$content_release_config" ]]; then
+      echo "beta content-release config is missing: $content_release_config" >&2
+      return 1
+    fi
+    mkdir -p "$BETA_SERVICE_CONFIG_ROOT/releases/config/content-service"
+    cp \
+      "$content_release_config" \
+      "$BETA_SERVICE_CONFIG_ROOT/releases/config/content-service/${BETA_CONTENT_RELEASE_CONFIG_VERSION}.yaml"
+    export CONTENT_CONFIG_VERSION="$BETA_CONTENT_RELEASE_CONFIG_VERSION"
+  else
+    unset CONTENT_CONFIG_VERSION
+  fi
+  mkdir -p "$BETA_MODEL_CACHE_ROOT"
+  PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 \
+    python3 -m quwoquan_ops.cli.lib.local_environment_auth \
+      --write-report-account-backfill \
+      beta \
+      beta-local \
+      "$BETA_REPORT_ACCOUNT_BACKFILL_FILE" >/dev/null
+}
+
+beta_manual_compose_up_data_plane() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "chat backing services unavailable and docker is not installed" >&2
+    echo "beta content data plane is unavailable because docker is not installed" >&2
     return 1
   fi
   if [[ ! -f "$BETA_BACKING_COMPOSE_FILE" ]]; then
     echo "beta backing compose file missing: $BETA_BACKING_COMPOSE_FILE" >&2
     return 1
   fi
-  echo "[app-beta-manual] starting isolated beta postgres/mongodb/redis backing services"
-  docker compose -p "$BETA_BACKING_COMPOSE_PROJECT_NAME" -f "$BETA_BACKING_COMPOSE_FILE" up -d postgres mongodb mongo-init redis >/dev/null
+  beta_manual_prepare_service_config_root || return 1
+  echo "[app-beta-manual] starting real beta content data plane"
+  docker compose -p "$BETA_BACKING_COMPOSE_PROJECT_NAME" -f "$BETA_BACKING_COMPOSE_FILE" \
+    up -d --build postgres mongodb mongo-init redis object-storage object-storage-init \
+    rec-model-service content-service >/dev/null
+}
+
+beta_manual_stop_content_runtime() {
+  if ! command -v docker >/dev/null 2>&1 || [[ ! -f "$BETA_BACKING_COMPOSE_FILE" ]]; then
+    return 0
+  fi
+  docker compose -p "$BETA_BACKING_COMPOSE_PROJECT_NAME" -f "$BETA_BACKING_COMPOSE_FILE" \
+    stop content-service rec-model-service object-storage >/dev/null 2>&1 || true
+}
+
+beta_manual_require_content_embedding_binding() {
+  local missing=""
+  if [[ -z "${CONTENT_EMBEDDING_ENDPOINT:-}" ]]; then
+    missing="CONTENT_EMBEDDING_ENDPOINT"
+  fi
+  if [[ -z "${CONTENT_EMBEDDING_API_KEY:-}" ]]; then
+    missing="${missing:+${missing}, }CONTENT_EMBEDDING_API_KEY"
+  fi
+  if [[ -n "$missing" ]]; then
+    echo "GATE_BLOCK: beta content embedding provider prerequisite is missing: ${missing}" >&2
+    return 1
+  fi
 }
 
 beta_manual_ensure_docker_daemon() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "docker CLI unavailable; cannot start chat fallback services" >&2
+    echo "docker CLI unavailable; cannot start the beta data plane" >&2
     return 1
   fi
   if docker info >/dev/null 2>&1; then
@@ -361,37 +452,21 @@ beta_manual_ensure_docker_daemon() {
   echo "[app-beta-manual] docker daemon ready"
 }
 
-beta_manual_ensure_chat_backing_services() {
-  local default_mongo_uri="mongodb://localhost:27017/?directConnection=true"
-  local default_redis_addr="localhost:6379"
-  local effective_mongo_uri="$CHAT_MONGO_URI"
-  local effective_redis_addr="$CHAT_REDIS_ADDR"
-
-  if beta_manual_check_mongo "$effective_mongo_uri" && beta_manual_check_redis "$effective_redis_addr"; then
-    return 0
+beta_manual_ensure_data_plane() {
+  if [[ "$CONTENT_RELEASE_ONLY" != "1" ]]; then
+    beta_manual_require_content_embedding_binding || return 1
   fi
-
-  if [[ "$CHAT_MONGO_URI" != "$default_mongo_uri" || "$CHAT_REDIS_ADDR" != "$default_redis_addr" ]]; then
-    if ! beta_manual_check_mongo "$effective_mongo_uri"; then
-      echo "chat mongo unavailable: $effective_mongo_uri" >&2
-    fi
-    if ! beta_manual_check_redis "$effective_redis_addr"; then
-      echo "chat redis unavailable: $effective_redis_addr" >&2
-    fi
-    return 1
-  fi
-
   beta_manual_ensure_docker_daemon || return 1
-  beta_manual_compose_up_chat_backing_services || return 1
-  effective_mongo_uri="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true"
-  effective_redis_addr="127.0.0.1:${BETA_REDIS_PORT}"
+  beta_manual_compose_up_data_plane || return 1
+  local effective_mongo_uri="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true"
+  local effective_redis_addr="127.0.0.1:${BETA_REDIS_PORT}"
   beta_manual_wait_postgres_ready 90 || return 1
-  beta_manual_wait_mongo_ready "$effective_mongo_uri" "chat mongo fallback" 90 || return 1
-  beta_manual_wait_redis_ready "$effective_redis_addr" "chat redis fallback" 90 || return 1
+  beta_manual_wait_mongo_ready "$effective_mongo_uri" "beta MongoDB" 90 || return 1
+  beta_manual_wait_redis_ready "$effective_redis_addr" "beta Redis" 90 || return 1
   CHAT_MONGO_URI="$effective_mongo_uri"
   CHAT_REDIS_ADDR="$effective_redis_addr"
-  echo "[app-beta-manual] chat mongo fallback OK: $CHAT_MONGO_URI"
-  echo "[app-beta-manual] chat redis fallback OK: $CHAT_REDIS_ADDR"
+  beta_manual_wait_http_ok "${INTERNAL_CONTENT_BASE_URL}/healthz" "content-service" 300 || return 1
+  echo "[app-beta-manual] beta Mongo/Redis/content runtime OK"
 }
 
 resolve_assistant_model_env() {
@@ -402,8 +477,6 @@ provider = os.environ.get("ASSISTANT_MODEL_PROVIDER", "deterministic").strip() o
 base_url = os.environ.get("ASSISTANT_MODEL_BASE_URL", "").strip()
 model_id = os.environ.get("ASSISTANT_MODEL_MODEL", "").strip()
 api_key = os.environ.get("ASSISTANT_MODEL_API_KEY", "").strip()
-if not api_key:
-    api_key = os.environ.get("PERSONAL_ASSISTANT_MIMO_API_KEY", "").strip()
 if provider not in {"deterministic", "fake"} and (not base_url or not model_id or not api_key):
     print("echo 'GATE_BLOCK: real assistant model requires ASSISTANT_MODEL_BASE_URL, ASSISTANT_MODEL_MODEL and ASSISTANT_MODEL_API_KEY' >&2")
     print("exit 2")
@@ -449,7 +522,9 @@ CHAT_LOG="$LOG_DIR/chat-service/local/runtime.log"
 ENTITY_LOG="$LOG_DIR/entity-service/local/runtime.log"
 CHAT_SEED_LOG="$LOG_DIR/chat-seed/local/runtime.log"
 GATEWAY_LOG="$LOG_DIR/api-edge/local/runtime.log"
+NOTIFICATION_LOG="$LOG_DIR/notification-service/local/runtime.log"
 MEDIA_LOG="$LOG_DIR/media-origin/local/runtime.log"
+MEDIA_EDGE_LOG="$LOG_DIR/media-edge/local/runtime.log"
 MEDIA_DIR="$CACHE_DIR/media"
 SOURCE_MEDIA_ROOT="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CANONICAL_SOURCE_MEDIA_ROOT="$SOURCE_MEDIA_ROOT"
@@ -540,6 +615,7 @@ if [[ "$RESTART_STACK" == "1" || "$CLEAN_ENV" == "1" ]]; then
     podman rm -f "$TLS_PROXY_NAME" >/dev/null 2>&1 || true
   fi
   beta_manual_stop_stack "$CLEAN_ENV"
+  beta_manual_stop_content_runtime
   beta_manual_init
 fi
 
@@ -551,6 +627,9 @@ beta_manual_record_metadata "assistant_enabled" "$START_ASSISTANT"
 beta_manual_record_metadata "assistant_port" "$ASSISTANT_PORT"
 beta_manual_record_metadata "chat_port" "$CHAT_PORT"
 beta_manual_record_metadata "entity_port" "$ENTITY_PORT"
+beta_manual_record_metadata "content_port" "$CONTENT_PORT"
+beta_manual_record_metadata "notification_port" "$BETA_NOTIFICATION_PORT"
+beta_manual_record_metadata "fixture_gateway_port" "$BETA_FIXTURE_GATEWAY_PORT"
 beta_manual_record_metadata "gateway_port" "$GATEWAY_PORT"
 beta_manual_record_metadata "gateway_base_url" "$GATEWAY_BASE_URL"
 beta_manual_record_metadata "flutter_device_id" "$FLUTTER_DEVICE_ID"
@@ -623,8 +702,31 @@ https://localhost:${GATEWAY_PORT} {
 		root * /srv/legal
 		file_server
 	}
-	handle {
+	handle /healthz {
 		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
+	@content_report path /content/reports /content/reports/* /content/users/me/reports
+	handle @content_report {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
+	@content_behavior path /content/behaviors
+	handle @content_behavior {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
+	@content_filter_catalog path /content/filter-catalog
+	handle @content_filter_catalog {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
+	@content_filter_catalog_release path /internal/content/filter-catalog-releases /internal/content/filter-catalog-releases/*
+	handle @content_filter_catalog_release {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
+	@notification_app_messages path /app-messages /app-messages/*
+	handle @notification_app_messages {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${BETA_NOTIFICATION_PORT}
+	}
+	handle {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${BETA_FIXTURE_GATEWAY_PORT}
 	}
 }
 
@@ -764,22 +866,210 @@ beta_manual_wait_https_range_ok() {
   done
 }
 
+beta_manual_start_fixture_gateway() {
+  echo "[app-beta-manual] starting beta fixture gateway on :$BETA_FIXTURE_GATEWAY_PORT"
+  beta_manual_start_process \
+    "gateway" \
+    "$GATEWAY_LOG" \
+    "$ROOT_DIR" \
+    python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py \
+      --listen-host 127.0.0.1 \
+      --listen-port "$BETA_FIXTURE_GATEWAY_PORT" \
+      --assistant-upstream-host 127.0.0.1 \
+      --assistant-upstream-port "$ASSISTANT_PORT" \
+      --chat-upstream-host 127.0.0.1 \
+      --chat-upstream-port "$CHAT_PORT" \
+      --entity-upstream-host 127.0.0.1 \
+      --entity-upstream-port "$ENTITY_PORT" \
+      --avatar-cdn-base-url "$MEDIA_AVATAR_CDN_BASE_URL" \
+      --image-cdn-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
+      --video-cdn-base-url "$MEDIA_VIDEO_CDN_BASE_URL"
+
+  beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/healthz" "gateway" 30
+}
+
+beta_manual_start_notification_service() {
+  echo "[app-beta-manual] starting notification-service beta on :$BETA_NOTIFICATION_PORT"
+  beta_manual_start_process \
+    "notification-service" \
+    "$NOTIFICATION_LOG" \
+    "$ROOT_DIR/quwoquan_service/services/notification-service" \
+    env \
+      APP_ENV=beta \
+      NOTIFICATION_SERVICE_ADDR=":${BETA_NOTIFICATION_PORT}" \
+      NOTIFICATION_MONGO_URI="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true" \
+      NOTIFICATION_MONGO_DATABASE=quwoquan_notification \
+      NOTIFICATION_INTEGRATION_BASE_URL="$INTERNAL_GATEWAY_BASE_URL" \
+      NOTIFICATION_INTEGRATION_TIMEOUT_MS=1500 \
+      NOTIFICATION_USER_BASE_URL="$INTERNAL_GATEWAY_BASE_URL" \
+      NOTIFICATION_REALTIME_BASE_URL="$INTERNAL_GATEWAY_BASE_URL" \
+      NOTIFICATION_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
+      NOTIFICATION_REDIS_GENERAL_DB=1 \
+      NOTIFICATION_REDIS_REALTIME_DB=4 \
+      go run ./cmd/api
+
+  beta_manual_wait_http_ok \
+    "http://127.0.0.1:${BETA_NOTIFICATION_PORT}/healthz" \
+    "notification-service" \
+    90
+}
+
+beta_manual_start_media_runtime() {
+  rm -rf "$MEDIA_DIR"
+  mkdir -p "$MEDIA_DIR/media"
+  case "$MEDIA_PREP_MODE" in
+    copy)
+      cp -R "$CANONICAL_SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
+      ;;
+    symlink)
+      while IFS= read -r source_child; do
+        child_name="$(basename "$source_child")"
+        ln -s "$source_child" "$MEDIA_DIR/media/$child_name"
+      done < <(find "$CANONICAL_SOURCE_MEDIA_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
+      ;;
+  esac
+  mkdir -p "$MEDIA_DIR/media/video"
+  python3 - "$MEDIA_DIR" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+source = root / "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+target = root / "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+if not source.is_file():
+    raise SystemExit(f"playable sample video missing: {source}")
+target.write_bytes(source.read_bytes())
+PY
+  echo "[app-beta-manual] starting local media origin on :$MEDIA_ORIGIN_PORT"
+  beta_manual_start_process \
+    "media-origin" \
+    "$MEDIA_LOG" \
+    "$ROOT_DIR" \
+    python3 quwoquan_ops/cli/lib/local_media_origin.py \
+      --listen-host 127.0.0.1 \
+      --listen-port "$MEDIA_ORIGIN_PORT" \
+      --root-dir "$MEDIA_DIR" \
+      --server-label app-beta-manual-media-origin
+  beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media origin current user avatar fixture" 30 || return 1
+  beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "media origin friend avatar fixture" 30 || return 1
+  beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "media origin group avatar fixture" 30 || return 1
+  beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media origin post cover fixture" 30 || return 1
+  beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg" "media origin mixed-format post cover fixture" 30 || return 1
+  beta_manual_wait_http_range_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" "media origin playable video range" 30 || return 1
+  echo "[app-beta-manual] starting local media edge on :$MEDIA_PORT -> :$MEDIA_ORIGIN_PORT"
+  beta_manual_start_process \
+    "media-edge" \
+    "$MEDIA_EDGE_LOG" \
+    "$ROOT_DIR" \
+    python3 quwoquan_ops/cli/lib/http_reverse_proxy.py \
+      --listen-host 127.0.0.1 \
+      --listen-port "$MEDIA_PROCESSOR_PORT" \
+      --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
+  beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || return 1
+  beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || return 1
+  beta_manual_wait_http_range_ok "${INTERNAL_MEDIA_BASE_URL}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" "media edge playable video range" 30 || return 1
+  if [[ "$DEVICE_KIND" == android_* && -n "$FLUTTER_DEVICE_ID" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
+    adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
+    adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
+    adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_ORIGIN_PORT}" "tcp:${MEDIA_ORIGIN_PORT}" >/dev/null 2>&1 || true
+    ADB_REVERSE_ENABLED=1
+  fi
+}
+
+beta_manual_start_entity_service() {
+  echo "[app-beta-manual] starting entity-service beta on :$ENTITY_PORT"
+  beta_manual_start_process \
+    "entity-service" \
+    "$ENTITY_LOG" \
+    "$ENTITY_SERVICE_DIR" \
+    env \
+      APP_ENV=beta \
+      ENTITY_SERVICE_ADDR="127.0.0.1:${ENTITY_PORT}" \
+      ENTITY_MONGO_URI="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true" \
+      ENTITY_MONGO_DATABASE=quwoquan_entity \
+      ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
+      go run ./cmd/api
+
+  beta_manual_wait_http_ok "http://127.0.0.1:${ENTITY_PORT}/healthz" "entity-service" 60
+}
+
+beta_manual_ensure_filter_catalog_release() {
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" \
+    filter-catalog \
+    --target beta-local \
+    --action stage-and-activate >/dev/null
+}
+
+beta_manual_start_content_release_stack() {
+  beta_manual_ensure_data_plane || return 1
+  beta_manual_start_media_runtime || return 1
+  beta_manual_start_entity_service || return 1
+  beta_manual_start_fixture_gateway || return 1
+  beta_manual_start_notification_service || return 1
+  beta_manual_start_tls_proxy
+  beta_manual_export_tls_root_ca || return 1
+  beta_manual_wait_https_ok \
+    "$PUBLIC_API_HOST" \
+    "$GATEWAY_PORT" \
+    "/healthz" \
+    "content release public health" \
+    30 || return 1
+  beta_manual_ensure_filter_catalog_release || return 1
+  beta_manual_wait_https_ok \
+    "$PUBLIC_IMAGE_HOST" \
+    "$MEDIA_PORT" \
+    "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" \
+    "content release public media image" \
+    30 || return 1
+  beta_manual_wait_https_range_ok \
+    "$PUBLIC_VIDEO_HOST" \
+    "$MEDIA_PORT" \
+    "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" \
+    "content release public media video" \
+    30 || return 1
+  echo "[app-beta-manual] content release slice is ready."
+  beta_manual_wait_until_stopped notification-service gateway media-edge media-origin entity-service
+}
+
 cleanup() {
   trap - EXIT INT TERM HUP TSTP
   beta_manual_stop_tls_proxy
   beta_manual_stop_stack "$CLEAN_ENV" "$BETA_MANUAL_OWNER_ID"
+  beta_manual_stop_content_runtime
 }
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT TERM
 trap 'cleanup; exit 129' HUP
 trap 'cleanup; exit 148' TSTP
 
+if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then
+  beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
+  beta_manual_ensure_port_available "$CONTENT_PORT" "content-service"
+  beta_manual_ensure_port_available "$BETA_NOTIFICATION_PORT" "notification-service"
+  beta_manual_ensure_port_available "$BETA_FIXTURE_GATEWAY_PORT" "fixture-gateway"
+  beta_manual_ensure_port_available "$BETA_OBJECT_STORAGE_EDGE_PORT" "object-storage"
+  beta_manual_ensure_port_available "$ENTITY_PORT" "entity-service"
+  beta_manual_ensure_port_available "$MEDIA_PORT" "media-edge"
+  beta_manual_ensure_port_available "$MEDIA_PROCESSOR_PORT" "media-edge-upstream"
+  beta_manual_ensure_port_available "$MEDIA_ORIGIN_PORT" "media-origin"
+  echo "[app-beta-manual] starting the Beta Content/Notification release slice"
+  beta_manual_start_content_release_stack || {
+    echo "content release slice failed to become ready" >&2
+    exit 1
+  }
+  exit 0
+fi
+
 if [[ "$START_ASSISTANT" == "1" ]]; then
   beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
 fi
 beta_manual_ensure_port_available "$CHAT_PORT" "chat-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
-beta_manual_ensure_port_available "$CONTENT_PORT" "gateway-upstream"
+beta_manual_ensure_port_available "$CONTENT_PORT" "content-service"
+beta_manual_ensure_port_available "$BETA_NOTIFICATION_PORT" "notification-service"
+beta_manual_ensure_port_available "$BETA_FIXTURE_GATEWAY_PORT" "fixture-gateway"
+beta_manual_ensure_port_available "$BETA_OBJECT_STORAGE_EDGE_PORT" "object-storage"
 beta_manual_ensure_port_available "$MEDIA_PORT" "media-edge"
 beta_manual_ensure_port_available "$MEDIA_PROCESSOR_PORT" "media-edge-upstream"
 beta_manual_ensure_port_available "$MEDIA_ORIGIN_PORT" "media-origin"
@@ -797,68 +1087,14 @@ if [[ "$VERIFY_MODE" == "full" ]]; then
 else
   echo "[app-beta-manual] fast mode: skip full shared-pool consistency verification"
 fi
-rm -rf "$MEDIA_DIR"
-mkdir -p "$MEDIA_DIR/media"
-case "$MEDIA_PREP_MODE" in
-  copy)
-    cp -R "$CANONICAL_SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
-    ;;
-  symlink)
-    while IFS= read -r source_child; do
-      child_name="$(basename "$source_child")"
-      ln -s "$source_child" "$MEDIA_DIR/media/$child_name"
-    done < <(find "$CANONICAL_SOURCE_MEDIA_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
-    ;;
-esac
-mkdir -p "$MEDIA_DIR/media/video"
-python3 - "$MEDIA_DIR" <<'PY'
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-source = root / "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
-target = root / "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
-if not source.is_file():
-    raise SystemExit(f"playable sample video missing: {source}")
-target.write_bytes(source.read_bytes())
-PY
-MEDIA_EDGE_LOG="$LOG_DIR/media-edge/local/runtime.log"
-echo "[app-beta-manual] starting local media origin on :$MEDIA_ORIGIN_PORT"
-beta_manual_start_process \
-  "media-origin" \
-  "$MEDIA_LOG" \
-  "$ROOT_DIR" \
-  python3 quwoquan_ops/cli/lib/local_media_origin.py \
-    --listen-host 127.0.0.1 \
-    --listen-port "$MEDIA_ORIGIN_PORT" \
-    --root-dir "$MEDIA_DIR" \
-    --server-label app-beta-manual-media-origin
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media origin current user avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "media origin friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "media origin group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media origin post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg" "media origin mixed-format post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_range_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" "media origin playable video range" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-echo "[app-beta-manual] starting local media edge on :$MEDIA_PORT -> :$MEDIA_ORIGIN_PORT"
-beta_manual_start_process \
-  "media-edge" \
-  "$MEDIA_EDGE_LOG" \
-  "$ROOT_DIR" \
-  python3 quwoquan_ops/cli/lib/http_reverse_proxy.py \
-    --listen-host 127.0.0.1 \
-    --listen-port "$MEDIA_PROCESSOR_PORT" \
-    --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
-beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_range_ok "${INTERNAL_MEDIA_BASE_URL}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" "media edge playable video range" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-if [[ "$DEVICE_KIND" == android_* && -n "$FLUTTER_DEVICE_ID" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
-  adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
-  adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
-  adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_ORIGIN_PORT}" "tcp:${MEDIA_ORIGIN_PORT}" >/dev/null 2>&1 || true
-  ADB_REVERSE_ENABLED=1
-fi
-beta_manual_ensure_chat_backing_services || {
-  echo "chat backing services must be ready before beta services start" >&2
+beta_manual_start_media_runtime || {
+  echo "media runtime failed to become ready" >&2
+  echo "media edge log: $MEDIA_EDGE_LOG" >&2
+  echo "media origin log: $MEDIA_LOG" >&2
+  exit 1
+}
+beta_manual_ensure_data_plane || {
+  echo "real beta content data plane must be ready before beta services start" >&2
   exit 1
 }
 if [[ "$START_ASSISTANT" == "1" ]]; then
@@ -939,43 +1175,15 @@ beta_manual_wait_http_ok "http://127.0.0.1:${CHAT_PORT}/healthz" "chat-service" 
   exit 1
 }
 
-echo "[app-beta-manual] starting entity-service beta on :$ENTITY_PORT"
-beta_manual_start_process \
-  "entity-service" \
-  "$ENTITY_LOG" \
-  "$ENTITY_SERVICE_DIR" \
-  env \
-    APP_ENV=beta \
-    ENTITY_SERVICE_ADDR="127.0.0.1:${ENTITY_PORT}" \
-    ENTITY_MONGO_URI="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true" \
-    ENTITY_MONGO_DATABASE=quwoquan_entity \
-    ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
-    go run ./cmd/api
-
-beta_manual_wait_http_ok "http://127.0.0.1:${ENTITY_PORT}/healthz" "entity-service" 60 || {
+beta_manual_start_entity_service || {
   echo "entity-service log: $ENTITY_LOG" >&2
   exit 1
 }
 
-echo "[app-beta-manual] starting unified local beta gateway on :$GATEWAY_PORT"
-beta_manual_start_process \
-  "gateway" \
-  "$GATEWAY_LOG" \
-  "$ROOT_DIR" \
-  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py \
-    --listen-host 127.0.0.1 \
-    --listen-port "$CONTENT_PORT" \
-    --assistant-upstream-host 127.0.0.1 \
-    --assistant-upstream-port "$ASSISTANT_PORT" \
-    --chat-upstream-host 127.0.0.1 \
-    --chat-upstream-port "$CHAT_PORT" \
-    --entity-upstream-host 127.0.0.1 \
-    --entity-upstream-port "$ENTITY_PORT" \
-    --avatar-cdn-base-url "$MEDIA_AVATAR_CDN_BASE_URL" \
-    --image-cdn-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
-    --video-cdn-base-url "$MEDIA_VIDEO_CDN_BASE_URL"
-
-beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/healthz" "gateway" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_start_fixture_gateway || {
+  echo "gateway log: $GATEWAY_LOG" >&2
+  exit 1
+}
 if [[ "$START_ASSISTANT" == "1" ]]; then
   beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 fi
@@ -984,7 +1192,7 @@ beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/content/feed" "content fi
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/chat/inbox" "chat inbox route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/chat/contacts" "chat contacts route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/chat/conversations" "chat conversations route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
-python3 - "$CONTENT_PORT" <<'PY' || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+python3 - "$BETA_FIXTURE_GATEWAY_PORT" <<'PY' || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
 import json
 import sys
 from urllib.error import HTTPError
@@ -1008,9 +1216,17 @@ except HTTPError as exc:
     detail = exc.read().decode("utf-8", errors="replace").strip()
     raise SystemExit(f"user sync route unhealthy: HTTP {exc.code}: {detail[:500]}") from exc
 PY
+beta_manual_start_notification_service || {
+  echo "notification log: $NOTIFICATION_LOG" >&2
+  exit 1
+}
 beta_manual_start_tls_proxy
 beta_manual_export_tls_root_ca || exit 2
 beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/healthz" "gateway public health" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_ensure_filter_catalog_release || {
+  echo "filter catalog release bootstrap failed" >&2
+  exit 1
+}
 beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/user-agreement" "legal static user agreement" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_verify_legal_document "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/user-agreement" "趣我圈用户协议" || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_verify_legal_document "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/privacy-policy" "趣我圈隐私政策" || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
@@ -1029,9 +1245,6 @@ beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/users/fixture_user_curren
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/user/sub-accounts/fixture_user_current/relationship/capability" "relationship capability fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/homepages/search" "entity fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/integration/locations/pois" "integration fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/app-messages/unread-count" "notification unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/notifications/unread-count" "notification aggregate unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/content/feed/intersections?limit=4&channel=recommend" "feed intersections fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
@@ -1081,9 +1294,6 @@ checked_routes = [
     "/user/sub-accounts/fixture_user_current/relationship/capability",
     "/homepages/search",
     "/integration/locations/pois",
-    "/app-messages",
-    "/app-messages/unread-count",
-    "/notifications/unread-count",
     "/content/feed/intersections?limit=4&channel=recommend",
     "/rtc/calls",
 ]
@@ -1139,9 +1349,9 @@ echo "[app-beta-manual] APP_RUNTIME_ENV=beta APP_DATA_SOURCE=remote CLOUD_GATEWA
 if [[ "$SKIP_APP" == "1" ]]; then
   echo "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C."
   if [[ "$START_ASSISTANT" == "1" ]]; then
-    beta_manual_wait_until_stopped assistant-service chat-service gateway media-static
+    beta_manual_wait_until_stopped assistant-service chat-service notification-service gateway media-static
   else
-    beta_manual_wait_until_stopped chat-service gateway media-static
+    beta_manual_wait_until_stopped chat-service notification-service gateway media-static
   fi
   exit 0
 fi

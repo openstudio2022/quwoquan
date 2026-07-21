@@ -55,26 +55,10 @@ type config struct {
 	} `yaml:"redis"`
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
-		Social                     struct {
-			Providers map[string]providerOAuthCfg `yaml:"providers"`
-		} `yaml:"social"`
-		OneTap struct {
-			Resolver string `yaml:"resolver"`
-		} `yaml:"one_tap"`
-		OTP struct {
+		OTP                        struct {
 			Mode string `yaml:"mode"`
 		} `yaml:"otp"`
 	} `yaml:"integration"`
-}
-
-type providerOAuthCfg struct {
-	AppID                string `yaml:"app_id"`
-	AppSecret            string `yaml:"app_secret"`
-	AppPrivateKeyPEM     string `yaml:"app_private_key_pem"`
-	PlatformPublicKeyPEM string `yaml:"platform_public_key_pem"`
-	MerchantPID          string `yaml:"merchant_pid"`
-	TokenURL             string `yaml:"token_url"`
-	UserInfoURL          string `yaml:"user_info_url"`
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -122,16 +106,31 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	if strings.TrimSpace(configRoot) != "" {
 		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
 		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
-		_ = mergeConfigFile(&cfg, defaultFile)
-		_ = mergeConfigFile(&cfg, envFile)
+		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
+			return config{}, fmt.Errorf("read default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, envFile); err != nil {
+			return config{}, fmt.Errorf("read env config: %w", err)
+		}
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
-			_ = mergeConfigFile(&cfg, versionFile)
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			if err := mergeConfigFile(&cfg, versionFile); err != nil {
+				return config{}, fmt.Errorf("read version config: %w", err)
+			}
 		}
 		return cfg, nil
 	}
-	_ = mergeConfigFile(&cfg, "configs/default/config.yaml")
-	_ = mergeConfigFile(&cfg, "configs/"+appEnv+"/config.yaml")
+	if err := mergeConfigFile(&cfg, "configs/default/config.yaml"); err != nil {
+		return config{}, fmt.Errorf("read local default config: %w", err)
+	}
+	if err := mergeConfigFile(&cfg, "configs/"+appEnv+"/config.yaml"); err != nil {
+		return config{}, fmt.Errorf("read local env config: %w", err)
+	}
+	if configVersion != "" {
+		if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
+			return config{}, fmt.Errorf("read local version config: %w", err)
+		}
+	}
 	return cfg, nil
 }
 

@@ -57,7 +57,7 @@ func WebSearchMetadata() Metadata {
 	meta := DefaultMetadata("web_search")
 	meta.DisplayName = "网络搜索"
 	meta.Description = "检索公开网络信息并返回可核验引用。"
-	meta.RequiredOutputKeys = []string{"provider", "summary", "references"}
+	meta.RequiredOutputKeys = []string{"summary", "references"}
 	return meta
 }
 

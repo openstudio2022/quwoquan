@@ -13,6 +13,7 @@ func GeneratedPrefixRoutes() []PrefixRoute {
 		{Prefix: "counter:", Scene: "general"},
 		{Prefix: "dedup:", Scene: "realtime"},
 		{Prefix: "device_tokens:", Scene: "general"},
+		{Prefix: "events.chat.", Scene: "general"},
 		{Prefix: "events.circle.", Scene: "general"},
 		{Prefix: "events.content.", Scene: "general"},
 		{Prefix: "events.search.", Scene: "general"},

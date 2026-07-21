@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_cloud_mock/chat_fixture.dart';
 
@@ -67,11 +68,6 @@ class MockChatRepository implements ChatRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
@@ -80,11 +76,6 @@ class MockChatRepository implements ChatRepository {
         _engine.createConversation(
           type: type,
           title: title,
-          circleId: circleId,
-          circleGroupId: circleGroupId,
-          originType: originType,
-          bindingType: bindingType,
-          lifecyclePolicy: lifecyclePolicy,
           maxGroupSize: maxGroupSize,
           initialMemberIds: initialMemberIds,
         ),
@@ -265,33 +256,47 @@ class MockChatRepository implements ChatRepository {
       .toList(growable: false);
 
   @override
-  Future<List<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
-  }) async => _engine
-      .listSelectableGroupConversations(
-        query: query,
-        source: source.wireValue,
-        limit: limit,
-      )
-      .map((row) => SelectableGroupConversationRowDto.fromMap(_appMap(row)))
-      .toList(growable: false);
+  }) async {
+    final page = _engine.listSelectableGroupConversations(
+      query: query,
+      source: source.wireValue,
+      cursor: cursor,
+      limit: limit,
+    );
+    return CursorPage<SelectableGroupConversationRowDto>(
+      items: page.items
+          .map((row) => SelectableGroupConversationRowDto.fromMap(_appMap(row)))
+          .toList(growable: false),
+      nextCursor: page.nextCursor,
+    );
+  }
 
   @override
-  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
-  }) async => _engine
-      .listSelectableGroupContactMembers(
-        conversationId: conversationId,
-        query: query,
-        limit: limit,
-      )
-      .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
-      .toList(growable: false);
+  }) async {
+    final page = _engine.listSelectableGroupContactMembers(
+      conversationId: conversationId,
+      query: query,
+      cursor: cursor,
+      limit: limit,
+    );
+    return CursorPage<ChatContactRowDto>(
+      items: page.items
+          .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
+          .toList(growable: false),
+      nextCursor: page.nextCursor,
+    );
+  }
 
   @override
   Future<List<ChatConversationTimestampDto>>

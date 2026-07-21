@@ -20,11 +20,11 @@ from governance.coverage.coverage_matrix import (  # noqa: E402
     _runtime_root,
     completed_discovery_shards,
     coverage_matrix_status,
-    finalize_discovery_source_cells,
     resumable_cells,
     prepare_coverage_matrix,
     record_cell_page,
 )
+from governance.coverage.coverage_finalize import finalize_discovery_source_cells  # noqa: E402
 from core.runtime_policy import active_runtime_policy  # noqa: E402
 
 

@@ -20,7 +20,11 @@ func TestRedisEventPublisherPreservesStableOutboxEventID(t *testing.T) {
 	}
 	defer subscription.Close()
 
-	publisher := NewRedisEventPublisher(client, "content-service", nil)
+	transport, err := runtimemessaging.NewRedisMessageTransport(client, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := NewRedisEventPublisherWithTransport(transport, "content-service", nil)
 	if err := publisher.Publish(ctx, runtimemessaging.DomainEvent{
 		EventID:       "evt-post-42-v2",
 		Type:          "PostPublished",

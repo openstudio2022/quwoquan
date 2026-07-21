@@ -18,10 +18,73 @@ type TransactionRunner interface {
 type ConversationStore interface {
 	CreateConversation(ctx context.Context, conversation *conversationmodel.Conversation) error
 	FindConversationByID(ctx context.Context, id string) (*conversationmodel.Conversation, error)
+	FindConversationsByIDs(ctx context.Context, ids []string) ([]conversationmodel.Conversation, error)
 	UpdateConversation(ctx context.Context, id string, conversation *conversationmodel.Conversation) error
+	ListConversationPageByUser(
+		ctx context.Context,
+		userID string,
+		limit int,
+		cursor string,
+	) (conversationmodel.ConversationPage, error)
 	ListConversationsByUser(ctx context.Context, userID string, limit int, cursor string) ([]conversationmodel.Conversation, error)
 	FindDirectConversationBetween(ctx context.Context, memberA, memberB string) (*conversationmodel.Conversation, error)
 	ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]conversationmodel.Conversation, error)
+}
+
+// CircleGroupConversationReader 是 CircleGroup durable projector 的最小读取口；
+// circleGroupId 在 Conversation 侧必须一对一，因此不能退化成通用筛选查询。
+type CircleGroupConversationReader interface {
+	FindConversationByCircleGroupID(
+		ctx context.Context,
+		circleGroupID string,
+	) (*conversationmodel.Conversation, error)
+}
+
+// CircleGroupMembershipProjectionState 记录 CircleGroupMembership 已应用的
+// source version。它不是第二业务写模型，而是 chat 侧可重建的投影幂等水位。
+type CircleGroupMembershipProjectionState struct {
+	CircleGroupID  string
+	ConversationID string
+	UserID         string
+	SourceVersion  int64
+	State          string
+	Role           string
+	LastEventID    string
+	UpdatedAt      time.Time
+}
+
+type CircleGroupMembershipProjectionStore interface {
+	LoadCircleGroupMembershipProjection(
+		ctx context.Context,
+		circleGroupID string,
+		userID string,
+	) (CircleGroupMembershipProjectionState, bool, error)
+	SaveCircleGroupMembershipProjection(
+		ctx context.Context,
+		state CircleGroupMembershipProjectionState,
+	) error
+}
+
+// CircleGroupChatBindingProjectionState prevents cross-stream reordering from
+// provisioning a Chat conversation after CircleGroupArchived has won.
+type CircleGroupChatBindingProjectionState struct {
+	CircleGroupID string
+	CircleID      string
+	SourceVersion int64
+	Status        string
+	LastEventID   string
+	UpdatedAt     time.Time
+}
+
+type CircleGroupChatBindingProjectionStore interface {
+	LoadCircleGroupChatBindingProjection(
+		ctx context.Context,
+		circleGroupID string,
+	) (CircleGroupChatBindingProjectionState, bool, error)
+	SaveCircleGroupChatBindingProjection(
+		ctx context.Context,
+		state CircleGroupChatBindingProjectionState,
+	) error
 }
 
 // MessageStore 仅暴露消息聚合的持久化能力。
@@ -132,8 +195,23 @@ type MemberStore interface {
 
 type UserStateStore interface {
 	UpsertUserState(ctx context.Context, state *conversationmodel.ConversationUserState) error
+	// DeleteUserState 将已离开会话的用户从 ChatInbox 真相源移除；重放删除必须是 no-op。
+	DeleteUserState(ctx context.Context, userID, conversationID string) error
 	FindUserState(ctx context.Context, userID, conversationID string) (*conversationmodel.ConversationUserState, error)
+	// ListUserStatePage is the sole keyset reader for inbox ordering. Its
+	// cursor carries all of the persisted sort keys (pinned, updatedAt and
+	// conversationId), so callers cannot paginate a differently sorted list
+	// with a bare conversation identifier.
+	ListUserStatePage(
+		ctx context.Context,
+		userID string,
+		limit int,
+		cursor string,
+	) (conversationmodel.ConversationUserStatePage, error)
 	ListUserStates(ctx context.Context, userID string, limit int, cursor string) ([]conversationmodel.ConversationUserState, error)
+	// ListUserStatesByConversationID 是候选来源编排的稳定 keyset Reader；它不复用
+	// inbox 的置顶/最近消息排序，避免 group selector 在翻页时遗漏或重复会话。
+	ListUserStatesByConversationID(ctx context.Context, userID string, limit int, afterConversationID string) ([]conversationmodel.ConversationUserState, error)
 	// AdvanceInboxUnread 是 ChatInbox 投影的单调幂等写入口；eventSeq 不高于
 	// inboxProjectedSeq 时为 no-op，且 eventSeq 不高于 readSeq 时只推进投影水位。
 	AdvanceInboxUnread(
@@ -160,16 +238,19 @@ type ConversationCache interface {
 
 // ChatStoragePorts 聚合细粒度端口，本身不提供转发方法或通用仓储语义。
 type ChatStoragePorts struct {
-	Transactions      TransactionRunner
-	Conversations     ConversationStore
-	Messages          MessageStore
-	MessageProjection ConversationMessageProjector
-	Members           MemberStore
-	UserStates        UserStateStore
-	Receipts          ReceiptStore
+	Transactions             TransactionRunner
+	Conversations            ConversationStore
+	CircleGroupConversations CircleGroupConversationReader
+	Messages                 MessageStore
+	MessageProjection        ConversationMessageProjector
+	Members                  MemberStore
+	UserStates               UserStateStore
+	Receipts                 ReceiptStore
 	// 三个非 Message 聚合各自的命令回执 + 事务 outbox 端口；state 写入与
 	// CommitAggregateCommand 必须在同一事务闭包内完成。
-	ConversationCommands AggregateCommandStore
-	MembershipCommands   AggregateCommandStore
-	UserStateCommands    AggregateCommandStore
+	ConversationCommands              AggregateCommandStore
+	MembershipCommands                AggregateCommandStore
+	UserStateCommands                 AggregateCommandStore
+	CircleGroupMembershipProjections  CircleGroupMembershipProjectionStore
+	CircleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
 }

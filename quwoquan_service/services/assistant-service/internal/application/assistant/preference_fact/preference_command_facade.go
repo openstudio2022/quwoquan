@@ -96,9 +96,7 @@ func (f *CommandFacade) SetPreference(
 			return preferencemodel.Fact{}, preferenceStorageUnavailable(ownerErr.Error())
 		}
 		if !owned {
-			return preferencemodel.Fact{}, preferenceInvalidArgument(
-				"session preference conversation is not owned by persona",
-			)
+			return preferencemodel.Fact{}, preferenceNotFound()
 		}
 	}
 	if f == nil || f.store == nil {

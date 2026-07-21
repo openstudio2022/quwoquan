@@ -166,6 +166,8 @@ func TestUpdateSettingsNoopPersistsReceiptWithoutEvents(t *testing.T) {
 	states := &memoryUserStateStore{}
 	service := &ConversationService{
 		transactions:      passthroughTransactionRunner{},
+		conversations:     activeConversationStore{},
+		members:           activeMemberStore{},
 		userStates:        states,
 		userStateCommands: commands,
 		cache:             noopCache{},
@@ -213,6 +215,8 @@ func TestUpdateSettingsCommitsStateReceiptAndEventTogether(t *testing.T) {
 	states := &memoryUserStateStore{}
 	service := &ConversationService{
 		transactions:      passthroughTransactionRunner{},
+		conversations:     activeConversationStore{},
+		members:           activeMemberStore{},
 		userStates:        states,
 		userStateCommands: commands,
 		cache:             noopCache{},
@@ -249,6 +253,30 @@ func TestUpdateSettingsCommitsStateReceiptAndEventTogether(t *testing.T) {
 	}
 }
 
+func TestUpdateSettingsRejectsNonMemberBeforeCreatingUserState(t *testing.T) {
+	states := &memoryUserStateStore{}
+	service := &ConversationService{
+		transactions:      passthroughTransactionRunner{},
+		conversations:     activeConversationStore{},
+		members:           deniedMemberStore{},
+		userStates:        states,
+		userStateCommands: newMemoryAggregateCommandStore(),
+		cache:             noopCache{},
+	}
+	pinned := true
+
+	err := service.UpdateSettings(
+		commandContext("p1", "settings-non-member"),
+		UpdateSettingsRequest{UserId: "p1", ConversationId: "conv-1", Pinned: &pinned},
+	)
+	if err == nil || !strings.Contains(err.Error(), "CHAT.USER.conversation_not_found") {
+		t.Fatalf("non-member settings must be hidden as conversation_not_found, got %v", err)
+	}
+	if states.upserts != 0 || states.state != nil {
+		t.Fatalf("non-member settings must not create user state: %+v", states)
+	}
+}
+
 type passthroughTransactionRunner struct{}
 
 func (passthroughTransactionRunner) RunInTransaction(
@@ -265,6 +293,7 @@ func (noopCache) InvalidateConversation(context.Context, string) error { return 
 type memoryUserStateStore struct {
 	state   *model.ConversationUserState
 	upserts int
+	deletes int
 }
 
 func (s *memoryUserStateStore) UpsertUserState(
@@ -273,6 +302,18 @@ func (s *memoryUserStateStore) UpsertUserState(
 ) error {
 	s.upserts++
 	s.state = state
+	return nil
+}
+
+func (s *memoryUserStateStore) DeleteUserState(
+	_ context.Context,
+	userID string,
+	conversationID string,
+) error {
+	if s.state != nil && s.state.UserId == userID && s.state.ConversationId == conversationID {
+		s.state = nil
+	}
+	s.deletes++
 	return nil
 }
 
@@ -287,7 +328,33 @@ func (s *memoryUserStateStore) FindUserState(
 	return s.state, nil
 }
 
+func (s *memoryUserStateStore) ListUserStatePage(
+	context.Context,
+	string,
+	int,
+	string,
+) (model.ConversationUserStatePage, error) {
+	if s.state == nil {
+		return model.ConversationUserStatePage{}, nil
+	}
+	return model.ConversationUserStatePage{
+		Items: []model.ConversationUserState{*s.state},
+	}, nil
+}
+
 func (s *memoryUserStateStore) ListUserStates(
+	context.Context,
+	string,
+	int,
+	string,
+) ([]model.ConversationUserState, error) {
+	if s.state == nil {
+		return nil, nil
+	}
+	return []model.ConversationUserState{*s.state}, nil
+}
+
+func (s *memoryUserStateStore) ListUserStatesByConversationID(
 	context.Context,
 	string,
 	int,
@@ -309,4 +376,36 @@ func (s *memoryUserStateStore) AdvanceInboxUnread(
 	time.Time,
 ) error {
 	return nil
+}
+
+type activeConversationStore struct{ ConversationStore }
+
+func (activeConversationStore) FindConversationByID(
+	context.Context,
+	string,
+) (*model.Conversation, error) {
+	return &model.Conversation{
+		ID:     "conv-1",
+		Status: model.ConversationStatusActive,
+	}, nil
+}
+
+type activeMemberStore struct{ MemberStore }
+
+func (activeMemberStore) FindMember(
+	context.Context,
+	string,
+	string,
+) (*model.ConversationMember, error) {
+	return &model.ConversationMember{ID: "member-1", UserId: "p1"}, nil
+}
+
+type deniedMemberStore struct{ MemberStore }
+
+func (deniedMemberStore) FindMember(
+	context.Context,
+	string,
+	string,
+) (*model.ConversationMember, error) {
+	return nil, errors.New("not a member")
 }

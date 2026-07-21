@@ -24,9 +24,11 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 )
 
+const dataContentFleetIntegrationLeaseTTL = 10 * time.Second
+
 func dataJob(i int) reliabletask.DataContentJob {
 	entity := fmt.Sprintf("entity/地点/景区/%03d", i)
-	return reliabletask.DataContentJob{
+	job := reliabletask.DataContentJob{
 		EntityRef:      entity,
 		Carrier:        "homepage",
 		SourceRevision: fmt.Sprintf("sha256:%064d", i+1),
@@ -36,6 +38,12 @@ func dataJob(i int) reliabletask.DataContentJob {
 		Stage:          "author",
 		PartitionKey:   entity,
 	}
+	key, err := job.ExpectedIdempotencyKey()
+	if err != nil {
+		panic(err)
+	}
+	job.IdempotencyKey = key
+	return job
 }
 
 func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
@@ -81,7 +89,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 		Store:          store,
 		Ready:          ready,
 		WorkerID:       "data-integration-worker",
-		LeaseTTL:       time.Second,
+		LeaseTTL:       dataContentFleetIntegrationLeaseTTL,
 		PendingMinIdle: 10 * time.Millisecond,
 		Retry:          reliabletask.RetryPolicy{MaxAttempts: 3, Backoff: []time.Duration{10 * time.Millisecond}},
 	}
@@ -208,6 +216,29 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
+	// retryOf 的新 immutable execution 即使复用同一实体和来源版本，也必须有独立的
+	// Mongo task/outbox，不能复用前一 execution 的终态或死信。
+	retry := dataJob(0)
+	retry.ExecutionID = "20260720--travel-homepage-coverage--cn-zhejiang--canary-002"
+	retry.JobID = "job-000-retry"
+	if _, err := fleet.Declare(ctx, retry); err != nil {
+		t.Fatalf("declare retry execution task: %v", err)
+	}
+	retryTasks, err := fleet.Dispatch(ctx, 10)
+	if err != nil {
+		t.Fatalf("dispatch retry execution task: %v", err)
+	}
+	if len(retryTasks) != 1 {
+		t.Fatalf("retry execution dispatched=%d want=1", len(retryTasks))
+	}
+	if retryTasks[0].Payload["executionId"] != retry.ExecutionID {
+		t.Fatalf(
+			"retry task executionId=%q want=%q",
+			retryTasks[0].Payload["executionId"],
+			retry.ExecutionID,
+		)
+	}
 }
 
 func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
@@ -257,7 +288,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	if fixture.Schema != "quwoquan.reliabletask_process_fixture" {
 		t.Fatalf("fixture schema drift: %q", fixture.Schema)
 	}
-	key, err := fixture.Job.IdempotencyKey()
+	key, err := fixture.Job.ValidateIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,9 +355,8 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	executor := reliabletask.DataContentProcessExecutor{
 		Command: []string{
 			python,
-			filepath.Join(repoRoot, "quwoquan_data/scripts/cli.py"),
-			"task",
-			"execute-object-worker",
+			"-c",
+			"from content.execution.reliabletask_worker import run_process_worker; run_process_worker()",
 		},
 		WorkDir: filepath.Join(repoRoot, "quwoquan_data"),
 		Environment: dataContentTestEnvironment(
@@ -387,7 +417,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	}
 }
 
-func TestQWQDataCLIUsesProductionReliableTaskFleet(t *testing.T) {
+func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 	repoRoot := strings.TrimSpace(os.Getenv("TEST_REPO_ROOT"))
 	python := strings.TrimSpace(os.Getenv("TEST_QWQ_DATA_PYTHON"))
 	mongoURI := strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
@@ -441,21 +471,39 @@ func TestQWQDataCLIUsesProductionReliableTaskFleet(t *testing.T) {
 		_ = client.Database(databaseName).Drop(context.Background())
 		_ = client.Disconnect(context.Background())
 	})
-	command := exec.Command(
-		python,
-		filepath.Join(repoRoot, "quwoquan_data/scripts/cli.py"),
-		"task",
-		"reliabletask-fleet",
-		"--execution-id",
+	requestPath := filepath.Join(tempRoot, "fleet_request.json")
+	reportPath := filepath.Join(
+		outputRoot,
+		"data",
+		"tasks",
 		fixture.Job.ExecutionID,
-		"--stage",
-		"publish",
-		"--workers",
-		"2",
-		"--timeout-seconds",
-		"60",
+		"evidence",
+		"reliabletask",
+		"publish_fleet_report.json",
 	)
-	command.Dir = filepath.Join(repoRoot, "quwoquan_data")
+	requestPayload, err := json.Marshal(map[string]any{
+		"schema":            "quwoquan.data_content_fleet_request",
+		"executionId":       fixture.Job.ExecutionID,
+		"requireCommercial": true,
+		"recoverDeadTasks":  false,
+		"jobs":              []reliabletask.DataContentJob{fixture.Job},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(requestPath, requestPayload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(
+		"go",
+		"run",
+		"./services/content-service/cmd/data-content-worker",
+		"--request",
+		requestPath,
+		"--report",
+		reportPath,
+	)
+	command.Dir = filepath.Join(repoRoot, "quwoquan_service")
 	command.Env = dataContentEnvironment(
 		os.Environ(),
 		map[string]string{
@@ -466,6 +514,13 @@ func TestQWQDataCLIUsesProductionReliableTaskFleet(t *testing.T) {
 			"QWQ_DATA_FLEET_MONGO_DATABASE":      databaseName,
 			"QWQ_DATA_FLEET_REDIS_ADDR":          redisAddr,
 			"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS": "10",
+			"QWQ_DATA_FLEET_PYTHON":              python,
+			"QWQ_DATA_FLEET_SCRIPTS_ROOT":        filepath.Join(repoRoot, "quwoquan_data", "scripts"),
+			"QWQ_DATA_FLEET_WORK_DIR":            filepath.Join(repoRoot, "quwoquan_data"),
+			"QWQ_DATA_FLEET_PUBLISH_ROOT":        publishRoot,
+			"QWQ_DATA_FLEET_EVIDENCE_ROOT":       outputRoot,
+			"QWQ_DATA_FLEET_WORKERS":             "2",
+			"QWQ_DATA_FLEET_TIMEOUT_MS":          "60000",
 		},
 	)
 	output, err := command.CombinedOutput()
@@ -476,15 +531,6 @@ func TestQWQDataCLIUsesProductionReliableTaskFleet(t *testing.T) {
 			output,
 		)
 	}
-	reportPath := filepath.Join(
-		outputRoot,
-		"data",
-		"tasks",
-		fixture.Job.ExecutionID,
-		"evidence",
-		"reliabletask",
-		"publish_fleet_report.json",
-	)
 	reportBytes, err := os.ReadFile(reportPath)
 	if err != nil {
 		t.Fatal(err)
@@ -522,11 +568,15 @@ func dataContentTestEnvironment(
 	outputRoot string,
 	publishRoot string,
 ) []string {
-	return dataContentEnvironment(current, map[string]string{
+	overrides := map[string]string{
 		"PYTHONDONTWRITEBYTECODE": "1",
 		"QWQ_OUTPUT_ROOT":         outputRoot,
 		"QWQ_PUBLISH_ROOT":        publishRoot,
-	})
+	}
+	if repoRoot := strings.TrimSpace(os.Getenv("TEST_REPO_ROOT")); repoRoot != "" {
+		overrides["PYTHONPATH"] = filepath.Join(repoRoot, "quwoquan_data", "scripts")
+	}
+	return dataContentEnvironment(current, overrides)
 }
 
 func dataContentEnvironment(

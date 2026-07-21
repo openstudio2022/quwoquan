@@ -74,6 +74,8 @@ var (
 	mongoDB                     *mongo.Database
 	mongoClient                 *mongo.Client
 	testRouter                  *rtredis.Router
+	testBehaviorProjectionRelay *recinfra.BehaviorProjectionRelay
+	testBehaviorProjectionMu    sync.Mutex
 )
 
 func requireMongoDB(tb testing.TB) *mongo.Database {
@@ -220,6 +222,19 @@ func TestMain(m *testing.M) {
 		panic("failed to connect to mongo: " + err.Error())
 	}
 	mongoDB = mongoClient.Database("content_test")
+	testBehaviorProjector := recinfra.NewRecommendFeatureProjector(mongoDB)
+	if err := testBehaviorProjector.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize behavior recommendation projection indexes: " + err.Error())
+	}
+	// 测试进程内复用同一个 relay owner；每个 case 创建新 owner 会被上一 case
+	// 15 秒 lease 阻塞，造成把“standby 尚未接管”误判为“投影已完成”的假绿/假红。
+	testBehaviorProjectionRelay = recinfra.NewBehaviorProjectionRelay(
+		mongoDB,
+		testBehaviorProjector,
+		recinfra.NewDiscoveryFeedProjector(mongoDB),
+	).WithWatermarkLag(0).WithConsumer(
+		fmt.Sprintf("api-integration-behavior-feature-projection-%d", time.Now().UnixNano()),
+	)
 	postStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
 	if err := postStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize Post aggregate/outbox indexes: " + err.Error())
@@ -233,7 +248,17 @@ func TestMain(m *testing.M) {
 		panic("failed to initialize MediaUploadSession/MediaAsset indexes: " + err.Error())
 	}
 	mediaObjects := newAPIIntegrationMediaObjectGateway()
-	mediaService := mediaapp.NewMediaService(mediaapp.BindDataPorts(mediaStore), mediaObjects)
+	mediaPostReader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	mediaService := mediaapp.NewMediaService(
+		mediaapp.BindDataPorts(mediaStore),
+		mediaObjects,
+		mediaapp.WithOriginalAccessPostVisibilityReader(
+			postapp.NewMediaAssetVisibilityReader(
+				mediaPostReader,
+				recinfra.NewPersonaBlockReader(mongoDB),
+			),
+		),
+	)
 	testReactionStore = persistence.NewMongoContentReactionStore(mongoDB)
 	if err := testReactionStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize ContentReaction aggregate/outbox indexes: " + err.Error())
@@ -468,11 +493,15 @@ func TestMain(m *testing.M) {
 			CurrentCase: testModerationStore,
 		},
 	))
+	wishlistStore := persistence.NewMongoWishlistEventStore(mongoDB, slog.Default())
 	behaviorService := behaviorapp.NewBehaviorService(
 		hotPath,
 		postStore,
 		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, slog.Default())),
-		behaviorapp.WithWishlistEventStore(persistence.NewMongoWishlistEventStore(mongoDB, slog.Default())),
+		// 写入与读取必须绑定同一个 Mongo port，保持 api_integration 与
+		// cmd/api 生产装配同构，避免状态端点在测试中退化为 503。
+		behaviorapp.WithWishlistEventStore(wishlistStore),
+		behaviorapp.WithWishlistStateReader(wishlistStore),
 		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
 		behaviorapp.WithAuthorImpactStore(authorImpactStore),
 		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
@@ -615,6 +644,19 @@ func (g *apiIntegrationMediaObjectGateway) CompleteUpload(_ context.Context, par
 		SHA256:      params.ExpectedSHA256,
 		DeliveryURL: "https://cdn.test/media/" + strings.TrimPrefix(params.ExpectedSHA256, "sha256:"),
 	}, nil
+}
+
+func (g *apiIntegrationMediaObjectGateway) DeleteTemporaryUpload(
+	_ context.Context,
+	objectKey string,
+) error {
+	if !strings.HasPrefix(objectKey, "uploads/") {
+		return fmt.Errorf("object %s is not a temporary upload", objectKey)
+	}
+	g.mu.Lock()
+	delete(g.objects, objectKey)
+	g.mu.Unlock()
+	return nil
 }
 
 func (g *apiIntegrationMediaObjectGateway) PublishPublicSlice(

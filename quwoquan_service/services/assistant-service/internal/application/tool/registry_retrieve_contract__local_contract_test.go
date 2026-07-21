@@ -69,8 +69,8 @@ func TestSearchToolQueryCanonicalInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("web_search err=%v", err)
 	}
-	if result.Output["provider"] == nil {
-		t.Fatalf("web_search output missing provider: %#v", result.Output)
+	if _, exposed := result.Output["provider"]; exposed {
+		t.Fatalf("web_search must not expose adapter provider: %#v", result.Output)
 	}
 }
 
@@ -101,7 +101,6 @@ func retrievalContractTestRegistry() Registry {
 	})
 	registry.Register(WebSearchMetadata(), func(_ context.Context, _ Request) (Result, error) {
 		return Result{Output: map[string]any{
-			"provider":   "test_web_adapter",
 			"summary":    "web test result",
 			"references": []map[string]any{},
 		}}, nil

@@ -560,27 +560,25 @@ def _homepage_gate_body(page_text: str) -> str:
 
 
 def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, Any]) -> list[str]:
-    """主页确定性标签：主清单契约来源的类型 + 地理标签，加 compose/agent 透传 tagRefs。
-    WP3 统一打标：`typeTagRefs`（Entity/地点/** 全量类型）、`geoTagRef` 主归属与
-    `geoTagRefs` 全量地理归属（Topic/地理/行政区/**）全部并进 tagRefs
-    → ObjectTagIndex 多值反查（「按博物馆浏览」「四川的景区」均命中）。
-    仍不编造：主清单/上游没提供的维度不打。最后补 Topic/Format 最小集，
-    保证 manifest.tagRefs >= 2 个合法 ref（关闭「主页零标签」缺口）。
+    """Project only source-independent homepage tags.
+
+    A coverage leaf's ``typeTagRefs`` is a discovery classification, not
+    evidence that every fine-grained fact is stated by the selected homepage
+    source.  Materializing it verbatim can turn a coverage hint such as ``5A``
+    into an unsupported public claim.  The canonical object therefore keeps
+    the declared entity kind, administrative ownership, and neutral delivery
+    tags.  Evidence-backed fine-grained tags must be produced by the source
+    qualification lane with their own cited evidence; this homepage projection
+    never promotes a static coverage hint into a fact.
     """
     from core.content_tags import resolved_content_tag_refs
-    provided: list[str] = []
+    provided: list[str] = [f"Entity/{domain}/{etype}"]
     if isinstance(payload, dict):
-        provided.extend(
-            str(item).strip() for item in (payload.get("typeTagRefs") or []) if str(item).strip()
-        )
         geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
         if geo_tag_ref:
             provided.append(geo_tag_ref)
         provided.extend(
             str(item).strip() for item in (payload.get("geoTagRefs") or []) if str(item).strip()
         )
-        candidate = payload.get("tagRefs")
-        if isinstance(candidate, list):
-            provided.extend(str(item) for item in candidate if str(item).strip())
     brief: dict[str, Any] = {"tagRefs": list(dict.fromkeys(provided))} if provided else {}
     return resolved_content_tag_refs(brief, "article")

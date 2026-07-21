@@ -70,6 +70,16 @@ func TestFilterCatalogStageValidatesCanonicalPayload(t *testing.T) {
 			},
 		},
 		{
+			name: "duplicate category sort",
+			transform: func(
+				categories []filtercatalogmodel.FilterCategoryDefinition,
+				_ []filtercatalogmodel.FilterPresetDefinition,
+				_ []string,
+			) {
+				categories[1].Sort = categories[0].Sort
+			},
+		},
+		{
 			name: "unknown category reference",
 			transform: func(
 				_ []filtercatalogmodel.FilterCategoryDefinition,
@@ -221,6 +231,55 @@ func TestFilterCatalogCanonicalDigestIsOrderStableAndSnapshotImmutable(t *testin
 		restored.Presets[0].Adjustments.Contrast == 99 ||
 		restored.RecommendedFallbackPresetIDs[0] == "mutated" {
 		t.Fatal("snapshot mutation leaked into immutable FilterCatalogRelease")
+	}
+}
+
+func TestFilterCatalogCanonicalDigestMatchesDecimalBoundaryVector(t *testing.T) {
+	categories := []filtercatalogmodel.FilterCategoryDefinition{
+		{
+			CategoryID:        "camera_photo",
+			DisplayNameZhHans: "拍照",
+			Sort:              1,
+			Enabled:           true,
+		},
+	}
+	presets := []filtercatalogmodel.FilterPresetDefinition{
+		{
+			PresetID:          "original",
+			CategoryID:        "camera_photo",
+			DisplayNameZhHans: "原图",
+			Sort:              1,
+			Enabled:           true,
+			DefaultStrength:   0,
+		},
+		{
+			PresetID:          "cinema",
+			CategoryID:        "camera_photo",
+			DisplayNameZhHans: "电影",
+			DisplayNameEn:     filterCatalogString("Cinema"),
+			Sort:              2,
+			Enabled:           true,
+			DefaultStrength:   80.5,
+			Adjustments: filtercatalogmodel.FilterAdjustmentValues{
+				Contrast:    8.25,
+				Temperature: -12.5,
+				Grain:       0.0000001,
+				Fade:        -0.0,
+			},
+		},
+	}
+
+	digest, err := filtercatalogmodel.ComputeCanonicalDigest(
+		categories,
+		presets,
+		[]string{"cinema"},
+	)
+	if err != nil {
+		t.Fatalf("compute decimal boundary vector digest: %v", err)
+	}
+	const expected = "fba38ede15295f3bbee31375d9955edc0baf722b8c204dbf0575f4ab25401242"
+	if digest != expected {
+		t.Fatalf("decimal boundary digest drift: got %s want %s", digest, expected)
 	}
 }
 

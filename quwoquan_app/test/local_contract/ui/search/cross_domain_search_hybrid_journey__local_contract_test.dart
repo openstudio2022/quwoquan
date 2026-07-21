@@ -11,8 +11,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
@@ -263,7 +263,7 @@ final class _SearchJourneyHarness {
         searchFeedbackCommandWriterProvider.overrideWithValue(feedback),
         assistantXiaoquSearchFacetProvider.overrideWithValue(assistantSearch),
         chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
-        circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+        circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
         homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
         behaviorRepositoryProvider.overrideWithValue(
           _RecordingBehaviorRepository(),

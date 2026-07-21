@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import shutil
 import sys
 from types import SimpleNamespace
 from argparse import Namespace
@@ -46,11 +47,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     publish_root = tmp_path / "publish"
     execution_root = tmp_path / EXECUTION_ID
     release_root = tmp_path / "releases"
+    source_digest = current_source_digest().to_document()
     _write_json(
         execution_root / "execution_manifest.json",
         {
             "executionId": EXECUTION_ID,
-            "sourceDigest": current_source_digest().to_document(),
+            "sourceDigest": source_digest,
         },
     )
     _write_json(
@@ -76,6 +78,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     _write_json(
         entity_root / "manifest.json",
         {
+            "schema": "quwoquan_data.entity_object",
+            "executionId": EXECUTION_ID,
+            "sourceDigest": source_digest,
             "finalContentRef": "page.md",
             "sourceCatalogRef": "source_catalog.json",
             "rightsRef": "rights.json",
@@ -126,12 +131,13 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
 
 def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: Path) -> None:
     publish_root, execution_root, release_root, selected_key, unrelated_key = _fixture(tmp_path)
+    shutil.rmtree(execution_root)
 
     result = build_aggregate_release(
         publish_root=publish_root,
         release_root=release_root,
         release_id=RELEASE_ID,
-        execution_roots=[execution_root],
+        execution_ids=[EXECUTION_ID],
         rollout_milestone="m1",
     )
 
@@ -149,13 +155,13 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert unrelated_key not in {item["objectKey"] for item in media["assets"]}
     aggregate = json.loads((release / "attestations/aggregate.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
-    assert aggregate["sourceDigest"] == current_source_digest().to_document()
+    assert aggregate["sourceDigests"] == [current_source_digest().to_document()]
     assert aggregate["rolloutMilestone"] == "m1"
     assert aggregate["postCount"] == 0
     assert aggregate["creatorCount"] == 0
     header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
     assert header["rolloutMilestone"] == "m1"
-    assert header["sourceDigest"] == current_source_digest().to_document()
+    assert header["sourceDigests"] == [current_source_digest().to_document()]
     assert not (release / "release.json").exists()
     assert not (release / "desired_state.json").exists()
 
@@ -169,7 +175,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         publish_root=publish_root,
         release_root=release_root,
         release_id=RELEASE_ID,
-        execution_roots=[execution_root],
+        execution_ids=[EXECUTION_ID],
         rollout_milestone="m1",
     )
     assert rerun["idempotent"] is True
@@ -211,7 +217,7 @@ def test_canary_release__homepage_only_closure_is_forbidden(
             publish_root=publish_root,
             release_root=release_root,
             release_id="20260713--travel-cold-start--cn-zhejiang--canary-902",
-            execution_roots=[execution_root],
+            execution_ids=[EXECUTION_ID],
             rollout_milestone="canary",
         )
 
@@ -224,8 +230,6 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
         "20260715--travel-homepage-coverage--cn-sichuan--canary-001",
     ]
     captured: dict[str, object] = {}
-
-    monkeypatch.setattr(handler, "execution_root", lambda execution_id: tmp_path / "tasks" / execution_id)
 
     def _build(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
@@ -242,7 +246,7 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
         )
     )
 
-    assert captured["execution_roots"] == [tmp_path / "tasks" / item for item in execution_ids]
+    assert captured["execution_ids"] == execution_ids
     assert captured["rollout_milestone"] == "canary"
     assert json.loads(capsys.readouterr().out)["releaseId"] == RELEASE_ID
 
@@ -292,33 +296,32 @@ def test_launch_release__complete_object_closure__contract__local_contract(
     _write_json(creator_root / "assets.refs.json", {"assets": []})
     (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
 
-    executions: list[Path] = []
+    executions: list[str] = []
 
-    def add_execution(execution_id: str, *, entities: list[str], posts: list[str]) -> None:
-        root = tmp_path / "tasks" / execution_id
-        _write_json(
-            root / "execution_manifest.json",
-            {
-                "executionId": execution_id,
-                "sourceDigest": current_source_digest().to_document(),
-            },
-        )
-        _write_json(
-            root / "publish_ref.json",
-            {
-                "schema": "quwoquan_data.execution_publish_ref",
-                "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
-                "publishedRefs": {"entities": entities, "posts": posts},
-            },
-        )
-        executions.append(root)
+    def add_execution(
+        execution_id: str,
+        *,
+        entities: list[str],
+        posts: list[str],
+        source_digest: dict[str, object] | None = None,
+    ) -> None:
+        source_digest = source_digest or current_source_digest().to_document()
+        for kind, refs in (("entities", entities), ("posts", posts)):
+            for ref in refs:
+                manifest_path = publish_root / kind / ref / "manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["executionId"] = execution_id
+                manifest["sourceDigest"] = source_digest
+                _write_json(manifest_path, manifest)
+        executions.append(execution_id)
 
     add_execution(
         "20260718--travel-homepage-coverage--cn-zhejiang--m3-901",
         entities=[entity_ref],
         posts=[],
     )
+    alternate_source_digest = current_source_digest().to_document()
+    alternate_source_digest["digest"] = "sha256:" + "c" * 64
     for content_type, suffix in (("article", "guide"), ("image", "gallery"), ("video", "short")):
         post_ref = f"{content_type}/普陀山/{suffix}"
         post_root = publish_root / "posts" / post_ref
@@ -350,6 +353,9 @@ def test_launch_release__complete_object_closure__contract__local_contract(
             f"20260718--travel-{content_type}-cold-start--cn-zhejiang--m3-90{len(executions) + 1}",
             entities=[],
             posts=[post_ref],
+            source_digest=(
+                alternate_source_digest if content_type == "article" else None
+            ),
         )
         assert (publish_root / object_key).is_file()
 
@@ -369,7 +375,7 @@ def test_launch_release__complete_object_closure__contract__local_contract(
         publish_root=publish_root,
         release_root=release_root,
         release_id="20260718--travel-cold-start-launch--cn-zhejiang-sichuan--launch-001",
-        execution_roots=executions,
+        execution_ids=executions,
         rollout_milestone="launch",
     )
 
@@ -388,3 +394,8 @@ def test_launch_release__complete_object_closure__contract__local_contract(
     assert payload_file(release, f"objects/creators/{creator_ref}/_creator.json").is_file()
     assert result["postCount"] == 3
     assert result["creatorCount"] == 1
+    release_header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
+    assert release_header["sourceDigests"] == sorted(
+        [current_source_digest().to_document(), alternate_source_digest],
+        key=lambda item: item["digest"],
+    )

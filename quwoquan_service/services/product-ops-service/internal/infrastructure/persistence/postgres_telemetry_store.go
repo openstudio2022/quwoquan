@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS %s.telemetry_event_records (
   page_name TEXT NOT NULL,
   app_version TEXT NOT NULL,
   network_class TEXT NOT NULL,
+  result TEXT,
   error_code TEXT,
   occurred_at TIMESTAMPTZ NOT NULL,
   ingested_at TIMESTAMPTZ NOT NULL,
@@ -68,10 +69,14 @@ CREATE TABLE IF NOT EXISTS %s.telemetry_event_records (
   PRIMARY KEY (batch_key, batch_index),
   UNIQUE (row_key)
 );
+ALTER TABLE %s.telemetry_event_records
+  ADD COLUMN IF NOT EXISTS result TEXT;
 CREATE INDEX IF NOT EXISTS telemetry_event_records_occurred_at_idx
   ON %s.telemetry_event_records (occurred_at DESC);
 CREATE INDEX IF NOT EXISTS telemetry_event_records_session_idx
   ON %s.telemetry_event_records (session_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS telemetry_event_records_result_idx
+  ON %s.telemetry_event_records (event_type, result, occurred_at DESC);
 CREATE TABLE IF NOT EXISTS %s.telemetry_startup_records (
   batch_key TEXT NOT NULL,
   batch_index INTEGER NOT NULL CHECK (batch_index >= 0),
@@ -109,7 +114,8 @@ CREATE TABLE IF NOT EXISTS %s.telemetry_visits (
 `, schema,
 		schema,
 		schema,
-		schema, schema,
+		schema, schema, schema,
+		schema,
 		schema,
 		schema,
 		schema,
@@ -292,8 +298,8 @@ func (s *PostgresTelemetryStore) PutEventBatch(
 	stmt := fmt.Sprintf(`
 INSERT INTO %s (
  batch_key,batch_index,row_key,log_type,event_type,session_id,page_name,
- app_version,network_class,error_code,occurred_at,ingested_at,payload
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+ app_version,network_class,result,error_code,occurred_at,ingested_at,payload
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 ON CONFLICT (batch_key,batch_index) DO NOTHING`, s.table("telemetry_event_records"))
 	for index, record := range records {
 		occurredAt, err := time.Parse(time.RFC3339Nano, record.OccurredAt)
@@ -308,10 +314,14 @@ ON CONFLICT (batch_key,batch_index) DO NOTHING`, s.table("telemetry_event_record
 		if record.ErrorCode != nil {
 			errorCode = strings.TrimSpace(*record.ErrorCode)
 		}
+		result := ""
+		if record.Result != nil {
+			result = strings.TrimSpace(*record.Result)
+		}
 		if _, err := tx.Exec(ctx, stmt,
 			batchKey, index, telemetryRowKey(batchKey, index),
 			record.LogType, record.EventType, record.SessionID, record.PageName,
-			record.AppVersion, record.NetworkClass, nullableText(errorCode),
+			record.AppVersion, record.NetworkClass, nullableText(result), nullableText(errorCode),
 			occurredAt.UTC(), record.IngestedAt.UTC(), payload,
 		); err != nil {
 			return err
@@ -466,6 +476,7 @@ func (s *PostgresTelemetryStore) queryEventRows(
 	add("page_name", query.PageName)
 	add("app_version", query.AppVersion)
 	add("network_class", query.NetworkClass)
+	add("result", query.Result)
 	add("error_code", query.ErrorCode)
 	if strings.TrimSpace(includeSession) != "" {
 		add("session_id", includeSession)
@@ -755,7 +766,7 @@ func (s *PostgresTelemetryStore) GetEventDrilldown(
 ) (application.EventDrilldown, error) {
 	summaryQuery := application.EventSummaryQuery{
 		LogType: query.LogType, EventType: query.EventType, PageName: query.PageName,
-		AppVersion: query.AppVersion, NetworkClass: query.NetworkClass, ErrorCode: query.ErrorCode,
+		AppVersion: query.AppVersion, NetworkClass: query.NetworkClass, Result: query.Result, ErrorCode: query.ErrorCode,
 		From: query.From, To: query.To,
 	}
 	rows, err := s.queryEventRows(ctx, summaryQuery, query.SessionID)

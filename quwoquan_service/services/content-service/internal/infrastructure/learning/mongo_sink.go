@@ -3,6 +3,7 @@ package learning
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -96,16 +97,32 @@ func (s *MongoSink) FlushEvents(
 	now := time.Now().UTC()
 	documents := make([]interface{}, len(events))
 	for index, event := range events {
+		occurredAt, parseErr := time.Parse(time.RFC3339Nano, event.OccurredAt)
+		if parseErr != nil {
+			return fmt.Errorf(
+				"learning event %q has invalid occurredAt %q: %w",
+				event.EventID,
+				event.OccurredAt,
+				parseErr,
+			)
+		}
+		normalizedContext, contextErr := normalizeLearningEventContext(
+			event.EventID,
+			event.Context,
+		)
+		if contextErr != nil {
+			return contextErr
+		}
 		documents[index] = bson.M{
 			// 确定性 eventId 作为 _id 承载 dedupe（rec_model/storage.yaml）：
 			// 重放写入被唯一约束拒绝后按已存在处理，事实不重复。
 			"_id":     event.EventID,
 			"eventId": event.EventID, "eventType": event.EventType,
-			"scenario": event.Scenario, "occurredAt": event.OccurredAt,
+			"scenario": event.Scenario, "occurredAt": occurredAt.UTC(),
 			"userId": event.UserID, "personaId": event.PersonaID,
 			"pageId": event.PageID, "traceId": event.TraceID,
 			"causationId": event.CausationID, "targetId": event.TargetID,
-			"labels": event.Labels, "context": event.Context, "createdAt": now,
+			"labels": event.Labels, "context": normalizedContext, "createdAt": now,
 		}
 	}
 	_, err := s.events.InsertMany(ctx, documents, options.InsertMany().SetOrdered(false))
@@ -118,6 +135,48 @@ func (s *MongoSink) FlushEvents(
 		return err
 	}
 	return nil
+}
+
+// normalizeLearningEventContext 保留信封的动态 context，同时落实
+// RecommendationExposureFact 投影声明的时间类型。在线特征快照必须写为 BSON
+// datetime，避免 PIT 消费者将畸形字符串静默解释为另一条训练时间轴。
+func normalizeLearningEventContext(
+	eventID string,
+	contextMap map[string]any,
+) (map[string]any, error) {
+	if contextMap == nil {
+		return nil, nil
+	}
+	normalized := make(map[string]any, len(contextMap))
+	for key, value := range contextMap {
+		normalized[key] = value
+	}
+	snapshotAt, exists := normalized["featureSnapshotAt"]
+	if !exists {
+		return normalized, nil
+	}
+	switch value := snapshotAt.(type) {
+	case string:
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"learning event %q has invalid featureSnapshotAt %q: %w",
+				eventID,
+				value,
+				err,
+			)
+		}
+		normalized["featureSnapshotAt"] = parsed.UTC()
+	case time.Time:
+		normalized["featureSnapshotAt"] = value.UTC()
+	default:
+		return nil, fmt.Errorf(
+			"learning event %q has non-timestamp featureSnapshotAt type %T",
+			eventID,
+			snapshotAt,
+		)
+	}
+	return normalized, nil
 }
 
 // allDuplicateKeyErrors 判断批量写失败是否全部由 _id dedupe 拒绝构成

@@ -161,7 +161,21 @@ func (s *MemberService) combinedContactHits(
 	query string,
 	limit int,
 ) ([]ContactSearchHit, error) {
-	limit = clampSearchLimit(limit, 20)
+	return s.combinedContactHitsWithMaxLimit(ctx, userID, query, limit, 100)
+}
+
+// combinedContactHitsWithMaxLimit is reserved for server-side intersection
+// evaluation. A group roster is bounded by the group-size policy, so its
+// mutual-contact lookup must not silently truncate at the interactive-search
+// page size.
+func (s *MemberService) combinedContactHitsWithMaxLimit(
+	ctx context.Context,
+	userID string,
+	query string,
+	limit int,
+	maxLimit int,
+) ([]ContactSearchHit, error) {
+	limit = clampLimit(limit, 20, maxLimit)
 	normalizedQuery := normalizeSearchQuery(query)
 	results := make([]ContactSearchHit, 0, limit)
 	indexByID := make(map[string]int, limit)

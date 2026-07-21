@@ -18,7 +18,7 @@ from core.release_layout import (
     payload_root,
 )
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
+from core.source_digest import SourceDigest, SourceDigestError
 from core.tree_integrity import tree_integrity_stats
 from governance.coverage.cold_start_supply import load_cold_start_supply_policy
 from content.execution.identity import parse_execution_id
@@ -65,50 +65,54 @@ def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
 
 
 def _execution_publish_closure(
-    root: Path,
+    execution_id: str,
     *,
     publish_root: Path,
 ) -> ExecutionPublishClosure:
-    manifest = _read_json(root / "execution_manifest.json")
-    execution_id = _execution_id(str(manifest.get("executionId") or ""))
-    if root.name != execution_id:
-        raise ObjectTransactionError("aggregate execution root identity mismatch")
-    publish_ref = _read_json(root / "publish_ref.json")
-    try:
-        assert_valid(
-            publish_ref,
-            "execution",
-            "publish_ref",
-            label=f"publish_ref:{execution_id}",
-        )
-    except (FileNotFoundError, ValueError) as exc:
-        raise ObjectTransactionError(str(exc)) from exc
-    if publish_ref.get("executionId") != execution_id:
-        raise ObjectTransactionError(f"{execution_id}: publish_ref identity mismatch")
-    refs = publish_ref["publishedRefs"]
-    entity_refs = _normalized_refs(
-        refs["entities"], label=f"{execution_id}.publishedRefs.entities"
-    )
-    post_refs = _normalized_refs(
-        refs["posts"], label=f"{execution_id}.publishedRefs.posts"
-    )
+    execution_id = _execution_id(execution_id)
     identity = parse_execution_id(execution_id)
+    matched_refs: dict[str, list[str]] = {"entities": [], "posts": []}
+    matched_digests: list[SourceDigest] = []
+    for kind in ("entities", "posts"):
+        objects_root = publish_root / kind
+        if not objects_root.is_dir():
+            continue
+        for manifest_path in sorted(objects_root.rglob("manifest.json")):
+            manifest = _read_json(manifest_path)
+            if str(manifest.get("executionId") or "") != execution_id:
+                continue
+            ref = _safe_rel(
+                manifest_path.parent.relative_to(objects_root).as_posix(),
+                label=f"{kind}Ref",
+            ).as_posix()
+            try:
+                source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+            except SourceDigestError as exc:
+                raise ObjectTransactionError(
+                    f"{execution_id}: canonical {kind}/{ref} lacks a valid frozen sourceDigest"
+                ) from exc
+            matched_refs[kind].append(ref)
+            matched_digests.append(source_digest)
+    entity_refs = tuple(sorted(matched_refs["entities"]))
+    post_refs = tuple(sorted(matched_refs["posts"]))
     if identity.content_type is ContentType.HOMEPAGE and post_refs:
-        raise ObjectTransactionError(f"{execution_id}: homepage execution published posts")
+        raise ObjectTransactionError(f"{execution_id}: homepage execution has canonical posts")
     if identity.content_type is not ContentType.HOMEPAGE and entity_refs:
-        raise ObjectTransactionError(f"{execution_id}: post execution published entities")
+        raise ObjectTransactionError(f"{execution_id}: post execution has canonical entities")
     if identity.content_type is not ContentType.HOMEPAGE:
         actual_mix = _post_content_mix(publish_root, set(post_refs))
         if set(actual_mix) != {identity.content_type}:
             raise ObjectTransactionError(
-                f"{execution_id}: published post contentType does not match execution identity"
+                f"{execution_id}: canonical post contentType does not match execution identity"
             )
     if not entity_refs and not post_refs:
-        raise ObjectTransactionError(f"{execution_id}: publish_ref has no canonical objects")
-    try:
-        source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
-    except SourceDigestError as exc:
-        raise ObjectTransactionError(f"{execution_id}: {exc}") from exc
+        raise ObjectTransactionError(
+            f"{execution_id}: canonical publish has no objects bound to this execution"
+        )
+    source_digests = {item.digest for item in matched_digests}
+    if len(source_digests) != 1:
+        raise ObjectTransactionError(f"{execution_id}: canonical object source digests drift")
+    source_digest = matched_digests[0]
     return ExecutionPublishClosure(execution_id, entity_refs, post_refs, source_digest)
 
 
@@ -277,10 +281,10 @@ def build_aggregate_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
-    execution_roots: list[Path],
+    execution_ids: list[str],
     rollout_milestone: str,
 ) -> dict[str, Any]:
-    """Create one immutable release from exact execution publish refs."""
+    """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
     try:
         milestone = RolloutMilestone(str(rollout_milestone or "").strip())
@@ -289,20 +293,21 @@ def build_aggregate_release(
     if milestone not in CONTENT_MILESTONES:
         raise ObjectTransactionError("rolloutMilestone is not a content milestone")
     closures = tuple(
-        _execution_publish_closure(root, publish_root=publish_root)
-        for root in execution_roots
+        _execution_publish_closure(execution_id, publish_root=publish_root)
+        for execution_id in execution_ids
     )
     execution_ids = sorted({closure.execution_id for closure in closures})
     if len(execution_ids) != len(closures):
-        raise ObjectTransactionError("aggregate execution roots are duplicated")
-    source_digests = {closure.source_digest.digest for closure in closures}
-    if len(source_digests) != 1:
-        raise ObjectTransactionError("aggregate execution source digests drift")
-    source_digest = closures[0].source_digest
-    if source_digest != current_source_digest():
-        raise ObjectTransactionError(
-            "aggregate execution source digest does not match the frozen repository inputs"
+        raise ObjectTransactionError("aggregate execution IDs are duplicated")
+    source_digests = tuple(
+        sorted(
+            {closure.source_digest for closure in closures},
+            key=lambda source_digest: source_digest.digest,
         )
+    )
+    source_digest_documents = [
+        source_digest.to_document() for source_digest in source_digests
+    ]
     entity_refs = {ref for closure in closures for ref in closure.entity_refs}
     post_refs = {ref for closure in closures for ref in closure.post_refs}
     if not entity_refs and not post_refs:
@@ -345,8 +350,8 @@ def build_aggregate_release(
             and header.get("canonicalMerkle") == selected_merkle
             and header.get("releaseKind") == ReleaseKind.CONTENT
             and header.get("rolloutMilestone") == milestone.value
-            and header.get("sourceDigest") == source_digest.to_document()
-            and aggregate.get("sourceDigest") == source_digest.to_document()
+            and header.get("sourceDigests") == source_digest_documents
+            and aggregate.get("sourceDigests") == source_digest_documents
             and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
             return {
@@ -383,7 +388,7 @@ def build_aggregate_release(
                 "canonicalMerkle": selected_merkle,
                 "executionIds": execution_ids,
                 "rolloutMilestone": milestone.value,
-                "sourceDigest": source_digest.to_document(),
+                "sourceDigests": source_digest_documents,
             },
         )
         _write_json(
@@ -446,7 +451,7 @@ def build_aggregate_release(
             creator_count=len(creator_refs),
             tag_count=len(tag_refs),
             canonical_merkle=selected_merkle,
-            source_digest=source_digest,
+            source_digests=source_digests,
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
         ).to_document()

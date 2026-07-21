@@ -24,7 +24,3 @@ integration:
   external_interaction_base_url: "https://integration-service.local"
   otp:
     mode: fixed_test
-  social:
-    providers: {}
-  one_tap:
-    resolver: aliyun

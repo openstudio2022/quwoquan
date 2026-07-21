@@ -33,6 +33,13 @@ collections:
     role: authoritative
 
 redis_cache:
+  - key: "cache:circle-discovery:{generation}:{scope}:{personaHash}:{category}:{subCategory}:{sort}:{cursor}:{limit}"
+    ttl_seconds: 60
+    entity: CircleDiscoveryFeedPageSlice
+    isolation: persona_scope
+    invalidate_on: [CircleCreated, CircleUpdated, CircleArchived, CircleMembershipJoined, CircleMembershipApproved, CircleMembershipLeft, PostPublished, PostDeleted, CirclePostPlaced, CirclePostPlacementPresentationChanged, CirclePostPlacementRemoved]
+    description: 圈子频道聚合读切片；generation 在任一源事实变更后递增，personaHash 只允许由服务端 actor 上下文生成，匿名 mine 不写缓存。
+
   - key: "cache:circle:{circleId}"
     ttl_seconds: 600
     entity: Circle

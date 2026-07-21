@@ -35,8 +35,10 @@ type UserAccountCloseStore interface {
 	CommitClose(ctx context.Context, accountID string, closedAt time.Time) (CloseResult, error)
 }
 
-// CloseOutboxEvent 是 UserAccountClosed durable outbox 的强类型记录。
-type CloseOutboxEvent struct {
+// UserAccountOutboxEvent 是 UserAccount 生命周期 durable outbox 的强类型记录。
+// UserAccountClosed 使用不可逆清理路径；UserSuspended/UserRestored 只能被可逆
+// restriction projection 消费，三者共享同一投递与重试语义。
+type UserAccountOutboxEvent struct {
 	EventID         string
 	AccountID       string
 	AccountVersion  int64
@@ -46,14 +48,14 @@ type CloseOutboxEvent struct {
 	DeliveryAttempt int
 }
 
-// CloseOutboxStore 为 UserAccountClosed 提供带租约的至少一次投递端口。
-type CloseOutboxStore interface {
+// UserAccountOutboxStore 为 UserAccount 生命周期事件提供带租约的至少一次投递端口。
+type UserAccountOutboxStore interface {
 	ClaimReady(
 		ctx context.Context,
 		owner string,
 		now time.Time,
 		lease time.Duration,
-	) (CloseOutboxEvent, bool, error)
+	) (UserAccountOutboxEvent, bool, error)
 	MarkPublished(
 		ctx context.Context,
 		eventID string,

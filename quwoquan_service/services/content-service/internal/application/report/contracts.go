@@ -8,11 +8,12 @@ import (
 )
 
 type CreateReportCommand struct {
-	ReporterID  string
-	TargetType  reportmodel.TargetType
-	TargetID    string
-	Reason      reportmodel.Reason
-	Description string
+	ReporterID        string
+	ReporterAccountID string
+	TargetType        reportmodel.TargetType
+	TargetID          string
+	Reason            reportmodel.Reason
+	Description       string
 }
 
 type BeginReviewReportCommand struct {

@@ -21,6 +21,7 @@ api_routes:
     idempotency: none
   error_codes:
     - ASSISTANT.USER.preference_invalid_argument
+    - ASSISTANT.USER.preference_not_found
     - ASSISTANT.USER.unauthorized
     - ASSISTANT.SYSTEM.preference_storage_unavailable
   privacy:
@@ -179,8 +180,8 @@ api_routes:
 
 service:
   commercial_defaults:
-    block_reason: 新对象 packet 尚待实现、三层测试与四环境证据闭环
-    gap_id: ASSISTANT_PREFERENCE_FACT_WIRING
+    block_reason: 端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据
+    gap_id: ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE
     status: blocked
     target_story: session-preference-memory-control
   description: AssistantPreferenceFact 对象专属命令与查询 packet。

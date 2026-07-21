@@ -4,11 +4,25 @@ import {
   fetchGrayRoutingPolicy,
   fetchReleases,
   type GrayRoutingPolicyResponse,
+  type GrayRoutingStage,
   type ReleaseItem,
 } from '../../shared/api/controlPlane.js';
 import { SectionCard } from '../../shared/components/SectionCard.js';
 import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
+
+const grayRoutingStages: Array<{ stage: GrayRoutingStage; label: string }> = [
+  { stage: 'gray-initial', label: '初始灰度' },
+  { stage: 'carry-on', label: '持续放量' },
+  { stage: 'full', label: '全量' },
+];
+
+const grayRoutingDimensions = [
+  { key: 'appVersions', label: '端侧版本', header: 'X-Client-App-Version' },
+  { key: 'userIds', label: '用户白名单', header: 'X-Client-User-Id' },
+  { key: 'provinces', label: '省份', header: 'X-Client-Region-Code' },
+  { key: 'carriers', label: '运营商', header: 'X-Client-Carrier' },
+] as const;
 
 export function PlatformRolloutPage() {
   const releaseObject = platformControlPlane.object_types.find((item) => item.object_type === 'config_release');
@@ -99,7 +113,7 @@ export function PlatformRolloutPage() {
 
       <SectionCard
         title="灰度路由策略（IaC 只读）"
-        subtitle="维度：端侧版本 / userId 白名单 / 省份（GB/T 2260）/ 运营商；命中任一维度的请求由公网边缘转发到灰度栈，未命中走稳定栈"
+        subtitle="按发布阶段读取端侧版本 / userId 白名单 / 省份（GB/T 2260）/ 运营商。命中任一启用维度的请求由可信边缘转发到灰度栈；未知或未命中均走稳定栈。"
       >
         {routingPolicy ? (
           <>
@@ -112,32 +126,24 @@ export function PlatformRolloutPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>发布阶段</th>
                   <th>维度</th>
                   <th>匹配请求头</th>
                   <th>命中值</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>端侧版本</td>
-                  <td>X-Client-App-Version</td>
-                  <td>{routingPolicy.policy.dimensions.appVersions.join(', ') || '（空 = 不匹配）'}</td>
-                </tr>
-                <tr>
-                  <td>用户白名单</td>
-                  <td>X-Client-User-Id</td>
-                  <td>{routingPolicy.policy.dimensions.userIds.join(', ') || '（空 = 不匹配）'}</td>
-                </tr>
-                <tr>
-                  <td>省份</td>
-                  <td>X-Client-Region-Code</td>
-                  <td>{routingPolicy.policy.dimensions.provinces.join(', ') || '（空 = 不匹配）'}</td>
-                </tr>
-                <tr>
-                  <td>运营商</td>
-                  <td>X-Client-Carrier</td>
-                  <td>{routingPolicy.policy.dimensions.carriers.join(', ') || '（空 = 不匹配）'}</td>
-                </tr>
+                {grayRoutingStages.flatMap(({ stage, label }) => {
+                  const dimensions = routingPolicy.policy.stageDimensions[stage];
+                  return grayRoutingDimensions.map(({ key, label: dimensionLabel, header }) => (
+                    <tr key={`${stage}-${key}`}>
+                      <td>{label}</td>
+                      <td>{dimensionLabel}</td>
+                      <td>{header}</td>
+                      <td>{dimensions[key].join(', ') || '（空 = 不匹配）'}</td>
+                    </tr>
+                  ));
+                })}
               </tbody>
             </table>
             <div className="inline-note">

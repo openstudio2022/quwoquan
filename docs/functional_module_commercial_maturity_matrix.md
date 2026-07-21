@@ -50,7 +50,7 @@
 | D3 UX 与页面 | 87 个横向矩阵行无 `○`；仍不能证明页面成熟度；横向静态合规与商业成熟度必须分开 | 核心页成熟度≥P4，交集主战场=P5；对象语义、IA、状态、token、模板、双色、断点、iOS、无障碍一致 | 真机/截图审查 + 横向质量门禁 + 重构前后旅程回归 |
 | D4 非功能 | 启动阶段遥测和 API RT 拦截已有；通用页面 TTI、ANR watchdog 与统一离线策略不足 | 页面/接口性能预算、分页缓存、弱网恢复、幂等、灰度与回滚同时冻结；不以后补方式处理 | P50/P95/P99、错误率、恢复率及容量证据在 beta/gamma/prod 可读 |
 | D5 可观测与运营 | 路由级 page_open/page_return、结构化异常、frame jank、Prometheus 中间件已有；真实 SLS/ANR/页面 TTI/多域行为仍有缺口 | 每页曝光/停留/异常/TTI/ANR/恢复页；每关键业务最多 3 个黄金指标；二级指标可下钻到页面、对象状态、operation、错误码 | 真实采集→传输→ETL→SLS/Prometheus→dashboard/alert 全链可回放，不允许 fake |
-| D6 测试 | 当前磁盘 App local_contract 483、api_integration 9、user_acceptance 87；coverage map 通过，但 RTC 特性树扁平化并行改动仍有重复/缺失 acceptance，test specs 未通过 | 状态机、关系、权限、生命周期、页面-对象一致性、交集事实与隐私、重构回归三层齐备 | alpha contract、beta remote、gamma-local Patrol、prod gray canary 证据绑定 acceptance |
+| D6 测试 | 当前磁盘 App local_contract 483、api_integration 9、user_acceptance 87；`verify_test_specs.py` 与 coverage map 均通过，路径诚信已收口；仍需按对象补足真实远端与 hosted 证据 | 状态机、关系、权限、生命周期、页面-对象一致性、交集事实与隐私、重构回归三层齐备 | alpha contract、beta remote、gamma-local Patrol、prod gray canary 证据绑定 acceptance |
 
 ## 3. 每个专项会话必须产出的 A～G
 
@@ -342,7 +342,7 @@
 | App `user_acceptance` | 87 个 | 非 Patrol 不由普通 app gate 全量运行；Patrol 走 gamma 设备入口 | 当前已有 RTC reconnect/answer-hangup，用例存在不等于真机 hosted 证据 |
 | Service local/API | 各服务目录 + canonical bridge | service gate 与专项目标 | circle/rtc/tag 缺 `tests/local_contract`；realtime-gateway 缺 `tests/api_integration` |
 | notification 内层 | domain/application 当前无 `_test.go` | 依赖外层 tests | 核心状态机缺就地测试，不能只靠 HTTP happy path |
-| acceptance traceability | `verify_test_coverage_map.py` 通过；`verify_test_specs.py` 当前失败 | repo gate | RTC 扁平化并行改动中出现 acceptance 重复 YAML 文档与节点文件瞬时缺失；R-OPS-ACCEPTANCE-PHANTOM 未关闭 |
+| acceptance traceability | `verify_test_specs.py` 与 `verify_test_coverage_map.py` 通过 | repo gate | 路径存在性已由硬门验证；仍需逐 Story 补真实环境运行证据，不能以 recorded 路径存在替代验收 |
 
 14 个 Go 服务根 `tests/{local_contract,api_integration}` 当前合计约 **60/152** 个测试文件；这不包含 `internal/**/__local_contract_test.go`。因此 circle/rtc/tag “无 local 根目录”不能写成“完全无本地测试”，notification 也不是“两层零测试”；真正要补的是对象/边界缺证据，而不是为数字整齐新建空 wrapper。
 
@@ -1462,7 +1462,8 @@ iOS Settings、微信设置/关于、Signal Privacy、Apple Legal/Privacy pages�
   `content-service`、`notification-service`、user 关系事实投影和 App Runtime。
 - **交集定位**：场景增强。只展示服务端可证实的 `viewerRelation` 和 `authorLiked`
   事实；不以关系改变 canonical 热评顺序，不暴露关系证据来源或私有关系图。
-- **范围裁决**：评论不支持编辑，避免修改历史讨论语义；仅支持作者 CAS 软删。推荐负反馈、
+- **范围裁决**：评论不支持编辑，避免修改历史讨论语义；仅支持作者发起、服务端内部 CAS
+  执行的软删。推荐负反馈、
   拉黑与屏蔽关键词分别归 FeedbackFact、PersonaRelationship、UserSettings，不在 Comment
   聚合或评论页面维护第二套状态。
 
@@ -1506,30 +1507,32 @@ user relationship facts ──> persona_follow_projection ──> CommentPageSli
 ```text
 CreateComment
   -> active
-  -> 作者 DeleteComment(expectedVersion) -> deleted（终态）
-  -> operator HideComment(expectedVersion) -> hidden
-       -> operator RestoreComment(expectedVersion) -> active
+  -> 作者 DeleteComment(idempotencyKey) -> deleted（终态）
+  -> operator HideComment(idempotencyKey) -> hidden
+       -> operator RestoreComment(idempotencyKey) -> active
   -> PostDeleted projector -> tombstoned（终态）
 ```
 
 - `deleted/tombstoned` 不可恢复；`hidden` 只在作者私有互动投影显示状态，公开列表不可见。
 - 回复必须归一到一级 `parentCommentId`；删除、隐藏、恢复回复都触发父评论 replyCount 与
   hotScore 重算。
+- HTTP 调用方不携带 `expectedVersion`；Comment application 层读取当前聚合版本，仅对纯技术
+  CAS 冲突有界重放同一命名意图，避免客户端快照覆盖后续状态。
 - Report 处置是跨对象命令触发，不直接改 Comment collection；重复事件与已满足状态幂等。
 
 ### M16-E 对象—功能—页面完整性矩阵
 
 | 用户任务 | 对象/命令/查询 | 统一 Comment surface | 个人互动 Tab | 通知中心 | 我的举报/Ops | 当前结论 |
 |---|---|---:|---:|---:|---:|---|
-| 浏览/分页/切换热门最新 | CommentPageSlice/ListComments | ✓ | — | — | — | 本地已闭；真实 Mongo explain/设备待复验 |
+| 浏览/分页/切换热门最新 | CommentPageSlice/ListComments | ✓ | — | — | — | 本地与真实 Mongo 两档 explain 已闭；Gamma 设备待复验 |
 | 展开二级回复/定位 | ReplyPageSlice/ListCommentReplies | ✓ | 跳回宿主 | 跳回宿主 | — | typed 链路已闭 |
 | 评论/回复/@/图片 | CreateComment + MediaAsset | ✓ | — | — | — | typed 输入已闭；真实媒体 UAT 待复验 |
 | 赞/踩/取消 | ContentReaction | ✓ | 回源执行 | — | — | 服务端权威回读 |
 | 置顶/取消置顶 | PinComment/UnpinComment | owner capability | — | 置顶通知 | — | CAS 已闭 |
 | 复制/举报/删除 | Report/DeleteComment | capability action sheet | 回源执行 | — | 举报进度/处置 | 动作与登录续接已补 |
 | IP属地/作者赞过/关系 | CommentPageSlice display projection | ✓ | ✓ | — | — | 服务投影和 UI 已补；窄屏视觉待证 |
-| 治理隐藏/恢复 | HideComment/RestoreComment | 结构化失效 | 状态回流 | 结果回流 | operator | 本地链路已补；环境回放待证 |
-| Post 删除级联 | PostDeleted→tombstone | 结构化失效 | 结构化失效 | 结构化失效 | 审计 | projector 已补；真实 Mongo 回放待证 |
+| 治理隐藏/恢复 | HideComment/RestoreComment | 结构化失效 | 状态回流 | 结果回流 | operator | 本地与真实 Mongo Report→Hide 重放已闭；Gamma 环境回放待证 |
+| Post 删除级联 | PostDeleted→tombstone | 结构化失效 | 结构化失效 | 结构化失效 | 审计 | projector 与真实 Mongo 批量 tombstone/计数收敛已闭；Gamma 环境回放待证 |
 
 ### M16-F 页面成熟度与处置决策
 
@@ -1579,9 +1582,9 @@ V4 Gamma 截图与设备矩阵，因此不得把静态代码评为 P4。
 | D1 功能 | V4 主要代码已落，环境证据不完整 | browse→create/reply→reaction/report→notification→失效完整 | 逐 GWT 关闭 partial/pending | author/viewer/reporter/operator UAT |
 | D2 架构 | Comment/Reaction/Report 独立对象 | metadata→generated client→Facet→Store/Event 单轨 | 扫 legacy/旧三档/动态 Map/第二计数 | ContractGraph + DDD/CQRS gate |
 | D3 UX | 静态约 P2/P3 | 统一评论 surface 达 P4 | 320px、200%字体、键盘、light/dark、语义与焦点测试 | golden/像素 + Gamma iOS/Android/Web profile |
-| D4 性能 | keyset 与事务频控已实现 | list P95<800ms；reply/command P95<500ms；无 N+1/COLLSCAN | 两档 explain、热帖容量、并发频控与投影滞后 | 真实 Mongo 10k/100k 数据集 |
-| D5 运营观测 | lookup/部分服务指标和告警已补 | 评论创建成功率、提交到可见 P95、有效互动率、举报创建率、72h结案率、hotScore/outbox/属地数据新鲜度 | dashboard/alert/runbook 同 operation/trace | Prometheus/SLS readback 与告警演练 |
-| D6 测试环境 | local_contract 已覆盖主链 | local/API/UAT 对称，alpha/beta/gamma/prod 同 commit/Graph hash | Remote API、通知流、设备、AOT/SBOM、prod canary | release gate 全绿 |
+| D4 性能 | 两档 keyset explain、事务频控并发 Mongo 契约已通过 | list P95<800ms；reply/command P95<500ms；无 N+1/COLLSCAN | 热帖容量、投影滞后与环境 P95 读回 | 真实 Mongo 10k/100k 数据集 |
+| D5 运营观测 | dashboard、告警和 Comment runbook 已覆盖 operation、relay、频控和属地 | 评论创建成功率、提交到可见 P95、有效互动率、举报创建率、72h结案率、hotScore/outbox/属地数据新鲜度 | 同 operation/trace 的 Prometheus/SLS readback 与告警演练 | Prometheus/SLS readback 与告警演练 |
+| D6 测试环境 | local_contract 与真实 Mongo API 已覆盖主链 | local/API/UAT 对称，alpha/beta/gamma/prod 同 commit/Graph hash | 通知流、设备、AOT/SBOM、prod canary | release gate 全绿 |
 
 核心业务指标：评论入口→打开率、打开→提交完成率、提交到可见 P50/P95、评论后 24h 有效
 回复率、赞踩转化、举报有效创建率、72h 结案率、通知点击回原评论成功率、结构化恢复成功率。
@@ -1797,8 +1800,8 @@ Apple Maps Place/Search、Google Maps Places、Instagram location tagging、iOS 
 
 ### 28.5 本文验证记录
 
-- `python3 quwoquan_ops/gate/scaffold/verify_test_specs.py`：**失败**；RTC 特性树扁平化仍在并行写入，已观测到同一 acceptance 拼接两个 YAML 文档，以及 `call-experience/acceptance.yaml` 瞬时缺失。正确收口应合并重复 Story 节点并恢复一节点一份有效 acceptance，不能用空 acceptance 绕门。
-- `python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py`：通过。
+- `python3 quwoquan_ops/gate/scaffold/verify_test_specs.py`：通过（2026-07-21；recorded 路径存在性、环境层级与 execution profile 一致性均已复验）。
+- `python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py`：通过（2026-07-21）。
 - `verify_page_horizontal_quality_matrix.py`：通过；`verify_page_matrix_scan_complete.py`：通过（87 paths，inventory aligned）。
 - `make verify-agent-context-contract`：通过。
 - `git diff --check -- docs/functional_module_commercial_maturity_matrix.md specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md`：目标范围通过。

@@ -14,12 +14,44 @@ func main() {
 	var contractGraphPath string
 	var contractGraphLockPath string
 	var generatedManifestPath string
+	var assistantRuntimeEnumsGoOutput string
+	var checkAssistantRuntimeEnumsGo bool
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
 	flag.StringVar(&contractGraphLockPath, "contract-graph-lock", "../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json", "accepted App ContractGraph lock")
 	flag.StringVar(&generatedManifestPath, "generated-manifest", "../quwoquan_app/tool/cloud_codegen/generated_manifest.json", "App generated output manifest")
+	flag.StringVar(
+		&assistantRuntimeEnumsGoOutput,
+		"assistant-runtime-enums-go-output",
+		"",
+		"write Assistant runtime Go enums to this service-owned generated file",
+	)
+	flag.BoolVar(
+		&checkAssistantRuntimeEnumsGo,
+		"check-assistant-runtime-enums-go",
+		false,
+		"verify the Assistant runtime Go enum output is current",
+	)
 	flag.Parse()
+	if assistantRuntimeEnumsGoOutput != "" {
+		if err := initializeContractGraph(metadataDir); err != nil {
+			exitErr(err)
+		}
+		if err := generateAssistantRuntimeEnumsGo(
+			metadataDir,
+			assistantRuntimeEnumsGoOutput,
+			checkAssistantRuntimeEnumsGo,
+		); err != nil {
+			exitErr(err)
+		}
+		return
+	}
+	if checkAssistantRuntimeEnumsGo {
+		exitErr(fmt.Errorf(
+			"--check-assistant-runtime-enums-go requires --assistant-runtime-enums-go-output",
+		))
+	}
 	if err := initializeContractGraphBundle(
 		metadataDir,
 		contractGraphPath,
@@ -288,6 +320,30 @@ func main() {
 		renderContentMediaUploadPolicyDart(mediaUploadPolicy),
 	)
 
+	imageVariantPolicy, imageVariantPolicyErr := readContentImageVariantPolicy(
+		filepath.Join(
+			metadataDir,
+			"content",
+			"media_asset",
+			"image_variant_policy.yaml",
+		),
+	)
+	if imageVariantPolicyErr != nil {
+		exitErr(fmt.Errorf("read content image variant policy: %w", imageVariantPolicyErr))
+	}
+	writeFile(
+		filepath.Join(
+			appDir,
+			"lib",
+			"application",
+			"content",
+			"media",
+			"generated",
+			"content_image_variant_policy.g.dart",
+		),
+		renderContentImageVariantPolicyDart(imageVariantPolicy),
+	)
+
 	prefabUserDef, err := readPrefabUserProvenance(
 		filepath.Join(metadataDir, "_shared", "prefab_user_provenance.yaml"),
 	)
@@ -486,7 +542,7 @@ func main() {
 		}
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "link_templates.g.dart"),
-			renderLinkTemplatesDart(linkTemplates),
+			renderLinkTemplatesDart(linkTemplates, appRoutes),
 		)
 	}
 	if uiSurfaces != nil {

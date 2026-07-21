@@ -1,6 +1,6 @@
 {
   "schema": "circle.scenario-fixtures",
-  "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。",
+  "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧由 AlphaCircleQueryReader 回放 immutable fixture bundle。",
   "repositoryExpectations": {
     "alpha": "mock",
     "beta": "remote",
@@ -12326,58 +12326,162 @@
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_gold_invest",
           "memberCount": 8400,
           "postCount": 1200,
           "discussionCount": 326,
-          "weeklyActiveCount": 326
+          "weeklyActiveCount": 326,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_food",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_tech",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_life",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_city",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_travel",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         },
         {
           "circleId": "fixture_circle_photo",
           "memberCount": 6,
           "postCount": 18,
           "discussionCount": 0,
-          "weeklyActiveCount": 16
+          "weeklyActiveCount": 16,
+          "likeCount": 0,
+          "storageUsedBytes": 0,
+          "storageQuotaBytes": 0
         }
       ],
+      "impacts": {
+        "fixture_circle_photo": {
+          "circleId": "fixture_circle_photo",
+          "total": 6,
+          "items": [
+            {
+              "helpType": "relationship",
+              "action": "join_circle",
+              "intersectionDimension": "relationship",
+              "tagRef": "photography",
+              "source": "circle_membership",
+              "count": 6,
+              "primaryText": "6位成员加入了契约摄影社",
+              "subtitleText": "来自已验证的圈子成员关系",
+              "impactId": "fixture_circle_photo_membership",
+              "primarySpans": [
+                {
+                  "text": "6",
+                  "role": "count"
+                },
+                {
+                  "text": "位成员加入了契约摄影社",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
+                  "displayName": "契约摄影师",
+                  "target": {
+                    "objectType": "user",
+                    "objectId": "fixture_user_photo",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ],
+              "representativeActor": {
+                "actorId": "fixture_user_photo",
+                "displayName": "契约摄影师",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
+                "relationLabel": "圈子成员",
+                "privacyState": "visible",
+                "target": {
+                  "objectType": "user",
+                  "objectId": "fixture_user_photo",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                },
+                "evidenceRank": 1,
+                "snapshotVersion": "fixture-circle-photo-membership"
+              },
+              "actionHints": [],
+              "countTarget": {
+                "objectType": "circle",
+                "objectId": "fixture_circle_photo",
+                "objectKind": "circle",
+                "routeId": "circleDetail"
+              },
+              "evidenceSnapshotId": "fixture_circle_photo_membership_snapshot",
+              "countObjectKind": "person",
+              "propagationPath": {
+                "pathKind": "personToCircle",
+                "hopCount": 1,
+                "secondarySpreadCount": 0,
+                "summaryText": "成员加入契约摄影社",
+                "summaryTarget": {
+                  "objectType": "circle",
+                  "objectId": "fixture_circle_photo",
+                  "objectKind": "circle",
+                  "routeId": "circleDetail"
+                },
+                "nodes": []
+              },
+              "iconKey": "people"
+            }
+          ]
+        }
+      },
       "placements": [
         {
           "circleId": "fixture_circle_photo",

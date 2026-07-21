@@ -18,6 +18,7 @@ import (
 	followingapp "quwoquan_service/services/user-service/internal/application/relationship/following_subject"
 	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
 	subjectfollowapp "quwoquan_service/services/user-service/internal/application/relationship/subject_follow"
+	accountports "quwoquan_service/services/user-service/internal/domain/account/user_account/ports"
 	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
 	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 	usermodel "quwoquan_service/services/user-service/internal/domain/user/model"
@@ -44,6 +45,11 @@ type UserHandler struct {
 	followedSubjectVisit       *visitapp.VisitService
 	followingSubjects          *followingapp.QueryService
 	accountLifecycle           *accountlifecycleapp.CloseAccountFacade
+	accountEnforcement         *accountlifecycleapp.AccountEnforcementCommandFacade
+	accountSecurity            accountports.AccountSecurityReader
+	wechatLogin                *application.FederatedLoginFacade
+	alipayLogin                *application.FederatedLoginFacade
+	qqLogin                    *application.FederatedLoginFacade
 }
 
 // WithAccountLifecycle 注入 UserAccount 生命周期终态 facade（CloseAccount）。
@@ -51,6 +57,35 @@ func (h *UserHandler) WithAccountLifecycle(
 	facade *accountlifecycleapp.CloseAccountFacade,
 ) *UserHandler {
 	h.accountLifecycle = facade
+	return h
+}
+
+// WithAccountEnforcement 注入受信 Suspend/Restore command facade。
+func (h *UserHandler) WithAccountEnforcement(
+	facade *accountlifecycleapp.AccountEnforcementCommandFacade,
+) *UserHandler {
+	h.accountEnforcement = facade
+	return h
+}
+
+// WithAccountSecurityReader 注入认证后终端用户请求的 fail-closed 安全状态校验。
+func (h *UserHandler) WithAccountSecurityReader(
+	reader accountports.AccountSecurityReader,
+) *UserHandler {
+	h.accountSecurity = reader
+	return h
+}
+
+// WithFederatedLogins injects the explicitly bound authorization capabilities
+// for the corresponding published HTTP routes.
+func (h *UserHandler) WithFederatedLogins(
+	wechat *application.FederatedLoginFacade,
+	alipay *application.FederatedLoginFacade,
+	qq *application.FederatedLoginFacade,
+) *UserHandler {
+	h.wechatLogin = wechat
+	h.alipayLogin = alipay
+	h.qqLogin = qq
 	return h
 }
 
@@ -190,7 +225,7 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /owner/contact-discovery/latest", h.handleGetLatestContactDiscovery)
 	mux.HandleFunc("DELETE /owner/contact-discovery/{id}", h.handleDismissContactDiscovery)
 
-	return mux
+	return h.enforceAccountSecurity(mux)
 }
 
 func (h *UserHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -1278,19 +1313,23 @@ func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *UserHandler) handleLoginWithWechat(w http.ResponseWriter, r *http.Request) {
-	h.handleSocialProviderLogin(w, r, "wechat", "wechatCode")
+	h.handleFederatedLogin(w, r, h.wechatLogin, "wechatCode")
 }
 
 func (h *UserHandler) handleLoginWithAlipay(w http.ResponseWriter, r *http.Request) {
-	h.handleSocialProviderLogin(w, r, "alipay", "alipayAuthCode")
+	h.handleFederatedLogin(w, r, h.alipayLogin, "alipayAuthCode")
 }
 
 func (h *UserHandler) handleLoginWithQq(w http.ResponseWriter, r *http.Request) {
-	h.handleSocialProviderLogin(w, r, "qq", "qqAuthCode")
+	h.handleFederatedLogin(w, r, h.qqLogin, "qqAuthCode")
 }
 
-// handleSocialProviderLogin 处理微信/支付宝/QQ：App 只上传短期授权码，服务端置换稳定身份并首次同步资料。
-func (h *UserHandler) handleSocialProviderLogin(w http.ResponseWriter, r *http.Request, provider, primaryField string) {
+func (h *UserHandler) handleFederatedLogin(
+	w http.ResponseWriter,
+	r *http.Request,
+	login *application.FederatedLoginFacade,
+	primaryField string,
+) {
 	body, err := readBody(r)
 	if err != nil {
 		writeInvalidArg(w, r, "invalid body")
@@ -1304,7 +1343,17 @@ func (h *UserHandler) handleSocialProviderLogin(w http.ResponseWriter, r *http.R
 		writeInvalidArg(w, r, primaryField+" required")
 		return
 	}
-	result, err := h.auth.LoginWithSocialProvider(r.Context(), provider, authCode, deviceID, platform, appVersion)
+	if login == nil {
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromSocialProviderUnavailable(
+				"federated identity capability unavailable",
+			),
+		)
+		return
+	}
+	result, err := login.Login(r.Context(), authCode, deviceID, platform, appVersion)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -1318,7 +1367,6 @@ func (h *UserHandler) handleOneTapLogin(w http.ResponseWriter, r *http.Request) 
 		writeInvalidArg(w, r, "invalid body")
 		return
 	}
-	vendor := strings.TrimSpace(anyString(body["vendor"]))
 	carrierToken := strings.TrimSpace(anyString(body["carrierToken"]))
 	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
 	platform := strings.TrimSpace(anyString(body["platform"]))
@@ -1331,7 +1379,6 @@ func (h *UserHandler) handleOneTapLogin(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.auth.LoginWithOneTap(
 		r.Context(),
-		vendor,
 		carrierToken,
 		deviceID,
 		platform,
@@ -1352,7 +1399,6 @@ func (h *UserHandler) handleOneTapLoginHint(w http.ResponseWriter, r *http.Reque
 		writeInvalidArg(w, r, "invalid body")
 		return
 	}
-	vendor := strings.TrimSpace(anyString(body["vendor"]))
 	carrierToken := strings.TrimSpace(anyString(body["carrierToken"]))
 	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
 	platform := strings.TrimSpace(anyString(body["platform"]))
@@ -1363,7 +1409,6 @@ func (h *UserHandler) handleOneTapLoginHint(w http.ResponseWriter, r *http.Reque
 	}
 	result, err := h.auth.ResolveOneTapLoginHint(
 		r.Context(),
-		vendor,
 		carrierToken,
 		deviceID,
 		platform,
@@ -1486,7 +1531,6 @@ func (h *UserHandler) handleBindCarrierPhoneCredential(w http.ResponseWriter, r 
 		writeInvalidArg(w, r, "invalid body")
 		return
 	}
-	vendor, _ := body["vendor"].(string)
 	carrierToken, _ := body["carrierToken"].(string)
 	deviceID, _ := body["deviceId"].(string)
 	platform, _ := body["platform"].(string)
@@ -1494,7 +1538,6 @@ func (h *UserHandler) handleBindCarrierPhoneCredential(w http.ResponseWriter, r 
 	result, err := h.auth.BindCarrierPhoneCredential(
 		r.Context(),
 		userID,
-		vendor,
 		carrierToken,
 		deviceID,
 		platform,

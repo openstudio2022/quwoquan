@@ -7,16 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -28,6 +22,9 @@ import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+
+import '../typed_circle_query_test_double.dart';
 
 class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
   @override
@@ -205,17 +202,29 @@ final class _FixtureCircleMembershipCommandWriter
 }
 
 Widget _scopedApp({
-  CircleRepository? mock,
+  CircleQueryReader? circleQuery,
   VoidCallback? onBack,
   String circleId = 'fixture_circle_photo',
   UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
   List<Override> overrides = const <Override>[],
 }) {
-  final repo = mock ?? MockCircleRepository();
+  final alphaQueries = AlphaCircleQueryReader();
+  final query = circleQuery ?? alphaQueries;
+  final CircleDiscoveryFeedQueryReader discoveryQuery =
+      query is CircleDiscoveryFeedQueryReader
+      ? query as CircleDiscoveryFeedQueryReader
+      : CircleDiscoveryFeedQueryTestDouble(
+          (CircleDiscoveryFeedQuery query) => CircleDiscoveryFeedPageSlice(
+            circles: const <CircleProjection>[],
+            items: const <CircleFeedPostProjection>[],
+          ),
+        );
   return ProviderScope(
     overrides: [
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
-      circleRepositoryProvider.overrideWithValue(repo),
+      circlesListQueryProvider.overrideWithValue(query),
+      circleDetailQueryProvider.overrideWithValue(query),
+      circlesListDiscoveryFeedQueryProvider.overrideWithValue(discoveryQuery),
       circleDetailGroupQueryProvider.overrideWithValue(
         const _FixtureCircleGroupQuery(),
       ),
@@ -264,7 +273,7 @@ Widget _scopedApp({
 
 Future<void> _pumpShell(
   WidgetTester tester, {
-  CircleRepository? mock,
+  CircleQueryReader? circleQuery,
   VoidCallback? onBack,
   String circleId = 'fixture_circle_photo',
   UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
@@ -277,7 +286,7 @@ Future<void> _pumpShell(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     _scopedApp(
-      mock: mock,
+      circleQuery: circleQuery,
       onBack: onBack,
       circleId: circleId,
       sourceAppearanceMode: sourceAppearanceMode,
@@ -385,7 +394,7 @@ void main() {
     });
 
     testWidgets('圈子影响展示云侧 displayText，最多三条且不本地拼装', (tester) async {
-      await _pumpShell(tester, mock: _ImpactCircleRepository());
+      await _pumpShell(tester, circleQuery: _ImpactCircleQuery());
 
       expect(
         find.text(UITextConstants.objectImpactTitleCircle),
@@ -409,7 +418,7 @@ void main() {
       );
       await _pumpShell(
         tester,
-        mock: _ImpactCircleRepository(),
+        circleQuery: _ImpactCircleQuery(),
         circleId: circleId,
         overrides: <Override>[
           currentUserIdProvider.overrideWithValue(viewerId),
@@ -432,7 +441,7 @@ void main() {
     });
 
     testWidgets('圈子影响事实行可点开查看来源说明', (tester) async {
-      await _pumpShell(tester, mock: _ImpactCircleRepository());
+      await _pumpShell(tester, circleQuery: _ImpactCircleQuery());
 
       await tester.tap(find.text('12人在这里建立了新连接'));
       await tester.pumpAndSettle();
@@ -445,13 +454,13 @@ void main() {
     });
 
     testWidgets('圈子影响为空时整体收起', (tester) async {
-      await _pumpShell(tester, mock: _EmptyImpactCircleRepository());
+      await _pumpShell(tester, circleQuery: _EmptyImpactCircleQuery());
 
       expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
     });
 
     testWidgets('圈子影响错误时不阻塞主页并收起影响卡', (tester) async {
-      await _pumpShell(tester, mock: _ImpactErrorCircleRepository());
+      await _pumpShell(tester, circleQuery: _ImpactErrorCircleQuery());
 
       expect(find.byType(CircleShell), findsOneWidget);
       expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
@@ -460,7 +469,7 @@ void main() {
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
       await _pumpShell(
         tester,
-        mock: _PrivateVisitorCircleRepository(),
+        circleQuery: _PrivateVisitorCircleQuery(),
         overrides: <Override>[
           resolvedOwnerUserIdProvider.overrideWithValue(''),
         ],
@@ -574,7 +583,7 @@ void main() {
     testWidgets('审批加入后切换为待审核状态', (tester) async {
       await _pumpShell(
         tester,
-        mock: _ApprovalVisitorCircleRepository(),
+        circleQuery: _ApprovalVisitorCircleQuery(),
         overrides: <Override>[
           resolvedOwnerUserIdProvider.overrideWithValue(''),
         ],
@@ -607,7 +616,7 @@ void main() {
 
   group('CircleShell - 稳定性', () {
     testWidgets('Repository 异常时 Widget 不崩溃', (tester) async {
-      await _pumpShell(tester, mock: _ErrorCircleRepository());
+      await _pumpShell(tester, circleQuery: _ErrorCircleQuery());
 
       expect(find.byType(AppPageErrorState), findsOneWidget);
       expect(find.text(UITextConstants.tryAgain), findsOneWidget);
@@ -621,7 +630,7 @@ void main() {
       var backCalled = false;
       await _pumpShell(
         tester,
-        mock: _ErrorCircleRepository(),
+        circleQuery: _ErrorCircleQuery(),
         onBack: () => backCalled = true,
       );
 
@@ -642,7 +651,7 @@ void main() {
     testWidgets('Repository 异常错误态跟随来源页面 appearance', (tester) async {
       await _pumpShell(
         tester,
-        mock: _ErrorCircleRepository(),
+        circleQuery: _ErrorCircleQuery(),
         sourceAppearanceMode: UiErrorAppearanceMode.light,
       );
       var errorState = tester.widget<AppPageErrorState>(
@@ -652,7 +661,7 @@ void main() {
 
       await _pumpShell(
         tester,
-        mock: _ErrorCircleRepository(),
+        circleQuery: _ErrorCircleQuery(),
         sourceAppearanceMode: UiErrorAppearanceMode.dark,
       );
       errorState = tester.widget<AppPageErrorState>(
@@ -663,43 +672,43 @@ void main() {
   });
 }
 
-class _PrivateVisitorCircleRepository extends MockCircleRepository {
+class _PrivateVisitorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
-    return CircleDetailPayload.fromWire(<String, dynamic>{
-      ...CircleMockData.circleInfo,
-      'id': circleId,
-      'visibility': 'private',
-      'role': 'visitor',
-      'joinStatus': 'none',
-      'isFollowed': false,
-    });
-  }
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      CircleProjection(
+        circleId: query.circleId,
+        name: '私密测试圈子',
+        ownerId: 'fixture_user_owner',
+        visibility: 'private',
+        viewerRole: 'visitor',
+        joinStatus: 'none',
+        isFollowed: false,
+      );
 }
 
-class _ApprovalVisitorCircleRepository extends MockCircleRepository {
+class _ApprovalVisitorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
-    return CircleDetailPayload.fromWire(<String, dynamic>{
-      ...CircleMockData.circleInfo,
-      'id': circleId,
-      'visibility': 'public',
-      'joinPolicy': 'approval',
-      'role': 'visitor',
-      'joinStatus': 'none',
-      'isFollowed': false,
-    });
-  }
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      CircleProjection(
+        circleId: query.circleId,
+        name: '审批测试圈子',
+        ownerId: 'fixture_user_owner',
+        visibility: 'public',
+        joinPolicy: 'approval',
+        viewerRole: 'visitor',
+        joinStatus: 'none',
+        isFollowed: false,
+      );
 }
 
-class _ImpactCircleRepository extends MockCircleRepository {
+class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
-    return CircleImpactSummary(
-      circleId: circleId,
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async {
+    return CircleImpactSlice(
+      circleId: query.circleId,
       total: 21,
-      items: <CircleImpactItem>[
-        CircleImpactItem(
+      items: <CircleImpactItemProjection>[
+        CircleImpactItemProjection(
           helpType: 'relationship',
           action: 'establish_connection',
           intersectionDimension: 'relationship',
@@ -707,7 +716,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           count: 12,
           primaryText: '12人在这里建立了新连接',
         ),
-        CircleImpactItem(
+        CircleImpactItemProjection(
           helpType: 'community',
           action: 'start_discussion',
           intersectionDimension: 'content',
@@ -715,7 +724,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           count: 5,
           primaryText: '5个讨论正在这里发生',
         ),
-        CircleImpactItem(
+        CircleImpactItemProjection(
           helpType: 'spread',
           action: 'active_participation',
           intersectionDimension: 'interest',
@@ -723,7 +732,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           count: 3,
           primaryText: '3人最近参与了这里',
         ),
-        CircleImpactItem(
+        CircleImpactItemProjection(
           helpType: 'spread',
           action: 'hidden',
           intersectionDimension: 'interest',
@@ -736,28 +745,31 @@ class _ImpactCircleRepository extends MockCircleRepository {
   }
 }
 
-class _EmptyImpactCircleRepository extends MockCircleRepository {
+class _EmptyImpactCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
-    return CircleImpactSummary(circleId: circleId);
-  }
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
+      CircleImpactSlice(
+        circleId: query.circleId,
+        total: 0,
+        items: const <CircleImpactItemProjection>[],
+      );
 }
 
-class _ImpactErrorCircleRepository extends MockCircleRepository {
+class _ImpactErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async {
     throw Exception('impact failed');
   }
 }
 
-class _ErrorCircleRepository extends MockCircleRepository {
+class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
+  Future<CircleProjection> get(CircleDetailQuery query) async {
     throw Exception('Network error');
   }
 
   @override
-  Future<CircleStatsWireDto> getCircleStats(String circleId) async {
+  Future<CircleStatsSlice> stats(CircleStatsQuery query) async {
     throw Exception('Network error');
   }
 }

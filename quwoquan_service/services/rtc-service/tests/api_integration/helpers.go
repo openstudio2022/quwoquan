@@ -138,3 +138,24 @@ func extractSession(t *testing.T, resp map[string]any) map[string]any {
 	}
 	return session
 }
+
+func extractMediaAccess(t *testing.T, resp map[string]any) map[string]any {
+	t.Helper()
+	if _, legacy := resp["token"]; legacy {
+		t.Fatal("response must not expose legacy token field")
+	}
+	if _, legacy := resp["livekitUrl"]; legacy {
+		t.Fatal("response must not expose vendor-specific livekitUrl field")
+	}
+	mediaAccess, ok := resp["mediaAccess"].(map[string]any)
+	if !ok {
+		t.Fatal("response missing mediaAccess object")
+	}
+	if accessToken, _ := mediaAccess["accessToken"].(string); accessToken == "" {
+		t.Fatal("mediaAccess missing accessToken")
+	}
+	if _, leaksEndpoint := mediaAccess["connectionUrl"]; leaksEndpoint {
+		t.Fatal("mediaAccess must not expose media connection endpoint")
+	}
+	return mediaAccess
+}

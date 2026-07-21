@@ -55,6 +55,19 @@ errors:
       zh: "位置服务响应超时，请稍后重试"
       en: "Location upstream timed out, please retry"
 
+  - code: INTEGRATION.MIDDLEWARE.location_provider_unavailable
+    kind: MIDDLEWARE
+    reason: location_provider_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: locationProviderUnavailable
+    l10n_key: locationProviderUnavailable
+    go_const: ErrLocationProviderUnavailable
+    user_message:
+      zh: "位置服务暂不可用，请稍后重试"
+      en: "Location provider is temporarily unavailable, please retry"
+
   - code: INTEGRATION.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

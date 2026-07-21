@@ -26,9 +26,14 @@ from report_feedback_probe_support import (
 
 SCHEMA = "content-report-feedback-lifecycle-probe-report"
 SCENARIO = "content.report_feedback.lifecycle"
-LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
 REPORTER_FORBIDDEN_FIELDS = frozenset(
-    {"reviewerId", "resolution", "reporterId", "internalNote"}
+    {
+        "reviewerId",
+        "resolution",
+        "reporterId",
+        "reporterAccountId",
+        "internalNote",
+    }
 )
 
 def _utc_now() -> str:
@@ -306,6 +311,8 @@ def main() -> int:
 
             operator_session = build_operator_session(
                 environment=args.env,
+                base_url=args.base_url,
+                resolve_host=args.resolve_host,
                 hosted_token_env=args.operator_auth_token_env,
             )
             operator = ProbeClient(

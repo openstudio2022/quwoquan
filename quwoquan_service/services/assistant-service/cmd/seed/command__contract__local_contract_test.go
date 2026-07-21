@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
+
+	rtredis "quwoquan_service/runtime/redis"
 )
 
 func TestParseCommandOptionsUsesManifestRefsByDefault(t *testing.T) {
@@ -62,5 +65,36 @@ func TestParseCommandOptionsRejectsInvalidTimeout(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("zero timeout should be rejected")
+	}
+}
+
+func TestRequireAssistantSeedMessageTransportUsesSeedDescriptor(t *testing.T) {
+	router := rtredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {Mode: "memory"},
+		},
+		DefaultScene: "general",
+	})
+	t.Cleanup(func() { _ = router.Close() })
+
+	transport, err := requireAssistantSeedMessageTransport(
+		context.Background(),
+		"alpha",
+		router,
+		map[string]string{"general": "memory"},
+	)
+	if err != nil {
+		t.Fatalf("alpha seed fixture transport error = %v", err)
+	}
+	if transport == nil {
+		t.Fatal("alpha seed fixture transport is nil")
+	}
+	if _, err := requireAssistantSeedMessageTransport(
+		context.Background(),
+		"beta",
+		router,
+		map[string]string{"general": "memory"},
+	); err == nil {
+		t.Fatal("beta seed memory transport must fail closed")
 	}
 }

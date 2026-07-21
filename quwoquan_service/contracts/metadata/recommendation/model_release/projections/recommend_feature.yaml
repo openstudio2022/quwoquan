@@ -40,6 +40,8 @@ fields:
       topicAffinities / audienceAffinities / formatAffinities / entityAffinities /
       entityInstanceAffinities / typeImpressions / typeEngagements / depthDistribution /
       searchTermAffinity / searchTopObjectAffinity / searchTermHeat / searchTermUpdatedAt / ...
+      engagementDepthSum / engagementDepthCount 是行为 relay 原子累计的充分统计量；
+      FeatureStore 只在读时由二者派生 avgEngagementDepth，禁止持久化单条行为覆盖的均值。
       InterestDecayJob 按半衰期衰减四维 affinities，解原始 $inc 单调增长。
       SearchRecommendationSignalPublished 以 24h 新鲜度窗口写入 search* 在线意图特征；
       FeatureStore 读时按 searchTermUpdatedAt 过期剔除，避免 stale search intent 长期污染 Feed。
@@ -74,7 +76,8 @@ fields:
     type: string
     description: |
       行为投影最后成功应用的 rm_behavior_events ObjectID 十六进制水位。
-      与同次 $inc 原子写入，供 relay checkpoint 重放和多副本并发幂等收敛。
+      与同次 $inc 原子写入，供 relay checkpoint 重放幂等收敛；共享 checkpoint
+      由 behavior relay lease 串行推进，禁止多副本乱序跨越该水位。
   - { name: segmentsUpdatedAt, type: timestamp, description: segments 最近回写时间 }
   - { name: updatedAt, type: timestamp }
 

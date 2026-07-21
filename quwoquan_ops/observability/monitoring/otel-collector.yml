@@ -6,6 +6,10 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 processors:
   memory_limiter:
     check_interval: 5s
@@ -16,17 +20,25 @@ processors:
     timeout: 5s
 
 exporters:
-  debug:
-    verbosity: basic
+  otlphttp/traces:
+    endpoint: ${env:OTEL_TRACE_BACKEND_ENDPOINT}
+    tls:
+      insecure: false
+    retry_on_failure:
+      enabled: true
+    sending_queue:
+      enabled: true
+      queue_size: 2048
   prometheus:
     endpoint: 0.0.0.0:8889
 
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [otlphttp/traces]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]

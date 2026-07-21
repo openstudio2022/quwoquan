@@ -7,6 +7,10 @@ collections:
     indexes:
       - { name: idx_circle_group_membership_identity, keys: { groupId: 1, personaId: 1 }, unique: true }
       - { name: idx_circle_group_membership_roster, keys: { groupId: 1, state: 1, joinedAt: 1, _id: 1 } }
+  circle_group_membership_capacity_counters:
+    entity: CircleGroupMembership
+    role: authoritative
+    description: 每个 groupId 一条的事务容量账本；与成员状态、命令回执和 outbox 同一 Mongo transaction 提交，用于串行化 active 成员上限检查。
   circle_group_membership_command_receipts:
     entity: CircleGroupMembershipCommandReceipt
     role: authoritative

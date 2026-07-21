@@ -12,7 +12,7 @@
 ///     --dart-define=API_CONTRACT_ENV=gamma \
 ///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=QWQ_PATROL_SESSION_MODE=local_gamma_anonymous \
-///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.quwoquan-env.test:19000
+///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.localhost:19000
 library;
 
 import 'package:flutter/foundation.dart';
@@ -21,6 +21,7 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -65,6 +66,12 @@ void main() {
       expect(submitVisible, isTrue, reason: '输入查询后必须显示搜索动作');
       await $(find.byKey(_submitButtonKey)).tap();
 
+      final resultsRouteVisible = await _waitForFinder(
+        $,
+        find.byType(SearchNetworkResultsPage),
+        timeout: const Duration(seconds: 8),
+      );
+      expect(resultsRouteVisible, isTrue, reason: '提交查询后必须进入网络结果页');
       final resultsVisible = await _waitForFinder(
         $,
         find.byKey(_allResultsKey),

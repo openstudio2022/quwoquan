@@ -21,7 +21,3 @@ integration:
   external_interaction_base_url: "https://integration-service.prod"
   otp:
     mode: provider
-  social:
-    providers: {}
-  one_tap:
-    resolver: aliyun

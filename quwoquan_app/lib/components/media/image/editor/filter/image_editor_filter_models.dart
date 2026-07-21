@@ -253,55 +253,74 @@ class ImageEditorFilterConfig {
   String toJsonString() => jsonEncode(toJson());
 
   bool isValid() {
-    if (releaseId.trim().isEmpty ||
-        canonicalDigest.length != 64 ||
+    if (!_isCanonicalText(releaseId) ||
+        !_isCanonicalSha256(canonicalDigest) ||
         categories.isEmpty ||
         categories.length > 32 ||
         presets.isEmpty ||
         presets.length > 256) {
       return false;
     }
-    final categoryIds = categories
-        .where((entry) => entry.enabled)
-        .map((entry) => entry.id)
-        .toSet();
-    if (categoryIds.isEmpty) return false;
-    if (categoryIds.length !=
-        categories.where((entry) => entry.enabled).length) {
-      return false;
+    final categoriesById = <String, ImageEditorFilterCategory>{};
+    final categorySorts = <int>{};
+    var hasEnabledCategory = false;
+    for (final category in categories) {
+      if (!_isCanonicalText(category.id) ||
+          !_isCanonicalText(category.label) ||
+          !_isOptionalCanonicalText(category.displayNameEn) ||
+          categoriesById.containsKey(category.id) ||
+          !categorySorts.add(category.sort)) {
+        return false;
+      }
+      categoriesById[category.id] = category;
+      hasEnabledCategory = hasEnabledCategory || category.enabled;
     }
-    final presetIds = <String>{};
+    if (!hasEnabledCategory) return false;
+
+    final presetsById = <String, ImageEditorFilterPreset>{};
+    final sortsByCategory = <String, Set<int>>{};
     for (final preset in presets) {
-      if (preset.id.trim().isEmpty ||
-          preset.name.trim().isEmpty ||
-          !presetIds.add(preset.id) ||
+      final category = categoriesById[preset.categoryId];
+      if (!_isCanonicalText(preset.id) ||
+          !_isCanonicalText(preset.categoryId) ||
+          !_isCanonicalText(preset.name) ||
+          !_isOptionalCanonicalText(preset.displayNameEn) ||
+          category == null ||
+          preset.enabled && !category.enabled ||
+          presetsById.containsKey(preset.id) ||
+          !preset.defaultStrength.isFinite ||
           preset.defaultStrength < 0 ||
           preset.defaultStrength > 100 ||
           !preset.adjustments.isInRange) {
         return false;
       }
-      if (!preset.enabled) continue;
-      if (!categoryIds.contains(preset.categoryId)) return false;
+      final categorySorts = sortsByCategory.putIfAbsent(
+        preset.categoryId,
+        () => <int>{},
+      );
+      if (!categorySorts.add(preset.sort)) return false;
+      presetsById[preset.id] = preset;
     }
-    ImageEditorFilterPreset? original;
-    for (final preset in presets) {
-      if (preset.id == 'original') {
-        original = preset;
-        break;
-      }
-    }
+    final original = presetsById['original'];
     if (original == null ||
+        !original.enabled ||
         original.defaultStrength != 0 ||
         !original.adjustments.isIdentity) {
       return false;
     }
     if (recommendedFallbackPresetIds.toSet().length !=
             recommendedFallbackPresetIds.length ||
-        !recommendedFallbackPresetIds.every(presetIds.contains)) {
+        !recommendedFallbackPresetIds.every(
+          (presetId) =>
+              _isCanonicalText(presetId) &&
+              (presetsById[presetId]?.enabled ?? false),
+        )) {
       return false;
     }
-    return canonicalDigest == _computeCanonicalDigest();
+    return canonicalDigest == computedCanonicalDigest;
   }
+
+  String get computedCanonicalDigest => _computeCanonicalDigest();
 
   String _computeCanonicalDigest() {
     final sortedCategories = [...categories]
@@ -334,6 +353,15 @@ String _requiredText(Map<String, Object?> json, String key) {
   }
   return value.trim();
 }
+
+bool _isCanonicalText(String value) =>
+    value.isNotEmpty && value.trim() == value;
+
+bool _isOptionalCanonicalText(String? value) =>
+    value == null || _isCanonicalText(value);
+
+bool _isCanonicalSha256(String value) =>
+    RegExp(r'^[0-9a-f]{64}$').hasMatch(value);
 
 String? _optionalText(Map<String, Object?> json, String key) {
   final value = json[key];
@@ -392,7 +420,7 @@ String _canonicalJson(Object? value) {
     }
     if (value == 0) return '0';
     if (value is int || value.toInt() == value) return value.toInt().toString();
-    return value.toString();
+    return _canonicalFiniteDouble(value.toDouble());
   }
   if (value is List<Object?>) {
     return '[${value.map(_canonicalJson).join(',')}]';
@@ -405,4 +433,28 @@ String _canonicalJson(Object? value) {
     }).join(',')}}';
   }
   throw ArgumentError.value(value, 'value', 'unsupported canonical JSON type');
+}
+
+String _canonicalFiniteDouble(double value) {
+  final text = value.toString();
+  final exponentIndex = text.indexOf(RegExp(r'[eE]'));
+  if (exponentIndex == -1) return text;
+
+  final coefficient = text.substring(0, exponentIndex);
+  final exponent = int.parse(text.substring(exponentIndex + 1));
+  final negative = coefficient.startsWith('-');
+  final unsignedCoefficient = negative ? coefficient.substring(1) : coefficient;
+  final parts = unsignedCoefficient.split('.');
+  final integer = parts.first;
+  final fraction = parts.length == 2 ? parts.last : '';
+  final digits = integer + fraction;
+  final decimalIndex = integer.length + exponent;
+  final sign = negative ? '-' : '';
+  if (decimalIndex <= 0) {
+    return '${sign}0.${'0' * -decimalIndex}$digits';
+  }
+  if (decimalIndex >= digits.length) {
+    return '$sign$digits${'0' * (decimalIndex - digits.length)}';
+  }
+  return '$sign${digits.substring(0, decimalIndex)}.${digits.substring(decimalIndex)}';
 }

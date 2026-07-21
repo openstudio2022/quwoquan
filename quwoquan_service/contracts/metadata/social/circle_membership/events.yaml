@@ -12,6 +12,12 @@ events:
     channel: transactional_outbox
     payload_entity: CircleMembership
     payload_fields: [id, version, circleId, circleOwnerPersonaId, personaId, role, state, joinedAt]
+  - name: CircleMembershipApproved
+    producer: circle-service
+    consumers: [circle-member-count-projector, recommendation-engine, notification-service]
+    channel: transactional_outbox
+    payload_entity: CircleMembership
+    payload_fields: [id, version, circleId, circleOwnerPersonaId, personaId, role, state, joinedAt]
   - name: CircleMembershipLeft
     producer: circle-service
     consumers: [circle-member-count-projector, recommendation-engine, notification-service]

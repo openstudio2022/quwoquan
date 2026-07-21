@@ -19,11 +19,6 @@ policy:
   enabled: true
   grayUpstream: "http://host.containers.internal:29000"
   grayUpstreamTlsInsecureSkipVerify: false # 同机容器桥接，不经过公网；禁止伪造 internal CA
-  dimensions:
-    appVersions: ["1.1.0"]
-    userIds: [ops-release-canary]
-    provinces: []
-    carriers: []
   stageDimensions:
     gray-initial:
       appVersions: []

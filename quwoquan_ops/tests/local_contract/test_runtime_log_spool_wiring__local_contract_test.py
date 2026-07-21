@@ -61,12 +61,19 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             rendered["volumes"],
         )
 
-    def test_product_ops_writes_sls_directly_without_http_feedback_loop(self) -> None:
+    def test_product_ops_uses_the_durable_spool_without_http_feedback_loop(self) -> None:
         rendered = self.rewrite("product-ops-service")
         env = rendered["environment"]
-        self.assertNotIn("RUNTIME_LOG_INGEST_URL", env)
-        self.assertNotIn("RUNTIME_LOG_SPOOL_DIR", env)
-        self.assertNotIn(
+        self.assertEqual(
+            env["RUNTIME_LOG_INGEST_URL"],
+            "http://product-ops-service:18086/ops/internal/runtime-logs:ingest",
+        )
+        self.assertIn("RUNTIME_LOG_INGEST_TOKEN is required", env["RUNTIME_LOG_INGEST_TOKEN"])
+        self.assertEqual(
+            env["RUNTIME_LOG_SPOOL_DIR"],
+            "/var/lib/quwoquan/runtime-log-spool/product-ops-service",
+        )
+        self.assertIn(
             "runtime-log-spool:/var/lib/quwoquan/runtime-log-spool",
             rendered["volumes"],
         )

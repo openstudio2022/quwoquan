@@ -9,20 +9,11 @@ mongodb:
 
 integration:
   location:
-    provider: "baidu"
-    primary_provider: "baidu"
-    backup_provider: "amap"
-    timeout_ms: 1200
     nearby_default_radius_meters: 3000
     nearby_default_limit: 20
     search_default_limit: 20
     default_latitude: 30.6586
     default_longitude: 104.0648
-    baidu_base_url: "https://api.map.baidu.com"
-    amap_base_url: "https://restapi.amap.com"
-    # placeholder keys, injected by secret/config center in real env
-    baidu_ak: ""
-    amap_key: ""
   external_interaction:
     callback_secret: ""
     sms:

@@ -390,6 +390,13 @@ def verify_experience_collection_wiring(errors: list[str]) -> None:
         "quwoquan_service/services/product-ops-service/internal/application/telemetry_service.go",
         [
             'generated.EventContextExtensions["devicePlatform"]',
+            "type EventRecordInput = generated.EventRecordInput",
+        ],
+        errors,
+    )
+    require_source(
+        "quwoquan_service/services/product-ops-service/internal/generated/event_catalog.go",
+        [
             'out["recoveryAction"]',
             'out["detectionSource"]',
             'out["terminalState"]',

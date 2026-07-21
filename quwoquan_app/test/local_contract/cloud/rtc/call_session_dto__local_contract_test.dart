@@ -497,12 +497,14 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // RtcJoinCredentialsDto（原 RtcTokenDto 合并）
+  // RtcJoinCredentialsDto 媒体访问凭据
   // ──────────────────────────────────────────────────────────────────
   group('RtcJoinCredentialsDto — 常规契约', () {
     test('fromMap 解析全字段', () {
       final raw = <String, dynamic>{
-        'token': 'eyJhbGciOiJIUzI1NiJ9.mock_payload.mock_sig',
+        'mediaAccess': <String, dynamic>{
+          'accessToken': 'eyJhbGciOiJIUzI1NiJ9.mock_payload.mock_sig',
+        },
         'session': <String, dynamic>{
           'callId': 'call_001',
           'initiatorId': 'user_001',
@@ -512,14 +514,14 @@ void main() {
         },
       };
       final dto = decodeRtcJoinCallResult(raw);
-      expect(dto.token, startsWith('eyJ'));
-      expect(dto.roomId, equals('room_abc123'));
-      expect(dto.callId, equals('call_001'));
+      expect(dto.mediaAccess.accessToken, startsWith('eyJ'));
+      expect(dto.session.roomId, equals('room_abc123'));
+      expect(dto.session.callId, equals('call_001'));
     });
 
     test('嵌套 session 信封（JoinCall）', () {
       final raw = <String, dynamic>{
-        'token': 'tok_join',
+        'mediaAccess': <String, dynamic>{'accessToken': 'tok_join'},
         'session': <String, dynamic>{
           'callId': 'call_099',
           'initiatorId': 'user_099',
@@ -529,9 +531,9 @@ void main() {
         },
       };
       final dto = decodeRtcJoinCallResult(raw);
-      expect(dto.token, equals('tok_join'));
-      expect(dto.roomId, equals('room_nested'));
-      expect(dto.callId, equals('call_099'));
+      expect(dto.mediaAccess.accessToken, equals('tok_join'));
+      expect(dto.session.roomId, equals('room_nested'));
+      expect(dto.session.callId, equals('call_099'));
     });
   });
 
@@ -546,11 +548,7 @@ void main() {
 
   group('RtcJoinCredentialsDto — 异常/边界契约', () {
     test('null 值字段安全', () {
-      final raw = <String, dynamic>{
-        'token': null,
-        'roomId': null,
-        'callId': null,
-      };
+      final raw = <String, dynamic>{'session': null, 'mediaAccess': null};
       expect(() => decodeRtcJoinCallResult(raw), throwsFormatException);
     });
   });
@@ -558,7 +556,7 @@ void main() {
   group('Rtc 结果 DTO — rtc-service 信封', () {
     test('RtcInitiateCallResultDto 嵌套 session', () {
       final raw = <String, dynamic>{
-        'token': 'tok_i',
+        'mediaAccess': <String, dynamic>{'accessToken': 'tok_i'},
         'session': <String, dynamic>{
           'callId': 'c1',
           'callType': 'audio',
@@ -572,15 +570,14 @@ void main() {
         },
       };
       final dto = decodeRtcInitiateCallResult(raw);
-      expect(dto.token, equals('tok_i'));
+      expect(dto.mediaAccess.accessToken, equals('tok_i'));
       expect(dto.session.callId, equals('c1'));
       expect(dto.session.roomId, equals('r1'));
     });
 
     test('RtcAnswerCallResultDto 嵌套 session', () {
       final raw = <String, dynamic>{
-        'token': 'tok_a',
-        'roomId': 'r_a',
+        'mediaAccess': <String, dynamic>{'accessToken': 'tok_a'},
         'session': <String, dynamic>{
           'callId': 'c2',
           'callType': 'video',
@@ -594,8 +591,8 @@ void main() {
         },
       };
       final dto = decodeRtcAnswerCallResult(raw);
-      expect(dto.token, equals('tok_a'));
-      expect(dto.roomId, equals('r_a'));
+      expect(dto.mediaAccess.accessToken, equals('tok_a'));
+      expect(dto.session.roomId, equals('r_a'));
       expect(dto.session.callId, equals('c2'));
     });
   });

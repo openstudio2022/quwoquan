@@ -32,6 +32,9 @@
 - [x] 2026-07-20 B6.2 实体主页商用收口已复核 `homepage_claim_page.dart`、`homepage_maintenance_page.dart`、`homepage_status_report_page.dart`、`homepage_detail_page.dart` 与 `homepage_introduction_page.dart`：typed Query/Command Facet、强登录及 owner fail-closed、结构化错误恢复、真实内容跳转与 product action 观测均有 local_contract/UAT 证据；P7 版式与 P8 语义 token 分列结论已同步矩阵。
 - [x] 2026-07-21 CM-003 已复核 `main_app_shell.dart`：Tab 页面 P4 TTI 统一从真实导航起点计时，首帧与首个 content/empty/error 可用终态分轨；P1–P3、P5–P9 及 P7/P8 结论不变。
 - [x] 2026-07-21 M9 实体主页想去闭环已复核 `homepage_detail_page.dart`：地点类型由 generated UI 配置裁决，`GetEntityWishlistState` 与 `wishlist_add/remove` 事实同源，登录成功续接 one-shot；P7 版式未变，P8 复用对象操作栏与语义 token。
+- [x] 2026-07-21 私助偏好管理已复核 `assistant_management_page.dart`：仅投影 active 偏好、撤销恢复限于本次操作窗口；surface operation、required auth 与 typed Facet 同源。P7 延续 Inset 响应式壳，P8 延续设置语义 token。
+- [x] 2026-07-21 圈群托管治理已复核 `chat_settings_page.dart` 与 `group_manage_page.dart`：`circleGroupId` 从 metadata projection 生成；保留会话成员与 RTC 能力展示，隐藏 Chat 侧成员/治理写入并跳转 Circle 详情。P7 分别延续成员网格列宽和 Inset 宽度壳；P8 分别延续设置语义颜色、间距与字阶 token。
+- [x] 2026-07-21 圈子主页 Phase 2 已复核 `home_circles_hub_page.dart`：聚合 typed Slice 保证默认 `recommended` 单请求、认证后才请求 `mine`；cursor 仅服务端解释并按 `placementId` 去重追加，未回退 N+1 或 raw Map。P7 保持 `AppSpacing` 双列/滚动响应式壳；P8 保持既有语义色、间距和字阶 token。
 
 ## 维度快速核对（当前 P1–P9）
 

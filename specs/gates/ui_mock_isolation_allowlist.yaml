@@ -15,5 +15,3 @@ allowed:
     rule: import_cloud_mock
   - path: cloud/services/circle/mock/circle_contract_seed_helpers.dart
     rule: import_cloud_mock
-  - path: cloud/services/entity/mock/homepage_repository_mock.dart
-    rule: import_cloud_mock

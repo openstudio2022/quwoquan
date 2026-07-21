@@ -122,7 +122,10 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SendMessage",
 		attribute.String("conversation.id", req.ConversationId),
 		attribute.String("message.type", req.Type))
-	defer func() { rtobs.EndSpan(span, err) }()
+	defer func() {
+		recordChatMentionCommand(req.Mentions, err)
+		rtobs.EndSpan(span, err)
+	}()
 
 	if err := s.ensureMessageAllowed(ctx, req); err != nil {
 		return nil, err
@@ -752,7 +755,10 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.MarkAsRead",
 		attribute.String("conversation.id", req.ConversationId),
 		attribute.String("message.id", req.MessageId))
-	defer func() { rtobs.EndSpan(span, err) }()
+	defer func() {
+		recordChatReadWatermarkCommand(err)
+		rtobs.EndSpan(span, err)
+	}()
 	if err := s.requireConversationMembership(ctx, req.ConversationId, req.UserId); err != nil {
 		return err
 	}

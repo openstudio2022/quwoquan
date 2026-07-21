@@ -29,6 +29,7 @@ void main() {
       final prepared = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
         state: state,
+        mediaPreparationIdentity: 'photo-payload-draft',
         sourceReader: _MemoryContentMediaSourceReader(fileStorage.bytesByPath),
         uploadStream:
             (
@@ -73,10 +74,7 @@ void main() {
       ]);
       expect(prepared.payload, isNot(contains('mediaUrls')));
       expect(prepared.payload, isNot(contains('coverUrl')));
-      expect(prepared.payload['mediaItems'], <Map<String, Object?>>[
-        <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_1'},
-        <String, Object?>{'kind': 'image', 'mediaId': 'image_asset_2'},
-      ]);
+      expect(prepared.payload, isNot(contains('mediaItems')));
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
       expect(
         prepared.payload.values.toString(),
@@ -101,6 +99,7 @@ void main() {
         buildPostPublicationPayloadWithRemoteMedia(
           media: media,
           state: state,
+          mediaPreparationIdentity: 'photo-failure-draft',
           sourceReader: _MemoryContentMediaSourceReader(
             fileStorage.bytesByPath,
           ),

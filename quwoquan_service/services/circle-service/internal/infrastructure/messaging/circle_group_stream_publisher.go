@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
 	groupports "quwoquan_service/services/circle-service/internal/domain/circle/circle_group/ports"
 )
 
@@ -18,15 +17,15 @@ const (
 )
 
 type CircleGroupStreamPublisher struct {
-	redis rtredis.Client
+	transport durableStreamTransport
 }
 
-func NewCircleGroupStreamPublisher(redis rtredis.Client) *CircleGroupStreamPublisher {
-	return &CircleGroupStreamPublisher{redis: redis}
+func NewCircleGroupStreamPublisher(transport durableStreamTransport) *CircleGroupStreamPublisher {
+	return &CircleGroupStreamPublisher{transport: transport}
 }
 
 func (publisher *CircleGroupStreamPublisher) Publish(ctx context.Context, event groupports.OutboxEvent) error {
-	if publisher == nil || publisher.redis == nil {
+	if publisher == nil || publisher.transport == nil {
 		return fmt.Errorf("CircleGroup stream publisher is not configured")
 	}
 	if strings.TrimSpace(event.EventID) == "" || strings.TrimSpace(event.EventType) == "" ||
@@ -36,16 +35,13 @@ func (publisher *CircleGroupStreamPublisher) Publish(ctx context.Context, event 
 	if !json.Valid(event.Payload) {
 		return fmt.Errorf("CircleGroup event payload is not valid JSON")
 	}
-	if _, err := publisher.redis.XAdd(ctx, CircleGroupStream, map[string]string{
+	if err := appendCircleDurableRecord(ctx, publisher.transport, CircleGroupStream, map[string]string{
 		"eventId": event.EventID, "eventType": event.EventType,
 		"aggregateType": "CircleGroup", "aggregateId": event.AggregateID,
 		"aggregateVersion": strconv.FormatInt(event.AggregateVersion, 10),
 		"payload":          string(event.Payload), "occurredAt": event.OccurredAt.UTC().Format(time.RFC3339Nano),
-	}); err != nil {
+	}, CircleGroupStreamRetention); err != nil {
 		return fmt.Errorf("append CircleGroup stream: %w", err)
-	}
-	if err := publisher.redis.Expire(ctx, CircleGroupStream, CircleGroupStreamRetention); err != nil {
-		return fmt.Errorf("refresh CircleGroup stream retention: %w", err)
 	}
 	return nil
 }

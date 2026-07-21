@@ -64,13 +64,14 @@ func (s *ReportService) CreateReport(
 		return ReportCommandResult{}, unavailable(err)
 	}
 	aggregate, err := reportmodel.Create(reportmodel.CreateParams{
-		ID:          reportID,
-		ReporterID:  command.ReporterID,
-		TargetType:  command.TargetType,
-		TargetID:    command.TargetID,
-		Reason:      command.Reason,
-		Description: command.Description,
-		Now:         now,
+		ID:                reportID,
+		ReporterID:        command.ReporterID,
+		ReporterAccountID: command.ReporterAccountID,
+		TargetType:        command.TargetType,
+		TargetID:          command.TargetID,
+		Reason:            command.Reason,
+		Description:       command.Description,
+		Now:               now,
 	})
 	if err != nil {
 		return ReportCommandResult{}, mapDomainError(err)
@@ -83,17 +84,19 @@ func (s *ReportService) CreateReport(
 		commandDigest,
 		"content.report.created",
 		struct {
-			ReportID   string                 `json:"reportId"`
-			ReporterID string                 `json:"reporterId"`
-			TargetType reportmodel.TargetType `json:"targetType"`
-			TargetID   string                 `json:"targetId"`
-			Reason     reportmodel.Reason     `json:"reason"`
+			ReportID          string                 `json:"reportId"`
+			ReporterID        string                 `json:"reporterId"`
+			ReporterAccountID string                 `json:"reporterAccountId"`
+			TargetType        reportmodel.TargetType `json:"targetType"`
+			TargetID          string                 `json:"targetId"`
+			Reason            reportmodel.Reason     `json:"reason"`
 		}{
-			ReportID:   reportID,
-			ReporterID: strings.TrimSpace(command.ReporterID),
-			TargetType: command.TargetType,
-			TargetID:   strings.TrimSpace(command.TargetID),
-			Reason:     command.Reason,
+			ReportID:          reportID,
+			ReporterID:        strings.TrimSpace(command.ReporterID),
+			ReporterAccountID: strings.TrimSpace(command.ReporterAccountID),
+			TargetType:        command.TargetType,
+			TargetID:          strings.TrimSpace(command.TargetID),
+			Reason:            command.Reason,
 		},
 		now,
 	)
@@ -197,19 +200,21 @@ func (s *ReportService) Resolve(
 		commandDigest,
 		"content.report.resolved",
 		struct {
-			ReportID   string                 `json:"reportId"`
-			ReporterID string                 `json:"reporterId"`
-			TargetType reportmodel.TargetType `json:"targetType"`
-			TargetID   string                 `json:"targetId"`
-			ReviewerID string                 `json:"reviewerId"`
-			Resolution reportmodel.Resolution `json:"resolution"`
+			ReportID          string                 `json:"reportId"`
+			ReporterID        string                 `json:"reporterId"`
+			ReporterAccountID string                 `json:"reporterAccountId"`
+			TargetType        reportmodel.TargetType `json:"targetType"`
+			TargetID          string                 `json:"targetId"`
+			ReviewerID        string                 `json:"reviewerId"`
+			Resolution        reportmodel.Resolution `json:"resolution"`
 		}{
-			ReportID:   aggregate.ID(),
-			ReporterID: snapshot.ReporterID,
-			TargetType: snapshot.TargetType,
-			TargetID:   snapshot.TargetID,
-			ReviewerID: strings.TrimSpace(command.ReviewerID),
-			Resolution: command.Resolution,
+			ReportID:          aggregate.ID(),
+			ReporterID:        snapshot.ReporterID,
+			ReporterAccountID: snapshot.ReporterAccountID,
+			TargetType:        snapshot.TargetType,
+			TargetID:          snapshot.TargetID,
+			ReviewerID:        strings.TrimSpace(command.ReviewerID),
+			Resolution:        command.Resolution,
 		},
 		now,
 	)
@@ -257,17 +262,19 @@ func (s *ReportService) Dismiss(
 		commandDigest,
 		"content.report.dismissed",
 		struct {
-			ReportID   string                 `json:"reportId"`
-			ReporterID string                 `json:"reporterId"`
-			TargetType reportmodel.TargetType `json:"targetType"`
-			TargetID   string                 `json:"targetId"`
-			ReviewerID string                 `json:"reviewerId"`
+			ReportID          string                 `json:"reportId"`
+			ReporterID        string                 `json:"reporterId"`
+			ReporterAccountID string                 `json:"reporterAccountId"`
+			TargetType        reportmodel.TargetType `json:"targetType"`
+			TargetID          string                 `json:"targetId"`
+			ReviewerID        string                 `json:"reviewerId"`
 		}{
-			ReportID:   aggregate.ID(),
-			ReporterID: snapshot.ReporterID,
-			TargetType: snapshot.TargetType,
-			TargetID:   snapshot.TargetID,
-			ReviewerID: strings.TrimSpace(command.ReviewerID),
+			ReportID:          aggregate.ID(),
+			ReporterID:        snapshot.ReporterID,
+			ReporterAccountID: snapshot.ReporterAccountID,
+			TargetType:        snapshot.TargetType,
+			TargetID:          snapshot.TargetID,
+			ReviewerID:        strings.TrimSpace(command.ReviewerID),
 		},
 		now,
 	)

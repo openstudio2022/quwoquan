@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-20T14:35:49.873809Z
+updated_at: 2026-07-21T04:03:00Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -173,6 +173,14 @@ features:
           domain: ""
           status: specified
           tags: []
+          children:
+            - id: session-preference-memory-control
+              name: session-preference-memory-control
+              level: L3_story
+              path: assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control
+              domain: ""
+              status: specified
+              tags: []
     - id: chat-conversation
       name: chat-conversation
       level: L1_domain_service
@@ -679,6 +687,14 @@ features:
           domain: ""
           status: specified
           tags: []
+          children:
+            - id: circle-group-chat-binding-sync
+              name: circle-group-chat-binding-sync
+              level: L3_story
+              path: circle-community/circle-collaboration-tools/circle-group-chat-binding-sync
+              domain: ""
+              status: specified
+              tags: []
         - id: circle-experience-redesign
           name: circle-experience-redesign
           level: L2_business_capability
@@ -1229,6 +1245,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: image-delivery-variants
+              name: image-delivery-variants
+              level: L3_story
+              path: discovery-content/media-processing-helper-read/image-delivery-variants
+              domain: ""
+              status: specified
+              tags: []
             - id: helper-read-summary
               name: helper-read-summary
               level: L3_story
@@ -2682,6 +2705,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: capability-provider-commercial-readiness-gate
+              name: capability-provider-commercial-readiness-gate
+              level: L3_story
+              path: runtime/runtime-external-integration/capability-provider-commercial-readiness-gate
+              domain: ""
+              status: specified
+              tags: []
             - id: integration-service-foundation
               name: integration-service-foundation
               level: L3_story
@@ -2693,6 +2723,13 @@ features:
               name: integration-service-foundation--location-nearby-search-gateway
               level: L3_story
               path: runtime/runtime-external-integration/integration-service-foundation--location-nearby-search-gateway
+              domain: ""
+              status: specified
+              tags: []
+            - id: provider-adapter-conformance-suite
+              name: provider-adapter-conformance-suite
+              level: L3_story
+              path: runtime/runtime-external-integration/provider-adapter-conformance-suite
               domain: ""
               status: specified
               tags: []
@@ -3420,6 +3457,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: account-suspension-and-appeal-lifecycle
+              name: account-suspension-and-appeal-lifecycle
+              level: L3_story
+              path: user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle
+              domain: ""
+              status: specified
+              tags: []
             - id: account-lifecycle--self-service-account-closure
               name: account-lifecycle--self-service-account-closure
               level: L3_story

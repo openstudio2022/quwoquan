@@ -262,8 +262,8 @@ export function ProductL1L4MetricsPage() {
             label="实时覆盖"
             value={`${metricsPayload?.coverage.liveMetrics ?? 0}/${metricsPayload?.coverage.totalMetrics ?? 0}`}
             icon={<ShieldCheck size={20} color="#16A34A" />}
-            trendLabel={`fallback=${metricsPayload?.coverage.fallbackMetrics ?? 0}`}
-            trendTone={(metricsPayload?.coverage.fallbackMetrics ?? 0) > 0 ? 'warning' : 'positive'}
+            trendLabel={`unavailable=${metricsPayload?.coverage.unavailableMetrics ?? 0}`}
+            trendTone={(metricsPayload?.coverage.unavailableMetrics ?? 0) > 0 ? 'warning' : 'positive'}
             description={`eventSignals=${metricsPayload?.coverage.eventSignals ?? 0}`}
           />
           <KpiCard

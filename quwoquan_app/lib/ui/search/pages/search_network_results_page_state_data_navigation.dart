@@ -249,27 +249,19 @@ extension _SearchNetworkResultsPageStateDataNavigation
   Future<void> _openAssistantCitation(
     AssistantSearchCitationView citation,
   ) async {
-    switch (citation.objectType) {
-      case 'circle':
-        if (citation.objectId.isNotEmpty) {
-          context.push(
-            AppRoutePaths.circleDetail(id: citation.objectId),
-            extra: const CircleDetailPageRouteExtra(
-              referralSource: ReferralSource.search,
-            ),
-          );
-        }
-        return;
-      case 'conversation':
-        if (citation.objectId.isNotEmpty) {
-          context.push(AppRoutePaths.chatDetail(id: citation.objectId));
-        }
-        return;
-      case 'post':
-      default:
-        if (citation.objectId.isNotEmpty) {
-          await _openPost(citation.objectId);
-        }
+    final destination = CitationDestinationResolver.resolve(
+      citation.destination,
+    );
+    switch (destination) {
+      case InternalCitationDestination():
+        context.push(destination.routePath);
+      case ExternalCitationDestination():
+        await launchUrl(
+          destination.uri,
+          mode: LaunchMode.externalApplication,
+        );
+      case null:
+        // 未知对象、无链接与非法 URL 均 fail-closed，绝不回退打开 post。
         return;
     }
   }

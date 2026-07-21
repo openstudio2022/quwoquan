@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../typed_circle_query_test_double.dart';
 
 class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
   @override
@@ -14,13 +15,14 @@ class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
 }
 
 Widget _scopedApp({
-  CircleRepository? mock,
+  CircleQueryReader? circleQuery,
   String circleId = 'fixture_circle_photo',
 }) {
-  final repo = mock ?? MockCircleRepository();
+  final query = circleQuery ?? CircleQueryReaderTestDouble();
   return ProviderScope(
     overrides: [
-      circleRepositoryProvider.overrideWithValue(repo),
+      circleDetailQueryProvider.overrideWithValue(query),
+      circlesListQueryProvider.overrideWithValue(query),
       // 游客态：行为信号守卫短路，不触发 Remote-only 装配链。
       resolvedOwnerUserIdProvider.overrideWithValue(''),
       circleDetailBehaviorFactWriterProvider.overrideWithValue(

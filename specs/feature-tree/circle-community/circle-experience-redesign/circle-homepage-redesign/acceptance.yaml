@@ -75,6 +75,63 @@ gwt_acceptance:
         - beta
         - gamma
     notes: []
+  GWT2:
+    title: 圈子频道单请求、游标与强类型内容投影
+    given:
+    - 用户进入圈子频道，默认频道为 recommended。
+    - 服务端存在不同分类、成员范围、展示位状态和相同排序值的圈子内容。
+    when:
+    - 用户首次打开频道、切换我的频道或继续加载下一页。
+    then:
+    - 首屏仅请求一次 ListCircleDiscoveryFeed(recommended)；已认证用户切换我的频道后才请求 ListCircleDiscoveryFeed(mine)，匿名用户不会读取 mine 数据。
+    - 页面只消费服务端返回的 CircleDiscoveryFeedPageSlice 与 CircleFeedItemView；每个帖子必含 placementId，展示字段不通过 Post.toMap 或动态 Map 补造。
+    - nextCursor 驱动增量追加且无重复/遗漏；服务端稳定排序、scope 与分类过滤在端侧不可被重新解释。
+    - Circle、Membership、Post、Placement 变化后，最多 60 秒缓存窗口内收敛为最新内容；恢复请求显示结构化加载/错误/重试状态。
+    edge_cases:
+    - anonymous mine 返回安全空态与登录续接，不泄漏成员圈子、成员关系或私密内容。
+    - 缺 placementId、非法 cursor 或非法 scope 时不以空成功降级；端侧显示结构化 RuntimeFailure 恢复面。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/social/circle/service.yaml
+    - quwoquan_service/contracts/metadata/social/circle/fields.yaml
+    - quwoquan_service/contracts/metadata/social/circle/projections/circle_discovery_feed.yaml
+    - quwoquan_service/contracts/metadata/social/circle/storage.yaml
+    performance_points:
+    - ListCircleDiscoveryFeed p95 <= 800ms at 10k/100k fixture scale
+    - 默认频道首屏一次请求
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/ui/circle/pages/home_circles_hub_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/circle/circle_query_contracts__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/cloud/circle/circle_discovery_feed__api_integration_test.dart
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_discovery_feed__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/patrol/circle/circle_commercial_visual_journey__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.circle_community.circle_experience_redesign.circle_homepage_redesign.gwt2_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.circle_community.circle_experience_redesign.circle_homepage_redesign.gwt2_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: gwt2_user_acceptance
+        cases:
+        - user_acceptance.circle_community.circle_experience_redesign.circle_homepage_redesign.gwt2_user_acceptance
+        envs:
+        - gamma_local
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

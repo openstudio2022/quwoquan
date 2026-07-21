@@ -32,10 +32,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_request_page_
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/remote/circle/circle/circle_lifecycle_remote.dart';
+import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/profile_interaction/profile_interaction_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/persona/persona_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reaction_facets_remote.dart';
@@ -53,6 +53,38 @@ import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 import '../../../support/homepage_remote_test_support.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
+
+const _personaManagementItem = <String, Object?>{
+  'subAccountId': 'persona_1',
+  'displayName': '摄影分身',
+  'userHandle': 'photo-persona',
+  'isolationLevel': 'open',
+  'profileVisibility': 'public',
+  'isPrimary': false,
+  'isActive': false,
+  'status': 'active',
+  'hasPublishedContent': false,
+  'inheritsProfileFromOwner': true,
+  'overriddenProfileFields': <String>[],
+  'subjectType': 'persona',
+};
+
+const _activePersonaContext = <String, Object?>{
+  'ownerUserId': 'account-1',
+  'subAccountId': 'persona_1',
+  'subjectType': 'persona',
+  'displayName': '摄影分身',
+  'avatarUrl': '',
+  'avatarVersion': 0,
+  'isPrimary': false,
+  'isolationLevel': 'open',
+  'profileVisibility': 'public',
+  'contextVersion': 1,
+  'personaSnapshotVersion': 1,
+  'sourceSurfaceId': 'profilePersonas',
+  'explicitOverride': false,
+  'switchedAt': '2026-07-20T12:00:00Z',
+};
 
 typedef _CapturedRequest = ({
   String method,
@@ -219,6 +251,57 @@ MockClient _captureClient(List<_CapturedRequest> log) {
         headers: {'content-type': 'application/json'},
       );
     }
+    if (request.method == 'GET' && path == UserApiMetadata.listPersonasPath) {
+      return http.Response(
+        json.encode(<String, Object?>{
+          'items': <Object?>[_personaManagementItem],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == UserApiMetadata.getPersonaManagementSummaryPath) {
+      return http.Response(
+        json.encode(<String, Object?>{
+          'items': <Object?>[_personaManagementItem],
+          'quota': <String, Object?>{
+            'ownerUserId': 'account-1',
+            'totalCount': 1,
+            'quotaLimit': 5,
+            'remainingCount': 4,
+          },
+          'activeContext': _activePersonaContext,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == UserApiMetadata.getActivePersonaContextPath) {
+      return http.Response(
+        json.encode(_activePersonaContext),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path ==
+            UserApiMetadata.getPersonaLifecycleGuardPath(
+              subAccountId: 'persona_1',
+            )) {
+      return http.Response(
+        json.encode(<String, Object?>{
+          'subAccountId': 'persona_1',
+          'requestedAction': 'retire',
+          'allowed': true,
+          'reason': 'allowed',
+          'requiresSuccessor': false,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
     if (request.method == 'POST' && path == UserApiMetadata.createPersonaPath) {
       return http.Response(
         json.encode({
@@ -244,11 +327,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
         path ==
             UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1')) {
       return http.Response(
-        json.encode({
-          'ownerUserId': 'account-1',
-          'subAccountId': 'persona_1',
-          'switchedAt': '2026-07-20T12:00:00Z',
-        }),
+        json.encode(_activePersonaContext),
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -358,30 +437,47 @@ void _expectSurfaceOperationHeaders(
 }
 
 void main() {
-  group('CircleRepository Remote — service.yaml 路径对齐', () {
+  group('CircleQueryReader Remote — service.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
-    late RemoteCircleRepository repo;
+    late RemoteCircleQueryReader repo;
     late RemoteCircleLifecycleFacet lifecycle;
 
     setUp(() {
       log = [];
-      repo = RemoteCircleRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
-        baseUrl: _baseUrl,
+      final client = buildGeneratedCloudOperationClient(
+        httpClient: CloudHttpClient(
+          client: _captureClient(log),
+          authTokenProvider: const _TestAuthTokenProvider(),
+        ),
+        clientContextProvider: const _TestCloudClientContext(),
+        telemetrySink: RecordingCloudOperationTelemetrySink(),
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_baseUrl),
+        ),
+      );
+      repo = RemoteCircleQueryReader(
+        client: client,
+        invocationContext: (clientPageId, {required command}) {
+          final surface =
+              clientPageId == CircleRequestPageIds.listCircles ||
+                  clientPageId == CircleRequestPageIds.searchCircles ||
+                  clientPageId == CircleRequestPageIds.listCircleDiscoveryFeed
+              ? AppUiSurfaces.circlesList
+              : AppUiSurfaces.circleDetail;
+          return CloudOperationInvocationContext(
+            surfaceId: surface.id,
+            routeId: surface.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(
+              accountId: 'account-1',
+              personaId: 'persona-1',
+            ),
+          );
+        },
       );
       lifecycle = RemoteCircleLifecycleFacet(
-        client: buildGeneratedCloudOperationClient(
-          httpClient: CloudHttpClient(
-            client: _captureClient(log),
-            authTokenProvider: const _TestAuthTokenProvider(),
-          ),
-          clientContextProvider: const _TestCloudClientContext(),
-          telemetrySink: RecordingCloudOperationTelemetrySink(),
-          environment: CloudRuntimeEnvironment(
-            environment: CloudEnvironment.gamma,
-            gatewayBaseUri: Uri.parse(_baseUrl),
-          ),
-        ),
+        client: client,
         invocationContext: (clientPageId, {required command}) =>
             CloudOperationInvocationContext(
               surfaceId: clientPageId == CircleRequestPageIds.createCircle
@@ -402,18 +498,20 @@ void main() {
 
     test('listCircles → GET /circles', () async {
       try {
-        await repo.listCircles();
+        await repo.list(const CircleListQuery());
       } catch (_) {}
       expect(log.last.method, 'GET');
       expect(log.last.path, CircleApiMetadata.listCirclesPath);
     });
 
     test('searchCircles → GET /circles/search', () async {
-      await repo.searchCircles(
-        query: '摄影',
-        categoryId: 'art',
-        subCategory: 'photo',
-        limit: 6,
+      await repo.search(
+        const CircleSearchQuery(
+          query: '摄影',
+          categoryId: 'art',
+          subCategory: 'photo',
+          limit: 6,
+        ),
       );
       expect(log.last.method, 'GET');
       expect(log.last.path, CircleApiMetadata.searchCirclesPath);
@@ -429,7 +527,7 @@ void main() {
 
     test('getCircle → GET /circles/{circleId}', () async {
       try {
-        await repo.getCircle('c1');
+        await repo.get(const CircleDetailQuery(circleId: 'c1'));
       } catch (_) {}
       expect(log.last.method, 'GET');
       expect(log.last.path, CircleApiMetadata.getCirclePath(circleId: 'c1'));
@@ -468,7 +566,7 @@ void main() {
 
     test('getCircleFeed → GET /circles/{circleId}/feed', () async {
       try {
-        await repo.getCircleFeed('c1');
+        await repo.feed(const CircleFeedQuery(circleId: 'c1'));
       } catch (_) {}
       expect(log.last.method, 'GET');
       expect(
@@ -479,14 +577,20 @@ void main() {
 
     test('getCircleFeed 透传 identity/type query', () async {
       try {
-        await repo.getCircleFeed('c1', identity: 'work', type: 'article');
+        await repo.feed(
+          const CircleFeedQuery(
+            circleId: 'c1',
+            identity: 'work',
+            type: 'article',
+          ),
+        );
       } catch (_) {}
       expect(log.last.query['identity'], 'work');
       expect(log.last.query['type'], 'article');
     });
 
     test('getCircleStats → GET /circles/{circleId}/stats', () async {
-      await repo.getCircleStats('c1');
+      await repo.stats(const CircleStatsQuery(circleId: 'c1'));
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
@@ -1032,8 +1136,8 @@ void main() {
       personaWriter = RemotePersonaCommandWriter(
         client: generatedClient,
         invocationContext: (clientPageId) => CloudOperationInvocationContext(
-          surfaceId: AppUiSurfaces.profileHome.id,
-          routeId: AppUiSurfaces.profileHome.routeId,
+          surfaceId: AppUiSurfaces.profilePersonas.id,
+          routeId: AppUiSurfaces.profilePersonas.routeId,
           clientPageId: clientPageId,
           idempotencyKey: 'persona-path-contract-idempotency-key',
           actor: const CloudOperationActorContext(
@@ -1292,7 +1396,7 @@ void main() {
 
   group('HomepageFacetSet Remote — service.yaml 路径对齐', () {
     late List<_CapturedRequest> log;
-    late RemoteHomepageRepository repo;
+    late HomepageFacetProjectionAdapter repo;
 
     setUp(() {
       log = [];

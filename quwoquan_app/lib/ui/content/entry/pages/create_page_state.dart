@@ -619,10 +619,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   Future<String?> _generateVideoThumbnail(String path) async {
     try {
-      return await VideoThumbnail.thumbnailFile(
-        video: path,
-        imageFormat: ImageFormat.JPEG,
-        quality: 80,
+      return await IosVideoEditingService().generateThumbnail(
+        videoPath: path,
+        maxDimension: 360,
       );
     } catch (error, stackTrace) {
       unawaited(
@@ -662,7 +661,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<List<CreateCircleOption>> _loadJoinedCircles() {
-    return _circleService.listCircles(ref.read(circleRepositoryProvider));
+    return _circleService.listCircles(ref.read(circlesListQueryProvider));
   }
 
   Future<PublishSettings?> _showPublishConfirmationSheet(

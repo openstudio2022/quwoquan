@@ -39,10 +39,12 @@
         "建议"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -59,9 +61,12 @@
           "建议"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -98,10 +103,12 @@
         "非投资建议"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -118,9 +125,12 @@
           "非投资建议"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -157,10 +167,12 @@
         "缓冲"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "app_search"
@@ -177,9 +189,12 @@
           "缓冲"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -216,10 +231,12 @@
         "拥堵"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -236,9 +253,12 @@
           "拥堵"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -275,10 +295,12 @@
         "附近"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "app_search"
@@ -295,9 +317,12 @@
           "附近"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -334,10 +359,12 @@
         "提醒"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "app_search"
@@ -354,9 +381,12 @@
           "提醒"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -393,10 +423,12 @@
         "局限"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -413,9 +445,12 @@
           "局限"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -452,10 +487,12 @@
         "运动"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -472,9 +509,12 @@
           "运动"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -511,10 +551,12 @@
         "计划"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -531,9 +573,12 @@
           "计划"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -570,10 +615,12 @@
         "里程碑"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "app_search"
@@ -590,9 +637,12 @@
           "里程碑"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -629,10 +679,12 @@
         "性价比"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -649,9 +701,12 @@
           "性价比"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -688,10 +743,12 @@
         "流程"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -708,9 +765,12 @@
           "流程"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -747,10 +807,12 @@
         "焦虑"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -767,9 +829,12 @@
           "焦虑"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -806,10 +871,12 @@
         "聊天"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -826,9 +893,12 @@
           "聊天"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -865,10 +935,12 @@
         "关系"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -885,9 +957,12 @@
           "关系"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -924,10 +999,12 @@
         "青春期"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -944,9 +1021,12 @@
           "青春期"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -983,10 +1063,12 @@
         "娱乐"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -1003,9 +1085,12 @@
           "娱乐"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -1042,10 +1127,12 @@
         "趣味"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -1062,9 +1149,12 @@
           "趣味"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -1101,10 +1191,12 @@
         "太阳星座"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -1121,9 +1213,12 @@
           "太阳星座"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -1160,10 +1255,12 @@
         "对象存储"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -1180,9 +1277,12 @@
           "对象存储"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -1219,10 +1319,12 @@
         "AI 产品"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "expectedToolNames": [
         "web_search"
@@ -1239,9 +1341,12 @@
           "AI 产品"
         ],
         "eventTypes": [
-          "assistant.skill.selected",
-          "assistant.tool.completed",
-          "assistant.answer.final"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {

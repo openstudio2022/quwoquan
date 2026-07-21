@@ -3,12 +3,12 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
@@ -16,7 +16,12 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantIntersectionEvidenceRef;
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -35,8 +40,16 @@ enum _PersonalAssistantRetryKind { send, openTurn }
 
 const Object _unsetAssistantFailure = Object();
 
-/// 测试收集：`flutter test --dart-define=ASSISTANT_MODEL_LOG_COLLECT=true`
-final personalAssistantModelInteractionLogLinesForTest = <String>[];
+const String _assistantTurnActionSubmit = 'submit';
+const String _assistantTurnActionFirstAnswer = 'first_answer';
+const String _assistantTurnActionCompleted = 'completed';
+const String _assistantTurnActionFailed = 'failed';
+const String _assistantTurnActionCancelled = 'cancelled';
+const String _assistantTurnActionStreamFailure = 'stream_failure';
+
+const String _assistantTurnResultSuccess = 'success';
+const String _assistantTurnResultFailure = 'failure';
+const String _assistantTurnResultCancelled = 'cancelled';
 
 class PersonalAssistantTranscriptItem {
   const PersonalAssistantTranscriptItem({
@@ -173,6 +186,7 @@ class PersonalAssistantProcessSummary {
     this.expansionReason = '',
     this.finalAnswerSummary = '',
     this.finalAnswerReady = false,
+    this.processes = const <AssistantRunVisibleProcess>[],
     this.selectedKeyPoints = const <String>[],
     this.acceptedReferences = const <RetrievalProcessingReference>[],
   });
@@ -188,6 +202,7 @@ class PersonalAssistantProcessSummary {
   final String expansionReason;
   final String finalAnswerSummary;
   final bool finalAnswerReady;
+  final List<AssistantRunVisibleProcess> processes;
   final List<String> selectedKeyPoints;
   final List<RetrievalProcessingReference> acceptedReferences;
 
@@ -203,6 +218,7 @@ class PersonalAssistantProcessSummary {
     String? expansionReason,
     String? finalAnswerSummary,
     bool? finalAnswerReady,
+    List<AssistantRunVisibleProcess>? processes,
     List<String>? selectedKeyPoints,
     List<RetrievalProcessingReference>? acceptedReferences,
   }) {
@@ -219,6 +235,7 @@ class PersonalAssistantProcessSummary {
       expansionReason: expansionReason ?? this.expansionReason,
       finalAnswerSummary: finalAnswerSummary ?? this.finalAnswerSummary,
       finalAnswerReady: finalAnswerReady ?? this.finalAnswerReady,
+      processes: processes ?? this.processes,
       selectedKeyPoints: selectedKeyPoints ?? this.selectedKeyPoints,
       acceptedReferences: acceptedReferences ?? this.acceptedReferences,
     );
@@ -229,6 +246,7 @@ class PersonalAssistantProcessSummary {
       searchCount > 0 ||
       acceptedCount > 0 ||
       lines.isNotEmpty ||
+      processes.isNotEmpty ||
       understandingSummary.trim().isNotEmpty ||
       retrievalDesignNarrative.trim().isNotEmpty ||
       processingSummary.trim().isNotEmpty ||
@@ -241,10 +259,22 @@ class PersonalAssistantStreamController
   Future<void>? _historyInitializationFuture;
   _PersonalAssistantRetryKind? _retryKind;
   String _retryValue = '';
+  List<AssistantIntersectionEvidenceRef> _pendingIntersectionEvidenceRefs =
+      const <AssistantIntersectionEvidenceRef>[];
 
   @override
   PersonalAssistantStreamState build() {
     return const PersonalAssistantStreamState();
+  }
+
+  /// 页面入口设置的交集引用只消费给下一次 StartAssistantRun，避免后续手工对话继续
+  /// 携带已经过期的页面证据。
+  void setOpenContext(AssistantOpenContext? context) {
+    _pendingIntersectionEvidenceRefs =
+        List<AssistantIntersectionEvidenceRef>.unmodifiable(
+          context?.intersectionEvidenceRefs ??
+              const <AssistantIntersectionEvidenceRef>[],
+        );
   }
 
   Future<void> ensureHistoryInitialized() {
@@ -375,7 +405,7 @@ class PersonalAssistantStreamController
   }
 
   /// 停止当前生成：发送 CancelAssistantRun 命令；SSE 会以
-  /// turn_cancelled 终态事件结束流，send() 收尾时落停止态。
+  /// cancelled 终态事件结束流，send() 收尾时落停止态。
   Future<void> stopGeneration() async {
     final runId = state.turnId.trim();
     if (runId.isEmpty || !state.running) {
@@ -591,12 +621,6 @@ class PersonalAssistantStreamController
     _debugPersonalAssistant(
       'send text="${_debugSnippet(trimmed)}" existingConversation=${state.conversationId}',
     );
-    if (const bool.fromEnvironment(
-      'ASSISTANT_MODEL_LOG_COLLECT',
-      defaultValue: false,
-    )) {
-      personalAssistantModelInteractionLogLinesForTest.clear();
-    }
     state = state.copyWith(
       running: true,
       errorMessage: '',
@@ -617,6 +641,8 @@ class PersonalAssistantStreamController
       events: const <AssistantStreamEventWire>[],
     );
     final repository = ref.read(assistantConversationRunFacetProvider);
+    final turnStartedAt = DateTime.now();
+    var runStarted = false;
     try {
       var conversationId = state.conversationId;
       if (conversationId.isEmpty) {
@@ -630,6 +656,16 @@ class PersonalAssistantStreamController
         conversationId: conversationId,
         text: trimmed,
         domainId: 'assistant',
+        intersectionEvidenceRefs: _pendingIntersectionEvidenceRefs,
+      );
+      _pendingIntersectionEvidenceRefs =
+          const <AssistantIntersectionEvidenceRef>[];
+      runStarted = true;
+      _recordAssistantTurnQuality(
+        turnAction: _assistantTurnActionSubmit,
+        result: _assistantTurnResultSuccess,
+        startedAt: turnStartedAt,
+        operationId: AssistantApiMetadata.startAssistantRunOperation,
       );
       _debugPersonalAssistant(
         'turn created conversationId=$conversationId turnId=${turn.turnId} traceId=${turn.traceId}',
@@ -638,7 +674,9 @@ class PersonalAssistantStreamController
       var lastSeq = 0;
       var failed = false;
       var cancelled = false;
-      final startedAt = DateTime.now();
+      var firstAnswerObserved = false;
+      var terminalEventObserved = false;
+      final startedAt = turnStartedAt;
       var processSummary = const PersonalAssistantProcessSummary();
       final events = <AssistantStreamEventWire>[];
       final assistantItemId = 'assistant_${turn.turnId}';
@@ -668,24 +706,64 @@ class PersonalAssistantStreamController
         }
         lastSeq = event.seq;
         events.add(event);
-        if (event.eventType == 'assistant.model.interaction') {
-          _emitAssistantModelInteractionToConsole(event.payload);
+        final streamEvent = AssistantRunStreamEvent.fromWire(event);
+        if (streamEvent.type == AssistantRunStreamEventType.unknown) {
+          throw FormatException(
+            'Unsupported assistant stream event type ${event.eventType}',
+          );
         }
-        if (event.eventType == 'turn_cancelled') {
+        if (streamEvent.type == AssistantRunStreamEventType.runStarted &&
+            streamEvent.restarted) {
+          answer = '';
+          processSummary = const PersonalAssistantProcessSummary();
+        }
+        if (streamEvent.type == AssistantRunStreamEventType.cancelled) {
           cancelled = true;
         }
-        final payload = _AssistantStreamPayload(event);
+        if (streamEvent.type == AssistantRunStreamEventType.answerDelta &&
+            !firstAnswerObserved) {
+          firstAnswerObserved = true;
+          _recordAssistantTurnQuality(
+            turnAction: _assistantTurnActionFirstAnswer,
+            result: _assistantTurnResultSuccess,
+            startedAt: startedAt,
+            operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
+          );
+        }
+        if (streamEvent.type.isTerminal) {
+          terminalEventObserved = true;
+          _recordAssistantTurnQuality(
+            turnAction: switch (streamEvent.type) {
+              AssistantRunStreamEventType.completed =>
+                _assistantTurnActionCompleted,
+              AssistantRunStreamEventType.failed => _assistantTurnActionFailed,
+              AssistantRunStreamEventType.cancelled =>
+                _assistantTurnActionCancelled,
+              _ => _assistantTurnActionStreamFailure,
+            },
+            result: switch (streamEvent.type) {
+              AssistantRunStreamEventType.completed =>
+                _assistantTurnResultSuccess,
+              AssistantRunStreamEventType.cancelled =>
+                _assistantTurnResultCancelled,
+              _ => _assistantTurnResultFailure,
+            },
+            startedAt: startedAt,
+            failReasonCode: streamEvent.wire.runtimeFailure?.code,
+            operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
+          );
+        }
         _debugPersonalAssistant(
           'stream event type=${event.eventType} seq=${event.seq} turnId=${turn.turnId} '
-          'skill=${payload.string('skillId')} tool=${payload.toolName} '
-          'fixedNarrative="${_debugSnippet(payload.fixedNarrative)}"',
+          'process=${streamEvent.process?.stage ?? ''} '
+          'status=${streamEvent.process?.status ?? ''}',
         );
         processSummary = _projectProcessSummary(
           processSummary,
-          event,
+          streamEvent,
           elapsedMs: DateTime.now().difference(startedAt).inMilliseconds,
         );
-        final failureMessage = _failureMessageForEvent(event);
+        final failureMessage = _failureMessageForEvent(streamEvent);
         if (failureMessage.isNotEmpty) {
           failed = true;
           transcript = _upsertAssistantTranscript(
@@ -710,17 +788,17 @@ class PersonalAssistantStreamController
           );
           continue;
         }
-        answer = _projectAnswer(answer, event);
+        answer = _projectAnswer(answer, streamEvent);
         final answerGateOpen =
-            state.answerGateOpen || _isAnswerEvent(event) || answer.isNotEmpty;
-        if (_isAnswerEvent(event)) {
+            state.answerGateOpen ||
+            _isAnswerEvent(streamEvent) ||
+            answer.isNotEmpty;
+        if (_isAnswerEvent(streamEvent)) {
           _debugPersonalAssistant(
-            'answer event type=${event.eventType} answerLength=${answer.length} delta="${_debugSnippet(_payloadText(event))}"',
+            'answer event type=${event.eventType} answerLength=${answer.length}',
           );
         }
-        if (answer.isNotEmpty ||
-            processSummary.hasContent ||
-            event.eventType == 'answer_reset') {
+        if (answer.isNotEmpty || processSummary.hasContent) {
           transcript = _upsertAssistantTranscript(
             transcript,
             assistantItemId,
@@ -729,7 +807,8 @@ class PersonalAssistantStreamController
             traceId: turn.traceId,
             sourceQuery: trimmed,
             eventType: event.eventType,
-            streaming: event.eventType != 'final_answer',
+            streaming:
+                streamEvent.type != AssistantRunStreamEventType.completed,
             processSummary: processSummary,
           );
         }
@@ -743,6 +822,11 @@ class PersonalAssistantStreamController
           processSummary: processSummary,
           events: List<AssistantStreamEventWire>.unmodifiable(events),
           answerGateOpen: answerGateOpen,
+        );
+      }
+      if (!terminalEventObserved) {
+        throw const FormatException(
+          'Assistant SSE stream ended without a terminal event',
         );
       }
       // 取消后无任何 partial answer 时以停止占位收尾，避免空气泡。
@@ -806,6 +890,17 @@ class PersonalAssistantStreamController
         errorFailure: runtimeFailureFromError(error),
         retryAvailable: true,
       );
+      _recordAssistantTurnQuality(
+        turnAction: runStarted
+            ? _assistantTurnActionStreamFailure
+            : _assistantTurnActionSubmit,
+        result: _assistantTurnResultFailure,
+        startedAt: turnStartedAt,
+        failReasonCode: runtimeFailureFromError(error)?.code,
+        operationId: runStarted
+            ? AssistantApiMetadata.streamAssistantRunEventsOperation
+            : AssistantApiMetadata.startAssistantRunOperation,
+      );
       _rememberRetry(_PersonalAssistantRetryKind.send, trimmed);
     }
   }
@@ -851,6 +946,49 @@ class PersonalAssistantStreamController
   void _clearRetry() {
     _retryKind = null;
     _retryValue = '';
+  }
+
+  void _recordAssistantTurnQuality({
+    required String turnAction,
+    required String result,
+    required DateTime startedAt,
+    String? failReasonCode,
+    String? operationId,
+  }) {
+    if (!ref.mounted) {
+      return;
+    }
+    final durationMs = DateTime.now()
+        .difference(startedAt)
+        .inMilliseconds
+        .clamp(0, 1 << 31)
+        .toInt();
+    unawaited(() async {
+      try {
+        await ref
+            .read(appTelemetryReporterProvider)
+            .record(
+              AppTelemetryPayload.assistantTurnQuality(
+                turnAction: turnAction,
+                result: result,
+                durationMs: durationMs,
+                failReasonCode: failReasonCode?.trim().isEmpty ?? true
+                    ? null
+                    : failReasonCode!.trim(),
+                operationId: operationId?.trim().isEmpty ?? true
+                    ? null
+                    : operationId!.trim(),
+              ),
+            );
+      } catch (error, stackTrace) {
+        developer.log(
+          'assistant turn telemetry failed',
+          name: 'personal_assistant',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }());
   }
 
   /// 反馈事件内存待重试队列：ack 全拒或请求失败时保留，下次
@@ -932,5 +1070,5 @@ class PersonalAssistantStreamController
 
 /// 从流式事件中提取小艺对话浮现的兴趣标签（路径制 tagRef）。
 ///
-/// 读取 `assistant.turn.completed` envelope 的 `payload['emergedTags']`（云侧
+/// 读取 `completed` envelope 的 `payload['emergedTags']`（云侧
 /// `collectEmergedTags` 下发的 `List<String>`），去重并过滤空值。

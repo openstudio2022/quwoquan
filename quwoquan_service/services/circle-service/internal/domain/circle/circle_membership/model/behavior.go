@@ -134,7 +134,7 @@ func (change ChangeSet) Apply(current *CircleMembership) (CircleMembership, stri
 			next.State = CircleMembershipStateActive
 			next.JoinedAt = now
 			next.LastActiveAt = now
-			return next, "CircleMembershipJoined", nil
+			return next, "CircleMembershipApproved", nil
 		}
 		next.State = CircleMembershipStateRejected
 		return next, "CircleMembershipRejected", nil

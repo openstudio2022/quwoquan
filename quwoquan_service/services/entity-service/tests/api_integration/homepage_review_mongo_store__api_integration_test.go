@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/internal/platform/testinfra"
 	reviewmodel "quwoquan_service/services/entity-service/internal/domain/homepage_review/model"
 	reviewports "quwoquan_service/services/entity-service/internal/domain/homepage_review/ports"
 	reviewpersistence "quwoquan_service/services/entity-service/internal/infrastructure/homepage_review/persistence"
@@ -22,6 +23,7 @@ func tryRunReviewMongoContainer(ctx context.Context) (c *mongomod.MongoDBContain
 			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
 		}
 	}()
+	testinfra.ConfigureLocalContainerRuntime()
 	c, err = mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
 	return
 }

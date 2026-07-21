@@ -727,9 +727,15 @@ entities:
       - { name: pinnedAt, source: pinnedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: featuredAt, source: featuredAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
 
-  CircleDiscoveryFeedView:
-    description: 圈子频道聚合读切片；圈子卡片与帖子均已按 category/subCategory/scope 在服务端过滤
+  CircleFeedPageSlice:
+    description: 单个圈子内容流的强类型 keyset 分页切片；展示位、帖子和作者字段只来自 CircleFeedItemView
     fields:
-      - { name: circles, source: circles, type: "[]Circle", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
-      - { name: items, source: items, type: "[]CircleFeedItemView", constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: items, source: items, type: "[]CircleFeedItemView", constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+
+  CircleDiscoveryFeedPageSlice:
+    description: 圈子频道聚合读 keyset 分页切片；圈子卡片与帖子均已按 category/subCategory/scope 在服务端过滤
+    fields:
+      - { name: circles, source: circles, type: "[]Circle", constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: items, source: items, type: "[]CircleFeedItemView", constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
       - { name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }

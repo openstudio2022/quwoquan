@@ -14,8 +14,9 @@ const (
 )
 
 // DataContentJob 是 quwoquan_data object_job 到 runtime/reliabletask 的强类型适配契约。
-// 幂等身份由 entity + carrier + sourceRevision + stage 构成；同一内容对象的
-// download/author/publish 是三个独立工作，批次与 worker 等易漂移字段仍不得进入。
+// 幂等身份由 executionId + entity + carrier + sourceRevision + stage 构成。同一
+// immutable execution 的重复声明必须合并；retryOf 创建的新 execution 即使复用相同
+// 来源版本，也不得绑定旧 execution 的任务结果、死信或作者证据。
 type DataContentJob struct {
 	EntityRef      string `json:"entityRef"`
 	Carrier        string `json:"carrier"`
@@ -25,16 +26,18 @@ type DataContentJob struct {
 	Ref            string `json:"ref"`
 	Stage          string `json:"stage"`
 	PartitionKey   string `json:"partitionKey"`
+	IdempotencyKey string `json:"idempotencyKey"`
 }
 
-func (j DataContentJob) IdempotencyKey() (string, error) {
+func (j DataContentJob) ExpectedIdempotencyKey() (string, error) {
+	executionID := strings.TrimSpace(j.ExecutionID)
 	entity := strings.TrimSpace(j.EntityRef)
 	carrier := strings.TrimSpace(j.Carrier)
 	revision := strings.TrimSpace(j.SourceRevision)
 	stage := strings.TrimSpace(j.Stage)
-	if entity == "" || carrier == "" || revision == "" || stage == "" {
+	if executionID == "" || entity == "" || carrier == "" || revision == "" || stage == "" {
 		return "", fmt.Errorf(
-			"reliabletask data job requires entityRef + carrier + sourceRevision + stage",
+			"reliabletask data job requires executionId + entityRef + carrier + sourceRevision + stage",
 		)
 	}
 	rawRevision := strings.TrimPrefix(revision, "sha256:")
@@ -56,7 +59,24 @@ func (j DataContentJob) IdempotencyKey() (string, error) {
 			return "", fmt.Errorf("reliabletask data job requires %s", field.name)
 		}
 	}
-	return entity + "|" + carrier + "|" + revision + "|" + stage, nil
+	return executionID + "|" + entity + "|" + carrier + "|" + revision + "|" + stage, nil
+}
+
+// ValidateIdentity rejects cross-boundary drift before a job reaches Mongo.
+// The queue owns the declared key; Go verifies rather than silently rebuilding
+// a second identity truth source.
+func (j DataContentJob) ValidateIdentity() (string, error) {
+	expected, err := j.ExpectedIdempotencyKey()
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(j.IdempotencyKey) == "" {
+		return "", fmt.Errorf("reliabletask data job requires idempotencyKey")
+	}
+	if strings.TrimSpace(j.IdempotencyKey) != expected {
+		return "", fmt.Errorf("reliabletask data job idempotencyKey does not match immutable job identity")
+	}
+	return expected, nil
 }
 
 func (j DataContentJob) payload(idempotencyKey string) map[string]string {
@@ -91,7 +111,7 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 	if f.Store == nil {
 		return TaskOutboxRecord{}, ErrStoreRequired
 	}
-	key, err := job.IdempotencyKey()
+	key, err := job.ValidateIdentity()
 	if err != nil {
 		return TaskOutboxRecord{}, err
 	}
@@ -117,6 +137,47 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 func (f DataContentFleet) Dispatch(ctx context.Context, limit int) ([]ReliableAsyncTask, error) {
 	dispatcher := Dispatcher{Store: f.Store, Ready: f.Ready, Now: f.Now}
 	return dispatcher.DispatchDue(ctx, limit)
+}
+
+// RecoverAuditedDeadJobs revives only request-selected dead tasks. The
+// controller records recovery before this method can be called; the retained
+// logical idempotency key prevents duplicate content while the next claim gets
+// a new runtime lease from Mongo truth.
+func (f DataContentFleet) RecoverAuditedDeadJobs(
+	ctx context.Context,
+	jobs []DataContentJob,
+) (int, error) {
+	recovery, ok := f.Store.(DLQRecoveryStore)
+	if !ok {
+		return 0, fmt.Errorf("data content fleet store does not support DLQ recovery")
+	}
+	wanted := make(map[string]struct{}, len(jobs))
+	for _, job := range jobs {
+		key, err := job.ValidateIdentity()
+		if err != nil {
+			return 0, err
+		}
+		wanted[key] = struct{}{}
+	}
+	dead, err := recovery.ListDeadTasks(ctx, []string{DataContentTaskType}, 0)
+	if err != nil {
+		return 0, err
+	}
+	now := time.Now().UTC()
+	if f.Now != nil {
+		now = f.Now().UTC()
+	}
+	recovered := 0
+	for _, task := range dead {
+		if _, selected := wanted[strings.TrimSpace(task.Payload["idempotencyKey"])]; !selected {
+			continue
+		}
+		if err := recovery.RecoverDeadTask(ctx, task.TaskID, now); err != nil {
+			return recovered, err
+		}
+		recovered++
+	}
+	return recovered, nil
 }
 
 // ReconcileReadyIndex rebuilds the disposable Redis ready index from Mongo truth.

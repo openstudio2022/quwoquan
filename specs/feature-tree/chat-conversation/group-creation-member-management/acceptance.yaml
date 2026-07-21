@@ -38,7 +38,15 @@ sit_acceptance:
       - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
       - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_create_journey__user_acceptance_test.dart
       - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
-      recorded: []
+      recorded:
+      - quwoquan_service/services/chat-service/tests/api_integration/selectable_group_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/group_governance_authorization__security__api_integration_test.go
+      - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
+      - quwoquan_app/test/local_contract/ui/chat/providers/start_group_from_group_provider__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+      - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_create_journey__user_acceptance_test.dart
+      - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
+      - quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py
     status: pending
     test_evidence:
       primary:

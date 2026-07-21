@@ -50,13 +50,15 @@ func TestDefaultToolCoordinatorExecutesCloudToolAdapters(t *testing.T) {
 			if len(execution.Completed.Result) == 0 {
 				t.Fatalf("missing tool result")
 			}
-			if provider, _ := execution.Completed.Result["provider"].(string); provider == "fake_web_search" || provider == "fake_unified_search" {
-				t.Fatalf("tool %s must use canonical provider, got %q", toolName, provider)
-			}
 			if toolName == "app_search" {
+				if provider, _ := execution.Completed.Result["provider"].(string); provider == "fake_web_search" || provider == "fake_unified_search" {
+					t.Fatalf("tool %s must use canonical provider, got %q", toolName, provider)
+				}
 				if _, ok := execution.Completed.Result["provenance"].(map[string]any); !ok {
 					t.Fatalf("app_search missing canonical provenance: %#v", execution.Completed.Result)
 				}
+			} else if _, exposed := execution.Completed.Result["provider"]; exposed {
+				t.Fatalf("web_search must not expose adapter provider: %#v", execution.Completed.Result)
 			}
 		})
 	}
@@ -98,7 +100,7 @@ func TestDefaultToolCoordinatorMapsToolValidationFailures(t *testing.T) {
 	}
 }
 
-func TestDefaultToolCoordinatorCreatesDeviceActionProposal(t *testing.T) {
+func TestDefaultToolCoordinatorFailsClosedForUnwiredDeviceAction(t *testing.T) {
 	coordinator := DefaultToolCoordinator{
 		Now: func() time.Time { return time.Date(2026, 4, 29, 5, 0, 0, 0, time.UTC) },
 	}
@@ -114,16 +116,14 @@ func TestDefaultToolCoordinatorCreatesDeviceActionProposal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if execution.Failure != nil {
-		t.Fatalf("unexpected failure: %#v", execution.Failure)
+	if execution.Failure == nil {
+		t.Fatalf("unwired device action must fail closed: %#v", execution)
 	}
-	if execution.Requested.Placement != "device_action" || !execution.Requested.RequiresConfirmation {
-		t.Fatalf("requested=%#v", execution.Requested)
-	}
-	if execution.Completed.Status != "waiting_confirmation" {
+	if execution.Completed.Status != "failed" {
 		t.Fatalf("completed status=%q", execution.Completed.Status)
 	}
-	if _, ok := execution.Completed.Result["proposal"].(map[string]any); !ok {
-		t.Fatalf("missing proposal result: %#v", execution.Completed.Result)
+	if execution.Requested.Placement == "device_action" ||
+		execution.Requested.RequiresConfirmation {
+		t.Fatalf("unwired action must not advertise executable placement: %#v", execution.Requested)
 	}
 }

@@ -35,11 +35,13 @@ gwt_acceptance:
     performance_points:
       - 偏好读取包含在 StartAssistantRun 的 1500ms P95 预算内
     tests:
-      planned:
-        - file: quwoquan_service/services/assistant-service/internal/application/preference_fact_service__local_contract_test.go
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact/preference_fact_service__local_contract_test.go
+        - file: quwoquan_service/services/assistant-service/internal/application/preference_injection__local_contract_test.go
+        - file: quwoquan_service/services/assistant-service/tests/api_integration/preference_fact__api_integration_test.go
         - file: quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
-      recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
         - layer: local_contract
@@ -48,8 +50,15 @@ gwt_acceptance:
           cases:
             - local_contract.assistant_run_learning.world_class_trinity_experience_baseline.session_preference_memory_control.preference_injection
           envs: [local]
-      supporting: []
-    notes: []
+      supporting:
+        - layer: api_integration
+          execution_profile: integration
+          suite: preference_store
+          cases:
+            - api_integration.assistant_run_learning.world_class_trinity_experience_baseline.session_preference_memory_control.preference_store
+          envs: [gamma]
+    notes:
+      - 2026-07-21 本地契约已证明 session 偏好按 owner+conversation 注入下一 Run，原始问题不拼接风格前缀；beta/gamma Remote 运行证据待环境工作包统一回填。
   GWT2:
     title: 用户遗忘偏好并撤销恢复
     given:
@@ -70,12 +79,13 @@ gwt_acceptance:
     performance_points:
       - 偏好读写 P95 不超过 500ms
     tests:
-      planned:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact/preference_fact_service__local_contract_test.go
         - file: quwoquan_service/services/assistant-service/tests/api_integration/preference_fact__api_integration_test.go
-        - file: quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_preference__local_contract_test.dart
-        - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_management/assistant_memory_revoke_restore__user_acceptance_test.dart
-      recorded: []
-    status: pending
+        - file: quwoquan_app/test/local_contract/cloud/assistant/assistant_preference_fact__local_contract_test.dart
+        - file: quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
         - layer: local_contract
@@ -90,14 +100,13 @@ gwt_acceptance:
           cases:
             - api_integration.assistant_run_learning.world_class_trinity_experience_baseline.session_preference_memory_control.preference_store
           envs: [gamma]
-      supporting:
-        - layer: user_acceptance
-          execution_profile: user_journey
-          suite: management_memory
-          cases:
-            - user_acceptance.assistant_run_learning.world_class_trinity_experience_baseline.session_preference_memory_control.management_memory
-          envs: [beta, gamma]
-    notes: []
+      supporting: []
+    notes:
+      - 2026-07-21 真实 Mongo/Postgres/Redis 容器 api_integration 已覆盖自然身份幂等、owner
+        隔离、撤销窗口、进程重启后恢复，以及 revoke 后下一 Run 不注入、restore 后重新注入。
+      - 已删除通过 Recording Facet 驱动的伪 UAT；页面行为由
+        `assistant_management_page_consent__local_contract_test.dart` 承载，beta/gamma Remote
+        与设备证据仍待环境工作包。
 execution:
   local_gate:
     - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

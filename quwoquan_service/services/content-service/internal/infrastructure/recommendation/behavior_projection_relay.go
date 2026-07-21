@@ -2,6 +2,9 @@ package recommendation
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -18,10 +21,11 @@ import (
 // 替换此前 fire-and-forget 的 BehaviorBatchReported Pub/Sub（生产环境无订阅者，
 // tagInteraction / 亲和度 / 交集 kindCounts 投影断链）。
 //
-// 与 post OutboxRelay 同构：游标增量扫 rm_behavior_events（_id 单调），全部
-// projector 处理成功后才推进 checkpoint。投影器以每条事件 _id 原子去重，因此
-// checkpoint 重放与多副本并发不会重复 $inc。水位线排除最近 watermarkLag 内
-// 插入的文档，避免多副本并发 InsertMany 下 ObjectID 边界乱序造成漏扫。
+// 与 post OutboxRelay 同构：游标增量扫 rm_behavior_events（_id 单调），每条事实的
+// 所有 projector 更新、租约续期与 checkpoint 推进在同一事务内提交。共享 checkpoint
+// 使用 lease 单写，保证多副本不会把同一用户的低 ObjectID 事件错判为旧水位；投影器仍以
+// 每条事件 _id 原子去重，承接 checkpoint 重放。水位线排除最近 watermarkLag 内插入的
+// 文档，避免 InsertMany 下 ObjectID 边界乱序造成漏扫。
 type BehaviorProjectionRelay struct {
 	events      *mongo.Collection
 	checkpoints *mongo.Collection
@@ -29,6 +33,8 @@ type BehaviorProjectionRelay struct {
 	consumer    string
 
 	watermarkLag time.Duration
+	leaseOwner   string
+	leaseTTL     time.Duration
 
 	mu          sync.RWMutex
 	lastSuccess time.Time
@@ -45,6 +51,11 @@ const (
 	behaviorProjectionConsumer  = "behavior-feature-projection"
 	behaviorCheckpointsColl     = "rec_projection_checkpoints"
 	defaultBehaviorWatermarkLag = 2 * time.Second
+	defaultBehaviorLeaseTTL     = 15 * time.Second
+)
+
+var errBehaviorProjectionLeaseLost = errors.New(
+	"behavior projection relay lease lost before checkpoint commit",
 )
 
 func NewBehaviorProjectionRelay(db *mongo.Database, projectors ...BehaviorBatchProjector) *BehaviorProjectionRelay {
@@ -54,20 +65,45 @@ func NewBehaviorProjectionRelay(db *mongo.Database, projectors ...BehaviorBatchP
 		projectors:   projectors,
 		consumer:     behaviorProjectionConsumer,
 		watermarkLag: defaultBehaviorWatermarkLag,
+		leaseOwner:   newBehaviorRelayLeaseOwner(),
+		leaseTTL:     defaultBehaviorLeaseTTL,
 	}
 }
 
 // WithWatermarkLag 覆盖乱序保护窗口。仅测试装配使用（同步 Drain 场景置 0）；
 // 生产保持默认 2s。
 func (r *BehaviorProjectionRelay) WithWatermarkLag(lag time.Duration) *BehaviorProjectionRelay {
+	if lag < 0 {
+		lag = 0
+	}
 	r.watermarkLag = lag
 	return r
 }
 
+// WithLeaseTTL 覆盖多副本 lease 的存活时间。仅测试或明确的运行时装配使用；
+// 生产保持默认值，使一个 relay owner 串行推进共享 checkpoint。
+func (r *BehaviorProjectionRelay) WithLeaseTTL(ttl time.Duration) *BehaviorProjectionRelay {
+	if ttl > 0 {
+		r.leaseTTL = ttl
+	}
+	return r
+}
+
+// WithConsumer 为独立部署或隔离测试指定 checkpoint 身份。生产默认消费者固定，
+// 因此同一部署的副本仍共享单一有序游标。
+func (r *BehaviorProjectionRelay) WithConsumer(consumer string) *BehaviorProjectionRelay {
+	if normalized := strings.TrimSpace(consumer); normalized != "" {
+		r.consumer = normalized
+	}
+	return r
+}
+
 type behaviorRelayCheckpointDoc struct {
-	ID        string        `bson:"_id"`
-	LastID    bson.ObjectID `bson:"lastId"`
-	UpdatedAt time.Time     `bson:"updatedAt"`
+	ID             string        `bson:"_id"`
+	LastID         bson.ObjectID `bson:"lastId"`
+	LeaseOwner     string        `bson:"leaseOwner"`
+	LeaseExpiresAt time.Time     `bson:"leaseExpiresAt"`
+	UpdatedAt      time.Time     `bson:"updatedAt"`
 }
 
 // relayBehaviorEvent 在 RawBehaviorEvent 之上带出 Mongo _id 作游标。
@@ -86,20 +122,23 @@ func (r *BehaviorProjectionRelay) Drain(ctx context.Context, limit int) (int, er
 	if limit <= 0 {
 		limit = 200
 	}
+	acquired, err := r.acquireLease(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if !acquired {
+		// standby replica：活跃 owner 正在顺序推进全局 cursor。不得并行处理，
+		// 否则每文档 ObjectID 水位会把较慢副本尚未落下的低 ID 误判为旧事件。
+		return 0, nil
+	}
 
 	var checkpoint behaviorRelayCheckpointDoc
-	err := r.checkpoints.FindOne(ctx, bson.M{"_id": r.consumer}).Decode(&checkpoint)
+	err = r.checkpoints.FindOne(ctx, bson.M{"_id": r.consumer}).Decode(&checkpoint)
 	if err != nil && err != mongo.ErrNoDocuments {
 		return 0, fmt.Errorf("load behavior projection checkpoint: %w", err)
 	}
 
-	// 水位线：只消费插入时间早于 now-watermarkLag 的文档（ObjectID 时间戳前缀
-	// 由服务端生成，与客户端 occurredAt 时钟无关）。
-	watermark := bson.NewObjectIDFromTimestamp(time.Now().Add(-r.watermarkLag))
-	filter := bson.M{"_id": bson.M{"$lt": watermark}}
-	if !checkpoint.LastID.IsZero() {
-		filter["_id"] = bson.M{"$gt": checkpoint.LastID, "$lt": watermark}
-	}
+	filter := r.scanFilter(checkpoint.LastID, time.Now().UTC())
 
 	cursor, err := r.events.Find(ctx, filter,
 		options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(int64(limit)))
@@ -114,24 +153,159 @@ func (r *BehaviorProjectionRelay) Drain(ctx context.Context, limit int) (int, er
 		return 0, nil
 	}
 
-	for _, event := range buildBehaviorBatchEvents(rows) {
-		for _, projector := range r.projectors {
-			if err := projector.Project(ctx, event); err != nil {
-				r.recordFailure(err)
-				return 0, fmt.Errorf("project behavior batch (aggregate=%s): %w", event.AggregateID, err)
-			}
-		}
+	session, err := r.checkpoints.Database().Client().StartSession()
+	if err != nil {
+		return 0, fmt.Errorf("start behavior projection transaction session: %w", err)
 	}
+	defer session.EndSession(ctx)
 
-	lastID := rows[len(rows)-1].ID
-	if _, err := r.checkpoints.UpdateOne(ctx,
-		bson.M{"_id": r.consumer},
-		bson.M{"$set": bson.M{"lastId": lastID, "updatedAt": time.Now().UTC()}},
-		options.UpdateOne().SetUpsert(true),
-	); err != nil {
-		return 0, fmt.Errorf("save behavior projection checkpoint: %w", err)
+	events := buildBehaviorBatchEvents(rows)
+	processed := 0
+	for index, event := range events {
+		_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+			now := time.Now().UTC()
+			leaseResult, leaseErr := r.checkpoints.UpdateOne(txCtx,
+				bson.M{
+					"_id":            r.consumer,
+					"leaseOwner":     r.leaseOwner,
+					"leaseExpiresAt": bson.M{"$gt": now},
+				},
+				bson.M{"$set": bson.M{
+					"leaseExpiresAt": now.Add(r.leaseTTL),
+					"updatedAt":      now,
+				}},
+			)
+			if leaseErr != nil {
+				return nil, fmt.Errorf("renew behavior projection lease: %w", leaseErr)
+			}
+			if leaseResult.MatchedCount != 1 {
+				return nil, errBehaviorProjectionLeaseLost
+			}
+			for _, projector := range r.projectors {
+				if projectErr := projector.Project(txCtx, event); projectErr != nil {
+					return nil, fmt.Errorf(
+						"project behavior batch (aggregate=%s): %w",
+						event.AggregateID,
+						projectErr,
+					)
+				}
+			}
+			checkpointAt := time.Now().UTC()
+			checkpointResult, checkpointErr := r.checkpoints.UpdateOne(txCtx,
+				bson.M{"_id": r.consumer, "leaseOwner": r.leaseOwner},
+				bson.M{"$set": bson.M{
+					"lastId":         rows[index].ID,
+					"leaseExpiresAt": checkpointAt.Add(r.leaseTTL),
+					"updatedAt":      checkpointAt,
+				}},
+			)
+			if checkpointErr != nil {
+				return nil, fmt.Errorf(
+					"save behavior projection checkpoint: %w",
+					checkpointErr,
+				)
+			}
+			if checkpointResult.MatchedCount != 1 {
+				return nil, errBehaviorProjectionLeaseLost
+			}
+			return nil, nil
+		})
+		if err != nil {
+			r.recordFailure(err)
+			return processed, err
+		}
+		processed++
 	}
-	return len(rows), nil
+	return processed, nil
+}
+
+// scanFilter 为生产 relay 保留 ObjectID 插入时间水位，避免批量写入边界的乱序漏扫。
+// lag=0 仅用于同步测试/回放：ObjectID 的时间部分精度只有秒，若仍使用
+// `$lt NewObjectIDFromTimestamp(now)`，本秒刚写入的所有事实都会被错误排除。
+func (r *BehaviorProjectionRelay) scanFilter(
+	lastID bson.ObjectID,
+	now time.Time,
+) bson.M {
+	bounds := bson.M{}
+	if !lastID.IsZero() {
+		bounds["$gt"] = lastID
+	}
+	if r.watermarkLag > 0 {
+		bounds["$lt"] = bson.NewObjectIDFromTimestamp(now.Add(-r.watermarkLag))
+	}
+	if len(bounds) == 0 {
+		return bson.M{}
+	}
+	return bson.M{"_id": bounds}
+}
+
+// acquireLease 为共享 checkpoint 取得单写租约。投影器保留逐文档事件水位以处理重放；
+// 租约补齐全局顺序保证，避免领先副本使另一副本尚未落下的低 ObjectID 被跳过。
+// 每条事实随后在事务内再次续租并推进 checkpoint，过期 owner 不能在新 owner 接管后提交。
+func (r *BehaviorProjectionRelay) acquireLease(ctx context.Context) (bool, error) {
+	now := time.Now().UTC()
+	if strings.TrimSpace(r.leaseOwner) == "" {
+		return false, fmt.Errorf("behavior projection relay lease owner is empty")
+	}
+	if r.leaseTTL <= 0 {
+		return false, fmt.Errorf("behavior projection relay lease TTL must be positive")
+	}
+	filter := bson.M{
+		"_id": r.consumer,
+		"$or": []bson.M{
+			{"leaseOwner": r.leaseOwner},
+			{"leaseExpiresAt": bson.M{"$exists": false}},
+			{"leaseExpiresAt": bson.M{"$lte": now}},
+		},
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"leaseOwner":     r.leaseOwner,
+			"leaseExpiresAt": now.Add(r.leaseTTL),
+			"updatedAt":      now,
+		},
+	}
+	result, err := r.checkpoints.UpdateOne(
+		ctx,
+		filter,
+		update,
+		options.UpdateOne().SetUpsert(true),
+	)
+	if isBehaviorProjectionLeaseContention(err) {
+		// 另一副本创建/续期 checkpoint，或持有事务内的 checkpoint 写锁。
+		// 这两种情况都代表当前循环不能越过全局 cursor，下一轮再尝试。
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("acquire behavior projection lease: %w", err)
+	}
+	return result.MatchedCount == 1 || result.UpsertedCount == 1, nil
+}
+
+func isBehaviorProjectionLeaseContention(err error) bool {
+	if err == nil {
+		return false
+	}
+	if mongo.IsDuplicateKeyError(err) {
+		return true
+	}
+	var commandError mongo.CommandError
+	if errors.As(err, &commandError) && commandError.Code == 112 {
+		// Mongo WriteConflict：活跃 relay 正在其事务中续租、投影并提交 cursor。
+		return true
+	}
+	var writeError mongo.WriteException
+	return errors.As(err, &writeError) && writeError.HasErrorCode(112)
+}
+
+func newBehaviorRelayLeaseOwner() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err == nil {
+		return "behavior-relay-" + hex.EncodeToString(raw[:])
+	}
+	// crypto/rand 不可用是极端运行时故障；纳秒 fallback 仍确保同一进程内 owner
+	// 不会静默空值退化为无锁并行。
+	return fmt.Sprintf("behavior-relay-fallback-%d", time.Now().UnixNano())
 }
 
 // Run 周期 Drain 直到 ctx 结束；失败批次不推进 checkpoint，下一轮重试。

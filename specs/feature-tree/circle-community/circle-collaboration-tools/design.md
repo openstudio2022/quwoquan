@@ -124,6 +124,38 @@
 - `groupId/nodeId` 进入内容分发表
 - 父节点聚合按 `lastActiveAt` 排序
 
+### DK-9：CircleGroup → Chat 使用双向 durable event，而非同步 RPC 或页面拼装
+
+`CircleGroup` 是群单元与成员治理的聚合根，`Conversation` 只是其交流能力。因此绑定与名册使用下列单一链路：
+
+```text
+CircleGroupCreated
+  → events.circle.groups
+  → chat circle-group provisioner
+  → Conversation(circleId, circleGroupId) + owner ConversationMember + ConversationUserState
+  → CircleGroupConversationProvisioned
+  → events.chat.circle-group-bindings
+  → circle binding projector
+  → CircleGroup.conversationId
+
+CircleGroupMembershipActivated / Left / Removed / RoleChanged
+  → events.circle.group-memberships
+  → chat circle-group membership projector
+  → ConversationMember / ConversationUserState / ChatInbox
+```
+
+- 每个 Stream consumer 通过独立 consumer group、checkpoint、pending reclaim、幂等事件键和 7 天 TTL DLQ 运行；**Chat 持久化成功后才 ACK**。
+- `CircleGroupCreated` 与 `CircleGroupMembershipActivated` 可以乱序到达：名册事件在 conversation 未建好时保留 pending，不允许 ACK 后丢弃；重放完成后按 source event id 精确幂等。
+- `CircleGroupArchived` 必须令绑定 Conversation 进入终态，删除所有成员的 `ConversationUserState`，并投递终态 realtime 事件；不留可发送、可见 Inbox 或可被重新投影复活的半终态。
+- `Conversation.circleGroupId` 是一对一唯一索引，绑定事件会回写 `CircleGroup.conversationId`。`Circle.conversationId` 不承担任何群绑定或兼容读取职责。
+
+### DK-10：成员容量、角色与治理权不跨域分叉
+
+- `CircleGroup` 与绑定 Chat Conversation 都固定 **1000 active human members** 上限。成员激活命令在 circle-service 的真实事务内获取容量；容量满时在上游返回 `CIRCLE.USER.group_membership_full`，不能先让 Circle 成员 active 再由 Chat 异步拒绝。
+- Circle role 到 Chat role 只有一个映射：`owner → owner`、`manager → admin`、`member → member`。Chat 不保留可独立编辑的圈群角色。
+- 对 `circleGroupId` 非空的会话，Chat HTTP 成员/治理命令统一拒绝为 `CHAT.USER.circle_group_managed_by_circle`；App 隐藏转让群主、管理员、移除成员、解散等入口，并跳转 CircleGroup 权威治理页。
+- 私建 Chat group 仍维持 chat 自治；是否圈群绑定必须由服务端存储字段判定，不能只依赖前端按钮隐藏。
+
 ## metadata / codegen 方案
 
 ### `social/circle/fields.yaml`
@@ -154,14 +186,16 @@
 ### `messages/conversation/*`
 
 - 增加 `circleGroupId`
-- chat-service 只负责 Conversation 生命周期与消息
+- chat-service 只负责 Conversation 生命周期与消息，并通过 durable projector 消费 CircleGroup 的权威成员事实
+- `Conversation.circleGroupId` 建唯一索引；普通 `CreateConversation` 不接受 `circleId/circleGroupId` 作为用户可写字段
+- 声明 `CircleGroupConversationProvisioned` 事件及 circle binding consumer
 
 ### `content/post/*`
 
 - 增加 `groupId/nodeId`
 - 支持节点内容聚合与最近活跃排序
 
-## 字段演进、迁移 / 回填、双读双写
+## 字段演进与一次性回填
 
 ### 字段演进
 
@@ -170,16 +204,11 @@
 
 ### 迁移 / 回填
 
-- 记录 `Circle.conversationId` 迁为默认公共群的 `conversationId`
+- 记录 `Circle.conversationId` 迁为默认公共群的 `CircleGroup.conversationId`
 - 原有群文件与群公告能力若落在圈级，迁移到默认公共群
 - 无法准确归属的记录资料可先保留在圈级并逐步清理
-
-### 双读 / 双写
-
-- 迁移期允许圈级与群级 conversation 兼容读
-- 退出条件：
-  - 所有活跃群组均存在 `CircleGroup`
-  - chat 侧全部改读 `circleGroupId`
+- 所有 active CircleGroup 必须拥有唯一 `conversationId`，所有绑定 Conversation 必须填充同一 `circleGroupId`；回填校验通过后才能启用消费者。
+- 禁止双读、双写、旧 `Circle.conversationId` fallback 或运行时兼容分支。
 
 ## feature flag、观测、SLO 验证与回滚方案
 
@@ -194,17 +223,22 @@
 - `circle_group_apply_decision_latency_ms`
 - `circle_group_private_search_hit_count`
 - `circle_group_file_upload_success_count`
+- `circle_group_chat_projection_duration_ms`（按 created/membership_activated/left/removed/role_changed/archived 与 outcome）
+- `circle_group_chat_projection_pending_age_ms`、`circle_group_chat_projection_dlq_total`
+- `circle_group_chat_binding_lag_ms`、`circle_group_chat_roster_divergence_total`
+- consumer group pending 数、reclaim 次数、DLQ 率和 source-event replay 率必须进入 health、Prometheus 与告警。
 
 ### SLO 验证
 
 - 入群申请链路稳定
 - 文件与公告能力不阻塞群主页
 - 群内搜索与节点聚合符合性能约束
+- CircleGroup 创建至 `conversationId` 回写 P95 ≤ 3 秒；成员 active/left/removed/role_changed 至 Chat 名册收敛 P95 ≤ 3 秒；超过 30 秒的 pending 或任意 DLQ 记录均为告警。
 
 ### 回滚
 
-- 整版回退到旧圈子协作实现
-- 必要时回落到“默认公共群兼容读”
+- 仅允许整版部署回退到已验证镜像；outbox、Stream 和幂等事件键保留，恢复后从 checkpoint 继续消费。
+- 不允许回退到 `Circle.conversationId` 兼容读、同步 RPC、页面本地拼装或 Chat 直接写圈群成员的旧路径。
 
 ## TDD / ATDD 策略
 
@@ -234,6 +268,7 @@
 | `P2` | 完成 codegen 与 conversation/content 关联字段 | `T1_schema`, `T3_cross_service_integration` |
 | `P3` | 落地公共群 / 自建群 / 私有群搜索流程 | `T2_module_interaction`, `T4_user_journey` |
 | `P4` | 落地群资料、公告与节点内容聚合 | `T2_module_interaction`, `T3_cross_service_integration`, `T4_user_journey` |
+| `P5` | CircleGroup 创建/绑定、成员与角色投影、归档终态、容量与治理边界 | `local_contract`, `api_integration`, `user_acceptance` |
 
 ## 未来演进
 

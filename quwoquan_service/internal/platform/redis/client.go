@@ -363,6 +363,18 @@ func (c *client) XAutoClaim(
 	return output, next, nil
 }
 
+func (c *client) XPendingCount(
+	ctx context.Context,
+	stream string,
+	group string,
+) (int64, error) {
+	pending, err := c.raw.XPending(ctx, stream, group).Result()
+	if err != nil {
+		return 0, err
+	}
+	return pending.Count, nil
+}
+
 func (c *client) Pipeline(context.Context) rtredis.Pipeliner {
 	return &pipeline{raw: c.raw.Pipeline()}
 }

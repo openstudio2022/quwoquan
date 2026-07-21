@@ -65,11 +65,20 @@ func run() error {
 	})
 	defer otelShutdown()
 
-	redisRouter, err := buildRedisRouter()
+	redisRouter, realtimeScene, err := buildRedisRouter()
 	if err != nil {
 		return err
 	}
 	defer redisRouter.Close()
+	messageTransport, err := requireMessageTransport(
+		ctx,
+		getenvOrDefault("APP_ENV", "alpha"),
+		redisRouter,
+		map[string]string{"realtime": realtimeScene.Mode},
+	)
+	if err != nil {
+		return fmt.Errorf("realtime-gateway message transport preflight failed: %w", err)
+	}
 	realtimeClient := redisRouter.Scene("realtime")
 	if err := realtimeClient.Ping(ctx); err != nil {
 		if failFastEnvironment() {
@@ -84,7 +93,7 @@ func run() error {
 	ticketStore := redisstore.NewTicketStore(realtimeClient)
 	leaseStore := redisstore.NewLeaseStore(realtimeClient)
 	presenceStore := redisstore.NewPresenceStore(realtimeClient)
-	eventSource := redisstore.NewEventSource(realtimeClient)
+	eventSource := redisstore.NewEventSource(messageTransport)
 
 	tickets, err := application.NewTicketService(ticketStore)
 	if err != nil {
@@ -193,7 +202,7 @@ func run() error {
 	return rthttp.ListenAndServeGraceful(server, 15*time.Second)
 }
 
-func buildRedisRouter() (*rtredis.Router, error) {
+func buildRedisRouter() (*rtredis.Router, rtredis.SceneConfig, error) {
 	sceneConfig := rtredis.SceneConfig{
 		Mode:     getenvOrDefault("REALTIME_REDIS_MODE", "memory"),
 		Addr:     strings.TrimSpace(os.Getenv("REALTIME_REDIS_ADDR")),
@@ -203,15 +212,19 @@ func buildRedisRouter() (*rtredis.Router, error) {
 		sceneConfig.Addrs = strings.Split(addrs, ",")
 	}
 	if failFastEnvironment() && sceneConfig.Mode == "memory" {
-		return nil, fmt.Errorf(
+		return nil, rtredis.SceneConfig{}, fmt.Errorf(
 			"REALTIME_REDIS_MODE=memory is forbidden in %s",
 			getenvOrDefault("APP_ENV", ""),
 		)
 	}
-	return platformredis.NewRouter(rtredis.RouterConfig{
+	router, err := platformredis.NewRouter(rtredis.RouterConfig{
 		Scenes:       map[string]rtredis.SceneConfig{"realtime": sceneConfig},
 		DefaultScene: "realtime",
 	})
+	if err != nil {
+		return nil, rtredis.SceneConfig{}, err
+	}
+	return router, sceneConfig, nil
 }
 
 func failFastEnvironment() bool {

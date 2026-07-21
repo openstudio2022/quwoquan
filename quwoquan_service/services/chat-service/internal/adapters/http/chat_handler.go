@@ -1,6 +1,8 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
+	conversationmodel "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 	"quwoquan_service/services/chat-service/internal/generated"
 )
 
@@ -102,45 +105,67 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
 
-	convs, err := h.conversationService.ListConversations(r.Context(), application.ListConversationsRequest{
+	page, err := h.conversationService.ListConversationPage(r.Context(), application.ListConversationsRequest{
 		UserId: userId, Cursor: cursor, Limit: limit,
 	})
 	if err != nil {
+		if errors.Is(err, conversationmodel.ErrInvalidInboxCursor) {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(
+				rterr.ModuleChat,
+				"invalid conversation cursor",
+				"conversation cursor must be an opaque keyset token",
+			))
+			return
+		}
 		writeHTTPError(w, r, err)
 		return
 	}
 
-	nextCursor := ""
-	if len(convs) > 0 {
-		nextCursor = convs[len(convs)-1].ID
+	response := map[string]any{
+		"items": h.flattenConversations(r.Context(), page.Items),
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items": h.flattenConversations(r.Context(), convs), "cursor": nextCursor,
-	})
+	if page.NextCursor != "" {
+		response["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Type             string   `json:"type"`
-		Title            string   `json:"title"`
-		CircleId         string   `json:"circleId"`
-		CircleGroupId    string   `json:"circleGroupId"`
-		EntityId         string   `json:"entityId"`
-		OriginType       string   `json:"originType"`
-		BindingType      string   `json:"bindingType"`
-		LifecyclePolicy  string   `json:"lifecyclePolicy"`
-		MaxGroupSize     int      `json:"maxGroupSize"`
-		InitialMemberIds []string `json:"initialMemberIds"`
+		Type             string          `json:"type"`
+		Title            string          `json:"title"`
+		MaxGroupSize     int             `json:"maxGroupSize"`
+		InitialMemberIds []string        `json:"initialMemberIds"`
+		CircleID         json.RawMessage `json:"circleId"`
+		CircleGroupID    json.RawMessage `json:"circleGroupId"`
+		EntityID         json.RawMessage `json:"entityId"`
+		OriginType       json.RawMessage `json:"originType"`
+		BindingType      json.RawMessage `json:"bindingType"`
+		LifecyclePolicy  json.RawMessage `json:"lifecyclePolicy"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
+	if len(body.CircleID) != 0 ||
+		len(body.CircleGroupID) != 0 ||
+		len(body.EntityID) != 0 ||
+		len(body.OriginType) != 0 ||
+		len(body.BindingType) != 0 ||
+		len(body.LifecyclePolicy) != 0 {
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromCircleGroupBindingWriteForbidden(
+				"public CreateConversation must not submit circle binding or source fields",
+			),
+		)
+		return
+	}
 
 	conv, err := h.conversationService.CreateConversation(r.Context(), application.CreateConversationRequest{
-		Type: body.Type, Title: body.Title, CircleId: body.CircleId, CircleGroupId: body.CircleGroupId, EntityId: body.EntityId,
-		OriginType: body.OriginType, BindingType: body.BindingType, LifecyclePolicy: body.LifecyclePolicy,
-		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
+		Type: body.Type, Title: body.Title, MaxGroupSize: body.MaxGroupSize,
+		CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -190,24 +215,26 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 
 	msgs, err := h.messageService.ListMessages(r.Context(), application.ListMessagesRequest{
 		ConversationId: convId, ViewerID: resolvePersonaID(r),
-		Limit: limit, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
+		Limit: limit + 1, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 
-	cursor := ""
-	if len(msgs) > 0 {
-		cursor = msgs[len(msgs)-1].Message.ID
+	hasNextPage := len(msgs) > limit
+	if hasNextPage {
+		msgs = msgs[:limit]
 	}
 	items := make([]map[string]any, 0, len(msgs))
 	for i := range msgs {
 		items = append(items, messageToWire(msgs[i]))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items, "cursor": cursor,
-	})
+	response := map[string]any{"items": items}
+	if hasNextPage {
+		response["nextBeforeSeq"] = msgs[len(msgs)-1].Message.Seq
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
@@ -329,25 +356,46 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 	role := r.URL.Query().Get("role")
 	query := r.URL.Query().Get("query")
 
-	sort := r.URL.Query().Get("sort")
+	sort := application.NormalizeMemberListSort(r.URL.Query().Get("sort"))
 	members, err := h.memberService.ListMembers(r.Context(), application.ListMembersRequest{
 		ConversationId: convId,
 		ViewerId:       resolveUserID(r),
 		Cursor:         cursor,
-		Limit:          limit,
+		Limit:          limit + 1,
 		Role:           role,
 		Query:          query,
-		Sort:           sort,
+		Sort:           string(sort),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	if members == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
-		return
+	hasNextPage := len(members) > limit
+	if hasNextPage {
+		members = members[:limit]
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": members})
+	items := make([]map[string]any, 0, len(members))
+	currentUserID := resolveUserID(r)
+	for _, member := range members {
+		items = append(items, conversationMemberToWire(member, currentUserID))
+	}
+	response := map[string]any{"items": items}
+	if hasNextPage {
+		last := members[len(members)-1]
+		switch sort {
+		case application.MemberListSortDisplayNameAsc:
+			response["nextCursor"] = application.EncodeMemberListNextCursorDisplayName(
+				last.DisplayName,
+				last.UserId,
+			)
+		default:
+			response["nextCursor"] = application.EncodeMemberListNextCursorJoined(
+				last.JoinedAt,
+				last.ID,
+			)
+		}
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
@@ -633,14 +681,26 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 50)
 
-	items, err := h.inboxService.ListInbox(r.Context(), application.ListInboxRequest{
+	page, err := h.inboxService.ListInboxPage(r.Context(), application.ListInboxRequest{
 		UserId: userId, Cursor: cursor, Limit: limit,
 	})
 	if err != nil {
+		if errors.Is(err, conversationmodel.ErrInvalidInboxCursor) {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(
+				rterr.ModuleChat,
+				"invalid inbox cursor",
+				"inbox cursor must be an opaque keyset token",
+			))
+			return
+		}
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": h.flattenInboxItems(r.Context(), items)})
+	response := map[string]any{"items": h.flattenInboxItems(r.Context(), page.Items)}
+	if page.NextCursor != "" {
+		response["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *ChatHandler) handleListMessageHome(w http.ResponseWriter, r *http.Request) {
@@ -649,21 +709,33 @@ func (h *ChatHandler) handleListMessageHome(w http.ResponseWriter, r *http.Reque
 	limit := queryInt(r, "limit", 50)
 	filter := normalizeMessageHomeFilter(r.URL.Query().Get("filter"))
 
-	items, err := h.inboxService.ListInbox(r.Context(), application.ListInboxRequest{
+	page, err := h.inboxService.ListInboxPage(r.Context(), application.ListInboxRequest{
 		UserId: userId, Cursor: cursor, Limit: limit,
 	})
 	if err != nil {
+		if errors.Is(err, conversationmodel.ErrInvalidInboxCursor) {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(
+				rterr.ModuleChat,
+				"invalid message home cursor",
+				"message home cursor must be an opaque keyset token",
+			))
+			return
+		}
 		writeHTTPError(w, r, err)
 		return
 	}
-	rows := make([]map[string]any, 0, len(items))
-	for _, item := range items {
+	rows := make([]map[string]any, 0, len(page.Items))
+	for _, item := range page.Items {
 		if !messageHomeMatchesFilter(item, filter) {
 			continue
 		}
 		rows = append(rows, h.messageHomeRowToWire(r.Context(), item))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+	response := map[string]any{"items": rows}
+	if page.NextCursor != "" {
+		response["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
@@ -768,5 +840,5 @@ func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.R
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": candidates, "cursor": ""})
+	writeJSON(w, http.StatusOK, map[string]any{"items": candidates})
 }

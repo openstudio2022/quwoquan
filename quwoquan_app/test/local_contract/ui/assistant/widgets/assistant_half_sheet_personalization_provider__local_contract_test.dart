@@ -71,7 +71,15 @@ void main() {
         experienceLevel: ExperienceLevel.returning,
         entityId: 'post_001',
         objectType: 'content.post',
-        intersectionRefs: const <String>['tag:travel'],
+        intersectionEvidenceRefs: const <AssistantIntersectionEvidenceRef>[
+          AssistantIntersectionEvidenceRef(
+            intersectionId: 'intersection-001',
+            evidenceId: 'snapshot-001',
+            sourceRef: 'travel_companion',
+            objectTypeRef: 'content.post',
+            objectId: 'post_001',
+          ),
+        ],
       );
       final container = ProviderContainer(
         overrides: [
@@ -94,6 +102,10 @@ void main() {
       expect(value.suggestionLines, <String>['服务端动作']);
       expect(repo.lastContextSnapshot?['pageType'], 'home');
       expect(repo.lastContextSnapshot?['pageObjects'], isA<List<dynamic>>());
+      expect(
+        repo.lastContextSnapshot?['intersectionEvidenceRefs'],
+        isA<List<dynamic>>(),
+      );
     },
   );
 }

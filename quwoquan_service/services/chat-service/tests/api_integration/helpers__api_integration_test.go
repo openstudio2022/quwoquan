@@ -25,13 +25,14 @@ var apiIntegrationIdempotencySeq int64
 
 func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStoragePorts {
 	return application.ChatStoragePorts{
-		Transactions:      store,
-		Conversations:     store,
-		Messages:          store,
-		MessageProjection: store,
-		Members:           store,
-		UserStates:        store,
-		Receipts:          store,
+		Transactions:             store,
+		Conversations:            store,
+		CircleGroupConversations: store,
+		Messages:                 store,
+		MessageProjection:        store,
+		Members:                  store,
+		UserStates:               store,
+		Receipts:                 store,
 		ConversationCommands: persistence.NewMongoAggregateCommandStore(
 			mongoDB, "conversations_command_receipts", "conversations_outbox",
 		),
@@ -41,6 +42,8 @@ func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStorage
 		UserStateCommands: persistence.NewMongoAggregateCommandStore(
 			mongoDB, "conversation_user_states_command_receipts", "conversation_user_states_outbox",
 		),
+		CircleGroupMembershipProjections:  store,
+		CircleGroupChatBindingProjections: store,
 	}
 }
 

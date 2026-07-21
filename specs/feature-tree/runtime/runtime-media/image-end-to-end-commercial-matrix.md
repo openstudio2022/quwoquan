@@ -7,6 +7,10 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 
 本规格与 [`avatar-e2e-validation.md`](../runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md)、[`video-end-to-end-commercial-matrix.md`](./video-end-to-end-commercial-matrix.md) 口径一致：**任一必选环境缺少 passed 报告 → `GATE_BLOCK`，不得宣称商用端到端全矩阵完成。**
 
+图片交付对象、policy、reprocess 与原图授权的唯一功能规格是
+[`image-delivery-variants`](../../discovery-content/media-processing-helper-read/image-delivery-variants/spec.md)；
+本矩阵只定义四环境运行证据，不能用静态 profile 或本地 fixture 替代该 Story 的端云契约。
+
 ## 环境矩阵（必选）
 
 | 环境 | 运行形态 | 必须验证（内容图片） | 准出要求 |

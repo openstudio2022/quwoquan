@@ -14,7 +14,7 @@ from core.runtime_policy import RuntimePolicy, active_runtime_policy
 from core.schema import assert_valid
 
 
-SPEND_ROOT = DATA_LOCAL_ROOT / "spend"
+SPEND_ROOT = DATA_LOCAL_ROOT / "cache" / "cursor_spend"
 SPEND_LEDGER_PATH = SPEND_ROOT / "cursor_sdk_spend.json"
 SPEND_LOCK_PATH = SPEND_ROOT / ".cursor_sdk_spend.lock"
 

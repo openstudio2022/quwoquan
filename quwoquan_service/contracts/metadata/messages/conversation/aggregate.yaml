@@ -27,6 +27,8 @@ members: []
 business_rules:
   - type、creatorId 与 origin binding 创建后不可变
   - Conversation 只管理会话身份、标题、策略和生命周期
+  - circleGroupId 非空时必须一对一绑定 active CircleGroup；绑定只可由 CircleGroupCreated 的 durable event provisioner 写入，普通 HTTP 创建命令不得提交 circleId 或 circleGroupId
+  - CircleGroupMembership 的 active、left、removed、role_changed 与 CircleGroupArchived 仅由 durable projector 写入对应 Conversation 成员、用户态与终态；圈群成员治理不接受 Chat HTTP 旁路
   - 成员、用户状态与 Message 分别由其聚合维护
   - maxSeq 只由 MessageCommitted 事件单调推进，不由客户端提交
   - dissolved 为终态且通过 outbox 通知成员与投影收敛

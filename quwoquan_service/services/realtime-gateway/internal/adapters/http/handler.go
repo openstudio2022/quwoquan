@@ -17,7 +17,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/realtime-gateway/internal/application"
 	generated "quwoquan_service/services/realtime-gateway/internal/generated"
 )
@@ -201,7 +201,7 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 // 减少 App 端逐条唤醒。
 func collectEvents(
 	ctx context.Context,
-	source <-chan rtredis.Message,
+	source <-chan runtimemessaging.EphemeralDelivery,
 	hold time.Duration,
 ) []json.RawMessage {
 	events := make([]json.RawMessage, 0, 4)
@@ -217,7 +217,7 @@ func collectEvents(
 			if !ok {
 				return events
 			}
-			if !json.Valid([]byte(message.Payload)) {
+			if !json.Valid(message.Payload) {
 				continue
 			}
 			events = append(events, json.RawMessage(message.Payload))
@@ -228,7 +228,7 @@ func collectEvents(
 
 func drainEvents(
 	ctx context.Context,
-	source <-chan rtredis.Message,
+	source <-chan runtimemessaging.EphemeralDelivery,
 ) []json.RawMessage {
 	events := make([]json.RawMessage, 0, 4)
 	window := time.NewTimer(longPollBatchWindow)
@@ -243,7 +243,7 @@ func drainEvents(
 			if !ok {
 				return events
 			}
-			if !json.Valid([]byte(message.Payload)) {
+			if !json.Valid(message.Payload) {
 				continue
 			}
 			events = append(events, json.RawMessage(message.Payload))

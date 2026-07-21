@@ -24,7 +24,7 @@ gwt_acceptance:
     - 申请者点击加入圈子；owner/admin 在审批队列执行 Approve 或 Reject。
     then:
     - 加入后 membership state=pending，申请者按钮呈「加入审批中」禁用态。
-    - Approve 后 state=active、memberCount 投影 +1、发布 CircleMembershipJoined。
+    - Approve 后 state=active、memberCount 投影 +1、发布 CircleMembershipApproved。
     - Reject 后 state 回到可再申请态，发布对应事实事件；申请者可见结果反馈。
     done_when:
     - 圈子级 Approve/Reject 命令经 metadata→codegen→circle-service 落地，审批页可达且权限受限于 owner/admin。

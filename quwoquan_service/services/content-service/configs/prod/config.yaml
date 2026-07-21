@@ -20,6 +20,11 @@ rec_model_service:
   timeout_ms: 80
   enabled: true
 
+# prod 的 content embedding 由受控 Binding 注入；缺 endpoint 或凭据时启动失败。
+embedding:
+  enabled: true
+  vector_recall_enabled: false
+
 # prod runs the shared ES cluster; endpoints/credentials are injected as deploy
 # secrets via SEARCH_ES_ENDPOINTS / SEARCH_ES_* (same cluster/index as search-service).
 es:

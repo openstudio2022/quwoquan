@@ -40,7 +40,7 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 - 领域私有资产归领域：服务 Dockerfile、部署规则和 release config 位于 `quwoquan_service/services/<service>/`；App 配置与发布规则位于 `quwoquan_app/configs/`、`quwoquan_app/deploy/`；数据发布规则位于 `quwoquan_data/` 的 control plane 与 publish 边界。
 - Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
 - 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
-- 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,release,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。部署渲染临时文件与设备信任证书在系统临时目录，容器证书和卷状态由容器运行时命名卷管理；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
+- 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。App、Service、Legal-static 与 Portal 的 deploy payload、渲染配置、Caddy、TLS 和 env 文件统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
 
 ## 常用入口
 

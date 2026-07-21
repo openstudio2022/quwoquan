@@ -40,7 +40,7 @@ def _fixture(tmp_path: Path) -> Path:
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": EXECUTION_IDS,
             "rolloutMilestone": "canary",
-            "sourceDigest": current_source_digest().to_document(),
+            "sourceDigests": [current_source_digest().to_document()],
         },
     )
     _write_json(
@@ -69,7 +69,7 @@ def _fixture(tmp_path: Path) -> Path:
             "creatorCount": 0,
             "tagCount": 1,
             "canonicalMerkle": "sha256:" + "a" * 64,
-            "sourceDigest": current_source_digest().to_document(),
+            "sourceDigests": [current_source_digest().to_document()],
             "payloadSha256": payload_digest(release),
             "recordedAt": "2026-07-15T00:00:00Z",
         },

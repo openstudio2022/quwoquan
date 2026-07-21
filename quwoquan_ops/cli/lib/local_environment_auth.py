@@ -27,7 +27,13 @@ _SECRET_KEYS = (
     "push_token_encryption_key_b64",
     "account_closure_subject_hmac_secret",
 )
-_LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
+_LOCAL_TARGETS = {
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    # prod-sim 使用 production 配置投影，但其认证材料仍限定在本机部署目录。
+    "prod": "prod-sim",
+}
+_REPORT_ACCOUNT_BACKFILL_KIND = "content.reporter_account_backfill"
 
 
 @dataclass(frozen=True)
@@ -100,6 +106,7 @@ def open_local_acceptance_session(
     *,
     environment: str,
     target_name: str,
+    profile: str = "",
     subject: str | None = None,
     resolve_host: str = "127.0.0.1",
     timeout_seconds: float = 30.0,
@@ -132,6 +139,7 @@ def open_local_acceptance_session(
             raise ValueError("local environment acceptance subject is invalid")
         owner_id = canonical_subject
         persona_id = canonical_subject
+    profile_value = _canonical_acceptance_profile(profile)
     auth = prepare_local_environment_auth(environment, target_name)
     process_env = os.environ.copy()
     process_env.update(auth.environment)
@@ -141,6 +149,7 @@ def open_local_acceptance_session(
             "QWQ_LOCAL_ACCEPTANCE_TARGET": target_name,
             "QWQ_ACCEPTANCE_OWNER_ID": owner_id,
             "QWQ_ACCEPTANCE_PERSONA_ID": persona_id,
+            "QWQ_ACCEPTANCE_PROFILE": profile_value,
         }
     )
     result = subprocess.run(
@@ -299,6 +308,16 @@ def _load_acceptance_principal() -> tuple[str, str]:
     )
 
 
+def _canonical_acceptance_profile(value: str) -> str:
+    profile = value.strip()
+    allowed = frozenset(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+    )
+    if any(character not in allowed for character in profile):
+        raise ValueError("local environment acceptance profile is invalid")
+    return profile
+
+
 def _load_or_create_secrets(path: Path) -> dict[str, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(path.parent, 0o700)
@@ -375,10 +394,68 @@ def _print_shell_environment(environment: str, target_name: str) -> None:
         print(f"export {key}={shlex.quote(value)}")
 
 
+def write_local_report_account_backfill(
+    environment: str,
+    target_name: str,
+    output_path: Path,
+    *,
+    include_acceptance_principal: bool = True,
+) -> dict[str, object]:
+    """Create a target-local, reviewed legacy Report ownership mapping.
+
+    The only populated local mapping is derived from the canonical acceptance
+    fixture. Production deployment never synthesizes a mapping: unresolved
+    legacy rows stay fail-closed until an operator provides a verified export.
+    """
+
+    _require_local_environment(environment, target_name)
+    entries: list[dict[str, str]] = []
+    if include_acceptance_principal:
+        owner_id, persona_id = _load_acceptance_principal()
+        entries.append({"reporterId": persona_id, "accountId": owner_id})
+    payload: dict[str, object] = {
+        "kind": _REPORT_ACCOUNT_BACKFILL_KIND,
+        "entries": entries,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = output_path.with_name(output_path.name + ".tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(temporary_path, 0o600)
+    temporary_path.replace(output_path)
+    return payload
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] != "--shell":
+    if len(sys.argv) == 4 and sys.argv[1] == "--shell":
+        _print_shell_environment(sys.argv[2], sys.argv[3])
+    elif (
+        len(sys.argv) in {5, 6}
+        and sys.argv[1] == "--write-report-account-backfill"
+        and (len(sys.argv) == 5 or sys.argv[5] == "--empty")
+    ):
+        result = write_local_report_account_backfill(
+            sys.argv[2],
+            sys.argv[3],
+            Path(sys.argv[4]),
+            include_acceptance_principal=len(sys.argv) == 5,
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "entryCount": len(result["entries"]),
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
         raise SystemExit(
             "usage: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--shell <beta|gamma> <beta-local|gamma-local>"
+            "--shell <beta|gamma> <beta-local|gamma-local>\n"
+            "   or: python -m quwoquan_ops.cli.lib.local_environment_auth "
+            "--write-report-account-backfill <beta|gamma> "
+            "<beta-local|gamma-local> <output-path> [--empty]"
         )
-    _print_shell_environment(sys.argv[2], sys.argv[3])

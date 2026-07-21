@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 // 本文件覆盖群成员治理的授权矩阵与生命周期负例（metadata 声明的
@@ -31,6 +32,24 @@ func errorCodeOf(t *testing.T, body map[string]any) string {
 	}
 	t.Fatalf("response has no error code: %v", body)
 	return ""
+}
+
+func inboxContainsConversation(t *testing.T, body map[string]any, conversationID string) bool {
+	t.Helper()
+	items, ok := body["items"].([]any)
+	if !ok {
+		t.Fatalf("inbox response missing items: %v", body)
+	}
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("inbox item is not an object: %v", raw)
+		}
+		if item["id"] == conversationID {
+			return true
+		}
+	}
+	return false
 }
 
 // postExpectingError 与 doPost 同源，但不对状态码 fatal（负例断言用）。
@@ -265,6 +284,77 @@ func TestLeaveConversation_MemberLeaves(t *testing.T) {
 
 	// 重复退出为 no-op（幂等回执）。
 	doPost(t, "/chat/conversations/"+convId+"/leave", `{}`, "user_b", http.StatusOK)
+}
+
+// TestTerminalMembershipStateCleanup prevents removed/left users from retaining
+// a private inbox row or recreating it via settings after their membership ends.
+func TestTerminalMembershipStateCleanup(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	removedConv := createConversation(
+		t,
+		`{"type":"group","title":"removed inbox cleanup","initialMemberIds":["user_removed"]}`,
+	)
+	removedID := removedConv["id"].(string)
+	_, beforeRemoval := doGet(t, "/chat/inbox?limit=50", "user_removed")
+	if !inboxContainsConversation(t, beforeRemoval, removedID) {
+		t.Fatal("new member must have an inbox row before removal")
+	}
+
+	if code, body := doDelete(
+		t,
+		"/chat/conversations/"+removedID+"/members/user_removed",
+		"user_test_001",
+	); code != http.StatusOK {
+		t.Fatalf("remove member: %d %v", code, body)
+	}
+	_, afterRemoval := doGet(t, "/chat/inbox?limit=50", "user_removed")
+	if inboxContainsConversation(t, afterRemoval, removedID) {
+		t.Fatal("removed user must lose the inbox row in the membership transaction")
+	}
+	code, body := doPatch(
+		t,
+		"/chat/conversations/"+removedID+"/settings",
+		`{"pinned":true}`,
+		"user_removed",
+	)
+	if code != http.StatusNotFound || errorCodeOf(t, body) != "CHAT.USER.conversation_not_found" {
+		t.Fatalf("removed user settings must be hidden as not found: %d %v", code, body)
+	}
+	_, afterDeniedSettings := doGet(t, "/chat/inbox?limit=50", "user_removed")
+	if inboxContainsConversation(t, afterDeniedSettings, removedID) {
+		t.Fatal("rejected settings command must not recreate removed user's inbox row")
+	}
+
+	leftConv := createConversation(
+		t,
+		`{"type":"group","title":"left inbox cleanup","initialMemberIds":["user_left"]}`,
+	)
+	leftID := leftConv["id"].(string)
+	_, beforeLeave := doGet(t, "/chat/inbox?limit=50", "user_left")
+	if !inboxContainsConversation(t, beforeLeave, leftID) {
+		t.Fatal("new member must have an inbox row before leave")
+	}
+	doPost(t, "/chat/conversations/"+leftID+"/leave", `{}`, "user_left", http.StatusOK)
+
+	// A MessageSent event committed before leave may reach the inbox projector
+	// afterwards. Its deleted state is terminal, so this must remain a no-op.
+	store := persistence.NewMongoChatStore(mongoDB)
+	if err := store.AdvanceInboxUnread(
+		context.Background(),
+		"user_left",
+		leftID,
+		999,
+		1,
+		1,
+		time.Now().UTC(),
+	); err != nil {
+		t.Fatalf("late inbox projection after leave must be no-op: %v", err)
+	}
+	_, afterLeave := doGet(t, "/chat/inbox?limit=50", "user_left")
+	if inboxContainsConversation(t, afterLeave, leftID) {
+		t.Fatal("left user must not regain an inbox row from a delayed projection")
+	}
 }
 
 // TestLeaveConversation_OwnerMustTransferFirst：群主退群前必须转让。

@@ -13,7 +13,6 @@ func testCloudToolRegistry() toolpkg.Registry {
 		toolpkg.Request,
 	) (toolpkg.Result, error) {
 		return toolpkg.Result{Output: map[string]any{
-			"provider":   "test_web_provider",
 			"summary":    "测试网络检索结果",
 			"references": []map[string]any{},
 		}}, nil

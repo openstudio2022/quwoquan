@@ -25,11 +25,16 @@ typedef ChatProviderInvalidate =
 /// Called by realtime connection delegates when a WebSocket, long-poll,
 /// or mock catalog event arrives.
 class RealtimeMessageHandler {
-  RealtimeMessageHandler(ChatProviderRead read, {this._invalidate})
-    : _read = read;
+  RealtimeMessageHandler(
+    ChatProviderRead read, {
+    this.invalidate,
+    String Function()? currentUserIdResolver,
+  }) : _read = read,
+       _currentUserIdResolver = currentUserIdResolver ?? _emptyCurrentUserId;
 
   final ChatProviderRead _read;
-  final ChatProviderInvalidate? _invalidate;
+  final ChatProviderInvalidate? invalidate;
+  final String Function() _currentUserIdResolver;
   final Set<String> _pendingConversationRefreshes = <String>{};
   Timer? _conversationRefreshTimer;
   Timer? _avatarPatchTimer;
@@ -126,7 +131,7 @@ class RealtimeMessageHandler {
           unawaited(
             _read(conversationMembersProvider(conversationId).notifier).load(),
           );
-          _invalidate?.call(groupHomeProvider(conversationId));
+          invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
@@ -137,14 +142,15 @@ class RealtimeMessageHandler {
             (payload['latestSyncSeq'] as num?)?.toInt();
         _scheduleAvatarPatchSync(conversationLatestSeq);
         if (conversationId.isNotEmpty) {
-          _invalidate?.call(groupHomeProvider(conversationId));
+          invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
 
       case 'ConversationMemberRemoved':
+      case 'ConversationMemberLeft':
         if (conversationId.isEmpty) return;
-        _reloadGroupRosterProviders(conversationId);
+        _handleTerminalMembershipEvent(conversationId, payload);
         return;
 
       case 'ConversationUserSettingsChanged':
@@ -166,6 +172,34 @@ class RealtimeMessageHandler {
       default:
         return;
     }
+  }
+
+  static String _emptyCurrentUserId() => '';
+
+  // Removal/leave events are delivered to the affected user in addition to the
+  // post-mutation roster. That user must purge all local copies immediately:
+  // the server has deleted ConversationUserState, so retaining cached messages
+  // or an inbox card would expose an inaccessible conversation until a later
+  // full sync.
+  void _handleTerminalMembershipEvent(
+    String conversationId,
+    Map<String, dynamic> payload,
+  ) {
+    final affectedUserId = (payload['userId'] as String? ?? '').trim();
+    final currentUserId = _currentUserIdResolver().trim();
+    if (affectedUserId.isEmpty ||
+        currentUserId.isEmpty ||
+        affectedUserId != currentUserId) {
+      _reloadGroupRosterProviders(conversationId);
+      return;
+    }
+    _read(conversationCacheProvider).remove(conversationId);
+    invalidate?.call(chatMessageProvider(conversationId));
+    invalidate?.call(conversationMembersProvider(conversationId));
+    invalidate?.call(groupHomeProvider(conversationId));
+    unawaited(
+      _read(localChatSearchSyncProvider).removeConversation(conversationId),
+    );
   }
 
   /// 识别并路由推荐实时 patch。返回 true 表示该事件已被识别为 feed patch
@@ -236,7 +270,7 @@ class RealtimeMessageHandler {
     unawaited(
       _read(conversationMembersProvider(conversationId).notifier).load(),
     );
-    _invalidate?.call(groupHomeProvider(conversationId));
+    invalidate?.call(groupHomeProvider(conversationId));
     _refreshConversationCache(conversationId);
   }
 

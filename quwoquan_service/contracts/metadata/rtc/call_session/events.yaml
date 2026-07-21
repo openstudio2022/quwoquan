@@ -3,7 +3,7 @@ aggregate: CallSession
 events:
   - name: CallInitiated
     source: CallInitiated
-    description: 通话发起（发起方创建 CallSession + LiveKit Room）
+    description: 通话发起（发起方创建 CallSession + 媒体 Room）
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store

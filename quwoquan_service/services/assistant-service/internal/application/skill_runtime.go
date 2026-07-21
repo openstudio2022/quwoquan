@@ -69,13 +69,14 @@ func (r ModelDrivenSkillRuntime) SelectSkill(ctx context.Context, turn assistant
 	model := r.Model
 	if model != nil && strings.TrimSpace(turn.Input.Text) != "" {
 		resp, err := model.Complete(ctx, ModelRequest{
-			TurnID:       turn.TurnID,
-			TraceID:      turn.TraceID,
-			Stage:        "skill_selection",
-			Prompt:       buildSkillSelectionPrompt(catalog),
-			UserQuestion: turn.Input.Text,
-			ContextTurns: turn.ContextTurns,
-			SkillCatalog: catalog,
+			TurnID:               turn.TurnID,
+			TraceID:              turn.TraceID,
+			Stage:                "skill_selection",
+			Prompt:               buildSkillSelectionPrompt(catalog),
+			UserQuestion:         turn.Input.Text,
+			ContextTurns:         turn.ContextTurns,
+			IntersectionEvidence: turn.IntersectionEvidence,
+			SkillCatalog:         catalog,
 		})
 		if err == nil {
 			if manifest, ok := manifestByModelSelection(catalog, resp); ok {

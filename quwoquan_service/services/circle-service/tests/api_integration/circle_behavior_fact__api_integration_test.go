@@ -96,7 +96,9 @@ func TestCircleBehaviorFactRealAppendReplayProjectionAndStream(t *testing.T) {
 	}
 
 	streamRelay := behaviorfactapp.NewOutboxRelay(
-		store, store, messaging.NewCircleBehaviorFactStreamPublisher(redisRouter.Scene("general")),
+		store,
+		store,
+		messaging.NewCircleBehaviorFactStreamPublisher(circleMessageTransport),
 		"circle-behavior-fact-stream-test",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 2 {

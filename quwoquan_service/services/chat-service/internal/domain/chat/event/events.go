@@ -3,8 +3,9 @@ package event
 
 // Event type constants for Conversation.
 const (
-	ConversationCreated       = "ConversationCreated"
-	ConversationRosterUpdated = "ConversationRosterUpdated"
-	ConversationAvatarUpdated = "ConversationAvatarUpdated"
-	ConversationDissolved     = "ConversationDissolved"
+	ConversationCreated                = "ConversationCreated"
+	CircleGroupConversationProvisioned = "CircleGroupConversationProvisioned"
+	ConversationRosterUpdated          = "ConversationRosterUpdated"
+	ConversationAvatarUpdated          = "ConversationAvatarUpdated"
+	ConversationDissolved              = "ConversationDissolved"
 )

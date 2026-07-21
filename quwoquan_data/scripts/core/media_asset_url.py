@@ -16,15 +16,56 @@ from core.release_layout import payload_file
 _CAS_RE = re.compile(
     r"^media/objects/sha256/([0-9a-f]{2})/([0-9a-f]{2})/([0-9a-f]{64})(\.[a-z0-9]+)?$"
 )
-IMAGE_VARIANT_PROFILES: dict[str, dict[str, Any]] = {
-    "thumbnail": {"width": 320, "format": "webp", "quality": 80, "scene": "feed_grid"},
-    "display": {"width": 960, "format": "webp", "quality": 82, "scene": "article_body"},
-    "cover": {"width": 1280, "format": "webp", "quality": 85, "scene": "feed_cover"},
-    "full": {"width": 2048, "format": "webp", "quality": 90, "scene": "immersive_viewer"},
-}
+_IMAGE_VARIANT_POLICY = (
+    REPO_ROOT
+    / "quwoquan_service"
+    / "contracts"
+    / "metadata"
+    / "content"
+    / "media_asset"
+    / "image_variant_policy.yaml"
+)
+_REQUIRED_IMAGE_VARIANT_PROFILES = frozenset(
+    {"thumbnail", "display", "cover", "full"}
+)
 ENVIRONMENT_TOPOLOGY_MANIFEST = (
     REPO_ROOT / "quwoquan_ops" / "environments" / "environment_topology_manifest.yaml"
 )
+
+
+def _load_image_variant_policy() -> tuple[int, dict[str, dict[str, Any]]]:
+    document = yaml.safe_load(_IMAGE_VARIANT_POLICY.read_text(encoding="utf-8")) or {}
+    if document.get("schema") != "content_image_variant_policy":
+        raise ValueError("content image variant policy schema is invalid")
+    version = int(document.get("derivative_policy_version") or 0)
+    profiles = document.get("profiles")
+    if version <= 0 or not isinstance(profiles, dict):
+        raise ValueError("content image variant policy is incomplete")
+    normalized: dict[str, dict[str, Any]] = {}
+    for name in sorted(_REQUIRED_IMAGE_VARIANT_PROFILES):
+        profile = profiles.get(name)
+        if not isinstance(profile, dict):
+            raise ValueError(f"content image variant profile is missing: {name}")
+        width = int(profile.get("width") or 0)
+        quality = int(profile.get("quality") or 0)
+        image_format = str(profile.get("format") or "").strip()
+        scene = str(profile.get("scene") or "").strip()
+        processing = str(profile.get("processing") or "").strip()
+        if width <= 0 or not 1 <= quality <= 100 or not image_format or not scene or not processing:
+            raise ValueError(f"content image variant profile is invalid: {name}")
+        normalized[name] = {
+            "width": width,
+            "format": image_format,
+            "quality": quality,
+            "scene": scene,
+            "processing": processing,
+        }
+    if set(profiles) != _REQUIRED_IMAGE_VARIANT_PROFILES:
+        raise ValueError("content image variant policy has unexpected profiles")
+    return version, normalized
+
+
+IMAGE_VARIANT_POLICY_VERSION, IMAGE_VARIANT_PROFILES = _load_image_variant_policy()
 
 
 def resolve_media_cdn_bases(

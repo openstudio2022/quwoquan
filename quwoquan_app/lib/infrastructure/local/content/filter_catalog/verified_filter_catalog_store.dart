@@ -13,11 +13,33 @@ final class SharedPreferencesVerifiedFilterCatalogStore
   static const String _catalogKey = 'verified_filter_catalog_release';
 
   @override
-  Future<FilterCatalogSnapshot?> read() async {
+  Future<VerifiedFilterCatalogCacheEntry?> read() async {
     final preferences = await SharedPreferences.getInstance();
     final source = preferences.getString(_catalogKey);
     if (source == null || source.trim().isEmpty) return null;
-    return decodeFilterCatalogSnapshot(jsonDecode(source));
+    final decoded = jsonDecode(source);
+    if (decoded is! Map) {
+      throw const FormatException('verified filter catalog cache is not an object');
+    }
+    final payload = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final verifiedAtValue = payload['verifiedAt'];
+    if (verifiedAtValue is! String || verifiedAtValue.trim().isEmpty) {
+      throw const FormatException(
+        'verified filter catalog cache has no verifiedAt timestamp',
+      );
+    }
+    final verifiedAt = DateTime.tryParse(verifiedAtValue);
+    if (verifiedAt == null) {
+      throw const FormatException(
+        'verified filter catalog cache has an invalid verifiedAt timestamp',
+      );
+    }
+    return VerifiedFilterCatalogCacheEntry(
+      snapshot: decodeFilterCatalogSnapshot(payload),
+      verifiedAt: verifiedAt.toUtc(),
+    );
   }
 
   @override
@@ -26,9 +48,11 @@ final class SharedPreferencesVerifiedFilterCatalogStore
       throw ArgumentError.value(snapshot, 'snapshot', 'must be verified');
     }
     final preferences = await SharedPreferences.getInstance();
+    final payload = _snapshotToJson(snapshot)
+      ..['verifiedAt'] = DateTime.now().toUtc().toIso8601String();
     final committed = await preferences.setString(
       _catalogKey,
-      jsonEncode(_snapshotToJson(snapshot)),
+      jsonEncode(payload),
     );
     if (!committed) {
       throw StateError('verified filter catalog cache commit failed');

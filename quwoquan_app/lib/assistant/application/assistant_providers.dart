@@ -13,21 +13,7 @@ final assistantScheduleTasksProvider =
 /// 助理管理页显式偏好事实，统一走可撤销的 AssistantPreferenceFactFacet。
 final assistantPreferencesProvider =
     FutureProvider.autoDispose<List<AssistantPreferenceFact>>((ref) async {
-      final facet = ref.read(assistantPreferenceFactFacetProvider);
-      final results = await Future.wait(<Future<List<AssistantPreferenceFact>>>[
-        facet.listAssistantPreferences(),
-        facet.listAssistantPreferences(
-          status: AssistantPreferenceStatus.revoked,
-        ),
-      ]);
-      final now = DateTime.now().toUtc();
-      return <AssistantPreferenceFact>[
-        ...results[0],
-        ...results[1].where((preference) {
-          final deadline = DateTime.tryParse(
-            preference.revocationDeadline?.trim() ?? '',
-          );
-          return deadline != null && deadline.toUtc().isAfter(now);
-        }),
-      ];
+      return ref
+          .read(assistantPreferenceFactFacetProvider)
+          .listAssistantPreferences();
     });

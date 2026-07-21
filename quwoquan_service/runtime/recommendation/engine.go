@@ -43,6 +43,7 @@ const (
 // GetFeedRequest defines input for feed generation.
 type GetFeedRequest struct {
 	UserID        string
+	PersonaID     string
 	SessionID     string
 	FeedType      FeedType
 	Sort          string
@@ -65,6 +66,7 @@ type GetFeedRequest struct {
 // DeliveryAttribution 是延迟记账所需的本次评分归因（RecordDelivery 消费）。
 type DeliveryAttribution struct {
 	FeedRequestID  string
+	PersonaID      string
 	ChannelID      string
 	ModelBucket    string
 	ModelVersion   string
@@ -107,6 +109,9 @@ type FeedItem struct {
 	// trainingFeatures 只在进程内随最终下发集流转，不进入客户端 wire。
 	// FeedbackRecorder 将其写入不可变曝光事实，训练不得再回查当前可变宽表。
 	trainingFeatures *trainingFeatureSnapshot
+	// rank 是本次服务端重排后的全局一基序位，仅供不可变曝光事实使用。
+	// 它不进入客户端 wire，不能由端侧行为 position 回写覆盖。
+	rank int
 }
 
 type feedCursorState struct {
@@ -593,7 +598,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	distinctTopics := computeDistinctTopicCount(reranked)
 
 	allItems := make([]FeedItem, 0, len(reranked))
-	for _, s := range reranked {
+	for index, s := range reranked {
 		trainingFeatures := newTrainingFeatureSnapshot(
 			userFeatures,
 			candidateInputAt(s.Candidate, scoringFeatures.FeatureSnapshotAt),
@@ -611,6 +616,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			ContentVertical:  s.Candidate.ContentVertical,
 			SupplySource:     s.Candidate.SupplySource,
 			trainingFeatures: trainingFeatures,
+			rank:             pagingOffset + index + 1,
 		})
 	}
 
@@ -691,6 +697,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 
 	attribution := DeliveryAttribution{
 		FeedRequestID:  req.FeedRequestID,
+		PersonaID:      req.PersonaID,
 		ChannelID:      req.ChannelID,
 		ModelBucket:    modelBucket,
 		ModelReleaseID: modelReleaseID,
@@ -705,7 +712,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		resp.Attribution = attribution
 		return resp, nil
 	}
-	e.RecordDelivery(ctx, req.UserID, req.SessionID, attribution, items)
+	if err := e.RecordDelivery(ctx, req.UserID, req.SessionID, attribution, items); err != nil {
+		return nil, err
+	}
 
 	return resp, nil
 }
@@ -719,15 +728,16 @@ func (e *Engine) RecordDelivery(
 	userID, sessionID string,
 	attribution DeliveryAttribution,
 	items []FeedItem,
-) {
+) error {
 	if len(items) == 0 {
-		return
+		return nil
 	}
 	if e.feedback != nil {
 		feedbackItems := make([]FeedItem, len(items))
 		copy(feedbackItems, items)
 		impressionAttribution := ImpressionAttribution{
 			FeedRequestID:  attribution.FeedRequestID,
+			PersonaID:      attribution.PersonaID,
 			ModelBucket:    attribution.ModelBucket,
 			ModelVersion:   attribution.ModelVersion,
 			ModelReleaseID: attribution.ModelReleaseID,
@@ -741,12 +751,15 @@ func (e *Engine) RecordDelivery(
 			sessionID,
 			impressionAttribution,
 			feedbackItems,
-		); err != nil && e.logger != nil {
-			e.logger.Warn(
-				"rec.impression.write_failed",
-				slog.String("feedRequestId", attribution.FeedRequestID),
-				slog.String("error", err.Error()),
-			)
+		); err != nil {
+			if e.logger != nil {
+				e.logger.Warn(
+					"rec.impression.write_failed",
+					slog.String("feedRequestId", attribution.FeedRequestID),
+					slog.String("error", err.Error()),
+				)
+			}
+			return fmt.Errorf("record recommendation delivery impression: %w", err)
 		}
 	}
 	if e.exposureMemory != nil && userID != "" {
@@ -762,6 +775,7 @@ func (e *Engine) RecordDelivery(
 			}
 		}()
 	}
+	return nil
 }
 
 func normalizeSort(raw string) string {

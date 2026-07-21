@@ -12,6 +12,7 @@ PROBE_PATH = (
     / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke"
     / "run_chat_group_lifecycle_probe.py"
 )
+WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 SPEC = importlib.util.spec_from_file_location("chat_group_lifecycle_probe", PROBE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load chat group lifecycle probe")
@@ -70,6 +71,34 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
         self.assertNotEqual(evidence_id, raw_id)
         self.assertNotIn(raw_id, evidence_id)
 
+    def test_mentioned_message_round_trip_requires_canonical_target(self) -> None:
+        items = [
+            {
+                "id": "message-mention",
+                "mentions": ["fixture_user_friend"],
+            }
+        ]
+        self.assertTrue(
+            PROBE._mentioned_message_visible(
+                items,
+                message_id="message-mention",
+                mentioned_user_id="fixture_user_friend",
+            )
+        )
+        with self.assertRaisesRegex(PROBE.ProbeFailure, "not preserved"):
+            PROBE._mentioned_message_visible(
+                items,
+                message_id="message-mention",
+                mentioned_user_id="fixture_user_other",
+            )
+        self.assertFalse(
+            PROBE._mentioned_message_visible(
+                items,
+                message_id="unknown-message",
+                mentioned_user_id="fixture_user_friend",
+            )
+        )
+
     def test_release_profiles_register_group_lifecycle_probe(self) -> None:
         registry = json.loads(
             (ROOT / "quwoquan_ops/environments/gamma_validation_suites.json").read_text(
@@ -88,6 +117,26 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
             profile = registry["profiles"][profile_name]
             self.assertTrue(profile["smokeCasesBlocking"])
             self.assertIn("chat_group_lifecycle_api_probe", profile["smokeCases"])
+
+    def test_hosted_probe_keeps_tls_validation_and_uses_standard_prod_token(self) -> None:
+        source = PROBE_PATH.read_text(encoding="utf-8")
+        self.assertIn('default="PROD_TEST_AUTH_TOKEN"', source)
+        self.assertNotIn("_create_unverified_context", source)
+
+    def test_mainline_beta_bootstrap_runs_stackctl_integration_profile(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        bootstrap_start = workflow.index("Bootstrap beta-local stack for mainline auto prod")
+        bootstrap_end = workflow.index("      - id: run_matrix", bootstrap_start)
+        bootstrap = workflow[bootstrap_start:bootstrap_end]
+
+        self.assertIn(
+            "stackctl.py verify --env beta --kind all --profile integration",
+            bootstrap,
+        )
+        self.assertIn(
+            'report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-verify"',
+            bootstrap,
+        )
 
 
 if __name__ == "__main__":

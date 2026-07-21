@@ -37,7 +37,7 @@ redis:
     addr: ""
     addrs: []
     password: ""
-    db: 1
+    db: 0
     tls: false
     pool:
       size: 0

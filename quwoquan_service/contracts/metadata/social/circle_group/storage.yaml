@@ -4,6 +4,8 @@ collections:
   circle_groups:
     entity: CircleGroup
     role: authoritative
+    indexes:
+      - { name: uq_circle_group_conversation, keys: { conversationId: 1 }, sparse: true, unique: true }
   circle_group_command_receipts:
     entity: CircleGroupCommandReceipt
     role: authoritative
@@ -18,3 +20,10 @@ collections:
   circle_group_projection_checkpoints:
     entity: CircleGroupProjectionCheckpoint
     role: projection
+  circle_group_conversation_binding_receipts:
+    entity: CircleGroup
+    role: projection
+    description: CircleGroupConversationProvisioned durable event 的 source-event 幂等回执；与 circle_groups.conversationId 在同一事务提交。
+    indexes:
+      - { name: uq_circle_group_conversation_binding_event, keys: { eventId: 1 }, unique: true }
+      - { name: uq_circle_group_conversation_binding_conversation, keys: { conversationId: 1 }, unique: true }

@@ -36,7 +36,7 @@ class ReleaseAttestation:
     creator_count: int
     tag_count: int
     canonical_merkle: str
-    source_digest: SourceDigest
+    source_digests: tuple[SourceDigest, ...]
     payload_sha256: str
     recorded_at: str
 
@@ -51,6 +51,13 @@ class ReleaseAttestation:
             raise ReleaseAttestationError("recordedAt is required")
         if any(count < 0 for count in self.counts):
             raise ReleaseAttestationError("release counts must be non-negative")
+        if not self.source_digests:
+            raise ReleaseAttestationError("sourceDigests must not be empty")
+        digest_values = tuple(item.digest for item in self.source_digests)
+        if digest_values != tuple(sorted(set(digest_values))):
+            raise ReleaseAttestationError(
+                "sourceDigests must be sorted and contain no duplicates"
+            )
         if self.release_kind is ReleaseKind.CONTENT:
             if not self.execution_ids or not (self.entity_count or self.post_count):
                 raise ReleaseAttestationError(
@@ -84,7 +91,9 @@ class ReleaseAttestation:
             "creatorCount": self.creator_count,
             "tagCount": self.tag_count,
             "canonicalMerkle": self.canonical_merkle,
-            "sourceDigest": self.source_digest.to_document(),
+            "sourceDigests": [
+                source_digest.to_document() for source_digest in self.source_digests
+            ],
             "payloadSha256": self.payload_sha256,
             "recordedAt": self.recorded_at,
         }
@@ -97,7 +106,12 @@ class ReleaseAttestation:
             )
             release_kind = ReleaseKind(document.string("releaseKind"))
             milestone = RolloutMilestone(document.string("rolloutMilestone"))
-            source_digest = SourceDigest.from_document(document.value("sourceDigest"))
+            raw_source_digests = document.value("sourceDigests")
+            if not isinstance(raw_source_digests, list):
+                raise ReleaseAttestationError("sourceDigests must be an array")
+            source_digests = tuple(
+                SourceDigest.from_document(item) for item in raw_source_digests
+            )
             execution_ids = document.string_sequence("executionIds")
             entity_count = document.integer("entityCount")
             post_count = document.integer("postCount")
@@ -115,7 +129,7 @@ class ReleaseAttestation:
             creator_count=creator_count,
             tag_count=tag_count,
             canonical_merkle=document.string("canonicalMerkle"),
-            source_digest=source_digest,
+            source_digests=source_digests,
             payload_sha256=document.string("payloadSha256"),
             recorded_at=document.string("recordedAt"),
         )

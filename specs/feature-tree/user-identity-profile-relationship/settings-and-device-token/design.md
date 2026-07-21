@@ -7,7 +7,7 @@
 | `UserSettings` | 通知、隐私、通话、外观四个 named Slice | 单聚合 version CAS；同值命令返回幂等回执 |
 | `DeviceRegistration` | 账号拥有的设备及 push endpoint | 父聚合与 owned endpoint 同事务；token 仅存 AES-GCM 密文与 keyed fingerprint |
 | `CredentialBinding` | 登录凭证绑定、解绑与脱敏列表 | 数据库唯一约束串行化；禁止应用层“先查再写” |
-| `UserAccount` | 账号 active/closed 生命周期 | 注销安全终态事务 + durable outbox |
+| `UserAccount` | 账号 `active/suspended/closed` 生命周期与 auth epoch | 注销安全终态事务；受信封禁/恢复决策 + durable outbox |
 
 页面与 Provider 只依赖上述对象级 Query/Command Facet。production composition 只装配
 generated client + Remote adapter；Alpha/test 在独立 runner/mock package 注入同构实现。
@@ -23,6 +23,49 @@ generated client + Remote adapter；Alpha/test 在独立 runner/mock package 注
 
 若未来产品引入冷静期，必须作为新的状态机变更重新走 spec/acceptance；禁止在当前
 `CloseAccount` 上增加隐式恢复分支。
+
+## 运营封禁与申诉方案裁决
+
+封禁不是注销的软别名。`closed` 永远不可逆，`suspended` 仅表示运营处置期间的可逆受限
+状态，状态机严格为：
+
+```text
+active --[trusted Suspend decision]--> suspended
+suspended --[approved Restore decision]--> active
+closed --[任何请求]--> closed
+```
+
+Product Ops 是 `moderation_case_v1 / appeal_case_v1` 的 owner，负责证据、审批人、case
+状态和审计。它在审批完成后，以 OIDC/服务凭证签名的 internal enforcement decision 调用
+User Service；UserAccount 仍是 `accountState`、`authEpoch`、session revoke receipt 和
+`UserSuspended/UserRestored` outbox 的唯一 owner。申诉批准不允许直写账号或通过 App
+绕过 User Service；它只产生 Restore decision。decision payload 只带不透明 case ref、
+decision id/digest、action、request/trace id 和最小目标账号引用，不包含审核理由或证据。
+
+## 封禁提交与认证边界
+
+`AccountEnforcementStore.CommitDecision` 是 PostgreSQL 内的事务协调器：
+
+1. 校验 internal principal、decision action、case/appeal 审批状态与不可重放的 receipt。
+2. `SELECT ... FOR UPDATE` 锁定 UserAccount；`closed` 只能拒绝，已处于目标状态才返回同一
+   receipt 的幂等结果。
+3. 首次状态转换递增 `authEpoch`；Suspend 同事务撤销所有 AccountSession/refresh binding，
+   且落 `UserSuspended` outbox。Restore 只恢复 account state，不恢复旧 session/token，
+   并落 `UserRestored` outbox。
+4. 事务提交后，认证、refresh、WebSocket/service authentication 都必须同时验证 account
+   state 与 token epoch；enforcement reader 缺失、状态未知或 epoch 不匹配均 fail-closed。
+
+下游复用 `eventId + digest` inbox、pending claim、有限重试和 TTL DLQ，但各自写
+`restriction projection` 而非清理数据：
+
+- content/search：隐藏 suspended owner 的 profile、post、comment 与索引，Restore 后按
+  projection 回读恢复；
+- chat/circle：拒绝发送、成员写与入会动作，保留会话/成员原事实；
+- notification：抑制投递并在 Restore 后重新允许后续通知，不补发已过期消息；
+- recommendation：过滤 suspended subject 和特征写入，不删除可恢复画像。
+
+任何消费者不得调用 `accountclosure` 的匿名化/删除器，不能用缓存未命中、客户端 header 或
+前端分支替代服务端 enforcement reader。
 
 ## 注销提交事务
 
@@ -66,8 +109,13 @@ ACK`；失败有限重试，达到阈值后写 DLQ 并设置 TTL。ACK、inbox �
 - Alpha：typed mock/local_contract 验证页面、命令与异常。
 - Beta：真实 Remote + seed，验证设置与注销完整用户旅程。
 - Gamma：generated client 通过 gateway 验证 AccountSession/UserSettings/CloseAccount，
-  并观测 outbox/consumer/DLQ 指标。
+  并观测 outbox/consumer/DLQ 指标；封禁旅程额外验证旧 token 拒绝、受限主页不可见、申诉
+  恢复后的新会话续接和 restriction projection 收敛。
 - Prod：正式凭据、真机和受保护发布审批齐备后才能登记 readiness 环境证据。
 
 Schema 与安全终态为前向变更，不通过恢复已注销账号回滚。代码回滚只能发生在尚未执行
 注销的账号；已提交事件必须由兼容当前 canonical 事件的消费者继续排空。
+
+封禁的代码回滚也不允许把 `suspended` 静默改回 `active`：已发布 decision/outbox 必须继续
+由版本兼容的消费者排空；恢复只能使用审计链完整的 Restore decision。Prod 部署前必须演练
+Suspend/Restore 各一次、验证 epoch 拒绝与下游 lag/DLQ 告警。

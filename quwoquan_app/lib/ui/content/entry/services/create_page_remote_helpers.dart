@@ -376,6 +376,26 @@ class PreparedPostPublicationPayload {
   final List<String> mediaAssetIds;
 }
 
+/// 返回首次点击发布时可持久化的媒体准备意图。
+///
+/// 本地路径仅属于草稿和本次流式读取，不能进入持久发布命令；MediaAsset 尚未产生时，
+/// 队列只记录不可变发布身份和非交付展示元数据，并在上传完成后原子替换为最终命令。
+PreparedPostPublicationPayload buildPostPublicationMediaPreparationPayload(
+  CreateEditorState state,
+) {
+  final payload =
+      Map<String, Object?>.from(buildPostPublicationPayloadMap(state))
+        ..remove('mediaUrls')
+        ..remove('videoUrl')
+        ..remove('coverUrl')
+        ..remove('thumbnailUrl')
+        ..remove('mediaItems');
+  return PreparedPostPublicationPayload(
+    payload: payload,
+    mediaAssetIds: const <String>[],
+  );
+}
+
 Future<PreparedPostPublicationPayload>
 buildPostPublicationPayloadWithRemoteMedia({
   required ContentMediaFacet media,
@@ -385,7 +405,23 @@ buildPostPublicationPayloadWithRemoteMedia({
   AppTelemetryRecorder? telemetry,
   PostMediaUploadProgressCallback? onUploadProgress,
   ContentMediaUploadCancellationSignal? cancellationSignal,
+  String? mediaPreparationIdentity,
+  Iterable<ContentMediaPreparationCheckpoint> preparedMediaAssets =
+      const <ContentMediaPreparationCheckpoint>[],
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
+  final preparedAssetsBySlot = <String, ContentMediaPreparationCheckpoint>{
+    for (final checkpoint in preparedMediaAssets) checkpoint.slot: checkpoint,
+  };
+  final preparationIdentity =
+      mediaPreparationIdentity?.trim().isNotEmpty == true
+      ? mediaPreparationIdentity!.trim()
+      : state.draftId?.trim() ?? '';
+  if (preparationIdentity.isEmpty &&
+      state.editorKind == CreateEditorKind.media) {
+    throw StateError('media publication requires a durable draft identity');
+  }
   final basePayload = Map<String, Object?>.from(
     buildPostPublicationPayloadMap(state),
   );
@@ -401,7 +437,8 @@ buildPostPublicationPayloadWithRemoteMedia({
     ..remove('mediaUrls')
     ..remove('videoUrl')
     ..remove('coverUrl')
-    ..remove('thumbnailUrl');
+    ..remove('thumbnailUrl')
+    ..remove('mediaItems');
   if (state.hasVideo) {
     return _buildPostPublicationPayloadWithRemoteVideoMedia(
       media: media,
@@ -412,6 +449,9 @@ buildPostPublicationPayloadWithRemoteMedia({
       telemetry: telemetry,
       onUploadProgress: onUploadProgress,
       cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
   }
   if (state.imagePaths.isEmpty) {
@@ -438,6 +478,10 @@ buildPostPublicationPayloadWithRemoteMedia({
         );
       },
       cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      slot: 'image:$index',
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
     if (resolved.assetId.isNotEmpty) {
       assetIds.add(resolved.assetId);
@@ -446,9 +490,6 @@ buildPostPublicationPayloadWithRemoteMedia({
   if (assetIds.isEmpty) {
     throw StateError('image publish requires uploaded media asset ids');
   }
-  basePayload['mediaItems'] = assetIds
-      .map((assetId) => <String, Object?>{'kind': 'image', 'mediaId': assetId})
-      .toList(growable: false);
   return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
@@ -465,6 +506,10 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
   AppTelemetryRecorder? telemetry,
   PostMediaUploadProgressCallback? onUploadProgress,
   ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
   final itemCount = state.videoThumbnail.trim().isEmpty ? 1 : 2;
   final video = await _resolveMediaReference(
@@ -479,6 +524,10 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
       onUploadProgress?.call(itemProgress / itemCount);
     },
     cancellationSignal: cancellationSignal,
+    preparationIdentity: preparationIdentity,
+    slot: 'video:0',
+    preparedAssetsBySlot: preparedAssetsBySlot,
+    onMediaPrepared: onMediaPrepared,
   );
   if (video.assetId.isEmpty) {
     throw StateError('video publish requires an uploaded MediaAsset id');
@@ -496,12 +545,25 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
       onUploadProgress?.call((1 + itemProgress) / itemCount);
     },
     cancellationSignal: cancellationSignal,
+    preparationIdentity: preparationIdentity,
+    preparedAssetsBySlot: preparedAssetsBySlot,
+    onMediaPrepared: onMediaPrepared,
   );
   if (cover.assetId.isNotEmpty) {
     assetIds.add(cover.assetId);
   }
+  final selectedCover = cover.assetId.isNotEmpty
+      ? await media.selectManualCover(
+          SelectManualContentMediaCoverCommand(
+            mediaId: video.assetId,
+            coverAssetId: cover.assetId,
+          ),
+        )
+      : await media.selectAutoCover(
+          SelectAutoContentMediaCoverCommand(mediaId: video.assetId),
+        );
 
-  basePayload['coverStrategy'] = cover.coverStrategy;
+  basePayload['coverStrategy'] = selectedCover.coverStrategy;
   basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
   if (state.videoDurationMs > 0) {
     basePayload['durationMs'] = state.videoDurationMs;
@@ -512,19 +574,6 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
   if (state.videoHeight > 0) {
     basePayload['height'] = state.videoHeight;
   }
-  basePayload['mediaItems'] = <Map<String, Object?>>[
-    <String, Object?>{
-      'kind': 'video',
-      'coverStrategy': cover.coverStrategy,
-      'coverFrameTimeMs': state.videoCoverTimeMs,
-      if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
-      if (state.videoWidth > 0) 'width': state.videoWidth,
-      if (state.videoHeight > 0) 'height': state.videoHeight,
-      if (video.assetId.isNotEmpty) 'mediaId': video.assetId,
-      if (cover.assetId.isNotEmpty) 'coverAssetId': cover.assetId,
-    },
-  ];
-
   return PreparedPostPublicationPayload(
     payload: basePayload,
     mediaAssetIds: assetIds,
@@ -538,12 +587,8 @@ class _ResolvedMediaReference {
 }
 
 class _ResolvedVideoCoverReference {
-  const _ResolvedVideoCoverReference({
-    required this.coverStrategy,
-    this.assetId = '',
-  });
+  const _ResolvedVideoCoverReference({this.assetId = ''});
 
-  final String coverStrategy;
   final String assetId;
 }
 
@@ -556,6 +601,11 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   AppTelemetryRecorder? telemetry,
   ContentMediaUploadProgressCallback? onProgress,
   ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required String slot,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
   cancellationSignal?.throwIfCancelled();
   final path = localOrRemotePath.trim();
@@ -578,6 +628,35 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   );
   final source = await sourceReader.prepare(path);
   cancellationSignal?.throwIfCancelled();
+  final checkpoint = preparedAssetsBySlot[slot];
+  if (checkpoint != null &&
+      checkpoint.matches(
+        expectedSlot: slot,
+        expectedMediaType: mediaType,
+        expectedSha256Digest: source.sha256Digest,
+      ) &&
+      checkpoint.isCompleted) {
+    onProgress?.call(source.fileSize, source.fileSize);
+    return _ResolvedMediaReference(assetId: checkpoint.assetId);
+  }
+  final durableCheckpoint =
+      checkpoint != null &&
+          checkpoint.matches(
+            expectedSlot: slot,
+            expectedMediaType: mediaType,
+            expectedSha256Digest: source.sha256Digest,
+          )
+      ? checkpoint
+      : ContentMediaPreparationCheckpoint.forSource(
+          preparationIdentity: preparationIdentity,
+          slot: slot,
+          mediaType: mediaType,
+          sha256Digest: source.sha256Digest,
+        );
+  if (checkpoint == null || !identical(checkpoint, durableCheckpoint)) {
+    await onMediaPrepared?.call(durableCheckpoint);
+    preparedAssetsBySlot[slot] = durableCheckpoint;
+  }
   final uploaded = await coordinator.uploadPreparedSource(
     source: source,
     mediaType: mediaType,
@@ -585,11 +664,23 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
     uploadStream: uploadStream,
     onProgress: onProgress,
     cancellationSignal: cancellationSignal,
+    checkpoint: durableCheckpoint,
+    onCheckpoint: (updated) async {
+      await onMediaPrepared?.call(updated);
+      preparedAssetsBySlot[slot] = updated;
+    },
   );
   final assetId = uploaded.assetId.trim();
   if (assetId.isEmpty) {
     throw StateError('uploaded media is missing its MediaAsset id');
   }
+  final prepared = durableCheckpoint.copyWith(
+    sessionId: uploaded.sessionId,
+    assetId: assetId,
+    phase: ContentMediaPreparationPhase.completed,
+  );
+  await onMediaPrepared?.call(prepared);
+  preparedAssetsBySlot[slot] = prepared;
   return _ResolvedMediaReference(assetId: assetId);
 }
 
@@ -601,6 +692,10 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
   AppTelemetryRecorder? telemetry,
   ContentMediaUploadProgressCallback? onProgress,
   ContentMediaUploadCancellationSignal? cancellationSignal,
+  required String preparationIdentity,
+  required Map<String, ContentMediaPreparationCheckpoint> preparedAssetsBySlot,
+  Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
+  onMediaPrepared,
 }) async {
   cancellationSignal?.throwIfCancelled();
   final coverPath = localOrRemoteCoverPath.trim();
@@ -614,17 +709,16 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
       telemetry: telemetry,
       onProgress: onProgress,
       cancellationSignal: cancellationSignal,
+      preparationIdentity: preparationIdentity,
+      slot: 'cover:0',
+      preparedAssetsBySlot: preparedAssetsBySlot,
+      onMediaPrepared: onMediaPrepared,
     );
-    return _ResolvedVideoCoverReference(
-      // 发布绑定会在视频与封面都 ready 后原子解析 coverAssetId。这里不提前
-      // 变更仍处于 processing 的视频聚合，避免与转码结果发生版本竞争。
-      coverStrategy: 'manual',
-      assetId: cover.assetId,
-    );
+    return _ResolvedVideoCoverReference(assetId: cover.assetId);
   }
 
   onProgress?.call(1, 1);
-  return const _ResolvedVideoCoverReference(coverStrategy: 'first_frame');
+  return const _ResolvedVideoCoverReference();
 }
 
 bool _isRemoteMediaReference(String value) {

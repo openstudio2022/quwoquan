@@ -4,7 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -126,7 +126,7 @@ Widget _buildApp() {
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       fileStorageGatewayProvider.overrideWithValue(
         const _FakeFileStorageGateway(),
       ),

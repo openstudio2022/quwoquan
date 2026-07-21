@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/rtc-service/internal/application"
 	event "quwoquan_service/services/rtc-service/internal/domain/call_session/event"
@@ -14,7 +15,16 @@ func TestCallRingingUsesDurableStreamWithoutUserAliasPubSub(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()
-	publisher := NewRealtimePublisher(client)
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"rtc-service-api",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("new message transport: %v", err)
+	}
+	publisher := NewRealtimePublisher(transport)
 	personaSub, err := client.Subscribe(ctx, "rt:rtc:persona:persona-target")
 	if err != nil {
 		t.Fatal(err)

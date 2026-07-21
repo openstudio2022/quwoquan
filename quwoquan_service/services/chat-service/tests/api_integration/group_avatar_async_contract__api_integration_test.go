@@ -211,6 +211,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	}
 	eventPublisher := mq.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
 			members, err := chatStore.ListMembers(
 				ctx,

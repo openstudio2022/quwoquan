@@ -298,6 +298,8 @@ func mapCommitError(err error) error {
 	switch {
 	case errors.Is(err, model.ErrAlreadyActive):
 		return generated.AppErrorFromGroupMembershipAlreadyActive(err.Error())
+	case errors.Is(err, model.ErrGroupFull):
+		return generated.AppErrorFromGroupMembershipFull(err.Error())
 	case errors.Is(err, model.ErrNotFound):
 		return generated.AppErrorFromGroupMembershipNotFound(err.Error())
 	case errors.Is(err, model.ErrStateConflict):

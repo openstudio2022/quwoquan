@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
 )
@@ -9,6 +10,16 @@ import (
 type MediaOriginalAccessAppendRequest struct {
 	Fact          mediamodel.MediaOriginalAccessFact
 	CommandDigest string
+	RateLimit     MediaOriginalAccessRateLimit
+}
+
+type MediaOriginalAccessRateLimit struct {
+	MaxGrants int
+	Window    time.Duration
+}
+
+func (limit MediaOriginalAccessRateLimit) IsValid() bool {
+	return limit.MaxGrants > 0 && limit.Window > 0
 }
 
 type MediaOriginalAccessAppendResult struct {

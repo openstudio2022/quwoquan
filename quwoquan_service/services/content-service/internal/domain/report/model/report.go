@@ -55,46 +55,49 @@ const (
 // Snapshot 是 domain 与 persistence mapper 之间的无标签状态快照。
 // 它不是 transport DTO，调用方只能通过 Report 行为产生新状态。
 type Snapshot struct {
-	ID          string
-	Version     int64
-	ReporterID  string
-	TargetType  TargetType
-	TargetID    string
-	Reason      Reason
-	Description string
-	Status      Status
-	ReviewerID  string
-	Resolution  Resolution
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	ResolvedAt  *time.Time
+	ID                string
+	Version           int64
+	ReporterID        string
+	ReporterAccountID string
+	TargetType        TargetType
+	TargetID          string
+	Reason            Reason
+	Description       string
+	Status            Status
+	ReviewerID        string
+	Resolution        Resolution
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ResolvedAt        *time.Time
 }
 
 type CreateParams struct {
-	ID          string
-	ReporterID  string
-	TargetType  TargetType
-	TargetID    string
-	Reason      Reason
-	Description string
-	Now         time.Time
+	ID                string
+	ReporterID        string
+	ReporterAccountID string
+	TargetType        TargetType
+	TargetID          string
+	Reason            Reason
+	Description       string
+	Now               time.Time
 }
 
 // Report 是手写行为聚合；状态字段保持私有，禁止 application 直接改写。
 type Report struct {
-	id          string
-	version     int64
-	reporterID  string
-	targetType  TargetType
-	targetID    string
-	reason      Reason
-	description string
-	status      Status
-	reviewerID  string
-	resolution  Resolution
-	createdAt   time.Time
-	updatedAt   time.Time
-	resolvedAt  *time.Time
+	id                string
+	version           int64
+	reporterID        string
+	reporterAccountID string
+	targetType        TargetType
+	targetID          string
+	reason            Reason
+	description       string
+	status            Status
+	reviewerID        string
+	resolution        Resolution
+	createdAt         time.Time
+	updatedAt         time.Time
+	resolvedAt        *time.Time
 }
 
 func Create(params CreateParams) (*Report, error) {
@@ -103,16 +106,17 @@ func Create(params CreateParams) (*Report, error) {
 		return nil, fmt.Errorf("%w: creation time is required", ErrInvalidReport)
 	}
 	report := &Report{
-		id:          strings.TrimSpace(params.ID),
-		version:     1,
-		reporterID:  strings.TrimSpace(params.ReporterID),
-		targetType:  params.TargetType,
-		targetID:    strings.TrimSpace(params.TargetID),
-		reason:      params.Reason,
-		description: strings.TrimSpace(params.Description),
-		status:      StatusPending,
-		createdAt:   now,
-		updatedAt:   now,
+		id:                strings.TrimSpace(params.ID),
+		version:           1,
+		reporterID:        strings.TrimSpace(params.ReporterID),
+		reporterAccountID: strings.TrimSpace(params.ReporterAccountID),
+		targetType:        params.TargetType,
+		targetID:          strings.TrimSpace(params.TargetID),
+		reason:            params.Reason,
+		description:       strings.TrimSpace(params.Description),
+		status:            StatusPending,
+		createdAt:         now,
+		updatedAt:         now,
 	}
 	if err := report.validate(); err != nil {
 		return nil, err
@@ -122,19 +126,20 @@ func Create(params CreateParams) (*Report, error) {
 
 func Restore(snapshot Snapshot) (*Report, error) {
 	report := &Report{
-		id:          strings.TrimSpace(snapshot.ID),
-		version:     snapshot.Version,
-		reporterID:  strings.TrimSpace(snapshot.ReporterID),
-		targetType:  snapshot.TargetType,
-		targetID:    strings.TrimSpace(snapshot.TargetID),
-		reason:      snapshot.Reason,
-		description: strings.TrimSpace(snapshot.Description),
-		status:      snapshot.Status,
-		reviewerID:  strings.TrimSpace(snapshot.ReviewerID),
-		resolution:  snapshot.Resolution,
-		createdAt:   snapshot.CreatedAt.UTC(),
-		updatedAt:   snapshot.UpdatedAt.UTC(),
-		resolvedAt:  cloneTime(snapshot.ResolvedAt),
+		id:                strings.TrimSpace(snapshot.ID),
+		version:           snapshot.Version,
+		reporterID:        strings.TrimSpace(snapshot.ReporterID),
+		reporterAccountID: strings.TrimSpace(snapshot.ReporterAccountID),
+		targetType:        snapshot.TargetType,
+		targetID:          strings.TrimSpace(snapshot.TargetID),
+		reason:            snapshot.Reason,
+		description:       strings.TrimSpace(snapshot.Description),
+		status:            snapshot.Status,
+		reviewerID:        strings.TrimSpace(snapshot.ReviewerID),
+		resolution:        snapshot.Resolution,
+		createdAt:         snapshot.CreatedAt.UTC(),
+		updatedAt:         snapshot.UpdatedAt.UTC(),
+		resolvedAt:        cloneTime(snapshot.ResolvedAt),
 	}
 	if err := report.validate(); err != nil {
 		return nil, err
@@ -247,19 +252,20 @@ func (r *Report) Snapshot() Snapshot {
 		return Snapshot{}
 	}
 	return Snapshot{
-		ID:          r.id,
-		Version:     r.version,
-		ReporterID:  r.reporterID,
-		TargetType:  r.targetType,
-		TargetID:    r.targetID,
-		Reason:      r.reason,
-		Description: r.description,
-		Status:      r.status,
-		ReviewerID:  r.reviewerID,
-		Resolution:  r.resolution,
-		CreatedAt:   r.createdAt,
-		UpdatedAt:   r.updatedAt,
-		ResolvedAt:  cloneTime(r.resolvedAt),
+		ID:                r.id,
+		Version:           r.version,
+		ReporterID:        r.reporterID,
+		ReporterAccountID: r.reporterAccountID,
+		TargetType:        r.targetType,
+		TargetID:          r.targetID,
+		Reason:            r.reason,
+		Description:       r.description,
+		Status:            r.status,
+		ReviewerID:        r.reviewerID,
+		Resolution:        r.resolution,
+		CreatedAt:         r.createdAt,
+		UpdatedAt:         r.updatedAt,
+		ResolvedAt:        cloneTime(r.resolvedAt),
 	}
 }
 
@@ -267,6 +273,7 @@ func (r *Report) validate() error {
 	if r.id == "" ||
 		r.version < 1 ||
 		r.reporterID == "" ||
+		r.reporterAccountID == "" ||
 		!validTargetType(r.targetType) ||
 		r.targetID == "" ||
 		!validReason(r.reason) ||

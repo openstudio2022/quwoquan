@@ -105,6 +105,15 @@ errors:
     go_const: ErrGroupMembershipAlreadyActive
     user_message: { zh: "已经加入该群组", en: "Already joined this circle group" }
 
+  - code: CIRCLE.USER.group_membership_full
+    kind: USER
+    reason: group_membership_full
+    http_status: 409
+    recovery_action: surface
+    dart_const: groupMembershipFull
+    go_const: ErrGroupMembershipFull
+    user_message: { zh: "群组成员已达上限", en: "The circle group has reached its member limit" }
+
   - code: CIRCLE.USER.group_membership_state_conflict
     kind: USER
     reason: group_membership_state_conflict

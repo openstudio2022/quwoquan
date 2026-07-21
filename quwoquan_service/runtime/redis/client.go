@@ -57,6 +57,7 @@ type Client interface {
 	XReadGroup(ctx context.Context, group string, consumer string, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
 	XAck(ctx context.Context, stream string, group string, ids ...string) error
 	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]StreamMessage, string, error)
+	XPendingCount(ctx context.Context, stream string, group string) (int64, error)
 
 	// ── Pipeline ────────────────────────────────────────────
 	Pipeline(ctx context.Context) Pipeliner

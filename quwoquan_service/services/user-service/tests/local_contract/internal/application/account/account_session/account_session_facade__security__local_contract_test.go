@@ -183,6 +183,11 @@ func TestAccountSessionFacadeMapsStoreErrorsToGeneratedUserErrors(t *testing.T) 
 	}{
 		{name: "not found", storeErr: sessionports.ErrSessionNotFound, wantCode: generatedUnauthorizedCode},
 		{name: "revoked", storeErr: sessionports.ErrSessionRevoked, wantCode: generatedUnauthorizedCode},
+		{
+			name:     "account suspended",
+			storeErr: sessionports.ErrSessionAccountSuspended,
+			wantCode: generatedAccountSuspendedCode,
+		},
 		{name: "expired", storeErr: sessionports.ErrSessionExpired, wantCode: generatedTokenExpiredCode},
 		{name: "replayed", storeErr: sessionports.ErrSessionReplayed, wantCode: generatedTokenExpiredCode},
 		{name: "storage", storeErr: errors.New("database unavailable"), wantCode: generatedInternalErrorCode},
@@ -215,9 +220,10 @@ func TestAccountSessionFacadeMapsStoreErrorsToGeneratedUserErrors(t *testing.T) 
 }
 
 const (
-	generatedUnauthorizedCode  = "USER.USER.unauthorized"
-	generatedTokenExpiredCode  = "USER.AUTH.token_expired"
-	generatedInternalErrorCode = "USER.SYSTEM.internal_error"
+	generatedUnauthorizedCode     = "USER.USER.unauthorized"
+	generatedAccountSuspendedCode = "USER.AUTH.account_suspended"
+	generatedTokenExpiredCode     = "USER.AUTH.token_expired"
+	generatedInternalErrorCode    = "USER.SYSTEM.internal_error"
 )
 
 func assertAppErrorCode(t *testing.T, err error, want string) {

@@ -4,11 +4,20 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// It records the same command values that the production generated client
 /// receives and never exposes a path, operation ID or dynamic response.
 final class RecordingContentMediaFacet implements ContentMediaFacet {
-  RecordingContentMediaFacet({this.loseFirstCompleteResponse = false});
+  RecordingContentMediaFacet({
+    this.loseFirstCompleteResponse = false,
+    this.failUploadSessionRead = false,
+    this.failCompleteWithoutCommit = false,
+  });
 
   final bool loseFirstCompleteResponse;
+  final bool failUploadSessionRead;
+  final bool failCompleteWithoutCommit;
   final List<InitContentMediaUploadCommand> initCommands =
       <InitContentMediaUploadCommand>[];
+  final List<String> initIdempotencyKeys = <String>[];
+  final List<String> completeIdempotencyKeys = <String>[];
+  final List<String> abortIdempotencyKeys = <String>[];
   final List<String> completedSessions = <String>[];
   final List<String> abortedSessions = <String>[];
   final List<SelectManualContentMediaCoverCommand> selectedManualCovers =
@@ -17,15 +26,44 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   final Map<String, InitContentMediaUploadCommand> _uploadBySession =
       <String, InitContentMediaUploadCommand>{};
   final Map<String, String> _assetBySession = <String, String>{};
+  final Map<String, String> _sessionByInitIdempotencyKey = <String, String>{};
+  final Set<String> _abortedSessions = <String>{};
   final Set<String> _lostCompleteResponses = <String>{};
   int _sequence = 0;
 
   @override
   Future<ContentMediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
+    final existingSessionId =
+        _sessionByInitIdempotencyKey[context.idempotencyKey];
+    if (existingSessionId != null) {
+      final assetId = _assetBySession[existingSessionId];
+      final upload = _uploadBySession[existingSessionId]!;
+      return ContentMediaUploadSessionCommandResult(
+        sessionId: existingSessionId,
+        assetId: assetId,
+        status: assetId == null
+            ? ContentMediaUploadStatus.pending
+            : ContentMediaUploadStatus.completed,
+        objectKey: assetId == null
+            ? 'uploads/$existingSessionId'
+            : 'media/$assetId',
+        uploadUrl: assetId == null
+            ? Uri.parse('https://upload.quwoquan.test/$existingSessionId')
+            : null,
+        cdnUrl: assetId == null
+            ? null
+            : Uri.parse('https://cdn.quwoquan.test/$assetId'),
+        expiresAt: DateTime.utc(2030),
+        replayed: true,
+      );
+    }
     initCommands.add(command);
+    initIdempotencyKeys.add(context.idempotencyKey);
     final sessionId = 'session_${++_sequence}';
+    _sessionByInitIdempotencyKey[context.idempotencyKey] = sessionId;
     _uploadBySession[sessionId] = command;
     return ContentMediaUploadSessionCommandResult(
       sessionId: sessionId,
@@ -42,10 +80,15 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
+    completeIdempotencyKeys.add(context.idempotencyKey);
     final upload = _uploadBySession[command.sessionId];
     if (upload == null) throw StateError('upload session not found');
     completedSessions.add(command.sessionId);
+    if (failCompleteWithoutCommit) {
+      throw StateError('simulated pending complete failure');
+    }
     final index = command.sessionId.split('_').last;
     final prefix = upload.mediaType == ContentMediaType.video
         ? 'video'
@@ -76,9 +119,25 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
+    abortIdempotencyKeys.add(context.idempotencyKey);
     abortedSessions.add(command.sessionId);
+    final completedAssetId = _assetBySession[command.sessionId];
+    if (completedAssetId != null) {
+      return ContentMediaUploadSessionCommandResult(
+        sessionId: command.sessionId,
+        assetId: completedAssetId,
+        status: ContentMediaUploadStatus.completed,
+        objectKey: 'media/$completedAssetId',
+        uploadUrl: null,
+        cdnUrl: null,
+        expiresAt: DateTime.utc(2030),
+        replayed: true,
+      );
+    }
     _assetBySession.remove(command.sessionId);
+    _abortedSessions.add(command.sessionId);
     return ContentMediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: null,
@@ -135,6 +194,9 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   Future<ContentMediaUploadSessionSlice> getUploadSession(
     GetContentMediaUploadSessionQuery query,
   ) async {
+    if (failUploadSessionRead) {
+      throw StateError('simulated upload-session reconciliation failure');
+    }
     final upload = _uploadBySession[query.sessionId];
     if (upload == null) throw StateError('upload session not found');
     final assetId = _assetBySession[query.sessionId];
@@ -146,7 +208,9 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       mediaType: upload.mediaType,
       contentType: upload.contentType,
       fileSize: upload.fileSize,
-      status: assetId == null
+      status: _abortedSessions.contains(query.sessionId)
+          ? ContentMediaUploadStatus.aborted
+          : assetId == null
           ? ContentMediaUploadStatus.pending
           : ContentMediaUploadStatus.completed,
       createdAt: DateTime.utc(2030),

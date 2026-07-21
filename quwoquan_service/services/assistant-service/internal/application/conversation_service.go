@@ -272,6 +272,14 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 	if err := s.requireSkillConsent(ctx, userID, input.SkillID); err != nil {
 		return assistant.AssistantTurn{}, err
 	}
+	intersectionEvidence, err := s.resolveAuthorizedIntersectionEvidence(
+		ctx,
+		userID,
+		input.ContextSnapshot.IntersectionEvidenceRefs,
+	)
+	if err != nil {
+		return assistant.AssistantTurn{}, err
+	}
 	turnID, err := rtid.Generate(rtid.PrefixAssistantTurn)
 	if err != nil {
 		return assistant.AssistantTurn{}, rterr.NewUnavailable(rterr.ModuleAssistant, "生成轮次 ID 失败", err.Error())
@@ -306,6 +314,7 @@ func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationI
 		Status:                  "running",
 		SkillID:                 strings.TrimSpace(input.SkillID),
 		DomainID:                strings.TrimSpace(input.DomainID),
+		IntersectionEvidence:    intersectionEvidence,
 		SessionPreferenceFacts:  sessionPreferences,
 		LongTermPreferenceFacts: longTermPreferences,
 		Input: assistant.AssistantTurnInput{
@@ -426,19 +435,6 @@ func (s *AssistantService) executeTurn(ctx context.Context, userID, turnID strin
 	if err != nil {
 		return nil, err
 	}
-	if startSeq > 0 {
-		projector := NewStreamProjectorAt(turn, s.now, startSeq)
-		reset, resetErr := projector.Event("assistant.answer.reset", map[string]any{
-			"reason": "execution_restarted",
-		})
-		if resetErr != nil {
-			return nil, resetErr
-		}
-		if err := eventStore.AppendRunEvent(ctx, turn.TurnID, reset); err != nil {
-			return nil, assistantRunStorageUnavailable(err.Error())
-		}
-		startSeq = reset.Seq
-	}
 	// 执行 ctx 可被取消命令中断；SSE 客户端断开不再取消后台执行。
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
@@ -454,7 +450,7 @@ func (s *AssistantService) executeTurn(ctx context.Context, userID, turnID strin
 	persistEvent := func(envelope streaming.Envelope) error {
 		if !firstAnswerObserved {
 			switch envelope.EventType {
-			case "partial_answer", "final_answer", "assistant.answer.delta", "assistant.answer.final":
+			case string(AssistantStreamEventAnswerDelta):
 				firstAnswerObserved = true
 				recordAssistantFirstVisibleResponse(time.Since(turnStartedAt))
 			}
@@ -471,7 +467,7 @@ func (s *AssistantService) executeTurn(ctx context.Context, userID, turnID strin
 			lastSeq = out[len(out)-1].Seq
 		}
 		projector := NewStreamProjectorAt(turn, s.now, lastSeq)
-		envelope, eventErr := projector.Event("assistant.turn.cancelled", map[string]any{
+		envelope, eventErr := projector.Event(AssistantStreamEventCancelled, map[string]any{
 			"status": "cancelled",
 		})
 		if eventErr != nil {
@@ -530,7 +526,7 @@ func (s *AssistantService) executeTurn(ctx context.Context, userID, turnID strin
 	if stored.Status != completed.Status {
 		if stored.Status == "cancelled" {
 			projector := NewStreamProjectorAt(stored, s.now, lastSeq)
-			cancelledEvent, eventErr := projector.Event("assistant.turn.cancelled", map[string]any{
+			cancelledEvent, eventErr := projector.Event(AssistantStreamEventCancelled, map[string]any{
 				"status": "cancelled",
 			})
 			if eventErr != nil {
@@ -683,8 +679,7 @@ func (s *AssistantService) followRunEvents(
 				}
 			}
 			emittedCount++
-			if envelope.EventType == "turn_cancelled" ||
-				envelope.EventType == "assistant.turn.cancelled" {
+			if envelope.EventType == string(AssistantStreamEventCancelled) {
 				sawCancellation = true
 			}
 			lastSeq = envelope.Seq
@@ -823,7 +818,7 @@ func (s *AssistantService) failTurnExecution(
 	}
 	failure := modelFailure("run_execution", executionErr)
 	projector := NewStreamProjectorAt(turn, s.now, lastSeq)
-	envelope, err := projector.Failure("assistant.turn.failed", map[string]any{
+	envelope, err := projector.Failure(AssistantStreamEventFailed, map[string]any{
 		"status": "failed",
 	}, failure)
 	if err != nil {
@@ -892,18 +887,15 @@ func (s *AssistantService) replayCompletedTurnStream(
 		"status":         turn.Status,
 		"resumeToken":    turn.StreamState.ResumeToken,
 	}
-	eventType := "assistant.answer.final"
+	eventType := AssistantStreamEventCompleted
 	switch turn.Status {
 	case "failed":
-		eventType = "assistant.turn.failed"
-		if turn.Failure != nil {
-			payload["failure"] = turn.Failure
-		}
+		eventType = AssistantStreamEventFailed
 	case "cancelled":
-		eventType = "assistant.turn.cancelled"
+		eventType = AssistantStreamEventCancelled
 	default:
 		if strings.TrimSpace(turn.AnswerText) != "" {
-			payload["text"] = turn.AnswerText
+			payload["finalAnswer"] = turn.AnswerText
 		}
 	}
 	seq := turn.StreamState.LastSeq
@@ -913,11 +905,15 @@ func (s *AssistantService) replayCompletedTurnStream(
 	envelope := streaming.Envelope{
 		EventID:   turn.TurnID + ":replay",
 		StreamID:  turn.TurnID,
-		EventType: eventType,
+		EventType: string(eventType),
 		Seq:       seq,
 		TraceID:   turn.TraceID,
 		Payload:   payload,
 		CreatedAt: s.now(),
+	}
+	if turn.Failure != nil {
+		failure := turn.Failure.Normalized()
+		envelope.RuntimeFailure = &failure
 	}
 	if emit != nil {
 		if err := emit(envelope); err != nil {
@@ -963,13 +959,13 @@ func (s *AssistantService) conversationContextTurns(ctx context.Context, userID 
 func finalAnswerTextFromEvents(events []streaming.Envelope) string {
 	for i := len(events) - 1; i >= 0; i-- {
 		event := events[i]
-		if event.EventType != "final_answer" && event.EventType != "assistant.answer.final" {
+		if event.EventType != string(AssistantStreamEventCompleted) {
 			continue
 		}
-		if text := strings.TrimSpace(stringValue(event.Payload["text"])); text != "" {
+		if text := strings.TrimSpace(stringValue(event.Payload["finalAnswer"])); text != "" {
 			return text
 		}
-		if text := strings.TrimSpace(stringValue(event.Payload["userMarkdown"])); text != "" {
+		if text := strings.TrimSpace(stringValue(event.Payload["text"])); text != "" {
 			return text
 		}
 	}
@@ -978,10 +974,11 @@ func finalAnswerTextFromEvents(events []streaming.Envelope) string {
 
 func skillIDFromEvents(events []streaming.Envelope) string {
 	for _, event := range events {
-		if event.EventType != "understanding_updated" && event.EventType != "plan_updated" {
+		if event.EventType != string(AssistantStreamEventProcessAppend) &&
+			event.EventType != string(AssistantStreamEventProcessCommit) {
 			continue
 		}
-		if skillID := strings.TrimSpace(stringValue(event.Payload["skillId"])); skillID != "" {
+		if skillID := streamProcessString(event.Payload, "skillId"); skillID != "" {
 			return skillID
 		}
 	}
@@ -990,12 +987,37 @@ func skillIDFromEvents(events []streaming.Envelope) string {
 
 func domainIDFromEvents(events []streaming.Envelope) string {
 	for _, event := range events {
-		if event.EventType != "understanding_updated" {
+		if event.EventType != string(AssistantStreamEventProcessAppend) &&
+			event.EventType != string(AssistantStreamEventProcessCommit) {
 			continue
 		}
-		if domainID := strings.TrimSpace(stringValue(event.Payload["domainId"])); domainID != "" {
+		if domainID := streamProcessString(event.Payload, "domainId"); domainID != "" {
 			return domainID
 		}
+	}
+	return ""
+}
+
+func streamProcessString(payload map[string]any, field string) string {
+	raw, ok := payload["process"]
+	if !ok {
+		return ""
+	}
+	switch process := raw.(type) {
+	case AssistantUserProcess:
+		switch field {
+		case "skillId":
+			return strings.TrimSpace(process.SkillID)
+		case "domainId":
+			return strings.TrimSpace(process.DomainID)
+		}
+	case *AssistantUserProcess:
+		if process == nil {
+			return ""
+		}
+		return streamProcessString(map[string]any{"process": *process}, field)
+	case map[string]any:
+		return strings.TrimSpace(stringValue(process[field]))
 	}
 	return ""
 }

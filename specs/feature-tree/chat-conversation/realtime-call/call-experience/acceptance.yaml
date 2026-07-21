@@ -120,6 +120,7 @@ gwt_acceptance:
     - command P95 300ms；共享画面可用时延进入 RTC QoE。
     tests:
       planned:
+      - file: quwoquan_app/test/api_integration/cloud/rtc/rtc_api_contract_runner.dart
       recorded:
       - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
       - file: quwoquan_app/test/local_contract/ui/rtc/widgets/call_controls_bar__local_contract_test.dart

@@ -1,17 +1,11 @@
 // ignore_for_file: prefer_initializing_formals
 
-import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
@@ -21,62 +15,58 @@ import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.d
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
-
-part 'chat_repository_remote_decoders.dart';
-
-/// 在 surface/operation 基础头之上合并当前用户与分身上下文（如 [CloudRequestHeaders.withPersonaContext]）。
-typedef ChatRemoteMergeRequestContext =
-    Future<Map<String, String>> Function(Map<String, String> baseHeaders);
+import 'package:quwoquan_app/cloud/services/chat/remote/chat_contract_projection_mapper.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:uuid/uuid.dart';
 
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({
-    CloudHttpClient? httpClient,
-    String? baseUrl,
-    ChatRemoteMergeRequestContext? mergeRequestContext,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _mergeRequestContext = mergeRequestContext;
+    required ChatConversationQuery conversationQuery,
+    required ChatConversationCommandWriter conversationCommandWriter,
+    required ChatContactQuery contactQuery,
+    required ChatInboxQuery inboxQuery,
+    required ChatMessageHomeQuery messageHomeQuery,
+    required ChatConversationMembershipQuery membershipQuery,
+    required ChatConversationMembershipCommandWriter membershipCommandWriter,
+    required ChatConversationUserStateCommandWriter userStateCommandWriter,
+    required ChatMessageQuery messageQuery,
+    required ChatMessageMutationWriter messageMutationWriter,
+    ChatConversationQuery? settingsConversationQuery,
+    ChatConversationMembershipQuery? memberSearchQuery,
+    String Function()? idempotencyKeyFactory,
+    ChatContractProjectionMapper mapper = const ChatContractProjectionMapper(),
+  }) : _conversationQuery = conversationQuery,
+       _settingsConversationQuery =
+           settingsConversationQuery ?? conversationQuery,
+       _conversationCommandWriter = conversationCommandWriter,
+       _contactQuery = contactQuery,
+       _inboxQuery = inboxQuery,
+       _messageHomeQuery = messageHomeQuery,
+       _membershipQuery = membershipQuery,
+       _memberSearchQuery = memberSearchQuery ?? membershipQuery,
+       _membershipCommandWriter = membershipCommandWriter,
+       _userStateCommandWriter = userStateCommandWriter,
+       _messageQuery = messageQuery,
+       _messageMutationWriter = messageMutationWriter,
+       _mapper = mapper,
+       _idempotencyKeyFactory = idempotencyKeyFactory ?? const Uuid().v4;
 
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
-  final ChatRemoteMergeRequestContext? _mergeRequestContext;
-
-  Uri _uri(String path, {Map<String, String>? queryParameters}) {
-    return Uri.parse(
-      '$_baseUrl$path',
-    ).replace(queryParameters: queryParameters);
-  }
-
-  Future<Map<String, String>> _resolveHeaders(
-    AppUiSurface surface, {
-    required String operationId,
-    required String clientPageId,
-  }) async {
-    final base = CloudRequestHeaders.forSurfaceOperation(
-      surfaceId: surface.id,
-      routeId: surface.routeId,
-      operationId: operationId,
-      clientPageId: clientPageId,
-    );
-    final merger = _mergeRequestContext;
-    if (merger == null) {
-      return base;
-    }
-    return merger(base);
-  }
-
-  String _contextForSurface(
-    AppUiSurface surface, {
-    required String operationId,
-  }) {
-    return CloudRequestHeaders.contextForSurfaceOperation(
-      surfaceId: surface.id,
-      operationId: operationId,
-    );
-  }
+  final ChatConversationQuery _conversationQuery;
+  final ChatConversationQuery _settingsConversationQuery;
+  final ChatConversationCommandWriter _conversationCommandWriter;
+  final ChatContactQuery _contactQuery;
+  final ChatInboxQuery _inboxQuery;
+  final ChatMessageHomeQuery _messageHomeQuery;
+  final ChatConversationMembershipQuery _membershipQuery;
+  final ChatConversationMembershipQuery _memberSearchQuery;
+  final ChatConversationMembershipCommandWriter _membershipCommandWriter;
+  final ChatConversationUserStateCommandWriter _userStateCommandWriter;
+  final ChatMessageQuery _messageQuery;
+  final ChatMessageMutationWriter _messageMutationWriter;
+  final ChatContractProjectionMapper _mapper;
+  final String Function() _idempotencyKeyFactory;
 
   // ── 会话 ──────────────────────────────────────────────────────────────────
 
@@ -85,29 +75,10 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listInboxPath,
-      queryParameters: <String, String>{
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-      },
+    final page = await _inboxQuery.listInbox(
+      ChatListInboxQuery(cursor: cursor, limit: limit),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listInboxOperation,
-        clientPageId: ChatRequestPageIds.listInbox,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listInboxOperation,
-      ),
-      fromMap: ChatInboxDto.fromMap,
-    );
+    return page.items.map(_mapper.toInbox).toList(growable: false);
   }
 
   @override
@@ -116,30 +87,10 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listMessageHomePath,
-      queryParameters: <String, String>{
-        'filter': filter,
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-      },
+    final page = await _messageHomeQuery.listMessageHome(
+      ChatListMessageHomeQuery(filter: filter, cursor: cursor, limit: limit),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listMessageHomeOperation,
-        clientPageId: ChatRequestPageIds.listMessageHome,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listMessageHomeOperation,
-      ),
-      fromMap: MessageHomeRowDto.fromMap,
-    );
+    return page.items.map(_mapper.toMessageHome).toList(growable: false);
   }
 
   @override
@@ -147,96 +98,37 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listConversationsPath,
-      queryParameters: <String, String>{
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-      },
+    final page = await _conversationQuery.listConversations(
+      ChatListConversationsQuery(cursor: cursor, limit: limit),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listConversationsOperation,
-        clientPageId: ChatRequestPageIds.listConversations,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listConversationsOperation,
-      ),
-      fromMap: ChatInboxDto.fromMap,
-    );
+    return page.items.map(_mapper.conversationToInbox).toList(growable: false);
   }
 
   @override
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
-    final uri = _uri(ChatApiMetadata.createConversationPath);
-    final body = <String, dynamic>{
-      'type': type,
-      if (title != null && title.isNotEmpty) 'title': title,
-      if (circleId != null && circleId.isNotEmpty) 'circleId': circleId,
-      if (circleGroupId != null && circleGroupId.isNotEmpty)
-        'circleGroupId': circleGroupId,
-      if (originType != null && originType.isNotEmpty) 'originType': originType,
-      if (bindingType != null && bindingType.isNotEmpty)
-        'bindingType': bindingType,
-      if (lifecyclePolicy != null && lifecyclePolicy.isNotEmpty)
-        'lifecyclePolicy': lifecyclePolicy,
-      if (initialMemberIds != null && initialMemberIds.isNotEmpty)
-        'initialMemberIds': initialMemberIds,
-    };
-    if (maxGroupSize != null) {
-      body['maxGroupSize'] = maxGroupSize;
-    }
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.startGroupChat,
-        operationId: ChatApiMetadata.createConversationOperation,
-        clientPageId: ChatRequestPageIds.createConversation,
+    final conversation = await _conversationCommandWriter.createConversation(
+      ChatCreateConversationCommand(
+        type: type,
+        idempotencyKey: _idempotencyKeyFactory(),
+        title: title,
+        maxGroupSize: maxGroupSize,
+        initialMemberIds: initialMemberIds ?? const <String>[],
       ),
-      body: body,
     );
-    final map = CloudResponseDecoder.asObject(
-      decoded,
-      context: ChatRequestPageIds.createConversation,
-    );
-    return ChatConversationCreatedDto.fromMap(map);
+    return _mapper.toCreated(conversation);
   }
 
   @override
   Future<ConversationDto> getConversation(String conversationId) async {
-    final uri = _uri(
-      ChatApiMetadata.getConversationPath(conversationId: conversationId),
+    final conversation = await _conversationQuery.getConversation(
+      ChatGetConversationQuery(conversationId: conversationId),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.getConversationOperation,
-        clientPageId: ChatRequestPageIds.getConversation,
-      ),
-    );
-    return ConversationDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.getConversation,
-      ),
-    );
+    return _mapper.toConversation(conversation);
   }
 
   @override
@@ -244,17 +136,12 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     String title,
   ) async {
-    final uri = _uri(
-      ChatApiMetadata.getConversationPath(conversationId: conversationId),
-    );
-    await _httpClient.patchJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.updateConversationTitleOperation,
-        clientPageId: ChatRequestPageIds.updateConversationTitle,
+    await _conversationCommandWriter.updateConversationTitle(
+      ChatUpdateConversationTitleCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        title: title,
       ),
-      body: <String, dynamic>{'title': title},
     );
   }
 
@@ -266,29 +153,21 @@ class RemoteChatRepository implements ChatRepository {
     String? before,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listMessagesPath(conversationId: conversationId),
-      queryParameters: <String, String>{
-        if (before != null && before.isNotEmpty) 'before': before,
-        'limit': '$limit',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.listMessagesOperation,
-        clientPageId: ChatRequestPageIds.listMessages,
+    final normalizedBefore = before?.trim() ?? '';
+    final beforeSeq = normalizedBefore.isEmpty
+        ? null
+        : int.tryParse(normalizedBefore);
+    if (normalizedBefore.isNotEmpty && beforeSeq == null) {
+      throw ArgumentError.value(before, 'before', 'must be a message sequence');
+    }
+    final page = await _messageQuery.listMessages(
+      ChatListMessagesQuery(
+        conversationId: conversationId,
+        beforeSeq: beforeSeq,
+        limit: limit,
       ),
     );
-    final items = CloudResponseDecoder.asCursorPage(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.listMessagesOperation,
-      ),
-    ).items;
-    return items.map(ChatMessageDto.fromMap).toList(growable: false);
+    return page.items.map(_mapper.toMessage).toList(growable: false);
   }
 
   @override
@@ -296,20 +175,12 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.recallMessagePath(
+    await _messageMutationWriter.recallMessage(
+      ChatRecallMessageCommand(
         conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
         messageId: messageId,
       ),
-    );
-    await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.recallMessageOperation,
-        clientPageId: ChatRequestPageIds.recallMessage,
-      ),
-      body: {},
     );
   }
 
@@ -319,24 +190,14 @@ class RemoteChatRepository implements ChatRepository {
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.syncMessagesPath(conversationId: conversationId),
-    );
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.syncMessagesOperation,
-        clientPageId: ChatRequestPageIds.syncMessages,
-      ),
-      body: {'lastSeq': lastSeq, 'limit': limit},
-    );
-    return SyncResponse.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.syncMessages,
+    final slice = await _messageQuery.syncMessages(
+      ChatSyncMessagesQuery(
+        conversationId: conversationId,
+        lastSeq: lastSeq,
+        limit: limit,
       ),
     );
+    return _mapper.toSyncResponse(slice);
   }
 
   // ── 已读回执 ──────────────────────────────────────────────────────────────
@@ -346,20 +207,12 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.markAsReadPath(
+    await _userStateCommandWriter.markMessageRead(
+      ChatMarkConversationMessageReadCommand(
         conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
         messageId: messageId,
       ),
-    );
-    await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.markAsReadOperation,
-        clientPageId: ChatRequestPageIds.markAsRead,
-      ),
-      body: {},
     );
   }
 
@@ -368,25 +221,13 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.getReceiptsPath(
+    final page = await _conversationQuery.getMessageReceipts(
+      ChatGetMessageReceiptsQuery(
         conversationId: conversationId,
         messageId: messageId,
       ),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.getReceiptsOperation,
-        clientPageId: ChatRequestPageIds.getReceipts,
-      ),
-    );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.getReceipts,
-      fromMap: ChatMessageReceiptDto.fromMap,
-    );
+    return page.items.map(_mapper.toReceipt).toList(growable: false);
   }
 
   // ── 成员管理 ──────────────────────────────────────────────────────────────
@@ -399,28 +240,16 @@ class RemoteChatRepository implements ChatRepository {
     String? role,
     String? sort,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listMembersPath(conversationId: conversationId),
-      queryParameters: <String, String>{
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-        if (role != null && role.isNotEmpty) 'role': role,
-        'sort': sort ?? 'joined_asc',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatManage,
-        operationId: ChatApiMetadata.listMembersOperation,
-        clientPageId: ChatRequestPageIds.listMembers,
+    final page = await _membershipQuery.listMembers(
+      ChatListConversationMembersQuery(
+        conversationId: conversationId,
+        cursor: cursor,
+        limit: limit,
+        role: role,
+        sort: sort ?? 'joined_asc',
       ),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listMembers,
-      fromMap: ChatConversationMemberDto.fromMap,
-    );
+    return page.items.map(_mapper.toMember).toList(growable: false);
   }
 
   @override
@@ -429,27 +258,15 @@ class RemoteChatRepository implements ChatRepository {
     required String query,
     int limit = 50,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listMembersPath(conversationId: conversationId),
-      queryParameters: <String, String>{
-        'query': query.trim(),
-        'limit': '${limit.clamp(1, 50)}',
-        'sort': 'display_name_asc',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.listMembersOperation,
-        clientPageId: ChatRequestPageIds.listMembers,
+    final page = await _memberSearchQuery.listMembers(
+      ChatListConversationMembersQuery(
+        conversationId: conversationId,
+        query: query.trim(),
+        limit: limit.clamp(1, 50),
+        sort: 'display_name_asc',
       ),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listMembers,
-      fromMap: ChatConversationMemberDto.fromMap,
-    );
+    return page.items.map(_mapper.toMember).toList(growable: false);
   }
 
   @override
@@ -457,33 +274,22 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required List<String> userIds,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.addMembersPath(conversationId: conversationId),
-    );
-    await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatAddMembers,
-        operationId: ChatApiMetadata.addMembersOperation,
-        clientPageId: ChatRequestPageIds.addMembers,
+    await _membershipCommandWriter.addMembers(
+      ChatAddConversationMembersCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        userIds: userIds,
       ),
-      body: {'userIds': userIds},
     );
   }
 
   @override
   Future<void> leaveConversation(String conversationId) async {
-    final uri = _uri(
-      ChatApiMetadata.leaveConversationPath(conversationId: conversationId),
-    );
-    await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.leaveConversationOperation,
-        clientPageId: ChatRequestPageIds.leaveConversation,
+    await _membershipCommandWriter.leaveConversation(
+      ChatLeaveConversationCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
       ),
-      body: const <String, dynamic>{},
     );
   }
 
@@ -492,18 +298,11 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String userId,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.removeMemberPath(
+    await _membershipCommandWriter.removeMember(
+      ChatRemoveConversationMemberCommand(
         conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
         userId: userId,
-      ),
-    );
-    await _httpClient.deleteJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.removeMemberOperation,
-        clientPageId: ChatRequestPageIds.removeMember,
       ),
     );
   }
@@ -515,31 +314,21 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     String? skillId,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.inviteAssistantPath(conversationId: conversationId),
-    );
-    await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.inviteAssistantOperation,
-        clientPageId: ChatRequestPageIds.inviteAssistant,
+    await _membershipCommandWriter.inviteAssistant(
+      ChatInviteConversationAssistantCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        skillId: skillId,
       ),
-      body: {if (skillId != null && skillId.isNotEmpty) 'skillId': skillId},
     );
   }
 
   @override
   Future<void> removeAssistant({required String conversationId}) async {
-    final uri = _uri(
-      ChatApiMetadata.removeAssistantPath(conversationId: conversationId),
-    );
-    await _httpClient.deleteJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.removeAssistantOperation,
-        clientPageId: ChatRequestPageIds.removeAssistant,
+    await _membershipCommandWriter.removeAssistant(
+      ChatRemoveConversationAssistantCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
       ),
     );
   }
@@ -552,19 +341,13 @@ class RemoteChatRepository implements ChatRepository {
     bool? muted,
     bool? pinned,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.updateConversationSettingsPath(
+    await _userStateCommandWriter.updateConversationSettings(
+      ChatUpdateConversationSettingsCommand(
         conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        muted: muted,
+        pinned: pinned,
       ),
-    );
-    await _httpClient.patchJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.updateConversationSettingsOperation,
-        clientPageId: ChatRequestPageIds.updateConversationSettings,
-      ),
-      body: {'muted': ?muted, 'pinned': ?pinned},
     );
   }
 
@@ -575,26 +358,17 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listContactsPath,
-      queryParameters: <String, String>{
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-      },
+    if ((cursor?.trim() ?? '').isNotEmpty) {
+      throw ArgumentError.value(
+        cursor,
+        'cursor',
+        'ListContacts canonical contract does not support cursor',
+      );
+    }
+    final page = await _contactQuery.listContacts(
+      ChatListContactsQuery(limit: limit),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listContactsOperation,
-        clientPageId: ChatRequestPageIds.listContacts,
-      ),
-    );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listContacts,
-      fromMap: ChatContactRowDto.fromMap,
-    );
+    return page.items.map(_mapper.toContact).toList(growable: false);
   }
 
   @override
@@ -603,30 +377,17 @@ class RemoteChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = _uri(
-      ChatApiMetadata.listContactHomePath,
-      queryParameters: <String, String>{
-        'filter': filter,
-        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-        'limit': '$limit',
-      },
+    if ((cursor?.trim() ?? '').isNotEmpty) {
+      throw ArgumentError.value(
+        cursor,
+        'cursor',
+        'ListContactHome canonical contract does not support cursor',
+      );
+    }
+    final page = await _contactQuery.listContactHome(
+      ChatListContactHomeQuery(filter: filter, limit: limit),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listContactHomeOperation,
-        clientPageId: ChatRequestPageIds.listContactHome,
-      ),
-    );
-    return _decodeCursorPageItems(
-      decoded,
-      context: _contextForSurface(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listContactHomeOperation,
-      ),
-      fromMap: ContactHomeRowDto.fromMap,
-    );
+    return page.items.map(_mapper.toContactHome).toList(growable: false);
   }
 
   @override
@@ -634,92 +395,57 @@ class RemoteChatRepository implements ChatRepository {
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final normalizedConversationId = conversationId?.trim() ?? '';
-    final uri = _uri(
-      ChatApiMetadata.listGroupCandidatesPath,
-      queryParameters: <String, String>{
-        if (normalizedConversationId.isNotEmpty)
-          'conversationId': normalizedConversationId,
-        'limit': '$limit',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.startGroupChat,
-        operationId: ChatApiMetadata.listGroupCandidatesOperation,
-        clientPageId: ChatRequestPageIds.listGroupCandidates,
+    final page = await _contactQuery.listGroupCandidates(
+      ChatListGroupCandidatesQuery(
+        conversationId: conversationId,
+        limit: limit,
       ),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listGroupCandidates,
-      fromMap: ChatContactRowDto.fromMap,
-    );
+    return page.items.map(_mapper.toContact).toList(growable: false);
   }
 
   // ── 从群聊/圈子中选择联系人 ─────────────────────────────────────────────────
 
   @override
-  Future<List<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final normalizedQuery = query?.trim() ?? '';
-    final sourceValue = source.wireValue;
-    final uri = _uri(
-      ChatApiMetadata.listSelectableGroupConversationsPath,
-      queryParameters: <String, String>{
-        if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
-        'source': ?sourceValue,
-        'limit': '$limit',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.startGroupChat,
-        operationId: ChatApiMetadata.listSelectableGroupConversationsOperation,
-        clientPageId: ChatRequestPageIds.listSelectableGroupConversations,
+    final page = await _contactQuery.listSelectableGroupConversations(
+      ChatListSelectableGroupConversationsQuery(
+        query: query,
+        source: source.wireValue,
+        cursor: cursor,
+        limit: limit,
       ),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listSelectableGroupConversations,
-      fromMap: SelectableGroupConversationRowDto.fromMap,
+    return CursorPage<SelectableGroupConversationRowDto>(
+      items: page.items.map(_mapper.toSelectableGroup).toList(growable: false),
+      nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final normalizedQuery = query?.trim() ?? '';
-    final uri = _uri(
-      ChatApiMetadata.listSelectableGroupContactMembersPath(
+    final page = await _contactQuery.listSelectableGroupContactMembers(
+      ChatListSelectableGroupContactMembersQuery(
         conversationId: conversationId,
-      ),
-      queryParameters: <String, String>{
-        if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
-        'limit': '$limit',
-      },
-    );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.startGroupChat,
-        operationId: ChatApiMetadata.listSelectableGroupContactMembersOperation,
-        clientPageId: ChatRequestPageIds.listSelectableGroupContactMembers,
+        query: query,
+        cursor: cursor,
+        limit: limit,
       ),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listSelectableGroupContactMembers,
-      fromMap: ChatContactRowDto.fromMap,
+    return CursorPage<ChatContactRowDto>(
+      items: page.items.map(_mapper.toContact).toList(growable: false),
+      nextCursor: page.nextCursor,
     );
   }
 
@@ -739,86 +465,36 @@ class RemoteChatRepository implements ChatRepository {
 
   @override
   Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
-    final uri = _uri(ChatApiMetadata.listConversationTimestampsPath);
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.listConversationTimestampsOperation,
-        clientPageId: ChatRequestPageIds.listConversationTimestamps,
-      ),
+    final page = await _conversationQuery.listConversationTimestamps(
+      const ChatListConversationTimestampsQuery(),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.listConversationTimestamps,
-      fromMap: ChatConversationTimestampDto.fromMap,
-    );
+    return page.items.map(_mapper.toTimestamp).toList(growable: false);
   }
 
   @override
   Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
-    final uri = _uri(ChatApiMetadata.batchGetConversationsPath);
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatList,
-        operationId: ChatApiMetadata.batchGetConversationsOperation,
-        clientPageId: ChatRequestPageIds.batchGetConversations,
-      ),
-      body: {'ids': ids},
+    final page = await _conversationQuery.batchGetConversations(
+      ChatBatchGetConversationsQuery(conversationIds: ids),
     );
-    return _decodeObjectItems(
-      decoded,
-      context: ChatRequestPageIds.batchGetConversations,
-      fromMap: ConversationDto.fromMap,
-    );
+    return page.items.map(_mapper.toConversation).toList(growable: false);
   }
 
   // ── 群管理 ──────────────────────────────────────────────────────────────────
 
   @override
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
-    final uri = _uri(
-      ChatApiMetadata.getConversationPath(conversationId: conversationId),
+    final conversation = await _settingsConversationQuery.getConversation(
+      ChatGetConversationQuery(conversationId: conversationId),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.getConversationOperation,
-        clientPageId: ChatRequestPageIds.getConversation,
-      ),
-    );
-    return ChatGroupSettingsDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.getConversation,
-      ),
-    );
+    return _mapper.toGroupSettings(conversation);
   }
 
   @override
   Future<GroupHomeDto> getGroupHome(String conversationId) async {
-    final uri = _uri(
-      ChatApiMetadata.getGroupHomePath(conversationId: conversationId),
+    final home = await _conversationQuery.getGroupHome(
+      ChatGetGroupHomeQuery(conversationId: conversationId),
     );
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.getGroupHomeOperation,
-        clientPageId: ChatRequestPageIds.getGroupHome,
-      ),
-    );
-    return GroupHomeDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: _contextForSurface(
-          AppUiSurfaces.chatSettings,
-          operationId: ChatApiMetadata.getGroupHomeOperation,
-        ),
-      ),
-    );
+    return _mapper.toGroupHome(home);
   }
 
   @override
@@ -826,21 +502,12 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     ChatGroupSettingsDto settings,
   ) async {
-    // 群治理开关走 Conversation 聚合专属 governance 命令；
-    // UpdateConversationSettings 只承载用户级 mute/pin，禁止混用。
-    final uri = _uri(
-      ChatApiMetadata.updateGroupGovernanceSettingsPath(
+    await _conversationCommandWriter.updateGroupGovernanceSettings(
+      ChatUpdateGroupGovernanceSettingsCommand(
         conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        nameEditableByAdminOnly: settings.nameEditableByAdminOnly,
       ),
-    );
-    await _httpClient.patchJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatManage,
-        operationId: ChatApiMetadata.updateGroupGovernanceSettingsOperation,
-        clientPageId: ChatRequestPageIds.updateGroupGovernanceSettings,
-      ),
-      body: settings.toGroupSettingsPatchBody(),
     );
   }
 
@@ -849,17 +516,12 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     String announcement,
   ) async {
-    final uri = _uri(
-      ChatApiMetadata.updateAnnouncementPath(conversationId: conversationId),
-    );
-    await _httpClient.patchJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatManage,
-        operationId: ChatApiMetadata.updateAnnouncementOperation,
-        clientPageId: ChatRequestPageIds.updateAnnouncement,
+    await _conversationCommandWriter.updateAnnouncement(
+      ChatUpdateAnnouncementCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        announcement: announcement,
       ),
-      body: <String, Object?>{'announcement': announcement},
     );
   }
 
@@ -868,17 +530,12 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     String newOwnerId,
   ) async {
-    final uri = _uri(
-      ChatApiMetadata.transferOwnershipPath(conversationId: conversationId),
-    );
-    await _httpClient.patchJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatTransferOwnership,
-        operationId: ChatApiMetadata.transferOwnershipOperation,
-        clientPageId: ChatRequestPageIds.transferOwnership,
+    await _membershipCommandWriter.transferOwnership(
+      ChatTransferConversationOwnershipCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        newOwnerId: newOwnerId,
       ),
-      body: {'newOwnerId': newOwnerId},
     );
   }
 
@@ -887,31 +544,21 @@ class RemoteChatRepository implements ChatRepository {
     String conversationId,
     List<String> adminIds,
   ) async {
-    final uri = _uri(
-      ChatApiMetadata.updateGroupAdminsPath(conversationId: conversationId),
-    );
-    await _httpClient.putJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatAdmins,
-        operationId: ChatApiMetadata.updateGroupAdminsOperation,
-        clientPageId: ChatRequestPageIds.updateGroupAdmins,
+    await _membershipCommandWriter.updateAdmins(
+      ChatUpdateConversationAdminsCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
+        adminIds: adminIds,
       ),
-      body: {'adminIds': adminIds},
     );
   }
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
-    final uri = _uri(
-      ChatApiMetadata.dissolveConversationPath(conversationId: conversationId),
-    );
-    await _httpClient.deleteJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatManage,
-        operationId: ChatApiMetadata.dissolveConversationOperation,
-        clientPageId: ChatRequestPageIds.dissolveConversation,
+    await _conversationCommandWriter.dissolveConversation(
+      ChatDissolveConversationCommand(
+        conversationId: conversationId,
+        idempotencyKey: _idempotencyKeyFactory(),
       ),
     );
   }

@@ -71,7 +71,7 @@ api_routes:
       mutation_target: AssistantRun
       invariant_target: AssistantRun
     description: 统一启动助手执行；流式结果是该 Run 的 transport，不存在 CreateTurn/StreamTurn 第二主线
-    request_fields: [skillId, domainId, input, trigger, clientRequestId]
+    request_fields: [skillId, domainId, input, trigger, clientRequestId, contextSnapshot]
     response_entity: AssistantTurnEnvelope
     reliability:
       timeout_ms: 5000
@@ -84,7 +84,9 @@ api_routes:
       - ASSISTANT.USER.conversation_not_found
       - ASSISTANT.USER.run_idempotency_conflict
       - ASSISTANT.USER.skill_consent_required
+      - ASSISTANT.USER.intersection_evidence_not_found
       - ASSISTANT.USER.unauthorized
+      - ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable
       - ASSISTANT.SYSTEM.run_storage_unavailable
     privacy:
       request_classification: SENSITIVE

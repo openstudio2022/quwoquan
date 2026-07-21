@@ -10,9 +10,10 @@ var _ = time.Now
 // ErrConversationNotFound 是「会话不存在」的领域哨兵错误。基础设施层在查询无命中时
 // 必须 wrap 本哨兵，应用层据此映射结构化 not_found，而无需 import 任何存储驱动。
 var (
-	ErrConversationNotFound = errors.New("conversation not found")
-	ErrMemberNotFound       = errors.New("conversation member not found")
-	ErrUserStateNotFound    = errors.New("conversation user state not found")
+	ErrConversationNotFound                = errors.New("conversation not found")
+	ErrCircleGroupConversationAlreadyBound = errors.New("circle group conversation already bound")
+	ErrMemberNotFound                      = errors.New("conversation member not found")
+	ErrUserStateNotFound                   = errors.New("conversation user state not found")
 )
 
 // Conversation is the aggregate root for the chat domain.
@@ -26,7 +27,7 @@ type Conversation struct {
 	GroupAvatarSourceHash   string     `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
 	CreatorId               string     `json:"creatorId" bson:"creatorId"`
 	CircleId                string     `json:"circleId" bson:"circleId"`
-	CircleGroupId           string     `json:"circleGroupId" bson:"circleGroupId"`
+	CircleGroupId           string     `json:"circleGroupId" bson:"circleGroupId,omitempty"`
 	EntityId                string     `json:"entityId" bson:"entityId"`
 	OriginType              string     `json:"originType" bson:"originType"`
 	BindingType             string     `json:"bindingType" bson:"bindingType"`
@@ -42,6 +43,7 @@ type Conversation struct {
 	NameEditableByAdminOnly bool       `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
 	LastMessageId           string     `json:"lastMessageId" bson:"lastMessageId"`
 	LastMessagePreview      string     `json:"lastMessagePreview" bson:"lastMessagePreview"`
+	LastMessageType         string     `json:"lastMessageType" bson:"lastMessageType"`
 	LastMessageTime         time.Time  `json:"lastMessageTime" bson:"lastMessageTime"`
 	MessageCount            int        `json:"messageCount" bson:"messageCount"`
 	Status                  string     `json:"status" bson:"status"`

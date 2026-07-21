@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
 	membershipports "quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/ports"
 )
 
@@ -18,15 +17,15 @@ const (
 )
 
 type CircleMembershipStreamPublisher struct {
-	redis rtredis.Client
+	transport durableStreamTransport
 }
 
-func NewCircleMembershipStreamPublisher(redis rtredis.Client) *CircleMembershipStreamPublisher {
-	return &CircleMembershipStreamPublisher{redis: redis}
+func NewCircleMembershipStreamPublisher(transport durableStreamTransport) *CircleMembershipStreamPublisher {
+	return &CircleMembershipStreamPublisher{transport: transport}
 }
 
 func (publisher *CircleMembershipStreamPublisher) Publish(ctx context.Context, event membershipports.OutboxEvent) error {
-	if publisher == nil || publisher.redis == nil {
+	if publisher == nil || publisher.transport == nil {
 		return fmt.Errorf("CircleMembership stream publisher is not configured")
 	}
 	if strings.TrimSpace(event.EventID) == "" || strings.TrimSpace(event.EventType) == "" ||
@@ -36,16 +35,13 @@ func (publisher *CircleMembershipStreamPublisher) Publish(ctx context.Context, e
 	if !json.Valid(event.Payload) {
 		return fmt.Errorf("CircleMembership event payload is not valid JSON")
 	}
-	if _, err := publisher.redis.XAdd(ctx, CircleMembershipStream, map[string]string{
+	if err := appendCircleDurableRecord(ctx, publisher.transport, CircleMembershipStream, map[string]string{
 		"eventId": event.EventID, "eventType": event.EventType,
 		"aggregateType": "CircleMembership", "aggregateId": event.AggregateID,
 		"aggregateVersion": strconv.FormatInt(event.AggregateVersion, 10),
 		"payload":          string(event.Payload), "occurredAt": event.OccurredAt.UTC().Format(time.RFC3339Nano),
-	}); err != nil {
+	}, CircleMembershipStreamRetention); err != nil {
 		return fmt.Errorf("append CircleMembership stream: %w", err)
-	}
-	if err := publisher.redis.Expire(ctx, CircleMembershipStream, CircleMembershipStreamRetention); err != nil {
-		return fmt.Errorf("refresh CircleMembership stream retention: %w", err)
 	}
 	return nil
 }

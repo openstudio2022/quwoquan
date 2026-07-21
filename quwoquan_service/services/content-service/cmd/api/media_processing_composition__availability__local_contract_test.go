@@ -29,7 +29,8 @@ func TestMediaProcessingConfigIsSharedAcrossFourEnvironments(t *testing.T) {
 			if cfg.MediaProcessing.FFmpegPath != "ffmpeg" ||
 				cfg.MediaProcessing.FFprobePath != "ffprobe" ||
 				cfg.MediaProcessing.IntervalMs != 2_000 ||
-				cfg.MediaProcessing.JobTimeoutMs != 900_000 {
+				cfg.MediaProcessing.JobTimeoutMs != 900_000 ||
+				cfg.MediaProcessing.MinWorkDirFreeBytes != 536_870_912 {
 				t.Fatalf(
 					"%s media processing must inherit the shared default: %+v",
 					environment,

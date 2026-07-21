@@ -12,6 +12,7 @@ import (
 	accountsessionpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/account_session/persistence"
 	credentialpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/credential_binding/persistence"
 	registrationpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/device_registration/persistence"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/infrastructure/account/user_account/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 	userpersistence "quwoquan_service/services/user-service/internal/infrastructure/user/persistence"
 )
@@ -34,6 +35,10 @@ func testAccountPacketOptions(t *testing.T) []application.AuthServiceOption {
 	if err != nil {
 		t.Fatalf("device registration cipher: %v", err)
 	}
+	accountSecurityReader, err := useraccountpersistence.NewEnforcementStore(pgPool)
+	if err != nil {
+		t.Fatalf("account security reader: %v", err)
+	}
 	return []application.AuthServiceOption{
 		application.WithAccountSessionCommands(
 			accountsessionapp.NewAccountSessionCommandFacade(sessionStore),
@@ -44,6 +49,7 @@ func testAccountPacketOptions(t *testing.T) []application.AuthServiceOption {
 				tokenCipher,
 			),
 		),
+		application.WithAccountSecurityReader(accountSecurityReader),
 	}
 }
 
@@ -86,7 +92,6 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 	options := testAccountPacketOptions(t)
 	options = append(
 		options,
-		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
 		application.WithCredentialCommands(credentialCommands),
 	)
@@ -98,10 +103,14 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 		shardDirectory,
 		options...,
 	)
+	wechatLogin := application.NewFederatedLoginFacade(
+		authService,
+		externalProviderRuntime.wechat,
+		nil,
+	)
 
-	result, err := authService.LoginWithSocialProvider(
+	result, err := wechatLogin.Login(
 		context.Background(),
-		"wechat",
 		"sandbox-wechat-avatar-001",
 		"device-social-1",
 		"ios",
@@ -163,7 +172,6 @@ func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	options := testAccountPacketOptions(t)
 	options = append(
 		options,
-		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
 		application.WithCredentialCommands(credentialCommands),
 	)
@@ -175,9 +183,13 @@ func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 		shardDirectory,
 		options...,
 	)
-	firstLogin, err := authService.LoginWithSocialProvider(
+	wechatLogin := application.NewFederatedLoginFacade(
+		authService,
+		externalProviderRuntime.wechat,
+		nil,
+	)
+	firstLogin, err := wechatLogin.Login(
 		context.Background(),
-		"wechat",
 		"sandbox-wechat-existing",
 		"device-existing",
 		"ios",
@@ -186,9 +198,8 @@ func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first WeChat credential login failed: %v", err)
 	}
-	secondLogin, err := authService.LoginWithSocialProvider(
+	secondLogin, err := wechatLogin.Login(
 		context.Background(),
-		"wechat",
 		"sandbox-wechat-existing",
 		"device-existing",
 		"ios",
@@ -212,7 +223,7 @@ func TestGenericCredentialBindRouteIsNotPublic(t *testing.T) {
 	createTestCredential(t, "cred_phone", "bind_owner", "phone", "hash_phone_bind")
 
 	rec := doRequest(t, http.MethodPost, "/owner/credentials/bind",
-		`{"credentialType":"wechat","credentialKey":"wx_union_id_123","displayLabel":"微信账号"}`,
+		`{"credentialType":"federated_slot_a","credentialKey":"federated_identity_123","displayLabel":"联邦账号"}`,
 		authHeaders("bind_owner"))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf(
@@ -239,12 +250,12 @@ func TestUnbindCredential_KeepsRemaining(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "multi_cred_owner", "multi_cred_user")
 	createTestCredential(t, "c_phone", "multi_cred_owner", "phone", "hash_multi_phone")
-	createTestCredential(t, "c_wechat", "multi_cred_owner", "wechat", "wx_union_multi")
+	createTestCredential(t, "c_federated", "multi_cred_owner", "federated_slot_a", "federated_identity_multi")
 
-	// 解绑微信（还有手机号剩余）
-	rec := doRequest(t, http.MethodDelete, "/owner/credentials/wechat", "", authHeaders("multi_cred_owner"))
+	// 解绑联邦凭证（还有手机号剩余）
+	rec := doRequest(t, http.MethodDelete, "/owner/credentials/federated_slot_a", "", authHeaders("multi_cred_owner"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("unbind wechat: expected 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("unbind federated credential: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// DB 验证：手机号仍存在
@@ -253,7 +264,7 @@ func TestUnbindCredential_KeepsRemaining(t *testing.T) {
 		`SELECT COUNT(*) FROM credential_bindings WHERE owner_id = $1 AND credential_type = 'phone' AND is_active = true`,
 		"multi_cred_owner").Scan(&phoneCount)
 	if phoneCount != 1 {
-		t.Errorf("phone credential should remain after unbinding wechat, got count=%d", phoneCount)
+		t.Errorf("phone credential should remain after unbinding federated credential, got count=%d", phoneCount)
 	}
 }
 

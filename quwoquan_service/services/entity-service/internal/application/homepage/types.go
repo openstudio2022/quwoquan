@@ -17,15 +17,15 @@ type RelatedGroup = homepagemodel.RelatedGroup
 
 type View struct {
 	ID                   string              `json:"homepageId"`
-	Version              int64               `json:"version"`
+	Version              int64               `json:"-"`
 	Title                string              `json:"title"`
 	Subtitle             string              `json:"subtitle,omitempty"`
 	HomepageType         string              `json:"homepageType"`
-	CanonicalEntityID    string              `json:"canonicalEntityId"`
+	CanonicalEntityID    string              `json:"-"`
 	LookupAliases        []string            `json:"-"`
-	ObjectPageTemplate   string              `json:"objectPageTemplate"`
+	ObjectPageTemplate   string              `json:"-"`
 	Status               string              `json:"status"`
-	SourceType           string              `json:"sourceType"`
+	SourceType           string              `json:"-"`
 	SourceOwner          string              `json:"-" bson:"sourceOwner,omitempty"`
 	SourceEntityRef      string              `json:"-" bson:"sourceEntityRef,omitempty"`
 	SourceReleaseID      string              `json:"-" bson:"sourceReleaseId,omitempty"`
@@ -88,7 +88,7 @@ type BasicInput struct {
 
 type SearchItemView struct {
 	HomepageID        string   `json:"homepageId"`
-	CanonicalEntityID string   `json:"canonicalEntityId"`
+	CanonicalEntityID string   `json:"-"`
 	Title             string   `json:"title"`
 	Subtitle          string   `json:"subtitle,omitempty"`
 	HomepageType      string   `json:"homepageType"`

@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/rtc-service/internal/application"
 	event "quwoquan_service/services/rtc-service/internal/domain/call_session/event"
 )
@@ -48,11 +48,11 @@ var SupportedEventTypes = []string{
 //   - 其余信令发布到 rt:rtc:persona:{personaId}；
 //   - CallAnswered/CallEnded 同时进入 durable cancellation stream。
 type RealtimePublisher struct {
-	client rtredis.Client
+	transport runtimemessaging.MessageTransport
 }
 
-func NewRealtimePublisher(client rtredis.Client) *RealtimePublisher {
-	return &RealtimePublisher{client: client}
+func NewRealtimePublisher(transport runtimemessaging.MessageTransport) *RealtimePublisher {
+	return &RealtimePublisher{transport: transport}
 }
 
 func (p *RealtimePublisher) PublishToPersonas(
@@ -62,14 +62,17 @@ func (p *RealtimePublisher) PublishToPersonas(
 	evt application.CallOutboxEvent,
 ) error {
 	if stream := durableStream(evt.EventType); stream != "" {
-		if _, err := p.client.XAdd(ctx, stream, map[string]string{
-			"eventId":     evt.EventID,
-			"eventType":   evt.EventType,
-			"wireType":    wireType,
-			"callId":      evt.AggregateID,
-			"deliveryKey": evt.DeliveryKey,
-			"occurredAt":  evt.OccurredAt.UTC().Format(time.RFC3339Nano),
-			"payloadJson": string(evt.Payload),
+		if _, err := p.transport.AppendDurable(ctx, runtimemessaging.DurableMessage{
+			Stream: stream,
+			Fields: []runtimemessaging.DurableField{
+				{Name: "eventId", Value: evt.EventID},
+				{Name: "eventType", Value: evt.EventType},
+				{Name: "wireType", Value: wireType},
+				{Name: "callId", Value: evt.AggregateID},
+				{Name: "deliveryKey", Value: evt.DeliveryKey},
+				{Name: "occurredAt", Value: evt.OccurredAt.UTC().Format(time.RFC3339Nano)},
+				{Name: "payloadJson", Value: string(evt.Payload)},
+			},
 		}); err != nil {
 			rtcCallRelayTotal.WithLabelValues(
 				evt.EventType,
@@ -97,10 +100,12 @@ func (p *RealtimePublisher) PublishToPersonas(
 			continue
 		}
 		seen[personaID] = struct{}{}
-		if err := p.client.Publish(
+		if err := p.transport.PublishEphemeral(
 			ctx,
-			"rt:rtc:persona:"+personaID,
-			string(evt.Payload),
+			runtimemessaging.EphemeralMessage{
+				Channel: "rt:rtc:persona:" + personaID,
+				Payload: evt.Payload,
+			},
 		); err != nil {
 			rtcCallRelayTotal.WithLabelValues(
 				evt.EventType,

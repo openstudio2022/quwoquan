@@ -31,6 +31,7 @@ func TestMediaProcessingWorkerRecordsReadyAndAdvancesCheckpoint(t *testing.T) {
 		checkpoints,
 		processor,
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	processed, err := worker.Drain(context.Background(), 10)
@@ -72,6 +73,7 @@ func TestMediaProcessingWorkerRecordsReadyImageDescriptor(t *testing.T) {
 		checkpoints,
 		processor,
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	processed, err := worker.Drain(context.Background(), 10)
@@ -117,6 +119,7 @@ func TestMediaProcessingWorkerRecordsContentRejectionAndAdvancesCheckpoint(t *te
 		checkpoints,
 		processor,
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	processed, err := worker.Drain(context.Background(), 10)
@@ -152,6 +155,7 @@ func TestMediaProcessingWorkerReplaysAfterCheckpointFailureWithoutRepeatingTermi
 		checkpoints,
 		processor,
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	if processed, err := worker.Drain(context.Background(), 10); err == nil || processed != 0 {
@@ -187,6 +191,7 @@ func TestMediaProcessingWorkerDoesNotAdvanceOnInfrastructureFailure(t *testing.T
 		checkpoints,
 		&workerProcessor{err: errors.New("object storage unavailable")},
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	if processed, err := worker.Drain(context.Background(), 10); err == nil || processed != 0 {
@@ -209,6 +214,7 @@ func TestMediaProcessingWorkerSkipsUploadSessionAndUnrelatedFacts(t *testing.T) 
 			AggregateType: "MediaUploadSession",
 			AggregateID:   "upload-session-1",
 			Checkpoint:    "cp-session",
+			OccurredAt:    time.Now().UTC(),
 		},
 		{
 			EventID:       "evt-unrelated",
@@ -216,6 +222,7 @@ func TestMediaProcessingWorkerSkipsUploadSessionAndUnrelatedFacts(t *testing.T) 
 			AggregateType: "MediaAsset",
 			AggregateID:   "media-worker-unrelated",
 			Checkpoint:    "cp-unrelated",
+			OccurredAt:    time.Now().UTC(),
 		},
 	}}
 	checkpoints := &workerCheckpointStore{}
@@ -227,6 +234,7 @@ func TestMediaProcessingWorkerSkipsUploadSessionAndUnrelatedFacts(t *testing.T) 
 		checkpoints,
 		processor,
 		recorder,
+		&workerPoisonEvents{},
 	)
 
 	processed, err := worker.Drain(context.Background(), 10)
@@ -291,6 +299,24 @@ type workerCheckpointStore struct {
 	current      string
 	loadErr      error
 	saveFailures int
+	leaseOwner   string
+	leaseUntil   time.Time
+}
+
+type workerPoisonEvents struct {
+	recorded []mediaprocessing.PoisonEvent
+	err      error
+}
+
+func (s *workerPoisonEvents) QuarantineMediaProcessingEvent(
+	_ context.Context,
+	event mediaprocessing.PoisonEvent,
+) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.recorded = append(s.recorded, event)
+	return nil
 }
 
 func (s *workerCheckpointStore) LoadCheckpoint(
@@ -311,6 +337,53 @@ func (s *workerCheckpointStore) SaveCheckpoint(
 	}
 	s.current = checkpoint
 	return nil
+}
+
+func (s *workerCheckpointStore) TryAcquireMediaProcessingLease(
+	_ context.Context,
+	_ string,
+	owner string,
+	now time.Time,
+	ttl time.Duration,
+) (bool, error) {
+	if s.leaseOwner != "" && s.leaseOwner != owner && s.leaseUntil.After(now) {
+		return false, nil
+	}
+	s.leaseOwner = owner
+	s.leaseUntil = now.Add(ttl)
+	return true, nil
+}
+
+func (s *workerCheckpointStore) RenewMediaProcessingLease(
+	_ context.Context,
+	_ string,
+	owner string,
+	now time.Time,
+	ttl time.Duration,
+) (bool, error) {
+	if s.leaseOwner != owner || !s.leaseUntil.After(now) {
+		return false, nil
+	}
+	s.leaseUntil = now.Add(ttl)
+	return true, nil
+}
+
+func (s *workerCheckpointStore) SaveMediaProcessingCheckpointWithLease(
+	ctx context.Context,
+	_ string,
+	owner string,
+	checkpoint string,
+	now time.Time,
+	ttl time.Duration,
+) (bool, error) {
+	if s.leaseOwner != owner || !s.leaseUntil.After(now) {
+		return false, nil
+	}
+	s.leaseUntil = now.Add(ttl)
+	if err := s.SaveCheckpoint(ctx, "", checkpoint); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 type workerProcessor struct {
@@ -366,6 +439,7 @@ func processingEvent(eventID string, assetID string, checkpoint string) mediapor
 		AggregateType: "MediaAsset",
 		AggregateID:   assetID,
 		Checkpoint:    checkpoint,
+		OccurredAt:    time.Now().UTC(),
 	}
 }
 
@@ -436,7 +510,11 @@ func imageProcessingDescriptor(
 				assetID,
 				version,
 			),
-			ImagePublicSliceKey: publicPrefix + "/source.jpg",
+			ImagePublicSliceKey:     publicPrefix + "/source.jpg",
+			ImageDominantColor:      "#1A2B3C",
+			ImageLQIP:               "data:image/jpeg;base64,/9j/2Q==",
+			ImageContentProfile:     "photographic",
+			DerivativePolicyVersion: 1,
 		},
 	}
 }

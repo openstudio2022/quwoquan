@@ -112,6 +112,7 @@ void main() {
         'items': <Object?>[
           <String, Object?>{
             'circleId': 'circle-1',
+            'placementId': 'placement-1',
             'postId': 'post-1',
             'contentType': 'video',
             'title': '周末营地',
@@ -154,6 +155,7 @@ void main() {
         'items': <Object?>[
           <String, Object?>{
             'circleId': 'circle-1',
+            'placementId': 'placement-1',
             'postId': 'post-1',
             'contentType': 'image',
           },
@@ -164,6 +166,21 @@ void main() {
       expect(feed.circles.single.circleId, 'circle-1');
       expect(feed.items.single.post.postId, 'post-1');
       expect(feed.nextCursor, 'next');
+    });
+
+    test('rejects feed items without required placementId', () {
+      expect(
+        () => decodeCircleFeedPageSlice(<String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'circleId': 'circle-1',
+              'postId': 'post-1',
+              'contentType': 'image',
+            },
+          ],
+        }),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

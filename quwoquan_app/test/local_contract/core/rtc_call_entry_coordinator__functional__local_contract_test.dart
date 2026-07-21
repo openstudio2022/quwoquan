@@ -255,6 +255,9 @@ final class _RecordingCallLifecycleWriter
         createdAt: now,
         updatedAt: now,
       ),
+      mediaAccess: const RtcMediaSessionAccessDto(
+        accessToken: 'fixture-media-access',
+      ),
     );
   }
 

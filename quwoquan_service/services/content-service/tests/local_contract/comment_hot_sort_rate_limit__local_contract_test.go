@@ -20,7 +20,7 @@ func TestListCommentsRejectsUnknownSortWithStableError(t *testing.T) {
 	service, _ := newCommentAggregateService()
 	_, err := service.ListComments(context.Background(), commentapp.ListCommentsQuery{
 		PostID: "post-comment-owner",
-		Sort:   "most_liked",
+		Sort:   "unsupported_sort",
 	})
 	if err == nil {
 		t.Fatalf("unknown sort must be rejected")

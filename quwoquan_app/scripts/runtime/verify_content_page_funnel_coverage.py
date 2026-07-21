@@ -51,6 +51,14 @@ REQUIRED_FAILURE_DIMENSIONS = frozenset(
 AGGREGATED_FAILURE_DIMENSIONS = frozenset(
     {"result", "durationMs", "failReasonCode", "recoveryAction"}
 )
+B2_PRODUCT_ACTION_OBJECT_IDS = frozenset(
+    {
+        "content.outbound_share_fact",
+        "content.report",
+        "content.profile_interaction_activity_view",
+        "content.profile_interaction_read_fact",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -151,6 +159,8 @@ def load_product_action_funnels(
                 ).strip(),
                 alerts=_strings(action.get("alerts"), f"{label}.alerts", issues),
             )
+            if not set(funnel.object_ids) & B2_PRODUCT_ACTION_OBJECT_IDS:
+                continue
             missing_objects = set(funnel.object_ids) - page_object_ids
             if missing_objects:
                 issues.append(

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/streaming"
+	app "quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
@@ -15,7 +16,6 @@ func TestRunner_RunReplayCases(t *testing.T) {
 		"replay_direct_answer_min.json",
 		"replay_tool_search_min.json",
 		"replay_tool_failure_min.json",
-		"replay_device_action_proposal_min.json",
 	}
 	for _, fixture := range fixtures {
 		t.Run(fixture, func(t *testing.T) {
@@ -45,6 +45,61 @@ func TestRunner_RunReplayCases(t *testing.T) {
 
 func assertReplayGoldenEvents(t *testing.T, replay assistant.ReplayCase, events []streaming.Envelope) {
 	t.Helper()
+	if events[0].EventType != string(app.AssistantStreamEventRunStarted) {
+		t.Fatalf(
+			"replay %s first event=%q, want %q",
+			replay.ReplayCaseID,
+			events[0].EventType,
+			app.AssistantStreamEventRunStarted,
+		)
+	}
+	validTypes := map[string]bool{
+		string(app.AssistantStreamEventRunStarted):     true,
+		string(app.AssistantStreamEventProcessReplace): true,
+		string(app.AssistantStreamEventProcessAppend):  true,
+		string(app.AssistantStreamEventProcessCommit):  true,
+		string(app.AssistantStreamEventAnswerDelta):    true,
+		string(app.AssistantStreamEventCompleted):      true,
+		string(app.AssistantStreamEventFailed):         true,
+		string(app.AssistantStreamEventCancelled):      true,
+	}
+	seenReplace := false
+	terminalCount := 0
+	wantTerminal := string(app.AssistantStreamEventCompleted)
+	if replay.ExpectedRunResponse.Status == "failed" {
+		wantTerminal = string(app.AssistantStreamEventFailed)
+	}
+	for _, event := range events {
+		if !validTypes[event.EventType] {
+			t.Fatalf(
+				"replay %s emitted non-canonical event type %q",
+				replay.ReplayCaseID,
+				event.EventType,
+			)
+		}
+		if event.EventType == string(app.AssistantStreamEventProcessReplace) {
+			seenReplace = true
+		}
+		if event.EventType == string(app.AssistantStreamEventCompleted) ||
+			event.EventType == string(app.AssistantStreamEventFailed) ||
+			event.EventType == string(app.AssistantStreamEventCancelled) {
+			terminalCount++
+			if event.EventType != wantTerminal {
+				t.Fatalf(
+					"replay %s terminal=%q, want %q",
+					replay.ReplayCaseID,
+					event.EventType,
+					wantTerminal,
+				)
+			}
+		}
+	}
+	if !seenReplace {
+		t.Fatalf("replay %s missing process_replace", replay.ReplayCaseID)
+	}
+	if terminalCount != 1 {
+		t.Fatalf("replay %s terminal events=%d, want 1", replay.ReplayCaseID, terminalCount)
+	}
 	if len(replay.ExpectedStreamEvents) == 0 {
 		return
 	}

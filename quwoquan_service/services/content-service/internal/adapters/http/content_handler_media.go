@@ -173,6 +173,10 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 		ImageDeliveryContentType     string                      `json:"imageDeliveryContentType"`
 		ImageNormalizedObjectKey     string                      `json:"imageNormalizedObjectKey"`
 		ImagePublicSliceKey          string                      `json:"imagePublicSliceKey"`
+		ImageDominantColor           string                      `json:"imageDominantColor"`
+		ImageLQIP                    string                      `json:"imageLqip"`
+		ImageContentProfile          string                      `json:"imageContentProfile"`
+		ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion"`
 		VerifiedDurationMs           int64                       `json:"verifiedDurationMs"`
 		VideoWidth                   int                         `json:"videoWidth"`
 		VideoHeight                  int                         `json:"videoHeight"`
@@ -195,7 +199,11 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 		body.ImageHeight != 0 ||
 		strings.TrimSpace(body.ImageDeliveryContentType) != "" ||
 		strings.TrimSpace(body.ImageNormalizedObjectKey) != "" ||
-		strings.TrimSpace(body.ImagePublicSliceKey) != "" {
+		strings.TrimSpace(body.ImagePublicSliceKey) != "" ||
+		strings.TrimSpace(body.ImageDominantColor) != "" ||
+		strings.TrimSpace(body.ImageLQIP) != "" ||
+		strings.TrimSpace(body.ImageContentProfile) != "" ||
+		body.ImageDerivativePolicyVersion != 0 {
 		descriptor.Image = mediamodel.ImageProcessingDescriptor{
 			ProcessorProfile:         body.ProcessorProfile,
 			ImageWidth:               body.ImageWidth,
@@ -203,6 +211,10 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 			ImageDeliveryContentType: body.ImageDeliveryContentType,
 			ImageNormalizedObjectKey: body.ImageNormalizedObjectKey,
 			ImagePublicSliceKey:      body.ImagePublicSliceKey,
+			ImageDominantColor:       body.ImageDominantColor,
+			ImageLQIP:                body.ImageLQIP,
+			ImageContentProfile:      body.ImageContentProfile,
+			DerivativePolicyVersion:  body.ImageDerivativePolicyVersion,
 		}
 	}
 	if body.VerifiedDurationMs != 0 ||
@@ -276,14 +288,21 @@ type mediaUploadSessionResponse struct {
 }
 
 type mediaAssetHTTPResponse struct {
-	AssetID      string                      `json:"assetId"`
-	Version      int64                       `json:"version"`
-	MediaType    string                      `json:"mediaType"`
-	ContentType  string                      `json:"contentType"`
-	FileSize     int64                       `json:"fileSize"`
-	Status       mediamodel.ProcessingStatus `json:"status"`
-	AccessPolicy mediamodel.AccessPolicy     `json:"accessPolicy"`
-	CDNURL       string                      `json:"cdnUrl"`
+	AssetID                      string                      `json:"assetId"`
+	Version                      int64                       `json:"version"`
+	MediaType                    string                      `json:"mediaType"`
+	ContentType                  string                      `json:"contentType"`
+	FileSize                     int64                       `json:"fileSize"`
+	Status                       mediamodel.ProcessingStatus `json:"status"`
+	AccessPolicy                 mediamodel.AccessPolicy     `json:"accessPolicy"`
+	CDNURL                       string                      `json:"cdnUrl"`
+	ImageWidth                   int                         `json:"imageWidth,omitempty"`
+	ImageHeight                  int                         `json:"imageHeight,omitempty"`
+	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
+	ImageDominantColor           string                      `json:"imageDominantColor,omitempty"`
+	ImageLQIP                    string                      `json:"imageLqip,omitempty"`
+	ImageContentProfile          string                      `json:"imageContentProfile,omitempty"`
+	ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion,omitempty"`
 }
 
 func mediaAssetHTTPResponseFromSlice(asset mediaapp.MediaAssetSlice) mediaAssetHTTPResponse {
@@ -291,6 +310,11 @@ func mediaAssetHTTPResponseFromSlice(asset mediaapp.MediaAssetSlice) mediaAssetH
 		AssetID: asset.AssetID, Version: asset.Version, MediaType: asset.MediaType,
 		ContentType: asset.ContentType, FileSize: asset.FileSize, Status: asset.ProcessingStatus,
 		AccessPolicy: asset.AccessPolicy, CDNURL: asset.DeliveryURL,
+		ImageWidth: asset.ImageWidth, ImageHeight: asset.ImageHeight,
+		ImageDeliveryContentType: asset.ImageDeliveryContentType,
+		ImageDominantColor:       asset.ImageDominantColor, ImageLQIP: asset.ImageLQIP,
+		ImageContentProfile:          asset.ImageContentProfile,
+		ImageDerivativePolicyVersion: asset.ImageDerivativePolicyVersion,
 	}
 }
 

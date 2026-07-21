@@ -477,7 +477,9 @@ ruby -ryaml -rdate -e '
     check_index.call(features)
 
     # ⑤ 孤儿目录检测：目录存在但不在 tree_index 中
-    actual_node_dirs = Dir.glob("#{specs_root}/**/*/").map { |d| d.chomp("/") }
+    actual_node_dirs = Dir.glob("#{specs_root}/**/*/").map { |d| d.chomp("/") }.reject do |d|
+      d == "#{specs_root}/templates" || d.start_with?("#{specs_root}/templates/")
+    end
     orphaned = actual_node_dirs.reject { |d| indexed_dirs.include?(d) }
     orphaned.each do |d|
       blocking << "feature tree orphan directory (not in tree_index.yaml): #{d.sub(specs_root + "/", "")}"

@@ -57,11 +57,12 @@ func TestReportOutboxOpensModerationCase(t *testing.T) {
 		"moderation-report-first",
 	)
 	if _, err := reportService.CreateReport(firstContext, reportapp.CreateReportCommand{
-		ReporterID:  "moderation-reporter-1",
-		TargetType:  "post",
-		TargetID:    postID,
-		Reason:      "spam",
-		Description: "疑似垃圾内容",
+		ReporterID:        "moderation-reporter-1",
+		ReporterAccountID: "account-moderation-reporter-1",
+		TargetType:        "post",
+		TargetID:          postID,
+		Reason:            "spam",
+		Description:       "疑似垃圾内容",
 	}); err != nil {
 		t.Fatalf("create first report: %v", err)
 	}
@@ -91,11 +92,12 @@ func TestReportOutboxOpensModerationCase(t *testing.T) {
 		"moderation-report-second",
 	)
 	if _, err := reportService.CreateReport(secondContext, reportapp.CreateReportCommand{
-		ReporterID:  "moderation-reporter-2",
-		TargetType:  "post",
-		TargetID:    postID,
-		Reason:      "harassment",
-		Description: "另一位用户的举报",
+		ReporterID:        "moderation-reporter-2",
+		ReporterAccountID: "account-moderation-reporter-2",
+		TargetType:        "post",
+		TargetID:          postID,
+		Reason:            "harassment",
+		Description:       "另一位用户的举报",
 	}); err != nil {
 		t.Fatalf("create second report: %v", err)
 	}
@@ -144,11 +146,12 @@ func TestReportPostRevisionDecodeFailureDoesNotAdvanceCheckpoint(t *testing.T) {
 	if _, err := reportService.CreateReport(
 		commandmeta.WithIdempotencyKey(context.Background(), "report-malformed-revision"),
 		reportapp.CreateReportCommand{
-			ReporterID:  "reporter-malformed-revision",
-			TargetType:  "post",
-			TargetID:    postID,
-			Reason:      "spam",
-			Description: "触发真实 BSON revision 解码错误",
+			ReporterID:        "reporter-malformed-revision",
+			ReporterAccountID: "account-reporter-malformed-revision",
+			TargetType:        "post",
+			TargetID:          postID,
+			Reason:            "spam",
+			Description:       "触发真实 BSON revision 解码错误",
 		},
 	); err != nil {
 		t.Fatalf("create report for malformed Post: %v", err)
@@ -479,11 +482,12 @@ func createModerationReport(
 	if _, err := service.CreateReport(
 		commandmeta.WithIdempotencyKey(context.Background(), idempotencyKey),
 		reportapp.CreateReportCommand{
-			ReporterID:  reporterID,
-			TargetType:  "post",
-			TargetID:    postID,
-			Reason:      reportmodel.Reason(reason),
-			Description: "moderation lifecycle integration",
+			ReporterID:        reporterID,
+			ReporterAccountID: "account-" + reporterID,
+			TargetType:        "post",
+			TargetID:          postID,
+			Reason:            reportmodel.Reason(reason),
+			Description:       "moderation lifecycle integration",
 		},
 	); err != nil {
 		t.Fatalf("create moderation report %s: %v", idempotencyKey, err)

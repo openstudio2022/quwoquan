@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
 	"quwoquan_service/services/notification-service/internal/application"
@@ -139,8 +140,12 @@ func newUserAccountClosedConsumerFixture(
 	config := streamadapter.DefaultUserAccountClosedConsumerConfig()
 	config.MinIdle = 0
 	config.MaxAttempts = maxAttempts
+	transport, err := runtimemessaging.NewRedisMessageTransport(client, client)
+	if err != nil {
+		t.Fatalf("create message transport: %v", err)
+	}
 	consumer, err := streamadapter.NewUserAccountClosedConsumer(
-		client,
+		transport,
 		projection,
 		newUserAccountClosedFailureStoreStub(),
 		"notification-account-closure-test",

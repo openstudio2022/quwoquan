@@ -7,9 +7,12 @@ input roots and hashes their files in a deterministic order, so deleting
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
+import tarfile
 from typing import Mapping
 
 from core.paths import REPO_ROOT
@@ -84,6 +87,87 @@ def current_source_digest(*, repo_root: Path = REPO_ROOT) -> SourceDigest:
     return SourceDigest.build(repo_root=repo_root)
 
 
+def source_digest_at_git_revision(
+    revision: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> SourceDigest:
+    """按 Git 提交中的固定输入计算可审计的历史 source digest。
+
+    仅供旧 canonical 对象的 provenance 补全使用；正常执行仍必须调用
+    ``current_source_digest``，不能把历史 revision 当作当前输入。
+    """
+    normalized_revision = str(revision or "").strip()
+    if not normalized_revision:
+        raise SourceDigestError("source revision is required")
+    try:
+        archived = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "archive",
+                "--format=tar",
+                normalized_revision,
+                *_INPUT_ROOTS,
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        raise SourceDigestError("git archive is unavailable") from exc
+    if archived.returncode != 0:
+        detail = archived.stderr.decode("utf-8", errors="replace").strip()
+        raise SourceDigestError(
+            f"source revision cannot be archived: {normalized_revision}: {detail}"
+        )
+
+    archived_files: dict[str, str] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archived.stdout), mode="r:") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                path = Path(member.name)
+                if any(part in _EXCLUDED_PARTS for part in path.parts):
+                    continue
+                content = archive.extractfile(member)
+                if content is None:
+                    raise SourceDigestError(
+                        f"source revision archive entry is unreadable: {member.name}"
+                    )
+                archived_files[path.as_posix()] = hashlib.sha256(content.read()).hexdigest()
+    except (tarfile.TarError, OSError) as exc:
+        raise SourceDigestError(
+            f"source revision archive is invalid: {normalized_revision}"
+        ) from exc
+    if not archived_files:
+        raise SourceDigestError(
+            f"source revision archive contains no digest inputs: {normalized_revision}"
+        )
+
+    digest = hashlib.sha256()
+    for relative_root in _INPUT_ROOTS:
+        prefix = f"{relative_root.rstrip('/')}/"
+        if relative_root in archived_files:
+            entries = ((relative_root, archived_files[relative_root]),)
+        else:
+            entries = tuple(
+                sorted(
+                    (path, file_digest)
+                    for path, file_digest in archived_files.items()
+                    if path.startswith(prefix)
+                )
+            )
+        for relative, file_digest in entries:
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(file_digest.encode("ascii"))
+            digest.update(b"\n")
+    return SourceDigest(digest=_DIGEST_PREFIX + digest.hexdigest())
+
+
 def _iter_files(root: Path) -> tuple[Path, ...]:
     if root.is_file():
         return (root,)
@@ -111,4 +195,9 @@ def _is_sha256(value: str) -> bool:
     )
 
 
-__all__ = ["SourceDigest", "SourceDigestError", "current_source_digest"]
+__all__ = [
+    "SourceDigest",
+    "SourceDigestError",
+    "current_source_digest",
+    "source_digest_at_git_revision",
+]

@@ -673,8 +673,20 @@ func TestFeedbackRecorder_RecordImpression(t *testing.T) {
 	ctx := context.Background()
 
 	items := []FeedItem{
-		{ContentID: "c1", ContentType: "photo", Score: 5.0, RecallPath: "tag_recall"},
-		{ContentID: "c2", ContentType: "video", Score: 3.0, RecallPath: "hot_recall"},
+		{
+			ContentID:        "c1",
+			ContentType:      "photo",
+			Score:            5.0,
+			RecallPath:       "tag_recall",
+			trainingFeatures: testImpressionTrainingSnapshot(),
+		},
+		{
+			ContentID:        "c2",
+			ContentType:      "video",
+			Score:            3.0,
+			RecallPath:       "hot_recall",
+			trainingFeatures: testImpressionTrainingSnapshot(),
+		},
 	}
 
 	attribution := ImpressionAttribution{FeedRequestID: "frq_test_1", ModelBucket: "rule"}
@@ -733,7 +745,7 @@ func TestFeedbackRecorder_EngagementDeterministicEventID(t *testing.T) {
 	}
 }
 
-func TestFeedbackRecorder_RecordEngagement(t *testing.T) {
+func TestFeedbackRecorderRejectsEngagementWithoutFeedRequestID(t *testing.T) {
 	mock := &mockLearningRecorder{}
 	fr := NewFeedbackRecorder(mock)
 	ctx := context.Background()
@@ -741,11 +753,11 @@ func TestFeedbackRecorder_RecordEngagement(t *testing.T) {
 	err := fr.RecordEngagement(ctx, BehaviorSignal{
 		UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like",
 	}, 5.0)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("learning feedback without feedRequestId must fail closed")
 	}
-	if len(mock.events) != 1 {
-		t.Errorf("expected 1 engagement event, got %d", len(mock.events))
+	if len(mock.events) != 0 {
+		t.Errorf("unattributed learning feedback must not be emitted, got %d events", len(mock.events))
 	}
 }
 

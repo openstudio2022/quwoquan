@@ -72,6 +72,9 @@ var collections = []string{
 	"conversation_user_states_outbox",
 	"chat_aggregate_outbox_sequences",
 	"chat_projection_checkpoints",
+	"circle_group_membership_projection_states",
+	"circle_group_chat_binding_projection_states",
+	"circle_group_chat_sync_failures",
 	"chat_user_account_closed_inbox",
 	"chat_user_account_closed_failures",
 	"message_receipts",
@@ -230,6 +233,7 @@ func TestMain(m *testing.M) {
 
 	eventPublisher := mq.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
 			members, err := chatStore.ListMembers(
 				ctx,

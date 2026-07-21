@@ -11,6 +11,7 @@ tags:
   orientation:
   comment:
   like:
+  report:
   ops:
   event:
   replay:
@@ -19,4 +20,8 @@ tags:
   video-playback:
   search:
   gamma:
+  circle:
+  user:
+  user-profile:
+  visual:
   flaky:

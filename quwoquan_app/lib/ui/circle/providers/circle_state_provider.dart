@@ -108,10 +108,14 @@ class CircleStateNotifier extends Notifier<CircleState> {
   Future<void> loadCircle() async {
     state = CircleState(circleId: _circleId).copyWith(isLoading: true);
     try {
-      final repo = ref.read(circleRepositoryProvider);
-      final detail = await repo.getCircle(_circleId);
-      final statsWire = await repo.getCircleStats(_circleId);
-      final dto = detail.circle;
+      final circleQuery = ref.read(circleDetailQueryProvider);
+      final detail = await circleQuery.get(
+        CircleDetailQuery(circleId: _circleId),
+      );
+      final stats = await circleQuery.stats(
+        CircleStatsQuery(circleId: _circleId),
+      );
+      final dto = ref.read(circleProjectionMapperProvider).toDto(detail);
       CircleMembershipSlice? membership;
       if (ref.read(resolvedOwnerUserIdProvider).trim().isNotEmpty) {
         await ref.read(activePersonaContextProvider.future);
@@ -143,10 +147,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
             : membership.state.name,
         membershipVersion: membership?.version,
         clearMembershipVersion: membership == null,
-        circleStats: CircleStatsViewData.fromStatsWire(
-          statsWire,
-          circleFallback: dto,
-        ),
+        circleStats: CircleStatsViewData.fromSlice(stats),
         isLoading: false,
         clearLoadError: true,
       );

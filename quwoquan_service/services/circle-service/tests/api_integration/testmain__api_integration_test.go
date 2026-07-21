@@ -16,6 +16,7 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/circle-service/internal/adapters/http"
 	"quwoquan_service/services/circle-service/internal/application"
@@ -40,14 +41,15 @@ import (
 )
 
 var (
-	testHandler      http.Handler
-	eventSpy         *testinfra.EventSpy
-	mongoDB          *mongo.Database
-	mongoClient      *mongo.Client
-	integrationRedis *testinfra.RealRedis
-	redisRouter      *rtredis.Router
-	fileStreamRelay  *fileapp.OutboxRelay
-	circleEventRelay *application.CircleOutboxRelay
+	testHandler            http.Handler
+	eventSpy               *testinfra.EventSpy
+	mongoDB                *mongo.Database
+	mongoClient            *mongo.Client
+	integrationRedis       *testinfra.RealRedis
+	redisRouter            *rtredis.Router
+	circleMessageTransport *runtimemessaging.RedisMessageTransport
+	fileStreamRelay        *fileapp.OutboxRelay
+	circleEventRelay       *application.CircleOutboxRelay
 )
 
 // placementRoleReaderAdapter 复用 placement policy readers 的成员角色读，
@@ -155,6 +157,15 @@ func TestMain(m *testing.M) {
 
 	// Cache contract crosses a real Redis network boundary.
 	rdb := redisRouter.Scene("general")
+	circleMessageTransport, err = runtimemessaging.NewRedisMessageTransportForRoot(
+		"circle-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		rdb,
+		rdb,
+	)
+	if err != nil {
+		panic("create circle integration message transport: " + err.Error())
+	}
 	cachedCircleStore := cache.NewCachedCircleStore(circleStore, rdb)
 	circleStorage := application.CircleStoragePorts{Records: cachedCircleStore}
 	circleAggregateStore := circlepersistence.NewMongoAggregateStore(mongoDB)
@@ -167,6 +178,10 @@ func TestMain(m *testing.M) {
 	if err := discoveryFeedReader.EnsureIndexes(ctx); err != nil {
 		panic("ensure circle discovery feed indexes: " + err.Error())
 	}
+	cachedDiscoveryFeedReader := cache.NewCachedCircleDiscoveryFeedReader(
+		discoveryFeedReader,
+		rdb,
+	)
 	placementStore := placementpersistence.NewMongoAggregateStore(mongoDB)
 	if err := placementStore.EnsureIndexes(ctx); err != nil {
 		panic("ensure placement indexes: " + err.Error())
@@ -188,7 +203,7 @@ func TestMain(m *testing.M) {
 	circleService := application.NewCircleService(
 		circleStorage,
 		application.WithFeedStore(feedStore),
-		application.WithDiscoveryFeedReader(discoveryFeedReader),
+		application.WithDiscoveryFeedReader(cachedDiscoveryFeedReader),
 	)
 	circleCommands := application.NewCircleCommandFacade(
 		circleAggregateStore,
@@ -204,7 +219,7 @@ func TestMain(m *testing.M) {
 	fileCommands := fileapp.NewCommandFacade(fileStore, fileReaders, readyMediaAssetReader{})
 	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
 	fileStreamRelay = fileapp.NewOutboxRelay(
-		fileStore, fileStore, messaging.NewCircleFileStreamPublisher(rdb), "circle-file-stream",
+		fileStore, fileStore, messaging.NewCircleFileStreamPublisher(circleMessageTransport), "circle-file-stream",
 	)
 	placementCommands := placementapp.NewCommandFacade(placementStore, placementports.PolicyReaders{
 		Circles: placementReaders, Groups: placementReaders,
@@ -259,7 +274,7 @@ func cleanCollections(t *testing.T) {
 		"circle_membership_projection_inbox",
 		"circle_group_memberships", "circle_group_command_receipts", "circle_group_outbox",
 		"circle_group_outbox_sequences", "circle_group_projection_checkpoints",
-		"circle_group_membership_command_receipts", "circle_group_membership_outbox",
+		"circle_group_membership_capacity_counters", "circle_group_membership_command_receipts", "circle_group_membership_outbox",
 		"circle_group_membership_outbox_sequences", "circle_group_membership_projection_checkpoints",
 		"circle_behavior_facts", "circle_behavior_fact_outbox",
 		"circle_behavior_fact_outbox_sequences", "circle_behavior_fact_projection_checkpoints",

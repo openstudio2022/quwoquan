@@ -71,6 +71,7 @@ gwt_acceptance:
       - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/discovery_projector__local_contract_test.go
       - file: quwoquan_service/services/content-service/internal/application/content/outbound_share_fact/command/share_count_projector__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_reaction_contract__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/behavior_projection_idempotency__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/learning_event_dedupe__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/comment_persistence_migration_contract__api_integration_test.go
@@ -111,7 +112,7 @@ gwt_acceptance:
     - 2026-07-20 N0-N3 商用三期证据回填：生产 CascadeScorer 与实际 fallback 路径、
       持久行为 relay、服务端权威信号、AB 周期准入、新能力指标、Redis pipeline、
       最终下发 served 记账、PIT 训练过滤及 CandidateInput codegen 同构均补 recorded；
-      viewCount/commentCount/shareCount 通过真实 Mongo API integration 验证保鲜。
+      viewCount/likeCount/commentCount/shareCount 通过真实 Mongo API integration 验证保鲜。
     - bench_test.go 为性能基准（非验收证据），不入 recorded。
 execution:
   local_gate:

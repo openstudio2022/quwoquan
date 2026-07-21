@@ -1,5 +1,5 @@
-import 'package:livekit_client/livekit_client.dart' show VideoTrack;
 import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 
 const int callParticipantSummaryLimit = 6;
@@ -11,8 +11,8 @@ int callParticipantOverflowCount(int participantCount) =>
 
 /// UI-oriented view model wrapping CallParticipantDto with derived properties.
 ///
-/// [videoTrack] 与 [screenShareTrack] 分别承载 LiveKit camera 与
-/// screen-share-video 订阅轨道。轨道按 identity 参与相等性，避免轨道替换后
+/// [videoTrack] 与 [screenShareTrack] 分别承载平台 RTC 的 camera 与
+/// screen-share 订阅轨道。轨道按 identity 参与相等性，避免轨道替换后
 /// Riverpod 误判状态未变化；hashCode 只使用稳定展示事实，允许非相等对象同 hash。
 /// [isLocal] 标记本地参与者，供画面镜像与装饰使用。
 class CallParticipant {
@@ -27,8 +27,8 @@ class CallParticipant {
   final double audioLevel;
   final DateTime? joinedAt;
   final DateTime? leftAt;
-  final VideoTrack? videoTrack;
-  final VideoTrack? screenShareTrack;
+  final RtcVideoTrack? videoTrack;
+  final RtcVideoTrack? screenShareTrack;
   final bool isLocal;
 
   /// 信任关系（known=可信；possiblyUnknown=提示注意隐私）。
@@ -96,9 +96,9 @@ class CallParticipant {
     double? audioLevel,
     DateTime? joinedAt,
     DateTime? leftAt,
-    VideoTrack? videoTrack,
+    RtcVideoTrack? videoTrack,
     bool clearVideoTrack = false,
-    VideoTrack? screenShareTrack,
+    RtcVideoTrack? screenShareTrack,
     bool clearScreenShareTrack = false,
     bool? isLocal,
     TrustRelation? trustRelation,

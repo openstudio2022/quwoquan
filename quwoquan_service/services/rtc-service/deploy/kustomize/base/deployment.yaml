@@ -50,21 +50,21 @@ spec:
                 secretKeyRef:
                   name: rtc-service-secrets
                   key: REDIS_ADDR
-            - name: LIVEKIT_URL
+            - name: RTC_MEDIA_CONNECTION_URL
               valueFrom:
                 secretKeyRef:
                   name: rtc-service-secrets
-                  key: LIVEKIT_URL
-            - name: LIVEKIT_API_KEY
+                  key: RTC_MEDIA_CONNECTION_URL
+            - name: RTC_MEDIA_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: rtc-service-secrets
-                  key: LIVEKIT_API_KEY
-            - name: LIVEKIT_API_SECRET
+                  key: RTC_MEDIA_API_KEY
+            - name: RTC_MEDIA_API_SECRET
               valueFrom:
                 secretKeyRef:
                   name: rtc-service-secrets
-                  key: LIVEKIT_API_SECRET
+                  key: RTC_MEDIA_API_SECRET
           readinessProbe:
             httpGet:
               path: /healthz

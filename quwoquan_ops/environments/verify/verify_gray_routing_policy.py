@@ -2,10 +2,11 @@
 """灰度路由策略门禁。
 
 校验 quwoquan_ops/environments/gray_routing_policy.yaml：
-- schema 完整（enabled/grayUpstream/dimensions 四维列表）；
+- schema 完整（enabled/grayUpstream/stageDimensions 四维列表）；
 - carriers 只允许四大运营商枚举；provinces 必须是 GB/T 2260 六位省级码；
 - appVersions 必须是 semver 形式；userIds 非空字符串；
-- enabled=true 时至少一个维度非空（禁止全空放行造成 100% 灰度误导）。
+- enabled=true 时 gray-initial/carry-on 均至少一个维度非空（禁止全空放行造成
+  100% 灰度误导），full 必须为空。
 """
 
 from __future__ import annotations
@@ -70,7 +71,6 @@ def main() -> int:
                     )
         return dimensions
 
-    dimensions = validate_dimensions("policy.dimensions", policy.get("dimensions"))
     stage_dimensions = policy.get("stageDimensions")
     if not isinstance(stage_dimensions, dict) or set(stage_dimensions) != {
         "gray-initial",
@@ -86,10 +86,10 @@ def main() -> int:
         )
         for stage in ("gray-initial", "carry-on", "full")
     }
-    for stage in ("gray-initial", "carry-on"):
-        if not any(validated_stages[stage].get(key) for key in dimensions):
-            failures.append(f"policy.stageDimensions.{stage} must route real traffic")
-    if any(validated_stages["full"].get(key) for key in dimensions):
+    if any(
+        validated_stages["full"].get(key)
+        for key in ("appVersions", "userIds", "provinces", "carriers")
+    ):
         failures.append("policy.stageDimensions.full must disable gray routing")
 
     canary = policy.get("syntheticCanary")
@@ -109,16 +109,15 @@ def main() -> int:
         failures.append("HTTP gray upstream cannot enable TLS insecure skip verify")
 
     if enabled is True:
-        non_empty = [
-            key
-            for key in ("appVersions", "userIds", "provinces", "carriers")
-            if isinstance(dimensions.get(key), list) and dimensions.get(key)
-        ]
-        if not non_empty:
-            failures.append(
-                "policy.enabled=true requires at least one non-empty dimension "
-                "(refuse to imply full-traffic gray routing)"
-            )
+        for stage in ("gray-initial", "carry-on"):
+            if not any(
+                validated_stages[stage].get(key)
+                for key in ("appVersions", "userIds", "provinces", "carriers")
+            ):
+                failures.append(
+                    f"policy.enabled=true requires a non-empty {stage} dimension "
+                    "(refuse to imply full-traffic gray routing)"
+                )
 
     if failures:
         print("FAIL: gray routing policy validation:")

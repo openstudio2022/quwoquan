@@ -48,7 +48,7 @@ repo verify/package
 - 本地 host 暴露端口必须来自 `quwoquan_ops/environments/local_env_port_manifest.yaml` 的 1000 端口块 + plane + 10 端口槽位模型。
 - 官方自动化入口统一为 `python3 quwoquan_ops/cli/stackctl.py`。底层脚本可保留，但只作为实现细节；不保留第二套 stackctl wrapper。
 - GitHub Actions、Cursor skill、runbook 与手动命令都必须复用同一套 `stackctl` 子命令，不得复制第二套健康检查、探针或回滚语义。
-- 环境可重建输出只能写入 `.qwq_output/env/<env>/{runs,observability,release,local}/`；
+- `.qwq_output` 环境输出只能写入 `.qwq_output/env/<env>/{runs,observability,local}/`；可部署包、渲染配置、Caddy、TLS 和 env 文件统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`；
   本地 target 状态只能写入 `local/<target>/{process,cache}/`，其中 prod 发布状态固定为
   `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/`。静态配置、网络拓扑和
   证书生成规则仍由领域 deploy 与 Ops environments 维护，不进入 output。

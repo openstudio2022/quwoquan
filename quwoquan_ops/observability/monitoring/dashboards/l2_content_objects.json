@@ -158,7 +158,92 @@
         "gridPos": { "h": 6, "w": 24, "x": 0, "y": 48 },
         "options": {
           "mode": "markdown",
-          "content": "页面黄金指标来自 SLS `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
+          "content": "页面黄金指标来自 SLS `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`content_report` 覆盖首页、沉浸浏览器与用户主页三条真实举报入口，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-content-report-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
+        }
+      },
+      {
+        "title": "Filter catalog active reader",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
+        "targets": [
+          {
+            "expr": "sum(rate(content_filter_catalog_get_total[5m])) by (outcome)",
+            "legendFormat": "get {{ outcome }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=\"get\"}[5m])) by (le))",
+            "legendFormat": "get P95"
+          }
+        ]
+      },
+      {
+        "title": "Filter catalog release control plane",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
+        "targets": [
+          {
+            "expr": "sum(rate({__name__=~\"content_filter_catalog_(stage|activate|rollback)_total\"}[5m])) by (__name__, outcome, replayed)",
+            "legendFormat": "{{ __name__ }} / {{ outcome }} / replayed={{ replayed }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=~\"stage|activate|rollback\"}[5m])) by (le, operation, outcome))",
+            "legendFormat": "{{ operation }} P95 / {{ outcome }}"
+          }
+        ]
+      },
+      {
+        "title": "Media processing SLI",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 62 },
+        "targets": [
+          {
+            "expr": "sum(rate(content_media_processing_jobs_total[5m])) by (media_type, input_size_class, result)",
+            "legendFormat": "{{ media_type }} / {{ input_size_class }} / {{ result }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(content_media_processing_complete_to_ready_seconds_bucket[5m])) by (le, media_type, input_size_class))",
+            "legendFormat": "complete→ready P95 {{ media_type }} / {{ input_size_class }}"
+          },
+          {
+            "expr": "content_media_processing_outbox_oldest_event_age_seconds",
+            "legendFormat": "outbox oldest event age"
+          },
+          {
+            "expr": "max(content_media_processing_dlq_event_age_seconds) by (reason)",
+            "legendFormat": "DLQ admission age {{ reason }}"
+          }
+        ]
+      },
+      {
+        "title": "Publication / preview-track SLI",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 62 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_content_publication_events_total[5m])) by (publication_stage, content_type, result, background_retry_terminal)",
+            "legendFormat": "{{ publication_stage }} / {{ content_type }} / {{ result }} / {{ background_retry_terminal }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_content_publish_to_visible_seconds_bucket[5m])) by (le, content_type, result))",
+            "legendFormat": "publish→visible P95 {{ content_type }} / {{ result }}"
+          },
+          {
+            "expr": "sum(rate(ops_video_preview_track_loads_total[5m])) by (result)",
+            "legendFormat": "preview track {{ result }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_video_preview_track_load_duration_seconds_bucket[5m])) by (le, result))",
+            "legendFormat": "preview track P95 {{ result }}"
+          }
+        ]
+      },
+      {
+        "title": "Publication funnel SLS authority",
+        "type": "text",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 70 },
+        "options": {
+          "mode": "markdown",
+          "content": "权威小时漏斗为 SLS `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
         }
       }
     ]

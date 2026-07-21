@@ -36,6 +36,28 @@ def _read_object(path: Path, *, label: str, issues: list[str]) -> dict:
     return payload
 
 
+def _source_digests(
+    document: dict,
+    *,
+    path: Path,
+    issues: list[str],
+) -> tuple[SourceDigest, ...] | None:
+    raw_value = document.get("sourceDigests")
+    if not isinstance(raw_value, list):
+        issues.append(f"{path}: sourceDigests must be an array")
+        return None
+    try:
+        source_digests = tuple(SourceDigest.from_document(item) for item in raw_value)
+    except SourceDigestError as exc:
+        issues.append(f"{path}: {exc}")
+        return None
+    values = tuple(item.digest for item in source_digests)
+    if not values or values != tuple(sorted(set(values))):
+        issues.append(f"{path}: sourceDigests must be sorted and contain no duplicates")
+        return None
+    return source_digests
+
+
 def release_lifecycle_issues(release_id: str, *, release_root: Path | None = None) -> list[str]:
     root = (release_root or RELEASE_ROOT) / release_id
     required = (
@@ -99,13 +121,22 @@ def release_lifecycle_issues(release_id: str, *, release_root: Path | None = Non
         issues.append(f"{aggregate_file}: executionIds drift from release header")
     if typed_attestation.canonical_merkle != header.get("canonicalMerkle"):
         issues.append(f"{aggregate_file}: canonicalMerkle drift from release header")
-    try:
-        header_source_digest = SourceDigest.from_document(header.get("sourceDigest"))
-    except SourceDigestError as exc:
-        issues.append(f"{release_file}: {exc}")
-    else:
-        if aggregate.get("sourceDigest") != header_source_digest.to_document():
-            issues.append(f"{aggregate_file}: sourceDigest drift from release header")
+    header_source_digests = _source_digests(
+        header,
+        path=release_file,
+        issues=issues,
+    )
+    aggregate_source_digests = _source_digests(
+        aggregate,
+        path=aggregate_file,
+        issues=issues,
+    )
+    if (
+        header_source_digests is not None
+        and aggregate_source_digests is not None
+        and header_source_digests != aggregate_source_digests
+    ):
+        issues.append(f"{aggregate_file}: sourceDigests drift from release header")
     if typed_attestation.entity_count != len(entity_refs):
         issues.append(f"{aggregate_file}: entityCount drift from desired state")
     if typed_attestation.post_count != len(post_refs):

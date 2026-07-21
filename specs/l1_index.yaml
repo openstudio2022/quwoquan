@@ -191,16 +191,21 @@ domain_services:
       - quwoquan_app/lib/app
     metadata_domains:
       - quwoquan_service/contracts/metadata/_shared
+      - quwoquan_service/contracts/metadata/integration
     service_modules:
       - quwoquan_service/runtime
       - quwoquan_service/contracts
+      - quwoquan_service/services/integration-service
       - quwoquan_ops
     deploy_processes:
       - all
+      - integration-service
     test_roots:
       - quwoquan_app/test/core
       - quwoquan_app/test/cloud
       - quwoquan_service/runtime
+      - quwoquan_service/services/integration-service/tests
+      - quwoquan_ops/tests
 
   - category: nonfunctional
     title: 平台运维治理

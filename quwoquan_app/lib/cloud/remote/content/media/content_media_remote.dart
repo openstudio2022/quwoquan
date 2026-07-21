@@ -21,33 +21,36 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionInitMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.initMediaUpload,
-      command: true,
+      context,
     ),
   );
 
   @override
   Future<ContentMediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionCompleteMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.completeMediaUpload,
-      command: true,
+      context,
     ),
   );
 
   @override
   Future<ContentMediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionAbortMediaUpload(
     command,
-    context: invocationContext(
+    context: _uploadCommandContext(
       ContentRequestPageIds.abortMediaUpload,
-      command: true,
+      context,
     ),
   );
 
@@ -106,4 +109,24 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
     ),
   );
 
+  CloudOperationInvocationContext _uploadCommandContext(
+    String clientPageId,
+    ContentMediaUploadCommandContext upload,
+  ) {
+    final base = invocationContext(clientPageId, command: true);
+    return CloudOperationInvocationContext(
+      surfaceId: base.surfaceId,
+      clientPageId: base.clientPageId,
+      routeId: base.routeId,
+      referralSource: base.referralSource,
+      feedRequestId: base.feedRequestId,
+      shareId: base.shareId,
+      modelId: base.modelId,
+      experimentBucket: base.experimentBucket,
+      actor: base.actor,
+      idempotencyKey: upload.idempotencyKey,
+      deadlineAt: base.deadlineAt,
+      cancellation: upload.cancellation,
+    );
+  }
 }

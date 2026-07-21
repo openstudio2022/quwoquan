@@ -5,10 +5,6 @@ service:
 
 integration:
   location:
-    provider: "catalog"
-    primary_provider: "catalog"
-    backup_provider: "baidu"
-    timeout_ms: 1200
     nearby_default_radius_meters: 3000
     nearby_default_limit: 20
     search_default_limit: 20

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -309,8 +310,13 @@ def test_task_facade_exposes_only_durable_commands():
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    command_rows = [line.strip().split(maxsplit=1)[0] for line in result.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "execute"]
+    choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
+    assert choices is not None
+    command_rows = choices.group(1).split(",")
+    assert command_rows == [
+        "preflight",
+        "execute",
+    ]
 
 
 def test_execute_cli_has_no_selection_or_runtime_overrides():

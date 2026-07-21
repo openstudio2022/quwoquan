@@ -2,6 +2,8 @@ package persistence
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -58,18 +60,95 @@ func (s *MongoBehaviorEventStore) ensureIndexes() {
 		{
 			Keys: bson.D{{Key: "feedRequestId", Value: 1}, {Key: "channelId", Value: 1}, {Key: "recallPath", Value: 1}, {Key: "createdAt", Value: -1}},
 		},
-		{
-			Keys: bson.D{{Key: "userId", Value: 1}, {Key: "clientEventId", Value: 1}},
-			Options: options.Index().
-				SetName("uq_behavior_events_user_client_event").
-				SetUnique(true),
-		},
 	}
 
 	for _, idx := range indexes {
 		if _, err := s.coll.Indexes().CreateOne(ctx, idx); err != nil {
-			s.logger.Warn("behavior_event_store: index creation failed", slog.String("error", err.Error()))
+			s.warnIndexFailure(err)
 		}
+	}
+	if err := s.ensureClientEventIdIndex(ctx); err != nil {
+		s.warnIndexFailure(err)
+	}
+}
+
+func (s *MongoBehaviorEventStore) ensureClientEventIdIndex(ctx context.Context) error {
+	const indexName = "uq_behavior_events_user_client_event"
+
+	cursor, err := s.coll.Indexes().List(ctx)
+	if err != nil {
+		return fmt.Errorf("list behavior event indexes: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var existing []bson.M
+	if err := cursor.All(ctx, &existing); err != nil {
+		return fmt.Errorf("decode behavior event indexes: %w", err)
+	}
+	for _, index := range existing {
+		if index["name"] != indexName {
+			continue
+		}
+		if isClientEventIdPartialUniqueIndex(index) {
+			return nil
+		}
+		if err := s.coll.Indexes().DropOne(ctx, indexName); err != nil {
+			var commandErr mongo.CommandError
+			if !errors.As(err, &commandErr) || commandErr.Code != 27 {
+				return fmt.Errorf("drop legacy behavior event idempotency index: %w", err)
+			}
+		}
+		break
+	}
+
+	_, err = s.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "userId", Value: 1}, {Key: "clientEventId", Value: 1}},
+		Options: options.Index().
+			SetName(indexName).
+			SetUnique(true).
+			SetPartialFilterExpression(bson.M{
+				"clientEventId": bson.M{"$type": "string", "$gt": ""},
+			}),
+	})
+	if err != nil {
+		return fmt.Errorf("create behavior event idempotency index: %w", err)
+	}
+	return nil
+}
+
+func isClientEventIdPartialUniqueIndex(index bson.M) bool {
+	if unique, ok := index["unique"].(bool); !ok || !unique {
+		return false
+	}
+	partial, ok := bsonDocumentMap(index["partialFilterExpression"])
+	if !ok {
+		return false
+	}
+	clientEventID, ok := bsonDocumentMap(partial["clientEventId"])
+	if !ok {
+		return false
+	}
+	return clientEventID["$type"] == "string" && clientEventID["$gt"] == ""
+}
+
+func bsonDocumentMap(value any) (bson.M, bool) {
+	switch document := value.(type) {
+	case bson.M:
+		return document, true
+	case bson.D:
+		result := make(bson.M, len(document))
+		for _, element := range document {
+			result[element.Key] = element.Value
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+func (s *MongoBehaviorEventStore) warnIndexFailure(err error) {
+	if s.logger != nil {
+		s.logger.Warn("behavior_event_store: index creation failed", slog.String("error", err.Error()))
 	}
 }
 

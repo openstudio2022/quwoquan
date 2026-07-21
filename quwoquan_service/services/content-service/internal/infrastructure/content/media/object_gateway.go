@@ -106,6 +106,22 @@ func (g *ObjectGateway) CompleteUpload(ctx context.Context, params mediaapp.Comp
 	return mediaapp.CompletedUploadObject{ObjectKey: finalObjectKey, SHA256: actualDigest, DeliveryURL: deliveryURL}, nil
 }
 
+// DeleteTemporaryUpload 只允许删除短期 uploads/ 命名空间；canonical CAS 对象与公开交付
+// slice 不属于该操作的权限范围。
+func (g *ObjectGateway) DeleteTemporaryUpload(
+	ctx context.Context,
+	objectKey string,
+) error {
+	key := strings.Trim(strings.TrimSpace(objectKey), "/")
+	if !strings.HasPrefix(key, "uploads/") {
+		return errors.New("temporary media cleanup requires an uploads/ object key")
+	}
+	if err := g.client.DeleteObject(ctx, g.config.Bucket, key); err != nil {
+		return fmt.Errorf("delete temporary media upload: %w", err)
+	}
+	return nil
+}
+
 // PublishPublicSlice copies a private CAS object to its canonical public
 // delivery slice. The source remains authoritative internal storage; this
 // method deliberately does not turn the public path into a CAS identity.

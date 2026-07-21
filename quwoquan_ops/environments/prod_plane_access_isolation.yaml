@@ -151,6 +151,35 @@ planes:
         files:
           apnsKey: integration/apns-auth-key.p8
           fcmServiceAccount: integration/fcm-service-account.json
+    # 观测栈与 service plane 共享 rootless 网络，镜像、通知 URL、数据面 DSN
+    # 均只从受限账号的 credentialsPath 读取；渲染工件不携带密钥或环境值。
+    rootlessObservabilityRuntime:
+      composeDirectory: observability
+      composeFile: docker-compose.prod.yml
+      systemdUnitFile: quwoquan-observability.service
+      runtimeEnvFile: runtime.env
+      serviceNetworkName: quwoquan-prod-service
+      credentialsEnvFile: observability/monitoring.env
+      requiredEnvironment:
+        - ALERTMANAGER_WEBHOOK_SECRET_FILE
+        - ALERT_INGEST_TOKEN_SECRET_FILE
+        - PODMAN_SOCKET_PATH
+        - MONGODB_EXPORTER_URI
+        - POSTGRES_EXPORTER_DSN
+        - REDIS_EXPORTER_ADDR
+        - OTEL_TRACE_BACKEND_ENDPOINT
+        - OBSERVABILITY_PROMETHEUS_IMAGE
+        - OBSERVABILITY_ALERTMANAGER_IMAGE
+        - OBSERVABILITY_OTEL_COLLECTOR_IMAGE
+        - OBSERVABILITY_NODE_EXPORTER_IMAGE
+        - OBSERVABILITY_PODMAN_EXPORTER_IMAGE
+        - OBSERVABILITY_MONGODB_EXPORTER_IMAGE
+        - OBSERVABILITY_POSTGRES_EXPORTER_IMAGE
+        - OBSERVABILITY_REDIS_EXPORTER_IMAGE
+      healthURLs:
+        - http://127.0.0.1:9090/-/ready
+        - http://127.0.0.1:9093/-/ready
+        - http://127.0.0.1:13133/
     rootlessRuntimeLayout:
       composeFile: docker-compose.prod-hosted.yaml
       envFile: stack.env

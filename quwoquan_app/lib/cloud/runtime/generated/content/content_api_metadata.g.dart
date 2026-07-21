@@ -53,6 +53,7 @@ class ContentApiMetadata {
     'GetMediaAsset': '/content/media/{mediaId}',
     'GetMediaAssetDeliveryReference': '/internal/content/media/{mediaId}:delivery-reference',
     'GetMediaAssetReference': '/internal/content/media/{mediaId}:reference',
+    'GetMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs/{runId}',
     'GetMediaUploadSession': '/content/media/uploads/{sessionId}',
     'GetMyFootprint': '/content/footprint',
     'GetMyIntersectionSummary': '/content/intersections/summary',
@@ -77,6 +78,7 @@ class ContentApiMetadata {
     'ListUserPosts': '/content/sub-accounts/{subAccountId}/posts',
     'MarkIntersectionsVisited': '/content/intersections/visit',
     'OpenPostModerationCase': '/internal/content/posts/{postId}:open-moderation-case',
+    'PauseMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs/{runId}:pause',
     'PinComment': '/content/posts/{postId}/comments/{commentId}/pin',
     'PromotePostToWork': '/content/posts/{postId}:promoteToWork',
     'ReactToComment': '/content/comments/{commentId}/reaction',
@@ -85,11 +87,14 @@ class ContentApiMetadata {
     'RequestOriginalImageAccess': '/content/media/{mediaId}/original:access',
     'ResolveReport': '/content/reports/{reportId}',
     'RestoreComment': '/internal/content/comments/{commentId}:restore',
+    'ResumeMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs/{runId}:resume',
     'ReviewPostModerationCase': '/internal/content/posts/{postId}:review-moderation',
     'RollbackFilterCatalogRelease': '/internal/content/filter-catalog-releases/{releaseId}:rollback',
+    'RollbackMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs/{runId}:rollback',
     'SelectAutoVideoCover': '/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/content/media/{mediaId}/cover:manual',
     'StageFilterCatalogRelease': '/internal/content/filter-catalog-releases',
+    'StartMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs',
     'SubmitPostPublication': '/content/posts:publish',
     'SupersedePostModerationCase': '/internal/content/posts/{postId}:supersede-moderation',
     'UnlikePost': '/content/posts/{postId}/like',
@@ -125,6 +130,7 @@ class ContentApiMetadata {
     'GetMediaAsset': 'GET',
     'GetMediaAssetDeliveryReference': 'GET',
     'GetMediaAssetReference': 'GET',
+    'GetMediaImageReprocessRun': 'GET',
     'GetMediaUploadSession': 'GET',
     'GetMyFootprint': 'GET',
     'GetMyIntersectionSummary': 'GET',
@@ -149,6 +155,7 @@ class ContentApiMetadata {
     'ListUserPosts': 'GET',
     'MarkIntersectionsVisited': 'POST',
     'OpenPostModerationCase': 'POST',
+    'PauseMediaImageReprocessRun': 'POST',
     'PinComment': 'POST',
     'PromotePostToWork': 'POST',
     'ReactToComment': 'POST',
@@ -157,11 +164,14 @@ class ContentApiMetadata {
     'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
     'RestoreComment': 'POST',
+    'ResumeMediaImageReprocessRun': 'POST',
     'ReviewPostModerationCase': 'POST',
     'RollbackFilterCatalogRelease': 'POST',
+    'RollbackMediaImageReprocessRun': 'POST',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
     'StageFilterCatalogRelease': 'POST',
+    'StartMediaImageReprocessRun': 'POST',
     'SubmitPostPublication': 'POST',
     'SupersedePostModerationCase': 'POST',
     'UnlikePost': 'DELETE',
@@ -198,6 +208,7 @@ class ContentApiMetadata {
     'GetMediaAsset': 'optional',
     'GetMediaAssetDeliveryReference': 'required',
     'GetMediaAssetReference': 'required',
+    'GetMediaImageReprocessRun': 'required',
     'GetMediaUploadSession': 'required',
     'GetMyFootprint': 'required',
     'GetMyIntersectionSummary': 'required',
@@ -222,6 +233,7 @@ class ContentApiMetadata {
     'ListUserPosts': 'optional',
     'MarkIntersectionsVisited': 'required',
     'OpenPostModerationCase': 'required',
+    'PauseMediaImageReprocessRun': 'required',
     'PinComment': 'required',
     'PromotePostToWork': 'required',
     'ReactToComment': 'required',
@@ -230,11 +242,14 @@ class ContentApiMetadata {
     'RequestOriginalImageAccess': 'required',
     'ResolveReport': 'required',
     'RestoreComment': 'required',
+    'ResumeMediaImageReprocessRun': 'required',
     'ReviewPostModerationCase': 'required',
     'RollbackFilterCatalogRelease': 'required',
+    'RollbackMediaImageReprocessRun': 'required',
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
     'StageFilterCatalogRelease': 'required',
+    'StartMediaImageReprocessRun': 'required',
     'SubmitPostPublication': 'required',
     'SupersedePostModerationCase': 'required',
     'UnlikePost': 'optional',
@@ -271,6 +286,7 @@ class ContentApiMetadata {
     'GetAuthorImpact': 'object',
     'GetCurrentPostModerationCase': 'object',
     'GetEntityWishlistState': 'object',
+    'GetMediaImageReprocessRun': 'object',
     'GetMyFootprint': 'page',
     'GetMyIntersectionSummary': 'object',
     'GetObjectIntersections': 'page',
@@ -317,6 +333,7 @@ class ContentApiMetadata {
   static const String getMediaAssetOperation = 'GetMediaAsset';
   static const String getMediaAssetDeliveryReferenceOperation = 'GetMediaAssetDeliveryReference';
   static const String getMediaAssetReferenceOperation = 'GetMediaAssetReference';
+  static const String getMediaImageReprocessRunOperation = 'GetMediaImageReprocessRun';
   static const String getMediaUploadSessionOperation = 'GetMediaUploadSession';
   static const String getMyFootprintOperation = 'GetMyFootprint';
   static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
@@ -341,6 +358,7 @@ class ContentApiMetadata {
   static const String listUserPostsOperation = 'ListUserPosts';
   static const String markIntersectionsVisitedOperation = 'MarkIntersectionsVisited';
   static const String openPostModerationCaseOperation = 'OpenPostModerationCase';
+  static const String pauseMediaImageReprocessRunOperation = 'PauseMediaImageReprocessRun';
   static const String pinCommentOperation = 'PinComment';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
   static const String reactToCommentOperation = 'ReactToComment';
@@ -349,11 +367,14 @@ class ContentApiMetadata {
   static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
   static const String restoreCommentOperation = 'RestoreComment';
+  static const String resumeMediaImageReprocessRunOperation = 'ResumeMediaImageReprocessRun';
   static const String reviewPostModerationCaseOperation = 'ReviewPostModerationCase';
   static const String rollbackFilterCatalogReleaseOperation = 'RollbackFilterCatalogRelease';
+  static const String rollbackMediaImageReprocessRunOperation = 'RollbackMediaImageReprocessRun';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String stageFilterCatalogReleaseOperation = 'StageFilterCatalogRelease';
+  static const String startMediaImageReprocessRunOperation = 'StartMediaImageReprocessRun';
   static const String submitPostPublicationOperation = 'SubmitPostPublication';
   static const String supersedePostModerationCaseOperation = 'SupersedePostModerationCase';
   static const String unlikePostOperation = 'UnlikePost';
@@ -483,6 +504,12 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String getMediaImageReprocessRunPathTemplate = '/internal/content/media-image-reprocess-runs/{runId}';
+  static String getMediaImageReprocessRunPath({required String runId}) {
+    return _fillPath(getMediaImageReprocessRunPathTemplate, <String, String>{
+      'runId': runId,
+    });
+  }
   static const String getMediaUploadSessionPathTemplate = '/content/media/uploads/{sessionId}';
   static String getMediaUploadSessionPath({required String sessionId}) {
     return _fillPath(getMediaUploadSessionPathTemplate, <String, String>{
@@ -578,6 +605,12 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
+  static const String pauseMediaImageReprocessRunPathTemplate = '/internal/content/media-image-reprocess-runs/{runId}:pause';
+  static String pauseMediaImageReprocessRunPath({required String runId}) {
+    return _fillPath(pauseMediaImageReprocessRunPathTemplate, <String, String>{
+      'runId': runId,
+    });
+  }
   static const String pinCommentPathTemplate = '/content/posts/{postId}/comments/{commentId}/pin';
   static String pinCommentPath({required String postId, required String commentId}) {
     return _fillPath(pinCommentPathTemplate, <String, String>{
@@ -622,6 +655,12 @@ class ContentApiMetadata {
       'commentId': commentId,
     });
   }
+  static const String resumeMediaImageReprocessRunPathTemplate = '/internal/content/media-image-reprocess-runs/{runId}:resume';
+  static String resumeMediaImageReprocessRunPath({required String runId}) {
+    return _fillPath(resumeMediaImageReprocessRunPathTemplate, <String, String>{
+      'runId': runId,
+    });
+  }
   static const String reviewPostModerationCasePathTemplate = '/internal/content/posts/{postId}:review-moderation';
   static String reviewPostModerationCasePath({required String postId}) {
     return _fillPath(reviewPostModerationCasePathTemplate, <String, String>{
@@ -632,6 +671,12 @@ class ContentApiMetadata {
   static String rollbackFilterCatalogReleasePath({required String releaseId}) {
     return _fillPath(rollbackFilterCatalogReleasePathTemplate, <String, String>{
       'releaseId': releaseId,
+    });
+  }
+  static const String rollbackMediaImageReprocessRunPathTemplate = '/internal/content/media-image-reprocess-runs/{runId}:rollback';
+  static String rollbackMediaImageReprocessRunPath({required String runId}) {
+    return _fillPath(rollbackMediaImageReprocessRunPathTemplate, <String, String>{
+      'runId': runId,
     });
   }
   static const String selectAutoVideoCoverPathTemplate = '/content/media/{mediaId}/cover:auto';
@@ -647,6 +692,7 @@ class ContentApiMetadata {
     });
   }
   static const String stageFilterCatalogReleasePath = '/internal/content/filter-catalog-releases';
+  static const String startMediaImageReprocessRunPath = '/internal/content/media-image-reprocess-runs';
   static const String submitPostPublicationPath = '/content/posts:publish';
   static const String supersedePostModerationCasePathTemplate = '/internal/content/posts/{postId}:supersede-moderation';
   static String supersedePostModerationCasePath({required String postId}) {

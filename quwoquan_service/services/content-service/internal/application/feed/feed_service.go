@@ -309,6 +309,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
 			UserID:                  req.UserID,
+			PersonaID:               req.ViewerPersonaID,
 			SessionID:               req.SessionID,
 			FeedType:                route.FeedType,
 			Sort:                    normalizeFeedSort(req.Sort),
@@ -361,7 +362,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	for _, batch := range deliveryBatches {
 		// 每次 engine 分页调用保留自己的 scorer/modelRelease 归因；模型热切换
 		// 或单次降级时，禁止把后续页错误归因到首批结果。
-		s.engine.RecordDelivery(ctx, req.UserID, req.SessionID, batch.attribution, batch.items)
+		if err := s.engine.RecordDelivery(
+			ctx,
+			req.UserID,
+			req.SessionID,
+			batch.attribution,
+			batch.items,
+		); err != nil {
+			return nil, err
+		}
 	}
 	// 只有显式类型/身份过滤或 PostReader cursor 才使用具名查询。
 	// 普通推荐请求不允许在召回不足时偷渡到第二读主线。

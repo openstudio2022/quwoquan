@@ -8,6 +8,7 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
 	"quwoquan_service/services/notification-service/internal/application"
@@ -67,8 +68,15 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 	if err := failures.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("failure store indexes: %v", err)
 	}
+	messageTransport, err := runtimemessaging.NewRedisMessageTransport(
+		redisClient,
+		redisClient,
+	)
+	if err != nil {
+		t.Fatalf("message transport: %v", err)
+	}
 	consumer, err := streamadapter.NewInteractionNotificationConsumer(
-		redisClient, commands, failures, "api-integration-consumer", nil,
+		messageTransport, commands, failures, "api-integration-consumer", nil,
 	)
 	if err != nil {
 		t.Fatalf("consumer: %v", err)
@@ -156,11 +164,11 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 		t.Fatalf("xadd greeting: %v", err)
 	}
 	reportPayload, err := json.Marshal(map[string]any{
-		"reportId":   "report-api-1",
-		"reporterId": "recipient-api-1",
-		"targetType": "post",
-		"targetId":   "post-api-1",
-		"resolution": "delete_content",
+		"reportId":          "report-api-1",
+		"reporterAccountId": "recipient-api-1",
+		"targetType":        "post",
+		"targetId":          "post-api-1",
+		"resolution":        "delete_content",
 	})
 	if err != nil {
 		t.Fatalf("marshal report payload: %v", err)

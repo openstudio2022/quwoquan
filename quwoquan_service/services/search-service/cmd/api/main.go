@@ -99,6 +99,7 @@ func main() {
 	applyRedisEnvOverrides(&cfg)
 
 	ctx := context.Background()
+	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
 	if err != nil {
@@ -132,12 +133,24 @@ func main() {
 
 	logger := slog.Default()
 	metricsRecorder := searchmetrics.NewRecorder()
-	redisRouter := buildRedisRouter(cfg)
+	redisRouter, messageTransportSceneModes := buildRedisRouter(cfg)
 	defer redisRouter.Close()
+	messageTransport, err := requireSearchAPIMessageTransport(
+		ctx,
+		appEnv,
+		redisRouter,
+		messageTransportSceneModes,
+	)
+	if err != nil {
+		log.Fatalf("%s message transport construction failed: %v", serviceName, err)
+	}
 	if err := redisRouter.PingAll(ctx); err != nil {
 		log.Printf("%s WARN: redis ping: %v", serviceName, err)
 	}
-	searchSignalPublisher := searchsignals.NewStreamPublisher(redisRouter.Scene("general"), logger)
+	searchSignalPublisher, err := searchsignals.NewStreamPublisher(messageTransport, logger)
+	if err != nil {
+		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
+	}
 
 	// Persistence + heat read model are optional: without Mongo the service still
 	// serves searches (base ranking, no query log, no related terms). With Mongo
@@ -195,7 +208,7 @@ func main() {
 			)
 		}
 		accountClosureConsumer, err = mqadapter.NewUserAccountClosedConsumer(
-			redisRouter.Scene("general"),
+			messageTransport,
 			accountClosureProjection,
 			accountClosureProjection,
 			serviceName+"-"+hostname(),
@@ -388,7 +401,7 @@ func loadRuntimeConfig() (config, error) {
 			return config{}, err
 		}
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", name, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", name, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, err
 			}
@@ -537,11 +550,14 @@ func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
 	}
 }
 
-func buildRedisRouter(cfg config) *rtredis.Router {
+func buildRedisRouter(cfg config) (*rtredis.Router, map[string]string) {
 	base := rtredis.DefaultRouterConfig()
-	base.Scenes["general"] = toSceneConfig(cfg.Redis.General)
+	generalScene := toSceneConfig(cfg.Redis.General)
+	base.Scenes["general"] = generalScene
 	base.Scenes["rec"] = toSceneConfig(cfg.Redis.Rec)
-	return platformredis.MustNewRouter(base)
+	return platformredis.MustNewRouter(base), map[string]string{
+		"general": generalScene.Mode,
+	}
 }
 
 func toSceneConfig(cfg redisSceneCfg) rtredis.SceneConfig {

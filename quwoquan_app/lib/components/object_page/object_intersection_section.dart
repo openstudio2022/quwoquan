@@ -339,6 +339,8 @@ class ObjectIntersectionSection extends ConsumerWidget {
           hint,
           sourceRef: reason.source,
           attribution: _attributionFor(reason),
+          evidenceReason: reason,
+          contextObjectTarget: _contextObjectTarget,
         )
         .didOpen;
   }

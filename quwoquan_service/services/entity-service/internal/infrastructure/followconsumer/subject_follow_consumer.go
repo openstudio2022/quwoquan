@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 )
 
 const (
@@ -24,25 +24,29 @@ type HomepageFollowProjection interface {
 }
 
 type Consumer struct {
-	client     rtredis.Client
+	transport  runtimemessaging.DurableDeliveryTransport
 	projection HomepageFollowProjection
 	consumerID string
 }
 
-func NewConsumer(client rtredis.Client, projection HomepageFollowProjection, consumerID string) *Consumer {
-	if client == nil || projection == nil {
-		panic("subject follow consumer requires redis client and projection")
+func NewConsumer(
+	transport runtimemessaging.DurableDeliveryTransport,
+	projection HomepageFollowProjection,
+	consumerID string,
+) *Consumer {
+	if transport == nil || projection == nil {
+		panic("subject follow consumer requires transport and projection")
 	}
 	if strings.TrimSpace(consumerID) == "" {
 		consumerID = "entity-service"
 	}
-	return &Consumer{client: client, projection: projection, consumerID: consumerID}
+	return &Consumer{transport: transport, projection: projection, consumerID: consumerID}
 }
 
 // Run 以 consumer group 语义消费；Ack 前投影必须成功，故障时消息保持
 // pending 由 XAutoClaim 重新认领（至少一次 + 投影幂等）。
 func (c *Consumer) Run(ctx context.Context) {
-	if err := c.client.XGroupCreateMkStream(ctx, subjectFollowStream, consumerGroup, "0"); err != nil {
+	if err := c.transport.EnsureDurableConsumerGroup(ctx, subjectFollowStream, consumerGroup, "0"); err != nil {
 		slog.WarnContext(ctx, "subject follow consumer group create", "err", err)
 	}
 	for ctx.Err() == nil {
@@ -59,7 +63,7 @@ func (c *Consumer) Run(ctx context.Context) {
 
 func (c *Consumer) drainOnce(ctx context.Context) error {
 	// 先补偿认领超时 pending（其它实例崩溃遗留），再读新消息。
-	claimed, _, err := c.client.XAutoClaim(
+	claimed, _, err := c.transport.ReclaimDurable(
 		ctx, subjectFollowStream, consumerGroup, c.consumerID, time.Minute, "0-0", 50,
 	)
 	if err == nil && len(claimed) > 0 {
@@ -67,13 +71,15 @@ func (c *Consumer) drainOnce(ctx context.Context) error {
 			return err
 		}
 	}
-	messages, err := c.client.XReadGroup(
+	messages, err := c.transport.ReadDurable(
 		ctx,
-		consumerGroup,
-		c.consumerID,
-		map[string]string{subjectFollowStream: ">"},
-		50,
-		2*time.Second,
+		runtimemessaging.StreamReadRequest{
+			Stream:   subjectFollowStream,
+			Group:    consumerGroup,
+			Consumer: c.consumerID,
+			Count:    50,
+			Block:    2 * time.Second,
+		},
 	)
 	if err != nil {
 		return err
@@ -81,22 +87,31 @@ func (c *Consumer) drainOnce(ctx context.Context) error {
 	return c.apply(ctx, messages)
 }
 
-func (c *Consumer) apply(ctx context.Context, messages []rtredis.StreamMessage) error {
+func (c *Consumer) apply(ctx context.Context, messages []runtimemessaging.StreamDelivery) error {
 	for _, message := range messages {
-		if strings.TrimSpace(message.Values["subjectType"]) == "homepage" {
-			following := strings.TrimSpace(message.Values["state"]) == "following"
+		values := durableFieldValues(message.Fields)
+		if strings.TrimSpace(values["subjectType"]) == "homepage" {
+			following := strings.TrimSpace(values["state"]) == "following"
 			if err := c.projection.ApplySubjectFollowState(
 				ctx,
-				message.Values["subjectId"],
-				message.Values["personaId"],
+				values["subjectId"],
+				values["personaId"],
 				following,
 			); err != nil {
 				return err
 			}
 		}
-		if err := c.client.XAck(ctx, subjectFollowStream, consumerGroup, message.ID); err != nil {
+		if err := c.transport.AckDurable(ctx, subjectFollowStream, consumerGroup, message.ID); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func durableFieldValues(fields []runtimemessaging.DurableField) map[string]string {
+	values := make(map[string]string, len(fields))
+	for _, field := range fields {
+		values[strings.TrimSpace(field.Name)] = field.Value
+	}
+	return values
 }

@@ -120,7 +120,7 @@
       "minimum": 0
     },
     "idempotencyKey": {
-      "const": "entity+carrier+sourceRevision+stage"
+      "const": "executionId+entity+carrier+sourceRevision+stage"
     },
     "completedAt": {
       "type": "string",

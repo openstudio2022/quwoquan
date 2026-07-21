@@ -33,3 +33,11 @@ collections:
     description: media outbox 消费者 checkpoint（media-processing worker 等）；按 occurredAt/eventId 原子单调推进，多副本陈旧保存不得回退；先投递后落 checkpoint，重放由 processing 态守卫与命令 digest 幂等吸收。
     indexes:
       - { name: idx_media_projection_checkpoint_consumer, keys: { _id: 1 }, unique: true }
+
+  media_processing_dead_letters:
+    entity: MediaAsset
+    description: media-processing 在有效 checkpoint 前隔离不可恢复的源记录；只保存事件身份、checkpoint 与稳定原因，不保存原始 payload；同一 consumer/event 幂等写入后才允许 checkpoint 前进。
+    indexes:
+      - { name: idx_media_processing_dead_letters_event, keys: { _id: 1 }, unique: true }
+      - { name: idx_media_processing_dead_letters_consumer_time, keys: { consumer: 1, quarantinedAt: -1 } }
+      - { name: idx_media_processing_dead_letters_aggregate_time, keys: { aggregateId: 1, quarantinedAt: -1 } }

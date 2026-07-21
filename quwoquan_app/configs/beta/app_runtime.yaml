@@ -9,6 +9,7 @@ runtime:
   mediaImageCdnBaseUrl: https://beta-image.quwoquan-env.test:18100
   mediaVideoCdnBaseUrl: https://beta-video.quwoquan-env.test:18100
   mediaUploadBaseUrl: https://beta-upload.quwoquan-env.test:18100
+  rtcMediaConnectionUrl: wss://beta-rtc.quwoquan-env.test:18000
   currentUserId: fixture_user_current
 seed:
   enabled: false

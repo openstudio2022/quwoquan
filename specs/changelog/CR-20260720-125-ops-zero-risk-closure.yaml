@@ -1,7 +1,7 @@
 id: CR-20260720-125-ops-zero-risk-closure
 title: 运维运营平台商用风险与技术债清零
 slug: ops-zero-risk-closure
-revision: 1
+revision: 3
 status: in_progress
 
 affected_nodes:
@@ -42,3 +42,61 @@ entries:
         evidence:
           - quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
           - quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  - timestamp: "2026-07-21T04:20:00+08:00"
+    summary: |
+      复核 prod config-root 后发现 renderer 已把版本配置写入
+      `releases/config/<service>/<version>.yaml`，但多个服务 loader 仍读取
+      `CONFIG_ROOT/quwoquan_service/services/**`。这会使具有 CONFIG_VERSION 的
+      gamma/prod 实例在冷启动时找不到 release overlay，或在少数吞错 loader 中以
+      空/默认配置继续。现已统一服务与 recommendation runtime loader 到 canonical
+      发布路径，删除 user/circle 对配置读取错误的静默吞没，并把 renderer、服务启动、
+      ConfigSnapshot 的同路径约束加入门禁与验收。
+    reason: |
+      该分叉直接破坏“Build Once + immutable config artifact”与配置 ACK 的有效性，
+      属于可在仓内立即修复的生产冷启动/漂移风险，不能保留为运行手册提醒。
+    change_type:
+      - architecture
+      - reliability
+      - acceptance
+    changed_documents:
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md
+        sections: [任务包]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/design.md
+        sections: [配置 ACK 与可信灰度维度]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/acceptance.yaml
+        sections: [SIT6]
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_ops/gate/verify_runtime_config_release_layout.py
+          - quwoquan_service/services/content-service/cmd/api/main__local_contract_test.go
+      - layer: api_integration
+        intent: environment
+        evidence:
+          - quwoquan_ops/tests/acceptance/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
+  - timestamp: "2026-07-21T05:05:00+08:00"
+    summary: |
+      复核灰度 Caddy 编译后发现 renderer 已改为按 rollout stage 读取
+      `stageDimensions`，但本地契约测试仍调用旧无参接口，且 policy 同时保留未被
+      消费的全局 `dimensions`。这会造成测试失效并维护两份潜在冲突的灰度规则。
+      已删除全局维度副本，门禁与 Caddy renderer 只消费
+      `gray-initial/carry-on/full` 的 stageDimensions；未知阶段明确 fail-closed。
+    reason: |
+      灰度命中规则属于生产流量控制真相源。保留未消费的全局规则会使发布审查看到的
+      策略与实际 Caddy 路由不一致，不能以测试接口漂移掩盖。
+    change_type:
+      - reliability
+      - configuration
+      - acceptance
+    changed_documents:
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/design.md
+        sections: [配置 ACK 与可信灰度维度]
+      - path: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/acceptance.yaml
+        sections: [SIT6]
+    tests:
+      - layer: local_contract
+        intent: contract
+        evidence:
+          - quwoquan_ops/tests/local_contract/test_gray_routing_policy__local_contract_test.py
+          - quwoquan_ops/environments/verify/verify_gray_routing_policy.py

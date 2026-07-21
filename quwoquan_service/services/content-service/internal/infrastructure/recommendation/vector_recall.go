@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	embeddingapp "quwoquan_service/services/content-service/internal/application/embedding"
 )
 
 // VectorRecallSource retrieves semantically similar content via Atlas Vector Search.
@@ -30,18 +31,16 @@ func NewVectorRecallSource(db *mongo.Database) *VectorRecallSource {
 	}
 }
 
-// EmbeddingProvider generates vector embeddings for text input.
-type EmbeddingProvider interface {
-	Embed(ctx context.Context, text string) ([]float64, error)
-}
-
 // VectorRecallWithEmbedding pairs VectorRecallSource with an embedding provider.
 type VectorRecallWithEmbedding struct {
 	source   *VectorRecallSource
-	embedder EmbeddingProvider
+	embedder embeddingapp.EmbeddingGateway
 }
 
-func NewVectorRecallWithEmbedding(db *mongo.Database, embedder EmbeddingProvider) *VectorRecallWithEmbedding {
+func NewVectorRecallWithEmbedding(
+	db *mongo.Database,
+	embedder embeddingapp.EmbeddingGateway,
+) *VectorRecallWithEmbedding {
 	return &VectorRecallWithEmbedding{
 		source:   NewVectorRecallSource(db),
 		embedder: embedder,
@@ -66,7 +65,7 @@ func (v *VectorRecallWithEmbedding) Recall(ctx context.Context, req rtrec.Recall
 		return nil, nil
 	}
 
-	return v.source.RecallByVector(ctx, embedding, req.Limit, req.Vertical)
+	return v.source.RecallByVector(ctx, []float64(embedding), req.Limit, req.Vertical)
 }
 
 // RecallByVector performs Atlas Vector Search with a pre-computed query vector.

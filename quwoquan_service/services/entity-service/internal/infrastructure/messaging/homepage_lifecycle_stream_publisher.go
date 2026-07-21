@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
 	homepageports "quwoquan_service/services/entity-service/internal/domain/homepage/ports"
 	claimports "quwoquan_service/services/entity-service/internal/domain/homepage_claim_request/ports"
 	statusports "quwoquan_service/services/entity-service/internal/domain/homepage_status_report/ports"
@@ -30,14 +29,14 @@ type lifecycleEvent struct {
 }
 
 type lifecycleStream struct {
-	redis rtredis.Client
+	transport durableStreamTransport
 }
 
 func (stream *lifecycleStream) publish(
 	ctx context.Context,
 	event lifecycleEvent,
 ) error {
-	if stream == nil || stream.redis == nil {
+	if stream == nil || stream.transport == nil {
 		return fmt.Errorf("homepage lifecycle stream publisher is not configured")
 	}
 	if strings.TrimSpace(event.eventID) == "" ||
@@ -48,8 +47,9 @@ func (stream *lifecycleStream) publish(
 		!json.Valid(event.payload) {
 		return fmt.Errorf("homepage lifecycle event is incomplete")
 	}
-	_, err := stream.redis.XAdd(
+	err := appendEntityDurableRecord(
 		ctx,
+		stream.transport,
 		HomepageLifecycleStream,
 		map[string]string{
 			"eventId":          event.eventID,
@@ -60,16 +60,10 @@ func (stream *lifecycleStream) publish(
 			"payload":          string(event.payload),
 			"occurredAt":       event.occurredAt.UTC().Format(time.RFC3339Nano),
 		},
+		HomepageLifecycleStreamRetention,
 	)
 	if err != nil {
 		return fmt.Errorf("append homepage lifecycle stream: %w", err)
-	}
-	if err := stream.redis.Expire(
-		ctx,
-		HomepageLifecycleStream,
-		HomepageLifecycleStreamRetention,
-	); err != nil {
-		return fmt.Errorf("refresh homepage lifecycle stream retention: %w", err)
 	}
 	return nil
 }
@@ -77,9 +71,9 @@ func (stream *lifecycleStream) publish(
 type HomepageLifecycleStreamPublisher struct{ lifecycleStream }
 
 func NewHomepageLifecycleStreamPublisher(
-	redis rtredis.Client,
+	transport durableStreamTransport,
 ) *HomepageLifecycleStreamPublisher {
-	return &HomepageLifecycleStreamPublisher{lifecycleStream{redis: redis}}
+	return &HomepageLifecycleStreamPublisher{lifecycleStream{transport: transport}}
 }
 
 func (publisher *HomepageLifecycleStreamPublisher) Publish(
@@ -97,9 +91,9 @@ func (publisher *HomepageLifecycleStreamPublisher) Publish(
 type HomepageClaimLifecycleStreamPublisher struct{ lifecycleStream }
 
 func NewHomepageClaimLifecycleStreamPublisher(
-	redis rtredis.Client,
+	transport durableStreamTransport,
 ) *HomepageClaimLifecycleStreamPublisher {
-	return &HomepageClaimLifecycleStreamPublisher{lifecycleStream{redis: redis}}
+	return &HomepageClaimLifecycleStreamPublisher{lifecycleStream{transport: transport}}
 }
 
 func (publisher *HomepageClaimLifecycleStreamPublisher) Publish(
@@ -117,9 +111,9 @@ func (publisher *HomepageClaimLifecycleStreamPublisher) Publish(
 type HomepageStatusLifecycleStreamPublisher struct{ lifecycleStream }
 
 func NewHomepageStatusLifecycleStreamPublisher(
-	redis rtredis.Client,
+	transport durableStreamTransport,
 ) *HomepageStatusLifecycleStreamPublisher {
-	return &HomepageStatusLifecycleStreamPublisher{lifecycleStream{redis: redis}}
+	return &HomepageStatusLifecycleStreamPublisher{lifecycleStream{transport: transport}}
 }
 
 func (publisher *HomepageStatusLifecycleStreamPublisher) Publish(

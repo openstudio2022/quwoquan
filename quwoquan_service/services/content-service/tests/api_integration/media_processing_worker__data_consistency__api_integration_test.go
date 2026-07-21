@@ -68,6 +68,7 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 		store,
 		processor,
 		mediaService,
+		store,
 		mediaprocessing.WithConsumer(consumer),
 	)
 
@@ -109,6 +110,47 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 	}
 	if processor.calls != 1 {
 		t.Fatalf("non-created media fact repeated processing: calls=%d", processor.calls)
+	}
+}
+
+func TestMediaProcessingPoisonEventIsDurableAndIdempotent(t *testing.T) {
+	store := persistence.NewMongoMediaStore(mongoDB.Collection("media_upload_sessions"))
+	consumer := fmt.Sprintf("media-processing-poison-%d", time.Now().UnixNano())
+	eventID := fmt.Sprintf("evt-poison-%d", time.Now().UnixNano())
+	collection := mongoDB.Collection("media_processing_dead_letters")
+	documentID := consumer + ":" + eventID
+	t.Cleanup(func() {
+		_, _ = collection.DeleteOne(context.Background(), bson.M{"_id": documentID})
+	})
+	now := time.Now().UTC()
+	event := mediaprocessing.PoisonEvent{
+		Consumer:      consumer,
+		EventID:       eventID,
+		EventType:     "content.media_asset.created",
+		AggregateType: "MediaAsset",
+		AggregateID:   "asset-corrupt",
+		Checkpoint:    now.Format(time.RFC3339Nano) + "|" + eventID,
+		OccurredAt:    now,
+		Reason:        "invalid_asset_snapshot",
+		QuarantinedAt: now,
+	}
+
+	if err := store.QuarantineMediaProcessingEvent(context.Background(), event); err != nil {
+		t.Fatalf("persist poison event: %v", err)
+	}
+	if err := store.QuarantineMediaProcessingEvent(context.Background(), event); err != nil {
+		t.Fatalf("replay poison event must be idempotent: %v", err)
+	}
+	count, err := collection.CountDocuments(
+		context.Background(),
+		bson.M{
+			"_id":        documentID,
+			"checkpoint": event.Checkpoint,
+			"reason":     event.Reason,
+		},
+	)
+	if err != nil || count != 1 {
+		t.Fatalf("durable poison event count=%d err=%v", count, err)
 	}
 }
 

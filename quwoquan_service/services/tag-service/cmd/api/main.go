@@ -228,7 +228,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")); err != nil {
+			if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
 		}

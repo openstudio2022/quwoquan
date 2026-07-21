@@ -51,6 +51,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         (publishState.hasVideo || publishState.imagePaths.isNotEmpty);
     final cancellationSignal = ContentMediaUploadCancellationSignal();
     final publishStopwatch = Stopwatch()..start();
+    LocalPostPublicationIntent? mediaPreparationIntent;
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
     _setMountedState(() {
       _isPublishing = true;
@@ -70,6 +71,26 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       if (localDraftId == null) {
         throw StateError('local draft id unavailable');
       }
+      final activePersona = await ref.read(activePersonaContextProvider.future);
+      final publicationQueue = ref.read(
+        postPublicationIntentQueueProvider.notifier,
+      );
+      if (hasMediaUpload) {
+        final preparationCommand =
+            await attachActivePersonaToPostPublicationCommand(
+              ref,
+              buildPostPublicationMediaPreparationPayload(publishState),
+              localDraftId: localDraftId,
+              activePersona: activePersona,
+            );
+        mediaPreparationIntent = await publicationQueue.beginMediaPreparation(
+          command: preparationCommand,
+          authorPersonaId: activePersona.subAccountId,
+          circleIds: confirmedSettings.isPublic
+              ? confirmedSettings.circleIds
+              : const <String>[],
+        );
+      }
       final media = ref.read(createContentMediaFacetProvider);
       final preparedPayload = await buildPostPublicationPayloadWithRemoteMedia(
         media: media,
@@ -78,6 +99,16 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
         telemetry: ref.read(appTelemetryReporterProvider),
         cancellationSignal: hasMediaUpload ? cancellationSignal : null,
+        mediaPreparationIdentity: hasMediaUpload ? localDraftId : null,
+        preparedMediaAssets:
+            mediaPreparationIntent?.preparedMediaAssets ??
+            const <ContentMediaPreparationCheckpoint>[],
+        onMediaPrepared: hasMediaUpload
+            ? (checkpoint) => publicationQueue.recordPreparedMediaAsset(
+                localDraftId,
+                checkpoint,
+              )
+            : null,
         onUploadProgress: (progress) {
           if (!mounted ||
               !identical(_publicationCancellationSignal, cancellationSignal)) {
@@ -99,17 +130,15 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         ref,
         preparedPayload,
         localDraftId: localDraftId,
+        activePersona: activePersona,
       );
-      final activePersona = await ref.read(activePersonaContextProvider.future);
-      final receipt = await ref
-          .read(postPublicationIntentQueueProvider.notifier)
-          .submit(
-            command: command,
-            authorPersonaId: activePersona.subAccountId,
-            circleIds: confirmedSettings.isPublic
-                ? confirmedSettings.circleIds
-                : const <String>[],
-          );
+      final receipt = await publicationQueue.submit(
+        command: command,
+        authorPersonaId: activePersona.subAccountId,
+        circleIds: confirmedSettings.isPublic
+            ? confirmedSettings.circleIds
+            : const <String>[],
+      );
       final postId = receipt.postId;
       if (postId.isEmpty) {
         throw StateError('missing post id');
@@ -152,6 +181,11 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         <String, Object?>{
           'contentType': expectedContentType,
           'durationMs': publishStopwatch.elapsedMilliseconds,
+          'correlationHash': mediaPreparationIntent == null
+              ? null
+              : publicationCorrelationHash(
+                  mediaPreparationIntent.command.publishIntentId,
+                ),
         },
       );
       if (mounted) {

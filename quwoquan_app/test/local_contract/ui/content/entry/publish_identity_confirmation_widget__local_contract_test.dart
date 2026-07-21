@@ -9,7 +9,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -183,7 +183,7 @@ Widget _buildApp(
         createWorkspaceCirclePostPlacementWriterProvider.overrideWithValue(
           placements,
         ),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
@@ -233,7 +233,7 @@ Widget _buildRouterApp(
         postPublication,
         RecordingContentMediaFacet(),
       ),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],

@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 /// Anti-corruption boundary for app-owned native `MethodChannel` surfaces.
 ///
 /// The app currently owns five native channels:
-///  - `quwoquan/auth/one_tap`        -> already abstracted by `OneTapLoginClient`
-///                                      (core/auth/one_tap_login_channel.dart),
+///  - `quwoquan/auth/one_tap`        -> [OneTapLoginClient]
+///                                      (one_tap_login_native_bridge.dart),
 ///                                      gated by `PlatformCapabilities.oneTapLogin`.
 ///  - `quwoquan/video_editing`       -> used by `IosVideoEditingService`, gated
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.

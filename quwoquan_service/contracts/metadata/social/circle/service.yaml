@@ -67,10 +67,7 @@ api_routes:
     operation: ListCircleDiscoveryFeed
     actor: none
     commercial:
-      status: blocked
-      block_reason: 待聚合读模型、端侧单请求消费与三层测试证据全部通过后翻牌
-      gap_id: R-CIRCLE-001
-      target_story: circle-homepage-redesign
+      status: ready
     authorization:
       principal: public
       ownership_policy: public_circle_discovery
@@ -104,9 +101,9 @@ api_routes:
       method: listCircleDiscoveryFeed
       reader: CircleDiscoveryFeedReader
       slice: CircleDiscoveryFeedPageSlice
-    description: 圈子频道聚合流；服务端完成分类、成员范围与游标分页，一次返回圈子卡片和强类型帖子投影
+    description: 圈子频道聚合流；服务端唯一解释 category/subCategory/scope/sort/cursor/limit，按稳定 keyset 排序一次返回圈子卡片和强类型帖子投影。anonymous mine 返回安全空切片，不泄漏成员关系。
     query_params: [category, subCategory, scope, cursor, limit, sort]
-    response_entity: CircleDiscoveryFeedView
+    response_entity: CircleDiscoveryFeedPageSlice
     client_contract:
       dart_import: ../circle/circle_query_contracts.dart
       request_type: CircleDiscoveryFeedQuery
@@ -327,8 +324,9 @@ api_routes:
       method: getCircleFeed
       reader: CircleFeedReader
       slice: CircleFeedPageSlice
-    description: 圈子动态流；items 为 content Post 投影 wire，端侧经 content generated DTO 解码
+    description: 圈子动态流；items 为 placement/post/author 的 CircleFeedItemView 强类型投影，使用稳定 keyset cursor，端侧不得通过 Post 动态 wire 补齐展示字段
     query_params: [identity, type, cursor, limit, sort]
+    response_entity: CircleFeedPageSlice
     authorization: { principal: public, ownership_policy: public_circle_read }
     reliability: { timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
     error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]
@@ -361,7 +359,8 @@ api_routes:
       method: getCircleStats
       reader: CircleStatsReader
       slice: CircleStatsSlice
-    description: 圈子统计；返回体为 CircleStatsWire 松散投影（projections/circle_stats_wire.yaml）
+    description: 圈子统计；返回 `CircleStatsWire` canonical 计数投影（projections/circle_stats_wire.yaml）
+    response_entity: CircleStatsWire
     authorization: { principal: public, ownership_policy: public_circle_read }
     reliability: { timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none }
     error_codes: [CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]

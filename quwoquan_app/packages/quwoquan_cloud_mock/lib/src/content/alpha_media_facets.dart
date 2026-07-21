@@ -11,6 +11,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final id = 'alpha_media_upload_${++_sequence}';
     final expiresAt = DateTime.utc(2030, 1, 1, 0, 15);
@@ -30,6 +31,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final upload = _uploads[command.sessionId];
     if (upload == null)
@@ -64,6 +66,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   @override
   Future<ContentMediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
   ) async {
     final upload = _uploads.remove(command.sessionId);
     if (upload == null)

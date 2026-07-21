@@ -101,6 +101,8 @@ class RuntimePolicy:
     source_fetch_timeout_seconds: int
     source_fetch_max_retries: int
     ocr_timeout_seconds: int
+    video_probe_timeout_seconds: int
+    video_transcode_timeout_seconds: int
     mediawiki_fallback_retries: int
     mediawiki_wikitext_max_retries: int
     queue_lease_ttl_seconds: int
@@ -315,6 +317,14 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         source_fetch_timeout_seconds=_positive_int(budgets.get("sourceFetchTimeoutSeconds"), label="budgets.sourceFetchTimeoutSeconds"),
         source_fetch_max_retries=_positive_int(budgets.get("sourceFetchMaxRetries"), label="budgets.sourceFetchMaxRetries"),
         ocr_timeout_seconds=_positive_int(budgets.get("ocrTimeoutSeconds"), label="budgets.ocrTimeoutSeconds"),
+        video_probe_timeout_seconds=_positive_int(
+            budgets.get("videoProbeTimeoutSeconds"),
+            label="budgets.videoProbeTimeoutSeconds",
+        ),
+        video_transcode_timeout_seconds=_positive_int(
+            budgets.get("videoTranscodeTimeoutSeconds"),
+            label="budgets.videoTranscodeTimeoutSeconds",
+        ),
         mediawiki_fallback_retries=_positive_int(budgets.get("mediawikiFallbackRetries"), label="budgets.mediawikiFallbackRetries"),
         mediawiki_wikitext_max_retries=_positive_int(budgets.get("mediawikiWikitextMaxRetries"), label="budgets.mediawikiWikitextMaxRetries"),
         queue_lease_ttl_seconds=_positive_int(budgets.get("queueLeaseTtlSeconds"), label="budgets.queueLeaseTtlSeconds"),

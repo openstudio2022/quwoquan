@@ -343,6 +343,17 @@ func (c *instrumentedClient) XAutoClaim(
 	return messages, next, err
 }
 
+func (c *instrumentedClient) XPendingCount(
+	ctx context.Context,
+	stream string,
+	group string,
+) (int64, error) {
+	t := time.Now()
+	count, err := c.inner.XPendingCount(ctx, stream, group)
+	c.record(t, err)
+	return count, err
+}
+
 func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {
 	return c.inner.Pipeline(ctx)
 }

@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/search-service/internal/application"
 )
 
@@ -19,34 +20,48 @@ const (
 	StreamTTL        = StreamTTLSeconds * time.Second
 )
 
+type StreamTransport interface {
+	runtimemessaging.MessageTransport
+	runtimemessaging.DurableDeliveryTransport
+}
+
 // StreamPublisher publishes SearchRecommendationSignalPublished events to the
 // cross-service Redis Stream consumed by content-service.
 type StreamPublisher struct {
-	redis  rtredis.Client
-	logger *slog.Logger
+	transport StreamTransport
+	logger    *slog.Logger
 }
 
 var _ application.SearchSignalPublisher = (*StreamPublisher)(nil)
 
-func NewStreamPublisher(redis rtredis.Client, logger *slog.Logger) *StreamPublisher {
+func NewStreamPublisher(
+	transport StreamTransport,
+	logger *slog.Logger,
+) (*StreamPublisher, error) {
+	if transport == nil {
+		return nil, fmt.Errorf("search recommendation signal publisher requires message transport")
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &StreamPublisher{redis: redis, logger: logger}
+	return &StreamPublisher{transport: transport, logger: logger}, nil
 }
 
 func (p *StreamPublisher) PublishSearchSignal(ctx context.Context, signal application.SearchRecommendationSignal) error {
-	if p == nil || p.redis == nil {
-		return nil
+	if p == nil || p.transport == nil {
+		return fmt.Errorf("search recommendation signal transport is unavailable")
 	}
 	values, err := StreamValues(signal)
 	if err != nil {
 		return err
 	}
-	if _, err := p.redis.XAdd(ctx, StreamName, values); err != nil {
+	if _, err := p.transport.AppendDurable(ctx, runtimemessaging.DurableMessage{
+		Stream: StreamName,
+		Fields: durableFields(values),
+	}); err != nil {
 		return fmt.Errorf("publish search recommendation signal: %w", err)
 	}
-	if err := p.redis.Expire(ctx, StreamName, StreamTTL); err != nil {
+	if err := p.transport.SetDurableRetention(ctx, StreamName, StreamTTL); err != nil {
 		return fmt.Errorf("expire search recommendation signal stream: %w", err)
 	}
 	if p.logger != nil {
@@ -56,6 +71,22 @@ func (p *StreamPublisher) PublishSearchSignal(ctx context.Context, signal applic
 			slog.String("userId", signal.UserID))
 	}
 	return nil
+}
+
+func durableFields(values map[string]string) []runtimemessaging.DurableField {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	fields := make([]runtimemessaging.DurableField, 0, len(keys))
+	for _, key := range keys {
+		fields = append(fields, runtimemessaging.DurableField{
+			Name:  key,
+			Value: values[key],
+		})
+	}
+	return fields
 }
 
 func StreamValues(signal application.SearchRecommendationSignal) (map[string]string, error) {

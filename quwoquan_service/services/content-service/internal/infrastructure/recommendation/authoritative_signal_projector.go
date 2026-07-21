@@ -6,7 +6,10 @@ package recommendation
 // 服务端确认事实转为 BehaviorSignal，注入：
 //  1. SignalProcessor（HotPath 实时会话特征 / 负反馈集）；
 //  2. rm_behavior_events 持久轨（N0-2 relay → rm_recommend_feature 长期特征）；
-//  3. FeedbackRecorder（rec_learning_events 训练样本标签）。
+//  3. 若事实携带最终下发的 feedRequestId，FeedbackRecorder 写入可关联的训练标签。
+//
+// outbox 的权威事实通常没有 requestId：它们仍服务实时/长期特征，但不能伪造一条
+// 无法与曝光关联的 rec_learning_events 反馈事实。
 //
 // 事实源为对象 outbox（服务端确认后的事实），不依赖端侧补报，天然防伪造。
 // relay at-least-once 重放由 rm_behavior_events 的 userId+clientEventId 唯一索引
@@ -107,7 +110,7 @@ func (s *AuthoritativeSignalSink) emit(ctx context.Context, signal rtrec.Behavio
 			return fmt.Errorf("authoritative signal event store (%s): %w", signal.Action, err)
 		}
 	}
-	if s.feedback != nil {
+	if s.feedback != nil && strings.TrimSpace(signal.FeedRequestID) != "" {
 		if err := s.feedback.RecordEngagement(ctx, signal, 0); err != nil {
 			return fmt.Errorf("authoritative signal learning (%s): %w", signal.Action, err)
 		}

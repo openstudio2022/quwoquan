@@ -51,6 +51,9 @@ objects:
     authoritative_state:
     - userId
     - accountState
+    - authEpoch
+    - suspensionCaseRef
+    - suspendedAt
     - identityOrigin
     - logicalShard
     - anonymousRetentionPolicy
@@ -97,6 +100,8 @@ objects:
   member_bounds: {}
   mutation_entrypoints:
   - CloseAccount
+  - SuspendAccount
+  - RestoreAccount
   object_kind: aggregate_root
   relationships:
   - access: named_reader

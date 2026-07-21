@@ -48,7 +48,15 @@ api_routes:
     description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
     query_params: [cursor, limit]
     response_entity: Conversation
-    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
+    response_body: ChatConversation
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatListConversationsQuery
+      response_type: ChatConversationPageSlice
+      request_encoder: encodeChatListConversationsQuery
+      response_decoder: decodeChatConversationPageSlice
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.invalid_argument, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: owner
@@ -91,6 +99,14 @@ api_routes:
       availability_percent: 99.9
     description: 会话时间戳索引（用于本地缓存增量同步）
     response_entity: Conversation
+    response_body: ChatConversationTimestamp
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatListConversationTimestampsQuery
+      response_type: ChatConversationTimestampPageSlice
+      request_encoder: encodeChatListConversationTimestampsQuery
+      response_decoder: decodeChatConversationTimestampPageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -134,12 +150,22 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: |
-      创建会话（自动创建 ConversationMember + ConversationUserState；圈子发起的默认群仍使用 group + circleId）。
+      创建私信、私密群或加密会话，并自动创建 ConversationMember + ConversationUserState。
       direct 会话按参与者对唯一：重复创建返回既有会话；group 创建以 Idempotency-Key receipt 保证重放返回首个会话。
       group 的 maxGroupSize 缺省为 1000 且不可超过 1000；direct/encrypted 固定为 2。
+      CircleGroup 绑定会话仅由 circle-service durable event provisioner 创建；调用方不得提交 circleId、circleGroupId、
+      originType、bindingType 或 lifecyclePolicy。
     request_entity: Conversation
-    writable_fields: [type, title, circleId, circleGroupId, originType, bindingType, lifecyclePolicy, maxGroupSize, initialMemberIds]
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.not_mutual, CHAT.USER.greeting_required, CHAT.USER.blocked, CHAT.USER.group_member_not_mutual, CHAT.USER.group_member_blocked, CHAT.USER.group_full, CHAT.SYSTEM.internal_error]
+    writable_fields: [type, title, maxGroupSize, initialMemberIds]
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatCreateConversationCommand
+      response_type: ChatConversation
+      request_encoder: encodeChatCreateConversationCommand
+      response_decoder: decodeChatConversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.invalid_argument, CHAT.USER.circle_group_binding_write_forbidden, CHAT.USER.not_mutual, CHAT.USER.greeting_required, CHAT.USER.blocked, CHAT.USER.group_member_not_mutual, CHAT.USER.group_member_blocked, CHAT.USER.group_full, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: owner
@@ -182,6 +208,14 @@ api_routes:
       availability_percent: 99.9
     description: 批量拉取指定会话的完整信息（仅返回请求者为成员的会话）
     response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatBatchGetConversationsQuery
+      response_type: ChatConversationBatchSlice
+      request_encoder: encodeChatBatchGetConversationsQuery
+      response_decoder: decodeChatConversationBatchSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -225,6 +259,14 @@ api_routes:
       availability_percent: 99.9
     description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt；群设置页与聊天信息页共用本事实源，App 不得另建群设置读取旁路）
     response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatGetConversationQuery
+      response_type: ChatConversation
+      request_encoder: encodeChatGetConversationQuery
+      response_decoder: decodeChatConversation
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -271,9 +313,18 @@ api_routes:
       更新会话展示标题。HTTP 门槛为会话成员；当群治理开关 nameEditableByAdminOnly=true 时，
       聚合 invariant 仅放行 owner/admin（否则返回 group_governance_forbidden）。
       商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。标题已一致为 no-op 并重放原回执。
+      circleGroupId 非空时标题由 CircleGroup 管理并拒绝本 operation。
     writable_fields: [title]
     response_entity: Conversation
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatUpdateConversationTitleCommand
+      response_type: ChatConversation
+      request_encoder: encodeChatUpdateConversationTitleCommand
+      response_decoder: decodeChatConversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.circle_group_managed_by_circle, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: persona
@@ -318,10 +369,18 @@ api_routes:
     description: |
       更新群公告（仅群聊；owner/admin）。发布非空公告时同事务写入一条
       type=system_announcement 的会话消息触达全员（公告即触达）；
-      公告内容一致为 no-op 并重放原回执。
+      公告内容一致为 no-op 并重放原回执。circleGroupId 非空时公告由 CircleGroup 管理并拒绝本 operation。
     writable_fields: [announcement]
     response_entity: Conversation
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.USER.message_too_long, CHAT.SYSTEM.internal_error]
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatUpdateAnnouncementCommand
+      response_type: ChatConversation
+      request_encoder: encodeChatUpdateAnnouncementCommand
+      response_decoder: decodeChatConversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.circle_group_managed_by_circle, CHAT.USER.conversation_dissolved, CHAT.USER.message_too_long, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: persona
@@ -366,10 +425,18 @@ api_routes:
     description: |
       更新群治理开关（仅群聊；owner/admin）。当前唯一开关：nameEditableByAdminOnly。
       设置一致为 no-op 并重放原回执；变更递增 membersRosterRevision 并发布
-      ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。
+      ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。circleGroupId 非空时治理策略由 CircleGroup 管理并拒绝本 operation。
     writable_fields: [nameEditableByAdminOnly]
     response_entity: Conversation
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatUpdateGroupGovernanceSettingsCommand
+      response_type: ChatConversation
+      request_encoder: encodeChatUpdateGroupGovernanceSettingsCommand
+      response_decoder: decodeChatConversation
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.circle_group_managed_by_circle, CHAT.USER.conversation_dissolved, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: persona
@@ -412,6 +479,14 @@ api_routes:
       availability_percent: 99.9
     description: 获取消息回执列表（仅 receiptEnabled 会话可用；读取 MessageReceiptFact append-only 事实）
     response_entity: MessageReceipt
+    response_body: ChatMessageReceipt
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatGetMessageReceiptsQuery
+      response_type: ChatMessageReceiptPageSlice
+      request_encoder: encodeChatGetMessageReceiptsQuery
+      response_decoder: decodeChatMessageReceiptPageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -455,9 +530,16 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: |
-      解散群聊（仅群主；圈子绑定群禁止）。写入终态 status=dissolved 并发布
+      解散私建群（仅群主；circleGroupId 非空的群必须由 CircleGroupArchived durable event 终止）。写入终态 status=dissolved 并发布
       ConversationDissolved 事件实时收敛成员端；已解散重复请求为 no-op 并重放原回执。
-    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.SYSTEM.internal_error]
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatDissolveConversationCommand
+      response_type: ChatCommandAck
+      request_encoder: encodeChatDissolveConversationCommand
+      response_decoder: decodeChatCommandAck
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.USER.group_governance_forbidden, CHAT.USER.circle_group_managed_by_circle, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: persona
@@ -502,6 +584,14 @@ api_routes:
     description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 服务端预合成头像）
     query_params: [cursor, limit]
     response_entity: ChatInbox
+    response_body: ChatInbox
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListInboxQuery
+      response_type: ChatInboxPageSlice
+      request_encoder: encodeChatListInboxQuery
+      response_decoder: decodeChatInboxPageSlice
     security:
       auth_mode: required
       principal: persona
@@ -545,6 +635,14 @@ api_routes:
     description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
     query_params: [filter, cursor, limit]
     response_entity: MessageHomeRow
+    response_body: MessageHomeRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/message_home_contracts.dart
+      request_type: ChatListMessageHomeQuery
+      response_type: ChatMessageHomePageSlice
+      request_encoder: encodeChatListMessageHomeQuery
+      response_decoder: decodeChatMessageHomePageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -588,6 +686,14 @@ api_routes:
       availability_percent: 99.9
     description: 联系人列表
     response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListContactsQuery
+      response_type: ChatContactPageSlice
+      request_encoder: encodeChatListContactsQuery
+      response_decoder: decodeChatContactPageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -630,8 +736,16 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
-    query_params: [filter, cursor, limit]
+    query_params: [filter, limit]
     response_entity: ContactHomeRow
+    response_body: ContactHomeRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListContactHomeQuery
+      response_type: ChatContactHomePageSlice
+      request_encoder: encodeChatListContactHomeQuery
+      response_decoder: decodeChatContactHomePageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -674,6 +788,14 @@ api_routes:
       availability_percent: 99.9
     description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
     response_entity: GroupHome
+    response_body: GroupHome
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      request_type: ChatGetGroupHomeQuery
+      response_type: ChatGroupHome
+      request_encoder: encodeChatGetGroupHomeQuery
+      response_decoder: decodeChatGroupHome
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -715,8 +837,16 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
-    query_params: [conversationId, cursor, limit]
+    query_params: [conversationId, limit]
     response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListGroupCandidatesQuery
+      response_type: ChatContactPageSlice
+      request_encoder: encodeChatListGroupCandidatesQuery
+      response_decoder: decodeChatGroupCandidatePageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -761,9 +891,18 @@ api_routes:
       「从群聊/圈子中选择联系人」来源列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
       由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
       可选 source=group 仅返回 circleId 为空的私建群，source=circle 仅返回 circleId 非空的圈子绑定群；其它值拒绝，避免端侧分页后过滤导致来源漏项。
+      响应使用 `items + nextCursor` keyset Slice；cursor、source 和 query 必须在服务端同一读取链路中处理，端侧仅可顺序追加后续页。
     query_params: [cursor, limit, query, source]
     response_entity: SelectableGroupConversationRow
-    error_codes: [CHAT.USER.unauthorized, CHAT.SYSTEM.internal_error]
+    response_body: SelectableGroupConversationRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListSelectableGroupConversationsQuery
+      response_type: ChatSelectableGroupConversationPageSlice
+      request_encoder: encodeChatListSelectableGroupConversationsQuery
+      response_decoder: decodeChatSelectableGroupConversationPageSlice
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.invalid_argument, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
       principal: persona
@@ -806,8 +945,17 @@ api_routes:
     description: |
       「从群聊中选择联系人」群成员列表（图五）。返回指定群成员中与当前用户互关的联系人（排除当前用户、排除已屏蔽），供发起群聊/添加成员选人。
       与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
+      调用者必须是目标会话成员；响应使用 `items + nextCursor` keyset Slice，query 在分页前由服务端过滤。
     query_params: [cursor, limit, query]
     response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      request_type: ChatListSelectableGroupContactMembersQuery
+      response_type: ChatContactPageSlice
+      request_encoder: encodeChatListSelectableGroupContactMembersQuery
+      response_decoder: decodeChatSelectableGroupContactMemberPageSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -873,7 +1021,7 @@ contract_test:
             - "replay returns original receipt without new outbox event"
 
   coverage_requirements:
-    - all conversation types (direct/group/encrypted, with circle input merged into group) covered
-    - circleGroupId compatibility link covered
+    - all public conversation types (direct/group/encrypted) covered
+    - CircleGroup binding is provisioned only from durable events; public CreateConversation rejects all binding/source fields
     - governance commands write state/receipt/outbox in one transaction
     - receipt enabled/disabled paths

@@ -16,12 +16,16 @@ var (
 	ErrPinForbidden            = errors.New("comment pin forbidden")
 	ErrPinInvalidTarget        = errors.New("comment pin invalid target")
 	ErrAttachmentForbidden     = errors.New("comment attachment update forbidden")
+	ErrAttachmentLimitExceeded = errors.New("comment attachment limit exceeded")
 	ErrInvalidMutationClock    = errors.New("invalid comment mutation clock")
 	ErrModerationForbidden     = errors.New("comment moderation forbidden")
 	ErrInvalidStatusTransition = errors.New("invalid comment status transition")
 )
 
-const MaxContentRunes = 1000
+const (
+	MaxContentRunes       = 1000
+	MaxAttachmentMediaIDs = 9
+)
 
 type Status string
 
@@ -276,10 +280,19 @@ func (c *Comment) BindAttachments(actorID string, attachmentMediaIDs []string, n
 	if strings.TrimSpace(actorID) == "" || strings.TrimSpace(actorID) != c.authorID {
 		return ErrAttachmentForbidden
 	}
+	attachmentMediaIDs = cloneStrings(attachmentMediaIDs)
+	if len(attachmentMediaIDs) > MaxAttachmentMediaIDs {
+		return fmt.Errorf(
+			"%w: received %d attachments, maximum is %d",
+			ErrAttachmentLimitExceeded,
+			len(attachmentMediaIDs),
+			MaxAttachmentMediaIDs,
+		)
+	}
 	if err := c.advance(now); err != nil {
 		return err
 	}
-	c.attachmentMediaIDs = cloneStrings(attachmentMediaIDs)
+	c.attachmentMediaIDs = attachmentMediaIDs
 	return nil
 }
 
@@ -347,6 +360,14 @@ func (c *Comment) advance(now time.Time) error {
 }
 
 func (c *Comment) validate() error {
+	if c != nil && len(c.attachmentMediaIDs) > MaxAttachmentMediaIDs {
+		return fmt.Errorf(
+			"%w: received %d attachments, maximum is %d",
+			ErrAttachmentLimitExceeded,
+			len(c.attachmentMediaIDs),
+			MaxAttachmentMediaIDs,
+		)
+	}
 	if c == nil ||
 		c.id == "" ||
 		c.version < 1 ||

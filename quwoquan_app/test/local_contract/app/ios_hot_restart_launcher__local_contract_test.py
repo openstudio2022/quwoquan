@@ -30,6 +30,7 @@ def complete_defines(environment: str = "alpha") -> dict[str, str]:
         "MEDIA_IMAGE_CDN_BASE_URL": "https://image.example.test",
         "MEDIA_VIDEO_CDN_BASE_URL": "https://video.example.test",
         "MEDIA_UPLOAD_BASE_URL": "https://upload.example.test",
+        "RTC_MEDIA_CONNECTION_URL": "wss://rtc.example.test",
     }
 
 
@@ -52,6 +53,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         )
         self.assertIn("missing CLOUD_GATEWAY_BASE_URL", issues)
         self.assertIn("missing MEDIA_UPLOAD_BASE_URL", issues)
+        self.assertIn("missing RTC_MEDIA_CONNECTION_URL", issues)
 
         result = subprocess.run(
             [sys.executable, str(PREFLIGHT), "--env", "alpha", "--platform", "ios"],

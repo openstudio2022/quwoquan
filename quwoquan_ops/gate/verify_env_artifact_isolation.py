@@ -15,7 +15,11 @@ from quwoquan_ops.cli.lib.environment_topology import (
     forbidden_host_tokens,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.output_paths import app_release_dir, env_release_root
+from quwoquan_ops.cli.lib.output_paths import (
+    app_deployment_package_dir,
+    deployment_package_root,
+    deployment_target_for_env,
+)
 
 # 隔离校验对象是每个环境包的「生效配置」（env overlay），不是 config-provider-layering
 # 的 dev 默认基层，也不是共享的多环境拓扑清单：
@@ -34,12 +38,19 @@ EXCLUDED_BASENAMES = frozenset(
 )
 
 
-def artifact_files(env_name: str) -> list[Path]:
+def _display(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def artifact_files(env_name: str, *, target_name: str) -> list[Path]:
     files: list[Path] = []
-    app_dir = app_release_dir(env_name)
+    app_dir = app_deployment_package_dir(env_name, target=target_name)
     if app_dir.exists():
         files.extend(path for path in app_dir.rglob("*") if path.is_file())
-    service_root = env_release_root(env_name) / "service"
+    service_root = deployment_package_root(env_name, target=target_name) / "service"
     if service_root.exists():
         files.extend(path for path in service_root.rglob("*") if path.is_file())
     files = [path for path in files if path.name not in EXCLUDED_BASENAMES]
@@ -50,6 +61,7 @@ def artifact_files(env_name: str) -> list[Path]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Verify packaged env artifacts do not leak other env host tokens.")
     parser.add_argument("--env", choices=ENVIRONMENTS, default="")
+    parser.add_argument("--target", default="")
     return parser.parse_args()
 
 
@@ -70,7 +82,12 @@ def main() -> int:
 
     env_names = [args.env] if args.env else list(ENVIRONMENTS)
     for env_name in env_names:
-        files = artifact_files(env_name)
+        try:
+            target_name = deployment_target_for_env(env_name, target=args.target)
+        except ValueError as exc:
+            issues.append(str(exc))
+            continue
+        files = artifact_files(env_name, target_name=target_name)
         if not files:
             issues.append(f"no artifact files found for {env_name}")
             continue
@@ -85,13 +102,13 @@ def main() -> int:
                         continue
                     if token in text:
                         issues.append(
-                            f"{path.relative_to(ROOT)} leaks {other_env} host token {token}"
+                            f"{_display(path)} leaks {other_env} host token {token}"
                         )
             if env_name == "prod":
                 for token in forbidden_host_tokens(manifest, env_name):
                     if token and token in text:
                         issues.append(
-                            f"{path.relative_to(ROOT)} contains forbidden prod token {token!r}"
+                            f"{_display(path)} contains forbidden prod token {token!r}"
                         )
 
     if issues:

@@ -45,9 +45,9 @@ func (fixedXiaoquSearchReader) Retrieve(
 ) (rtsearch.RetrieveResponse, error) {
 	return rtsearch.RetrieveResponse{
 		Citations: []rtsearch.Citation{
-			{CitationID: "citation-article", ObjectType: "article", ObjectID: "post-1", Snippet: "露营路线", BadgeLabel: "内容", SourceDomain: "content", Score: 0.95},
-			{CitationID: "citation-entity", ObjectType: "entity", ObjectID: "homepage-1", Snippet: "露营地主页", BadgeLabel: "主页", SourceDomain: "entity", Score: 0.92},
-			{CitationID: "citation-web", ObjectType: "web", ObjectID: "web-1", Snippet: "公开信息", BadgeLabel: "网页", SourceDomain: "web", Score: 0.88},
+			{CitationID: "citation-article", ObjectType: "content.post", ObjectID: "post-1", Snippet: "露营路线", BadgeLabel: "内容", SourceDomain: "content", Score: 0.95},
+			{CitationID: "citation-entity", ObjectType: "entity.homepage", ObjectID: "homepage-1", Snippet: "露营地主页", BadgeLabel: "主页", SourceDomain: "entity", Score: 0.92},
+			{CitationID: "citation-web", ObjectType: "web.document", ObjectID: "web-1", Snippet: "公开信息", URL: "https://example.com/camping", BadgeLabel: "网页", SourceDomain: "web", Score: 0.88},
 		},
 		Provenance: rtsearch.Provenance{Provider: "search-service"},
 	}, nil
@@ -240,12 +240,17 @@ func TestSearchXiaoquResultsUsesCanonicalCitations(t *testing.T) {
 		if citation.ObjectType == "spec" || citation.ObjectType == "knowledge" {
 			t.Fatalf("placeholder citation must not be returned: %#v", citation)
 		}
-		// Retrieve contract exposes AI targets / web supplement, never internal
-		// object types like content.post or entity.homepage.
-		for _, forbidden := range []string{"content.post", "entity.homepage", "circle.group", "user.profile", "web.document"} {
-			if citation.ObjectType == forbidden {
-				t.Fatalf("internal object type leaked to AI citation: %q", citation.ObjectType)
-			}
+		if citation.Destination.Kind == "" {
+			t.Fatalf("citation destination missing: %#v", citation)
+		}
+		if citation.Destination.Kind == "internal" &&
+			(citation.Destination.ObjectTypeRef != citation.ObjectType ||
+				citation.Destination.ObjectID != citation.ObjectID) {
+			t.Fatalf("internal destination must keep canonical object identity: %#v", citation)
+		}
+		if citation.Destination.Kind == "external" &&
+			!strings.HasPrefix(citation.Destination.URL, "https://") {
+			t.Fatalf("external destination must be HTTPS: %#v", citation)
 		}
 		seen[citation.ObjectType] = true
 		if citation.SourceDomain == "" || citation.ObjectID == "" || citation.Snippet == "" {
@@ -261,8 +266,7 @@ func TestSearchXiaoquResultsUsesCanonicalCitations(t *testing.T) {
 			t.Fatalf("citation score must be positive: %#v", citation)
 		}
 	}
-	// Retrieve exposes AI targets plus a web supplement.
-	for _, target := range []string{"article", "entity", "web"} {
+	for _, target := range []string{"content.post", "entity.homepage", "web.document"} {
 		if !seen[target] {
 			t.Fatalf("missing citation target %q in %#v", target, result.Citations)
 		}

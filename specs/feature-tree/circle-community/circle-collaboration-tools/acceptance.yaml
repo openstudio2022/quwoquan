@@ -8,19 +8,24 @@ node:
   parent_business_capability: circle-collaboration-tools
 scope:
   summary: circle collaboration tools 验收范围。
-  in_scope: []
-  out_of_scope: []
+  in_scope:
+  - CircleGroup 到 Chat Conversation 的 durable 绑定、成员投影、容量、终态清理和治理边界
+  out_of_scope:
+  - 把 Conversation 重新作为 CircleGroup 的写模型或保留 Circle.conversationId 兼容路径
 sit_acceptance:
   SIT1:
     title: circle collaboration tools 能力 SIT
-    story_refs: []
+    story_refs:
+    - circle-group-chat-binding-sync
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - CircleGroup 创建、成员状态机、Chat 名册/Inbox、反向绑定、DLQ/health 与客户端终态体验可端到端验证。
+    performance_points:
+    - CircleGroup 创建至绑定 P95 <= 3 秒。
+    - 成员状态变化至 Chat 名册收敛 P95 <= 3 秒。
     tests:
       planned: []
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -39,12 +44,14 @@ sit_acceptance:
         - beta
         - gamma
       supporting:
-      - layer: local_contract
-        execution_profile: baseline
-        suite: sit1_local_contract
+      - layer: user_acceptance
+        execution_profile: release
+        suite: sit1_user_acceptance
         cases:
-        - local_contract.circle_community.circle_collaboration_tools.sit1.sit1_local_contract
-        envs: *id001
+        - user_acceptance.circle_community.circle_collaboration_tools.sit1.sit1_user_acceptance
+        envs:
+        - gamma_local
+        - prod
     notes: []
 execution:
   local_gate:

@@ -2060,6 +2060,210 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/content/media-image-reprocess-runs:
+        post:
+            operationId: StartMediaImageReprocessRun
+            x-contract-operation-id: content.media_image_reprocess_run.StartMediaImageReprocessRun
+            x-object-id: content.media_image_reprocess_run
+            x-actor: account
+            x-application:
+                kind: command
+                facet: MediaImageReprocessRunCommandFacet
+                method: start
+                aggregateOwner: MediaImageReprocessRun
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MediaImageReprocessRun'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaImageReprocessRun'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media-image-reprocess-runs/{runId}:
+        get:
+            operationId: GetMediaImageReprocessRun
+            x-contract-operation-id: content.media_image_reprocess_run.GetMediaImageReprocessRun
+            x-object-id: content.media_image_reprocess_run
+            x-actor: account
+            x-application:
+                kind: query
+                facet: MediaImageReprocessRunQueryFacet
+                method: get
+                reader: MediaImageReprocessRunReader
+                slice: MediaImageReprocessRunSlice
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaImageReprocessRunDetail'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media-image-reprocess-runs/{runId}:pause:
+        post:
+            operationId: PauseMediaImageReprocessRun
+            x-contract-operation-id: content.media_image_reprocess_run.PauseMediaImageReprocessRun
+            x-object-id: content.media_image_reprocess_run
+            x-actor: account
+            x-application:
+                kind: command
+                facet: MediaImageReprocessRunCommandFacet
+                method: pause
+                aggregateOwner: MediaImageReprocessRun
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PauseMediaImageReprocessRunRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaImageReprocessRun'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media-image-reprocess-runs/{runId}:resume:
+        post:
+            operationId: ResumeMediaImageReprocessRun
+            x-contract-operation-id: content.media_image_reprocess_run.ResumeMediaImageReprocessRun
+            x-object-id: content.media_image_reprocess_run
+            x-actor: account
+            x-application:
+                kind: command
+                facet: MediaImageReprocessRunCommandFacet
+                method: resume
+                aggregateOwner: MediaImageReprocessRun
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ResumeMediaImageReprocessRunRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaImageReprocessRun'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/media-image-reprocess-runs/{runId}:rollback:
+        post:
+            operationId: RollbackMediaImageReprocessRun
+            x-contract-operation-id: content.media_image_reprocess_run.RollbackMediaImageReprocessRun
+            x-object-id: content.media_image_reprocess_run
+            x-actor: account
+            x-application:
+                kind: command
+                facet: MediaImageReprocessRunCommandFacet
+                method: rollback
+                aggregateOwner: MediaImageReprocessRun
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RollbackMediaImageReprocessRunRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaImageReprocessRun'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/content/media/{mediaId}:
         get:
             operationId: GetOwnedMediaAsset
@@ -2811,6 +3015,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MarkIntersectionsVisitedRequest
             x-contract-placeholder: true
+        MediaImageReprocessRun:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaImageReprocessRun
+            x-contract-placeholder: true
+        MediaImageReprocessRunDetail:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaImageReprocessRunDetail
+            x-contract-placeholder: true
         MyReportItemSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2820,6 +3034,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OpenPostModerationCaseRequest
+            x-contract-placeholder: true
+        PauseMediaImageReprocessRunRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PauseMediaImageReprocessRunRequest
             x-contract-placeholder: true
         PinCommentRequest:
             type: object
@@ -2911,6 +3130,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RestoreCommentRequest
             x-contract-placeholder: true
+        ResumeMediaImageReprocessRunRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ResumeMediaImageReprocessRunRequest
+            x-contract-placeholder: true
         ReviewPostModerationCaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2920,6 +3144,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RollbackFilterCatalogReleaseRequest
+            x-contract-placeholder: true
+        RollbackMediaImageReprocessRunRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RollbackMediaImageReprocessRunRequest
             x-contract-placeholder: true
         SelectAutoVideoCoverRequest:
             type: object

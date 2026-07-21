@@ -19,9 +19,6 @@ type BaiduClient struct {
 }
 
 func NewBaiduClient(baseURL, ak string, client *http.Client) *BaiduClient {
-	if strings.TrimSpace(baseURL) == "" {
-		baseURL = "https://api.map.baidu.com"
-	}
 	return &BaiduClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		ak:      ak,
@@ -29,9 +26,13 @@ func NewBaiduClient(baseURL, ak string, client *http.Client) *BaiduClient {
 	}
 }
 
-func (c *BaiduClient) Name() model.Provider { return model.ProviderBaidu }
-
-func (c *BaiduClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.POI, error) {
+func (c *BaiduClient) Nearby(
+	ctx context.Context,
+	q model.NearbyQuery,
+) (_ []model.POI, err error) {
+	defer func() {
+		err = normalizeLocationProviderError(ctx, err)
+	}()
 	if strings.TrimSpace(c.ak) == "" {
 		return nil, fmt.Errorf("baidu ak is empty")
 	}
@@ -88,7 +89,6 @@ func (c *BaiduClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.
 		distance, _ := strconv.Atoi(poi.Distance)
 		items = append(items, model.POI{
 			ID:             poi.UID,
-			Provider:       model.ProviderBaidu,
 			Name:           poi.Name,
 			Address:        poi.Addr,
 			Latitude:       lat,
@@ -99,7 +99,13 @@ func (c *BaiduClient) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.
 	return items, nil
 }
 
-func (c *BaiduClient) Search(ctx context.Context, q model.SearchQuery) ([]model.POI, error) {
+func (c *BaiduClient) Search(
+	ctx context.Context,
+	q model.SearchQuery,
+) (_ []model.POI, err error) {
+	defer func() {
+		err = normalizeLocationProviderError(ctx, err)
+	}()
 	if strings.TrimSpace(c.ak) == "" {
 		return nil, fmt.Errorf("baidu ak is empty")
 	}
@@ -152,7 +158,6 @@ func (c *BaiduClient) Search(ctx context.Context, q model.SearchQuery) ([]model.
 	for _, poi := range out.Results {
 		items = append(items, model.POI{
 			ID:        poi.UID,
-			Provider:  model.ProviderBaidu,
 			Name:      poi.Name,
 			Address:   poi.Address,
 			Latitude:  poi.Location.Lat,

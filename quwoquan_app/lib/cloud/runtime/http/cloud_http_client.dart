@@ -492,11 +492,7 @@ class CloudHttpClient {
           .toList(growable: false);
     }
     final object = CloudResponseDecoder.asObject(decoded, context: context);
-    return CloudResponseDecoder.mapList(
-      object,
-      listKey,
-      context: context,
-    );
+    return CloudResponseDecoder.mapList(object, listKey, context: context);
   }
 
   /// [postJson] 后立即 [CloudResponseDecoder.asObject]。
@@ -620,7 +616,10 @@ class CloudHttpClient {
     if (!shouldAttemptRefresh) {
       return false;
     }
-    if (response.statusCode != 401) {
+    // account_suspended 与 stale authEpoch 都可能在已认证请求上以 403 返回。
+    // 仍只刷新一次：正常权限不足会保留原始 403；若 refresh 发现账号限制，
+    // AuthSessionController 会清凭证并切入结构化受限落点。
+    if (response.statusCode != 401 && response.statusCode != 403) {
       return false;
     }
     if (requestPath.endsWith('/auth/token/refresh')) {

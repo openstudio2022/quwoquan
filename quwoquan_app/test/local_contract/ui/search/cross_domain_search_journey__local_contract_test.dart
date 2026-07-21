@@ -10,8 +10,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.da
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -93,7 +93,7 @@ Widget _buildApp({
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
@@ -121,7 +121,7 @@ Widget _buildResultsPage({
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
     ],
     child: MaterialApp(
       home: SearchNetworkResultsPage(launchContext: launchContext),

@@ -146,7 +146,9 @@ final class CircleProjection {
     this.createdAt,
     this.updatedAt,
   }) : tags = List<String>.unmodifiable(tags),
-       sectionConfig = List<CircleSectionProjection>.unmodifiable(sectionConfig);
+       sectionConfig = List<CircleSectionProjection>.unmodifiable(
+         sectionConfig,
+       );
 
   final String circleId;
   final String name;
@@ -306,6 +308,7 @@ final class CircleDiscoveryFeedPageSlice {
 
 final class CircleStatsSlice {
   const CircleStatsSlice({
+    this.circleId = '',
     this.memberCount = 0,
     this.postCount = 0,
     this.discussionCount = 0,
@@ -315,6 +318,7 @@ final class CircleStatsSlice {
     this.storageQuotaBytes = 0,
   });
 
+  final String circleId;
   final int memberCount;
   final int postCount;
   final int discussionCount;
@@ -324,8 +328,115 @@ final class CircleStatsSlice {
   final int storageQuotaBytes;
 }
 
+final class CircleIntersectionTargetProjection {
+  const CircleIntersectionTargetProjection({
+    this.objectType = '',
+    this.objectId = '',
+    this.objectKind = '',
+    this.routeId = '',
+  });
+
+  final String objectType;
+  final String objectId;
+  final String objectKind;
+  final String routeId;
+}
+
+final class CircleIntersectionVisualProjection {
+  const CircleIntersectionVisualProjection({
+    this.assetKind = '',
+    this.imageUrl = '',
+    this.displayName = '',
+    this.target,
+  });
+
+  final String assetKind;
+  final String imageUrl;
+  final String displayName;
+  final CircleIntersectionTargetProjection? target;
+}
+
+final class CircleIntersectionTextSpanProjection {
+  const CircleIntersectionTextSpanProjection({
+    this.text = '',
+    this.role = 'plain',
+    this.target,
+    this.visual,
+  });
+
+  final String text;
+  final String role;
+  final CircleIntersectionTargetProjection? target;
+  final CircleIntersectionVisualProjection? visual;
+}
+
+final class CircleIntersectionRepresentativeActorProjection {
+  const CircleIntersectionRepresentativeActorProjection({
+    this.actorId = '',
+    this.displayName = '',
+    this.avatarUrl = '',
+    this.relationLabel = '',
+    this.privacyState = 'visible',
+    this.target,
+    this.evidenceRank = 0,
+    this.snapshotVersion = '',
+  });
+
+  final String actorId;
+  final String displayName;
+  final String avatarUrl;
+  final String relationLabel;
+  final String privacyState;
+  final CircleIntersectionTargetProjection? target;
+  final int evidenceRank;
+  final String snapshotVersion;
+}
+
+final class CircleIntersectionActionHintProjection {
+  CircleIntersectionActionHintProjection({
+    this.actionKey = '',
+    this.label = '',
+    this.target,
+    this.isPrimary = false,
+    this.priority = 0,
+    this.actionTier = 'light',
+    Iterable<String> requiredGates = const <String>[],
+    this.targetAvailability = 'available',
+    this.dispatch = 'navigate',
+  }) : requiredGates = List<String>.unmodifiable(requiredGates);
+
+  final String actionKey;
+  final String label;
+  final CircleIntersectionTargetProjection? target;
+  final bool isPrimary;
+  final int priority;
+  final String actionTier;
+  final List<String> requiredGates;
+  final String targetAvailability;
+  final String dispatch;
+}
+
+final class CircleIntersectionPropagationPathProjection {
+  CircleIntersectionPropagationPathProjection({
+    this.pathKind = '',
+    this.hopCount = 0,
+    this.secondarySpreadCount = 0,
+    this.summaryText = '',
+    this.summaryTarget,
+    Iterable<CircleIntersectionVisualProjection> nodes =
+        const <CircleIntersectionVisualProjection>[],
+  }) : nodes = List<CircleIntersectionVisualProjection>.unmodifiable(nodes);
+
+  final String pathKind;
+  final int hopCount;
+  final int secondarySpreadCount;
+  final String summaryText;
+  final CircleIntersectionTargetProjection? summaryTarget;
+  final List<CircleIntersectionVisualProjection> nodes;
+}
+
 final class CircleImpactItemProjection {
-  const CircleImpactItemProjection({
+  CircleImpactItemProjection({
     this.helpType = '',
     this.action = '',
     this.intersectionDimension = '',
@@ -335,10 +446,27 @@ final class CircleImpactItemProjection {
     this.primaryText = '',
     this.subtitleText = '',
     this.impactId = '',
+    Iterable<CircleIntersectionTextSpanProjection> primarySpans =
+        const <CircleIntersectionTextSpanProjection>[],
+    Iterable<CircleIntersectionVisualProjection> sampleVisuals =
+        const <CircleIntersectionVisualProjection>[],
+    this.representativeActor,
+    Iterable<CircleIntersectionActionHintProjection> actionHints =
+        const <CircleIntersectionActionHintProjection>[],
+    this.countTarget,
     this.evidenceSnapshotId = '',
     this.countObjectKind = '',
+    this.propagationPath,
     this.iconKey = '',
-  });
+  }) : primarySpans = List<CircleIntersectionTextSpanProjection>.unmodifiable(
+         primarySpans,
+       ),
+       sampleVisuals = List<CircleIntersectionVisualProjection>.unmodifiable(
+         sampleVisuals,
+       ),
+       actionHints = List<CircleIntersectionActionHintProjection>.unmodifiable(
+         actionHints,
+       );
 
   final String helpType;
   final String action;
@@ -349,8 +477,14 @@ final class CircleImpactItemProjection {
   final String primaryText;
   final String subtitleText;
   final String impactId;
+  final List<CircleIntersectionTextSpanProjection> primarySpans;
+  final List<CircleIntersectionVisualProjection> sampleVisuals;
+  final CircleIntersectionRepresentativeActorProjection? representativeActor;
+  final List<CircleIntersectionActionHintProjection> actionHints;
+  final CircleIntersectionTargetProjection? countTarget;
   final String evidenceSnapshotId;
   final String countObjectKind;
+  final CircleIntersectionPropagationPathProjection? propagationPath;
   final String iconKey;
 }
 
@@ -544,9 +678,13 @@ CircleDiscoveryFeedPageSlice decodeCircleDiscoveryFeedPageSlice(
 
 CircleFeedPostProjection _decodeCircleFeedPostProjection(Object? response) {
   final value = _object(response, 'circle feed item');
+  final placementId = _requiredValue(value['placementId'], 'placementId');
+  if (placementId.trim().isEmpty) {
+    throw FormatException('circle feed item.placementId is required');
+  }
   return CircleFeedPostProjection(
     circleId: _requiredValue(value['circleId'], 'circleId'),
-    placementId: _requiredValue(value['placementId'], 'placementId'),
+    placementId: placementId,
     post: decodeContentPostProjection(value),
     pinned: _boolean(value['pinned'], fallback: false),
     featured: _boolean(value['featured'], fallback: false),
@@ -558,6 +696,7 @@ CircleFeedPostProjection _decodeCircleFeedPostProjection(Object? response) {
 CircleStatsSlice decodeCircleStatsSlice(Object? response) {
   final root = _object(response, 'circle stats');
   return CircleStatsSlice(
+    circleId: _optional(root['circleId']) ?? '',
     memberCount: _integer(root['memberCount']),
     postCount: _integer(root['postCount']),
     discussionCount: _integer(root['discussionCount']),
@@ -585,12 +724,145 @@ CircleImpactSlice decodeCircleImpactSlice(Object? response) {
         primaryText: _optional(value['primaryText']) ?? '',
         subtitleText: _optional(value['subtitleText']) ?? '',
         impactId: _optional(value['impactId']) ?? '',
+        primarySpans: _list(
+          value['primarySpans'],
+          'circle impact item.primarySpans',
+          allowNull: true,
+        ).map(_decodeCircleIntersectionTextSpan),
+        sampleVisuals: _list(
+          value['sampleVisuals'],
+          'circle impact item.sampleVisuals',
+          allowNull: true,
+        ).map(_decodeCircleIntersectionVisual),
+        representativeActor:
+            _decodeOptionalCircleIntersectionRepresentativeActor(
+              value['representativeActor'],
+            ),
+        actionHints: _list(
+          value['actionHints'],
+          'circle impact item.actionHints',
+          allowNull: true,
+        ).map(_decodeCircleIntersectionActionHint),
+        countTarget: _decodeOptionalCircleIntersectionTarget(
+          value['countTarget'],
+        ),
         evidenceSnapshotId: _optional(value['evidenceSnapshotId']) ?? '',
         countObjectKind: _optional(value['countObjectKind']) ?? '',
+        propagationPath: _decodeOptionalCircleIntersectionPropagationPath(
+          value['propagationPath'],
+        ),
         iconKey: _optional(value['iconKey']) ?? '',
       );
     }),
   );
+}
+
+CircleIntersectionTargetProjection _decodeCircleIntersectionTarget(
+  Map<Object?, Object?> value,
+) => CircleIntersectionTargetProjection(
+  objectType: _optional(value['objectType']) ?? '',
+  objectId: _optional(value['objectId']) ?? '',
+  objectKind: _optional(value['objectKind']) ?? '',
+  routeId: _optional(value['routeId']) ?? '',
+);
+
+CircleIntersectionTargetProjection? _decodeOptionalCircleIntersectionTarget(
+  Object? response,
+) {
+  final value = _optionalMap(response);
+  return value == null ? null : _decodeCircleIntersectionTarget(value);
+}
+
+CircleIntersectionVisualProjection _decodeCircleIntersectionVisual(
+  Object? response,
+) {
+  final value = _object(response, 'circle impact visual');
+  return CircleIntersectionVisualProjection(
+    assetKind: _optional(value['assetKind']) ?? '',
+    imageUrl: _optional(value['imageUrl']) ?? '',
+    displayName: _optional(value['displayName']) ?? '',
+    target: _decodeOptionalCircleIntersectionTarget(value['target']),
+  );
+}
+
+CircleIntersectionVisualProjection? _decodeOptionalCircleIntersectionVisual(
+  Object? response,
+) {
+  final value = _optionalMap(response);
+  return value == null ? null : _decodeCircleIntersectionVisual(value);
+}
+
+CircleIntersectionTextSpanProjection _decodeCircleIntersectionTextSpan(
+  Object? response,
+) {
+  final value = _object(response, 'circle impact text span');
+  return CircleIntersectionTextSpanProjection(
+    text: _optional(value['text']) ?? '',
+    role: _optional(value['role']) ?? 'plain',
+    target: _decodeOptionalCircleIntersectionTarget(value['target']),
+    visual: _decodeOptionalCircleIntersectionVisual(value['visual']),
+  );
+}
+
+CircleIntersectionRepresentativeActorProjection
+_decodeCircleIntersectionRepresentativeActor(Map<Object?, Object?> value) =>
+    CircleIntersectionRepresentativeActorProjection(
+      actorId: _optional(value['actorId']) ?? '',
+      displayName: _optional(value['displayName']) ?? '',
+      avatarUrl: _optional(value['avatarUrl']) ?? '',
+      relationLabel: _optional(value['relationLabel']) ?? '',
+      privacyState: _optional(value['privacyState']) ?? 'visible',
+      target: _decodeOptionalCircleIntersectionTarget(value['target']),
+      evidenceRank: _integer(value['evidenceRank']),
+      snapshotVersion: _optional(value['snapshotVersion']) ?? '',
+    );
+
+CircleIntersectionRepresentativeActorProjection?
+_decodeOptionalCircleIntersectionRepresentativeActor(Object? response) {
+  final value = _optionalMap(response);
+  return value == null
+      ? null
+      : _decodeCircleIntersectionRepresentativeActor(value);
+}
+
+CircleIntersectionActionHintProjection _decodeCircleIntersectionActionHint(
+  Object? response,
+) {
+  final value = _object(response, 'circle impact action hint');
+  return CircleIntersectionActionHintProjection(
+    actionKey: _optional(value['actionKey']) ?? '',
+    label: _optional(value['label']) ?? '',
+    target: _decodeOptionalCircleIntersectionTarget(value['target']),
+    isPrimary: _boolean(value['isPrimary'], fallback: false),
+    priority: _integer(value['priority']),
+    actionTier: _optional(value['actionTier']) ?? 'light',
+    requiredGates: _stringList(value['requiredGates']),
+    targetAvailability: _optional(value['targetAvailability']) ?? 'available',
+    dispatch: _optional(value['dispatch']) ?? 'navigate',
+  );
+}
+
+CircleIntersectionPropagationPathProjection
+_decodeCircleIntersectionPropagationPath(Map<Object?, Object?> value) =>
+    CircleIntersectionPropagationPathProjection(
+      pathKind: _optional(value['pathKind']) ?? '',
+      hopCount: _integer(value['hopCount']),
+      secondarySpreadCount: _integer(value['secondarySpreadCount']),
+      summaryText: _optional(value['summaryText']) ?? '',
+      summaryTarget: _decodeOptionalCircleIntersectionTarget(
+        value['summaryTarget'],
+      ),
+      nodes: _list(
+        value['nodes'],
+        'circle impact propagation path.nodes',
+        allowNull: true,
+      ).map(_decodeCircleIntersectionVisual),
+    );
+
+CircleIntersectionPropagationPathProjection?
+_decodeOptionalCircleIntersectionPropagationPath(Object? response) {
+  final value = _optionalMap(response);
+  return value == null ? null : _decodeCircleIntersectionPropagationPath(value);
 }
 
 CircleProjection _decodeCircle(Object? response) {
@@ -618,19 +890,20 @@ CircleProjection _decodeCircle(Object? response) {
     defaultPublicGroupId: _optional(value['defaultPublicGroupId']),
     conversationId: _optional(value['conversationId']),
     autoSyncChat: _boolean(value['autoSyncChat'], fallback: true),
-    sectionConfig: _list(
-      value['sectionConfig'],
-      'circle.sectionConfig',
-      allowNull: true,
-    ).map((item) {
-      final section = _object(item, 'circle.sectionConfig.item');
-      return CircleSectionProjection(
-        sectionType: _requiredValue(section['sectionType'], 'sectionType'),
-        visible: _boolean(section['visible'], fallback: false),
-        order: _integer(section['order']),
-        customTitle: _optional(section['customTitle']),
-      );
-    }),
+    sectionConfig:
+        _list(
+          value['sectionConfig'],
+          'circle.sectionConfig',
+          allowNull: true,
+        ).map((item) {
+          final section = _object(item, 'circle.sectionConfig.item');
+          return CircleSectionProjection(
+            sectionType: _requiredValue(section['sectionType'], 'sectionType'),
+            visible: _boolean(section['visible'], fallback: false),
+            order: _integer(section['order']),
+            customTitle: _optional(section['customTitle']),
+          );
+        }),
     storageUsedBytes: _integer(value['storageUsedBytes']),
     storageQuotaBytes: _integer(value['storageQuotaBytes']),
     domainId: _optional(value['domainId']),
@@ -656,6 +929,9 @@ Map<Object?, Object?> _object(Object? value, String label) {
   }
   return value;
 }
+
+Map<Object?, Object?>? _optionalMap(Object? value) =>
+    value is Map<Object?, Object?> ? value : null;
 
 List<Object?> _list(Object? value, String label, {bool allowNull = false}) {
   if (allowNull && value == null) return const <Object?>[];

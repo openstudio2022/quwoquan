@@ -34,28 +34,34 @@ import (
 
 const fleetRequestSchema = "quwoquan.data_content_fleet_request"
 
+// pythonWorkerModule is an internal adapter, not a public qwq-data command.
+// The worker process imports its callable explicitly so the Python module has
+// no second executable entrypoint alongside scripts/cli.py.
+const pythonWorkerModule = "from content.execution.reliabletask_worker import run_process_worker; run_process_worker()"
+
 type fleetRequest struct {
 	Schema            string                        `json:"schema"`
 	ExecutionID       string                        `json:"executionId"`
 	RequireCommercial bool                          `json:"requireCommercial"`
+	RecoverDeadTasks  *bool                         `json:"recoverDeadTasks"`
 	Jobs              []reliabletask.DataContentJob `json:"jobs"`
 }
 
 type workerConfig struct {
-	mongoURI       string
-	mongoDatabase  string
-	redisAddr      string
-	redisPassword  string
-	python         string
-	dataCLI        string
-	workDir        string
-	publishRoot    string
-	evidenceRoot   string
-	workers        int
-	timeout        time.Duration
-	leaseTTL       time.Duration
-	pendingMinIdle time.Duration
-	maxAttempts    int
+	mongoURI        string
+	mongoDatabase   string
+	redisAddr       string
+	redisPassword   string
+	python          string
+	dataScriptsRoot string
+	workDir         string
+	publishRoot     string
+	evidenceRoot    string
+	workers         int
+	timeout         time.Duration
+	leaseTTL        time.Duration
+	pendingMinIdle  time.Duration
+	maxAttempts     int
 }
 
 func main() {
@@ -154,21 +160,29 @@ func run() error {
 			return fmt.Errorf("declare data content job %s: %w", job.JobID, err)
 		}
 	}
+	if *request.RecoverDeadTasks {
+		if _, err := fleet.RecoverAuditedDeadJobs(ctx, request.Jobs); err != nil {
+			return fmt.Errorf("recover audited dead data content jobs: %w", err)
+		}
+		if _, err := fleet.ReconcileReadyIndex(ctx, len(request.Jobs)); err != nil {
+			return fmt.Errorf("rebuild ready index after data content recovery: %w", err)
+		}
+	}
 	if _, err := fleet.Dispatch(ctx, len(request.Jobs)); err != nil {
 		return fmt.Errorf("dispatch data content jobs: %w", err)
 	}
 	executor := reliabletask.DataContentProcessExecutor{
 		Command: []string{
 			cfg.python,
-			cfg.dataCLI,
-			"task",
-			"execute-object-worker",
+			"-c",
+			pythonWorkerModule,
 		},
 		WorkDir: cfg.workDir,
 		Environment: dataWorkerEnvironment(
 			os.Environ(),
 			cfg.evidenceRoot,
 			cfg.publishRoot,
+			cfg.dataScriptsRoot,
 		),
 	}
 	tasks, runErr := runWorkers(
@@ -247,9 +261,9 @@ func readFleetRequest(path string) (fleetRequest, error) {
 		return fleetRequest{}, fmt.Errorf("fleet request schema=%q", request.Schema)
 	}
 	request.ExecutionID = strings.TrimSpace(request.ExecutionID)
-	if request.ExecutionID == "" || len(request.Jobs) == 0 {
+	if request.ExecutionID == "" || request.RecoverDeadTasks == nil || len(request.Jobs) == 0 {
 		return fleetRequest{}, errors.New(
-			"fleet request requires executionId and at least one job",
+			"fleet request requires executionId, recoverDeadTasks and at least one job",
 		)
 	}
 	jobIDs := make(map[string]struct{}, len(request.Jobs))
@@ -275,7 +289,7 @@ func readFleetRequest(path string) (fleetRequest, error) {
 			)
 		}
 		jobIDs[job.JobID] = struct{}{}
-		if _, err := job.IdempotencyKey(); err != nil {
+		if _, err := job.ValidateIdentity(); err != nil {
 			return fleetRequest{}, err
 		}
 	}
@@ -304,7 +318,7 @@ func loadWorkerConfig(
 	if err != nil {
 		return workerConfig{}, err
 	}
-	dataCLI, err := required("QWQ_DATA_FLEET_CLI")
+	dataScriptsRoot, err := required("QWQ_DATA_FLEET_SCRIPTS_ROOT")
 	if err != nil {
 		return workerConfig{}, err
 	}
@@ -321,19 +335,19 @@ func loadWorkerConfig(
 		return workerConfig{}, err
 	}
 	cfg := workerConfig{
-		mongoURI:       mongoURI,
-		mongoDatabase:  "quwoquan_reliabletask_data",
-		redisAddr:      redisAddr,
-		python:         python,
-		dataCLI:        dataCLI,
-		workDir:        workDir,
-		publishRoot:    publishRoot,
-		evidenceRoot:   evidenceRoot,
-		workers:        1,
-		timeout:        24 * time.Hour,
-		leaseTTL:       30 * time.Minute,
-		pendingMinIdle: time.Second,
-		maxAttempts:    3,
+		mongoURI:        mongoURI,
+		mongoDatabase:   "quwoquan_reliabletask_data",
+		redisAddr:       redisAddr,
+		python:          python,
+		dataScriptsRoot: dataScriptsRoot,
+		workDir:         workDir,
+		publishRoot:     publishRoot,
+		evidenceRoot:    evidenceRoot,
+		workers:         1,
+		timeout:         24 * time.Hour,
+		leaseTTL:        30 * time.Minute,
+		pendingMinIdle:  time.Second,
+		maxAttempts:     3,
 	}
 	if value, ok := provider.GetString("QWQ_DATA_FLEET_MONGO_DATABASE"); ok {
 		cfg.mongoDatabase = value
@@ -417,7 +431,15 @@ func runWorkers(
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		tasks, err := loadExecutionTasks(ctx, database, request.ExecutionID)
+		executionTasks, err := loadExecutionTasks(
+			ctx,
+			database,
+			request.ExecutionID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		tasks, err := requestedExecutionTasks(executionTasks, request)
 		if err != nil {
 			return nil, err
 		}
@@ -476,15 +498,66 @@ func loadExecutionTasks(
 	return tasks, nil
 }
 
+// requestedExecutionTasks 只观察本次 fleet request 明确声明的任务。
+// 同一 execution 允许 author 与 publish 分阶段独立运行；不能因已完成的
+// author 任务被一并读出而让 publish worker 永久等待。
+func requestedExecutionTasks(
+	executionTasks []reliabletask.ReliableAsyncTask,
+	request fleetRequest,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	byJobID := make(map[string][]reliabletask.ReliableAsyncTask, len(executionTasks))
+	for _, task := range executionTasks {
+		jobID := strings.TrimSpace(task.Payload["jobId"])
+		if jobID != "" {
+			byJobID[jobID] = append(byJobID[jobID], task)
+		}
+	}
+	selected := make([]reliabletask.ReliableAsyncTask, 0, len(request.Jobs))
+	for _, job := range request.Jobs {
+		jobID := strings.TrimSpace(job.JobID)
+		matches := byJobID[jobID]
+		if len(matches) > 1 {
+			return nil, fmt.Errorf(
+				"data content request job %q has %d remote tasks; refusing ambiguous result projection",
+				jobID,
+				len(matches),
+			)
+		}
+		if len(matches) == 0 {
+			continue
+		}
+		task := matches[0]
+		expectedKey, err := job.ValidateIdentity()
+		if err != nil {
+			return nil, err
+		}
+		if task.IdempotencyKey != expectedKey ||
+			task.DedupeKey != expectedKey ||
+			task.PartitionKey != job.PartitionKey ||
+			task.Payload["idempotencyKey"] != expectedKey ||
+			task.Payload["executionId"] != request.ExecutionID ||
+			task.Payload["jobId"] != jobID {
+			return nil, fmt.Errorf(
+				"data content request job %q remote identity does not match the frozen request",
+				jobID,
+			)
+		}
+		selected = append(selected, task)
+	}
+	return selected, nil
+}
+
 func dataWorkerEnvironment(
 	current []string,
 	evidenceRoot string,
 	publishRoot string,
+	scriptsRoot string,
 ) []string {
 	overrides := map[string]string{
 		"PYTHONDONTWRITEBYTECODE": "1",
 		"QWQ_OUTPUT_ROOT":         evidenceRoot,
 		"QWQ_PUBLISH_ROOT":        publishRoot,
+		"PYTHONPATH":              scriptsRoot,
 	}
 	result := make([]string, 0, len(current)+len(overrides))
 	for _, row := range current {

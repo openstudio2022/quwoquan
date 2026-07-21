@@ -1,13 +1,12 @@
 /// 圈子主页商用化真机视觉与主旅程证据。
 ///
 /// 该用例只允许使用 production Remote composition；运行方必须提供可管理
-/// `fixture_circle_photo` 的真实 Gamma 会话。截图由 integration_test 写入 Patrol
-/// 原生制品目录，用于核验 hub、详情、统计、编辑四页的深浅色表现。
+/// `fixture_circle_photo` 的真实 Gamma 会话。设备截图由统一的 Patrol 环境 runner
+/// 在用例前后采集，避免与 PatrolBinding 竞争 Flutter test binding。
 library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -19,15 +18,9 @@ import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 
 const _circleId = 'fixture_circle_photo';
 const _runtimeEnv = String.fromEnvironment('APP_RUNTIME_ENV');
-const _visualTheme = String.fromEnvironment(
-  'QWQ_CIRCLE_VISUAL_THEME',
-  defaultValue: 'system',
-);
 const _moreActionKey = ValueKey<String>('object-chrome-more');
 
 void main() {
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
   patrolTest(
     'circle_commercial_remote_visual_journey',
     tags: ['t4', 'circle', 'gamma', 'visual'],
@@ -47,7 +40,6 @@ void main() {
         find.byType(CirclesHubPage),
         reason: '圈子 hub 必须可达',
       );
-      await binding.takeScreenshot('circle_${_visualTheme}_hub');
 
       await patrolGoTo($, AppRoutePaths.circleDetail(id: _circleId));
       await _expectVisible(
@@ -60,7 +52,6 @@ void main() {
         find.text('契约摄影社'),
         reason: '圈子详情必须显示 Gamma fixture 圈名',
       );
-      await binding.takeScreenshot('circle_${_visualTheme}_detail');
 
       await patrolGoTo(
         $,
@@ -71,7 +62,6 @@ void main() {
         find.byType(CircleStatsPage),
         reason: '圈子统计页必须可达',
       );
-      await binding.takeScreenshot('circle_${_visualTheme}_stats');
 
       await patrolGoTo($, AppRoutePaths.circleDetail(id: _circleId));
       await _expectVisible(
@@ -91,7 +81,6 @@ void main() {
         find.byType(CircleEditSettingsPage),
         reason: '圈子编辑页必须从真实管理旅程进入',
       );
-      await binding.takeScreenshot('circle_${_visualTheme}_edit');
     },
   );
 }

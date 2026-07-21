@@ -36,6 +36,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
 import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
@@ -50,10 +51,8 @@ const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
 const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
   'API_CONTRACT_ALLOW_BAD_CERT',
 );
-const _localGammaSeedImageUrl =
-    'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
 
-// ─── Shared client & seeded data ───────────────────────────────────────────
+// ─── Shared client ─────────────────────────────────────────────────────────
 
 // _apiAvailable guards all tests after a skip decision in setUpAll.
 // When markTestSkipped is called, subsequent tests still attempt to run;
@@ -61,54 +60,7 @@ const _localGammaSeedImageUrl =
 bool _apiAvailable = false;
 late http.Client _client;
 late LocalGammaAnonymousSession _session;
-
-/// 在目标环境上创建一条 image post，返回新建 postId。
-Future<String> _seedPhotoPost() async {
-  final url = Uri.parse('$_apiBase/content/posts');
-  final resp = await _client
-      .post(
-        url,
-        headers: {
-          ..._authHeaders('content.post.create'),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'contentType': 'image',
-          'title': 'L3 contract seed post',
-          'body': 'automated test fixture - safe to delete',
-          'mediaUrls': [
-            _isLocalGammaContentOnly
-                ? _localGammaSeedImageUrl
-                : 'https://example.com/test.jpg',
-          ],
-        }),
-      )
-      .timeout(const Duration(seconds: 10));
-  if (resp.statusCode != 201) {
-    throw Exception('_seedPhotoPost failed: ${resp.statusCode} ${resp.body}');
-  }
-  final seeded = jsonDecode(resp.body) as Map<String, dynamic>;
-  final id = seeded['postId'] as String;
-  final publishUrl = Uri.parse('$_apiBase/content/posts/$id/publish');
-  final publishResp = await _client
-      .post(publishUrl, headers: _authHeaders('content.post.publish'))
-      .timeout(const Duration(seconds: 10));
-  if (publishResp.statusCode != 200) {
-    throw Exception(
-      '_seedPhotoPost publish failed: ${publishResp.statusCode} ${publishResp.body}',
-    );
-  }
-  return id;
-}
-
-/// 删除目标环境上由本次测试创建的 post。
-Future<void> _deletePost(String postId) async {
-  final url = Uri.parse('$_apiBase/content/posts/$postId');
-  await _client
-      .delete(url, headers: _authHeaders('content.post.delete'))
-      .timeout(const Duration(seconds: 10));
-  // 404 可接受（已被其他测试删除或自动清理）
-}
+int _idempotencySequence = 0;
 
 Map<String, String> _authHeaders(String pageId) => <String, String>{
   ..._client.headers ?? {},
@@ -116,8 +68,47 @@ Map<String, String> _authHeaders(String pageId) => <String, String>{
   'Authorization': _session.authorizationHeader,
 };
 
+String _nextIdempotencyKey(String operation) {
+  _idempotencySequence += 1;
+  return '$operation-${DateTime.now().toUtc().microsecondsSinceEpoch}-$_idempotencySequence';
+}
+
+Map<String, String> _commandHeaders(
+  String pageId, {
+  required String idempotencyKey,
+}) => <String, String>{
+  ..._authHeaders(pageId),
+  'Idempotency-Key': idempotencyKey,
+};
+
 bool get _isLocalGammaContentOnly =>
     _apiContractEnv == 'gamma' && _localGammaT3Scope == 'content';
+
+Map<String, Object> _behaviorEvent(
+  String action, {
+  required String clientEventId,
+  String? state,
+  double? duration,
+  int? position,
+}) => <String, Object>{
+  'clientEventId': clientEventId,
+  'occurredAt': DateTime.now().toUtc().toIso8601String(),
+  'contentId': 'fixture_photo_001',
+  'action': action,
+  'contentType': 'image',
+  ...?switch (state) {
+    final value? => <String, Object>{'state': value},
+    null => null,
+  },
+  ...?switch (duration) {
+    final value? => <String, Object>{'duration': value},
+    null => null,
+  },
+  ...?switch (position) {
+    final value? => <String, Object>{'position': value},
+    null => null,
+  },
+};
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
@@ -157,18 +148,6 @@ void main() {
   // ── 场景 1：feed_cursor_pagination_end_to_end ──────────────────────────────
   // e2e.yaml: feed_cursor_pagination_end_to_end [test_type: api_contract]
   group('feed_cursor_pagination_end_to_end', () {
-    var seededIds = <String>[];
-
-    setUpAll(() async {
-      if (!_apiAvailable) return;
-      seededIds = await Future.wait(List.generate(25, (_) => _seedPhotoPost()));
-    });
-
-    tearDownAll(() async {
-      if (!_apiAvailable) return;
-      await Future.wait(seededIds.map(_deletePost));
-    });
-
     test('第一页返回 20 条 + cursor 非空', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
@@ -194,7 +173,7 @@ void main() {
       expect(body.containsKey('cursor'), isTrue);
 
       final items = (body['items'] as List)
-          .map((e) => postBaseDtoFromMap(e as Map<String, dynamic>))
+          .map((e) => contentPostDtoFromReadModelMap(e as Map<String, dynamic>))
           .toList();
       expect(items, isNotEmpty);
 
@@ -243,7 +222,7 @@ void main() {
       );
     });
 
-    test('PhotoPostDto fromMap 解析所有字段包含 aspectRatio', () async {
+    test('服务 read model 投影为 PhotoPostDto 且包含 aspectRatio', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
@@ -254,7 +233,7 @@ void main() {
       expect(resp.statusCode, 200);
 
       final items = (jsonDecode(resp.body)['items'] as List)
-          .map((e) => postBaseDtoFromMap(e as Map<String, dynamic>))
+          .map((e) => contentPostDtoFromReadModelMap(e as Map<String, dynamic>))
           .whereType<PhotoPostDto>()
           .toList();
 
@@ -286,25 +265,36 @@ void main() {
   // ── 场景 2：behavior_batch_report_reaches_service ─────────────────────────
   // e2e.yaml: behavior_batch_report_reaches_service [test_type: api_contract]
   group('behavior_batch_report_reaches_service', () {
-    const postId = 'fixture_photo_001';
-
     test('POST /content/behaviors 返回 204', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
       final url = Uri.parse('$_apiBase/content/behaviors');
       final sw = Stopwatch()..start();
+      final idempotencyKey = _nextIdempotencyKey('content-behavior-batch');
       final resp = await _client
           .post(
             url,
             headers: {
-              ..._authHeaders('content.behavior'),
+              ..._commandHeaders(
+                'content.behavior',
+                idempotencyKey: idempotencyKey,
+              ),
               'Content-Type': 'application/json',
             },
             body: jsonEncode({
               'events': [
-                {'postId': postId, 'type': 'impression', 'feedPosition': 0},
-                {'postId': postId, 'type': 'dwell', 'dwellMs': 12000},
+                _behaviorEvent(
+                  'impression',
+                  clientEventId: '$idempotencyKey-impression',
+                  state: 'impressed',
+                  position: 0,
+                ),
+                _behaviorEvent(
+                  'dwell',
+                  clientEventId: '$idempotencyKey-dwell',
+                  duration: 12,
+                ),
               ],
             }),
           )
@@ -324,23 +314,32 @@ void main() {
       );
     });
 
-    test('事件 type 字段与 behaviors.yaml 枚举对齐', () async {
+    test('事件 action 字段与 behaviors.yaml 枚举对齐', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
-      // 验证合法 type 值（来自 behaviors.yaml behavior_events）被接受（不返回 400）
-      final validTypes = ['impression', 'dwell', 'click', 'share'];
-      for (final type in validTypes) {
+      // 验证合法 action 值（来自 behaviors.yaml behavior_events）被接受。
+      final validActions = ['impression', 'dwell', 'click', 'share'];
+      for (final action in validActions) {
+        final idempotencyKey = _nextIdempotencyKey('content-behavior-$action');
         final resp = await _client
             .post(
               Uri.parse('$_apiBase/content/behaviors'),
               headers: {
-                ..._authHeaders('content.behavior'),
+                ..._commandHeaders(
+                  'content.behavior',
+                  idempotencyKey: idempotencyKey,
+                ),
                 'Content-Type': 'application/json',
               },
               body: jsonEncode({
                 'events': [
-                  {'postId': postId, 'type': type},
+                  _behaviorEvent(
+                    action,
+                    clientEventId: '$idempotencyKey-event',
+                    state: action == 'impression' ? 'impressed' : null,
+                    duration: action == 'dwell' ? 12 : null,
+                  ),
                 ],
               }),
             )
@@ -348,27 +347,31 @@ void main() {
         expect(
           resp.statusCode,
           204,
-          reason: 'behavior type "$type" should be accepted (204)',
+          reason: 'behavior action "$action" should be accepted (204)',
         );
       }
     });
 
-    // e2e.yaml assertion: "like event NOT present in batch (dedicated route)"
+    // e2e.yaml assertion: "like event NOT present in batch（专属路由）"
     // The batch /behaviors endpoint should reject 'like' events (dedicated POST /posts/{id}/like).
-    test('like type 被 batch 端点拒绝（专属路由）', () async {
+    test('like action 被 batch 端点拒绝（专属路由）', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
+      final idempotencyKey = _nextIdempotencyKey('content-behavior-like');
       final resp = await _client
           .post(
             Uri.parse('$_apiBase/content/behaviors'),
             headers: {
-              ..._authHeaders('content.behavior'),
+              ..._commandHeaders(
+                'content.behavior',
+                idempotencyKey: idempotencyKey,
+              ),
               'Content-Type': 'application/json',
             },
             body: jsonEncode({
               'events': [
-                {'postId': postId, 'type': 'like'},
+                _behaviorEvent('like', clientEventId: '$idempotencyKey-event'),
               ],
             }),
           )
@@ -436,18 +439,24 @@ void main() {
         if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
         }
-        // 此 header 仅在非生产 profile 开启，生产不生效
+        final idempotencyKey = _nextIdempotencyKey('content-media-not-ready');
+        // 此 header 仅在非生产 profile 开启，生产不生效。
         final resp = await _client
             .post(
-              Uri.parse('$_apiBase/content/posts'),
+              Uri.parse('$_apiBase/content/posts:publish'),
               headers: {
-                ..._authHeaders('content.post.create'),
+                ..._commandHeaders(
+                  'content.post.publish',
+                  idempotencyKey: idempotencyKey,
+                ),
                 'Content-Type': 'application/json',
                 'X-Test-Error-Inject': 'CONTENT.USER.media_not_ready',
               },
               body: jsonEncode({
+                'publishIntentId': idempotencyKey,
+                'localDraftId': 'draft-$idempotencyKey',
                 'contentType': 'image',
-                'mediaUrls': ['https://example.com/processing.jpg'],
+                'mediaAssetIds': ['fixture_media_not_ready'],
               }),
             )
             .timeout(const Duration(seconds: 10));

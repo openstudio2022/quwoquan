@@ -10,3 +10,14 @@ scenarios:
       - owner 不可离开或被移除
       - 非授权 persona 决策 fail closed（BOLA）
       - membership、receipt、outbox 同一 Mongo transaction 提交
+
+  - name: group_membership_chat_roster_projection
+    operation: ApplyJoinCircleGroup / ApproveCircleGroupMember / LeaveCircleGroup / RemoveCircleGroupMember / UpdateCircleGroupMemberRole
+    go_func: TestCircleGroupMembershipProjectsChatRosterExactlyOnce
+    evidence: api_integration
+    assertions:
+      - active 映射 Chat member，owner/manager/member 分别映射 owner/admin/member
+      - left 或 removed 删除 ConversationUserState/ChatInbox，迟到 MessageSent 不得复活
+      - role_changed 只更新同一 Chat member role，不创建重复名册行
+      - consumer 因未 provisioned Conversation 暂时失败时不 ACK；reclaim/replay 后精确收敛
+      - 第 1001 个 active human member 在 circle-service transaction 中返回 group_membership_full，Chat 与 Circle 名册均不改变

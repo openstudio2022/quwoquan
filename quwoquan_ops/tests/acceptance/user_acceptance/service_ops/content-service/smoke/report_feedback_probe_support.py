@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
 import os
 import socket
 import ssl
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as xml
 from pathlib import Path
 from typing import Any
 
@@ -29,11 +30,11 @@ sys.path.insert(0, str(REPO_ROOT))
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     LocalAcceptanceSession,
     open_local_acceptance_session,
-    prepare_local_environment_auth,
 )
 
 
 LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
+_LOCAL_CANARY_TARGETS = {"prod": "prod-sim"}
 
 
 class ProbeFailure(RuntimeError):
@@ -48,12 +49,21 @@ def reporter_session(
     base_url: str,
     resolve_host: str,
     hosted_token_env: str,
+    target_name: str = "",
 ) -> LocalAcceptanceSession:
-    if environment in LOCAL_TARGETS:
+    local_target = LOCAL_TARGETS.get(environment)
+    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
+        local_target = _LOCAL_CANARY_TARGETS["prod"]
+    # prod 只有显式 prod-sim 才能使用本地受控 canary 凭据；prod-hosted 保持
+    # hosted bearer-token 路径，绝不能降级为本地签发令牌。
+    use_local_target = local_target is not None and (
+        environment != "prod" or target_name == _LOCAL_CANARY_TARGETS["prod"]
+    )
+    if use_local_target:
         return open_local_acceptance_session(
             base_url,
             environment=environment,
-            target_name=LOCAL_TARGETS[environment],
+            target_name=local_target,
             resolve_host=resolve_host,
         )
     return _hosted_session(hosted_token_env, "reporter")
@@ -62,12 +72,18 @@ def reporter_session(
 def operator_session(
     *,
     environment: str,
+    base_url: str,
+    resolve_host: str,
     hosted_token_env: str,
 ) -> LocalAcceptanceSession:
     if environment in LOCAL_TARGETS:
-        return _local_operator_session(
-            environment,
-            LOCAL_TARGETS[environment],
+        return open_local_acceptance_session(
+            base_url,
+            environment=environment,
+            target_name=LOCAL_TARGETS[environment],
+            profile="content-report-operator",
+            subject="fixture_content_report_operator",
+            resolve_host=resolve_host,
         )
     return _hosted_session(hosted_token_env, "report-operator")
 
@@ -82,58 +98,6 @@ def _hosted_session(token_env: str, actor: str) -> LocalAcceptanceSession:
     return LocalAcceptanceSession(
         owner_id=f"hosted-{actor}",
         persona_id=f"hosted-{actor}",
-        access_token=token,
-    )
-
-
-def _local_operator_session(
-    environment: str,
-    target_name: str,
-) -> LocalAcceptanceSession:
-    auth = prepare_local_environment_auth(environment, target_name)
-    actor_id = "fixture_content_report_operator"
-    process_env = os.environ.copy()
-    process_env.update(auth.environment)
-    process_env.update(
-        {
-            "APP_ENV": environment,
-            "QWQ_LOCAL_ACCEPTANCE_TARGET": target_name,
-            "QWQ_ACCEPTANCE_OWNER_ID": actor_id,
-            "QWQ_ACCEPTANCE_PERSONA_ID": actor_id,
-            "QWQ_ACCEPTANCE_PROFILE": "content-report-operator",
-        }
-    )
-    result = subprocess.run(
-        ["go", "run", "./services/user-service/cmd/acceptance-session"],
-        cwd=REPO_ROOT / "quwoquan_service",
-        env=process_env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise ProbeFailure(
-            "operator_auth_failed",
-            "local report operator session issuer failed",
-        )
-    try:
-        payload = json.loads(result.stdout)
-        token = str(payload["accessToken"]).strip()
-    except (KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise ProbeFailure(
-            "operator_auth_failed",
-            "local report operator session issuer returned invalid JSON",
-        ) from exc
-    if not token:
-        raise ProbeFailure(
-            "operator_auth_failed",
-            "local report operator session issuer returned an empty token",
-        )
-    return LocalAcceptanceSession(
-        owner_id=actor_id,
-        persona_id=actor_id,
         access_token=token,
     )
 
@@ -239,3 +203,74 @@ class ProbeClient:
                 f"{method} {path} returned a non-object payload",
             )
         return status, decoded
+
+
+def put_presigned_object(
+    *,
+    upload_url: str,
+    payload: bytes,
+    content_type: str,
+    sha256_digest: str,
+    resolve_host: str,
+) -> None:
+    """经服务端签发的 URL 上传二进制对象，不附带业务 Bearer 凭据。"""
+
+    digest = sha256_digest.removeprefix("sha256:").strip().lower()
+    try:
+        checksum = base64.b64encode(bytes.fromhex(digest)).decode("ascii")
+    except ValueError as exc:
+        raise ProbeFailure("invalid_probe_input", "invalid SHA-256 digest") from exc
+    request = urllib.request.Request(
+        upload_url,
+        data=payload,
+        headers={
+            "Content-Type": content_type,
+            "X-Amz-Checksum-Sha256": checksum,
+            "X-Amz-Meta-Sha256": f"sha256:{digest}",
+        },
+        method="PUT",
+    )
+    try:
+        with _temporary_host_resolution(upload_url, resolve_host):
+            with urllib.request.urlopen(
+                request,
+                timeout=30,
+                context=ssl._create_unverified_context(),
+            ) as response:
+                if int(response.status) not in {200, 201, 204}:
+                    raise ProbeFailure(
+                        "object_upload_failed",
+                        f"presigned PUT returned HTTP {response.status}",
+                    )
+    except urllib.error.HTTPError as exc:
+        error_code = _object_storage_error_code(exc.read() if exc.fp else b"")
+        parsed = urllib.parse.urlparse(upload_url)
+        endpoint = (
+            f"{parsed.scheme}://{parsed.hostname or '<missing-host>'}"
+            f"{f':{parsed.port}' if parsed.port else ''}"
+        )
+        raise ProbeFailure(
+            "object_upload_failed",
+            "presigned PUT returned "
+            f"HTTP {exc.code}{f' ({error_code})' if error_code else ''}"
+            f" at {endpoint}",
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise ProbeFailure(
+            "object_storage_unreachable",
+            "presigned object storage endpoint is unreachable",
+        ) from exc
+
+
+def _object_storage_error_code(body: bytes) -> str:
+    """仅提取 S3 XML 的机器码，避免把 presign URL 或响应全文写入报告。"""
+    if not body:
+        return ""
+    try:
+        root = xml.fromstring(body)
+    except xml.ParseError:
+        return ""
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] == "Code":
+            return (element.text or "").strip()
+    return ""

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
 	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
@@ -217,8 +218,12 @@ func TestIncomingCallDurableStreamReplayIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransport(client, client)
+	if err != nil {
+		t.Fatal(err)
+	}
 	consumer, err := streamadapter.NewRTCIncomingCallConsumer(
-		client,
+		transport,
 		coordinator,
 		"local-contract",
 		nil,

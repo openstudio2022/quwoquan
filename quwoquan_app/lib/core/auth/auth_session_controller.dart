@@ -366,6 +366,28 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
+  /// 账号被服务端限制时清除所有可换发凭证，并保留结构化的受限原因供路由切到
+  /// 安全首页。不得将它降级成普通 sessionExpired，否则用户看不到受限说明且
+  /// 可能回到会再次触发登录门的目标页面。
+  Future<void> clearForSuspendedAccount({required String errorMessage}) async {
+    await _store.clearSession(manualLogout: false);
+    final stored = await _store.read();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: AuthPromptReason.accountSuspended,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+      errorMessage: errorMessage,
+    );
+  }
+
   Future<void> updateActiveSubAccount(String subAccountId) async {
     await _store.updateActiveSubAccount(subAccountId);
     state = state.copyWith(activeSubAccountId: subAccountId.trim());
@@ -389,6 +411,12 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     } catch (e) {
       if (e is http.RequestAbortedException ||
           e is CloudOperationCancelledException) {
+        return false;
+      }
+      if (_isAccountSuspendedFailure(e)) {
+        await clearForSuspendedAccount(
+          errorMessage: runtimeErrorDisplayMessage(e),
+        );
         return false;
       }
       if (_shouldClearSessionForRefreshFailure(e)) {
@@ -450,6 +478,11 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       return true;
     }
     return false;
+  }
+
+  bool _isAccountSuspendedFailure(Object error) {
+    return error is CloudException &&
+        error.code == 'USER.AUTH.account_suspended';
   }
 
   bool _shouldRefreshDuringRestore(StoredAuthSession stored) {

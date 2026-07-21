@@ -1,17 +1,15 @@
 """通过唯一 Data CLI 驱动 Mongo+Redis ReliableTask 内容 worker。"""
 from __future__ import annotations
 
-import argparse
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Mapping
 
 from core.control_types import QueueBackend, QueueJobStage, QueueJobState
 from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT, execution_root
-from core.runtime_policy import active_runtime_policy
+from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
 from content.execution.queue.core import _load_jobs
 
@@ -29,6 +27,7 @@ def _fleet_job_document(job: object) -> dict[str, str]:
         "entityRef",
         "carrier",
         "sourceRevision",
+        "idempotencyKey",
         "jobId",
         "executionId",
         "ref",
@@ -42,6 +41,24 @@ def _fleet_job_document(job: object) -> dict[str, str]:
             f"ReliableTask job payload 不完整：{job.job_id}: {', '.join(missing)}"
         )
     return document
+
+
+def _has_audited_remote_recovery(
+    execution_id: str,
+    stage: QueueJobStage,
+) -> bool:
+    """Permit DLQ revival only after the controller recorded recovery evidence."""
+    from content.execution.support import load_execution_state
+
+    state = load_execution_state(execution_id)
+    for action in reversed(tuple(state.recovery_actions or ())):
+        if not isinstance(action, Mapping):
+            continue
+        if str(action.get("stage") or "").strip() != stage.value:
+            continue
+        if str(action.get("recoveredAt") or "").strip():
+            return True
+    return False
 
 
 def build_fleet_request(
@@ -63,6 +80,7 @@ def build_fleet_request(
         "schema": "quwoquan.data_content_fleet_request",
         "executionId": execution_id,
         "requireCommercial": stage is QueueJobStage.PUBLISH,
+        "recoverDeadTasks": _has_audited_remote_recovery(execution_id, stage),
         "jobs": [_fleet_job_document(job) for job in sorted(jobs, key=lambda item: item.job_id)],
     }
     assert_valid(
@@ -93,6 +111,17 @@ def _fleet_command() -> tuple[list[str], Path]:
     ], service_root
 
 
+def _fleet_agent_python() -> Path:
+    """Resolve the verified Data runtime instead of inheriting caller Python."""
+    python = resolve_data_agent_python(include_current=False)
+    if python is None:
+        raise RuntimeError(
+            "ReliableTask fleet 找不到包含 Agent 依赖的 Data Python；"
+            "先运行 `qwq-data task preflight` 重建仓外工具缓存"
+        )
+    return python
+
+
 def run_reliabletask_fleet(
     execution_id: str,
     stage: QueueJobStage,
@@ -115,8 +144,8 @@ def run_reliabletask_fleet(
     environment = {
         **os.environ,
         "PYTHONDONTWRITEBYTECODE": "1",
-        "QWQ_DATA_FLEET_PYTHON": sys.executable,
-        "QWQ_DATA_FLEET_CLI": str(REPO_ROOT / "quwoquan_data/scripts/cli.py"),
+        "QWQ_DATA_FLEET_PYTHON": str(_fleet_agent_python()),
+        "QWQ_DATA_FLEET_SCRIPTS_ROOT": str(REPO_ROOT / "quwoquan_data/scripts"),
         "QWQ_DATA_FLEET_WORK_DIR": str(REPO_ROOT / "quwoquan_data"),
         "QWQ_DATA_FLEET_PUBLISH_ROOT": str(PUBLISH_ROOT),
         "QWQ_DATA_FLEET_EVIDENCE_ROOT": str(OUTPUT_ROOT),
@@ -160,47 +189,7 @@ def run_reliabletask_fleet(
     return report
 
 
-def handle_reliabletask_fleet(args: argparse.Namespace) -> None:
-    report = run_reliabletask_fleet(
-        str(args.execution_id),
-        QueueJobStage(str(args.stage)),
-        workers=int(args.workers),
-        timeout_seconds=int(args.timeout_seconds),
-    )
-    print(
-        "[task reliabletask-fleet] "
-        f"stage={args.stage} total={report['total']} "
-        f"succeeded={report['succeeded']} "
-        f"accepted={report['commercialAcceptedCount']} "
-        f"acceptedObjectsPerHour={report['acceptedContentThroughputPerHour']:.3f}"
-    )
-
-
-def register_reliabletask_fleet_parser(
-    commands: argparse._SubParsersAction,
-) -> None:
-    policy = active_runtime_policy()
-    parser = commands.add_parser(
-        "reliabletask-fleet",
-        help="通过 Mongo+Redis worker 池执行已冻结的对象 author/publish jobs",
-    )
-    parser.add_argument("--execution-id", required=True)
-    parser.add_argument(
-        "--stage",
-        required=True,
-        choices=(QueueJobStage.AUTHOR.value, QueueJobStage.PUBLISH.value),
-    )
-    parser.add_argument("--workers", type=int, default=policy.author_workers)
-    parser.add_argument(
-        "--timeout-seconds",
-        type=int,
-        default=policy.queue_max_wall_clock_seconds,
-    )
-    parser.set_defaults(handler=handle_reliabletask_fleet)
-
-
 __all__ = [
     "build_fleet_request",
-    "register_reliabletask_fleet_parser",
     "run_reliabletask_fleet",
 ]

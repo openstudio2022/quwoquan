@@ -188,6 +188,27 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         with self.assertRaisesRegex(ValueError, "unsupported local environment target"):
             local_environment_auth.prepare_local_environment_auth("beta", "gamma-local")
 
+    def test_prod_sim_is_the_only_local_prod_auth_target(self) -> None:
+        with mock.patch.object(
+            local_environment_auth,
+            "_load_or_create_secrets",
+            return_value={
+                "jwt_secret": "jwt",
+                "device_ticket_secret": "device",
+                "otp_code_ref_key_b64": "code-ref",
+                "push_token_encryption_key_b64": "push-token",
+                "account_closure_subject_hmac_secret": "account-closure",
+            },
+        ):
+            prod_sim = local_environment_auth.prepare_local_environment_auth(
+                "prod",
+                "prod-sim",
+            )
+
+        self.assertEqual(prod_sim.environment["AUTH_JWT_ISSUER"], "quwoquan.prod.local")
+        with self.assertRaisesRegex(ValueError, "unsupported local environment target"):
+            local_environment_auth.prepare_local_environment_auth("prod", "prod-hosted")
+
     def test_run_scoped_subject_is_bound_to_both_actor_dimensions(self) -> None:
         completed = mock.Mock(
             returncode=0,
@@ -226,6 +247,42 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             process_env["QWQ_ACCEPTANCE_PERSONA_ID"],
             "premium-pool-seed-run-001",
         )
+
+    def test_service_profile_is_forwarded_only_through_issuer_environment(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "accessToken": "local-service-bearer",
+                    "ownerId": "filter-catalog-publisher",
+                    "personaId": "filter-catalog-publisher",
+                }
+            ),
+            stderr="",
+        )
+        auth = local_environment_auth.LocalEnvironmentAuth(
+            environment={"AUTH_JWT_SECRET": "test-secret"},
+            secret_path=Path("/tmp/auth.env"),
+        )
+        with (
+            mock.patch.object(local_environment_auth, "prepare_local_environment_auth", return_value=auth),
+            mock.patch.object(local_environment_auth.subprocess, "run", return_value=completed) as run,
+        ):
+            session = local_environment_auth.open_local_acceptance_session(
+                "https://gamma-api.quwoquan-env.test:19000",
+                environment="gamma",
+                target_name="gamma-local",
+                subject="filter-catalog-publisher",
+                profile="content-filter-catalog-publisher",
+            )
+
+        self.assertNotIn("local-service-bearer", repr(session))
+        process_env = run.call_args.kwargs["env"]
+        self.assertEqual(
+            process_env["QWQ_ACCEPTANCE_PROFILE"],
+            "content-filter-catalog-publisher",
+        )
+        self.assertNotIn("content-filter-catalog-publisher", run.call_args.args[0])
 
     def test_run_scoped_subject_rejects_noncanonical_identity(self) -> None:
         with self.assertRaisesRegex(ValueError, "subject is invalid"):

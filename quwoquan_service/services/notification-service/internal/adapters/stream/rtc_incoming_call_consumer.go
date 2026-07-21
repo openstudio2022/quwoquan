@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/notification-service/internal/application"
 	notification "quwoquan_service/services/notification-service/internal/domain/notification"
 )
@@ -25,7 +25,7 @@ const (
 )
 
 type RTCIncomingCallConsumer struct {
-	redis       rtredis.Client
+	transport   DurableMessageTransport
 	coordinator *application.IncomingCallDeliveryCoordinator
 	consumer    string
 	logger      *slog.Logger
@@ -35,14 +35,14 @@ type RTCIncomingCallConsumer struct {
 }
 
 func NewRTCIncomingCallConsumer(
-	client rtredis.Client,
+	transport DurableMessageTransport,
 	coordinator *application.IncomingCallDeliveryCoordinator,
 	consumer string,
 	logger *slog.Logger,
 ) (*RTCIncomingCallConsumer, error) {
-	if client == nil || coordinator == nil {
+	if transport == nil || coordinator == nil {
 		return nil, errors.New(
-			"rtc incoming call consumer requires Redis and coordinator",
+			"rtc incoming call consumer requires message transport and coordinator",
 		)
 	}
 	consumer = strings.TrimSpace(consumer)
@@ -53,7 +53,7 @@ func NewRTCIncomingCallConsumer(
 		logger = slog.Default()
 	}
 	return &RTCIncomingCallConsumer{
-		redis:       client,
+		transport:   transport,
 		coordinator: coordinator,
 		consumer:    consumer,
 		logger:      logger,
@@ -66,7 +66,7 @@ func (c *RTCIncomingCallConsumer) EnsureGroups(ctx context.Context) error {
 		RTCCallAnsweredStream,
 		RTCCallEndedStream,
 	} {
-		if err := c.redis.XGroupCreateMkStream(
+		if err := c.transport.EnsureDurableConsumerGroup(
 			ctx,
 			stream,
 			rtcIncomingCallConsumerGroup,
@@ -91,7 +91,7 @@ func (c *RTCIncomingCallConsumer) ProcessOnce(
 		RTCCallAnsweredStream,
 		RTCCallEndedStream,
 	} {
-		claimed, _, err := c.redis.XAutoClaim(
+		claimed, _, err := c.transport.ReclaimDurable(
 			ctx,
 			stream,
 			rtcIncomingCallConsumerGroup,
@@ -104,13 +104,15 @@ func (c *RTCIncomingCallConsumer) ProcessOnce(
 			c.recordFailure(err)
 			return processed, err
 		}
-		fresh, err := c.redis.XReadGroup(
+		fresh, err := c.transport.ReadDurable(
 			ctx,
-			rtcIncomingCallConsumerGroup,
-			c.consumer,
-			map[string]string{stream: ">"},
-			50,
-			10*time.Millisecond,
+			runtimemessaging.StreamReadRequest{
+				Stream:   stream,
+				Group:    rtcIncomingCallConsumerGroup,
+				Consumer: c.consumer,
+				Count:    50,
+				Block:    10 * time.Millisecond,
+			},
 		)
 		if err != nil {
 			c.recordFailure(err)
@@ -178,20 +180,21 @@ func (c *RTCIncomingCallConsumer) Healthy(
 func (c *RTCIncomingCallConsumer) processMessage(
 	ctx context.Context,
 	stream string,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) error {
-	eventType := strings.TrimSpace(message.Values["eventType"])
+	values := durableFieldsToMap(message.Fields)
+	eventType := strings.TrimSpace(values["eventType"])
 	var err error
 	switch eventType {
 	case "CallRinging":
 		var event notification.IncomingCallRingingEvent
-		event, err = decodeRingingEvent(message.Values)
+		event, err = decodeRingingEvent(values)
 		if err == nil {
 			err = c.coordinator.HandleRinging(ctx, event)
 		}
 	case "CallAnswered", "CallEnded":
 		var event notification.IncomingCallCancellationEvent
-		event, err = decodeCancellationEvent(eventType, message.Values)
+		event, err = decodeCancellationEvent(eventType, values)
 		if err == nil {
 			err = c.coordinator.HandleCancellation(ctx, event)
 		}
@@ -200,18 +203,20 @@ func (c *RTCIncomingCallConsumer) processMessage(
 	}
 	if err != nil {
 		if isInvalidRTCContract(err) {
-			if _, dlqErr := c.redis.XAdd(
+			if _, dlqErr := c.transport.AppendDurable(
 				ctx,
-				stream+rtcIncomingCallDLQSuffix,
-				map[string]string{
-					"eventId":        message.Values["eventId"],
-					"sourceStreamId": message.ID,
-					"reason":         err.Error(),
+				runtimemessaging.DurableMessage{
+					Stream: stream + rtcIncomingCallDLQSuffix,
+					Fields: []runtimemessaging.DurableField{
+						{Name: "eventId", Value: values["eventId"]},
+						{Name: "sourceStreamId", Value: message.ID},
+						{Name: "reason", Value: err.Error()},
+					},
 				},
 			); dlqErr != nil {
 				return errors.Join(err, dlqErr)
 			}
-			return c.redis.XAck(
+			return c.transport.AckDurable(
 				ctx,
 				stream,
 				rtcIncomingCallConsumerGroup,
@@ -220,7 +225,7 @@ func (c *RTCIncomingCallConsumer) processMessage(
 		}
 		return err
 	}
-	return c.redis.XAck(
+	return c.transport.AckDurable(
 		ctx,
 		stream,
 		rtcIncomingCallConsumerGroup,

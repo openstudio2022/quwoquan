@@ -10,9 +10,9 @@ python3 quwoquan_ops/cli/stackctl.py up --target gamma-local --skip-app
 
 默认会生成：
 
-- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/config/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
+- `QWQ_DEPLOY_WORK_ROOT/gamma-local/rendered/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
 - `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/cache/media`：本地 media/CDN 测试目录。
-- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/app-instances/stack_status.json`：实例状态；后续 gate 证据写入 `env/gamma/runs/**`。
+- `QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/`：仅保存可删除的进程状态；后续 gate 证据写入 `env/gamma/runs/**`。
 
 `quwoquan_data/control_plane/governance/taxonomy` 是受版本控制的唯一标签真相源。启动脚本只读导入该树；目录缺失时直接失败，不在运行期生成 `publish/tags` 副本。
 

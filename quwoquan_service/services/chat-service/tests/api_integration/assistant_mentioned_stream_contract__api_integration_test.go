@@ -13,7 +13,7 @@ func TestAssistantMentionedWritesReliableStream(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	ctx := context.Background()
-	if err := redisRouter.Scene("realtime").XGroupCreateMkStream(ctx, mqpkg.AssistantMentionedStream, "test-consumer", "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, mqpkg.AssistantMentionedStream, "test-consumer", "0"); err != nil {
 		t.Fatalf("create stream group: %v", err)
 	}
 	conv := createConversation(t, `{"type":"group","title":"assistant stream"}`)
@@ -24,7 +24,7 @@ func TestAssistantMentionedWritesReliableStream(t *testing.T) {
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		messages, err := redisRouter.Scene("realtime").XReadGroup(
+		messages, err := redisRouter.Scene("general").XReadGroup(
 			ctx,
 			"test-consumer",
 			"worker-1",
@@ -51,6 +51,29 @@ func TestAssistantMentionedWritesReliableStream(t *testing.T) {
 		if values["content"] != "@小趣 帮忙总结" {
 			t.Fatalf("content=%s", values["content"])
 		}
+		if err := redisRouter.Scene("general").XAck(
+			ctx,
+			mqpkg.AssistantMentionedStream,
+			"test-consumer",
+			messages[0].ID,
+		); err != nil {
+			t.Fatalf("ack stream: %v", err)
+		}
+		reclaimed, _, err := redisRouter.Scene("general").XAutoClaim(
+			ctx,
+			mqpkg.AssistantMentionedStream,
+			"test-consumer",
+			"recovery-worker",
+			0,
+			"0-0",
+			1,
+		)
+		if err != nil {
+			t.Fatalf("claim acknowledged stream: %v", err)
+		}
+		if len(reclaimed) != 0 {
+			t.Fatalf("acknowledged stream message must not remain pending: %+v", reclaimed)
+		}
 		return
 	}
 	t.Fatal("assistant mentioned stream event not received")
@@ -60,7 +83,7 @@ func TestAssistantGeneratedMessageDoesNotWriteMentionStream(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	ctx := context.Background()
-	if err := redisRouter.Scene("realtime").XGroupCreateMkStream(ctx, mqpkg.AssistantMentionedStream, "test-consumer", "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, mqpkg.AssistantMentionedStream, "test-consumer", "0"); err != nil {
 		t.Fatalf("create stream group: %v", err)
 	}
 	conv := createConversation(t, `{"type":"group","title":"assistant loop guard"}`)
@@ -69,7 +92,7 @@ func TestAssistantGeneratedMessageDoesNotWriteMentionStream(t *testing.T) {
 
 	sendMessageAs(t, "assistant", convId, `{"type":"text","content":"我是小趣回复","mentions":["assistant"],"clientMsgId":"assistant-loop-1"}`)
 
-	messages, err := redisRouter.Scene("realtime").XReadGroup(
+	messages, err := redisRouter.Scene("general").XReadGroup(
 		ctx,
 		"test-consumer",
 		"worker-1",

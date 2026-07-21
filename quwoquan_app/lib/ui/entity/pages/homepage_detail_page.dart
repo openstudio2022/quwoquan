@@ -97,6 +97,10 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           (previous == null || !previous.isAuthenticated);
       if (justLoggedIn) {
         _resumeHomepageInteractionAfterLogin();
+      } else if (previous?.isAuthenticated == true && !next.isAuthenticated) {
+        if (_viewerOwnerUserId != null) {
+          setState(() => _viewerOwnerUserId = null);
+        }
       }
     });
     final pendingContinuation = ref.watch(authContinuationProvider);
@@ -208,7 +212,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       trackHomepageProductAction(
         ref,
         action: 'share_open',
-        pageName: 'homepage_detail',
+        pageName: AppUiSurfaces.homepageDetail.id,
         result: 'success',
         startedAt: startedAt,
         homepageId: widget.homepageId,
@@ -292,7 +296,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         _wishlistState = loadedWishlistState;
         _isLoading = false;
       });
-      _trackCanonicalEntityPageViewIfNeeded(loadedBundle, loadedDetail);
+      _trackHomepagePageViewIfNeeded(loadedBundle, loadedDetail);
       unawaited(_hydrateViewerOwnerContext());
       final loadedIntroduction = await introductionFuture;
       if (mounted &&
@@ -344,7 +348,24 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     }
   }
 
+  Future<void> _refreshWishlistStateAfterLogin() async {
+    final detail = _detail;
+    if (detail == null || !_isWishlistHomepageType(detail.homepageType)) {
+      return;
+    }
+    final state = await _loadWishlistState(detail);
+    if (mounted && state != null) {
+      setState(() => _wishlistState = state);
+    }
+  }
+
   Future<void> _hydrateViewerOwnerContext() async {
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      if (mounted && _viewerOwnerUserId != null) {
+        setState(() => _viewerOwnerUserId = null);
+      }
+      return;
+    }
     try {
       final activeContext = await ref.read(activePersonaContextProvider.future);
       if (!mounted) return;
@@ -362,23 +383,23 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     }
   }
 
-  void _trackCanonicalEntityPageViewIfNeeded(
+  void _trackHomepagePageViewIfNeeded(
     ObjectPageBundle bundle,
     HomepageDetail detail,
   ) {
     if (_didTrackEntityPageView) {
       return;
     }
-    final entityId = bundle.canonicalEntityId.trim().isNotEmpty
-        ? bundle.canonicalEntityId.trim()
-        : (detail.canonicalEntityId?.trim() ?? '');
-    if (entityId.isEmpty) {
+    final homepageId = detail.id.trim().isNotEmpty
+        ? detail.id.trim()
+        : bundle.objectId.trim();
+    if (homepageId.isEmpty) {
       return;
     }
     _didTrackEntityPageView = true;
     ref
         .read(contentEngagementTrackerProvider)
-        .trackEntityPageView(entityId, from: widget.referralSource);
+        .trackEntityPageView(homepageId, from: widget.referralSource);
   }
 
   Future<void> _openClaim() async {
@@ -425,7 +446,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       await requireLogin(
         ref,
         context,
-        AuthGateReason.follow,
+        usesWishlistIntent ? AuthGateReason.wishlist : AuthGateReason.follow,
         dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
         dismissPolicy: LoginDismissPolicy.safeFallback,
       );
@@ -439,10 +460,16 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   }
 
   Future<void> _toggleHomepageWishlist(HomepageDetail detail) async {
+    await _setHomepageWishlist(detail, wishlisted: !(_wishlistState ?? false));
+  }
+
+  Future<void> _setHomepageWishlist(
+    HomepageDetail detail, {
+    required bool wishlisted,
+  }) async {
     final startedAt = DateTime.now();
-    final nextWishlisted = !(_wishlistState ?? false);
     final tracker = ref.read(contentBehaviorTrackerProvider);
-    if (nextWishlisted) {
+    if (wishlisted) {
       tracker.trackWishlistAdd(
         widget.homepageId,
         objectKind: SubjectFollowSubjectType.homepage.wire,
@@ -464,11 +491,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (!mounted) {
       return;
     }
-    setState(() => _wishlistState = nextWishlisted);
+    setState(() => _wishlistState = wishlisted);
     unawaited(
       trackHomepageProductAction(
         ref,
-        action: nextWishlisted ? 'wishlist_add' : 'wishlist_remove',
+        action: wishlisted
+            ? BehaviorAction.wishlistAdd.wireValue
+            : BehaviorAction.wishlistRemove.wireValue,
         pageName: AppUiSurfaces.homepageDetail.id,
         result: 'success',
         startedAt: startedAt,
@@ -514,7 +543,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         trackHomepageProductAction(
           ref,
           action: result.following ? 'follow' : 'unfollow',
-          pageName: 'homepageDetail',
+          pageName: AppUiSurfaces.homepageDetail.id,
           result: 'success',
           startedAt: startedAt,
           homepageId: widget.homepageId,
@@ -535,7 +564,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         trackHomepageProductAction(
           ref,
           action: detail.viewerFollowsHomepage ? 'unfollow' : 'follow',
-          pageName: 'homepageDetail',
+          pageName: AppUiSurfaces.homepageDetail.id,
           result: 'failure',
           startedAt: startedAt,
           homepageId: widget.homepageId,
@@ -587,7 +616,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         trackHomepageProductAction(
           ref,
           action: 'message_owner',
-          pageName: 'homepageDetail',
+          pageName: AppUiSurfaces.homepageDetail.id,
           result: 'success',
           startedAt: startedAt,
           homepageId: widget.homepageId,
@@ -609,7 +638,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         trackHomepageProductAction(
           ref,
           action: 'message_owner',
-          pageName: 'homepageDetail',
+          pageName: AppUiSurfaces.homepageDetail.id,
           result: 'failure',
           startedAt: startedAt,
           homepageId: widget.homepageId,
@@ -623,20 +652,24 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (!mounted) {
       return;
     }
+    unawaited(_hydrateViewerOwnerContext());
     final pending = ref.read(authContinuationProvider);
+    final controller = ref.read(authContinuationProvider.notifier);
+    if (pending is WishlistHomepageContinuation &&
+        pending.homepageId == widget.homepageId) {
+      final wishlist = controller.take<WishlistHomepageContinuation>();
+      final detail = _detail;
+      if (wishlist != null && detail != null) {
+        unawaited(_setHomepageWishlist(detail, wishlisted: true));
+      } else if (wishlist != null) {
+        controller.set(wishlist);
+      }
+      return;
+    }
+    unawaited(_refreshWishlistStateAfterLogin());
     if (pending is OpenHomepageReviewComposerContinuation &&
         pending.homepageId == widget.homepageId) {
       _scheduleReviewContinuationResume(pending);
-      return;
-    }
-    final controller = ref.read(authContinuationProvider.notifier);
-    final wishlist = controller.take<WishlistHomepageContinuation>();
-    if (wishlist != null) {
-      if (wishlist.homepageId == widget.homepageId) {
-        unawaited(_toggleHomepagePrimaryIntent());
-      } else {
-        controller.set(wishlist);
-      }
       return;
     }
     final follow = controller.take<FollowHomepageContinuation>();

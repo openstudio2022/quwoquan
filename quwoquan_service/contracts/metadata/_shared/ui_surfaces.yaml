@@ -7,6 +7,7 @@ surfaces:
     description: 趣信列表与会话入口（含通知维度 AppMessage inbox 与当前 persona 通话记录）
     operation_ids:
       - ListInbox
+      - ListMessageHome
       - ListConversations
       - ListConversationTimestamps
       - BatchGetConversations
@@ -63,6 +64,8 @@ surfaces:
       - SyncMessages
       - MarkAsRead
       - GetReceipts
+      - InviteAssistant
+      - RemoveAssistant
 
   - id: chatSettings
     owner: chat
@@ -71,6 +74,7 @@ surfaces:
     description: 会话设置页
     operation_ids:
       - GetConversation
+      - UpdateConversationTitle
       - UpdateConversationSettings
       - UpdateAnnouncement
       - ListMembers
@@ -690,7 +694,14 @@ surfaces:
     route_id: assistantManagement
     path_template: /assistant/management
     description: 私助偏好、隐私与记忆管理
-    operation_ids: []
+    operation_ids:
+      - SetAssistantPreference
+      - ListAssistantPreferences
+      - RevokeAssistantPreference
+      - RestoreAssistantPreference
+      - GrantSkillConsent
+      - RevokeSkillConsent
+      - ListConsents
 
   - id: assistantSkills
     owner: assistant

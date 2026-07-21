@@ -170,6 +170,9 @@ func (s *CommentService) CreateComment(
 			params.ParentCommentID = target.ID
 		}
 	}
+	if err := validateAttachmentMediaIDCount(params.AttachmentMediaIDs); err != nil {
+		return CommentCommandResult{}, err
+	}
 	if err := s.data.Attachments.ValidateCommentAttachments(ctx, actorID, params.AttachmentMediaIDs); err != nil {
 		return CommentCommandResult{}, mapDomainError(err)
 	}
@@ -397,9 +400,13 @@ func (s *CommentService) BindAttachments(
 		return CommentCommandResult{}, err
 	}
 	command.ActorID = actorID
+	command.AttachmentMediaIDs = cloneStrings(command.AttachmentMediaIDs)
 	commandDigest := bindAttachmentsCommandDigest(command)
 	if replayed, found, err := s.replay(ctx, actorID, "BindCommentAttachments", commandDigest); err != nil || found {
 		return replayed, err
+	}
+	if err := validateAttachmentMediaIDCount(command.AttachmentMediaIDs); err != nil {
+		return CommentCommandResult{}, err
 	}
 	if err := s.data.Attachments.ValidateCommentAttachments(ctx, actorID, command.AttachmentMediaIDs); err != nil {
 		return CommentCommandResult{}, mapDomainError(err)
@@ -644,6 +651,8 @@ func mapDomainError(err error) error {
 		return contentgenerated.AppErrorFromCommentNotFound(err.Error())
 	case errors.Is(err, commentmodel.ErrAttachmentForbidden):
 		return contentgenerated.AppErrorFromCommentForbiddenDelete(err.Error())
+	case errors.Is(err, commentmodel.ErrAttachmentLimitExceeded):
+		return contentgenerated.AppErrorFromCommentAttachmentLimitExceeded(err.Error())
 	case errors.Is(err, commentmodel.ErrModerationForbidden):
 		return contentgenerated.AppErrorFromCommentModerationForbidden(err.Error())
 	case errors.Is(err, commentmodel.ErrInvalidStatusTransition):
@@ -671,6 +680,19 @@ func commentNotFound(commentID string) error {
 
 func invalidArgument(debug string) error {
 	return contentgenerated.AppErrorFromInvalidArgument(debug)
+}
+
+func validateAttachmentMediaIDCount(attachmentMediaIDs []string) error {
+	if len(attachmentMediaIDs) <= commentmodel.MaxAttachmentMediaIDs {
+		return nil
+	}
+	return contentgenerated.AppErrorFromCommentAttachmentLimitExceeded(
+		fmt.Sprintf(
+			"received %d attachments, maximum is %d",
+			len(attachmentMediaIDs),
+			commentmodel.MaxAttachmentMediaIDs,
+		),
+	)
 }
 
 func unavailable(err error) error {

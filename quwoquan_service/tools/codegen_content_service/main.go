@@ -55,6 +55,12 @@ func main() {
 	if err := generateContentMediaUploadPolicy(source, outputDir); err != nil {
 		exitErr(fmt.Errorf("generate content media upload policy: %w", err))
 	}
+	if err := generateContentImageVariantPolicy(source, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate content image variant policy: %w", err))
+	}
+	if err := generateContentMediaOriginalAccessPolicy(source, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate content media original access policy: %w", err))
+	}
 	if err := generateHTTPScaffold(source, routeService, outputDir); err != nil {
 		exitErr(fmt.Errorf("generate http scaffold for service routes %s: %w", routeService, err))
 	}
@@ -477,6 +483,24 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGenerateArticleSummary(w, r)
 		{{- else if eq . "GetHelperRead" }}
 		h.handleGetHelperRead(w, r)
+		{{- else if eq . "StageFilterCatalogRelease" }}
+		h.handleStageFilterCatalogRelease(w, r)
+		{{- else if eq . "ActivateFilterCatalogRelease" }}
+		h.handleActivateFilterCatalogRelease(w, r)
+		{{- else if eq . "RollbackFilterCatalogRelease" }}
+		h.handleRollbackFilterCatalogRelease(w, r)
+		{{- else if eq . "GetActiveFilterCatalog" }}
+		h.handleGetActiveFilterCatalog(w, r)
+		{{- else if eq . "StartMediaImageReprocessRun" }}
+		h.handleStartMediaImageReprocessRun(w, r)
+		{{- else if eq . "PauseMediaImageReprocessRun" }}
+		h.handlePauseMediaImageReprocessRun(w, r)
+		{{- else if eq . "ResumeMediaImageReprocessRun" }}
+		h.handleResumeMediaImageReprocessRun(w, r)
+		{{- else if eq . "RollbackMediaImageReprocessRun" }}
+		h.handleRollbackMediaImageReprocessRun(w, r)
+		{{- else if eq . "GetMediaImageReprocessRun" }}
+		h.handleGetMediaImageReprocessRun(w, r)
 		{{- else if eq . "OpenPostModerationCase" }}
 		h.handleOpenPostModerationCase(w, r)
 		{{- else if eq . "ReviewPostModerationCase" }}
@@ -799,6 +823,7 @@ func contentDomainErrorsPaths() []string {
 		"content/deleted_post_tombstone/errors.yaml",
 		"content/filter_catalog_release/errors.yaml",
 		"content/media_asset/errors.yaml",
+		"content/media_image_reprocess_run/errors.yaml",
 		"content/media_original_access_fact/errors.yaml",
 		"content/media_upload_session/errors.yaml",
 		"content/outbound_share_fact/errors.yaml",

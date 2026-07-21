@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -121,10 +123,145 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 
 	streamRelay := groupmembershipapp.NewOutboxRelay(
 		groupMembershipStore, groupMembershipStore,
-		messaging.NewCircleGroupMembershipStreamPublisher(redisRouter.Scene("general")), "group-membership-stream-api-test",
+		messaging.NewCircleGroupMembershipStreamPublisher(circleMessageTransport), "group-membership-stream-api-test",
 	)
 	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 5 {
 		t.Fatalf("group membership stream count=%d err=%v", count, err)
+	}
+}
+
+func TestCircleGroupMembershipCapacityRejectsOneThousandAndFirstMember(t *testing.T) {
+	cleanCollections(t)
+	const (
+		circleID = "circle-group-capacity"
+		ownerID  = "persona-owner"
+		firstID  = "persona-capacity-first"
+		nextID   = "persona-capacity-next"
+	)
+	seedGroupCirclePolicy(t, circleID, ownerID, firstID)
+	now := time.Now().UTC()
+	if _, err := mongoDB.Collection("circle_memberships").InsertOne(context.Background(), bson.M{
+		"_id": "cm-capacity-next", "version": 1, "circleId": circleID, "personaId": nextID,
+		"role": "member", "state": "active", "createdAt": now, "updatedAt": now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	group := executeGroupCommand(t, http.MethodPost, "/circles/"+circleID+"/groups", map[string]any{
+		"groupType": "self_built", "name": "容量边界群", "description": "1000 名成员上限",
+		"visibility": "private", "joinPolicy": "apply_only", "storageEnabled": true, "noticeEnabled": true,
+	}, "group-capacity-create", "", ownerID, "CreateCircleGroup")
+	if group.Code != http.StatusCreated {
+		t.Fatalf("create capacity group: status=%d body=%s", group.Code, group.Body.String())
+	}
+	groupID := decodeBody(t, group)["groupId"].(string)
+
+	groupStore := grouppersistence.NewMongoAggregateStore(mongoDB)
+	groupMembershipStore := groupmembershippersistence.NewMongoAggregateStore(mongoDB)
+	groupMembershipReaders := groupmembershippersistence.NewMongoReaders(mongoDB)
+	groupMembershipCommands := groupmembershipapp.NewCommandFacade(
+		groupMembershipStore, groupMembershipReaders, groupMembershipReaders, groupMembershipReaders,
+	)
+	ownerRelay := groupapp.NewOutboxRelay(
+		groupStore,
+		groupStore,
+		groupmembershipapp.NewCircleGroupOwnerProjector(groupMembershipCommands),
+		"capacity-owner-membership",
+	)
+	if count, err := ownerRelay.Drain(context.Background(), 10); err != nil || count != 1 {
+		t.Fatalf("project capacity group owner: count=%d err=%v", count, err)
+	}
+
+	seededMembers := make([]any, 0, 998)
+	for index := 0; index < 998; index++ {
+		seededMembers = append(seededMembers, bson.M{
+			"_id": fmt.Sprintf("cgm-capacity-%04d", index), "version": 1,
+			"circleId": circleID, "groupId": groupID, "personaId": fmt.Sprintf("persona-capacity-%04d", index),
+			"role": "member", "state": "active", "joinedAt": now, "decidedAt": now,
+			"decidedByPersonaId": ownerID, "createdAt": now, "updatedAt": now,
+		})
+	}
+	if _, err := mongoDB.Collection("circle_group_memberships").InsertMany(context.Background(), seededMembers); err != nil {
+		t.Fatal(err)
+	}
+	// The counter is an internal invariant ledger. Removing it simulates an
+	// interrupted bootstrap: the next transaction must derive it from the
+	// authoritative active membership set without allowing a 1001st member.
+	if _, err := mongoDB.Collection("circle_group_membership_capacity_counters").DeleteMany(context.Background(), bson.M{}); err != nil {
+		t.Fatal(err)
+	}
+
+	applyPath := "/circles/" + circleID + "/groups/" + groupID + "/memberships"
+	for _, personaID := range []string{firstID, nextID} {
+		applied := executeGroupMembershipCommand(
+			t,
+			http.MethodPost,
+			applyPath,
+			nil,
+			"capacity-apply-"+personaID,
+			"",
+			personaID,
+			"ApplyJoinCircleGroup",
+		)
+		if applied.Code != http.StatusCreated || decodeBody(t, applied)["state"] != "pending" {
+			t.Fatalf("apply %s must remain pending before capacity decision: status=%d body=%s", personaID, applied.Code, applied.Body.String())
+		}
+	}
+
+	firstApproval := executeGroupMembershipCommand(
+		t,
+		http.MethodPost,
+		applyPath+"/"+firstID+":approve",
+		nil,
+		"capacity-approve-first",
+		"",
+		ownerID,
+		"ApproveCircleGroupMember",
+	)
+	if firstApproval.Code != http.StatusOK || decodeBody(t, firstApproval)["state"] != "active" {
+		t.Fatalf("the 1000th active member must commit: status=%d body=%s", firstApproval.Code, firstApproval.Body.String())
+	}
+
+	full := executeGroupMembershipCommand(
+		t,
+		http.MethodPost,
+		applyPath+"/"+nextID+":approve",
+		nil,
+		"capacity-approve-next",
+		"",
+		ownerID,
+		"ApproveCircleGroupMember",
+	)
+	if full.Code != http.StatusConflict || decodeBody(t, full)["code"] != "CIRCLE.USER.group_membership_full" {
+		t.Fatalf("the 1001st active member must be rejected: status=%d body=%s", full.Code, full.Body.String())
+	}
+
+	activeCount, err := mongoDB.Collection("circle_group_memberships").CountDocuments(context.Background(), bson.M{
+		"groupId": groupID, "state": "active",
+	})
+	if err != nil || activeCount != 1000 {
+		t.Fatalf("capacity rejection must not partially write membership: activeCount=%d err=%v", activeCount, err)
+	}
+	var rejected struct {
+		State   string `bson:"state"`
+		Version int64  `bson:"version"`
+	}
+	if err := mongoDB.Collection("circle_group_memberships").FindOne(context.Background(), bson.M{
+		"groupId": groupID, "personaId": nextID,
+	}).Decode(&rejected); err != nil {
+		t.Fatal(err)
+	}
+	if rejected.State != "pending" || rejected.Version != 1 {
+		t.Fatalf("rejected capacity target must retain pending state, got=%+v", rejected)
+	}
+	var capacity struct {
+		ActiveMemberCount int64 `bson:"activeMemberCount"`
+	}
+	if err := mongoDB.Collection("circle_group_membership_capacity_counters").FindOne(
+		context.Background(),
+		bson.M{"_id": groupID},
+	).Decode(&capacity); err != nil || capacity.ActiveMemberCount != 1000 {
+		t.Fatalf("capacity ledger must commit with membership transaction: counter=%+v err=%v", capacity, err)
 	}
 }
 

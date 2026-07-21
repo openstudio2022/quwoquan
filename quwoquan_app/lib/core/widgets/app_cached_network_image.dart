@@ -97,20 +97,11 @@ class AppCachedNetworkImage extends ConsumerWidget {
       }
       switch (cdnPreset) {
         case CdnImagePreset.thumbnail:
-          processed.add(
-            CdnImageUrlBuilder.thumbnail(
-              normalized,
-              width: (width ?? 400).toInt(),
-            ),
-          );
+          processed.add(CdnImageUrlBuilder.thumbnail(normalized));
         case CdnImagePreset.cover:
-          processed.add(
-            CdnImageUrlBuilder.cover(normalized, width: (width ?? 750).toInt()),
-          );
+          processed.add(CdnImageUrlBuilder.cover(normalized));
         case CdnImagePreset.inline:
-          processed.add(
-            CdnImageUrlBuilder.cover(normalized, width: (width ?? 900).toInt()),
-          );
+          processed.add(CdnImageUrlBuilder.display(normalized));
         case CdnImagePreset.avatar:
           processed.add(
             CdnImageUrlBuilder.avatar(normalized, size: (width ?? 120).toInt()),

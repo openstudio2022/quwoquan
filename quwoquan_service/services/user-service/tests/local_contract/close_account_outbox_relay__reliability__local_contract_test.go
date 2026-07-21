@@ -11,7 +11,7 @@ import (
 )
 
 type fakeCloseOutboxStore struct {
-	event         accountports.CloseOutboxEvent
+	event         accountports.UserAccountOutboxEvent
 	found         bool
 	published     bool
 	failed        bool
@@ -23,9 +23,9 @@ func (store *fakeCloseOutboxStore) ClaimReady(
 	string,
 	time.Time,
 	time.Duration,
-) (accountports.CloseOutboxEvent, bool, error) {
+) (accountports.UserAccountOutboxEvent, bool, error) {
 	if !store.found {
-		return accountports.CloseOutboxEvent{}, false, nil
+		return accountports.UserAccountOutboxEvent{}, false, nil
 	}
 	store.found = false
 	return store.event, true, nil
@@ -58,9 +58,9 @@ type fakeClosedStreamPublisher struct {
 	published int
 }
 
-func (publisher *fakeClosedStreamPublisher) PublishUserAccountClosed(
+func (publisher *fakeClosedStreamPublisher) PublishUserAccountEvent(
 	context.Context,
-	accountports.CloseOutboxEvent,
+	accountports.UserAccountOutboxEvent,
 	map[string]any,
 ) error {
 	publisher.published++
@@ -70,7 +70,7 @@ func (publisher *fakeClosedStreamPublisher) PublishUserAccountClosed(
 func TestCloseAccountOutboxRelayMarksPublishedAfterDurablePublish(t *testing.T) {
 	store := &fakeCloseOutboxStore{
 		found: true,
-		event: accountports.CloseOutboxEvent{
+		event: accountports.UserAccountOutboxEvent{
 			EventID:        "event-close-1",
 			AccountID:      "account-1",
 			AccountVersion: 2,
@@ -80,7 +80,7 @@ func TestCloseAccountOutboxRelayMarksPublishedAfterDurablePublish(t *testing.T) 
 		},
 	}
 	publisher := &fakeClosedStreamPublisher{}
-	relay, err := useraccountapp.NewCloseOutboxRelay(
+	relay, err := useraccountapp.NewUserAccountOutboxRelay(
 		store,
 		publisher,
 		"relay-test",
@@ -108,7 +108,7 @@ func TestCloseAccountOutboxRelayRetriesPublisherFailure(t *testing.T) {
 	now := time.Now().UTC()
 	store := &fakeCloseOutboxStore{
 		found: true,
-		event: accountports.CloseOutboxEvent{
+		event: accountports.UserAccountOutboxEvent{
 			EventID:         "event-close-2",
 			AccountID:       "account-2",
 			AccountVersion:  3,
@@ -121,7 +121,7 @@ func TestCloseAccountOutboxRelayRetriesPublisherFailure(t *testing.T) {
 	publisher := &fakeClosedStreamPublisher{
 		err: errors.New("stream unavailable"),
 	}
-	relay, err := useraccountapp.NewCloseOutboxRelay(
+	relay, err := useraccountapp.NewUserAccountOutboxRelay(
 		store,
 		publisher,
 		"relay-test",
@@ -136,5 +136,40 @@ func TestCloseAccountOutboxRelayRetriesPublisherFailure(t *testing.T) {
 	}
 	if !store.failed || store.published || !store.nextAttemptAt.After(now) {
 		t.Fatalf("failed delivery must schedule retry: %+v", store)
+	}
+}
+
+func TestUserAccountOutboxRelayPublishesReversibleEnforcementEvents(t *testing.T) {
+	store := &fakeCloseOutboxStore{
+		found: true,
+		event: accountports.UserAccountOutboxEvent{
+			EventID:        "event-suspend-1",
+			AccountID:      "account-3",
+			AccountVersion: 4,
+			EventType:      useraccountapp.UserSuspendedEventName,
+			PayloadJSON: []byte(
+				`{"userId":"account-3","personaIds":["persona-3"],"accountState":"suspended","authEpoch":2,"decisionRef":"decision-3","occurredAt":"2026-07-21T00:00:00Z"}`,
+			),
+			OccurredAt: time.Now().UTC(),
+		},
+	}
+	publisher := &fakeClosedStreamPublisher{}
+	relay, err := useraccountapp.NewUserAccountOutboxRelay(
+		store,
+		publisher,
+		"relay-test",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	didWork, err := relay.RelayOnce(context.Background())
+	if err != nil {
+		t.Fatalf("relay suspended event: %v", err)
+	}
+	if !didWork || publisher.published != 1 || !store.published || store.failed {
+		t.Fatalf(
+			"reversible enforcement event must use the same durable relay: %+v",
+			store,
+		)
 	}
 }

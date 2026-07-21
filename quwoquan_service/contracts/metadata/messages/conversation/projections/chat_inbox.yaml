@@ -7,6 +7,9 @@ description: |
   Message outbox 的 MessageSent 原子 $inc；已读回落与 muted/pinned 由
   ConversationUserState 命令在聚合 state 内原子完成；标题/头像/lastSeq 由
   Conversation 侧投影（ProjectCommittedMessage / 群头像流水线）维护。
+  ConversationMemberRemoved / ConversationMemberLeft 在成员命令事务内删除当事人的
+  ConversationUserState；因此其后迟到的 MessageSent 只推进既有成员的水位，缺失状态
+  必须 no-op，不能复活收件箱行。
   按 pinned DESC + lastMessageTime(updatedAt) DESC 排序。
 
 storage_backend: mongodb
@@ -23,6 +26,7 @@ source_events:
   - ConversationCreated
   - ConversationMemberAdded
   - ConversationMemberRemoved
+  - ConversationMemberLeft
   - ConversationUserSettingsChanged
   - ConversationReadWatermarkAdvanced
 

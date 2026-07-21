@@ -1,10 +1,9 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:quwoquan_app/application/rtc/call_session/call_participant_presentation.dart';
-import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -121,17 +120,15 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
     );
   }
 
-  /// 以 LiveKit 为媒体运行态真相，以已组合 roster 为展示真相。
-  void syncFromLiveKit(LiveKitRoomService room, List<CallParticipantDto> dtos) {
+  /// 以平台 RTC 运行态为媒体真相，以已组合 roster 为展示真相。
+  void syncFromRtcRoom(RtcRoomService room, List<CallParticipantDto> dtos) {
     final dtoById = <String, CallParticipantDto>{
       for (final dto in dtos) dto.userId: dto,
     };
     final live = <CallParticipant>[];
     final local = room.localParticipant;
     if (local != null) {
-      live.add(
-        _mergeParticipant(local, dtoById[local.identity], isLocal: true),
-      );
+      live.add(_mergeParticipant(local, dtoById[local.identity]));
     }
     for (final remote in room.remoteParticipants) {
       live.add(_mergeParticipant(remote, dtoById[remote.identity]));
@@ -149,25 +146,9 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
   }
 
   CallParticipant _mergeParticipant(
-    lk.Participant participant,
-    CallParticipantDto? dto, {
-    bool isLocal = false,
-  }) {
-    final cameraPublication = participant.videoTrackPublications
-        .where((publication) => publication.source == lk.TrackSource.camera)
-        .firstOrNull;
-    final videoTrack = cameraPublication?.track is lk.VideoTrack
-        ? cameraPublication!.track as lk.VideoTrack
-        : null;
-    final screenSharePublication = participant.videoTrackPublications
-        .where(
-          (publication) =>
-              publication.source == lk.TrackSource.screenShareVideo,
-        )
-        .firstOrNull;
-    final screenShareTrack = screenSharePublication?.track is lk.VideoTrack
-        ? screenSharePublication!.track as lk.VideoTrack
-        : null;
+    RtcParticipantSnapshot participant,
+    CallParticipantDto? dto,
+  ) {
     final base = dto == null
         ? CallParticipant(
             userId: participant.identity,
@@ -189,15 +170,14 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
     return base.copyWith(
       status: ParticipantStatus.connected,
       isMuted: participant.isMuted,
-      isCameraOn: videoTrack != null && !(cameraPublication?.muted ?? true),
+      isCameraOn: participant.isCameraOn,
       isSpeaking: participant.isSpeaking,
       audioLevel: participant.audioLevel,
-      videoTrack: videoTrack,
-      clearVideoTrack: videoTrack == null,
-      screenShareTrack: screenShareTrack,
-      clearScreenShareTrack:
-          screenShareTrack == null || (screenSharePublication?.muted ?? true),
-      isLocal: isLocal,
+      videoTrack: participant.cameraTrack,
+      clearVideoTrack: participant.cameraTrack == null,
+      screenShareTrack: participant.screenShareTrack,
+      clearScreenShareTrack: participant.screenShareTrack == null,
+      isLocal: participant.isLocal,
     );
   }
 

@@ -10,6 +10,7 @@ import (
 func TestEventPublisherRejectsUnknownEventType(t *testing.T) {
 	publisher := mqpkg.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		fixedRecipientResolver("user_contract"),
 	)
 	err := publisher.Publish(context.Background(), mqpkg.DomainEvent{

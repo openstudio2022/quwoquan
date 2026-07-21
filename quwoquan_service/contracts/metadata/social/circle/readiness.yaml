@@ -31,7 +31,6 @@ implementation:
     - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/circle/circle_query_contracts.dart
     - quwoquan_app/lib/cloud/remote/circle/circle/circle_lifecycle_remote.dart
     - quwoquan_app/lib/cloud/remote/circle/circle/circle_query_remote.dart
-    - quwoquan_app/lib/cloud/services/circle/circle_repository_remote.dart
   page:
     - quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
     - quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart

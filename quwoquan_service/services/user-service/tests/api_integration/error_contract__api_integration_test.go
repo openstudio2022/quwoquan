@@ -30,6 +30,17 @@ func TestErrorCode_UserNotFound(t *testing.T) {
 }
 
 func TestErrorCode_InvalidArgument(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "error-owner", "error-owner")
+	createTestPersonaFull(
+		t,
+		"error-persona-record",
+		"error-owner",
+		"error-persona",
+		"错误契约分身",
+		"open",
+		true,
+	)
 	headers := authHeadersForPersona("error-owner", "error-persona")
 	headers["X-Request-Id"] = "user-req-invalid-1"
 	headers["X-Trace-Id"] = "user-trace-invalid-1"

@@ -28,14 +28,6 @@ type RedisSceneConfig struct {
 	Pool     RedisPoolConfig `yaml:"pool"`
 }
 
-type ProviderConfig struct {
-	Provider  string `yaml:"provider"`
-	BaseURL   string `yaml:"base_url"`
-	Model     string `yaml:"model"`
-	APIKeyEnv string `yaml:"api_key_env"`
-	TimeoutMs int    `yaml:"timeout_ms"`
-}
-
 type UserProfileConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	TimeoutMs int    `yaml:"timeout_ms"`
@@ -73,8 +65,6 @@ type Config struct {
 		General  RedisSceneConfig `yaml:"general"`
 		Realtime RedisSceneConfig `yaml:"realtime"`
 	} `yaml:"redis"`
-	ModelProvider       ProviderConfig      `yaml:"model_provider"`
-	SearchProvider      ProviderConfig      `yaml:"search_provider"`
 	SearchService       ServiceEgressConfig `yaml:"search_service"`
 	EntityService       ServiceEgressConfig `yaml:"entity_service"`
 	ContentService      ServiceEgressConfig `yaml:"content_service"`
@@ -110,7 +100,7 @@ func LoadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (C
 			return Config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := MergeConfigFile(&cfg, versionFile); err != nil {
 				return Config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -173,8 +163,6 @@ func ApplyEnvOverrides(cfg *Config) error {
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CONTENT_SERVICE_BASE_URL")); v != "" {
 		cfg.ContentService.BaseURL = v
 	}
-	applyProviderEnvOverrides(&cfg.ModelProvider, "ASSISTANT_MODEL")
-	applyProviderEnvOverrides(&cfg.SearchProvider, "ASSISTANT_SEARCH")
 	return nil
 }
 
@@ -224,21 +212,6 @@ func applyRedisSceneEnvOverrides(prefix string, cfg *RedisSceneConfig) error {
 		cfg.DB = db
 	}
 	return nil
-}
-
-func applyProviderEnvOverrides(cfg *ProviderConfig, prefix string) {
-	if v := strings.TrimSpace(os.Getenv(prefix + "_PROVIDER")); v != "" {
-		cfg.Provider = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_BASE_URL")); v != "" {
-		cfg.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_MODEL")); v != "" {
-		cfg.Model = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_API_KEY_ENV")); v != "" {
-		cfg.APIKeyEnv = v
-	}
 }
 
 func getenvOrDefault(key, fallback string) string {

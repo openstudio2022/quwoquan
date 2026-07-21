@@ -128,6 +128,16 @@ final circlesListDiscoveryFeedQueryProvider =
       (ref) => _remoteCircleQueryReader(ref, AppUiSurfaces.circlesList),
     );
 
+/// 圈子目录的 typed 查询能力；生产只装配 generated Remote reader。
+final circlesListQueryProvider = Provider<CircleQueryReader>(
+  (ref) => _remoteCircleQueryReader(ref, AppUiSurfaces.circlesList),
+);
+
+/// 圈子详情的 typed 查询能力；生产只装配 generated Remote reader。
+final circleDetailQueryProvider = Provider<CircleQueryReader>(
+  (ref) => _remoteCircleQueryReader(ref, AppUiSurfaces.circleDetail),
+);
+
 final circleDetailFeedQueryProvider = Provider<CircleFeedQueryReader>(
   (ref) => _remoteCircleQueryReader(ref, AppUiSurfaces.circleDetail),
 );

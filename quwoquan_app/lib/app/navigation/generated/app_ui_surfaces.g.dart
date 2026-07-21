@@ -30,6 +30,7 @@ class AppUiSurfaces {
     description: '趣信列表与会话入口（含通知维度 AppMessage inbox 与当前 persona 通话记录）',
     operationIds: <String>[
       'ListInbox',
+      'ListMessageHome',
       'ListConversations',
       'ListConversationTimestamps',
       'BatchGetConversations',
@@ -95,6 +96,8 @@ class AppUiSurfaces {
       'SyncMessages',
       'MarkAsRead',
       'GetReceipts',
+      'InviteAssistant',
+      'RemoveAssistant',
     ],
   );
 
@@ -106,6 +109,7 @@ class AppUiSurfaces {
     description: '会话设置页',
     operationIds: <String>[
       'GetConversation',
+      'UpdateConversationTitle',
       'UpdateConversationSettings',
       'UpdateAnnouncement',
       'ListMembers',
@@ -871,6 +875,13 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/management',
     description: '私助偏好、隐私与记忆管理',
     operationIds: <String>[
+      'SetAssistantPreference',
+      'ListAssistantPreferences',
+      'RevokeAssistantPreference',
+      'RestoreAssistantPreference',
+      'GrantSkillConsent',
+      'RevokeSkillConsent',
+      'ListConsents',
     ],
   );
 

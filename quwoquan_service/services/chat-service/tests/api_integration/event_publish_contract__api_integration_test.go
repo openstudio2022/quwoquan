@@ -88,6 +88,7 @@ func publishDirect(t *testing.T, evt mqpkg.DomainEvent, recipients ...string) {
 	t.Helper()
 	publisher := mqpkg.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		fixedRecipientResolver(recipients...),
 	)
 	if err := publisher.Publish(context.Background(), evt); err != nil {
@@ -567,6 +568,7 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 	const recipient = "user_test_001"
 	publisher := mqpkg.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		fixedRecipientResolver(recipient),
 	)
 	channel := "rt:user:" + recipient
@@ -623,6 +625,7 @@ func TestEventPublish_BatchPublish(t *testing.T) {
 	const recipient = "user_batch_recipient"
 	publisher := mqpkg.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		fixedRecipientResolver(recipient),
 	)
 	channel := "rt:user:" + recipient
@@ -704,6 +707,7 @@ func TestEventPublish_ChannelFormat(t *testing.T) {
 	const recipient = "user_channel_format"
 	publisher := mqpkg.NewEventPublisher(
 		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
 		fixedRecipientResolver(recipient),
 	)
 	expectedChannel := "rt:user:" + recipient

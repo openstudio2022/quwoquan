@@ -1,33 +1,18 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-int _readStatsInt(Map<String, dynamic> stats, String key, int fallback) {
-  final v = stats[key];
-  if (v is num) return v.toInt();
-  if (v is String) {
-    final p = int.tryParse(v.trim());
-    if (p != null) return p;
-  }
-  return fallback;
-}
-
-/// 将 stats wire 的松散键收敛为展示用整数（避免 UI 散写 `raw[...]`）。
+/// 将 metadata 生成的 stats wire 投影为页面 ViewData。
 extension CircleStatsWireProjection on CircleStatsWireDto {
-  CircleStatsViewData toViewData({CircleDto? circleFallback}) {
-    final s = raw;
-    final fb = circleFallback;
+  CircleStatsViewData toViewData() {
     return CircleStatsViewData(
-      members: _readStatsInt(s, 'memberCount', fb?.memberCount ?? 0),
-      posts: _readStatsInt(s, 'postCount', fb?.postCount ?? 0),
-      discussions: _readStatsInt(s, 'discussionCount', 0),
-      weeklyActive: _readStatsInt(
-        s,
-        'weeklyActiveCount',
-        fb?.weeklyActiveCount ?? 0,
-      ),
-      likes: _readStatsInt(s, 'likeCount', 0),
-      storageUsedBytes: _readStatsInt(s, 'storageUsedBytes', 0),
-      storageQuotaBytes: _readStatsInt(s, 'storageQuotaBytes', 0),
+      members: memberCount,
+      posts: postCount,
+      discussions: discussionCount,
+      weeklyActive: weeklyActiveCount,
+      likes: likeCount,
+      storageUsedBytes: storageUsedBytes,
+      storageQuotaBytes: storageQuotaBytes,
     );
   }
 }
@@ -62,20 +47,20 @@ class CircleStatsViewData {
   final int storageUsedBytes;
   final int storageQuotaBytes;
 
-  factory CircleStatsViewData.fromStatsWire(
-    CircleStatsWireDto wire, {
-    CircleDto? circleFallback,
-  }) {
-    return wire.toViewData(circleFallback: circleFallback);
+  factory CircleStatsViewData.fromStatsWire(CircleStatsWireDto wire) {
+    return wire.toViewData();
   }
 
-  factory CircleStatsViewData.fromWire(
-    Map<String, dynamic> stats, {
-    CircleDto? circleFallback,
-  }) {
-    return CircleStatsWireDto.fromMap(
-      stats,
-    ).toViewData(circleFallback: circleFallback);
+  factory CircleStatsViewData.fromSlice(CircleStatsSlice slice) {
+    return CircleStatsViewData(
+      members: slice.memberCount,
+      posts: slice.postCount,
+      discussions: slice.discussionCount,
+      weeklyActive: slice.weeklyActiveCount,
+      likes: slice.likeCount,
+      storageUsedBytes: slice.storageUsedBytes,
+      storageQuotaBytes: slice.storageQuotaBytes,
+    );
   }
 
   /// 详情头 [CircleStatsRow]：帖子/成员/周活以 [CircleDto] 为准，点赞保留 wire。

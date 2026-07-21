@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
@@ -113,9 +116,32 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
             : ChatText.groupAnnouncementPublished,
       );
       _recordPageState(phase: 'updateSuccess');
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.succeeded,
+              governanceAction: ChatGovernanceAction.announcementUpdate,
+              pageName: PageNames.chatAnnouncement,
+              surfaceId: AppUiSurfaces.chatAnnouncement.id,
+            ),
+      );
       context.pop();
     } catch (error) {
       _recordPageState(phase: 'updateFailure', error: error);
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: ChatInteractionOutcome.failed,
+              governanceAction: ChatGovernanceAction.announcementUpdate,
+              pageName: PageNames.chatAnnouncement,
+              surfaceId: AppUiSurfaces.chatAnnouncement.id,
+              error: error,
+            ),
+      );
       if (!mounted) return;
       final resolved = runtimeErrorSemantic(
         context,

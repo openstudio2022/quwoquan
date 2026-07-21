@@ -1,5 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'node:path';
+
+const deployWorkRoot = process.env.QWQ_DEPLOY_WORK_ROOT;
+const deployTarget = process.env.QWQ_DEPLOY_TARGET || 'prod-hosted';
+
+if (!deployWorkRoot) {
+  throw new Error('QWQ_DEPLOY_WORK_ROOT is required for portal deployment builds');
+}
+
+const outputDir = path.resolve(deployWorkRoot, deployTarget, 'build', 'ops-portal');
 
 export default defineConfig({
   plugins: [react()],
@@ -8,7 +18,7 @@ export default defineConfig({
     port: 4173,
   },
   build: {
-    outDir: '../../.qwq_output/env/repo/local/ops-portal/process/dist',
+    outDir: outputDir,
     emptyOutDir: true,
     rollupOptions: {
       output: {

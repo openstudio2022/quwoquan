@@ -12,20 +12,22 @@ import (
 )
 
 type MemberService struct {
-	transactions       TransactionRunner
-	conversations      ConversationStore
-	members            MemberStore
-	userStates         UserStateStore
-	membershipCommands AggregateCommandStore
-	cache              ConversationCache
-	publisher          EventPublisher
-	profiles           ProfileSnapshotResolver
-	relationships      RelationshipGate
-	socialContacts     SocialContactResolver
-	circles            CircleListResolver
-	media              GroupAvatarAssetizer
-	syncPublisher      UserSyncPublisher
-	scheduler          GroupAvatarTaskScheduler
+	transactions                      TransactionRunner
+	conversations                     ConversationStore
+	members                           MemberStore
+	userStates                        UserStateStore
+	circleGroupMembershipProjections  CircleGroupMembershipProjectionStore
+	circleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
+	membershipCommands                AggregateCommandStore
+	cache                             ConversationCache
+	publisher                         EventPublisher
+	profiles                          ProfileSnapshotResolver
+	relationships                     RelationshipGate
+	socialContacts                    SocialContactResolver
+	circles                           CircleListResolver
+	media                             GroupAvatarAssetizer
+	syncPublisher                     UserSyncPublisher
+	scheduler                         GroupAvatarTaskScheduler
 }
 
 type MemberServiceOption func(*MemberService)
@@ -70,20 +72,22 @@ func NewMemberService(
 	}
 	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	svc := &MemberService{
-		transactions:       storage.Transactions,
-		conversations:      storage.Conversations,
-		members:            storage.Members,
-		userStates:         storage.UserStates,
-		membershipCommands: storage.MembershipCommands,
-		cache:              cache,
-		publisher:          publisher,
-		profiles:           profiles,
-		media:              media,
-		syncPublisher:      syncPublisher,
-		scheduler:          scheduler,
-		socialContacts:     noopSocialContactResolver{},
-		circles:            noopCircleListResolver{},
-		relationships:      nil,
+		transactions:                      storage.Transactions,
+		conversations:                     storage.Conversations,
+		members:                           storage.Members,
+		userStates:                        storage.UserStates,
+		circleGroupMembershipProjections:  storage.CircleGroupMembershipProjections,
+		circleGroupChatBindingProjections: storage.CircleGroupChatBindingProjections,
+		membershipCommands:                storage.MembershipCommands,
+		cache:                             cache,
+		publisher:                         publisher,
+		profiles:                          profiles,
+		media:                             media,
+		syncPublisher:                     syncPublisher,
+		scheduler:                         scheduler,
+		socialContacts:                    noopSocialContactResolver{},
+		circles:                           noopCircleListResolver{},
+		relationships:                     nil,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -161,27 +165,13 @@ func (s *MemberService) requireActiveConversationMember(
 	conversationID string,
 	operatorID string,
 ) (*model.Conversation, *model.ConversationMember, error) {
-	if strings.TrimSpace(operatorID) == "" {
-		return nil, nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "unauthorized"),
-			"请先登录",
-			"membership command requires an authenticated operator",
-		)
-	}
-	conv, err := s.conversations.FindConversationByID(ctx, conversationID)
-	if err != nil {
-		return nil, nil, err
-	}
-	operator, err := s.members.FindMember(ctx, conversationID, operatorID)
-	if err != nil {
-		return nil, nil, chatConversationNotFoundForNonMember(
-			"operator is not a member of this conversation",
-		)
-	}
-	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
-		return nil, nil, chatConversationDissolved("conversation is not active")
-	}
-	return conv, operator, nil
+	return requireActiveConversationMember(
+		ctx,
+		s.conversations,
+		s.members,
+		conversationID,
+		operatorID,
+	)
 }
 
 // validateAddedMembers 与建群 validateGroupInitialMembers 同源：
@@ -222,6 +212,9 @@ type AddMembersRequest struct {
 func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) error {
 	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy)
 	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "AddMembers"); err != nil {
 		return err
 	}
 	userIDs := dedupeUserIDs(req.UserIds)
@@ -376,8 +369,11 @@ type TransferOwnershipRequest struct {
 }
 
 func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwnershipRequest) error {
-	_, currentOwner, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
+	conv, currentOwner, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "TransferOwnership"); err != nil {
 		return err
 	}
 	if currentOwner.Role != "owner" {
@@ -467,8 +463,11 @@ type UpdateGroupAdminsRequest struct {
 }
 
 func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAdminsRequest) error {
-	_, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
+	conv, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "UpdateGroupAdmins"); err != nil {
 		return err
 	}
 	if operator.Role != "owner" {
@@ -580,8 +579,11 @@ type RemoveMemberRequest struct {
 
 func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberRequest) error {
 	operatorID := strings.TrimSpace(req.OperatorId)
-	_, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, operatorID)
+	conv, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, operatorID)
 	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "RemoveMember"); err != nil {
 		return err
 	}
 	targetID := strings.TrimSpace(req.UserId)
@@ -630,6 +632,9 @@ func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberReques
 	var newCount int
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.members.DeleteMember(txCtx, req.ConversationId, targetID); err != nil {
+			return err
+		}
+		if err := s.userStates.DeleteUserState(txCtx, targetID, req.ConversationId); err != nil {
 			return err
 		}
 		count, err := s.members.CountMembers(txCtx, req.ConversationId)
@@ -710,6 +715,9 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
 		return chatConversationDissolved("conversation is not active")
 	}
+	if err := rejectCircleGroupManaged(conv, "LeaveConversation"); err != nil {
+		return err
+	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, userID)
 	if err != nil {
 		return err
@@ -741,6 +749,9 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 	var newCount int
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.members.DeleteMember(txCtx, req.ConversationId, userID); err != nil {
+			return err
+		}
+		if err := s.userStates.DeleteUserState(txCtx, userID, req.ConversationId); err != nil {
 			return err
 		}
 		count, err := s.members.CountMembers(txCtx, req.ConversationId)
@@ -798,7 +809,11 @@ type InviteAssistantRequest struct {
 }
 
 func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistantRequest) error {
-	if _, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy); err != nil {
+	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy)
+	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "InviteAssistant"); err != nil {
 		return err
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.InvitedBy)
@@ -892,7 +907,11 @@ type RemoveAssistantRequest struct {
 }
 
 func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistantRequest) error {
-	if _, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.RemovedBy); err != nil {
+	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.RemovedBy)
+	if err != nil {
+		return err
+	}
+	if err := rejectCircleGroupManaged(conv, "RemoveAssistant"); err != nil {
 		return err
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.RemovedBy)

@@ -57,61 +57,26 @@ type l1l4DerivedMetricState struct {
 }
 
 func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l4MetricsScope) (l1l4MetricsResponse, error) {
-	items, err := s.store.ListDocuments("l1l4_metric_snapshots")
-	if err != nil {
-		return l1l4MetricsResponse{}, err
-	}
 	levelFilter := strings.TrimSpace(scope.Level)
 	if strings.EqualFold(levelFilter, "all") {
 		levelFilter = ""
 	}
 
-	out := make([]metricSnapshot, 0, len(items))
-	for _, item := range items {
-		snapshot, err := decodeDocument[metricSnapshot](item)
-		if err != nil {
-			return l1l4MetricsResponse{}, err
-		}
-		if scope.Environment != "" && snapshot.Environment != scope.Environment {
+	definitions := make([]metricSnapshot, 0, 5)
+	for _, candidate := range canonicalL1L4MetricDefinitions(scope) {
+		if levelFilter != "" && candidate.Level != levelFilter {
 			continue
 		}
-		if levelFilter != "" && snapshot.Level != levelFilter {
+		if scope.Cluster != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Cluster != scope.Cluster {
 			continue
 		}
-		isInfraLevel := snapshot.Level == "L3" || snapshot.Level == "L4"
-		if scope.Cluster != "" && isInfraLevel && snapshot.Cluster != scope.Cluster {
+		if scope.Service != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Service != scope.Service {
 			continue
 		}
-		if scope.Service != "" && isInfraLevel && snapshot.Service != scope.Service {
+		if scope.InstanceID != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.InstanceID != scope.InstanceID {
 			continue
 		}
-		if scope.InstanceID != "" && isInfraLevel && snapshot.InstanceID != scope.InstanceID {
-			continue
-		}
-		out = append(out, snapshot)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Level == out[j].Level {
-			return out[i].ID < out[j].ID
-		}
-		return out[i].Level < out[j].Level
-	})
-	if len(out) == 0 {
-		for _, candidate := range canonicalL1L4MetricSnapshots(scope) {
-			if levelFilter != "" && candidate.Level != levelFilter {
-				continue
-			}
-			if scope.Cluster != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Cluster != scope.Cluster {
-				continue
-			}
-			if scope.Service != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.Service != scope.Service {
-				continue
-			}
-			if scope.InstanceID != "" && (candidate.Level == "L3" || candidate.Level == "L4") && candidate.InstanceID != scope.InstanceID {
-				continue
-			}
-			out = append(out, candidate)
-		}
+		definitions = append(definitions, candidate)
 	}
 
 	telemetrySnapshot, err := s.telemetry.SnapshotEvents(ctx, application.EventSummaryQuery{}, 1000)
@@ -130,32 +95,36 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 		}
 	}
 
-	derivedCount := 0
-	alerts := make([]l1l4MetricAlertState, 0, len(out))
-	for i := range out {
-		if derived, ok := deriveL1L4MetricState(out[i], telemetrySnapshot, prometheusValues); ok {
-			out[i].Value = derived.Value
+	out := make([]metricSnapshot, 0, len(definitions))
+	alerts := make([]l1l4MetricAlertState, 0, len(definitions))
+	for _, definition := range definitions {
+		if derived, ok := deriveL1L4MetricState(definition, telemetrySnapshot, prometheusValues); ok {
+			definition.Value = derived.Value
 			if derived.Unit != "" {
-				out[i].Unit = derived.Unit
+				definition.Unit = derived.Unit
 			}
 			if derived.Status != "" {
-				out[i].Status = derived.Status
+				definition.Status = derived.Status
 			}
 			if derived.Trend != "" {
-				out[i].Trend = derived.Trend
+				definition.Trend = derived.Trend
 			}
-			out[i].Source = derived.Source
-			derivedCount++
+			definition.Source = derived.Source
+			out = append(out, definition)
 			if !derived.ObservedAt.IsZero() && derived.ObservedAt.After(latestObservedAt) {
 				latestObservedAt = derived.ObservedAt
 			}
 			if derived.Alert != nil {
 				alerts = append(alerts, *derived.Alert)
 			}
-		} else {
-			out[i].Source = "snapshot"
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Level == out[j].Level {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].Level < out[j].Level
+	})
 
 	sort.Slice(alerts, func(i, j int) bool {
 		if alertSeverityRank(alerts[i].Severity) == alertSeverityRank(alerts[j].Severity) {
@@ -164,14 +133,14 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 		return alertSeverityRank(alerts[i].Severity) > alertSeverityRank(alerts[j].Severity)
 	})
 
-	source := "snapshot"
+	source := "no-data"
 	switch {
-	case derivedCount == 0:
-		source = "snapshot"
-	case derivedCount == len(out):
-		source = "live-telemetry"
+	case len(out) == 0:
+		source = "no-data"
+	case len(out) == len(definitions):
+		source = "telemetry-and-prometheus"
 	default:
-		source = "hybrid"
+		source = "partial-live"
 	}
 
 	freshness := ""
@@ -179,14 +148,14 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 		freshness = latestObservedAt.UTC().Format(time.RFC3339)
 	}
 	if freshness == "" {
-		freshness = nowRFC3339()
+		freshness = "unavailable"
 	}
 
 	coverage := map[string]any{
-		"totalMetrics":    len(out),
-		"liveMetrics":     derivedCount,
-		"fallbackMetrics": len(out) - derivedCount,
-		"eventSignals":    telemetrySnapshot.Summary.TotalCount,
+		"totalMetrics":       len(definitions),
+		"liveMetrics":        len(out),
+		"unavailableMetrics": len(definitions) - len(out),
+		"eventSignals":       telemetrySnapshot.Summary.TotalCount,
 	}
 
 	return l1l4MetricsResponse{
@@ -206,7 +175,10 @@ func (s *productService) buildL1L4MetricsResponse(ctx context.Context, scope l1l
 	}, nil
 }
 
-func canonicalL1L4MetricSnapshots(scope l1l4MetricsScope) []metricSnapshot {
+// canonicalL1L4MetricDefinitions 只描述可查询的权威指标，绝不承载样例数值或
+// 持久化快照。实际数值只能由 telemetry 或 Prometheus 在请求时派生；没有样本时
+// 响应会保留 unavailable coverage 而不是返回零值/成功态。
+func canonicalL1L4MetricDefinitions(scope l1l4MetricsScope) []metricSnapshot {
 	environment := strings.TrimSpace(scope.Environment)
 	if environment == "" {
 		environment = "prod"

@@ -616,6 +616,16 @@ func (m *memoryClient) XAutoClaim(
 	return out, "0-0", nil
 }
 
+func (m *memoryClient) XPendingCount(_ context.Context, stream string, group string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	if currentGroup := ms.groups[group]; currentGroup != nil {
+		return int64(len(currentGroup.pending)), nil
+	}
+	return 0, nil
+}
+
 func (m *memoryClient) ensureStream(stream string) *memStream {
 	ms := m.streams[stream]
 	if ms == nil {

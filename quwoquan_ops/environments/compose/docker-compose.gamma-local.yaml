@@ -103,6 +103,7 @@ services:
       LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
     volumes:
       - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/qwq-object-storage/ca.crt:ro
+      - ./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro
     entrypoint:
       - /bin/sh
       - -ec
@@ -112,6 +113,7 @@ services:
         for attempt in $(seq 1 60); do
           if mc alias set qwq "https://gamma-upload.quwoquan-env.test:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
             mc mb --ignore-existing "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}"
+            mc ilm rule import "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}" < /etc/qwq-object-storage/lifecycle.json
             exit 0
           fi
           sleep 2
@@ -186,6 +188,7 @@ services:
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       MONGO_URI: mongodb://mongodb:27017
       REPORT_DATABASE_URL: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      CONTENT_REPORT_ACCOUNT_BACKFILL_FILE: /etc/qwq-config/report-account-backfill.json
       CONTENT_REDIS_REC_ADDR: redis:6379
       CONTENT_REDIS_GENERAL_ADDR: redis:6379
       CONTENT_REDIS_REALTIME_ADDR: redis:6379
@@ -205,13 +208,10 @@ services:
       # N2-2 per-env 推荐 policy：gamma-local overlay 开启 objectCards
       # （30s 热更；overlay 与 metadata 的差异范围由 verify_gamma_policy_overlay.py 门禁）。
       QWQ_REC_POLICY_PATH: /etc/qwq-rec-policy/policy.yaml
-      # N2-3 embedding 配置路径：外部 embedding API 凭据仅经环境注入（默认空 =
-      # 诚实关闭）；有凭据时设 CONTENT_EMBEDDING_ENABLED=true 开启写入管线，
-      # 向量召回读通道（vector_recall）按 S1 阶段门另行开启。
+      # ext.embed.openai_compatible 是 gamma 的必需 Binding；缺 endpoint 或密钥
+      # 必须在启动前失败，禁止退回空向量或关闭成功路径。
       CONTENT_EMBEDDING_ENDPOINT: "${LOCAL_GAMMA_EMBEDDING_ENDPOINT:-}"
       CONTENT_EMBEDDING_API_KEY: "${LOCAL_GAMMA_EMBEDDING_API_KEY:-}"
-      CONTENT_EMBEDDING_ENABLED: "${LOCAL_GAMMA_EMBEDDING_ENABLED:-false}"
-      CONTENT_EMBEDDING_VECTOR_RECALL_ENABLED: "${LOCAL_GAMMA_EMBEDDING_VECTOR_RECALL_ENABLED:-false}"
       CIRCLE_SERVICE_BASE_URL: http://circle-service:18082
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
@@ -225,6 +225,8 @@ services:
       mongodb:
         condition: service_healthy
       mongo-init:
+        condition: service_completed_successfully
+      object-storage-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -358,6 +360,7 @@ services:
       retries: 10
 
   assistant-service:
+    profiles: ["assistant-runtime"]
     image: "${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-localhost/quwoquan_service_assistant-service:latest}"
     build:
       context: ../../../quwoquan_service
@@ -382,7 +385,7 @@ services:
       ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-}"
       ASSISTANT_NOTIFICATION_BASE_URL: "http://notification-service:18087"
       ASSISTANT_SEARCH_PROVIDER: "${ASSISTANT_SEARCH_PROVIDER:-}"
-      PERSONAL_ASSISTANT_MIMO_API_KEY: "${PERSONAL_ASSISTANT_MIMO_API_KEY:-}"
+      ASSISTANT_MODEL_API_KEY: "${ASSISTANT_MODEL_API_KEY:-}"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -740,8 +743,8 @@ services:
       # gamma-local 不挂载 APNs/FCM 商业密钥；真实 provider 仅在 prod gray-initial/full
       # 通过 prod-service-svc 的受限 credentialsPath 注入并 fail-fast。
       INTEGRATION_PUSH_ENABLED: "false"
+      INTEGRATION_LOCATION_BAIDU_BASE_URL: "${LOCAL_GAMMA_BAIDU_BASE_URL:-}"
       INTEGRATION_LOCATION_BAIDU_AK: "${LOCAL_GAMMA_BAIDU_AK:-}"
-      INTEGRATION_LOCATION_AMAP_KEY: "${LOCAL_GAMMA_AMAP_KEY:-}"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -792,6 +795,8 @@ services:
       NOTIFICATION_DISPATCH_PER_SECOND: "100"
       NOTIFICATION_RETRY_PER_SECOND: "20"
       NOTIFICATION_REDIS_ADDR: "redis:6379"
+      NOTIFICATION_REDIS_GENERAL_DB: "1"
+      NOTIFICATION_REDIS_REALTIME_DB: "4"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
@@ -831,6 +836,7 @@ services:
         condition: service_healthy
       assistant-service:
         condition: service_healthy
+        required: false
       product-ops-service:
         condition: service_healthy
         required: false
@@ -859,9 +865,9 @@ services:
     volumes:
       - ${LOCAL_GAMMA_CADDYFILE:-../local-gamma/Caddyfile}:/etc/caddy/Caddyfile:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
-      - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../../../.qwq_output/env/gamma/release/legal-static/current/public}:/srv/legal:ro
+      - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:?LOCAL_GAMMA_LEGAL_STATIC_ROOT is required}:/srv/legal:ro
       # 运维运营 Portal 静态站点（vite build 产物；prod 渲染时替换为 runtime/portal）。
-      - ${LOCAL_GAMMA_PORTAL_ROOT:-../../../.qwq_output/env/repo/local/ops-portal/process/dist}:/srv/portal:ro
+      - ${LOCAL_GAMMA_PORTAL_ROOT:?LOCAL_GAMMA_PORTAL_ROOT is required}:/srv/portal:ro
       - ${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data
       - ${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config
     healthcheck:
@@ -905,11 +911,11 @@ services:
       MONGO_URI: mongodb://mongodb:27017
       MONGO_DATABASE: quwoquan_rtc
       REDIS_ADDR: redis:6379
-      # 下发给 App 的客户端可达地址必须来自 topology publicBases.rtc；
-      # livekit-sfu:7880 仅是服务内 DNS，禁止泄漏到设备。
-      LIVEKIT_URL: "${LOCAL_GAMMA_LIVEKIT_PUBLIC_URL:-wss://gamma-rtc.quwoquan-env.test:19000}"
-      LIVEKIT_API_KEY: "${LOCAL_GAMMA_LIVEKIT_API_KEY:-devkey}"
-      LIVEKIT_API_SECRET: "${LOCAL_GAMMA_LIVEKIT_API_SECRET:-secret}"
+      # 客户端媒体地址只由 App 环境包的 topology publicBases.rtc 注入；
+      # livekit-sfu:7880 仅是服务内 DNS，禁止进入任何业务 API。
+      RTC_MEDIA_CONNECTION_URL: "${LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL:-wss://gamma-rtc.quwoquan-env.test:19000}"
+      RTC_MEDIA_API_KEY: "${LOCAL_GAMMA_RTC_MEDIA_API_KEY:-devkey}"
+      RTC_MEDIA_API_SECRET: "${LOCAL_GAMMA_RTC_MEDIA_API_SECRET:-secret}"
     depends_on:
       mongodb:
         condition: service_healthy

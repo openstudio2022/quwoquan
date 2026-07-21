@@ -28,7 +28,7 @@ RECIPE = {
 def test_execution_runner_passes_only_execution_id_to_internal_controller(monkeypatch):
     observed: dict[str, object] = {}
 
-    monkeypatch.setattr(runner, "preflight_execution_models", lambda _recipe: {})
+    monkeypatch.setattr(runner, "require_execution_model_readiness", lambda *_args: None)
     monkeypatch.setattr(runner, "_prepare_execution", lambda execution_id: observed.setdefault("prepared", execution_id))
     monkeypatch.setattr(runner, "prepare_execution_qualification", lambda execution_id: observed.setdefault("qualified", execution_id))
     monkeypatch.setattr(
@@ -50,7 +50,7 @@ def test_execution_runner_passes_only_execution_id_to_internal_controller(monkey
 def test_execution_runner_carries_an_audited_checkpoint_recovery(monkeypatch):
     observed: dict[str, object] = {}
 
-    monkeypatch.setattr(runner, "preflight_execution_models", lambda _recipe: {})
+    monkeypatch.setattr(runner, "require_execution_model_readiness", lambda *_args: None)
     monkeypatch.setattr(runner, "_prepare_execution", lambda _execution_id: None)
     monkeypatch.setattr(runner, "prepare_execution_qualification", lambda _execution_id: None)
     monkeypatch.setattr(

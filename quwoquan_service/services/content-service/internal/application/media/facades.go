@@ -39,6 +39,14 @@ type MediaAssetCommandFacet interface {
 		context.Context,
 		RecordMediaProcessingResultCommand,
 	) (MediaAssetCommandResult, error)
+	ActivateReprocessedImageDescriptor(
+		context.Context,
+		ActivateReprocessedImageDescriptorCommand,
+	) (ImageDescriptorActivationResult, error)
+	RollbackReprocessedImageDescriptor(
+		context.Context,
+		RollbackReprocessedImageDescriptorCommand,
+	) (MediaAssetCommandResult, error)
 	UpdateMediaAssetAccessPolicy(
 		context.Context,
 		UpdateMediaAssetAccessPolicyCommand,

@@ -45,6 +45,35 @@ type AssistantConversationContextTurn struct {
 	DomainID string `json:"domainId,omitempty"`
 }
 
+// AssistantIntersectionEvidenceRef 是客户端可以提交的最小交集引用。它不包含
+// 可被篡改的标题、结论、标签或 URL；application 必须以当前 actor 回查后才使用。
+type AssistantIntersectionEvidenceRef struct {
+	IntersectionID string `json:"intersectionId"`
+	EvidenceID     string `json:"evidenceId"`
+	SourceRef      string `json:"sourceRef"`
+	ObjectTypeRef  string `json:"objectTypeRef"`
+	ObjectID       string `json:"objectId"`
+}
+
+// AssistantContextSnapshot 是 StartAssistantRun 接收的受限上下文。未声明的 JSON
+// 字段不会进入领域模型，交集引用也只能在 application 完成授权回查后进入 turn。
+type AssistantContextSnapshot struct {
+	IntersectionEvidenceRefs []AssistantIntersectionEvidenceRef `json:"intersectionEvidenceRefs,omitempty"`
+}
+
+// AuthorizedIntersectionEvidence 是 content 的公开 Reader 以当前 actor 重新验证后
+// 返回的事实。它是模型 prompt、evidence ledger 与 citation 的唯一交集事实来源。
+type AuthorizedIntersectionEvidence struct {
+	IntersectionID string    `json:"intersectionId" bson:"intersectionId"`
+	EvidenceID     string    `json:"evidenceId" bson:"evidenceId"`
+	SourceRef      string    `json:"sourceRef" bson:"sourceRef"`
+	ObjectTypeRef  string    `json:"objectTypeRef" bson:"objectTypeRef"`
+	ObjectID       string    `json:"objectId" bson:"objectId"`
+	PrimaryText    string    `json:"primaryText" bson:"primaryText"`
+	Dimension      string    `json:"dimension,omitempty" bson:"dimension,omitempty"`
+	VerifiedAt     time.Time `json:"verifiedAt" bson:"verifiedAt"`
+}
+
 type AssistantTurn struct {
 	TurnID                  string                             `json:"turnId" bson:"_id"`
 	ConversationID          string                             `json:"conversationId" bson:"conversationId"`
@@ -55,6 +84,7 @@ type AssistantTurn struct {
 	DomainID                string                             `json:"domainId,omitempty" bson:"domainId,omitempty"`
 	Input                   AssistantTurnInput                 `json:"input" bson:"input"`
 	ContextTurns            []AssistantConversationContextTurn `json:"contextTurns,omitempty" bson:"-"`
+	IntersectionEvidence    []AuthorizedIntersectionEvidence   `json:"intersectionEvidence,omitempty" bson:"intersectionEvidence,omitempty"`
 	SessionPreferenceFacts  []preferencemodel.Snapshot         `json:"sessionPreferenceFacts,omitempty" bson:"sessionPreferenceFacts,omitempty"`
 	LongTermPreferenceFacts []preferencemodel.Snapshot         `json:"longTermPreferenceFacts,omitempty" bson:"longTermPreferenceFacts,omitempty"`
 	AnswerText              string                             `json:"answerText,omitempty" bson:"answerText,omitempty"`
@@ -68,12 +98,13 @@ type AssistantTurn struct {
 }
 
 type CreateTurnInput struct {
-	TurnType        string               `json:"turnType"`
-	SkillID         string               `json:"skillId"`
-	DomainID        string               `json:"domainId"`
-	Input           AssistantTurnInput   `json:"input"`
-	Trigger         AssistantTurnTrigger `json:"trigger"`
-	ClientRequestID string               `json:"clientRequestId"`
+	TurnType        string                   `json:"turnType"`
+	SkillID         string                   `json:"skillId"`
+	DomainID        string                   `json:"domainId"`
+	Input           AssistantTurnInput       `json:"input"`
+	Trigger         AssistantTurnTrigger     `json:"trigger"`
+	ClientRequestID string                   `json:"clientRequestId"`
+	ContextSnapshot AssistantContextSnapshot `json:"contextSnapshot"`
 }
 
 // AssistantConversationListView 是 ListAssistantConversations 的响应切片

@@ -1,92 +1,82 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
 const _fixtureCircleId = 'fixture_circle_photo';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('CircleRepository — 读投影契约', () {
-    late CircleRepository repo;
+  group('CircleQueryReader — alpha fixture 读投影契约', () {
+    late CircleQueryReader reader;
 
     setUp(() {
-      repo = MockCircleRepository();
+      reader = AlphaCircleQueryReader();
     });
 
-    test('listCircles 返回非空圈子列表', () async {
-      final circles = await repo.listCircles();
-      expect(circles, isNotEmpty);
-      expect(circles.first.id, isNotEmpty);
-      expect(circles.first.name, isNotEmpty);
+    test('list 返回非空圈子列表', () async {
+      final circles = await reader.list(const CircleListQuery());
+      expect(circles.items, isNotEmpty);
+      expect(circles.items.first.circleId, isNotEmpty);
+      expect(circles.items.first.name, isNotEmpty);
     });
 
-    test('getCircle 返回完整圈子信息', () async {
-      final detail = await repo.getCircle(_fixtureCircleId);
-      expect(detail.circle.id, _fixtureCircleId);
-      expect(detail.circle.name, isNotEmpty);
-      final wire = detail.repositoryMergeBase();
-      expect(wire.containsKey('sectionConfig'), isTrue);
-      expect(wire.containsKey('storageUsedBytes'), isTrue);
-      expect(wire.containsKey('storageQuotaBytes'), isTrue);
-      expect(wire.containsKey('domainId'), isTrue);
-      expect(wire.containsKey('autoSyncChat'), isTrue);
+    test('get 返回完整纯投影', () async {
+      final detail = await reader.get(
+        const CircleDetailQuery(circleId: _fixtureCircleId),
+      );
+      expect(detail.circleId, _fixtureCircleId);
+      expect(detail.name, isNotEmpty);
+      expect(detail.domainId, isNotEmpty);
+      expect(detail.autoSyncChat, isTrue);
     });
 
-    test('getCircleFeed 返回 feed 列表', () async {
-      final feed = await repo.getCircleFeed(_fixtureCircleId);
-      expect(feed, isNotEmpty);
-      expect(feed.first, isA<PostBaseDto>());
+    test('feed 返回纯内容投影', () async {
+      final feed = await reader.feed(
+        const CircleFeedQuery(circleId: _fixtureCircleId),
+      );
+      expect(feed.items, isNotEmpty);
+      expect(feed.items.first.post.postId, isNotEmpty);
     });
 
-    test('listHomeCircleDiscoveryFeed 不回退本地静态 feed', () async {
-      final feed = await repo.listHomeCircleDiscoveryFeed(limit: 50);
-      expect(feed, isList);
+    test('discovery feed 使用同一 fixture bundle', () async {
+      final feed = await (reader as CircleDiscoveryFeedQueryReader)
+          .listDiscoveryFeed(const CircleDiscoveryFeedQuery(limit: 50));
+      expect(feed.items, isNotEmpty);
     });
 
-    test('getCircleStats 返回统计数据', () async {
-      final stats = await repo.getCircleStats(_fixtureCircleId);
-      expect(stats.raw.containsKey('memberCount'), isTrue);
-      expect(stats.raw.containsKey('weeklyActiveCount'), isTrue);
-      expect(stats.raw.containsKey('totalMembers'), isFalse);
-      expect(stats.raw.containsKey('weeklyActive'), isFalse);
+    test('stats 只返回 canonical wire 字段', () async {
+      final stats = await reader.stats(
+        const CircleStatsQuery(circleId: _fixtureCircleId),
+      );
+      expect(stats.circleId, _fixtureCircleId);
+      expect(stats.memberCount, greaterThanOrEqualTo(0));
+      expect(stats.weeklyActiveCount, greaterThanOrEqualTo(0));
+      expect(stats.likeCount, greaterThanOrEqualTo(0));
+      expect(stats.storageUsedBytes, greaterThanOrEqualTo(0));
     });
 
-    test('getCircle viewerWire 可读', () async {
-      final detail = await repo.getCircle(_fixtureCircleId);
-      expect(detail.viewerWire.role, isNotNull);
+    test('impact 保留结构化交叉信息', () async {
+      final impact = await reader.impact(
+        const CircleImpactQuery(circleId: _fixtureCircleId),
+      );
+      expect(impact.items, isNotEmpty);
+      expect(impact.items.single.primarySpans, isNotEmpty);
+      expect(impact.items.single.representativeActor, isNotNull);
     });
   });
 
-  group('CircleRepository — contract seed 契约', () {
-    late CircleRepository repo;
+  group('CircleQueryReader — fixture 完整性', () {
+    late CircleQueryReader reader;
 
     setUp(() {
-      repo = MockCircleRepository();
+      reader = AlphaCircleQueryReader();
     });
 
-    test('getCircle 由 contract seed 补齐 sectionConfig 与存储配额', () async {
-      final detail = await repo.getCircle(_fixtureCircleId);
-      final wire = detail.repositoryMergeBase();
-      final sections = wire['sectionConfig'] as List<dynamic>;
-      expect(sections, isNotEmpty);
-      final types = sections.map((s) => (s as Map)['sectionType']).toSet();
-      // 与 metadata ui_config circle_sections 闭集一致（works/members/chat/storage）。
-      expect(types, containsAll(['works', 'members', 'chat', 'storage']));
-      expect(types, isNot(contains('interaction')));
-      expect(wire['storageUsedBytes'], isA<int>());
-      expect(wire['storageQuotaBytes'], isA<int>());
-      expect(
-        wire['storageQuotaBytes'] as int,
-        greaterThan(wire['storageUsedBytes'] as int),
-      );
-    });
-
-    test('listCircles 的 contract seed 每项包含非空 domainId', () async {
-      final circles = await repo.listCircles(limit: 50);
-      expect(circles, isNotEmpty);
-      for (final circle in circles) {
+    test('list fixture 每项包含非空 domainId', () async {
+      final circles = await reader.list(const CircleListQuery(limit: 50));
+      expect(circles.items, isNotEmpty);
+      for (final circle in circles.items) {
         expect(
           circle.domainId,
           isNotNull,
@@ -97,19 +87,25 @@ void main() {
     });
   });
 
-  group('CircleRepository — 异常/边界契约', () {
-    late CircleRepository repo;
+  group('CircleQueryReader — 异常/边界契约', () {
+    late CircleQueryReader reader;
 
     setUp(() {
-      repo = MockCircleRepository();
+      reader = AlphaCircleQueryReader();
     });
 
-    test('listCircles 空参数不崩溃', () async {
-      expect(() async => await repo.listCircles(), returnsNormally);
+    test('list 空参数不崩溃', () async {
+      expect(
+        () async => await reader.list(const CircleListQuery()),
+        returnsNormally,
+      );
     });
 
-    test('getCircle 不存在的 ID 抛出异常', () async {
-      expect(() async => await repo.getCircle('nonexistent'), throwsException);
+    test('get 不存在的 ID 抛出异常', () async {
+      expect(
+        () async => await reader.get(const CircleDetailQuery(circleId: 'none')),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 

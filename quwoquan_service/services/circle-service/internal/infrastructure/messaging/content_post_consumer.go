@@ -10,8 +10,10 @@ import (
 	"sync"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
+	circlecache "quwoquan_service/services/circle-service/internal/infrastructure/cache"
 )
 
 const (
@@ -26,9 +28,10 @@ const (
 // Redis Stream consumer-group delivery. Mongo inbox and aggregate version make
 // new delivery, pending reclaim and duplicate XADD converge to one projection.
 type ContentPostConsumer struct {
-	redis       rtredis.Client
+	transport   runtimemessaging.DurableDeliveryTransport
 	projection  placementports.PostLifecycleProjection
 	failures    placementports.PostLifecycleFailureStore
+	cache       rtredis.Client
 	consumer    string
 	minIdle     time.Duration
 	logger      *slog.Logger
@@ -38,7 +41,7 @@ type ContentPostConsumer struct {
 }
 
 func NewContentPostConsumer(
-	redis rtredis.Client,
+	transport runtimemessaging.DurableDeliveryTransport,
 	projection placementports.PostLifecycleProjection,
 	failures placementports.PostLifecycleFailureStore,
 	consumer string,
@@ -52,36 +55,66 @@ func NewContentPostConsumer(
 		consumer = "circle-post-projection"
 	}
 	return &ContentPostConsumer{
-		redis: redis, projection: projection, failures: failures,
+		transport: transport, projection: projection, failures: failures,
 		consumer: consumer, minIdle: 30 * time.Second, logger: logger,
 	}
 }
 
-func (consumer *ContentPostConsumer) EnsureGroup(ctx context.Context) error {
-	if consumer == nil || consumer.redis == nil {
-		return fmt.Errorf("Content Post consumer Redis is not configured")
+// WithDiscoveryFeedCache makes Post lifecycle projection changes invalidate
+// cached Circle discovery slices after their Mongo projection has succeeded.
+func (consumer *ContentPostConsumer) WithDiscoveryFeedCache(
+	rdb rtredis.Client,
+) *ContentPostConsumer {
+	if consumer == nil {
+		return nil
 	}
-	return consumer.redis.XGroupCreateMkStream(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, "0")
+	consumer.cache = rdb
+	return consumer
+}
+
+func (consumer *ContentPostConsumer) EnsureGroup(ctx context.Context) error {
+	if consumer == nil || consumer.transport == nil {
+		return fmt.Errorf("Content Post consumer transport is not configured")
+	}
+	return consumer.transport.EnsureDurableConsumerGroup(
+		ctx,
+		ContentPostLifecycleStream,
+		contentPostConsumerGroup,
+		"0",
+	)
 }
 
 func (consumer *ContentPostConsumer) ProcessOnce(ctx context.Context) (int, error) {
-	if consumer == nil || consumer.redis == nil || consumer.projection == nil || consumer.failures == nil {
+	if consumer == nil || consumer.transport == nil || consumer.projection == nil || consumer.failures == nil {
 		return 0, fmt.Errorf("Content Post consumer is not fully configured")
 	}
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	claimed, _, err := consumer.redis.XAutoClaim(
-		ctx, ContentPostLifecycleStream, contentPostConsumerGroup,
-		consumer.consumer, consumer.minIdle, "0-0", 50,
+	claimed, _, err := consumer.transport.ReclaimDurable(
+		ctx,
+		ContentPostLifecycleStream,
+		contentPostConsumerGroup,
+		consumer.consumer,
+		consumer.minIdle,
+		"0-0",
+		50,
 	)
 	if err != nil {
 		consumer.recordFailure(err)
 		return 0, err
 	}
-	newMessages, err := consumer.redis.XReadGroup(ctx, contentPostConsumerGroup, consumer.consumer,
-		map[string]string{ContentPostLifecycleStream: ">"}, 50, 200*time.Millisecond)
+	newMessages, err := consumer.transport.ReadDurable(
+		ctx,
+		runtimemessaging.StreamReadRequest{
+			Stream:   ContentPostLifecycleStream,
+			Group:    contentPostConsumerGroup,
+			Consumer: consumer.consumer,
+			Count:    50,
+			Block:    200 * time.Millisecond,
+		},
+	)
 	if err != nil {
 		consumer.recordFailure(err)
 		return 0, err
@@ -145,38 +178,50 @@ func (consumer *ContentPostConsumer) Healthy(maxStaleness time.Duration) error {
 	return nil
 }
 
-func (consumer *ContentPostConsumer) processMessage(ctx context.Context, message rtredis.StreamMessage) error {
-	event, err := decodePostLifecycleMessage(message)
+func (consumer *ContentPostConsumer) processMessage(ctx context.Context, message runtimemessaging.StreamDelivery) error {
+	values := durableFieldValues(message.Fields)
+	event, err := decodePostLifecycleMessage(values)
 	if err == nil {
 		err = consumer.projection.ApplyPostLifecycle(ctx, event)
 	}
+	if err == nil && consumer.cache != nil {
+		err = circlecache.InvalidateCircleDiscoveryFeed(ctx, consumer.cache)
+	}
 	if err != nil {
-		attempts, recordErr := consumer.failures.RecordPostLifecycleFailure(ctx, message.ID, message.Values["eventId"], err)
+		attempts, recordErr := consumer.failures.RecordPostLifecycleFailure(ctx, message.ID, values["eventId"], err)
 		if recordErr != nil {
 			return fmt.Errorf("record Content Post projection failure: %w", recordErr)
 		}
 		if attempts < contentPostMaxAttempts {
 			return fmt.Errorf("Content Post projection attempt %d/%d: %w", attempts, contentPostMaxAttempts, err)
 		}
-		if _, dlqErr := consumer.redis.XAdd(ctx, ContentPostLifecycleDLQ, postLifecycleDLQValues(message, err, attempts)); dlqErr != nil {
+		if _, dlqErr := consumer.transport.PublishDeadLetter(
+			ctx,
+			runtimemessaging.DeadLetterMessage{
+				SourceStream:      ContentPostLifecycleStream,
+				DestinationStream: ContentPostLifecycleDLQ,
+				SourceID:          message.ID,
+				Reason:            "projection_failed",
+				Fields:            postLifecycleDLQFields(message, err, attempts),
+			},
+		); dlqErr != nil {
 			return fmt.Errorf("append Content Post projection DLQ: %w", dlqErr)
 		}
-		if expireErr := consumer.redis.Expire(ctx, ContentPostLifecycleDLQ, contentPostStreamRetention); expireErr != nil {
+		if expireErr := consumer.transport.SetDurableRetention(ctx, ContentPostLifecycleDLQ, contentPostStreamRetention); expireErr != nil {
 			return fmt.Errorf("refresh Content Post projection DLQ retention: %w", expireErr)
 		}
-		if ackErr := consumer.redis.XAck(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); ackErr != nil {
+		if ackErr := consumer.transport.AckDurable(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); ackErr != nil {
 			return fmt.Errorf("ack dead-lettered Content Post event: %w", ackErr)
 		}
 		return consumer.failures.ClearPostLifecycleFailure(ctx, message.ID)
 	}
-	if err := consumer.redis.XAck(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); err != nil {
+	if err := consumer.transport.AckDurable(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, message.ID); err != nil {
 		return fmt.Errorf("ack Content Post lifecycle event: %w", err)
 	}
 	return consumer.failures.ClearPostLifecycleFailure(ctx, message.ID)
 }
 
-func decodePostLifecycleMessage(message rtredis.StreamMessage) (placementports.PostLifecycleEvent, error) {
-	values := message.Values
+func decodePostLifecycleMessage(values map[string]string) (placementports.PostLifecycleEvent, error) {
 	if strings.TrimSpace(values["aggregateType"]) != "Post" {
 		return placementports.PostLifecycleEvent{}, fmt.Errorf("Content lifecycle aggregateType must be Post")
 	}
@@ -216,9 +261,9 @@ func decodePostLifecycleMessage(message rtredis.StreamMessage) (placementports.P
 	return event, nil
 }
 
-func uniqueStreamMessages(groups ...[]rtredis.StreamMessage) []rtredis.StreamMessage {
+func uniqueStreamMessages(groups ...[]runtimemessaging.StreamDelivery) []runtimemessaging.StreamDelivery {
 	seen := make(map[string]struct{})
-	result := make([]rtredis.StreamMessage, 0)
+	result := make([]runtimemessaging.StreamDelivery, 0)
 	for _, messages := range groups {
 		for _, message := range messages {
 			if _, exists := seen[message.ID]; exists {
@@ -231,16 +276,23 @@ func uniqueStreamMessages(groups ...[]rtredis.StreamMessage) []rtredis.StreamMes
 	return result
 }
 
-func postLifecycleDLQValues(message rtredis.StreamMessage, cause error, attempts int64) map[string]string {
+func postLifecycleDLQFields(
+	message runtimemessaging.StreamDelivery,
+	cause error,
+	attempts int64,
+) []runtimemessaging.DurableField {
 	values := map[string]string{
 		"sourceStream": ContentPostLifecycleStream, "streamId": message.ID,
 		"error": cause.Error(), "attempts": strconv.FormatInt(attempts, 10),
 		"deadLetteredAt": time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	for key, value := range message.Values {
+	for key, value := range durableFieldValues(message.Fields) {
+		if key == "sourceId" || key == "reason" {
+			continue
+		}
 		values[key] = value
 	}
-	return values
+	return durableFieldsFromValues(values)
 }
 
 func (consumer *ContentPostConsumer) recordSuccess() {

@@ -285,7 +285,7 @@ contract_acceptance:
         envs: *id002
     notes:
     - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart'
-    - '2026-07-12: make verify-app-auth-policy 与 RemoteSocialAuthorizationRepository/AuthRepository local_contract 通过。'
+    - '2026-07-12: make verify-app-auth-policy 与 AuthRepository local_contract 通过；2026-07-21 已删除未接入的 RemoteSocialAuthorizationRepository，避免保留手写 HTTP 双轨。'
     - '2026-07-12: TestUnsupportedFutureLoginMethodsAreNotPublic 通过；Apple/Passkey route 从 metadata、RemoteAuthRepository 与 user-service handler 同步移除。'
     - '2026-07-14: 8 个登录操作已补齐 commercial/security/privacy/reliability/telemetry/SLO；社交和一键登录继续因 R-AUTH-001 标为 blocked，未用本地绿灯冒充生产 ready。'
   CONTRACT2:

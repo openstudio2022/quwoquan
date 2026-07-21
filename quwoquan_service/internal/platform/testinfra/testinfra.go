@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -60,7 +62,6 @@ func NewSuite(t *testing.T, opts ...SuiteOption) *Suite {
 	t.Helper()
 
 	cfg := &suiteConfig{
-		pgPort:  15432,
 		mongoDB: "test_db",
 	}
 	for _, o := range opts {
@@ -77,12 +78,16 @@ func NewSuite(t *testing.T, opts ...SuiteOption) *Suite {
 
 	if cfg.pg {
 		pgPort := cfg.pgPort
+		if pgPort == 0 {
+			pgPort = reservePostgresPort(t)
+		}
+		pgRoot := t.TempDir()
 		pg := embeddedpostgres.NewDatabase(
 			embeddedpostgres.DefaultConfig().
 				Version(StableEmbeddedPostgresVersion).
 				Port(pgPort).
-				DataPath(os.TempDir() + "/embedded-pg-data").
-				RuntimePath(os.TempDir() + "/embedded-pg-runtime"),
+				DataPath(filepath.Join(pgRoot, "data")).
+				RuntimePath(filepath.Join(pgRoot, "runtime")),
 		)
 		if err := pg.Start(); err != nil {
 			t.Fatalf("testinfra: start embedded postgres: %v", err)
@@ -143,6 +148,25 @@ func NewSuite(t *testing.T, opts ...SuiteOption) *Suite {
 	}
 
 	return s
+}
+
+// reservePostgresPort provides a per-suite port. The listener is closed before
+// embedded Postgres binds it, so callers that require a fixed port can still
+// use WithPGPort explicitly.
+func reservePostgresPort(t *testing.T) uint32 {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("testinfra: reserve postgres port: %v", err)
+	}
+	defer listener.Close()
+
+	address, ok := listener.Addr().(*net.TCPAddr)
+	if !ok || address.Port <= 0 {
+		t.Fatalf("testinfra: reserve postgres port returned invalid address %v", listener.Addr())
+	}
+	return uint32(address.Port)
 }
 
 // TearDown stops all test databases.

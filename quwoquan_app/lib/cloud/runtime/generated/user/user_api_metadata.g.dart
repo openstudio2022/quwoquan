@@ -97,10 +97,12 @@ class UserApiMetadata {
     'ResolveOneTapLoginHint': '/auth/login/one-tap/hint',
     'ResolveProfileQrToken': '/public/profile/qr/resolve',
     'ResolvePushEndpointSecret': '/internal/user/push-endpoints/{endpointRef}/secret',
+    'RestoreAccount': '/internal/user/accounts/{userId}/restore',
     'RetirePersona': '/user/personas/{subAccountId}/retire',
     'SearchSocialRelations': '/user/search/social-relations',
     'SendGreetingRequest': '/user/greeting-request',
     'SendOtp': '/auth/otp/send',
+    'SuspendAccount': '/internal/user/accounts/{userId}/suspend',
     'UnbindCredential': '/owner/credentials/{credentialType}',
     'UnblockUser': '/user/sub-accounts/{targetSubAccountId}/block',
     'UnfollowSubject': '/relationships/subjects/{subjectType}/{subjectId}/follow',
@@ -177,10 +179,12 @@ class UserApiMetadata {
     'ResolveOneTapLoginHint': 'POST',
     'ResolveProfileQrToken': 'GET',
     'ResolvePushEndpointSecret': 'GET',
+    'RestoreAccount': 'POST',
     'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
     'SendOtp': 'POST',
+    'SuspendAccount': 'POST',
     'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
     'UnfollowSubject': 'DELETE',
@@ -258,10 +262,12 @@ class UserApiMetadata {
     'ResolveOneTapLoginHint': 'public',
     'ResolveProfileQrToken': 'optional',
     'ResolvePushEndpointSecret': 'required',
+    'RestoreAccount': 'required',
     'RetirePersona': 'required',
     'SearchSocialRelations': 'required',
     'SendGreetingRequest': 'required',
     'SendOtp': 'public',
+    'SuspendAccount': 'required',
     'UnbindCredential': 'required',
     'UnblockUser': 'required',
     'UnfollowSubject': 'required',
@@ -355,10 +361,12 @@ class UserApiMetadata {
   static const String resolveOneTapLoginHintOperation = 'ResolveOneTapLoginHint';
   static const String resolveProfileQrTokenOperation = 'ResolveProfileQrToken';
   static const String resolvePushEndpointSecretOperation = 'ResolvePushEndpointSecret';
+  static const String restoreAccountOperation = 'RestoreAccount';
   static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
   static const String sendOtpOperation = 'SendOtp';
+  static const String suspendAccountOperation = 'SuspendAccount';
   static const String unbindCredentialOperation = 'UnbindCredential';
   static const String unblockUserOperation = 'UnblockUser';
   static const String unfollowSubjectOperation = 'UnfollowSubject';
@@ -581,6 +589,12 @@ class UserApiMetadata {
       'endpointRef': endpointRef,
     });
   }
+  static const String restoreAccountPathTemplate = '/internal/user/accounts/{userId}/restore';
+  static String restoreAccountPath({required String userId}) {
+    return _fillPath(restoreAccountPathTemplate, <String, String>{
+      'userId': userId,
+    });
+  }
   static const String retirePersonaPathTemplate = '/user/personas/{subAccountId}/retire';
   static String retirePersonaPath({required String subAccountId}) {
     return _fillPath(retirePersonaPathTemplate, <String, String>{
@@ -590,6 +604,12 @@ class UserApiMetadata {
   static const String searchSocialRelationsPath = '/user/search/social-relations';
   static const String sendGreetingRequestPath = '/user/greeting-request';
   static const String sendOtpPath = '/auth/otp/send';
+  static const String suspendAccountPathTemplate = '/internal/user/accounts/{userId}/suspend';
+  static String suspendAccountPath({required String userId}) {
+    return _fillPath(suspendAccountPathTemplate, <String, String>{
+      'userId': userId,
+    });
+  }
   static const String unbindCredentialPathTemplate = '/owner/credentials/{credentialType}';
   static String unbindCredentialPath({required String credentialType}) {
     return _fillPath(unbindCredentialPathTemplate, <String, String>{

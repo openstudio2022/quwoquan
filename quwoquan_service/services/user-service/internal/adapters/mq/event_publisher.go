@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/user-service/internal/application"
 	accountports "quwoquan_service/services/user-service/internal/domain/account/user_account/ports"
 	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
@@ -31,11 +31,16 @@ type DomainEvent struct {
 }
 
 type EventPublisher struct {
-	client rtredis.Client
+	transport runtimemessaging.MessageTransport
 }
 
-func NewEventPublisher(client rtredis.Client) *EventPublisher {
-	return &EventPublisher{client: client}
+// NewEventPublisher accepts the preflighted provider-neutral transport. Object
+// topic and stream coordinates remain owned by this adapter.
+func NewEventPublisher(transport runtimemessaging.MessageTransport) *EventPublisher {
+	if transport == nil {
+		panic("user event publisher requires message transport")
+	}
+	return &EventPublisher{transport: transport}
 }
 
 func (p *EventPublisher) PublishUserEvent(
@@ -43,7 +48,7 @@ func (p *EventPublisher) PublishUserEvent(
 	eventType, userID, actorID string,
 	payload map[string]any,
 ) error {
-	if p == nil || p.client == nil {
+	if p == nil || p.transport == nil {
 		return nil
 	}
 	event := DomainEvent{
@@ -57,30 +62,40 @@ func (p *EventPublisher) PublishUserEvent(
 	if err != nil {
 		return fmt.Errorf("marshal user event: %w", err)
 	}
-	return p.client.Publish(ctx, "event:user-profile", string(body))
+	if err := p.transport.PublishEphemeral(ctx, runtimemessaging.EphemeralMessage{
+		Channel: "event:user-profile",
+		Payload: body,
+	}); err != nil {
+		return fmt.Errorf("publish user event: %w", err)
+	}
+	return nil
 }
 
-// AppendUserAccountClosed 写 durable stream。消费者必须按 eventId 去重；
-// 发布确认丢失时 relay 会安全重放。
-func (p *EventPublisher) AppendUserAccountClosed(
+// AppendUserAccountEvent 写 UserAccount 生命周期 durable stream。消费者必须按 eventId
+// 去重；UserAccountClosed 走不可逆清理，而 UserSuspended/UserRestored 只能维护可逆
+// restriction projection，发布确认丢失时 relay 会安全重放。
+func (p *EventPublisher) AppendUserAccountEvent(
 	ctx context.Context,
-	event accountports.CloseOutboxEvent,
+	event accountports.UserAccountOutboxEvent,
 	payload map[string]any,
 ) error {
-	if p == nil || p.client == nil {
+	if p == nil || p.transport == nil {
 		return fmt.Errorf("UserAccount event publisher is unavailable")
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal UserAccountClosed payload: %w", err)
+		return fmt.Errorf("marshal UserAccount event payload: %w", err)
 	}
-	if _, err := p.client.XAdd(ctx, UserAccountEventStream, map[string]string{
-		"eventId":        event.EventID,
-		"eventName":      event.EventType,
-		"accountId":      event.AccountID,
-		"accountVersion": strconv.FormatInt(event.AccountVersion, 10),
-		"payload":        string(body),
-		"occurredAt":     event.OccurredAt.UTC().Format(time.RFC3339Nano),
+	if _, err := p.transport.AppendDurable(ctx, runtimemessaging.DurableMessage{
+		Stream: UserAccountEventStream,
+		Fields: []runtimemessaging.DurableField{
+			{Name: "eventId", Value: event.EventID},
+			{Name: "eventName", Value: event.EventType},
+			{Name: "accountId", Value: event.AccountID},
+			{Name: "accountVersion", Value: strconv.FormatInt(event.AccountVersion, 10)},
+			{Name: "payload", Value: string(body)},
+			{Name: "occurredAt", Value: event.OccurredAt.UTC().Format(time.RFC3339Nano)},
+		},
 	}); err != nil {
 		return fmt.Errorf("append UserAccount event stream: %w", err)
 	}
@@ -92,7 +107,7 @@ func (p *EventPublisher) AppendUserAccountClosed(
 // delivered only after this method returns, so recommendation projections never
 // rely on lossy Pub/Sub delivery.
 func (p *EventPublisher) PublishPersonaRelationship(ctx context.Context, event relmodel.OutboxEvent) error {
-	if p == nil || p.client == nil {
+	if p == nil || p.transport == nil {
 		return fmt.Errorf("persona relationship event publisher is unavailable")
 	}
 	payload := event.Payload
@@ -119,7 +134,10 @@ func (p *EventPublisher) PublishPersonaRelationship(ctx context.Context, event r
 	if payload.TargetFollowCleared {
 		values["targetFollowCleared"] = strconv.FormatBool(true)
 	}
-	if _, err := p.client.XAdd(ctx, PersonaRelationshipEventStream, values); err != nil {
+	if _, err := p.transport.AppendDurable(
+		ctx,
+		durableMessage(PersonaRelationshipEventStream, values),
+	); err != nil {
 		return fmt.Errorf("append persona relationship stream: %w", err)
 	}
 	return p.PublishUserEvent(
@@ -137,7 +155,7 @@ func (p *EventPublisher) PublishGreetingEvent(
 	ctx context.Context,
 	event application.GreetingStreamEvent,
 ) error {
-	if p == nil || p.client == nil {
+	if p == nil || p.transport == nil {
 		return fmt.Errorf("greeting event publisher is unavailable")
 	}
 	if event.EventID == "" || event.EventName == "" || event.GreetingID == "" ||
@@ -160,7 +178,10 @@ func (p *EventPublisher) PublishGreetingEvent(
 	if event.PromotedConversationID != "" {
 		values["promotedConversationId"] = event.PromotedConversationID
 	}
-	if _, err := p.client.XAdd(ctx, GreetingEventStream, values); err != nil {
+	if _, err := p.transport.AppendDurable(
+		ctx,
+		durableMessage(GreetingEventStream, values),
+	); err != nil {
 		return fmt.Errorf("append greeting stream: %w", err)
 	}
 	return nil
@@ -171,7 +192,7 @@ func (p *EventPublisher) PublishGreetingEvent(
 // recommendation engine. The subject follow outbox is marked delivered only
 // after this method returns.
 func (p *EventPublisher) PublishSubjectFollow(ctx context.Context, event sfmodel.OutboxEvent) error {
-	if p == nil || p.client == nil {
+	if p == nil || p.transport == nil {
 		return fmt.Errorf("subject follow event publisher is unavailable")
 	}
 	payload := event.Payload
@@ -190,10 +211,30 @@ func (p *EventPublisher) PublishSubjectFollow(ctx context.Context, event sfmodel
 		"version":     strconv.FormatInt(payload.Version, 10),
 		"occurredAt":  payload.OccurredAt.UTC().Format(time.RFC3339Nano),
 	}
-	if _, err := p.client.XAdd(ctx, SubjectFollowEventStream, values); err != nil {
+	if _, err := p.transport.AppendDurable(
+		ctx,
+		durableMessage(SubjectFollowEventStream, values),
+	); err != nil {
 		return fmt.Errorf("append subject follow stream: %w", err)
 	}
 	return nil
+}
+
+func durableMessage(
+	stream string,
+	values map[string]string,
+) runtimemessaging.DurableMessage {
+	fields := make([]runtimemessaging.DurableField, 0, len(values))
+	for name, value := range values {
+		fields = append(fields, runtimemessaging.DurableField{
+			Name:  name,
+			Value: value,
+		})
+	}
+	return runtimemessaging.DurableMessage{
+		Stream: stream,
+		Fields: fields,
+	}
 }
 
 // relationshipRealtimePayload only adapts the typed relationship event to the

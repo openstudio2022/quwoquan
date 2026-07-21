@@ -41,7 +41,7 @@ func TestUserAccountClosedRealProjectionNormalReplayAndConflict(
 		t.Fatal(err)
 	}
 	consumer, err := messaging.NewUserAccountClosedConsumerWithConfig(
-		redisRouter.Scene("general"),
+		circleMessageTransport,
 		projection,
 		projection,
 		"account-closure-api-integration",

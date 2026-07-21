@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
 /// 与云侧 ListMembers `sort` 枚举对齐；非法值回退 `joined_asc`。
 List<ChatConversationMemberDto> sortChatMemberDtos(
@@ -69,11 +70,6 @@ abstract class ChatConversationRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   });
@@ -218,17 +214,19 @@ enum ChatSelectableGroupSource {
 abstract class ChatGroupSelectionRepository {
   /// 图四：当前用户所在、且含互关联系人的群会话列表，附 `friendMemberCount`。
   /// 云侧已过滤 `friendMemberCount == 0` 的群。
-  Future<List<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   /// 图五：指定群成员中与当前用户互关的联系人（排除当前用户与非 user 成员）。
-  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 }

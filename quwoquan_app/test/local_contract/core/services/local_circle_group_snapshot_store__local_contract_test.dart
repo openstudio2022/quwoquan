@@ -1,8 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
@@ -113,13 +111,13 @@ void main() {
     test(
       'ensureSeeded is deduped per namespace and reseeds new namespace',
       () async {
-        final repo = _CountingCircleRepository();
+        final reader = _CountingCircleQueryReader();
         const groups = _CountingCircleGroupQuery();
 
         expect(
           await store.ensureSeeded(
             namespace: ownerNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
@@ -127,24 +125,24 @@ void main() {
         expect(
           await store.ensureSeeded(
             namespace: ownerNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
         );
-        final ownerListCalls = repo.listCirclesCalls;
+        final ownerListCalls = reader.listCalls;
 
         expect(
           await store.ensureSeeded(
             namespace: subNamespace,
-            circleRepository: repo,
+            circleQuery: reader,
             circleGroupQuery: groups,
           ),
           isTrue,
         );
 
         expect(ownerListCalls, equals(1));
-        expect(repo.listCirclesCalls, equals(2));
+        expect(reader.listCalls, equals(2));
         expect(await store.hasAnySnapshot(ownerNamespace), isTrue);
         expect(await store.hasAnySnapshot(subNamespace), isTrue);
       },
@@ -152,30 +150,49 @@ void main() {
   });
 }
 
-class _CountingCircleRepository extends MockCircleRepository {
-  int listCirclesCalls = 0;
+final class _CountingCircleQueryReader implements CircleQueryReader {
+  int listCalls = 0;
 
   @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? subCategory,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-  }) async {
-    listCirclesCalls += 1;
-    return super.listCircles(
-      category: category,
-      subCategory: subCategory,
-      domainId: domainId,
-      recommendFor: recommendFor,
-      cursor: cursor,
-      limit: limit,
-      sort: sort,
+  Future<CirclePageSlice> list(CircleListQuery query) async {
+    listCalls += 1;
+    return CirclePageSlice(
+      items: <CircleProjection>[
+        CircleProjection(
+          circleId: 'fixture_circle_photo',
+          name: '契约摄影社',
+          ownerId: 'fixture_owner',
+        ),
+      ],
     );
   }
+
+  @override
+  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async =>
+      CircleSearchResultSlice(
+        items: const <CircleSearchItemProjection>[],
+        facetBuckets: const <CircleFacetBucketProjection>[],
+      );
+
+  @override
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
+      CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+
+  @override
+  Future<CircleStatsSlice> stats(CircleStatsQuery query) async =>
+      const CircleStatsSlice();
+
+  @override
+  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
+      CircleImpactSlice(
+        circleId: query.circleId,
+        total: 0,
+        items: const <CircleImpactItemProjection>[],
+      );
 }
 
 final class _CountingCircleGroupQuery implements CircleGroupQueryReader {

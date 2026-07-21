@@ -11,6 +11,7 @@ import (
 )
 
 const defaultDataContentProcessOutputBytes int64 = 1024 * 1024
+const maxDataContentWorkerDiagnosticBytes = 4 * 1024
 
 // DataContentProcessExecutor is the process boundary between the Go
 // Mongo+Redis fleet and the Python qwq-data object worker. The command is
@@ -69,6 +70,13 @@ func (e DataContentProcessExecutor) ExecuteDataContentObject(
 	if err := command.Run(); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return DataContentExecutionResult{}, ctxErr
+		}
+		if diagnostic := dataContentWorkerDiagnostic(stderr.Bytes()); diagnostic != "" {
+			return DataContentExecutionResult{}, fmt.Errorf(
+				"reliabletask data process worker failed: %w; %s",
+				err,
+				diagnostic,
+			)
 		}
 		return DataContentExecutionResult{}, fmt.Errorf(
 			"reliabletask data process worker failed: %w",
@@ -144,6 +152,23 @@ func (b *dataContentLimitedBuffer) Write(value []byte) (int, error) {
 
 func (b *dataContentLimitedBuffer) Bytes() []byte {
 	return b.buffer.Bytes()
+}
+
+// dataContentWorkerDiagnostic 只转发受控 Python worker 的协议化错误行。
+// 任意外部命令的 stderr 不得进入任务失败消息，以避免把未审计输出持久化。
+func dataContentWorkerDiagnostic(stderr []byte) string {
+	const prefix = "[data-content-worker] "
+	for _, line := range strings.Split(string(stderr), "\n") {
+		diagnostic := strings.TrimSpace(line)
+		if !strings.HasPrefix(diagnostic, prefix) {
+			continue
+		}
+		if len(diagnostic) > maxDataContentWorkerDiagnosticBytes {
+			return diagnostic[:maxDataContentWorkerDiagnosticBytes] + "…"
+		}
+		return diagnostic
+	}
+	return ""
 }
 
 func ensureDataContentJSONEOF(decoder *json.Decoder) error {

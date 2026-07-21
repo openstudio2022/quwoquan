@@ -77,7 +77,11 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 			"imageHeight":960,
 			"imageDeliveryContentType":"image/png",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.png",
-			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png"
+			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png",
+			"imageDominantColor":"#1A2B3C",
+			"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
+			"imageContentProfile":"alpha_graphic",
+			"imageDerivativePolicyVersion":1
 		}`, assetID, assetID),
 		ownerPersonaID,
 		"media-reference-processing-ready",

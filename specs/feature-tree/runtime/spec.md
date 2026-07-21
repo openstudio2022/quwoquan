@@ -3,12 +3,16 @@
 ## 功能说明
 - 为所有云侧 **Go 服务**提供统一运行时能力，覆盖配置、错误、可观测、HTTP、RPC、消息、治理、实验与学习闭环。
 - 目标是“服务只聚焦业务开发”，横切能力由 runtime 统一封装并复用。
-- 不包含独立可部署的微服务（推荐平台下 rec-model-training、rec-model-service 归属 recommendation-platform L1）。
+- runtime 是领域机制与横切合同的 L1，不等同于单个部署进程；可以治理
+  `integration-service` 等独立部署的机制服务，但这些进程不得拥有业务聚合或成为新的 L1。
+- 推荐训练与 serving 仍归属 `recommendation-platform` L1，不因复用 runtime 而改变领域归属。
 
 ## 约束
 - 业务服务不得重复实现横切基础能力，必须复用 runtime 子包。
 - runtime 的契约、字段与元数据必须与 `quwoquan_service/contracts/*` 一致。
 - runtime 变更必须遵循向后兼容与可回滚原则。
+- 外部能力必须经能力专属 typed Port 与登记的 Provider Adapter；运行时不得扫描 metadata
+  或动态选厂，Gamma/Prod 不得装配 Mock/Fake/InMemory/Noop。
 
 ## 验收重点
 - A3：治理策略可配置、可灰度、可回滚

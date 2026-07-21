@@ -60,6 +60,7 @@ DISPLAY_STATEMENT_BANNED_FRAGMENTS = (
     "最近在看这些",
 )
 DISPLAY_OBJECT_TARGET_TYPES = {"user", "circle", "homepage", "post", "task"}
+DEFAULT_ENABLED_DOMAINS = ("content", "chat", "circle", "entity", "user")
 _ACTIVE_SESSION: Optional[LocalGammaAcceptanceSession] = None
 
 
@@ -204,10 +205,25 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         device_info.setdefault("imageHeight", height)
     if duration_ms > 0:
         device_info.setdefault("durationMs", duration_ms)
+    revision_source = json.dumps(
+        {
+            "postId": post_id,
+            "contentType": post.get("contentType") or post.get("type", ""),
+            "title": post.get("title", ""),
+            "body": post.get("body", ""),
+            "mediaUrls": media_urls,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     doc = {
         "_id": post_id,
         "postId": post_id,
         "postRef": post_id,
+        "version": 1,
+        "contentDigest": "sha256:"
+        + hashlib.sha256(revision_source.encode("utf-8")).hexdigest(),
         "authorId": post.get("authorId", ""),
         "subAccountId": post.get("subAccountId") or post.get("authorId", ""),
         "authorDisplayNameSnapshot": post.get("displayName", ""),
@@ -497,24 +513,75 @@ for (const doc of docs) {
 }
 const dbh = db.getSiblingDB("quwoquan_content");
 const ids = docs.map((doc) => doc._id);
+const feedDocs = docs.map((doc) => ({
+  postId: doc._id,
+  authorId: doc.authorId || "",
+  creatorProfileId: doc.subAccountId || doc.authorId || "",
+  creatorDisclosure: {},
+  experienceClaimMode: "",
+  authorQualitySignals: {},
+  contentType: doc.contentType || "",
+  contentIdentity: doc.contentIdentity || "",
+  title: doc.title || "",
+  tagRefs: Array.isArray(doc.tags) ? doc.tags : [],
+  coverUrl: doc.coverUrl || "",
+  thumbnailUrl: doc.thumbnailUrl || "",
+  videoUrl: doc.videoUrl || "",
+  coverStrategy: "",
+  coverFrameTimeMs: 0,
+  durationMs: Number(doc.durationMs || 0),
+  width: Number(doc.width || 0),
+  height: Number(doc.height || 0),
+  mediaItems: Array.isArray(doc.mediaItems) ? doc.mediaItems : [],
+  status: "published",
+  visibility: "public",
+  assistantUsePolicy: doc.assistantUsePolicy || "allow",
+  entityRefs: [],
+  semanticMentions: null,
+  contentVertical: "",
+  sourceTaskId: "",
+  conditionProfile: {},
+  likeCount: Number(doc.likeCount || 0),
+  commentCount: Number(doc.commentCount || 0),
+  shareCount: Number(doc.shareCount || 0),
+  viewCount: 0,
+  createdAt: doc.createdAt,
+  publishedAt: doc.publishedAt,
+  updatedAt: doc.updatedAt,
+}));
 try {
   // The Gamma fixture set includes stable non-fixture IDs. Remove precisely
-  // this execution's IDs before insertion so a rerun is idempotent and every
-  // Mongo write failure terminates mongosh with a non-zero status.
+  // this execution's Posts and their derived feed rows before insertion so a
+  // rerun is idempotent. The content seed writes both objects atomically at
+  // the script level: a public Post without its rm_discovery_feed row makes
+  // the comment-count relay retry forever and therefore breaks readiness.
   const deleted = ids.length > 0
     ? dbh.posts.deleteMany({_id: {$in: ids}})
     : {deletedCount: 0};
+  const deletedFeed = ids.length > 0
+    ? dbh.rm_discovery_feed.deleteMany({postId: {$in: ids}})
+    : {deletedCount: 0};
   if (docs.length > 0) dbh.posts.insertMany(docs, {ordered: true});
+  if (feedDocs.length > 0) dbh.rm_discovery_feed.insertMany(feedDocs, {ordered: true});
   const storedCount = ids.length > 0
     ? dbh.posts.countDocuments({_id: {$in: ids}})
     : 0;
+  const storedFeedCount = ids.length > 0
+    ? dbh.rm_discovery_feed.countDocuments({postId: {$in: ids}})
+    : 0;
   if (storedCount !== docs.length) {
     throw new Error(`seed verification failed: stored ${storedCount}/${docs.length}`);
+  }
+  if (storedFeedCount !== feedDocs.length) {
+    throw new Error(`feed seed verification failed: stored ${storedFeedCount}/${feedDocs.length}`);
   }
   printjson({
     insertedCount: docs.length,
     deletedCount: deleted.deletedCount || 0,
     storedCount,
+    feedInsertedCount: feedDocs.length,
+    feedDeletedCount: deletedFeed.deletedCount || 0,
+    storedFeedCount,
   });
 } catch (error) {
   print(error && error.stack ? error.stack : String(error));
@@ -663,9 +730,10 @@ def seed_content_moment_channel() -> Dict[str, Any]:
 def setup_comment_thread(base_url: str) -> Dict[str, Any]:
     """Create runtime-only comment fixtures through the public API.
 
-    The local gamma mirror hydrates posts from Mongo, while comments live in the
-    content-service process. Creating the thread via API keeps T3 aligned with
-    runtime behavior instead of writing private in-process state.
+    Posts are fixture-seeded read data, while Comments remain content-service
+    aggregate state. Creating the thread through the generated public contract
+    exercises Comment persistence, outbox and projections instead of writing
+    Mongo documents behind the service boundary.
     """
     try:
         status, body = http_request(
@@ -677,7 +745,6 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
         )
         parent_resp = json.loads(body.decode("utf-8"))
         parent_id = str(parent_resp.get("id") or "").strip()
-        parent_version = int(parent_resp.get("version") or 0)
         if not parent_id:
             return {
                 "status": "failed",
@@ -709,10 +776,7 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
         bind_status, bind_body = http_request(
             base_url.rstrip() + f"/content/comments/{parent_id}/media:bind",
             method="POST",
-            body={
-                "version": parent_version,
-                "attachmentMediaIds": [],
-            },
+            body={"attachmentMediaIds": []},
             timeout=8,
             headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-media-bind")},
         )
@@ -1396,13 +1460,20 @@ def strict_endpoint_checks(
     return checks
 
 
-def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict[str, Any]]:
+def run_flutter_contracts(
+    base_url: str,
+    product_ops_base_url: str,
+    enabled_domains: Set[str],
+    *,
+    include_product_ops: bool,
+) -> List[Dict[str, Any]]:
     checks = []  # type: List[Dict[str, Any]]
     flutter_base_url = flutter_contract_base_url(base_url)
     flutter_product_ops_base_url = flutter_contract_base_url(product_ops_base_url)
     cases = [
         {
             "name": "content_api_contract",
+            "domain": "content",
             "path": "test/api_integration/cloud/content/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1413,6 +1484,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
         {
             "name": "chat_api_contract",
+            "domain": "chat",
             "path": "test/api_integration/cloud/chat/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1422,6 +1494,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
         {
             "name": "user_identity_api_contract",
+            "domain": "user",
             "path": "test/api_integration/cloud/user/user_api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1431,6 +1504,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
         {
             "name": "product_ops_api_contract",
+            "domain": "product_ops",
             "path": "test/api_integration/cloud/ops/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
@@ -1441,6 +1515,11 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict
         },
     ]
     for case in cases:
+        if case["domain"] == "product_ops":
+            if not include_product_ops:
+                continue
+        elif case["domain"] not in enabled_domains:
+            continue
         if case["name"] == "chat_api_contract":
             chat_inbox = endpoint_contract_summary("chat", "/chat/inbox", "GET")
             if chat_inbox.get("commercialStatus") == "blocked":
@@ -1495,13 +1574,16 @@ def main() -> int:
     parser.add_argument(
         "--enabled-domain",
         action="append",
-        default=["content", "chat", "circle", "entity", "user"],
+        default=None,
     )
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument(
         "--seed-only",
         action="store_true",
-        help="Only run Mongo content seed (no health wait or flutter contracts).",
+        help=(
+            "Seed content plus the authenticated user-profile prerequisite "
+            "(no health wait or Flutter contracts)."
+        ),
     )
     parser.add_argument("--skip-flutter-contracts", action="store_true")
     parser.add_argument("--strict-all", action="store_true")
@@ -1513,7 +1595,8 @@ def main() -> int:
     parser.add_argument("--wait-seconds", type=int, default=45)
     args = parser.parse_args()
 
-    enabled_domains = set(args.enabled_domain)
+    enabled_domain_scope_selected = args.enabled_domain is not None
+    enabled_domains = set(args.enabled_domain or DEFAULT_ENABLED_DOMAINS)
     manifest = load_manifest()
     scope_name = args.verification_scope.strip()
     scope = resolve_verification_scope(manifest, scope_name) if scope_name else None
@@ -1552,14 +1635,37 @@ def main() -> int:
 
     if args.seed_only:
         report["seed"] = seed_content()
-        report["status"] = "passed" if report["seed"].get("status") == "passed" else "failed"
+        # Gamma's environment health probe authenticates as the canonical
+        # acceptance principal and calls /user/sync. Seed its typed profile
+        # before reporting startup success; otherwise the proxy is healthy
+        # while the authenticated B1 path fails with USER.USER.not_found.
+        if (
+            report["seed"].get("status") == "passed"
+            and "user" in enabled_domains
+        ):
+            report["domainSeeds"]["user"] = seed_user()
+        user_seed_failed = (
+            report["domainSeeds"].get("user", {}).get("status") == "failed"
+        )
+        report["status"] = (
+            "passed"
+            if report["seed"].get("status") == "passed" and not user_seed_failed
+            else "failed"
+        )
     else:
         report["health"] = wait_url(args.base_url.rstrip("/") + "/healthz", args.wait_seconds)
-        report["productOpsHealth"] = wait_url(
-            args.product_ops_base_url.rstrip("/") + "/healthz",
-            args.wait_seconds,
+        report["productOpsHealth"] = (
+            {"status": "skipped", "reason": "domain_scoped_verification"}
+            if enabled_domain_scope_selected
+            else wait_url(
+                args.product_ops_base_url.rstrip("/") + "/healthz",
+                args.wait_seconds,
+            )
         )
-        if report["health"].get("status") != "passed" or report["productOpsHealth"].get("status") != "passed":
+        if report["health"].get("status") != "passed" or (
+            not enabled_domain_scope_selected
+            and report["productOpsHealth"].get("status") != "passed"
+        ):
             report["status"] = "gate_block"
         else:
             try:
@@ -1628,6 +1734,8 @@ def main() -> int:
                 else run_flutter_contracts(
                     args.base_url,
                     args.product_ops_base_url,
+                    enabled_domains,
+                    include_product_ops=not enabled_domain_scope_selected,
                 )
             )
             failed = any(item.get("status") == "failed" for item in report["endpoints"])

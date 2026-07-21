@@ -121,7 +121,7 @@ domains:
         target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
         status: compliant
-        note: 群主页 GroupHomeDto/GetGroupHome 承载来源、公告、成员数与能力；成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto；群名 updateConversationTitle
+        note: 群主页 GroupHomeDto/GetGroupHome 承载来源、公告、成员数与能力；成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto（含 circleGroupId）；圈群绑定会话跳转 Circle 详情，不向 Chat 治理 operation 发起必败写入
         target_dto: GroupHomeDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_announcement_page.dart
         status: compliant
@@ -141,7 +141,7 @@ domains:
         target_dto: ChatConversationMemberDto
       - path: quwoquan_app/lib/ui/chat/pages/group_manage_page.dart
         status: compliant
-        note: ChatGroupSettingsDto projection + conversationMembersProvider；开关乐观更新
+        note: ChatGroupSettingsDto projection（含 circleGroupId）+ conversationMembersProvider；私建群开关乐观更新，圈群绑定会话跳转 Circle 详情
         target_dto: ChatGroupSettingsDto
       - path: quwoquan_app/lib/ui/chat/pages/group_admins_page.dart
         status: compliant

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -144,6 +145,15 @@ func main() {
 	if err := redisRouter.PingAll(ctx); err != nil {
 		log.Printf("WARN: user-service redis ping: %v", err)
 	}
+	messageTransport, err := newUserMessageTransport(
+		ctx,
+		appEnv,
+		redisRouter,
+		cfg,
+	)
+	if err != nil {
+		log.Fatalf("user-service message transport preflight failed: %v", err)
+	}
 	redisClient := redisRouter.Scene("general")
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -233,7 +243,7 @@ func main() {
 	profileCache := usercache.NewProfileCache(redisClient)
 	// The domain MQ publisher stays the primary; when ES is enabled the search
 	// projector is composed onto the fan-out tail (best-effort, never blocks).
-	relationshipEventPublisher := mq.NewEventPublisher(redisClient)
+	relationshipEventPublisher := mq.NewEventPublisher(messageTransport)
 	var userEventPublisher application.UserEventPublisher = relationshipEventPublisher
 	accountCloseProjections := searchindex.ComposePublisher()
 	if searchBuilt.Projector != nil {
@@ -432,13 +442,9 @@ func main() {
 			authenticationChallengeStore,
 			challengeapp.OTPCredentialVerifier{},
 		)
-	socialProviderClient, err := socialAuthProviderClient(cfg)
-	if err != nil {
-		log.Fatalf("social auth provider client init failed: %v", err)
-	}
-	oneTapResolverImpl, err := oneTapResolver(cfg)
-	if err != nil {
-		log.Fatalf("one tap resolver init failed: %v", err)
+	carrierPhoneResolver, err := newCarrierPhoneResolver()
+	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+		log.Fatalf("carrier identity adapter init failed: %v", err)
 	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
@@ -473,6 +479,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("external interaction client init failed: %v", err)
 	}
+	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
+	if err != nil {
+		log.Fatalf("UserAccount enforcement store init failed: %v", err)
+	}
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
@@ -488,11 +498,15 @@ func main() {
 		application.WithOTPCodeSealer(otpCodeSealer),
 		application.WithOTPCodeGenerator(otpCodeGenerator),
 		application.WithExternalInteractionClient(externalInteractionClient),
-		application.WithExternalAuthProviderClient(socialProviderClient),
-		application.WithOneTapPhoneResolver(oneTapResolverImpl),
+		application.WithCarrierPhoneResolver(carrierPhoneResolver),
 		application.WithAccessTokenSigner(accessSigner),
+		application.WithAccountSecurityReader(accountEnforcementStore),
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 	)
+	federatedLogins, err := newFederatedLoginBindings(authService)
+	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+		log.Fatalf("federated identity adapter init failed: %v", err)
+	}
 	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("Persona command store init failed: %v", err)
@@ -546,34 +560,36 @@ func main() {
 	if err != nil {
 		log.Fatalf("UserAccount close store init failed: %v", err)
 	}
-	accountCloseOutboxStore, err :=
-		useraccountpersistence.NewCloseOutboxStore(pgPool)
+	accountOutboxStore, err :=
+		useraccountpersistence.NewUserAccountOutboxStore(pgPool)
 	if err != nil {
-		log.Fatalf("UserAccount close outbox store init failed: %v", err)
+		log.Fatalf("UserAccount outbox store init failed: %v", err)
 	}
-	accountCloseFanout, err := mq.NewUserAccountClosedFanout(
+	accountEventFanout, err := mq.NewUserAccountEventFanout(
 		relationshipEventPublisher,
 		accountCloseProjections,
 	)
 	if err != nil {
-		log.Fatalf("UserAccount close event fanout init failed: %v", err)
+		log.Fatalf("UserAccount event fanout init failed: %v", err)
 	}
-	accountCloseOutboxRelay, err := useraccountapp.NewCloseOutboxRelay(
-		accountCloseOutboxStore,
-		accountCloseFanout,
+	accountOutboxRelay, err := useraccountapp.NewUserAccountOutboxRelay(
+		accountOutboxStore,
+		accountEventFanout,
 		fmt.Sprintf("user-service-%d", os.Getpid()),
-		useraccountapp.WithCloseOutboxObserver(
+		useraccountapp.WithUserAccountOutboxObserver(
 			useraccountobservability.CloseOutboxObserver{},
 		),
 	)
 	if err != nil {
-		log.Fatalf("UserAccount close outbox relay init failed: %v", err)
+		log.Fatalf("UserAccount outbox relay init failed: %v", err)
 	}
-	go accountCloseOutboxRelay.Run(ctx)
+	go accountOutboxRelay.Run(ctx)
 	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
 		accountCloseStore,
 		useraccountcache.NewClosedAccountCache(redisClient),
 	)
+	accountEnforcementFacade :=
+		useraccountapp.NewAccountEnforcementCommandFacade(accountEnforcementStore)
 	userHandler, err := httpadapter.NewUserHandler(
 		profileService, searchService, relationshipService, greetingService,
 		userSettingsCommands, userSettingsQueries,
@@ -590,6 +606,13 @@ func main() {
 		log.Fatalf("user-service HTTP composition failed: %v", err)
 	}
 	userHandler.WithAccountLifecycle(closeAccountFacade)
+	userHandler.WithAccountEnforcement(accountEnforcementFacade)
+	userHandler.WithAccountSecurityReader(accountEnforcementStore)
+	userHandler.WithFederatedLogins(
+		federatedLogins.wechat,
+		federatedLogins.alipay,
+		federatedLogins.qq,
+	)
 	handler := userHandler.Routes()
 
 	outerMux := buildUserHTTPMux(handler, healthChecker)

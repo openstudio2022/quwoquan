@@ -93,7 +93,7 @@ func BuildDataContentFleetReport(
 		FinalizedWithinStageBudgetRate:    finalizedRate,
 		DuplicatePublishCount:             duplicatePublishCount,
 		MissingObjectCount:                missingObjectCount,
-		IdempotencyKey:                    "entity+carrier+sourceRevision+stage",
+		IdempotencyKey:                    "executionId+entity+carrier+sourceRevision+stage",
 		CompletedAt:                       completedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

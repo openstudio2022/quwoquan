@@ -77,6 +77,14 @@ func main() {
 		log.Fatalf("product-ops-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
+	cfg, err = resolveSLSBinding(
+		cfg,
+		appEnv,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service SLS binding invalid: %v", err)
+	}
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("product-ops-service config compatibility failed: %v", err)
 	}
@@ -164,11 +172,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("product-ops-service experiment facade invalid: %v", err)
 	}
-	router, err := buildRedisRouter(cfg)
+	router, messageTransportSceneModes, err := buildRedisRouter(cfg)
 	if err != nil {
 		log.Fatalf("product-ops-service redis config invalid: %v", err)
 	}
 	defer router.Close()
+	messageTransport, err := requireMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		messageTransportSceneModes,
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service message transport preflight failed: %v", err)
+	}
 	if err := router.PingAll(ctx); err != nil {
 		log.Fatalf("product-ops-service redis unavailable: %v", err)
 	}
@@ -176,7 +193,7 @@ func main() {
 	healthChecker.Register("redis", func(ctx context.Context) error {
 		return router.PingAll(ctx)
 	})
-	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
+	publisher := messaging.NewRedisEventPublisherWithTransport(messageTransport, serviceName, nil)
 	outboxDispatcher, err := pgoutbox.NewDispatcher(postgresPool, publisher, "product_ops_outbox")
 	if err != nil {
 		log.Fatalf("product-ops-service outbox dispatcher invalid: %v", err)
@@ -330,8 +347,10 @@ func main() {
 		mux.ServeHTTP(w, r)
 	})
 	// 云侧服务日志上云的内部通道：以 X-Runtime-Log-Ingest-Token 机器凭据
-	// fail-closed（handler 内校验），不走用户 JWT；app sourceType 被拒绝。
-	outerMux.HandleFunc("/ops/internal/runtime-logs:ingest", func(w http.ResponseWriter, r *http.Request) {
+	// fail-closed（handler 内校验），不走用户 JWT；app sourceType 被拒绝。该路径
+	// 在最外层跳过 access/process logger，避免 product-ops 自身 spool 回灌时把
+	// transport 请求再次写进 spool 而形成反馈环。
+	internalRuntimeLogIngest := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 	outerMux.Handle(
@@ -345,16 +364,24 @@ func main() {
 	)
 
 	instanceID, _ := os.Hostname()
-	runtimeLogExporter := exportServiceRuntimeLogs(runtimeLogStore)
+	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
+		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service runtime log exporter init failed: %v", err)
+	}
+	defer runtimeLogExporter.Close()
 	standardLogWriter := robs.NewRuntimeLogExportWriter(
 		os.Stdout,
 		512,
-		runtimeLogExporter,
+		runtimeLogExporter.Export,
 	)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(
 		os.Stderr,
 		512,
-		runtimeLogExporter,
+		runtimeLogExporter.Export,
 	)
 	defer standardLogWriter.Close()
 	defer errorLogWriter.Close()
@@ -386,7 +413,9 @@ func main() {
 	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore)
 
 	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(
+		withProductOpsInternalRuntimeLogIngestBypass(internalRuntimeLogIngest, corsHandler),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -404,32 +433,17 @@ func main() {
 	}
 }
 
-func exportServiceRuntimeLogs(
-	store application.RuntimeLogStore,
-) robs.RuntimeLogFieldBatchExporter {
-	return func(fieldsBatch []map[string]string) {
-		encoded, err := json.Marshal(fieldsBatch)
-		if err != nil {
+func withProductOpsInternalRuntimeLogIngestBypass(
+	internalRuntimeLogIngest http.Handler,
+	observed http.Handler,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ops/internal/runtime-logs:ingest" {
+			internalRuntimeLogIngest.ServeHTTP(w, r)
 			return
 		}
-		digest := sha256.Sum256(encoded)
-		batchKey := hex.EncodeToString(digest[:])
-		now := time.Now().UTC()
-		records := make([]application.RuntimeLogRecord, 0, len(fieldsBatch))
-		for index, fields := range fieldsBatch {
-			records = append(records, application.RuntimeLogRecord{
-				Fields:     fields,
-				BatchKey:   batchKey,
-				BatchIndex: index,
-				IngestedAt: now,
-			})
-		}
-		_ = store.PutRuntimeLogBatch(
-			context.Background(),
-			batchKey,
-			records,
-		)
-	}
+		observed.ServeHTTP(w, r)
+	})
 }
 
 func newProductService(
@@ -466,10 +480,6 @@ func newProductServiceWithRuntimeLogs(
 }
 
 func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
-	items, err := s.store.ListDocuments("l1l4_metric_snapshots")
-	if err != nil {
-		return nil, err
-	}
 	priority := map[string]int{"L1": 1, "L2": 2, "L3": 3, "L4": 4}
 	seen := map[string]bool{}
 	type card struct {
@@ -479,9 +489,8 @@ func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
 		priority int
 	}
 	cards := make([]card, 0, 4)
-	for _, item := range items {
-		level, _ := item["level"].(string)
-		level = strings.TrimSpace(level)
+	for _, definition := range canonicalL1L4MetricDefinitions(l1l4MetricsScope{Environment: "prod"}) {
+		level := strings.TrimSpace(definition.Level)
 		if level == "" || seen[level] {
 			continue
 		}
@@ -492,8 +501,8 @@ func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
 		seen[level] = true
 		cards = append(cards, card{
 			level:    level,
-			label:    strings.TrimSpace(safeString(item["label"])),
-			metric:   strings.TrimSpace(safeString(item["metric"])),
+			label:    strings.TrimSpace(definition.Label),
+			metric:   strings.TrimSpace(definition.Metric),
 			priority: rank,
 		})
 	}
@@ -508,27 +517,7 @@ func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
 			"metric": item.metric,
 		})
 	}
-	if len(out) == 0 {
-		for _, snapshot := range canonicalL1L4MetricSnapshots(l1l4MetricsScope{Environment: "prod"}) {
-			if seen[snapshot.Level] {
-				continue
-			}
-			out = append(out, map[string]any{
-				"level":  snapshot.Level,
-				"label":  snapshot.Label,
-				"metric": snapshot.Metric,
-			})
-			seen[snapshot.Level] = true
-		}
-	}
 	return out, nil
-}
-
-func safeString(value any) string {
-	if text, ok := value.(string); ok {
-		return text
-	}
-	return ""
 }
 
 func (s *productService) putIfMissing(namespace, id string, value any) error {

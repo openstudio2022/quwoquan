@@ -11,7 +11,12 @@ STATE_DIR="$QWQ_OUTPUT_ROOT/env/alpha/local/alpha-local/process"
 RUNTIME_LOG_DIR="$QWQ_OBSERVABILITY_RUN_ROOT/logs/service"
 PKI_STATE_DIR="$QWQ_DEPLOY_WORK_ROOT/alpha-local/certificates"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-LEGAL_STATIC_ROOT="$QWQ_OUTPUT_ROOT/env/alpha/release/legal-static/current/public"
+LEGAL_STATIC_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
+
+print(legal_static_deployment_package_dir("alpha") / "current" / "public")
+PY
+)"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
 
@@ -223,9 +228,9 @@ assert_distinct_http_body_sha256() {
 }
 
 stop_tls_proxy() {
-  stop_bg tls-api
-  stop_bg tls-product-ops
-  stop_bg tls-media
+  stop_bg edge-api
+  stop_bg edge-product-ops
+  stop_bg edge-media
 }
 
 prepare_tls_material() {
@@ -296,21 +301,21 @@ EOF
 start_tls_proxy() {
   prepare_tls_material
   stop_tls_proxy
-  start_bg tls-api \
+  start_bg edge-api \
     python3 "$ROOT_DIR/quwoquan_ops/cli/lib/tls_reverse_proxy.py" \
       --listen-host 127.0.0.1 \
       --listen-port "$API_EDGE_PORT" \
       --target-base-url "$INTERNAL_API_BASE_URL" \
       --cert-file "$TLS_LEAF_CERT" \
       --key-file "$TLS_LEAF_KEY"
-  start_bg tls-product-ops \
+  start_bg edge-product-ops \
     python3 "$ROOT_DIR/quwoquan_ops/cli/lib/tls_reverse_proxy.py" \
       --listen-host 127.0.0.1 \
       --listen-port "$PRODUCT_OPS_PORT" \
       --target-base-url "$INTERNAL_PRODUCT_OPS_BASE_URL" \
       --cert-file "$TLS_LEAF_CERT" \
       --key-file "$TLS_LEAF_KEY"
-  start_bg tls-media \
+  start_bg edge-media \
     python3 "$ROOT_DIR/quwoquan_ops/cli/lib/tls_reverse_proxy.py" \
       --listen-host 127.0.0.1 \
       --listen-port "$MEDIA_EDGE_PORT" \

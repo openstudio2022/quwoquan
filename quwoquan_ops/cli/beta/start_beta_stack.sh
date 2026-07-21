@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
 ACTION="${1:-up}"
 if [[ "$ACTION" == "-h" || "$ACTION" == "--help" || "$ACTION" == "help" ]]; then
   cat <<'EOF'
@@ -16,7 +17,8 @@ EOF
 fi
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env beta --target beta-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
-RUNTIME_CONFIG_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process/config"
+export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+RUNTIME_CONFIG_DIR="${QWQ_DEPLOY_WORK_ROOT}/beta-local/rendered"
 STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 ENV_FILE="${RUNTIME_CONFIG_DIR}/beta.env"
@@ -49,6 +51,7 @@ WORKLOAD="${QWQ_WORKLOAD:-full}"
 SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
 MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
+BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"
 MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-}"
 MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-}"
 MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-}"
@@ -171,6 +174,11 @@ case "$WORKLOAD" in
     exit 2
     ;;
 esac
+
+if ! [[ "$BETA_BACKEND_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "GATE_BLOCK: BETA_BACKEND_READY_TIMEOUT_SECONDS must be a positive integer." >&2
+  exit 2
+fi
 
 write_env() {
   cat > "$ENV_FILE" <<EOF
@@ -334,7 +342,7 @@ build_app_beta_command() {
     APP_BETA_CMD+=(--skip-app)
   fi
   if [[ "$WORKLOAD" == "content-release" ]]; then
-    APP_BETA_CMD+=(--skip-assistant)
+    APP_BETA_CMD+=(--content-release)
   fi
   if [[ -n "$DEVICE_ID" ]]; then
     APP_BETA_CMD+=(--device-id "$DEVICE_ID")
@@ -393,7 +401,9 @@ case "$ACTION" in
     # beta services alive while launching Flutter separately.
     build_app_beta_command
     start_bg app-beta "${APP_BETA_CMD[@]}"
-    wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" 120 || {
+    # 冷缓存下 `docker compose up --build` 会先完成 Go 镜像构建，再创建内容数据面。
+    # 不能把构建期误报为后端不可用；仍保留可配置且有上界语义的 readiness 失败。
+    wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" "$BETA_BACKEND_READY_TIMEOUT_SECONDS" || {
       echo "[beta] app-beta backend did not become ready" >&2
       exit 1
     }

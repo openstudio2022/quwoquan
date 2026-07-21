@@ -54,8 +54,9 @@ final class AlphaRtcCallSessionFacets
     _sessions[callId] = session;
     return RtcInitiateCallResultDto(
       session: session,
-      token: 'alpha-livekit-token-$callId',
-      livekitUrl: 'ws://127.0.0.1:19280',
+      mediaAccess: RtcMediaSessionAccessDto(
+        accessToken: 'alpha-media-access-$callId',
+      ),
     );
   }
 
@@ -64,9 +65,9 @@ final class AlphaRtcCallSessionFacets
     final session = _updateStatus(command.callId, 'in_call');
     return RtcAnswerCallResultDto(
       session: session,
-      token: 'alpha-livekit-token-${command.callId}',
-      roomId: session.roomId,
-      livekitUrl: 'ws://127.0.0.1:19280',
+      mediaAccess: RtcMediaSessionAccessDto(
+        accessToken: 'alpha-media-access-${command.callId}',
+      ),
     );
   }
 
@@ -87,8 +88,9 @@ final class AlphaRtcCallSessionFacets
     final session = _updateStatus(command.callId, 'in_call');
     return RtcJoinCredentialsDto(
       session: session,
-      token: 'alpha-livekit-token-${command.callId}',
-      livekitUrl: 'ws://127.0.0.1:19280',
+      mediaAccess: RtcMediaSessionAccessDto(
+        accessToken: 'alpha-media-access-${command.callId}',
+      ),
     );
   }
 

@@ -171,12 +171,14 @@ func recImpressionContext(
 	score float64,
 	authorID string,
 	tags []string,
+	rank int,
 	feedRequestID, modelBucket, modelVersion, modelReleaseID string,
 ) map[string]any {
 	return map[string]any{
 		"score":          score,
 		"authorId":       authorID,
 		"tagRefs":        tags,
+		"rank":           rank,
 		"feedRequestId":  feedRequestID,
 		"modelBucket":    modelBucket,
 		"modelVersion":   modelVersion,
@@ -199,9 +201,11 @@ func recEngagementContext(duration float64, recScore float64, tags []string, fee
 
 // ImpressionAttribution 是一次 feed 下发的曝光归因（fact 契约字段来源）。
 // FeedRequestID 是曝光批次的稳定归因键；ModelBucket/ModelVersion 是本次
-// 命中的评分轨道（rule 分桶时 ModelVersion 为空）。
+// 命中的评分轨道（rule 分桶时 ModelVersion 为空）。PersonaID 是服务端已验证的
+// 人格身份，必须随曝光事实保留，不能由客户端行为 payload 补写。
 type ImpressionAttribution struct {
 	FeedRequestID  string
+	PersonaID      string
 	ModelBucket    string
 	ModelVersion   string
 	ModelReleaseID string
@@ -215,7 +219,7 @@ type impressionScoreCacheEntry struct {
 // RecordImpression records that a feed item was shown to the user.
 // EventID 从 feedRequestId+targetId 确定性派生：同一 feed 批次同一内容重放
 // 不产生第二条曝光事实（Mongo _id dedupe）。
-// Also caches the recommendation score per content for later engagement lookups.
+// 同时按内容缓存推荐分数，供后续 engagement 恢复原始分数。
 func (f *FeedbackRecorder) RecordImpression(
 	ctx context.Context,
 	userID, sessionID string,
@@ -227,26 +231,40 @@ func (f *FeedbackRecorder) RecordImpression(
 	}
 	batchKey := strings.TrimSpace(attribution.FeedRequestID)
 	if batchKey == "" {
-		// 无 feedRequestId 的调用方（如离线回放）按 user+session 批次收敛。
-		batchKey = userID + "|" + sessionID
+		// RecommendationExposureFact 以 requestId+targetId 作为唯一训练归因键。
+		// 不能用 user/session 临时替代，否则事实虽落库却无法与反馈可靠关联，
+		// SampleJoiner 只能静默丢弃并掩盖数据质量问题。
+		return fmt.Errorf("record recommendation impression: missing feed request id")
+	}
+	attribution.FeedRequestID = batchKey
+	for _, item := range items {
+		if err := validateImpressionTrainingSnapshot(item); err != nil {
+			return err
+		}
 	}
 	scoreEntries := make([]impressionScoreCacheEntry, 0, len(items))
-	for _, item := range items {
+	for itemIndex, item := range items {
 		occurredAt := time.Now().UTC()
+		rank := item.rank
+		if rank <= 0 {
+			// 仅供直接调用 RecordImpression 的测试/离线回放；线上 Engine
+			// 始终提供全局重排序位，不能退化成端侧 position。
+			rank = itemIndex + 1
+		}
 		contextMap := recImpressionContext(
 			item.Score,
 			item.AuthorID,
 			item.Tags,
+			rank,
 			attribution.FeedRequestID,
 			attribution.ModelBucket,
 			attribution.ModelVersion,
 			attribution.ModelReleaseID,
 		)
-		if snapshot := item.trainingFeatures; snapshot != nil {
-			contextMap["featureSnapshotAt"] = snapshot.capturedAt.Format(time.RFC3339Nano)
-			contextMap["userFeatureSnapshot"] = snapshot.userFeatures
-			contextMap["itemFeatureSnapshot"] = snapshot.itemFeatures
-		}
+		snapshot := item.trainingFeatures
+		contextMap["featureSnapshotAt"] = snapshot.capturedAt.Format(time.RFC3339Nano)
+		contextMap["userFeatureSnapshot"] = snapshot.userFeatures
+		contextMap["itemFeatureSnapshot"] = snapshot.itemFeatures
 		if err := f.recorder.RecordEvent(ctx, learning.Event{
 			EventID:   deterministicEventID("rec_imp", batchKey, item.ContentID),
 			EventType: "rec_impression",
@@ -255,6 +273,7 @@ func (f *FeedbackRecorder) RecordImpression(
 			// 同一秒内稍早生成的曝光会看似早于快照并被 PIT 门禁误判为未来特征。
 			OccurredAt: occurredAt.Format(time.RFC3339Nano),
 			UserID:     userID,
+			PersonaID:  attribution.PersonaID,
 			TargetID:   item.ContentID,
 			Labels: map[string]string{
 				"sessionId":   sessionID,
@@ -289,11 +308,44 @@ func (f *FeedbackRecorder) RecordImpression(
 	return nil
 }
 
+func validateImpressionTrainingSnapshot(item FeedItem) error {
+	snapshot := item.trainingFeatures
+	if snapshot == nil {
+		return fmt.Errorf(
+			"record recommendation impression %q: missing immutable online feature snapshot",
+			item.ContentID,
+		)
+	}
+	if snapshot.capturedAt.IsZero() {
+		return fmt.Errorf(
+			"record recommendation impression %q: missing feature snapshot timestamp",
+			item.ContentID,
+		)
+	}
+	if snapshot.userFeatures == nil || snapshot.itemFeatures == nil {
+		return fmt.Errorf(
+			"record recommendation impression %q: incomplete immutable feature snapshot",
+			item.ContentID,
+		)
+	}
+	return nil
+}
+
 // RecordEngagement records a user engagement event on a recommended item.
 // If recScore is 0, it attempts to recover the original score from the impression cache.
 func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal BehaviorSignal, recScore float64) error {
 	if f.recorder == nil {
 		return nil
+	}
+	signal.FeedRequestID = strings.TrimSpace(signal.FeedRequestID)
+	if signal.FeedRequestID == "" {
+		// RecommendationFeedbackFact.requestId 是必填归因键。客户端事件或
+		// 服务端权威事实若没有对应的最终下发 requestId，仍可进入 HotPath 与
+		// 长期特征投影，但绝不能伪造一条不可训练的 learning event。
+		return fmt.Errorf(
+			"record recommendation engagement %q: missing feed request id",
+			signal.ContentID,
+		)
 	}
 	if recScore == 0 {
 		recScore = f.lookupImpressionScore(ctx, signal.UserID, signal.ContentID)
@@ -307,25 +359,16 @@ func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal Behavior
 	contextMap["supplySource"] = signal.SupplySource
 	contextMap["intersectionSourceRef"] = signal.IntersectionSourceRef
 	contextMap["intersectionClass"] = signal.IntersectionClass
-	// 反馈事实的 dedupe 身份：feedRequestId+targetId+action；缺 feedRequestId 时
-	// 回退端侧 clientEventId（云侧已有 rec:event_dedup Redis 一级去重），两者都缺
-	// 时按 user+content+action+session 收敛（rec_model/storage.yaml 契约）。
+	// 反馈事实的 dedupe 身份是 requestId+targetId+action；该键与
+	// RecommendationFeedbackFact 和 SampleJoiner 的关联契约完全一致。
 	engagementKey := []string{signal.FeedRequestID, signal.ContentID, signal.Action}
-	if strings.TrimSpace(signal.FeedRequestID) == "" {
-		if clientEventID := strings.TrimSpace(signal.ClientEventID); clientEventID != "" {
-			engagementKey = []string{clientEventID}
-		} else {
-			engagementKey = []string{
-				signal.UserID, signal.ContentID, signal.Action, signal.EffectiveSessionID(),
-			}
-		}
-	}
 	return f.recorder.RecordEvent(ctx, learning.Event{
 		EventID:    deterministicEventID("rec_eng", engagementKey...),
 		EventType:  "rec_engagement",
 		Scenario:   "content_feed",
 		OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
 		UserID:     signal.UserID,
+		PersonaID:  signal.PersonaID,
 		TargetID:   signal.ContentID,
 		Labels: map[string]string{
 			"sessionId":     signal.EffectiveSessionID(),

@@ -135,6 +135,10 @@
       "plane": "service",
       "slotOffset": 350
     },
+    "fixture-gateway": {
+      "plane": "service",
+      "slotOffset": 390
+    },
     "postgres": {
       "plane": "dataDebug",
       "slotOffset": 400

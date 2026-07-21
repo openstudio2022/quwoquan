@@ -30,14 +30,15 @@ gwt_acceptance:
     - 面板只展示具备真实结果的动作，不出现开发中 toast 或空回调。
     - 不感兴趣立即移除/跳过且带完整 feed 归因；撤销只恢复当前 Post 的精确负反馈。
     - 拉黑和屏蔽关键词在登录成功后续接原动作，关闭登录回到安全状态且不循环。
-    - 举报人收到结案通知，并只能在“我的举报”查看自己的公开生命周期字段。
+    - 举报以可信 persona 归属；创建时同步固化可信 account 归属，结案通知只能投递至该 account 的 Inbox，且 account 标识不得从 App API 回显。
+    - 举报人只能在“我的举报”查看自己的公开生命周期字段。
     - Portal 先消费当前 PostModerationCase 后再允许内容处置或驳回举报。
     done_when:
     - App、content-service、user-service、notification-service 与 Portal 共享同一 metadata/ContractGraph。
     - local_contract、api_integration 与 user_acceptance 证据均可定位并通过适用门禁。
     edge_cases:
     - 游客关闭登录不回到受限触发点，登录成功恢复原 post/reason/关键词。
-    - 举报目标删除、Case 尚未投影、重复 Idempotency-Key、未知 cursor 与越权 reporter 均 fail closed。
+    - 举报目标删除、Case 尚未投影、重复 Idempotency-Key、未知 cursor、越权 reporter、缺失可信 account 或伪造 Inbox 身份均 fail closed。
     - 弱网缓存回退继续过滤 blockedKeywords，不重新展示已屏蔽内容。
     - 最后一条沉浸内容负反馈不黑屏，撤销仍可恢复。
     contract_refs:
@@ -69,11 +70,14 @@ gwt_acceptance:
       - file: quwoquan_app/test/user_acceptance/pages/settings/blocked_keywords/blocked_keywords_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/settings/post_feedback_settings_pages__visual__user_acceptance_test.dart
       - file: quwoquan_service/services/content-service/internal/application/report/report_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/adapters/http/report_operations__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/persistence/report_account_backfill__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/report_dismiss_contract__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/moderation_case_contract__api_integration_test.go
       - file: quwoquan_service/runtime/recommendation/engine__local_contract_test.go
       - file: quwoquan_service/services/notification-service/tests/local_contract/interaction_notification_projection__local_contract_test.go
+      - file: quwoquan_service/services/notification-service/tests/api_integration/app_message_lifecycle__api_integration_test.go
       - file: quwoquan_service/services/notification-service/tests/api_integration/interaction_notification_stream__api_integration_test.go
       - file: quwoquan_service/services/user-service/cmd/acceptance-session/main__local_contract_test.go
       - file: quwoquan_ops/tests/local_contract/report_feedback_environment_evidence__local_contract_test.py
@@ -96,6 +100,8 @@ gwt_acceptance:
       supporting: []
     notes:
     - 2026-07-20：代码与本地三层证据已登记；四环境 stackctl 与对象级旅程报告未全部取得前保持 partial，不以静态实现宣称商用完成。
+    - 2026-07-21：Report 持久化可信 reporterAccountId；resolved/dismissed 事件以该账户投递，Inbox 只接受 JWT principal 的 account，拒绝 X-Client-User-Id 伪造。对应本地/API 契约覆盖账户持久化、事件投递和私有字段不回显。
+    - 2026-07-21：历史 Report 的 persona→account 迁移只接受受控、可审计的映射工件；缺失、冲突或未验证映射均 fail closed，绝不将 personaId 猜作 accountId。Beta/Gamma 的 content-release workload 显式禁用与举报旅程无关的 embedding/ES 管线，full workload 仍对 embedding Binding fail closed。
     - 2026-07-20 门禁已从“通用环境状态 + 文件存在”强化为对象级证据：beta/gamma 必须实际执行创建、幂等重放、reporter 隔离、运营驳回、通知回流及 dislike 撤销；prod 只允许真实鉴权的 read-only 私有列表探针；所有报告必须晚于当前代码。
     - 2026-07-20 最新实跑：beta 通用 integration `.qwq_output/env/beta/runs/20260720T174029Z-verify-beta-local/report.json` 为 ok，但对象级探针 `.qwq_output/env/beta/runs/20260720T174907Z-report-feedback-beta/report-feedback-lifecycle.json` 在 `GET /content/users/me/reports` 返回 404，证明当前 beta fixture gateway 未接真实 Report 服务，不能计商用证据；gamma/prod release 仍为 GATE_BLOCK 且尚无合格对象级报告。
 execution:

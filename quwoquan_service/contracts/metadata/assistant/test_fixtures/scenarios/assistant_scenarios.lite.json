@@ -58,10 +58,12 @@
         "非投资建议"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "alphaMockStream": {
         "finalAnswer": "股票哨兵已生成信息摘要：模拟消息显示关注公司出现重大信息变化；本提醒仅作信息摘要，非投资建议。",
@@ -75,14 +77,12 @@
           "投资建议"
         ],
         "eventTypes": [
-          "turn_started",
-          "plan_updated",
-          "search_query_generated",
-          "tool_use_requested",
-          "tool_result_received",
-          "observation_assessed",
-          "assistant.model.interaction",
-          "final_answer"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -117,10 +117,12 @@
         "天气"
       ],
       "expectedEvents": [
-        "turn_started",
-        "tool_use_requested",
-        "tool_result_received",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "alphaMockStream": {
         "finalAnswer": "天气助手已生成深圳天气提醒：模拟天气显示需要关注温度、降雨与出行建议。",
@@ -134,14 +136,12 @@
           "天气"
         ],
         "eventTypes": [
-          "turn_started",
-          "plan_updated",
-          "search_query_generated",
-          "tool_use_requested",
-          "tool_result_received",
-          "observation_assessed",
-          "assistant.model.interaction",
-          "final_answer"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -177,12 +177,12 @@
         "建议"
       ],
       "expectedEvents": [
-        "turn_started",
-        "plan_updated",
-        "tool_use_requested",
-        "tool_result_received",
-        "observation_assessed",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "alphaMockStream": {
         "finalAnswer": "出行管家已生成行程提醒：模拟天气显示午后可能有阵雨，建议携带雨具并预留缓冲时间。",
@@ -195,14 +195,12 @@
           "建议"
         ],
         "eventTypes": [
-          "turn_started",
-          "plan_updated",
-          "search_query_generated",
-          "tool_use_requested",
-          "tool_result_received",
-          "observation_assessed",
-          "assistant.model.interaction",
-          "final_answer"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {
@@ -238,12 +236,12 @@
         "拥堵"
       ],
       "expectedEvents": [
-        "turn_started",
-        "plan_updated",
-        "tool_use_requested",
-        "tool_result_received",
-        "observation_assessed",
-        "final_answer"
+        "run_started",
+        "process_replace",
+        "process_append",
+        "process_commit",
+        "answer_delta",
+        "completed"
       ],
       "alphaMockStream": {
         "finalAnswer": "出行管家已生成行程提醒：模拟天气、路况和景点拥堵显示出发前需要调整时间。",
@@ -256,14 +254,12 @@
           "拥堵"
         ],
         "eventTypes": [
-          "turn_started",
-          "plan_updated",
-          "search_query_generated",
-          "tool_use_requested",
-          "tool_result_received",
-          "observation_assessed",
-          "assistant.model.interaction",
-          "final_answer"
+          "run_started",
+          "process_replace",
+          "process_append",
+          "process_commit",
+          "answer_delta",
+          "completed"
         ]
       },
       "environments": {

@@ -1,0 +1,197 @@
+version: 2
+node:
+  id: account-suspension-and-appeal-lifecycle
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle
+  title: 账号封禁、恢复与申诉生命周期
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: settings-and-device-token
+scope:
+  summary: 验证受信运营决策驱动的可逆账号限制、认证拒绝、跨域 restriction projection 和申诉恢复。
+  in_scope:
+  - UserAccount active↔suspended 状态机、auth epoch、session/refresh revoke 与 durable outbox。
+  - moderation_case_v1 / appeal_case_v1 审批 decision、审计链和 closed 不可恢复规则。
+  - Content、Chat、Circle、Notification、Search、Recommendation 的可逆 restriction projection。
+  - App 结构化受限说明、申诉续接、安全落点与恢复后新会话目标续接。
+  out_of_scope:
+  - 自动处罚策略、审核证据采集 UI、人工审核工作台信息架构。
+  - 任何 closed 账号、注销数据或已吊销 token 的恢复。
+gwt_acceptance:
+  GWT1_trusted_suspend_decision_is_atomic_and_idempotent:
+    title: 受信 Suspend decision 原子限制账号并撤销旧凭证
+    given:
+    - UserAccount 处于 active，存在多个 active session/refresh binding。
+    - moderation_case_v1 已满足审批与审计要求，Product Ops 持有已签发的 Suspend decision。
+    when:
+    - User Service 接收同一 decision 的首次提交、重放或冲突 digest。
+    then:
+    - 首次提交在同一事务写入 suspended、authEpoch、session revoke receipt 与单一 UserSuspended outbox。
+    - 同 decision 重放返回稳定 receipt；相同 decision id 不同 digest、非受信主体或 closed 目标均 fail-closed。
+    done_when:
+    - 真实存储事务证明状态、epoch、session revoke 与 outbox 同提交，且没有 PII/审核证据进入事件。
+    edge_cases:
+    - 并发 Suspend 只产生一个状态转换和一个 canonical outbox。
+    - 事务或 outbox 写失败时账号保持 active、旧 session 保持有效。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile
+    - quwoquan_service/contracts/metadata/_control_plane/product/workflow.yaml
+    - quwoquan_service/contracts/metadata/_control_plane/product/audit_schema.yaml
+    performance_points:
+    - Suspend 命令 p95 不高于 1.5 秒。
+    tests:
+      planned:
+      - quwoquan_service/services/user-service/tests/local_contract/account_enforcement_facade__lifecycle__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/local_contract/close_account_outbox_relay__reliability__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/api_integration/account_enforcement_transaction__api_integration_test.go
+      recorded:
+      - quwoquan_service/services/user-service/tests/local_contract/account_enforcement_facade__lifecycle__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/local_contract/close_account_outbox_relay__reliability__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/api_integration/account_enforcement_transaction__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_enforcement_state_machine_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_suspension.trusted_suspend
+        envs: &local_envs
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_enforcement_transaction_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_suspension.trusted_suspend
+        envs: &integration_envs
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - 未实施前不得将 UserSuspended 的 metadata 声明视为生产者或安全证据。
+  GWT2_auth_epoch_rejects_suspended_and_old_tokens:
+    title: 登录、refresh 与服务鉴权一致拒绝封禁或旧 epoch 凭证
+    given:
+    - Suspend transaction 已成功提交，攻击者持有提交前 access token、refresh token 或长连接凭证。
+    when:
+    - 攻击者尝试登录、refresh、请求 owner/persona API 或续期长连接。
+    then:
+    - 所有入口返回 metadata 定义的 account_suspended 或 token epoch 结构化失败，绝不降级到旧 session。
+    - enforcement reader 不可用或读取状态未知时 fail-closed。
+    done_when:
+    - 所有认证入口有同源 local_contract 与真实 integration 负例，旧 token 在 30 秒目标内被拒绝。
+    edge_cases:
+    - Restore 后旧 token 仍不可使用，只有新签发 session 可以继续目标。
+    - closed 账号请求 Restore 必须被拒绝，不能借 auth epoch 重置重获访问。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/account_session
+    - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+    performance_points:
+    - 旧 token 拒绝生效目标不高于 30 秒。
+    tests:
+      planned:
+      - quwoquan_service/services/user-service/internal/adapters/http/account_security_gate__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/api_integration/account_enforcement_transaction__api_integration_test.go
+      - quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
+      recorded:
+      - quwoquan_service/services/user-service/internal/adapters/http/account_security_gate__local_contract_test.go
+      - quwoquan_service/services/user-service/tests/api_integration/account_enforcement_transaction__api_integration_test.go
+      - quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_enforcement_auth_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_suspension.auth_epoch
+        envs: *local_envs
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_enforcement_auth_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_suspension.auth_epoch
+        envs: *integration_envs
+      supporting: []
+    notes: []
+  GWT3_restore_decision_reopens_only_reversible_projections:
+    title: 申诉获批 Restore decision 仅恢复可逆受限态
+    given:
+    - UserAccount 处于 suspended，下游 restriction projection 已收敛。
+    - appeal_case_v1 已批准且产生受信 Restore decision。
+    when:
+    - User Service 接收 Restore，消费者重放 UserRestored，用户重新登录。
+    then:
+    - accountState 恢复 active、authEpoch 递增、旧 session 保持撤销；下游恢复后续可见性/写入/投递。
+    - 已删除或匿名化的 closed 数据不被恢复；过期通知不补发；所有 consumer 保持 inbox/digest 幂等。
+    done_when:
+    - Content、Chat、Circle、Notification、Search 和 Recommendation 的投影重放、冲突、retry、DLQ 与 5 分钟收敛有证据。
+    edge_cases:
+    - Restore decision 在 Suspended 以外状态、case 不匹配或审批不足时 fail-closed。
+    - consumer 不得调用 accountclosure 清理器或由客户端 header 决定可见性。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/events.yaml
+    performance_points:
+    - restriction projection 收敛不高于 5 分钟。
+    tests:
+      planned:
+      - quwoquan_service/services/user-service/tests/local_contract/close_account_outbox_relay__reliability__local_contract_test.go
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_enforcement_cross_domain_projection
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_suspension.restriction_projection
+        envs: *integration_envs
+      supporting:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_enforcement_projection_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_suspension.projection_replay
+        envs: *local_envs
+    notes: []
+  UAT1_suspended_user_sees_safe_appeal_and_restore_continuation:
+    title: 受限用户获得安全解释、申诉续接与恢复后新会话目标续接
+    given:
+    - Gamma 真实设备上的账号已经由受信 decision 进入 suspended，且存在受保护目标 continuation。
+    when:
+    - 用户尝试进入 App、提交申诉并在批准后重新登录。
+    then:
+    - App 展示结构化 account_suspended 解释与申诉/支持入口，不泄露 reason、evidence、case 或原始异常。
+    - 关闭受限面回安全首页；Restore 后旧 token 不可用，新会话继续原目标且主页/内容可见性一致恢复。
+    done_when:
+    - Gamma Android/iOS、浅色/深色、compact/regular 和 VoiceOver 均有真实 Patrol/run report；Prod 仅在受保护审批条件满足后补证。
+    edge_cases:
+    - 申诉拒绝、网络失败或关闭受限面不得造成登录门循环。
+    contract_refs:
+    - specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md
+    performance_points: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: account_suspension_recovery_patrol
+        cases:
+        - user_acceptance.user_identity_profile_relationship.settings_and_device_token.account_suspension.recovery
+        envs:
+        - gamma_local
+      supporting: []
+    notes:
+    - 未取得真实设备、辅助功能与 Prod 审批证据时，保持 pending_evidence/GATE_BLOCK。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  profile_gates:
+  - make gate

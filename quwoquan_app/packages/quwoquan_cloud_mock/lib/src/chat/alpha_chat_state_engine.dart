@@ -19,6 +19,40 @@ final class ChatFixtureSyncPage {
   final bool hasMore;
 }
 
+final class ChatFixtureCursorPage {
+  const ChatFixtureCursorPage({required this.items, this.nextCursor});
+
+  final List<ChatFixtureObject> items;
+  final String? nextCursor;
+}
+
+ChatFixtureCursorPage _fixtureCursorPage(
+  List<ChatFixtureObject> rows, {
+  required String? cursor,
+  required int limit,
+}) {
+  final normalizedLimit = limit <= 0 ? 20 : limit;
+  final normalizedCursor = cursor?.trim() ?? '';
+  if (normalizedCursor.isNotEmpty && !normalizedCursor.startsWith('offset:')) {
+    throw FormatException('invalid fixture cursor');
+  }
+  final offset = normalizedCursor.isEmpty
+      ? 0
+      : int.tryParse(normalizedCursor.substring('offset:'.length));
+  if (offset == null || offset < 0) {
+    throw FormatException('invalid fixture cursor');
+  }
+  final start = offset;
+  if (start >= rows.length) {
+    return const ChatFixtureCursorPage(items: <ChatFixtureObject>[]);
+  }
+  final end = (start + normalizedLimit).clamp(0, rows.length);
+  return ChatFixtureCursorPage(
+    items: rows.sublist(start, end),
+    nextCursor: end < rows.length ? 'offset:$end' : null,
+  );
+}
+
 /// Alpha/test 共用的纯 Dart chat fixture 与可变状态引擎。
 ///
 /// 真相数据来自构建期生成的 [AlphaFixtureBundle]。该类不依赖 Flutter、

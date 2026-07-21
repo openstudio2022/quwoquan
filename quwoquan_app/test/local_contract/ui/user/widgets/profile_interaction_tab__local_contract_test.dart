@@ -106,11 +106,6 @@ class _RecordingChatRepository extends MockChatRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) {
@@ -120,11 +115,6 @@ class _RecordingChatRepository extends MockChatRepository {
     return super.createConversation(
       type: type,
       title: title,
-      circleId: circleId,
-      circleGroupId: circleGroupId,
-      originType: originType,
-      bindingType: bindingType,
-      lifecyclePolicy: lifecyclePolicy,
       maxGroupSize: maxGroupSize,
       initialMemberIds: initialMemberIds,
     );

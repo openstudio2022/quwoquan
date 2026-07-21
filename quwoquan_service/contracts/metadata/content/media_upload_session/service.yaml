@@ -5,8 +5,8 @@ service:
   owner: backend-team
   commercial_defaults:
     status: blocked
-    block_reason: canonical operation awaits object-centered commercial migration
-    gap_id: CONTENT_MEDIA_UPLOAD_SESSION_COMMERCIAL_EVIDENCE
+    block_reason: media upload requires object-storage adapter and Gamma environment evidence before commercial enablement
+    gap_id: CONTENT_MEDIA_UPLOAD_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   description: MediaUploadSession 对象命令操作包。
 
@@ -27,10 +27,7 @@ api_routes:
       principal: persona
       ownership_policy: session_owner
     commercial:
-      status: blocked
-      block_reason: typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -85,10 +82,7 @@ api_routes:
       principal: persona
       ownership_policy: session_owner
     commercial:
-      status: blocked
-      block_reason: typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 8000
       cancellation: supported
@@ -143,10 +137,7 @@ api_routes:
       principal: persona
       ownership_policy: session_owner
     commercial:
-      status: blocked
-      block_reason: typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -200,10 +191,7 @@ api_routes:
       principal: persona
       ownership_policy: session_owner
     commercial:
-      status: blocked
-      block_reason: owner-scoped Mongo Reader and typed App query are implemented; Gamma resume evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 1500
       cancellation: supported

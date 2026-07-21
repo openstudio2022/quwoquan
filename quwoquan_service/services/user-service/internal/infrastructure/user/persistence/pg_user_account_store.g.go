@@ -22,11 +22,11 @@ type pgUserAccountStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const userAccountCols = `user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version, background_url, background_asset_id, bio, identity_tags, gender, birth_date, region, region_code, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at`
+const userAccountCols = `user_id, account_state, auth_epoch, suspension_case_ref, suspended_at, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version, background_url, background_asset_id, bio, identity_tags, gender, birth_date, region, region_code, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at`
 
 func scanUserAccount(row pgx.Row) (*model.UserAccount, error) {
 	e := &model.UserAccount{}
-	err := row.Scan(&e.UserID, &e.AccountState, &e.IdentityOrigin, &e.LogicalShard, &e.AnonymousRetentionPolicy, &e.Phone, &e.Nickname, &e.NicknameCustomized, &e.AvatarURL, &e.AvatarAssetID, &e.AvatarVersion, &e.BackgroundURL, &e.BackgroundAssetID, &e.Bio, &e.IdentityTags, &e.Gender, &e.BirthDate, &e.Region, &e.RegionCode, &e.Status, &e.ProfileVersion, &e.FollowerCount, &e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount, &e.OwnerDisplayName, &e.SubAccountCount, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.UserID, &e.AccountState, &e.AuthEpoch, &e.SuspensionCaseRef, &e.SuspendedAt, &e.IdentityOrigin, &e.LogicalShard, &e.AnonymousRetentionPolicy, &e.Phone, &e.Nickname, &e.NicknameCustomized, &e.AvatarURL, &e.AvatarAssetID, &e.AvatarVersion, &e.BackgroundURL, &e.BackgroundAssetID, &e.Bio, &e.IdentityTags, &e.Gender, &e.BirthDate, &e.Region, &e.RegionCode, &e.Status, &e.ProfileVersion, &e.FollowerCount, &e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount, &e.OwnerDisplayName, &e.SubAccountCount, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -48,8 +48,8 @@ func (s *pgUserAccountStoreBase) Create(ctx context.Context, e *model.UserAccoun
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO user_profiles (user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version, background_url, background_asset_id, bio, identity_tags, gender, birth_date, region, region_code, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)`,
-		e.UserID, e.AccountState, e.IdentityOrigin, e.LogicalShard, e.AnonymousRetentionPolicy, e.Phone, e.Nickname, e.NicknameCustomized, e.AvatarURL, e.AvatarAssetID, e.AvatarVersion, e.BackgroundURL, e.BackgroundAssetID, e.Bio, e.IdentityTags, e.Gender, e.BirthDate, e.Region, e.RegionCode, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO user_profiles (user_id, account_state, auth_epoch, suspension_case_ref, suspended_at, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version, background_url, background_asset_id, bio, identity_tags, gender, birth_date, region, region_code, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)`,
+		e.UserID, e.AccountState, e.AuthEpoch, e.SuspensionCaseRef, e.SuspendedAt, e.IdentityOrigin, e.LogicalShard, e.AnonymousRetentionPolicy, e.Phone, e.Nickname, e.NicknameCustomized, e.AvatarURL, e.AvatarAssetID, e.AvatarVersion, e.BackgroundURL, e.BackgroundAssetID, e.Bio, e.IdentityTags, e.Gender, e.BirthDate, e.Region, e.RegionCode, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -57,8 +57,8 @@ func (s *pgUserAccountStoreBase) Create(ctx context.Context, e *model.UserAccoun
 func (s *pgUserAccountStoreBase) Update(ctx context.Context, e *model.UserAccount) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE user_profiles SET account_state=$2, identity_origin=$3, logical_shard=$4, anonymous_retention_policy=$5, phone=$6, nickname=$7, nickname_customized=$8, avatar_url=$9, avatar_asset_id=$10, avatar_version=$11, background_url=$12, background_asset_id=$13, bio=$14, identity_tags=$15, gender=$16, birth_date=$17, region=$18, region_code=$19, status=$20, profile_version=$21, follower_count=$22, following_count=$23, post_count=$24, circle_count=$25, like_count=$26, owner_display_name=$27, sub_account_count=$28, created_at=$29, updated_at=$30 WHERE user_id = $1`,
-		e.UserID, e.AccountState, e.IdentityOrigin, e.LogicalShard, e.AnonymousRetentionPolicy, e.Phone, e.Nickname, e.NicknameCustomized, e.AvatarURL, e.AvatarAssetID, e.AvatarVersion, e.BackgroundURL, e.BackgroundAssetID, e.Bio, e.IdentityTags, e.Gender, e.BirthDate, e.Region, e.RegionCode, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
+		`UPDATE user_profiles SET account_state=$2, auth_epoch=$3, suspension_case_ref=$4, suspended_at=$5, identity_origin=$6, logical_shard=$7, anonymous_retention_policy=$8, phone=$9, nickname=$10, nickname_customized=$11, avatar_url=$12, avatar_asset_id=$13, avatar_version=$14, background_url=$15, background_asset_id=$16, bio=$17, identity_tags=$18, gender=$19, birth_date=$20, region=$21, region_code=$22, status=$23, profile_version=$24, follower_count=$25, following_count=$26, post_count=$27, circle_count=$28, like_count=$29, owner_display_name=$30, sub_account_count=$31, created_at=$32, updated_at=$33 WHERE user_id = $1`,
+		e.UserID, e.AccountState, e.AuthEpoch, e.SuspensionCaseRef, e.SuspendedAt, e.IdentityOrigin, e.LogicalShard, e.AnonymousRetentionPolicy, e.Phone, e.Nickname, e.NicknameCustomized, e.AvatarURL, e.AvatarAssetID, e.AvatarVersion, e.BackgroundURL, e.BackgroundAssetID, e.Bio, e.IdentityTags, e.Gender, e.BirthDate, e.Region, e.RegionCode, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}

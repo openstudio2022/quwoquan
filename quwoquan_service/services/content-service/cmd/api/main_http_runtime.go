@@ -8,6 +8,7 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -56,7 +57,10 @@ func buildContentHTTPServer(
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/metrics", rtmetrics.Handler())
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
-	outerMux.HandleFunc("/livez", healthChecker.Handler())
+	// Liveness is intentionally process-only: a stale worker/dependency must
+	// remove this instance from traffic through readiness without triggering a
+	// restart storm that abandons FFmpeg work during a transient outage.
+	outerMux.HandleFunc("/livez", contentLivenessHandler)
 	outerMux.HandleFunc("/startupz", healthChecker.Handler())
 	outerMux.Handle("/", generatedOperationGuard)
 
@@ -89,4 +93,26 @@ func buildContentHTTPServer(
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+}
+
+func contentLivenessHandler(w http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		rterr.WriteHTTPError(
+			w,
+			rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"仅支持 GET 健康检查",
+				"liveness endpoint only accepts GET",
+			).WithMetadata("invalid_argument", http.StatusMethodNotAllowed),
+			rterr.HTTPWriteOptions{
+				RequestID: request.Header.Get("X-Request-Id"),
+				TraceID:   request.Header.Get("X-Trace-Id"),
+			},
+		)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"live"}`))
 }

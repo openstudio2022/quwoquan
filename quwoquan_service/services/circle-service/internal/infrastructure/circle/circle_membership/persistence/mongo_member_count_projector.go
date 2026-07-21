@@ -13,6 +13,7 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	membershipports "quwoquan_service/services/circle-service/internal/domain/circle/circle_membership/ports"
+	circlecache "quwoquan_service/services/circle-service/internal/infrastructure/cache"
 )
 
 const membershipProjectionInboxCollection = "circle_membership_projection_inbox"
@@ -66,13 +67,16 @@ func (projector *MongoMemberCountProjector) Publish(ctx context.Context, event m
 	if err := projector.redis.Del(ctx, "cache:circle:"+payload.CircleID); err != nil {
 		return fmt.Errorf("invalidate Circle member-count cache: %w", err)
 	}
+	if err := circlecache.InvalidateCircleDiscoveryFeed(ctx, projector.redis); err != nil {
+		return fmt.Errorf("invalidate Circle membership discovery cache: %w", err)
+	}
 	return nil
 }
 
 func (projector *MongoMemberCountProjector) apply(ctx context.Context, event membershipports.OutboxEvent, circleID string) error {
 	delta := int64(0)
 	switch strings.TrimSpace(event.EventType) {
-	case "CircleMembershipJoined":
+	case "CircleMembershipJoined", "CircleMembershipApproved":
 		delta = 1
 	case "CircleMembershipLeft":
 		delta = -1

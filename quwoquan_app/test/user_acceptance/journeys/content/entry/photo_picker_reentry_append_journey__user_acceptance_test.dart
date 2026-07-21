@@ -7,7 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camera/camera.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
@@ -204,7 +204,7 @@ Widget _buildApp(_QueuedMediaPickerLauncher launcher) {
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(
         _AuthenticatedSessionController.new,
@@ -509,7 +509,7 @@ void main() {
         overrides: [
           currentUserIdProvider.overrideWithValue('user_001'),
           ...mockContentFacetOverrides(MockContentRepository()),
-          circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+          circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
           authSessionStoreProvider.overrideWithValue(
             const _AuthedSessionStore(),
           ),

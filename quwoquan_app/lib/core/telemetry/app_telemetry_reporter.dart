@@ -109,17 +109,23 @@ final class AppTelemetryReporter implements AppTelemetryRecorder {
       enqueuedAt: _now().toUtc(),
       expiresAt: _now().toUtc().add(ttl),
       droppable: payload.logType == 'event' && definition.normalSampleRate < 1,
+      critical: definition.internalPriority == 'critical',
     );
-    if (!bucket.take()) {
+    final critical = definition.internalPriority == 'critical';
+    if (!critical && !bucket.take()) {
       if (payload.logType == 'error') {
         await _outbox.deadLetter(queued, reason: 'error_rate_limited');
       }
       return AppTelemetryRecordResult.rateLimited;
     }
-    if (!_shouldKeep(payload, definition, wire['sessionId']!.toString())) {
+    if (!critical &&
+        !_shouldKeep(payload, definition, wire['sessionId']!.toString())) {
       return AppTelemetryRecordResult.sampledOut;
     }
-    await _outbox.enqueue(queued);
+    final enqueueResult = await _outbox.enqueue(queued);
+    if (enqueueResult != AppTelemetryEnqueueResult.persisted) {
+      return AppTelemetryRecordResult.rejected;
+    }
     final pending = await _outbox.pendingCount();
     if (pending >= 50) {
       unawaited(flush());

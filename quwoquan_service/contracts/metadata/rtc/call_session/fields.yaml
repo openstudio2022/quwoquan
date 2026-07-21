@@ -120,7 +120,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: LiveKit Room ID
+        description: 媒体房间 ID
 
       - name: maxParticipants
         source: maxParticipants

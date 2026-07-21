@@ -10,7 +10,10 @@
 - `api_integration`
 - `user_acceptance`
 
-`alpha`、`beta`、`gamma`、`prod` 只是 runner、配置、报告和证据维度，不允许作为测试目录层级。生产灰度是 `prod` rollout stage，不存在独立 `prod-gray` 测试目录或环境。
+`alpha`、`beta`、`gamma`、`prod` 只是 runner、Provider Binding、配置、报告和证据维度，
+不允许作为测试目录层级。生产灰度是 `prod` rollout stage，不存在独立 `prod-gray`
+测试目录或环境。商用外部能力必须把同一三层测试按 Alpha/Beta/Gamma 展开为 3×3 执行
+矩阵；九格增加的是执行证据，不是第四测试层。
 
 ## 2. Coverage Spine
 
@@ -44,10 +47,28 @@ env / rollout_stage / execution_profile / case_id / source_file / recorded_artif
 
 `execution_profile` 是运行与证据维度，不是第四层测试目录。每项环境相关证据只能属于一个 profile：
 
-- `baseline`：无外部环境；规格、契约、静态质量和全部 `local_contract`。外部依赖不得被读取，失败即 `FAIL`。
-- `smoke`：Alpha；确定性 mock/contract 投影、关键页面/API/导入形状。Alpha 不可用即 `FAIL`。
-- `integration`：Beta/Gamma 内容数据平面；真实 import、API、媒体、幂等与回滚/replay。核心依赖不可达为 `GATE_BLOCK`，不要求 SLS 或 product-ops。
-- `release`：Gamma 真机消费、trace/SLO/SLS 与 Prod 审批/灰度。商业依赖缺失为 `GATE_BLOCK`，绝不降级成 integration 通过。
+- `baseline`：不跨网络；规格、契约、静态质量和全部 `local_contract`。外部能力的
+  local_contract 可以加载 Alpha/Beta/Gamma 对应 Binding 下的真实 Adapter 类与本地
+  协议/故障 harness，但不得读取 endpoint、Secret 或访问外网。
+- `smoke`：Alpha；可控实现或轻量参考服务的跨进程 API 与完整用户旅程。Alpha 不可用、
+  固定成功或跳过合同校验即 `FAIL`。
+- `integration`：Beta/Gamma `api_integration` 及 Beta `user_acceptance`；连接远端沙箱、
+  自建兼容服务或厂商测试环境，验证真实 TLS、鉴权、回调、重试、超时和限流。核心依赖
+  不可达为 `GATE_BLOCK`。
+- `release`：Gamma production-grade Adapter 的完整用户/运营旅程、trace/SLO/readback，
+  以及 Prod 审批/灰度。商业依赖缺失为 `GATE_BLOCK`，绝不降级成 integration 通过。
+
+### 2.1 外部 Provider 3×3 语义
+
+| 环境 | local_contract | api_integration | user_acceptance |
+|---|---|---|---|
+| Alpha | 对 Alpha Adapter/参考实现跑离线合同与故障注入 | 跨进程调用可控参考服务 | 完整功能/异常/恢复旅程 |
+| Beta | 对 Beta production Adapter 类跑离线协议 harness | 真实沙箱、TLS、鉴权、callback | Beta Remote composition 的用户/运营旅程 |
+| Gamma | 对 Gamma production Adapter 类跑离线协议 harness | 隔离 Gamma 租户真实调用与 readback | gamma-local 真机/浏览器或运营旅程、观测与回滚 |
+
+每格必须有独立 `case_id/env/provider_adapter_digest/config_digest/data_digest` 和执行结果。
+同一测试源码可以参数化复用，但报告不得跨环境复制。`NOT_RUN`、required skip、零断言、
+dry-run、Memory/Mock 替代远端、旧 digest 或仅存在测试文件均不计通过。
 
 `test_object` 闭集：
 
@@ -184,6 +205,12 @@ Case ID 必须匹配层级：
 - `QWQ_OUTPUT_ROOT/env/repo/runs/tests/**/report.json`
 
 禁止把 shell command、Markdown 报告、历史路径或桥接文件作为当前执行证据。需要保留背景信息时，只能进入 `notes` 或 changelog。
+
+Provider 九格的原始环境报告归
+`QWQ_OUTPUT_ROOT/env/<env>/runs/<run-id>/**`，logs/traces/metrics 归
+`QWQ_OUTPUT_ROOT/env/<env>/observability/<run-id>/**`；`tests.recorded` 只绑定统一聚合后的
+`env/repo/runs/tests/provider-conformance/<run-id>/report.json`。配置、Binding、schema、
+endpoint/Secret 值、渲染 `.env` 和 TLS material 不得进入 output。
 
 ## 7. Page 与 API 覆盖
 

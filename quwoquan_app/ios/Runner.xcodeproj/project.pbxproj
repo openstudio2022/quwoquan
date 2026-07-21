@@ -252,6 +252,7 @@
 			buildPhases = (
 				4FC536F46AC933AA5A668518 /* [CP] Check Pods Manifest.lock */,
 				A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */,
+				D8E101B50000000000000001 /* Bundle Local HTTPS Trust Root */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -526,6 +527,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "bash \"${SRCROOT}/../scripts/ios/prepare_alpha_local_https.sh\"\n";
+		};
+		D8E101B50000000000000001 /* Bundle Local HTTPS Trust Root */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Local HTTPS Trust Root";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bash \"${SRCROOT}/../scripts/ios/prepare_local_https_trust_bundle.sh\"\n";
 		};
 		9C5E4EABB9E68540CE2CFB2C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;

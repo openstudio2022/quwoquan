@@ -31,9 +31,14 @@ func TestPostgresRtcMediaQoeSummaryUsesRawPercentileAndCanonicalDenominators(
 		)
 	})
 
-	now := time.Now().UTC().Truncate(time.Hour).Add(30 * time.Minute)
+	queryNow := time.Now().UTC()
+	eventNow := queryNow.Add(-time.Second)
+	if !eventNow.Truncate(time.Hour).Equal(queryNow.Truncate(time.Hour)) {
+		eventNow = queryNow
+		queryNow = queryNow.Add(time.Second)
+	}
 	facade := application.NewRtcMediaQoeQueryFacadeWithClock(store, func() time.Time {
-		return now
+		return queryNow
 	})
 	empty, err := facade.Get24HourSummary(ctx)
 	if err != nil {
@@ -46,11 +51,11 @@ func TestPostgresRtcMediaQoeSummaryUsesRawPercentileAndCanonicalDenominators(
 	}
 
 	events := []application.EventRecordInput{
-		postgresRtcMediaQoeEvent(now.Add(-10*time.Minute), "completed", true, 100, 1),
-		postgresRtcMediaQoeEvent(now.Add(-5*time.Minute), "connection_lost", true, 200, 2),
-		postgresRtcMediaQoeEvent(now.Add(-3*time.Minute), "abandoned", true, 9999, 99),
-		postgresRtcMediaQoeEvent(now.Add(-time.Hour-10*time.Minute), "completed", true, 300, 3),
-		postgresRtcMediaQoeEvent(now.Add(-time.Hour-5*time.Minute), "connect_failed", false, 0, 4),
+		postgresRtcMediaQoeEvent(eventNow, "completed", true, 100, 1),
+		postgresRtcMediaQoeEvent(eventNow, "connection_lost", true, 200, 2),
+		postgresRtcMediaQoeEvent(eventNow, "abandoned", true, 9999, 99),
+		postgresRtcMediaQoeEvent(eventNow.Add(-time.Hour), "completed", true, 300, 3),
+		postgresRtcMediaQoeEvent(eventNow.Add(-time.Hour), "connect_failed", false, 0, 4),
 	}
 	telemetry := application.NewTelemetryService(store, store, store)
 	if _, err := telemetry.ReportEventBatch(
@@ -78,11 +83,11 @@ func TestPostgresRtcMediaQoeSummaryUsesRawPercentileAndCanonicalDenominators(
 		t.Fatalf("postgres summary must expose 24 UTC buckets, got %d", len(got.Series))
 	}
 
-	current := integrationRtcMediaQoePoint(t, got.Series, now.Truncate(time.Hour))
+	current := integrationRtcMediaQoePoint(t, got.Series, queryNow.Truncate(time.Hour))
 	previous := integrationRtcMediaQoePoint(
 		t,
 		got.Series,
-		now.Truncate(time.Hour).Add(-time.Hour),
+		queryNow.Truncate(time.Hour).Add(-time.Hour),
 	)
 	if !current.Partial || current.EffectiveSampleCount != 2 ||
 		current.ConnectionLostCount != 1 {

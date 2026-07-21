@@ -142,7 +142,7 @@ local/gamma 可证明契约和实现；以下结论只能由 prod-hosted/外部�
 | RP3 | Actions SHA、CODEOWNERS、最小权限、ReleaseManifest/SBOM/provenance | R-OPS-GH-PROTECTION、R-OPS-BUILD-DEPLOY-DIGEST |
 | RP4 | rollout lock/CAS、Prometheus readback、冷启动与执行面单轨 | R-OPS-SLO-READBACK、R-OPS-GRAY-ROLLBACK-EXEC、R-OPS-PROD-COLDSTART、R-OPS-BACKEND-CONTRADICTION |
 | RP5 | 观测栈、灾备恢复、容量成本、真实数据对账 | R-OPS-OBS-STACK、R-OPS-DR-CAPACITY、R-OPS-DATA-SOURCE |
-| RP6 | Config ACK 全覆盖、可信 province/carrier、acceptance 路径诚信 | R-OPS-CONFIG-PLANE-PROD、R-OPS-ACCEPTANCE-PHANTOM |
+| RP6 | Config ACK 全覆盖、发布包 canonical config-root、可信 province/carrier、acceptance 路径诚信 | R-OPS-CONFIG-PLANE-PROD、R-OPS-ACCEPTANCE-PHANTOM |
 | RP7 | 全仓编译、三层测试、stackctl release 验证、backlog 关闭 | 全部 |
 
 ## 完成定义

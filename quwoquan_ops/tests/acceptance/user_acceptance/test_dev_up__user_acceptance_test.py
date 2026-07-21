@@ -686,6 +686,8 @@ class DevUpTest(unittest.TestCase):
             "ASSISTANT_NOTIFICATION_BASE_URL: \"http://notification-service:18087\"",
             gamma_compose,
         )
+        self.assertIn('NOTIFICATION_REDIS_GENERAL_DB: "1"', gamma_compose)
+        self.assertIn('NOTIFICATION_REDIS_REALTIME_DB: "4"', gamma_compose)
 
     def test_gamma_local_search_backfill_blocks_incomplete_read_model(self) -> None:
         gamma_script = (
@@ -829,7 +831,7 @@ class DevUpTest(unittest.TestCase):
                     "legal_static_root"
                 ]
 
-    def test_alpha_mock_public_plane_default_legal_root_uses_output_layout(self) -> None:
+    def test_alpha_mock_public_plane_default_legal_root_uses_deployment_workspace(self) -> None:
         previous_root = MockPublicPlaneHandler.legal_static_root
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_root = Path(tmp_dir)
@@ -840,7 +842,7 @@ class DevUpTest(unittest.TestCase):
             MockPublicPlaneHandler.legal_static_root = ""
             try:
                 with mock.patch(
-                    "quwoquan_ops.cli.lib.mock_public_plane.legal_static_release_dir",
+                    "quwoquan_ops.cli.lib.mock_public_plane.legal_static_deployment_package_dir",
                     return_value=package_root,
                 ):
                     self.assertEqual(

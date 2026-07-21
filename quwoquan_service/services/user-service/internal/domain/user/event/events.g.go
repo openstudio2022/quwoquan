@@ -6,6 +6,7 @@ const (
 	UserAvatarUpdated         = "UserAvatarUpdated"
 	UserRegistered            = "UserRegistered"
 	UserSuspended             = "UserSuspended"
+	UserRestored              = "UserRestored"
 	UserAccountClosed         = "UserAccountClosed"
 	PersonaCreated            = "PersonaCreated"
 	PersonaUpdated            = "PersonaUpdated"

@@ -14,12 +14,12 @@ import (
 )
 
 type eventCatalogFile struct {
-	LogTypes        []string                     `yaml:"log_types"`
-	NetworkClasses  []string                     `yaml:"network_classes"`
-	CommonFields    []string                     `yaml:"common_fields"`
-	ContextExtensions []string                   `yaml:"context_extensions"`
-	ExtensionFields map[string]eventExtensionDef `yaml:"extension_fields"`
-	Events          []eventCatalogEntry          `yaml:"events"`
+	LogTypes          []string                     `yaml:"log_types"`
+	NetworkClasses    []string                     `yaml:"network_classes"`
+	CommonFields      []string                     `yaml:"common_fields"`
+	ContextExtensions []string                     `yaml:"context_extensions"`
+	ExtensionFields   map[string]eventExtensionDef `yaml:"extension_fields"`
+	Events            []eventCatalogEntry          `yaml:"events"`
 }
 
 type eventExtensionDef struct {
@@ -180,6 +180,58 @@ func renderEventCatalogGo(catalog eventCatalogFile, pages appPagesFile) string {
 	b.WriteString("package generated\n\n")
 	b.WriteString("type EventExtensionDefinition struct { Type string; Minimum *int; Maximum *int; MaxLength int; MaxItems int; ItemMaxLength int; Sensitive bool; AllowedValues map[string]struct{} }\n")
 	b.WriteString("type EventCatalogDefinition struct { EventType string; LogType string; RequiredExtensions map[string]struct{}; OptionalExtensions map[string]struct{}; NormalSampleRate float64; SlowThresholdMS int; InternalPriority string }\n\n")
+	extensionNames := make([]string, 0, len(catalog.ExtensionFields))
+	for name := range catalog.ExtensionFields {
+		extensionNames = append(extensionNames, name)
+	}
+	sort.Strings(extensionNames)
+	b.WriteString("type EventRecordInput struct {\n")
+	b.WriteString("LogType string `json:\"logType\"`\n")
+	b.WriteString("EventType string `json:\"eventType\"`\n")
+	b.WriteString("SessionID string `json:\"sessionId\"`\n")
+	b.WriteString("PageName string `json:\"pageName\"`\n")
+	b.WriteString("OccurredAt string `json:\"occurredAt\"`\n")
+	b.WriteString("DeviceManufacturer string `json:\"deviceManufacturer\"`\n")
+	b.WriteString("DeviceModel string `json:\"deviceModel\"`\n")
+	b.WriteString("AppVersion string `json:\"appVersion\"`\n")
+	b.WriteString("NetworkClass string `json:\"networkClass\"`\n")
+	for _, name := range extensionNames {
+		definition := catalog.ExtensionFields[name]
+		if isEventContextExtension(name, catalog.ContextExtensions) {
+			b.WriteString(
+				fmt.Sprintf(
+					"%s string `json:\"%s\"`\n",
+					goEventExtensionFieldName(name),
+					name,
+				),
+			)
+			continue
+		}
+		b.WriteString(
+			fmt.Sprintf(
+				"%s %s `json:\"%s,omitempty\"`\n",
+				goEventExtensionFieldName(name),
+				goEventExtensionFieldType(definition.Type),
+				name,
+			),
+		)
+	}
+	b.WriteString("}\n\n")
+	b.WriteString("func (input EventRecordInput) ExtensionValues() map[string]any {\n")
+	b.WriteString("out := map[string]any{}\n")
+	for _, name := range extensionNames {
+		field := goEventExtensionFieldName(name)
+		if isEventContextExtension(name, catalog.ContextExtensions) {
+			b.WriteString(fmt.Sprintf("if input.%s != \"\" { out[%q] = input.%s }\n", field, name, field))
+			continue
+		}
+		if catalog.ExtensionFields[name].Type == "string_list" {
+			b.WriteString(fmt.Sprintf("if input.%s != nil { out[%q] = input.%s }\n", field, name, field))
+			continue
+		}
+		b.WriteString(fmt.Sprintf("if input.%s != nil { out[%q] = *input.%s }\n", field, name, field))
+	}
+	b.WriteString("return out\n}\n\n")
 	b.WriteString("var EventCommonFields = []string{")
 	for _, field := range catalog.CommonFields {
 		b.WriteString(fmt.Sprintf("%q,", field))
@@ -195,11 +247,6 @@ func renderEventCatalogGo(catalog eventCatalogFile, pages appPagesFile) string {
 		b.WriteString(fmt.Sprintf("%q:{},", value))
 	}
 	b.WriteString("}\n")
-	extensionNames := make([]string, 0, len(catalog.ExtensionFields))
-	for name := range catalog.ExtensionFields {
-		extensionNames = append(extensionNames, name)
-	}
-	sort.Strings(extensionNames)
 	b.WriteString("var EventExtensionFields = map[string]EventExtensionDefinition{\n")
 	for _, name := range extensionNames {
 		definition := catalog.ExtensionFields[name]
@@ -241,6 +288,44 @@ func renderEventCatalogGo(catalog eventCatalogFile, pages appPagesFile) string {
 	}
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func isEventContextExtension(name string, contextExtensions []string) bool {
+	for _, contextExtension := range contextExtensions {
+		if contextExtension == name {
+			return true
+		}
+	}
+	return false
+}
+
+func goEventExtensionFieldName(name string) string {
+	if name == "" {
+		return ""
+	}
+	field := strings.ToUpper(name[:1]) + name[1:]
+	field = strings.ReplaceAll(field, "Id", "ID")
+	field = strings.ReplaceAll(field, "Ms", "MS")
+	field = strings.ReplaceAll(field, "Http", "HTTP")
+	field = strings.ReplaceAll(field, "Ttff", "TTFF")
+	return field
+}
+
+func goEventExtensionFieldType(kind string) string {
+	switch kind {
+	case "string":
+		return "*string"
+	case "int":
+		return "*int"
+	case "double":
+		return "*float64"
+	case "bool":
+		return "*bool"
+	case "string_list":
+		return "[]string"
+	default:
+		panic(fmt.Sprintf("unsupported telemetry extension type %q", kind))
+	}
 }
 
 func goIntPointer(value *int) string {

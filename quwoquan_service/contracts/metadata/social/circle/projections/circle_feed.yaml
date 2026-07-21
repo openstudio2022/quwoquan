@@ -40,5 +40,4 @@ fields:
   - { name: featuredAt, type: timestamp }
 
 indexes:
-  - { name: idx_circle_feed_posts, collection: posts, keys: { status: 1, createdAt: -1, _id: -1 } }
   - { name: idx_circle_post_placement_feed, collection: circle_post_placements, keys: { circleId: 1, state: 1, pinned: -1, featured: -1, lastActiveAt: -1 } }

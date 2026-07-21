@@ -21,6 +21,7 @@ const (
 	IntegrationInvalidArgumentCode                = "INTEGRATION.USER.invalid_argument"
 	IntegrationLocationPermissionRequiredCode     = "INTEGRATION.USER.location_permission_required"
 	IntegrationUpstreamTimeoutCode                = "INTEGRATION.MIDDLEWARE.upstream_timeout"
+	IntegrationLocationProviderUnavailableCode    = "INTEGRATION.MIDDLEWARE.location_provider_unavailable"
 	IntegrationInternalErrorCode                  = "INTEGRATION.SYSTEM.internal_error"
 	IntegrationInvalidExternalRequestCode         = "INTEGRATION.USER.invalid_external_request"
 	IntegrationUnsupportedOperationCode           = "INTEGRATION.USER.unsupported_operation"

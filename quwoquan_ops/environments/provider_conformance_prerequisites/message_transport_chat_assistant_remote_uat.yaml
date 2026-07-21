@@ -1,0 +1,21 @@
+schema: provider-conformance-user-acceptance-prerequisite
+status: blocked
+prerequisite_id: runtime.message.transport.chat_assistant_remote_journey
+reason_code: PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED
+recovery_action: configure
+required_harness:
+  execution: native_device_patrol
+  composition: production_remote
+  endpoint: stackctl_managed_environment_topology
+  auth: ci_injected_remote_test_session
+  seed: environment_managed_assistant_conversation_seed
+required_assertions:
+- invite_assistant
+- mention_assistant_in_conversation
+- observe_remote_assistant_reply
+- correlate_redis_consumer_observability
+forbidden_substitutes:
+- memory_redis
+- fixture_consumer
+- ui_mock
+- provider_override

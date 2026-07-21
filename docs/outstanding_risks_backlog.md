@@ -344,6 +344,7 @@
   - 复核（2026-07-05 continue-dev，page-smoke 解阻断）: `quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py` 已补齐本地 target 设备侧地址重写（`.quwoquan-env.test` → `.localhost`）、`APP_CURRENT_USER_ID` 显式透传、iOS simulator `root.crt` 注入，以及 `test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart` 中视频探针从历史 mock `v1` 改为真实 gamma fixture `fixture_video_001`。证据：① `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` **passed**（`QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json`，`environment_basic_viability_smoke` 8s 绿）；② `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` **16 checks 全绿**（`.qwq_output/env/gamma/runs/20260705T133026Z-verify-gamma-local`）。剩余未闭合已收敛为两类：A. `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all` 仍因 `app_gamma_seed_manifest.json` 中 assistant/creator_pool/integration/notification/rtc 的 `verifiedEndpoints` 被记为 `not_ready` 而 `gate_block`，manifest 尚未只聚焦当前交集四主页闭环；B. 人工 probe 显示 `/v1/homepages/homepage_26/related-groups`、`/review-summary`、`/v1/circles/fixture_circle_photo/impact|members` 已 populated，但 `/v1/circles/fixture_circle_photo/feed` 与 `/v1/content/intersections/object?objectType=homepage|circle&objectId=...` 对当前 runtime id 仍空，四主页 populated real-data 与 prod-hosted gray 真实远端仍不能诚实宣称关闭。
   - 复核（2026-07-06 continue-dev）: 本轮继续把 R-IX05 压缩到“gamma-local 已绿、prod-hosted 未闭”这一层：① `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` **passed**（`QWQ_OUTPUT_ROOT/env/gamma/local/gamma-local/process/t3_report.json`），homepage/circle bundle/detail/impact/object-intersection Story strict 全绿；② 展示层 W3 已收紧为“无 `primaryText` 不渲染、前台不再补写主句”，旧 `EvidenceGroup` 支路已删除，相关 Flutter 测试全绿；③ `flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` **2/2 全绿**，真实补证 `getMyIntersectionSummary -> markIntersectionsVisited -> getMyIntersectionSummary` 远端清零链路；④ `flutter test test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart` 全绿；⑤ 修复 `my_intersection_inbox_page.dart` 缺失 `resolvedIntersectionReasonKind` import 后，`python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report QWQ_OUTPUT_ROOT/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json` 再次 **passed**，随后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` **16 checks 全绿**（`.qwq_output/env/gamma/runs/20260705T235459Z-verify-gamma-local`）；⑥ 只读拉取 `http://127.0.0.1:19220/metrics` 已观测到 `intersection_feed_candidates_total`、`intersection_feed_filtered_total`、`intersection_cooldown_exposure_reported_total`、`intersection_inbox_visit_total`。当前主阻断收敛为 prod-hosted：`python3 quwoquan_ops/cli/stackctl.py health --target prod-hosted --scope edge` 仍 **0/2 healthy**（`.qwq_output/env/prod/runs/20260705T235900Z-health-prod-hosted`，api/product-ops `/healthz` 均报 `SSL record layer failure`），因此真实 prod-hosted gray smoke 仍未闭环。
   - 复核（2026-07-20 圈子商用化排查）: gamma-local 直连探针复核——`GET /circles` populated（fixture 圈完整主档）、`GET /circles/fixture_circle_photo/feed` populated、`GET /circles/fixture_circle_photo/stats` populated（members/posts/weeklyActive/storage）；但 `fixture_circle_tech_01` 的 feed 为空（`{"cursor":"","items":[]}`，该圈 postCount=8 与 feed 空不一致，疑 placement seed 缺口）；`/circles/{id}/impact` 与 `/content/intersections/object?objectType=circle` 匿名 401（viewer 鉴权属预期，需登录态种子补 UAT 证据）。圈子面剩余收口项已拆分登记为 R-CIRCLE-001/002/003（hub N+1、圈子级审批、rec 消费），规格落点 `docs/functional_module_commercial_maturity_matrix.md` M8-H。
+  - 复核（2026-07-21 Phase 2）: 已修复上述 workspace 内可控 seed 缺口：`circle-service/cmd/seed` 现在对每个属于已播种圈子的 content fixture Post 派生并 upsert active `circle_post_placements`，重播后 `fixture_circle_tech_01` 不再出现 postCount 有值而 feed 为空；`TestContentFixtureSeedsActiveCirclePostPlacement` 已绿。尚未重起 gamma-local 是因为 embedding binding 未由受控密钥系统注入，保持 fail-closed，不能以旧运行实例伪造已验证结论。
   - 状态: 进行中（字段漂移/客户端编译断点/Pin·Feature 持久化/PostCount 跨服务回写/WeeklyActive 窗口回写/Impact Explain 归一已解决并验证绿；2026-07-06 已把 gamma-local 侧进一步压实为 Story strict 绿、visit->summary 远端清零链路绿、entity/circle user_acceptance 绿、page-smoke 绿、全量 `stackctl verify --env gamma --kind all --tier all` 16 checks 绿。剩余主阻断已收敛为 prod-hosted gray：edge health 0/2 healthy（SSL record layer failure），故真实远端 smoke 与 R-IX05 关闭仍未完成；2026-07-20 增补 fixture_circle_tech_01 feed 空数据证据并拆出 R-CIRCLE-001/002/003）
 - [x] R-IX06 搜索六场景端侧收口 + 术语退场关注者（WP-7，客户端，部分由 R-S06/R-S07 覆盖）
   - 区域: App
@@ -839,8 +840,8 @@
     2. beta：在 VPC 可达的受控 runner 部署独立 beta SLS Project/RAM/Secret，创建 3/3/90 天 Logstore 和 Scheduled SQL；先清除 `avatarBaseUrl` 种子阻断，再执行 `stackctl verify --env beta --kind all --tier t3` 及 `TEST_SLS_*` 实测：重放不重复、字段/保留期/聚合无敏感字段、Portal 查询 SLO。
     3. gamma：在同一 VPC 或获批私网连通的 runner 注入 gamma Secret；先修复 entity/comment/content 种子门，再执行 `stackctl verify --env gamma --kind all --tier t3`。开发机的 `gamma_local` 不可直连 VPC endpoint 时只能跑协议替身，不能伪称真实 SLS 验收。
     4. T4：准备至少一台 Android 或 iOS 真机，执行启动、页面访问、后台恢复、断网补传、可控异常、推荐反馈与 Portal 观测旅程；随后才进入 prod 5% rollout。
-  - 已有证据: 严格 metadata/codegen、App Reporter local_contract、Go SLS fake 协议、Portal 单测/build 已通过；`product-ops` gamma API 契约及 `/content/behaviors` 定向链路已通过。2026-07-20 B7.5 再次实跑 full gamma，`stackctl up --env gamma` 明确因缺少 `~/.config/quwoquan/product_telemetry_sls/gamma.env` GATE_BLOCK（`.qwq_output/env/gamma/runs/20260719T184946Z-up-gamma`）；这证明发布门正常阻断无凭据环境，不等同于真实 SLS 或真机验收。
-  - 状态: 进行中（2026-07-18 用户确认登记；2026-07-20 B7.5 复核仍缺 gamma 正式 Secret）
+  - 已有证据: 严格 metadata/codegen、App Reporter local_contract、Go SLS fake 协议、Portal 单测/build 已通过；`product-ops` gamma API 契约及 `/content/behaviors` 定向链路已通过。2026-07-20 B7.5 再次实跑 full gamma，`stackctl up --env gamma` 明确因缺少 `~/.config/quwoquan/product_telemetry_sls/gamma.env` GATE_BLOCK（`.qwq_output/env/gamma/runs/20260719T184946Z-up-gamma`）；这证明发布门正常阻断无凭据环境，不等同于真实 SLS 或真机验收。2026-07-21 复跑 `.qwq_output/env/gamma/runs/20260720T201302Z-up-gamma`：Gamma package 已生成，但本次启动先被当前工作区 content-service 编译错误中止；独立 `stackctl doctor --target gamma-local` 仍确认同一 SLS Secret 缺失。两项阻断均未被误记为真实 SLS、RTC QoE 或真机证据。
+  - 状态: 进行中（2026-07-18 用户确认登记；2026-07-20 B7.5 复核仍缺 gamma 正式 Secret；2026-07-21 复核须先修复工作区编译阻断并在受控 runner 注入 Secret 后重跑）
 
 ## 测试治理与目录迁移（Three-layer Test Migration）
 
@@ -1285,7 +1286,17 @@
   - 原因: alerts 仅有规则文件，scrape、receiver、OTLP endpoint 未形成生产 composition。
   - 影响: 服务 RED、遥测 freshness、发布和数据链路故障无值班闭环。
   - 验收: rootless service plane、scrape/route/receiver、触发→通知→ack→恢复演练通过。
-  - 状态: 部分完成（2026-07-19 收口批次：scrape 目标补齐 service plane 全部 compose 服务与 search/rtc 独立进程（realtime-gateway 实现未就绪暂不登记）；Alertmanager 每个 receiver 双路投递——外部值班 webhook + platform-ops `alerts/ingest` 回流（token 认证），值班可在 Portal 观测页 ack 并落审计（firing→ack→resolved 状态机 `TestPlatformAlertIngestAckLoopEmitsAudit`）；2026-07-20 FP4/FP5 收口：观测栈 compose 补齐基础设施 exporter 家族（node-exporter 主机 / podman-exporter rootless 容器 / mongodb / postgres / redis exporter）+ 对应 scrape jobs + `quwoquan_l4_infrastructure` 整体负荷与毛刺双阈值告警（CPU 85%/95%、内存、磁盘、网络错误、容器内存、数据面连接数与 exporter down）；修复 4 组死告警（AB validity 改用真实 `recommendation_feed_ab_experiment_validity_total`、coverage 改用离线 replay 单源 gauge、EventStore 发布失败改用 `mq_publish_total{status="error"}`、exposure_gini 删除在线死告警改离线报表评估）；content_contract recording rules 修复 operation id 漂移并补 ListMyReports 规则，`verify_content_object_alert_coverage` 全绿（60 operation / 46 ready）；promtool 122 规则全部通过。仍需生产主机触发→通知→ack→恢复真实演练与 exporter 家族部署证据）
+  - 状态: 部分完成（2026-07-21：在既有 scrape/receiver/exporter 与告警规则基础上，
+    prod renderer 为 service 与 observability compose 生成同名显式
+    `quwoquan-prod-service` 网络，Prometheus/Alertmanager 仅绑定
+    `127.0.0.1:9090/9093`；渲染 `runtime.env` 后由受限账号的 user systemd unit
+    常驻管理、`enable --now` 并验证 active。OTel trace pipeline 删除 debug sink，
+    强制受 TLS 保护的 `OTEL_TRACE_BACKEND_ENDPOINT`，启用 retry 与有界发送队列；
+    缺 trace backend/凭据即阻断部署。证据：
+    `test_prod_observability_stack__local_contract_test.py`、cold-start renderer
+    contract 和 shell/Python 语法检查通过。仍需 prod-hosted 账户验证网络/DNS、
+    exporter 可达、重启恢复、receiver firing→ack→resolved 及真实 trace 检索；
+    未取得这些实证前不能关闭本项。）
 - [ ] R-OPS-DATA-SOURCE 治理/推荐/L1-L4/运营页仍依赖 seed 或硬编码
   - 区域: Portal / Service / Recommendation
   - 原因: 真实事件投影和 Prometheus/行为查询尚未替代测试 snapshot。
@@ -1303,14 +1314,13 @@
   - 原因: SIT2、行为和 session 测试声明与磁盘文件不一致。
   - 影响: 验收诚信和 gate 追踪链断裂。
   - 验收: 每个 acceptance test path 在磁盘有真实测试且 recorded/evidence 同步。
-  - 状态: 已解决（2026-07-20；`verify_test_specs.py` 新增 planned 文件存在性硬门，
-    recorded 文件继续要求 canonical 且真实存在，recorded command/缺失运行报告保持阻断；
-    同时删除对消失 acceptance 的静默容错。全仓摘除 76 条不存在的 planned 文件引用，
-    未生成空测试或 wrapper，未完成行为继续由 pending/partial、done_when 与
-    `test_evidence.cases` 表达。证据：
-    `quwoquan_ops/tests/local_contract/test_acceptance_evidence_refs__contract__local_contract_test.py`
-    3 项通过，`verify_test_specs.py` 与 `verify_test_coverage_map.py` 全绿，清理清单见
-    `.qwq_output/env/repo/runs/tests/acceptance-planned-refs/report.json`）
+  - 状态: 已解决（2026-07-21 复验后关闭：将 run-stream protocol 的 recorded
+    文件改为真实存在的 `cmd/api/main__local_contract_test.go`，并修正
+    api_integration 的环境为 beta/gamma；同时修正 session-preference 记录的
+    integration 环境。`python3 quwoquan_ops/gate/scaffold/verify_test_specs.py`
+    与 `python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py` 均通过。
+    `R-UPROF-002` 的 Suspend/Restore 未实现属于已有业务状态机风险，不能用该
+    路径一致性项或空 planned 测试掩盖。）
 - [x] R-OPS-STARTUP-IDEMPOTENCY 启动 proof 跨批复用导致第二批丢失
   - 区域: App / Service
   - 原因: 服务端从长期 proof 派生 batch key，而非从每批 canonical body digest 派生。
@@ -1358,7 +1368,21 @@
   - 原因: 只有 product-ops 直写旁路，缺少 stdout→collector→SLS 的重试/spool链。
   - 影响: 其他服务异常无法进入统一查询与告警。
   - 验收: collector 配置、去高基数 route、重试/spool、warn/error 采样和服务矩阵证据通过。
-  - 状态: 部分完成（2026-07-20 FP3 收口：全部 14 个 Go 服务装配 `RuntimeLogExportWriter`，stdout/stderr 镜像经 `NewHTTPRuntimeLogFieldExporter` 批量推送 product-ops 内部通道 `/ops/internal/runtime-logs:ingest`（`X-Runtime-Log-Ingest-Token` 机器凭据 fail-closed、app sourceType 拒绝、幂等摘要），product-ops 自身继续直写 SLS；render 注入 `RUNTIME_LOG_INGEST_URL/TOKEN`；证据 `TestInternalRuntimeLogIngestTokenGate`。同批落地"按用户查日志"（correlation.actorHash 服务端注入 + drilldown `actorHash` 敏感权限查询）与日志文本检索（`messageContains` SLS 短语匹配），证据 `TestRuntimeLogActorAndTextQueries`；容量治理声明落 `runtime_observability.yaml#capacity`（3 天滚动 / 512GB 基准弹性至 50TB）。遗留：推送失败仅 stdout 兜底（无本地 spool 重试），生产服务矩阵证据待部署演练）
+  - 状态: 部分完成（2026-07-21：全部 14 个 Go 服务（含 product-ops-service）
+    装配 `RuntimeLogExportWriter`，stdout/stderr 镜像经
+    `NewHTTPRuntimeLogFieldExporter` 先入持久 spool、重启重试并在 TTL/永久失败时
+    进入 DLQ，再推送 product-ops 内部通道 `/ops/internal/runtime-logs:ingest`；
+    product-ops 的内部 ingest 路径旁路自身 access logger 以避免 HTTP feedback loop。
+    `X-Runtime-Log-Ingest-Token` 机器凭据 fail-closed，app sourceType 被拒绝，且
+    `ReportTrustedRuntimeLogBatch` 与 App runtime log 共用 durable idempotency ledger，
+    重放不会重复写入。render 注入 `RUNTIME_LOG_INGEST_URL/TOKEN/SPOOL_DIR`；
+    证据 `TestInternalRuntimeLogIngestTokenGate`、`TestProductOpsInternalRuntimeLogIngestBypassesObservedHandler`、
+    `test_runtime_log_spool_wiring__local_contract_test.py` 与
+    `runtime_log_http_exporter__local_contract_test.go`。同批落地"按用户查日志"
+    （correlation.actorHash 服务端注入 + drilldown `actorHash` 敏感权限查询）与日志文本
+    检索（`messageContains` SLS 短语匹配）；容量治理声明落
+    `runtime_observability.yaml#capacity`（3 天滚动 / 512GB 基准弹性至 50TB）。
+    尚未关闭的唯一条件是 prod-hosted 服务矩阵故障、重启、恢复和 DLQ 真实演练证据。）
 - [ ] R-OPS-GH-PROTECTION GitHub 分支/环境/runner/Action 安全保护不足
   - 区域: CI/CD
   - 原因: required checks/reviewer、最小 token、Action pin 和 runner 物理隔离未闭合。
@@ -1547,7 +1571,7 @@
     `verify_ui_mock_isolation`/页面矩阵/语义/conversation-sheet 门禁已绿。
   - 状态: 进行中（代码与本地三层证据已闭环；待 gamma api_integration 与 Patrol 证据后关闭）
 
-- [ ] R-ASSIST-002 assistant 工具面假实现与硬编码 grounding
+- [x] R-ASSIST-002 assistant 工具面假实现与硬编码 grounding
   - 区域: Service
   - 域: `assistant`
   - 原因: `tool/registry.go` 中 `search` 默认走 SliceBackend 合成文档、`web_fetch`/
@@ -1560,9 +1584,18 @@
     `contracts/metadata/assistant/assistant_run/storage.yaml`。
   - 验收: search 接真 search-service 或从工具目录移除；fake 工具删除；CreationSuggest
     装配真实 tag/entity grounding；向量契约落实现或从 storage.yaml 删除。
-  - 状态: 进行中（2026-07-20 小趣商用化规划经用户确认登记；本轮按阶段 2 实施）
+  - 状态: 已解决（2026-07-21；删除默认 `mock_search` / `memory_search` /
+    `web_fetch` 与 SliceBackend 合成结果，`BaseRegistry` 默认无可执行工具，composition
+    root 仅显式装配经真实 adapter 验证的 `app_search` 和配置后的 `web_search`；无 provider
+    的 beta/gamma/prod 启动 fail-closed。创作建议改由 `creationgrounding.Client` 经
+    search-service 的命中 tags 与 entity-service 的 published homepage 读取，不再以关键词
+    伪造建议；未配置 grounding 返回结构化 unavailable。`AssistantRun` metadata 已关闭
+    vector_enabled，未保留无 embedding 消费者的向量索引。验证：
+    `go test ./services/assistant-service/internal/application/...
+    ./services/assistant-service/internal/infrastructure/creationgrounding
+    ./services/assistant-service/cmd/api -count=1` 通过）
 
-- [ ] R-ASSIST-003 assistant 模型日志泄露敏感内容与业务告警缺口
+- [x] R-ASSIST-003 assistant 模型日志泄露敏感内容与业务告警缺口
   - 区域: Service / Ops
   - 域: `assistant`
   - 原因: `cmd/api/assistant_model_provider.go` 将模型请求/响应（含用户 prompt 全文）
@@ -1576,9 +1609,21 @@
     `quwoquan_service/contracts/metadata/ops/event_record/event_catalog.yaml`。
   - 验收: 模型日志按 metadata_only 脱敏（默认只留长度/哈希/耗时，debug 开关显式豁免）；
     4 条业务告警落地并对齐 spec 指标名；telemetry catalog 登记 assistant 事件并端侧接线。
-  - 状态: 进行中（2026-07-20 小趣商用化规划经用户确认登记；本轮按阶段 2/5 实施）
+  - 状态: 已解决（2026-07-21）。模型内容调试日志改为仅 alpha 显式启用，beta/gamma/prod
+    fail-closed（`main__local_contract_test.go::TestModelDebugContentLogIsAlphaOnly`）；四条
+    告警已落 `quwoquan_alerts.yaml`。服务端实际发射首可见回答、grounding、错误目的地与
+    `assistant_mentioned_consumer_dlq_total` 指标；后者仅在消息成功写入七天可重放 DLQ、
+    刷新保留期并从源 consumer group ACK 后递增。DLQ 不再记录原始错误，且不再遗留无法
+    reclaim 的 pending 消息。App `PersonalAssistantStreamController` 对 start、首 answer
+    delta、三种终态和异常流发射 codegen `assistant_turn_quality`；无终态的 SSE 流改为
+    结构化可重试失败，禁止伪造 completed。验证：
+    `go test ./services/assistant-service/internal/application
+    ./services/assistant-service/internal/infrastructure/messaging`、`go test ./runtime/redis`、
+    `flutter test --dart-define=APP_RUNTIME_ENV=alpha
+    test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart`
+    通过；Redis keyspace codegen `gen_redis_router_config.py --check` 通过。
 
-- [ ] R-ASSIST-004 assistant run 非 token 级流式与 SSE 断线整条重发
+- [x] R-ASSIST-004 assistant run 非 token 级流式与 SSE 断线整条重发
   - 区域: App / Service
   - 域: `assistant`
   - 原因: 模型调用为分阶段阻塞 JSON（无 `stream:true`），`answer_delta` 是服务端把
@@ -1590,7 +1635,19 @@
     `quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart`。
   - 验收: model provider final 阶段支持 OpenAI 兼容 SSE 流式并回退非流式；端侧断线按
     seq/resumeToken 续传；首 token 延迟打点可观测。
-  - 状态: 待办（2026-07-20 小趣商用化规划经用户确认登记；模型网关 stream 能力验证后实施）
+  - 状态: 已解决（2026-07-21；`StreamingModelProvider` 在 final 阶段以 OpenAI-compatible
+    `stream:true` 逐 token 回调，非流式 provider 仅产生一次真实完整增量，删除定时切片伪流。
+    运行事件先持久化到 Mongo journal，服务端接受 `Last-Event-ID` / metadata `resumeToken`
+    严格从后续 seq 重放；App Remote 解析服务端 SSE `id`，按 metadata 的 idempotent
+    retry 契约重连并去重。首个 `answer_delta` 计入
+    `assistant_first_visible_response_ms`，对应告警已登记。验证证据：
+    `go test ./services/assistant-service/cmd/api ./services/assistant-service/internal/application
+    ./services/assistant-service/internal/adapters/http`、真实 Mongo/Redis/Postgres
+    `go test ./services/assistant-service/tests/api_integration -run
+    '^TestAssistantRunStreamResumeSemantics$' -count=1`、以及
+    `flutter test --dart-define=APP_RUNTIME_ENV=alpha
+    test/local_contract/cloud/assistant/assistant_run_stream_resume__local_contract_test.dart
+    test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart` 全部通过）
 
 ## 用户主页商用化收口（2026-07-20 用户批准规划登记）
 
@@ -1674,7 +1731,12 @@
   - 状态: 进行中（2026-07-20；**注销实现与本地/API 证据已闭环**；gamma/prod 设备证据
     由 R-UPROF-004 统一收口，Apple token revoke 由 R-AUTH-001 正式凭据链收口。
     本项只剩 UserSuspended/Restore 的 metadata-first 运营状态机、跨域可逆隔离和申诉审计，
-    未完成前不得将“封禁”宣称为商用能力）
+    未完成前不得将“封禁”宣称为商用能力。2026-07-21：UserAccount 已新增
+    `active ↔ suspended` 原子 Store/receipt/outbox、`authEpoch`、refresh revoke reason、
+    旧 access token gate 与 App 的结构化安全落点；metadata/codegen、User Service
+    local_contract/api_integration、App auth local_contract 均已复验。仍缺受信 Product Ops
+    decision verifier、Content/Chat/Circle/Notification/Search/Recommendation 可逆 projection
+    与 Gamma 真机/真实 SLS 证据，故状态保持进行中）
 
 - [x] R-UPROF-003 关系计数同步 increment + 全量 COUNT reconcile 规模风险
   - 区域: Service
@@ -1798,7 +1860,7 @@
 
 ## 圈子主页商用化排查（2026-07-20 用户授权登记，规格落点 M8-H）
 
-- [ ] R-CIRCLE-001 circle hub 频道页 N+1 客户端聚合与端侧过滤（性能/流量风险）
+- [x] R-CIRCLE-001 circle hub 频道页 N+1 客户端聚合与端侧过滤（性能/流量风险）
   - 区域: App / Service
   - 域: `circle`
   - 原因: `RemoteCircleRepository.listHomeCircleDiscoveryFeed` 先 `listCircles(limit: 500)`
@@ -1812,7 +1874,17 @@
   - 验收: metadata 新增 circle discovery feed 聚合 operation（服务端垂类过滤+游标分页）；
     hub 首屏单次聚合请求 P95 ≤ 800ms；读侧迁 generated client 并消灭 raw Map；
     api_integration 覆盖聚合 feed 契约。
-  - 状态: 待办（2026-07-20 登记；M8-H Phase 2）
+  - 收口证据（2026-07-21）: `ListCircleDiscoveryFeed` / `GetCircleFeed` 已由 metadata
+    生成 typed Slice 与 OpenAPI/Dart/Go 合同；`home_circles_hub_page.dart` 首屏只读
+    `recommended`，认证后才读取 `mine`，keyset cursor 按 `placementId` 追加去重，移除
+    `limit: 200`、客户端 scope/category 重过滤和 `post.toMap()` 回读。真实 Mongo + Redis
+    `circle_feed_contract__api_integration_test.go` 已验证 cursor、cache hit/invalidation；
+    10k/100k source-read P95 分别为 11.53ms/8.05ms，Explain 使用声明索引。App Circle
+    local_contract 141 用例、Circle service local contracts、metadata/ContractGraph/App
+    generated manifest 与页面横向质量矩阵均已通过。复核补强：operation 已翻牌为 `ready`，
+    generated authorization guard 对匿名 public discovery 返回 200；单圈 public feed 会对
+    private/archived Circle fail-closed 返回 404，避免遗留 placement 泄漏。
+  - 状态: 已解决（2026-07-21；M8-H Phase 2）
 
 - [ ] R-CIRCLE-002 圈子级入圈审批命令缺失，joinPolicy=approval 旅程断裂
   - 区域: App / Service
@@ -1923,4 +1995,13 @@
     `quwoquan_ops/environments/**`
   - 验收: `stackctl verify --env gamma --kind all` 含群管理 journey 通过 → prod gray
     canary → 解除 blocked；大群扇出压测报告；提及 story 按其 acceptance 收口。
-  - 状态: 待办（2026-07-20 登记；群聊商用化规划阶段 4 出口条件）
+  - 状态: 进行中（2026-07-21：`ListSelectableGroupConversations` 已按 `source=group|circle` 在云侧分页前隔离，App/Mock/真实 Mongo API 契约与发起群聊页 local_contract 均已复验；@成员选择、token 删除、服务端成员/角色校验、未读水位重放与气泡高亮的 local_contract/api_integration 也已复验。环境探针已扩展为创建群后发送普通消息与 mention 的真实 round-trip，并已由 `stackctl verify` 在 beta integration、gamma release、prod hosted read-only 三种适用模式装配；probe 保持 prod 禁写、标准 `PROD_TEST_AUTH_TOKEN` 和 TLS 证书校验。`chat_interaction_outcome` 的严格解码、加密 outbox 逐条隔离、SLS `chat_funnel` 聚合以及 mention/watermark/Inbox 投影延迟告警已补齐本地契约证据。仍未取得 gamma-local 实跑报告：此前 `stackctl health --target gamma-local --scope full` 仅 2/39 healthy，运行态因缺 `LOCAL_GAMMA_EMBEDDING_ENDPOINT` 与 `LOCAL_GAMMA_EMBEDDING_API_KEY` fail-closed，之后 Docker/Colima daemon 又不可用；Patrol 双账号「提醒→主页」、prod-hosted gray-initial 与大群 >512 扇出容量报告仍缺受控环境/凭据证据。因此 status 不得关闭，commercial_defaults.status 继续 blocked。）
+  - 进展（2026-07-21）: `mainline_auto_prod` 的 beta-local bootstrap 在 health / inspect 后强制执行
+    `stackctl verify --env beta --kind all --profile integration`；该 profile 的群聊 lifecycle probe
+    失败即阻断 CI，且本地契约同时断言 workflow 与 stackctl 编排，消除“套件已登记但 CI 未执行”的缺口。
+  - 最新阻断证据（2026-07-21）: `stackctl health --target gamma-local --scope full` 仅
+    `14/39 healthy`；随后 `stackctl doctor --target gamma-local` 明确报告
+    `~/.config/quwoquan/product_telemetry_sls/gamma.env` 缺失，且 api/media edge、user、
+    assistant、product-ops、realtime、rtc、LiveKit 与 coturn 等端口均未监听。该文件为受限环境密钥，
+    Agent 不可生成或猜测；在人工提供受控 gamma 凭据并启动完整拓扑前，gamma mutating probe、
+    Patrol 双账号 journey 与容量压测仍不可诚实执行。

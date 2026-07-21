@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
@@ -57,8 +62,33 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                       ).notifier,
                     )
                     .transferOwnership(member.userId);
+                unawaited(
+                  ref
+                      .read(chatInteractionTelemetryTrackerProvider)
+                      .track(
+                        action: ChatInteractionAction.groupGovernance,
+                        outcome: ChatInteractionOutcome.succeeded,
+                        governanceAction:
+                            ChatGovernanceAction.ownershipTransfer,
+                        pageName: PageNames.chatTransferOwnership,
+                        surfaceId: AppUiSurfaces.chatTransferOwnership.id,
+                      ),
+                );
                 if (mounted) context.pop();
               } catch (error) {
+                unawaited(
+                  ref
+                      .read(chatInteractionTelemetryTrackerProvider)
+                      .track(
+                        action: ChatInteractionAction.groupGovernance,
+                        outcome: ChatInteractionOutcome.failed,
+                        governanceAction:
+                            ChatGovernanceAction.ownershipTransfer,
+                        pageName: PageNames.chatTransferOwnership,
+                        surfaceId: AppUiSurfaces.chatTransferOwnership.id,
+                        error: error,
+                      ),
+                );
                 if (!mounted) {
                   return;
                 }

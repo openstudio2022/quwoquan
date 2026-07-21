@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	rtauth "quwoquan_service/runtime/auth"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/reliabletask"
 	httpadapter "quwoquan_service/services/notification-service/internal/adapters/http"
@@ -138,8 +139,15 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	realtimePublisher, err := realtimeclient.NewIncomingCallPublisher(
+	messageTransport, err := runtimemessaging.NewRedisMessageTransport(
 		notificationRedisClient,
+		notificationRedisClient,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	realtimePublisher, err := realtimeclient.NewIncomingCallPublisher(
+		messageTransport,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +164,7 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 		t.Fatal(err)
 	}
 	consumer, err := streamadapter.NewRTCIncomingCallConsumer(
-		notificationRedisClient,
+		messageTransport,
 		coordinator,
 		"incoming-api-integration",
 		nil,

@@ -89,7 +89,7 @@ scenarios:
       - POST /content/behaviors with events array
     assertions:
       - click event reaches service within 200ms
-      - batch payload type field matches behaviors.yaml behavior_events types
+      - batch payload action field matches behaviors.yaml behavior_events actions
       - like event NOT present in batch (dedicated route)
       - service returns 204
 

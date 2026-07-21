@@ -20,10 +20,11 @@ import (
 const mediaReceiptTTL = 24 * time.Hour
 
 type MediaService struct {
-	data    DataPorts
-	objects MediaObjectGateway
-	now     func() time.Time
-	newID   func(string) (string, error)
+	data                     DataPorts
+	objects                  MediaObjectGateway
+	originalAccessVisibility OriginalAccessPostVisibilityReader
+	now                      func() time.Time
+	newID                    func(string) (string, error)
 }
 
 type MediaServiceOption func(*MediaService)
@@ -43,6 +44,14 @@ func WithIdentifierGenerator(
 		if newID != nil {
 			service.newID = newID
 		}
+	}
+}
+
+func WithOriginalAccessPostVisibilityReader(
+	reader OriginalAccessPostVisibilityReader,
+) MediaServiceOption {
+	return func(service *MediaService) {
+		service.originalAccessVisibility = reader
 	}
 }
 
@@ -311,6 +320,9 @@ func (s *MediaService) AbortMediaUpload(
 	if err := session.Abort(command.OwnerID, now); err != nil {
 		return MediaUploadSessionCommandResult{}, mapMediaDomainError(err)
 	}
+	if err := s.objects.DeleteTemporaryUpload(ctx, session.ObjectKey()); err != nil {
+		return MediaUploadSessionCommandResult{}, unavailable(err)
+	}
 	payload, err := json.Marshal(mediaUploadAbortedPayload{
 		SessionID: session.ID(),
 		OwnerID:   session.OwnerID(),
@@ -377,6 +389,145 @@ func (s *MediaService) RecordMediaProcessingResult(
 		"RecordMediaProcessingResult",
 		commandDigest,
 		"content.media_asset.processing_updated",
+		payload,
+		now,
+	)
+}
+
+func (s *MediaService) ActivateReprocessedImageDescriptor(
+	ctx context.Context,
+	command ActivateReprocessedImageDescriptorCommand,
+) (ImageDescriptorActivationResult, error) {
+	encoded, err := json.Marshal(command)
+	if err != nil {
+		return ImageDescriptorActivationResult{}, unavailable(err)
+	}
+	commandDigest := mediaCommandDigest("ActivateReprocessedImageDescriptor", encoded)
+	if replayed, found, err := s.replayAsset(
+		ctx,
+		"ActivateReprocessedImageDescriptor",
+		commandDigest,
+	); err != nil {
+		return ImageDescriptorActivationResult{}, err
+	} else if found {
+		asset, assetFound, loadErr := s.loadAsset(ctx, command.AssetID)
+		if loadErr != nil {
+			return ImageDescriptorActivationResult{}, loadErr
+		}
+		if !assetFound {
+			return ImageDescriptorActivationResult{}, mediaNotFound(command.AssetID)
+		}
+		activation, activationFound := asset.ImageDescriptorActivationForRun(command.RunID)
+		if !activationFound {
+			return ImageDescriptorActivationResult{}, unavailable(
+				errors.New("replayed image descriptor activation audit is missing"),
+			)
+		}
+		return ImageDescriptorActivationResult{
+			AssetID:           replayed.AssetID,
+			Version:           replayed.Version,
+			PreviousRevision:  activation.PreviousRevision,
+			ActivatedRevision: activation.Revision,
+			Replayed:          true,
+		}, nil
+	}
+	asset, found, err := s.loadAsset(ctx, command.AssetID)
+	if err != nil {
+		return ImageDescriptorActivationResult{}, err
+	}
+	if !found {
+		return ImageDescriptorActivationResult{}, mediaNotFound(command.AssetID)
+	}
+	expectedVersion := asset.Version()
+	now := s.now().UTC()
+	previousRevision, activatedRevision, err := asset.ActivateReprocessedImageDescriptor(
+		command.RunID,
+		command.Descriptor,
+		now,
+	)
+	if err != nil {
+		return ImageDescriptorActivationResult{}, mapMediaDomainError(err)
+	}
+	payload, err := json.Marshal(mediaAssetImageDescriptorActivatedPayload{
+		AssetID:           asset.ID(),
+		RunID:             command.RunID,
+		PreviousRevision:  previousRevision,
+		ActivatedRevision: activatedRevision,
+	})
+	if err != nil {
+		return ImageDescriptorActivationResult{}, unavailable(err)
+	}
+	committed, err := s.commitAsset(
+		ctx,
+		asset,
+		expectedVersion,
+		"ActivateReprocessedImageDescriptor",
+		commandDigest,
+		"content.media_asset.image_descriptor_activated",
+		payload,
+		now,
+	)
+	if err != nil {
+		return ImageDescriptorActivationResult{}, err
+	}
+	return ImageDescriptorActivationResult{
+		AssetID:           committed.AssetID,
+		Version:           committed.Version,
+		PreviousRevision:  previousRevision,
+		ActivatedRevision: activatedRevision,
+		Replayed:          committed.Replayed,
+	}, nil
+}
+
+func (s *MediaService) RollbackReprocessedImageDescriptor(
+	ctx context.Context,
+	command RollbackReprocessedImageDescriptorCommand,
+) (MediaAssetCommandResult, error) {
+	encoded, err := json.Marshal(command)
+	if err != nil {
+		return MediaAssetCommandResult{}, unavailable(err)
+	}
+	commandDigest := mediaCommandDigest("RollbackReprocessedImageDescriptor", encoded)
+	if replayed, found, err := s.replayAsset(
+		ctx,
+		"RollbackReprocessedImageDescriptor",
+		commandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	asset, found, err := s.loadAsset(ctx, command.AssetID)
+	if err != nil {
+		return MediaAssetCommandResult{}, err
+	}
+	if !found {
+		return MediaAssetCommandResult{}, mediaNotFound(command.AssetID)
+	}
+	expectedVersion := asset.Version()
+	now := s.now().UTC()
+	if err := asset.RollbackImageDescriptorRevision(
+		command.RunID,
+		command.PreviousRevision,
+		command.ActivatedRevision,
+		now,
+	); err != nil {
+		return MediaAssetCommandResult{}, mapMediaDomainError(err)
+	}
+	payload, err := json.Marshal(mediaAssetImageDescriptorRolledBackPayload{
+		AssetID:           asset.ID(),
+		RunID:             command.RunID,
+		PreviousRevision:  command.PreviousRevision,
+		ActivatedRevision: command.ActivatedRevision,
+	})
+	if err != nil {
+		return MediaAssetCommandResult{}, unavailable(err)
+	}
+	return s.commitAsset(
+		ctx,
+		asset,
+		expectedVersion,
+		"RollbackReprocessedImageDescriptor",
+		commandDigest,
+		"content.media_asset.image_descriptor_rolled_back",
 		payload,
 		now,
 	)
@@ -465,39 +616,124 @@ func (s *MediaService) RequestOriginalMediaAccess(
 	if err != nil {
 		return OriginalMediaAccessResult{}, err
 	}
-	asset, err := s.GetMediaAsset(ctx, GetMediaAssetQuery{
-		AssetID: command.AssetID,
-		OwnerID: command.ViewerID,
-	})
-	if err != nil {
-		return OriginalMediaAccessResult{}, err
-	}
-	if asset.ProcessingStatus != mediamodel.ProcessingStatusReady ||
-		(asset.MediaType != "image" && asset.MediaType != "video") {
-		return OriginalMediaAccessResult{}, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"原始媒体尚未就绪或类型不受支持",
-			"original media access requires a ready image or video asset",
+	viewerID := strings.TrimSpace(command.ViewerID)
+	if viewerID == "" {
+		return OriginalMediaAccessResult{}, contentgenerated.AppErrorFromOriginalAccessDenied(
+			"original media access requires an authenticated viewer",
 		)
 	}
-	// MongoDB persists timestamps at millisecond precision. Normalize before
-	// deriving the fact and signed grant so the first response and a replay are
-	// byte-for-byte stable.
-	now := s.now().UTC().Truncate(time.Millisecond)
-	auditDigest := sha256.Sum256([]byte(strings.Join([]string{
-		idempotencyKey, asset.AssetID, command.ViewerID, purpose,
-	}, ":")))
-	auditID := "moa_" + hex.EncodeToString(auditDigest[:16])
-	expiresAt := now.Add(5 * time.Minute)
-	fact := mediamodel.MediaOriginalAccessFact{
-		AuditID: auditID, AssetID: asset.AssetID, ViewerID: command.ViewerID,
-		Purpose: purpose, IdempotencyKey: idempotencyKey, GrantedAt: now, ExpiresAt: expiresAt,
-	}
-	appended, err := s.data.OriginalAccess.AppendMediaOriginalAccess(ctx, mediaports.MediaOriginalAccessAppendRequest{
-		Fact: fact, CommandDigest: commandDigest,
-	})
+	asset, found, err := s.data.Assets.FindMediaAssetForOriginalAccess(
+		ctx,
+		strings.TrimSpace(command.AssetID),
+	)
 	if err != nil {
 		return OriginalMediaAccessResult{}, unavailable(err)
+	}
+	if !found {
+		return OriginalMediaAccessResult{}, mediaNotFound(command.AssetID)
+	}
+	// MongoDB persists timestamps at millisecond precision. Normalize before
+	// deriving the immutable decision fact and its optional signed grant.
+	now := s.now().UTC().Truncate(time.Millisecond)
+	appendDecision := func(
+		outcome string,
+		reason string,
+	) (mediaports.MediaOriginalAccessAppendResult, error) {
+		auditDigest := sha256.Sum256([]byte(strings.Join([]string{
+			idempotencyKey, asset.AssetID, viewerID, purpose, outcome, reason,
+		}, ":")))
+		fact := mediamodel.MediaOriginalAccessFact{
+			AuditID:        "moa_" + hex.EncodeToString(auditDigest[:16]),
+			AssetID:        asset.AssetID,
+			ViewerID:       viewerID,
+			Purpose:        purpose,
+			Outcome:        outcome,
+			Reason:         reason,
+			IdempotencyKey: idempotencyKey,
+			GrantedAt:      now,
+		}
+		if outcome == "granted" {
+			fact.ExpiresAt = now.Add(
+				time.Duration(contentgenerated.ContentMediaOriginalAccessGrantTTLSeconds) *
+					time.Second,
+			)
+		}
+		request := mediaports.MediaOriginalAccessAppendRequest{
+			Fact:          fact,
+			CommandDigest: commandDigest,
+		}
+		if outcome == "granted" {
+			request.RateLimit = mediaports.MediaOriginalAccessRateLimit{
+				MaxGrants: contentgenerated.ContentMediaOriginalAccessRateLimitMaxGrants,
+				Window: time.Duration(
+					contentgenerated.ContentMediaOriginalAccessRateLimitWindowSeconds,
+				) * time.Second,
+			}
+		}
+		return s.data.OriginalAccess.AppendMediaOriginalAccess(ctx, request)
+	}
+	deny := func(reason string, debugMessage string) (OriginalMediaAccessResult, error) {
+		if _, appendErr := appendDecision("denied", reason); appendErr != nil {
+			return OriginalMediaAccessResult{}, unavailable(appendErr)
+		}
+		return OriginalMediaAccessResult{}, contentgenerated.AppErrorFromOriginalAccessDenied(
+			debugMessage,
+		)
+	}
+	if asset.ProcessingStatus != mediamodel.ProcessingStatusReady ||
+		asset.MediaType != "image" {
+		return deny(
+			"asset_not_ready",
+			"original media access requires a ready image asset",
+		)
+	}
+	if asset.AccessPolicy == mediamodel.AccessPolicyOwnerOnly && asset.OwnerID != viewerID {
+		return deny(
+			"asset_policy",
+			"original media access owner-only policy denied viewer",
+		)
+	}
+	if s.originalAccessVisibility == nil {
+		return OriginalMediaAccessResult{}, unavailable(
+			errors.New("Post media visibility reader is not configured"),
+		)
+	}
+	visible, visibilityErr := s.originalAccessVisibility.CanViewerAccessPublishedMedia(
+		ctx,
+		asset.AssetID,
+		viewerID,
+	)
+	if visibilityErr != nil {
+		return OriginalMediaAccessResult{}, unavailable(visibilityErr)
+	}
+	if !visible {
+		return deny(
+			"post_visibility",
+			"no viewer-visible published Post references the media asset",
+		)
+	}
+	appended, err := appendDecision("granted", "authorized")
+	if err != nil {
+		var appError *rterr.AppError
+		if errors.As(err, &appError) &&
+			appError.Code.String() ==
+				contentgenerated.AppErrorFromOriginalAccessRateLimited("").Code.String() {
+			if _, auditErr := appendDecision("rate_limited", "rate_limit_exhausted"); auditErr != nil {
+				return OriginalMediaAccessResult{}, unavailable(auditErr)
+			}
+			return OriginalMediaAccessResult{}, appError
+		}
+		return OriginalMediaAccessResult{}, unavailable(err)
+	}
+	if appended.Fact.Outcome == "rate_limited" {
+		return OriginalMediaAccessResult{}, contentgenerated.AppErrorFromOriginalAccessRateLimited(
+			"media original access rate limit exhausted",
+		)
+	}
+	if appended.Fact.Outcome != "granted" {
+		return OriginalMediaAccessResult{}, contentgenerated.AppErrorFromOriginalAccessDenied(
+			"original media access replay did not produce a grant",
+		)
 	}
 	originalURL, err := s.objects.DeliveryURLUntil(ctx, asset.ObjectKey, appended.Fact.ExpiresAt)
 	if err != nil {
@@ -506,8 +742,9 @@ func (s *MediaService) RequestOriginalMediaAccess(
 	return OriginalMediaAccessResult{
 		AssetID: asset.AssetID, Status: "granted", OriginalURL: originalURL,
 		ContentType: asset.ContentType, FileSize: asset.FileSize,
-		ExpiresAt: appended.Fact.ExpiresAt, TTLSeconds: 300,
-		AuditID: appended.Fact.AuditID,
+		ExpiresAt:  appended.Fact.ExpiresAt,
+		TTLSeconds: contentgenerated.ContentMediaOriginalAccessGrantTTLSeconds,
+		AuditID:    appended.Fact.AuditID,
 	}, nil
 }
 
@@ -759,6 +996,10 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 		ImageWidth:                   slice.ImageWidth,
 		ImageHeight:                  slice.ImageHeight,
 		ImageDeliveryContentType:     slice.ImageDeliveryContentType,
+		ImageDominantColor:           slice.ImageDominantColor,
+		ImageLQIP:                    slice.ImageLQIP,
+		ImageContentProfile:          slice.ImageContentProfile,
+		ImageDerivativePolicyVersion: slice.ImageDerivativePolicyVersion,
 		VerifiedDurationMs:           slice.VerifiedDurationMs,
 		VideoWidth:                   slice.VideoWidth,
 		VideoHeight:                  slice.VideoHeight,

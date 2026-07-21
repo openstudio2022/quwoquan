@@ -1,10 +1,4 @@
 # Baseline of business-layer platform branching in quwoquan_app/lib.
 # Managed by verify_lib_platform_check_isolation.py (rule 14).
 # Only-decrease: migrate behind PlatformCapabilities / platform ACL to remove rows.
-allowed:
-  - path: core/auth/one_tap_login_channel.dart
-    kind: raw_channel
-  - path: ui/content/entry/services/ios_video_editing_service.dart
-    kind: platform_branch
-  - path: ui/content/entry/services/ios_video_editing_service.dart
-    kind: raw_channel
+allowed: []

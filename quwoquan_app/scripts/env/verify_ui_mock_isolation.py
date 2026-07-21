@@ -23,6 +23,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
 ALLOW = ROOT / "specs" / "gates" / "ui_mock_isolation_allowlist.yaml"
+PRODUCTION_SERVICE_MOCK_ROOT = APP_LIB / "cloud" / "services"
 
 # package:quwoquan_app/.../mock/ 或 .../mock/xxx.dart
 IMPORT_MOCK = re.compile(
@@ -67,6 +68,15 @@ def main() -> int:
 
     allowed = load_allowed()
     errors: list[str] = []
+
+    # 生产 lib 不得保留业务 Mock 源文件。alpha/test 必须转入独立 mock package，
+    # 不能只靠 import allowlist 或 tree-shaking 隐藏可达实现。
+    if PRODUCTION_SERVICE_MOCK_ROOT.is_dir():
+        for path in sorted(PRODUCTION_SERVICE_MOCK_ROOT.glob("**/mock/*.dart")):
+            rel = path.relative_to(APP_LIB).as_posix()
+            errors.append(
+                f"{rel}: production lib 禁止保留 cloud/services/*/mock 源文件"
+            )
 
     # lib/cloud 纳入扫描（B2）：production adapter/provider 同样禁止 import
     # …/mock/ 本体；mock 承接只允许 test/support 与 runners/alpha。

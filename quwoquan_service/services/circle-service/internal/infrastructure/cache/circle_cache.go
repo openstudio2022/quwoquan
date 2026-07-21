@@ -50,6 +50,16 @@ func (s *CachedCircleStore) InvalidateCircle(ctx context.Context, id string) err
 		s.logger.Warn("circle cache delete failed", "circleId", id, "error", err)
 		return err
 	}
+	if err := InvalidateCircleDiscoveryFeed(ctx, s.rdb); err != nil {
+		s.logger.Warn(
+			"circle discovery cache invalidation failed",
+			"circleId",
+			id,
+			"error",
+			err,
+		)
+		return err
+	}
 	return nil
 }
 

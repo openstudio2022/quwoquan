@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
@@ -71,12 +76,31 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   }
 
   Future<void> _onDone() async {
+    final previousAdminIds = ref
+        .read(conversationMembersProvider(widget.conversationId))
+        .members
+        .where((member) => member.role == 'admin')
+        .map((member) => member.userId)
+        .toSet();
+    final added = _selectedIds.difference(previousAdminIds);
+    final removed = previousAdminIds.difference(_selectedIds);
     try {
       await ref
           .read(conversationMembersProvider(widget.conversationId).notifier)
           .updateGroupAdmins(_selectedIds.toList());
+      _recordAdminGovernanceOutcomes(
+        added: added,
+        removed: removed,
+        outcome: ChatInteractionOutcome.succeeded,
+      );
       if (mounted) context.pop();
     } catch (error) {
+      _recordAdminGovernanceOutcomes(
+        added: added,
+        removed: removed,
+        outcome: ChatInteractionOutcome.failed,
+        error: error,
+      );
       if (!mounted) {
         return;
       }
@@ -113,6 +137,35 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
             await _onDone();
           }
         },
+      );
+    }
+  }
+
+  void _recordAdminGovernanceOutcomes({
+    required Set<String> added,
+    required Set<String> removed,
+    required ChatInteractionOutcome outcome,
+    Object? error,
+  }) {
+    final actions = <ChatGovernanceAction>[
+      if (added.isNotEmpty) ChatGovernanceAction.adminAssign,
+      if (removed.isNotEmpty) ChatGovernanceAction.adminRevoke,
+    ];
+    if (actions.isEmpty) {
+      return;
+    }
+    for (final governanceAction in actions) {
+      unawaited(
+        ref
+            .read(chatInteractionTelemetryTrackerProvider)
+            .track(
+              action: ChatInteractionAction.groupGovernance,
+              outcome: outcome,
+              governanceAction: governanceAction,
+              pageName: PageNames.chatAdmins,
+              surfaceId: AppUiSurfaces.chatAdmins.id,
+              error: error,
+            ),
       );
     }
   }

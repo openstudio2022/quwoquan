@@ -38,6 +38,12 @@ https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	handle @api_content {
 		reverse_proxy content-service:18080
 	}
+	# FilterCatalogRelease 写入由 content-service 的 service principal 保护。
+	# local-gamma 只暴露此窄发布路由，启动时据此建立不可变的 active catalog。
+	@api_content_filter_catalog_release path /internal/content/filter-catalog-releases /internal/content/filter-catalog-releases/*
+	handle @api_content_filter_catalog_release {
+		reverse_proxy content-service:18080
+	}
 	@api_chat path /chat*
 	handle @api_chat {
 		reverse_proxy chat-service:18081

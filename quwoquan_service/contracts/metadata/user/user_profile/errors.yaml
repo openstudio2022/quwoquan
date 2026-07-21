@@ -64,6 +64,28 @@ errors:
       zh: "请求参数有误"
       en: "Invalid request parameters"
 
+  - code: USER.ACCOUNT.enforcement_decision_invalid
+    kind: ACCOUNT
+    reason: enforcement_decision_invalid
+    http_status: 400
+    recovery_action: surface
+    dart_const: accountEnforcementDecisionInvalid
+    go_const: ErrAccountEnforcementDecisionInvalid
+    user_message:
+      zh: "账号处置决策无效"
+      en: "The account enforcement decision is invalid"
+
+  - code: USER.ACCOUNT.state_conflict
+    kind: ACCOUNT
+    reason: state_conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: accountStateConflict
+    go_const: ErrAccountStateConflict
+    user_message:
+      zh: "账号当前状态无法执行该操作"
+      en: "The account is not in a state that permits this action"
+
   - code: USER.USER.rate_limited
     kind: USER
     reason: rate_limited

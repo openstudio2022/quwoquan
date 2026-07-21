@@ -14,7 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
-	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtgov "quwoquan_service/runtime/governance"
@@ -23,7 +22,6 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
 	"quwoquan_service/services/entity-service/internal/application"
 	homepageapp "quwoquan_service/services/entity-service/internal/application/homepage"
@@ -80,6 +78,23 @@ func main() {
 	defer otelShutdown()
 
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
+	messageTransportRouter, messageTransportSceneModes, err := buildEntityMessageTransportRouter(
+		appEnv,
+		cfg,
+	)
+	if err != nil {
+		log.Fatalf("entity-service message transport Redis config invalid: %v", err)
+	}
+	defer messageTransportRouter.Close()
+	messageTransport, err := requireEntityAPIMessageTransport(
+		ctx,
+		appEnv,
+		messageTransportRouter,
+		messageTransportSceneModes,
+	)
+	if err != nil {
+		log.Fatalf("entity-service message transport preflight failed: %v", err)
+	}
 	var homepageStore application.HomepageDataStore
 	var mongoPing func(context.Context) error
 	var reviewStore *reviewpersistence.MongoReviewStore
@@ -262,66 +277,49 @@ func main() {
 	}
 
 	// SubjectFollowStateChanged 消费：homepage 关注真相源在 user.SubjectFollow，
-	// 本服务只投影 viewerFollowsHomepage / followerCount。Redis 未配置时投影
-	// 静默缺席（alpha 本地栈），beta/gamma/prod 拓扑必须提供。
-	if redisAddr := getenvOrDefault("ENTITY_REDIS_ADDR", cfg.Redis.Addr); redisAddr != "" {
-		followRedisRouter := platformredis.MustNewRouter(rtredis.RouterConfig{
-			Scenes: map[string]rtredis.SceneConfig{
-				"general": {
-					Mode:     "standalone",
-					Addr:     redisAddr,
-					Password: getenvOrDefault("ENTITY_REDIS_PASSWORD", cfg.Redis.Password),
-					DB:       cfg.Redis.DB,
-				},
-			},
-			DefaultScene: "general",
-		})
-		defer followRedisRouter.Close()
-		generalRedis := followRedisRouter.Scene("general")
-		followConsumer := followconsumer.NewConsumer(
-			generalRedis,
-			homepageService,
-			hostname(),
+	// 本服务只投影 viewerFollowsHomepage / followerCount。启动前已将 generated
+	// runtime.message.transport root 解析为唯一的生产消息 transport。
+	followConsumer := followconsumer.NewConsumer(
+		messageTransport,
+		homepageService,
+		hostname(),
+	)
+	go followConsumer.Run(ctx)
+	homepageStreamRelay, relayErr := homepageapp.NewLifecycleOutboxRelay(
+		homepageStore,
+		entitymessaging.NewHomepageLifecycleStreamPublisher(messageTransport),
+	)
+	if relayErr != nil {
+		log.Fatalf("entity-service homepage lifecycle stream relay failed: %v", relayErr)
+	}
+	projectionRunners = append(projectionRunners, namedProjectionRunner{
+		name: "homepage-lifecycle-stream", runner: homepageStreamRelay,
+	})
+	if claimStore != nil {
+		claimStreamRelay, streamErr := claimapp.NewLifecycleOutboxRelay(
+			claimStore,
+			entitymessaging.NewHomepageClaimLifecycleStreamPublisher(messageTransport),
 		)
-		go followConsumer.Run(ctx)
-		homepageStreamRelay, relayErr := homepageapp.NewLifecycleOutboxRelay(
-			homepageStore,
-			entitymessaging.NewHomepageLifecycleStreamPublisher(generalRedis),
-		)
-		if relayErr != nil {
-			log.Fatalf("entity-service homepage lifecycle stream relay failed: %v", relayErr)
+		if streamErr != nil {
+			log.Fatalf("entity-service claim lifecycle stream relay failed: %v", streamErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
-			name: "homepage-lifecycle-stream", runner: homepageStreamRelay,
+			name: "homepage-claim-lifecycle-stream", runner: claimStreamRelay,
 		})
-		if claimStore != nil {
-			claimStreamRelay, streamErr := claimapp.NewLifecycleOutboxRelay(
-				claimStore,
-				entitymessaging.NewHomepageClaimLifecycleStreamPublisher(generalRedis),
-			)
-			if streamErr != nil {
-				log.Fatalf("entity-service claim lifecycle stream relay failed: %v", streamErr)
-			}
-			projectionRunners = append(projectionRunners, namedProjectionRunner{
-				name: "homepage-claim-lifecycle-stream", runner: claimStreamRelay,
-			})
-		}
-		if statusReportStore != nil {
-			statusStreamRelay, streamErr := statusapp.NewLifecycleOutboxRelay(
-				statusReportStore,
-				entitymessaging.NewHomepageStatusLifecycleStreamPublisher(generalRedis),
-			)
-			if streamErr != nil {
-				log.Fatalf("entity-service status lifecycle stream relay failed: %v", streamErr)
-			}
-			projectionRunners = append(projectionRunners, namedProjectionRunner{
-				name: "homepage-status-lifecycle-stream", runner: statusStreamRelay,
-			})
-		}
-		log.Printf("entity-service subject follow consumer enabled: %s", redisAddr)
-	} else if appEnv != "alpha" {
-		log.Fatalf("entity-service requires ENTITY_REDIS_ADDR when APP_ENV=%s", appEnv)
 	}
+	if statusReportStore != nil {
+		statusStreamRelay, streamErr := statusapp.NewLifecycleOutboxRelay(
+			statusReportStore,
+			entitymessaging.NewHomepageStatusLifecycleStreamPublisher(messageTransport),
+		)
+		if streamErr != nil {
+			log.Fatalf("entity-service status lifecycle stream relay failed: %v", streamErr)
+		}
+		projectionRunners = append(projectionRunners, namedProjectionRunner{
+			name: "homepage-status-lifecycle-stream", runner: statusStreamRelay,
+		})
+	}
+	log.Printf("entity-service subject follow consumer enabled")
 	httpHandler := httpadapter.NewHandler(homepageService)
 	if reviewStore != nil {
 		reviewFacade, err := reviewapp.NewFacade(reviewapp.DataPorts{
@@ -457,7 +455,7 @@ func loadRuntimeConfig() (config, error) {
 			return config{}, err
 		}
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, err
 			}

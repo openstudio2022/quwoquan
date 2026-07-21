@@ -27,10 +27,7 @@ func TestContract_InitiateCall(t *testing.T) {
 		t.Error("session missing roomId")
 	}
 
-	token, _ := resp["token"].(string)
-	if token == "" {
-		t.Error("response missing token")
-	}
+	extractMediaAccess(t, resp)
 }
 
 func TestContract_InitiateCall_VideoType(t *testing.T) {
@@ -70,6 +67,7 @@ func TestContract_AnswerCall(t *testing.T) {
 	if session["status"] != "connecting" {
 		t.Errorf("expected status=connecting, got %v", session["status"])
 	}
+	extractMediaAccess(t, answerResp)
 }
 
 func TestContract_RejectCall(t *testing.T) {

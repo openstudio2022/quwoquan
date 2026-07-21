@@ -16,6 +16,10 @@ tests:
     operation: GetMediaUploadSession
     go_func: TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay
     command: InitMediaUpload/GetMediaUploadSession/AbortMediaUpload
+  - name: media_upload_session_completion_reconciliation_contract
+    operation: GetMediaUploadSession
+    go_func: TestCompletedMediaUploadSessionQueryRecoversAssetIdentity
+    command: InitMediaUpload/CompleteMediaUpload/GetMediaUploadSession
   - name: media_upload_real_s3_compatible_lifecycle
     operation: CompleteMediaUpload
     go_func: TestMediaObjectGatewayUsesRealS3CompatibleObjectLifecycle

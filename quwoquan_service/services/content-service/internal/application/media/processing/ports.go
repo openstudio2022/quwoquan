@@ -44,6 +44,61 @@ type CheckpointStore interface {
 	SaveCheckpoint(ctx context.Context, consumer string, checkpoint string) error
 }
 
+// CheckpointLeaseStore serializes one consumer across content-service
+// replicas. A lease owner must renew while FFmpeg is active, and advancing the
+// cursor must atomically prove ownership so a stale worker cannot skip facts
+// after a failover. The same narrow port is implementable by a future
+// standalone worker's durable cursor store.
+type CheckpointLeaseStore interface {
+	TryAcquireMediaProcessingLease(
+		ctx context.Context,
+		consumer string,
+		owner string,
+		now time.Time,
+		ttl time.Duration,
+	) (bool, error)
+	RenewMediaProcessingLease(
+		ctx context.Context,
+		consumer string,
+		owner string,
+		now time.Time,
+		ttl time.Duration,
+	) (bool, error)
+	SaveMediaProcessingCheckpointWithLease(
+		ctx context.Context,
+		consumer string,
+		owner string,
+		checkpoint string,
+		now time.Time,
+		ttl time.Duration,
+	) (bool, error)
+}
+
+// PoisonEvent is a durable, non-retriable source record that was isolated so
+// one corrupt aggregate reference cannot permanently stall later media facts.
+// It deliberately excludes the raw event payload because outbox payloads can
+// contain user-controlled metadata; repair is driven by the immutable event
+// identity and checkpoint only.
+type PoisonEvent struct {
+	Consumer      string
+	EventID       string
+	EventType     string
+	AggregateType string
+	AggregateID   string
+	Checkpoint    string
+	OccurredAt    time.Time
+	Reason        string
+	QuarantinedAt time.Time
+}
+
+// PoisonEventRecorder persists a quarantined event before its checkpoint can
+// advance. Its implementation must be idempotent by (consumer, eventID).
+// A persistence failure is an infrastructure failure and must retain the
+// checkpoint for retry.
+type PoisonEventRecorder interface {
+	QuarantineMediaProcessingEvent(ctx context.Context, event PoisonEvent) error
+}
+
 // ResultRecorder applies the trusted processing outcome to the MediaAsset
 // aggregate. In-process it is the media application facade; a future
 // standalone worker service replaces it with the internal HTTP operation.
@@ -63,7 +118,7 @@ type ProcessRequest struct {
 	AssetVersion int64
 	// SourceObjectKey is the private CAS object key of the uploaded bytes.
 	SourceObjectKey string
-	MediaType      string
+	MediaType       string
 	ContentType     string
 	FileSize        int64
 }
@@ -95,6 +150,19 @@ type Processor interface {
 // Observer receives worker lifecycle signals for metrics. Implementations
 // live in infrastructure; a nil observer is valid.
 type Observer interface {
-	JobCompleted(result string, duration time.Duration)
-	OutboxLag(pending int)
+	JobCompleted(
+		mediaType string,
+		inputSizeClass string,
+		result string,
+		duration time.Duration,
+	)
+	BatchObserved(eventCount int, batchLimit int)
+	OutboxOldestEventAge(age time.Duration)
+	CompleteToReady(
+		mediaType string,
+		inputSizeClass string,
+		duration time.Duration,
+	)
+	Poisoned(reason string, eventAge time.Duration)
+	PoisonQuarantineFailed(reason string)
 }

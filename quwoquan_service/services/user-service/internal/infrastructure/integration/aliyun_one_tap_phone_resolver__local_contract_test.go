@@ -46,16 +46,13 @@ func TestAliyunOneTapPhoneResolverExchangesTokenWithoutExposingIt(t *testing.T) 
 		}),
 	)
 
-	phone, display, err := resolver.ResolvePhone(
-		context.Background(),
-		"CMCC",
-		secretToken,
-	)
+	verifiedPhone, err := resolver.ResolvePhone(context.Background(), secretToken)
 	if err != nil {
 		t.Fatalf("ResolvePhone failed: %v", err)
 	}
-	if phone != "18013813909" || display != "180****3909" {
-		t.Fatalf("unexpected phone result phone=%q display=%q", phone, display)
+	if verifiedPhone.Phone != "18013813909" ||
+		verifiedPhone.DisplayLabel != "180****3909" {
+		t.Fatalf("unexpected phone result %#v", verifiedPhone)
 	}
 }
 
@@ -70,7 +67,7 @@ func TestAliyunOneTapPhoneResolverSanitizesProviderErrors(t *testing.T) {
 		}),
 	)
 
-	_, _, err := resolver.ResolvePhone(context.Background(), "CUCC", secretToken)
+	_, err := resolver.ResolvePhone(context.Background(), secretToken)
 	if err == nil {
 		t.Fatal("expected provider failure")
 	}
@@ -96,7 +93,7 @@ func TestAliyunOneTapPhoneResolverRejectsNonMainlandPhone(t *testing.T) {
 		}),
 	)
 
-	if _, _, err := resolver.ResolvePhone(context.Background(), "CTCC", "token"); err == nil {
+	if _, err := resolver.ResolvePhone(context.Background(), "token"); err == nil {
 		t.Fatal("invalid provider phone must fail closed")
 	}
 }

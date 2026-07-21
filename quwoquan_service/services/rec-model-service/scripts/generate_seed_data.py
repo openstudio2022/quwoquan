@@ -153,14 +153,16 @@ def generate_users(rng: random.Random, count: int = 8) -> list[dict]:
         for t in rng.sample(TAG_POOL, rng.randint(3, 8)):
             circle_aff[t] = round(rng.uniform(0.05, 0.5), 3)
 
+        total_events = rng.randint(100, 5000)
+        depth_sample_count = rng.randint(10, total_events)
+        average_depth = round(rng.uniform(1.0, 3.5), 2)
         depth_dist = {
-            "L0": round(rng.uniform(0.05, 0.3), 3),
-            "L1": round(rng.uniform(0.1, 0.3), 3),
-            "L2": round(rng.uniform(0.1, 0.3), 3),
-            "L3": round(rng.uniform(0.05, 0.2), 3),
-            "L4": round(rng.uniform(0.01, 0.1), 3),
+            "L0": rng.randint(1, 30),
+            "L1": rng.randint(5, 50),
+            "L2": rng.randint(5, 50),
+            "L3": rng.randint(1, 30),
+            "L4": rng.randint(1, 20),
         }
-
         type_imps = {ct: rng.randint(10, 200) for ct in CONTENT_TYPES}
         type_engs = {ct: rng.randint(1, imp) for ct, imp in type_imps.items()}
 
@@ -177,18 +179,14 @@ def generate_users(rng: random.Random, count: int = 8) -> list[dict]:
                 "engagementRate": round(rng.uniform(0.1, 0.6), 3),
                 "totalLikes": rng.randint(10, 500),
                 "totalShares": rng.randint(0, 50),
-                "totalEvents": rng.randint(100, 5000),
-                "avgEngagementDepth": round(rng.uniform(1.0, 3.5), 2),
+                "totalEvents": total_events,
+                "engagementDepthSum": int(round(average_depth * depth_sample_count)),
+                "engagementDepthCount": depth_sample_count,
                 "depthDistribution": depth_dist,
                 "circleTagAffinities": circle_aff,
                 "socialInterestScore": round(rng.uniform(0.0, 1.0), 3),
                 "typeImpressions": type_imps,
                 "typeEngagements": type_engs,
-                "sourceDistribution": {
-                    "organic_feed": round(rng.uniform(0.4, 0.7), 2),
-                    "friend_share": round(rng.uniform(0.05, 0.2), 2),
-                    "search": round(rng.uniform(0.05, 0.15), 2),
-                },
             },
             "_seedMarker": SEED_MARKER,
         }

@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantIntersectionEvidenceRef;
 import 'package:quwoquan_app/core/models/visit_models.dart';
 
 /// 打开私助时的来源。
@@ -42,7 +44,7 @@ class AssistantOpenContext {
     this.entityId,
     this.objectType,
     this.conversationId = '',
-    this.intersectionRefs = const [],
+    this.intersectionEvidenceRefs = const <AssistantIntersectionEvidenceRef>[],
     this.hints = const {},
   });
 
@@ -63,9 +65,8 @@ class AssistantOpenContext {
   /// 指定恢复的云端会话；空表示由页面按最近会话恢复（历史抽屉/最近会话入口）。
   final String conversationId;
 
-  /// 交集来源引用（路径制 tagRef 或 relation:{kind}:{objectId}），
-  /// 供小趣按需深度解释时只引用真实来源，禁止编造（全局验收 G2）。
-  final List<String> intersectionRefs;
+  /// 交集入口的最小引用；服务端必须以当前 actor 回查后才能写入 grounding。
+  final List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs;
 
   final VisitTarget visitTarget;
   final ExperienceLevel experienceLevel;
@@ -80,7 +81,7 @@ class AssistantOpenContext {
     String? entityId,
     String? objectType,
     String? conversationId,
-    List<String>? intersectionRefs,
+    List<AssistantIntersectionEvidenceRef>? intersectionEvidenceRefs,
     VisitTarget? visitTarget,
     ExperienceLevel? experienceLevel,
     Map<String, dynamic>? hints,
@@ -92,7 +93,8 @@ class AssistantOpenContext {
       entityId: entityId ?? this.entityId,
       objectType: objectType ?? this.objectType,
       conversationId: conversationId ?? this.conversationId,
-      intersectionRefs: intersectionRefs ?? this.intersectionRefs,
+      intersectionEvidenceRefs:
+          intersectionEvidenceRefs ?? this.intersectionEvidenceRefs,
       visitTarget: visitTarget ?? this.visitTarget,
       experienceLevel: experienceLevel ?? this.experienceLevel,
       hints: hints ?? this.hints,

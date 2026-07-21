@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
@@ -64,7 +64,7 @@ Widget _buildApp({
   return ProviderScope(
     overrides: [
       appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
       ),
@@ -86,7 +86,7 @@ Widget _buildAppWithSearchRepository({
   return ProviderScope(
     overrides: [
       appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       searchRepositoryProvider.overrideWithValue(repository),
       searchFeedbackCommandWriterProvider.overrideWithValue(
         feedbackWriter ?? AlphaSearchFeedbackWriter(),

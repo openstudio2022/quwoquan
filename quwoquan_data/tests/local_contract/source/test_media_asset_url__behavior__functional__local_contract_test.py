@@ -13,6 +13,8 @@ if str(SCRIPTS_ROOT) not in sys.path:
 
 from core.io import read_json, write_json  # noqa: E402
 from core.media_asset_url import (  # noqa: E402
+    IMAGE_VARIANT_POLICY_VERSION,
+    IMAGE_VARIANT_PROFILES,
     is_cas_media_object_key,
     materialize_release_media,
     sha256_file,
@@ -105,3 +107,37 @@ def test_cas_key_and_hash_contract() -> None:
     assert is_cas_media_object_key(object_key)
     assert not is_cas_media_object_key("../escape.png")
     assert sha256_file(canonical / object_key) == "sha256:" + object_key.split("/")[-1].split(".")[0]
+
+
+def test_image_variant_profiles_are_loaded_from_canonical_metadata() -> None:
+    assert IMAGE_VARIANT_POLICY_VERSION == 1
+    assert IMAGE_VARIANT_PROFILES == {
+        "thumbnail": {
+            "width": 320,
+            "format": "webp",
+            "quality": 80,
+            "scene": "feed_grid",
+            "processing": "image/resize,w_320/format,webp/quality,q_80",
+        },
+        "display": {
+            "width": 960,
+            "format": "webp",
+            "quality": 82,
+            "scene": "article_body",
+            "processing": "image/resize,w_960/format,webp/quality,q_82",
+        },
+        "cover": {
+            "width": 1280,
+            "format": "webp",
+            "quality": 85,
+            "scene": "feed_cover",
+            "processing": "image/resize,w_1280/format,webp/quality,q_85",
+        },
+        "full": {
+            "width": 2048,
+            "format": "webp",
+            "quality": 90,
+            "scene": "immersive_viewer",
+            "processing": "image/resize,w_2048/format,webp/quality,q_90",
+        },
+    }

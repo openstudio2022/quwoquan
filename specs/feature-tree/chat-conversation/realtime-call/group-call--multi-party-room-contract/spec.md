@@ -11,7 +11,8 @@ CallSession 在并发邀请、加入、离开与达到上限时，保持 owned p
 ## Contract
 
 - `InviteToCall(inviteeIds)` 只能由现有参与者调用，新增/更新 owned participant。
-- `JoinCall` 返回 CallSession、LiveKit token 与 `livekitUrl`，重复 join 幂等。
+- `JoinCall` 返回 CallSession 与 provider-neutral `mediaAccess(accessToken)`；连接地址仅由
+  App 环境包注入平台媒体 adapter，重复 join 幂等。
 - `LeaveCall` 不等价于 HangupCall；仍有参与者时会话继续。
 - participantCount 不超过 maxParticipants，且 maxParticipants 不超过 32。
 - 最后一人离开写 `status=ended`、`endReason=last_leave`。

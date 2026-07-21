@@ -86,6 +86,15 @@ func acceptanceSubject(
 			},
 			Roles: []string{"operator"},
 		}, nil
+	case "content-filter-catalog-publisher":
+		return rtauth.TokenSubject{
+			AccountID: ownerID,
+			PersonaID: personaID,
+			Scopes: []string{
+				"content.filter_catalog.manage",
+			},
+			Roles: []string{"service"},
+		}, nil
 	default:
 		return rtauth.TokenSubject{}, fmt.Errorf(
 			"unsupported local acceptance profile %q",

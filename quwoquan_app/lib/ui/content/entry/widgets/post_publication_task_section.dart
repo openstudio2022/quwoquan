@@ -183,8 +183,10 @@ class _PublicationTaskActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final publicationState = intent.publicationState;
+    final requiresMediaPreparation = intent.requiresMediaPreparation;
     final isRejected = publicationState == ContentPostPublicationState.rejected;
     final canRetry =
+        !requiresMediaPreparation &&
         publicationState != ContentPostPublicationState.rejected &&
         publicationState != ContentPostPublicationState.published;
     final canRemove =
@@ -194,7 +196,7 @@ class _PublicationTaskActions extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        if (isRejected)
+        if (requiresMediaPreparation || isRejected)
           CupertinoButton(
             key: ValueKey<String>('publication_task_edit_$draftId'),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -242,6 +244,9 @@ String _statusForIntent(LocalPostPublicationIntent intent) {
     case ContentPostPublicationState.rejected:
       return UITextConstants.publishTaskRejectedStatus;
     case null:
+      if (intent.requiresMediaPreparation) {
+        return UITextConstants.publishTaskPreparingMediaStatus;
+      }
       if (intent.blocked) {
         return UITextConstants.publishTaskBlockedStatus;
       }
@@ -260,6 +265,8 @@ String _descriptionForIntent(LocalPostPublicationIntent intent) {
       UITextConstants.publishTaskRejectedDescription,
     ContentPostPublicationState.published =>
       UITextConstants.publishTaskFinalizingDescription,
+    null when intent.requiresMediaPreparation =>
+      UITextConstants.publishTaskPreparingMediaDescription,
     null when intent.blocked => switch (intent.blockReason) {
       LocalPostPublicationBlockReason.personaChanged =>
         UITextConstants.publishTaskPersonaChangedDescription,

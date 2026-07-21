@@ -99,6 +99,20 @@ spec:
           - durationMismatch
           - devicePlatform
           - playbackMode
+          - publicationStage
+          - contentType
+          - objectState
+          - surfaceId
+          - correlationHash
+          - backgroundRetryTerminal
+          - chatAction
+          - chatOutcome
+          - chatSource
+          - mentionScope
+          - governanceAction
+          - watermarkResult
+          - memberCountBucket
+          - unreadCountBucket
         forbidden: [callStack]
       access:
         write: product-ops-service
@@ -189,6 +203,66 @@ spec:
           max(ingestedAt) AS generatedThrough,
           unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
           GROUP BY businessHour,journey,action,pageName,result,failReasonCode,recoveryAction
+      - name: app-product-telemetry-chat-funnel-hourly
+        rowKind: chat_funnel
+        sql: >-
+          eventType:chat_interaction_outcome | SELECT 'chat_funnel' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          pageName,chatAction,chatOutcome,chatSource,mentionScope,governanceAction,
+          watermarkResult,memberCountBucket,unreadCountBucket,failReasonCode,recoveryAction,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          approx_set(sessionId) AS sessionHll,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt))) AS lagSeconds
+          GROUP BY businessHour,pageName,chatAction,chatOutcome,chatSource,mentionScope,
+          governanceAction,watermarkResult,memberCountBucket,unreadCountBucket,
+          failReasonCode,recoveryAction
+      - name: app-product-telemetry-content-publication-funnel-hourly
+        rowKind: content_publication_funnel
+        sql: >-
+          eventType:content_publication | SELECT 'content_publication_funnel' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          pageName,publicationStage,contentType,objectState,surfaceId,result,
+          backgroundRetryTerminal,failReasonCode,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          count(DISTINCT CASE WHEN publicationStage='submit_started'
+            THEN correlationHash END) AS submitStartedCount,
+          count(DISTINCT CASE WHEN publicationStage='pending_review'
+            THEN correlationHash END) AS pendingReviewCount,
+          count(DISTINCT CASE WHEN publicationStage='published'
+            THEN correlationHash END) AS publishedCount,
+          count(DISTINCT CASE WHEN publicationStage='cancelled'
+            THEN correlationHash END) AS cancelledCount,
+          count(DISTINCT CASE WHEN backgroundRetryTerminal='retry_exhausted'
+            THEN correlationHash END) AS retryExhaustedCount,
+          histogram(try_cast(durationMs AS double),
+            array[0,1000,5000,15000,30000,60000,120000,300000,600000,1800000,3600000])
+            AS publishToVisibleHistogram,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt)))
+            AS lagSeconds
+          GROUP BY businessHour,pageName,publicationStage,contentType,objectState,surfaceId,
+          result,backgroundRetryTerminal,failReasonCode
+      - name: app-product-telemetry-video-preview-track-load-hourly
+        rowKind: video_preview_track_load
+        sql: >-
+          eventType:video_preview_track_load | SELECT 'video_preview_track_load' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          pageName,result,failReasonCode,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          histogram(try_cast(durationMs AS double),
+            array[0,50,100,250,500,1000,2000,3000,5000,10000,30000])
+            AS durationHistogram,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt)))
+            AS lagSeconds
+          GROUP BY businessHour,pageName,result,failReasonCode
       - name: app-product-telemetry-search-funnel-hourly
         rowKind: search_funnel
         sql: >-
@@ -425,6 +499,16 @@ spec:
         / (count(*) + 0.001) AS failureRate
       condition: sampleCount >= 20 AND failureRate > 0.05
       severity: warning
+    - name: product-content-report-action-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:product_action AND journey:content_report | SELECT
+        count(*) AS sampleCount,
+        sum(CASE WHEN result='failure' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS failureRate
+      condition: sampleCount >= 20 AND failureRate > 0.05
+      severity: warning
     - name: product-profile-interaction-state-failure-rate-high
       signal: scheduledSqlQuery
       source: app-product-telemetry-raw
@@ -432,6 +516,26 @@ spec:
         eventType:product_action AND journey:profile_interaction | SELECT
         count(*) AS sampleCount,
         sum(CASE WHEN result='failure' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS failureRate
+      condition: sampleCount >= 20 AND failureRate > 0.02
+      severity: warning
+    - name: product-chat-group-create-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:chat_interaction_outcome AND chatAction:group_create | SELECT
+        count(*) AS sampleCount,
+        sum(CASE WHEN chatOutcome='failed' THEN 1 ELSE 0 END)
+        / (count(*) + 0.001) AS failureRate
+      condition: sampleCount >= 20 AND failureRate > 0.05
+      severity: warning
+    - name: product-chat-governance-failure-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:chat_interaction_outcome AND chatAction:group_governance | SELECT
+        count(*) AS sampleCount,
+        sum(CASE WHEN chatOutcome='failed' THEN 1 ELSE 0 END)
         / (count(*) + 0.001) AS failureRate
       condition: sampleCount >= 20 AND failureRate > 0.02
       severity: warning

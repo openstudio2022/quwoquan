@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -293,6 +294,31 @@ func circleFeedDocFromFixture(post contentFixturePost) bson.M {
 	}
 }
 
+func circlePlacementDocFromFixture(post contentFixturePost, circleID string) (string, bson.M) {
+	postID := strings.TrimSpace(post.PostID)
+	if postID == "" {
+		postID = strings.TrimSpace(post.ID)
+	}
+	circleID = strings.TrimSpace(circleID)
+	placementID := fmt.Sprintf("fixture_placement_%s_%s", circleID, postID)
+	createdAt := parseFixtureTime(post.CreatedAt)
+	updatedAt := parseFixtureTime(post.UpdatedAt)
+	return placementID, bson.M{
+		"_id":            placementID,
+		"version":        int64(1),
+		"circleId":       circleID,
+		"postId":         postID,
+		"groupId":        "",
+		"state":          "active",
+		"pinned":         false,
+		"featured":       false,
+		"lastActiveAt":   createdAt,
+		"createdAt":      createdAt,
+		"updatedAt":      updatedAt,
+		"ownerPersonaId": "",
+	}
+}
+
 func main() {
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "MongoDB connection URI")
 	database := flag.String("database", "quwoquan_circle", "circle MongoDB database name")
@@ -325,7 +351,14 @@ func main() {
 	db := client.Database(*database)
 
 	// Reset previously seeded fixture rows so reseeding stays deterministic.
-	for _, coll := range []string{"circles", "circle_memberships", "circle_groups", "circle_files", "posts"} {
+	for _, coll := range []string{
+		"circles",
+		"circle_memberships",
+		"circle_groups",
+		"circle_files",
+		"circle_post_placements",
+		"posts",
+	} {
 		if _, err := db.Collection(coll).DeleteMany(ctx, bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},
@@ -411,6 +444,17 @@ func main() {
 			}
 			upsert("posts", postID, doc)
 			inserted++
+			for _, circleID := range circleIDs {
+				if _, ok := seededCircleIDs[circleID]; !ok {
+					continue
+				}
+				placementID, placement := circlePlacementDocFromFixture(
+					post,
+					circleID,
+				)
+				upsert("circle_post_placements", placementID, placement)
+				inserted++
+			}
 		}
 	}
 

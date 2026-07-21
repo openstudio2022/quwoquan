@@ -30,6 +30,11 @@ void main() {
                 blocked: true,
                 blockReason: LocalPostPublicationBlockReason.rejected,
               ),
+              _intent(
+                draftId: 'draft-media',
+                createdAt: createdAt,
+                stage: LocalPostPublicationStage.preparingMedia,
+              ),
             ],
             onRetry: (intent) => retriedDraftId = intent.command.localDraftId,
             onEdit: (intent) => editedDraftId = intent.command.localDraftId,
@@ -48,6 +53,14 @@ void main() {
       find.text(UITextConstants.publishTaskRejectedStatus),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.publishTaskPreparingMediaStatus),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.publishTaskPreparingMediaDescription),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey<String>('publication_task_retry_draft-review')),
@@ -60,6 +73,15 @@ void main() {
       ),
     );
     expect(editedDraftId, 'draft-rejected');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('publication_task_edit_draft-media')),
+    );
+    expect(editedDraftId, 'draft-media');
+    expect(
+      find.byKey(const ValueKey<String>('publication_task_retry_draft-media')),
+      findsNothing,
+    );
   });
 }
 
@@ -68,6 +90,7 @@ LocalPostPublicationIntent _intent({
   required DateTime createdAt,
   ContentPostPublicationState? publicationState,
   String? postId,
+  LocalPostPublicationStage stage = LocalPostPublicationStage.submitting,
   bool blocked = false,
   LocalPostPublicationBlockReason? blockReason,
 }) {
@@ -82,6 +105,7 @@ LocalPostPublicationIntent _intent({
     circleIds: const <String>[],
     createdAt: createdAt,
     nextAttemptAt: createdAt,
+    stage: stage,
     postId: postId,
     committedVersion: postId == null ? null : 1,
     acceptedAt: postId == null ? null : createdAt,

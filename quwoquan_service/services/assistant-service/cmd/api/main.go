@@ -44,16 +44,6 @@ func run() error {
 		return fmt.Errorf("runtime identity invalid: %w", err)
 	}
 	runtimeConfigProvider := runtimeconfig.EnvRuntimeConfigProvider{}
-	modelDebugSetting, _ := runtimeConfigProvider.GetString(
-		"ASSISTANT_MODEL_DEBUG_LOG",
-	)
-	assistantModelDebugLogEnabled = strings.EqualFold(modelDebugSetting, "true")
-	if err := validateAssistantModelDebugLogPolicy(
-		appEnv,
-		assistantModelDebugLogEnabled,
-	); err != nil {
-		return fmt.Errorf("model debug log policy invalid: %w", err)
-	}
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
 		return fmt.Errorf("config load failed: %w", err)
@@ -122,6 +112,17 @@ func run() error {
 		return dependencyError("redis", "connectivity", err)
 	}
 	redisProbeCancel()
+	messageTransport, err := requireAssistantAPIMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		map[string]string{
+			"general": cfg.Redis.General.Mode,
+		},
+	)
+	if err != nil {
+		return dependencyError("runtime.message.transport", "preflight", err)
+	}
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "assistant-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
@@ -257,12 +258,17 @@ func run() error {
 	if err != nil {
 		return dependencyError("content-service", "intersection-reader", err)
 	}
-	agentLoop, err := buildAgentLoop(cfg, appEnv, canonicalSearch)
+	agentLoop, err := buildAgentLoop(
+		appEnv,
+		canonicalSearch,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+		newObservedEgressClient,
+	)
 	if err != nil {
 		return dependencyError("assistant-agent-loop", "initialization", err)
 	}
 
-	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
+	publisher := messaging.NewRedisEventPublisherWithTransport(messageTransport, serviceName, nil)
 	if deps.preferenceStore == nil || deps.preferenceReader == nil {
 		return dependencyError(
 			"mongodb.assistant_preference_facts",
@@ -293,6 +299,7 @@ func run() error {
 		application.WithCreationSuggestGrounding(creationGroundingClient),
 		application.WithXiaoquSearchReader(canonicalSearch),
 		application.WithIntersectionInboxReader(intersectionInbox),
+		application.WithIntersectionEvidenceReader(intersectionInbox),
 		application.WithAgentLoop(agentLoop),
 	}
 	chatGroundingEnabled := false
@@ -319,8 +326,8 @@ func run() error {
 	serviceCtx, serviceCancel := context.WithCancel(context.Background())
 	defer serviceCancel()
 	if chatGroundingEnabled {
-		consumer := messaging.NewAssistantMentionedConsumer(
-			router.Scene("general"),
+		consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+			messageTransport,
 			service,
 			instanceID,
 			slog.Default(),

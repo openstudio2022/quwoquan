@@ -1,19 +1,22 @@
 read_model: CircleStatsWire
 
 description: |
-  圈子统计接口返回体：当前为松散 JSON，键集合随版本演进。
-  Flutter：`CircleStatsWireDto` 保留 raw Map（见 circle_stats_wire_dto.dart），展示层用 CircleStatsViewData.fromStatsWire 解析。
+  圈子统计接口 `GetCircleStats` 的稳定响应投影。
+  只允许下列 canonical wire keys；禁止 `totalMembers`、`weeklyActive`、
+  `totalPosts`、`totalDiscussions` 或其他 alias。
 
 consumer: app
 
-# 非穷尽列举，仅供契约文档与评审；客户端只认下列 canonical 键，禁止 alias 双读。
-documented_keys_examples:
-  - memberCount
-  - postCount
-  - discussionCount
-  - weeklyActiveCount
-  - likeCount
-  - storageUsedBytes
-  - storageQuotaBytes
-
-payload_shape: opaque_object
+client_projection:
+  dart_class: CircleStatsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/circle/circle_stats_wire_dto.dart
+  fields:
+    - { name: circleId, dart_type: String, nullable: false, source: circleId, default: "''" }
+    - { name: memberCount, dart_type: int, nullable: false, source: memberCount, default: "0" }
+    - { name: postCount, dart_type: int, nullable: false, source: postCount, default: "0" }
+    - { name: discussionCount, dart_type: int, nullable: false, source: discussionCount, default: "0" }
+    - { name: weeklyActiveCount, dart_type: int, nullable: false, source: weeklyActiveCount, default: "0" }
+    - { name: likeCount, dart_type: int, nullable: false, source: likeCount, default: "0" }
+    - { name: storageUsedBytes, dart_type: int, nullable: false, source: storageUsedBytes, default: "0" }
+    - { name: storageQuotaBytes, dart_type: int, nullable: false, source: storageQuotaBytes, default: "0" }

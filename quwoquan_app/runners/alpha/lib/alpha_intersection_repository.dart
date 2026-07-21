@@ -13,7 +13,7 @@ import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import 'package:quwoquan_cloud_mock/alpha_fixture_reader.dart';
 
 /// Alpha-only 交集读写适配器。
 ///

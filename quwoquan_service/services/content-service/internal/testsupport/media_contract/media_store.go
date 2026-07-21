@@ -9,6 +9,7 @@ import (
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
 	mediaports "quwoquan_service/services/content-service/internal/domain/media/ports"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
 // MediaStore is test-only durable-store behavior for local contracts. It is
@@ -62,11 +63,36 @@ func (s *MediaStore) AppendMediaOriginalAccess(
 	if err := request.Fact.Validate(); err != nil {
 		return mediaports.MediaOriginalAccessAppendResult{}, err
 	}
+	if request.Fact.Outcome == "granted" && !request.RateLimit.IsValid() {
+		return mediaports.MediaOriginalAccessAppendResult{}, errors.New(
+			"media original access append requires a valid rate limit policy",
+		)
+	}
 	if receipt, found := s.originalAccessReceipts[request.Fact.IdempotencyKey]; found {
 		if receipt.digest != request.CommandDigest {
 			return mediaports.MediaOriginalAccessAppendResult{}, idempotencyConflict()
 		}
 		return mediaports.MediaOriginalAccessAppendResult{Fact: receipt.fact, Replayed: true}, nil
+	}
+	if request.Fact.Outcome == "granted" {
+		grants := 0
+		windowStart := request.Fact.GrantedAt.UTC().Truncate(request.RateLimit.Window)
+		for _, receipt := range s.originalAccessReceipts {
+			fact := receipt.fact
+			if fact.Outcome == "granted" &&
+				fact.AssetID == request.Fact.AssetID &&
+				fact.ViewerID == request.Fact.ViewerID &&
+				fact.Purpose == request.Fact.Purpose &&
+				fact.GrantedAt.UTC().Truncate(request.RateLimit.Window).Equal(windowStart) {
+				grants++
+			}
+		}
+		if grants >= request.RateLimit.MaxGrants {
+			return mediaports.MediaOriginalAccessAppendResult{},
+				contentgenerated.AppErrorFromOriginalAccessRateLimited(
+					"media original access rate limit exhausted",
+				)
+		}
 	}
 	s.originalAccessReceipts[request.Fact.IdempotencyKey] = originalAccessReceipt{
 		digest: request.CommandDigest,
@@ -159,6 +185,27 @@ func (s *MediaStore) FindMediaAssetForOwner(
 		ProcessedAt:      cloneTime(snapshot.ProcessedAt),
 		CoverStrategy:    snapshot.CoverStrategy, ManualCoverAssetID: snapshot.ManualCoverAssetID,
 		CoverFrameTimeMs: snapshot.CoverFrameTimeMs,
+	}, true, nil
+}
+
+func (s *MediaStore) FindMediaAssetForOriginalAccess(
+	_ context.Context,
+	id string,
+) (mediaapp.MediaAssetSlice, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	snapshot, ok := s.assets[id]
+	if !ok {
+		return mediaapp.MediaAssetSlice{}, false, nil
+	}
+	return mediaapp.MediaAssetSlice{
+		AssetID: snapshot.ID, Version: snapshot.Version, OwnerID: snapshot.OwnerID,
+		SourceSessionID: snapshot.SourceSessionID, ObjectKey: snapshot.ObjectKey,
+		SHA256: snapshot.SHA256, MediaType: snapshot.MediaType,
+		ContentType: snapshot.ContentType, FileSize: snapshot.FileSize,
+		AccessPolicy: snapshot.AccessPolicy, ProcessingStatus: snapshot.ProcessingStatus,
+		CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.UpdatedAt,
+		ProcessedAt: cloneTime(snapshot.ProcessedAt),
 	}, true, nil
 }
 

@@ -43,11 +43,12 @@ func TestResolvedCommentReportHidesMongoCommentExactlyOnce(t *testing.T) {
 			"comment-report-create",
 		),
 		reportapp.CreateReportCommand{
-			ReporterID:  "comment-report-reporter",
-			TargetType:  reportmodel.TargetComment,
-			TargetID:    comment.ID,
-			Reason:      reportmodel.ReasonHarassment,
-			Description: "verified integration moderation target",
+			ReporterID:        "comment-report-reporter",
+			ReporterAccountID: "account-comment-report-reporter",
+			TargetType:        reportmodel.TargetComment,
+			TargetID:          comment.ID,
+			Reason:            reportmodel.ReasonHarassment,
+			Description:       "verified integration moderation target",
 		},
 	)
 	if err != nil {

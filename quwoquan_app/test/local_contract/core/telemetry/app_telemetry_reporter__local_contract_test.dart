@@ -106,6 +106,33 @@ void main() {
     expect(transport.idempotencyKey, hasLength(64));
   });
 
+  test('critical ANR 未持久入队时必须拒绝，不能伪装为 accepted', () async {
+    final unavailableOutbox = AppTelemetryOutbox(
+      partition: ActorQueuePartition(environment: 'gamma'),
+      storage: ActorQueueStorage(keyStore: _KeyStore()),
+      transport: transport,
+      now: () => now,
+    );
+    final unavailableReporter = AppTelemetryReporter(
+      sessionStore: sessionStore,
+      contextProvider: contextProvider,
+      outbox: unavailableOutbox,
+      now: () => now,
+    );
+
+    expect(
+      await unavailableReporter.record(
+        AppTelemetryPayload.appAnrOutcome(
+          detectionSource: 'android_application_exit_info',
+          result: 'detected',
+        ),
+      ),
+      AppTelemetryRecordResult.rejected,
+    );
+    expect(await unavailableOutbox.pendingCount(), 0);
+    await unavailableReporter.dispose();
+  });
+
   test('未登记页面和越界时间在本地拒绝，正常、慢和异常启动全部保留', () async {
     expect(
       await reporter.record(
@@ -210,7 +237,7 @@ void main() {
       disconnectReason: 'transport_closed',
       networkQuality: 'poor',
       participantCount: 3,
-      failReasonCode: 'RTC.SYSTEM.livekit_unavailable',
+      failReasonCode: 'RTC.SYSTEM.media_transport_unavailable',
     );
 
     expect(AppTelemetryCatalog.validate(payload), isNull);
@@ -223,7 +250,7 @@ void main() {
       'disconnectReason': 'transport_closed',
       'networkQuality': 'poor',
       'participantCount': 3,
-      'failReasonCode': 'RTC.SYSTEM.livekit_unavailable',
+      'failReasonCode': 'RTC.SYSTEM.media_transport_unavailable',
     });
     expect(await reporter.record(payload), AppTelemetryRecordResult.accepted);
   });

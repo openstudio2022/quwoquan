@@ -1025,10 +1025,10 @@ def patrol_command(
                 f"--dart-define=APP_CURRENT_USER_ID={current_sub_account_id}",
             ]
         )
-    if str(device.get("targetPlatform", "")).strip().lower() == "ios":
-        sdk_version = ios_sdk_version(device)
-        if sdk_version is not None:
-            command.append(f"--ios={sdk_version[0]}.{sdk_version[1]}")
+    # `-d` 已唯一绑定 Simulator。把设备 runtime 透传给 Patrol 的 `--ios`
+    # 会让它把 Xcode SDK（例如 26.2）与设备 runtime（例如 26.3）混用，最终
+    # 在 xcodebuild 中退化为不可解析的 destination。兼容性筛选仍由
+    # `_select_compatible_ios_devices` 完成。
     if media_avatar_base_url or media_image_base_url or media_video_base_url or media_upload_base_url:
         command.extend(
             [

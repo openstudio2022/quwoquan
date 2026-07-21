@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   fetchPageExperience,
   fetchPremiumPoolEntries,
+  fetchProductEventSummary,
   fetchProductL1L4Metrics,
   fetchProductProjectionSummary,
   fetchRtcMediaQoeSummary,
@@ -12,6 +13,7 @@ import {
   fetchReports,
   type ControlPlaneBacklogCandidate,
   type PageExperienceStat,
+  type ProductEventSummary,
   type PremiumPoolEntryItem,
   type ProductL1L4MetricsResponse,
   type ProductProjectionSummary,
@@ -33,6 +35,12 @@ function formatMilliseconds(value: number | null | undefined): string {
   return value == null ? 'n/a' : `${Math.round(value)}ms`;
 }
 
+interface AppExperienceSummary {
+  startup: ProductEventSummary;
+  anr: ProductEventSummary;
+  jank: ProductEventSummary;
+}
+
 export function ProductDashboardPage() {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
   const [premiumEntries, setPremiumEntries] = useState<PremiumPoolEntryItem[]>([]);
@@ -44,6 +52,8 @@ export function ProductDashboardPage() {
   const [rtcMediaQoeError, setRtcMediaQoeError] = useState<RuntimeError | null>(null);
   const [pageExperience, setPageExperience] = useState<PageExperienceStat[]>([]);
   const [pageExperienceError, setPageExperienceError] = useState<RuntimeError | null>(null);
+  const [appExperience, setAppExperience] = useState<AppExperienceSummary | null>(null);
+  const [appExperienceError, setAppExperienceError] = useState<RuntimeError | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
@@ -88,6 +98,19 @@ export function ProductDashboardPage() {
         setRtcMediaQoe(null);
         setRtcMediaQoeError(coerceRuntimeError(error));
       });
+    Promise.all([
+      fetchProductEventSummary({ eventType: 'app_startup' }),
+      fetchProductEventSummary({ eventType: 'app_anr_outcome', result: 'detected' }),
+      fetchProductEventSummary({ eventType: 'app_frame_jank_outcome' }),
+    ])
+      .then(([startup, anr, jank]) => {
+        setAppExperience({ startup, anr, jank });
+        setAppExperienceError(null);
+      })
+      .catch((error) => {
+        setAppExperience(null);
+        setAppExperienceError(coerceRuntimeError(error));
+      });
   }, []);
 
   const queueItems = useMemo(() => {
@@ -107,7 +130,7 @@ export function ProductDashboardPage() {
   const topMetric = metricsPayload?.items[0];
 
   // 页面矩阵热力图：行 = metadata 登记页面全集（含 internal），列 = 真实遥测
-  // 聚合；登记但无数据的页面显示 0（防 fake），未登记但出现遥测的页面标注 unregistered。
+  // 聚合；登记但无数据必须显式标记「无采样」，而不是伪装成数值 0。
   const pageHeatmapRows = useMemo(() => {
     const registered = new Set<string>();
     for (const page of appPages.pages) {
@@ -123,12 +146,12 @@ export function ProductDashboardPage() {
       return {
         pageName,
         registered: true,
-        opens: stat?.opens ?? 0,
-        avgReadyMs: stat?.avgReadyMs ?? 0,
-        readySamples: stat?.readySamples ?? 0,
-        avgStayMs: stat?.avgStayMs ?? 0,
-        runtimeErrors: stat?.runtimeErrors ?? 0,
-        heat: (stat?.opens ?? 0) / maxOpens,
+        opens: stat?.opens ?? null,
+        avgReadyMs: stat?.avgReadyMs ?? null,
+        readySamples: stat?.readySamples ?? null,
+        avgStayMs: stat?.avgStayMs ?? null,
+        runtimeErrors: stat?.runtimeErrors ?? null,
+        heat: stat ? stat.opens / maxOpens : null,
       };
     });
     for (const item of pageExperience) {
@@ -145,7 +168,7 @@ export function ProductDashboardPage() {
         });
       }
     }
-    rows.sort((left, right) => right.opens - left.opens);
+    rows.sort((left, right) => (right.opens ?? -1) - (left.opens ?? -1));
     return rows;
   }, [pageExperience]);
   const openReports = reports.filter((item) => item.status === 'pending' || item.status === 'reviewing').length;
@@ -153,6 +176,16 @@ export function ProductDashboardPage() {
   const reportCloseRate =
     reports.length > 0 ? `${((resolvedReports / reports.length) * 100).toFixed(1)}%` : 'n/a';
   const activePremium = premiumEntries.filter((item) => item.status === 'active' && !item.takedownEjected).length;
+  const appExperienceWindow = appExperience
+    ? `${appExperience.startup.actualFrom} ～ ${appExperience.startup.actualTo}`
+    : '';
+  const appExperienceHasSamples = (appExperience?.startup.sessionCount ?? 0) > 0;
+  const appAnrRate = appExperienceHasSamples && appExperience
+    ? appExperience.anr.sessionCount / appExperience.startup.sessionCount
+    : null;
+  const appJankRate = appExperienceHasSamples && appExperience
+    ? appExperience.jank.sessionCount / appExperience.startup.sessionCount
+    : null;
 
   return (
     <PageScaffold
@@ -463,7 +496,7 @@ export function ProductDashboardPage() {
 
       <SectionCard
         title="页面矩阵热力图（最近 24h）"
-        subtitle="行 = metadata 登记页面全集；列 = 真实遥测聚合（打开 / 逐页 TTI / 停留 / 运行错误）。登记但无数据的页面显示 0，不合成任何数值。"
+        subtitle="行 = metadata 登记页面全集；列 = 真实遥测聚合（打开 / 逐页 TTI / 停留 / 运行错误）。登记但无数据的页面明确显示无采样。"
       >
         {pageExperienceError ? <RuntimeErrorBadge error={pageExperienceError} /> : null}
         <table className="table">
@@ -487,17 +520,17 @@ export function ProductDashboardPage() {
                       height: 10,
                       borderRadius: 2,
                       marginRight: 8,
-                      background: row.opens === 0
+                      background: row.heat == null
                         ? '#E5E7EB'
                         : `rgba(37, 99, 235, ${Math.max(0.15, row.heat)})`,
                     }}
                   />
                   {row.pageName}
                 </td>
-                <td>{row.opens}</td>
-                <td>{row.readySamples > 0 ? row.avgReadyMs.toFixed(0) : '无采样'}</td>
-                <td>{row.avgStayMs > 0 ? row.avgStayMs.toFixed(0) : '无采样'}</td>
-                <td>{row.runtimeErrors}</td>
+                <td>{row.opens ?? '无采样'}</td>
+                <td>{(row.readySamples ?? 0) > 0 && row.avgReadyMs != null ? row.avgReadyMs.toFixed(0) : '无采样'}</td>
+                <td>{row.avgStayMs != null ? row.avgStayMs.toFixed(0) : '无采样'}</td>
+                <td>{row.runtimeErrors ?? '无采样'}</td>
               </tr>
             ))}
           </tbody>
@@ -506,6 +539,50 @@ export function ProductDashboardPage() {
           共 {pageHeatmapRows.length} 个登记页面（展示打开次数前 40）；ANR / 卡顿明细在平台可观测页按
           signal=app.performance.anr / app.performance.frame 检索。
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="应用体验黄金指标"
+        subtitle="ANR 与卡顿率按 SLS/Postgres 权威事件中的 sessionId 去重，再以启动 session 为分母；没有启动分母时明确显示无采样。"
+      >
+        {appExperienceError ? <RuntimeErrorBadge error={appExperienceError} /> : null}
+        {appExperience ? (
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th>结果</th>
+                  <th>分子 session</th>
+                  <th>启动分母 session</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ANR 会话率</td>
+                  <td>{appExperienceHasSamples ? formatRatio(appAnrRate) : '无采样'}</td>
+                  <td>{appExperience.anr.sessionCount}</td>
+                  <td>{appExperience.startup.sessionCount}</td>
+                  <td>{appExperience.anr.sourceKind}</td>
+                </tr>
+                <tr>
+                  <td>卡顿会话率</td>
+                  <td>{appExperienceHasSamples ? formatRatio(appJankRate) : '无采样'}</td>
+                  <td>{appExperience.jank.sessionCount}</td>
+                  <td>{appExperience.startup.sessionCount}</td>
+                  <td>{appExperience.jank.sourceKind}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="inline-note">
+              window={appExperienceWindow} · startup freshness={appExperience.startup.freshness} ·
+              anr freshness={appExperience.anr.freshness} · jank freshness={appExperience.jank.freshness}
+            </div>
+          </>
+        ) : (
+          <div className="inline-note">等待产品遥测体验摘要；控制面不可用时不会显示合成成功态。</div>
+        )}
       </SectionCard>
 
       <SectionCard title="主路径联动" subtitle="Dashboard 与 L1-L4 页面共享同一份实时指标和 triage 数据源">

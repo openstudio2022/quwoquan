@@ -347,9 +347,9 @@ func TestCredentialBindingCommitsSecurityOutboxAndLocksLastCredential(t *testing
 		context.Background(),
 		ownerID,
 		credentialapp.BindCredentialCommand{
-			CredentialType: credentialmodel.CredentialTypeWechat,
-			CredentialKey:  "wechat-subject",
-			DisplayLabel:   "wechat",
+			CredentialType: credentialmodel.CredentialTypeFederatedSlotA,
+			CredentialKey:  "federated-subject",
+			DisplayLabel:   "federated",
 		},
 	); err != nil {
 		t.Fatalf("bind wechat: %v", err)
@@ -374,7 +374,7 @@ WHERE event_type='CredentialBound'`,
 	if _, err := credentialCommands.UnbindCredential(
 		actorContext,
 		credentialapp.UnbindCredentialCommand{
-			CredentialType: credentialmodel.CredentialTypeWechat,
+			CredentialType: credentialmodel.CredentialTypeFederatedSlotA,
 		},
 	); err != nil {
 		t.Fatalf("revoke secondary credential: %v", err)

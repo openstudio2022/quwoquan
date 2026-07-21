@@ -8,6 +8,7 @@ import {
   dismissReport,
   fetchActiveAlerts,
   fetchEffectiveConfig,
+  fetchGrayRoutingPolicy,
   fetchHomepageCandidates,
   fetchHomepageClaimRequests,
   fetchHomepageStatusReports,
@@ -301,6 +302,46 @@ test('active alerts listing and ack hit platform alert loop endpoints', async ()
   restoreEnvAndFetch();
 });
 
+test('requests stage-scoped gray routing policy from platform control plane', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  const calls = stubFetch({
+    policy: {
+      enabled: true,
+      grayUpstream: 'http://gray.internal:29000',
+      grayUpstreamTlsInsecureSkipVerify: false,
+      stageDimensions: {
+        'gray-initial': {
+          appVersions: [],
+          userIds: ['ops-release-canary'],
+          provinces: [],
+          carriers: [],
+        },
+        'carry-on': {
+          appVersions: ['1.1.0'],
+          userIds: ['ops-release-canary'],
+          provinces: [],
+          carriers: [],
+        },
+        full: {
+          appVersions: [],
+          userIds: [],
+          provinces: [],
+          carriers: [],
+        },
+      },
+    },
+    sourcePath: '/runtime/config-root/gray-routing/policy.yaml',
+    rawYaml: 'policy: {}',
+  });
+
+  const response = await fetchGrayRoutingPolicy();
+
+  assert.equal(calls[0], 'http://platform.test/control-plane/platform/rollout/routing-policy');
+  assert.deepEqual(response.policy.stageDimensions['gray-initial'].userIds, ['ops-release-canary']);
+  assert.deepEqual(response.policy.stageDimensions.full.appVersions, []);
+  restoreEnvAndFetch();
+});
+
 test('requests onboarding domains from platform control plane', async () => {
   process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
   const calls = stubFetch({
@@ -398,9 +439,9 @@ test('requests product event summary from configured base url', async () => {
     dimensions: { pageName: { home: 8 } },
   });
 
-  const summary = await fetchProductEventSummary({ eventType: 'page_open', from: '2026-04-01T00:00:00Z', to: '2026-04-02T00:00:00Z' });
+  const summary = await fetchProductEventSummary({ eventType: 'app_anr_outcome', result: 'detected', from: '2026-04-01T00:00:00Z', to: '2026-04-02T00:00:00Z' });
 
-  assert.equal(calls[0], 'http://product.test/ops/events/summary?eventType=page_open&from=2026-04-01T00%3A00%3A00Z&to=2026-04-02T00%3A00%3A00Z');
+  assert.equal(calls[0], 'http://product.test/ops/events/summary?eventType=app_anr_outcome&result=detected&from=2026-04-01T00%3A00%3A00Z&to=2026-04-02T00%3A00%3A00Z');
   assert.equal(summary.totalCount, 12);
   assert.equal(summary.sessionCount, 5);
   restoreEnvAndFetch();
@@ -540,7 +581,7 @@ test('requests l1l4 metrics from product control plane', async () => {
     source: 'live-telemetry',
     freshness: '2026-06-08T01:00:00Z',
     window: '24h',
-    coverage: { totalMetrics: 4, liveMetrics: 4, fallbackMetrics: 0, eventSignals: 18 },
+    coverage: { totalMetrics: 4, liveMetrics: 4, unavailableMetrics: 0, eventSignals: 18 },
     alerts: [
       { id: 'L3HttpRequestP95High', state: 'firing', metric: 'http_request_p95_ms', source: 'telemetry', runbookRoute: '/platform/runbook', repairEntry: '/product/l1-l4/environment', alertId: 'HighP95Latency', auditRoute: '/audit', owner: 'app-observability' },
     ],

@@ -87,16 +87,21 @@ def _reliabletask_ref(
     adapter can dispatch it through MongoStore + RedisReadyIndex without
     changing job IDs or queue semantics.
     """
+    execution_id = str(execution_id or "").strip()
     entity_ref = str(entity_ref or "").strip()
     carrier = str(carrier or "").strip()
     source_revision = str(source_revision or "").strip()
     stage = str(stage or "").strip()
-    if not entity_ref or not carrier or not source_revision or not stage:
+    if not execution_id or not entity_ref or not carrier or not source_revision or not stage:
         raise ValueError(
             "reliabletask idempotency requires "
-            "entityRef + carrier + sourceRevision + stage"
+            "executionId + entityRef + carrier + sourceRevision + stage"
         )
-    idempotency_key = f"{entity_ref}|{carrier}|{source_revision}|{stage}"
+    # 必须与 runtime/reliabletask.DataContentJob.IdempotencyKey 完全同构。
+    # 新 execution 即便复用同一来源，也不能与旧执行共享死信或作者证据。
+    idempotency_key = (
+        f"{execution_id}|{entity_ref}|{carrier}|{source_revision}|{stage}"
+    )
     return {
         "taskType": RELIABLETASK_TASK_TYPE,
         "queue": RELIABLETASK_QUEUE,

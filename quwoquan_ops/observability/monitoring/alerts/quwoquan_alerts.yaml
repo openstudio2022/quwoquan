@@ -1249,7 +1249,7 @@ groups:
 
       # ---- 小趣商用业务级告警（真相源：specs/feature-tree/assistant-run-learning/
       # commercial_slo_observability.md §告警）。指标由 assistant-service 业务
-      # metrics 产出；emit 缺失时规则静默（不触发），emit 接线随 R-ASSIST-003 收口。----
+      # metrics 产出；所有规则均有对应 emit 接线与 local_contract 覆盖。
       - alert: AssistantMentionedConsumerDLQBacklog
         expr: |
           sum(increase(assistant_mentioned_consumer_dlq_total[15m])) > 0
@@ -1420,6 +1420,57 @@ groups:
         annotations:
           summary: "chat 投影/Outbox {{ $labels.check }} 持续不健康"
           description: "消息实时投递或 Inbox 未读/排序投影可能停滞；检查 checkpoint、Mongo outbox 与 realtime Redis scene。"
+
+      - alert: ChatMentionCommandFailureRateHigh
+        expr: |
+          sum(rate(chat_mention_command_total{result="failed"}[10m]))
+          / clamp_min(sum(rate(chat_mention_command_total[10m])), 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 带 @ 消息命令失败率 > 2%"
+          description: "用户 @ 或 @全体消息提交失败率超过预算；检查成员关系验证、消息事务与命令幂等回执。指标仅按 all/members 分桶，不含成员或会话标识。"
+
+      - alert: ChatReadWatermarkCommandFailureRateHigh
+        expr: |
+          sum(rate(chat_read_watermark_command_total{result="failed"}[10m]))
+          / clamp_min(sum(rate(chat_read_watermark_command_total[10m])), 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat 已读水位推进失败率 > 2%"
+          description: "已读水位命令连续失败会造成未读数和回执停滞；检查 ConversationUserState 事务、成员校验与客户端重试。"
+
+      - alert: ChatInboxProjectionLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(chat_inbox_projection_event_lag_seconds_bucket[10m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat Inbox 投影事件 P95 延迟超过 5 秒"
+          description: "MessageSent 到未读/排序投影的 P95 延迟超过商业预算；检查 Message outbox checkpoint、Mongo 读写与 projector 消费循环。"
+
+      - alert: ChatInboxProjectionDrainFailures
+        expr: sum(increase(chat_inbox_projection_drain_total{result="failed"}[10m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat Inbox 投影 drain 出现失败"
+          description: "Inbox projector 读取、应用或保存 checkpoint 失败；未读和排序会滞后，需检查失败日志后恢复并验证 checkpoint 前进。"
 
       - alert: ChatProjectionOrOutboxSignalStale
         expr: |
@@ -1824,6 +1875,37 @@ groups:
           summary: "媒体上传会话可用性低于 99.9%"
           description: "init/complete/abort/get 任一 operation 退化会阻断图文、视频与评论附件上传。"
 
+      - alert: ContentFilterCatalogAvailabilityLow
+        expr: |
+          sum(rate(content_filter_catalog_get_total{outcome=~"unavailable|storage_unavailable"}[5m]))
+          / clamp_min(sum(rate(content_filter_catalog_get_total[5m])), 0.001) > 0.001
+        for: 5m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "活动滤镜目录可用性低于 99.9%"
+          description: "GetActiveFilterCatalog 无 active release 或存储不可用会让图片编辑器无法加载经验证目录；检查 single-active 状态、Redis 缓存失效和 Mongo reader。"
+
+      - alert: ContentFilterCatalogReadLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation="get"}[5m])) by (le)
+          ) > 0.3
+        for: 5m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "活动滤镜目录读取 P95 超过 300ms"
+          description: "GetActiveFilterCatalog 超出 metadata latency_p95_ms=300；检查 active reader 缓存和 Mongo 查询。"
+
+      - alert: ContentFilterCatalogPublishStorageUnavailable
+        expr: |
+          sum(rate({__name__=~"content_filter_catalog_(stage|activate|rollback)_total",outcome="storage_unavailable"}[5m])) > 0
+        for: 5m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "滤镜目录发布面持续出现存储不可用"
+          description: "Stage/Activate/Rollback 的 Mongo 事务或 active cache invalidation 失败；停止发布并以当前 active release 保持端侧目录稳定。"
+
       - alert: ContentReportSubmitAvailabilityLow
         expr: |
           sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.report.CreateReport",contract_metric="content_report_create",status=~"5.."}[10m]))
@@ -1907,17 +1989,17 @@ groups:
           summary: "个人主页互动 {{ $labels.operation }} P95 超过 500ms"
           description: "超出三条 profile interaction operation 的 ContractGraph latency SLO。"
 
-      - alert: ContentMediaProcessingAvailabilityLow
+      - alert: ContentMediaProcessingResultWriteAvailabilityLow
         expr: |
           sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result",status=~"5.."}[10m]))
           / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result"}[10m])), 0.001) > 0.001
         for: 10m
         labels: { severity: critical, layer: l2, domain: content }
         annotations:
-          summary: "媒体处理结果回写可用性低于 99.9%"
-          description: "处理 worker 无法落 processing_status 会阻断媒体可发布状态推进。"
+          summary: "媒体处理结果写入可用性低于 99.9%"
+          description: "内部 processing-result operation 的 5xx 超过契约 SLO；外置 worker 通过此 operation 回写时会阻断资产终态推进。"
 
-      - alert: ContentMediaProcessingLatencyHigh
+      - alert: ContentMediaProcessingResultWriteLatencyHigh
         expr: |
           histogram_quantile(0.95,
             sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation="content.media_asset.RecordMediaProcessingResult",contract_metric="content_media_processing_result"}[5m])) by (le)
@@ -1925,8 +2007,74 @@ groups:
         for: 10m
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
-          summary: "媒体处理结果回写 P95 超过 1.2s"
+          summary: "媒体处理结果写入 P95 超过 1.2s"
           description: "超出 RecordMediaProcessingResult latencyP95Milliseconds=1200。"
+
+      - alert: ContentMediaProcessingJobFailureRateHigh
+        expr: |
+          sum(rate(content_media_processing_jobs_total{result=~"infrastructure_error|record_failed"}[10m]))
+          / clamp_min(sum(rate(content_media_processing_jobs_total[10m])), 0.001) > 0.001
+        for: 10m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理 Worker 失败率超过 0.1%"
+          description: "基于 Worker 全链路 job 指标；对象存储、FFmpeg 或结果持久化失败会保留 checkpoint 并重放。"
+
+      - alert: ContentMediaProcessingJobLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(content_media_processing_duration_seconds_bucket{result=~"ready|rejected"}[10m])) by (le)
+          ) > 840
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理全链路 Job P95 接近 15 分钟超时"
+          description: "50 MiB、最长 1 小时视频的处理预算被突破；检查 FFmpeg 容量、对象存储吞吐与 worker CPU。"
+
+      - alert: ContentMediaProcessingCompleteToReadyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(content_media_processing_complete_to_ready_seconds_bucket[10m])) by (le)
+          ) > 900
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体 upload-complete 到 ready 的 P95 超过 15 分钟"
+          description: "按 media_type/input_size_class 下钻，核对 outbox oldest-event age、对象存储、FFmpeg 容量和结果回写。"
+
+      - alert: ContentMediaProcessingOldestOutboxEventHigh
+        expr: content_media_processing_outbox_oldest_event_age_seconds > 900
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "媒体 outbox 最旧事件滞留超过 15 分钟"
+          description: "Worker 已观测到未消费的 durable event；检查 lease、checkpoint、工作目录容量、对象存储和 FFmpeg。"
+
+      - alert: ContentMediaProcessingDLQAdmissionAgeHigh
+        expr: max(content_media_processing_dlq_event_age_seconds) > 300
+        for: 1m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体事件进入 DLQ 时已滞留超过 5 分钟"
+          description: "这是 DLQ 准入时的年龄，不代表当前时钟年龄；按 poison reason 修复源事实并使用受控重放流程。"
+
+      - alert: ContentPublicationRetryExhausted
+        expr: sum(increase(ops_content_publication_events_total{background_retry_terminal="retry_exhausted"}[10m])) > 0
+        for: 1m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "内容发布后台重试已耗尽"
+          description: "按 content_type、object_state 和 failReasonCode 在 SLS content_publication_funnel 下钻；不得把终态任务伪装为成功。"
+
+      - alert: VideoPreviewTrackLoadFailureRateHigh
+        expr: |
+          sum(rate(ops_video_preview_track_loads_total{result="failure"}[10m]))
+          / clamp_min(sum(rate(ops_video_preview_track_loads_total[10m])), 0.001) > 0.01
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "视频预览轨道加载失败率超过 1%"
+          description: "核对 CDN manifest、签名/缓存、轨道 descriptor 版本绑定，并通过 SLS video_preview_track_load 明细定位失败类型。"
 
       - alert: ContentMediaProcessingWorkerUnhealthy
         expr: |
@@ -1948,12 +2096,30 @@ groups:
 
       - alert: ContentMediaProcessingOutboxBacklog
         expr: |
-          max(content_media_processing_outbox_pending) >= 20
+          max(content_media_processing_outbox_consecutive_full_batches) > 0
         for: 15m
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
           summary: "媒体处理 outbox 连续满批"
-          description: "Worker 每批上限为 20；连续满批表示消费落后或单条事件反复失败。"
+          description: "Worker 每批上限为 10；15 分钟未出现非满批扫描，表示消费持续落后。"
+
+      - alert: ContentMediaProcessingPoisonEvent
+        expr: |
+          sum(increase(content_media_processing_poison_events_total[5m])) > 0
+        for: 1m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理发现异常 outbox 源事件"
+          description: "带有效 cursor 的事件会在推进 checkpoint 前持久化到 media_processing_dead_letters；缺 cursor 的事件会 fail-closed。必须修复源数据并执行受控重放。"
+
+      - alert: ContentMediaProcessingPoisonQuarantineFailed
+        expr: |
+          sum(increase(content_media_processing_poison_quarantine_failures_total[5m])) > 0
+        for: 1m
+        labels: { severity: critical, layer: l2, domain: content }
+        annotations:
+          summary: "媒体处理异常事件无法写入 dead letter"
+          description: "Worker 已保持 checkpoint 不推进，后续事件会阻塞等待重试；检查 media_processing_dead_letters 的 Mongo 可用性和唯一索引。"
 
       - alert: ContentProjectionCheckpointUnhealthy
         expr: |

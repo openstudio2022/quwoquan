@@ -29,6 +29,10 @@ var (
 	ErrSessionReplayed = errors.New("account session refresh token replayed")
 	// ErrSessionRevoked 表示会话已被吊销。
 	ErrSessionRevoked = errors.New("account session revoked")
+	// ErrSessionAccountSuspended 表示 refresh session 因账号封禁而被原子吊销。
+	// 这是客户端获得结构化 account_suspended 恢复语义的唯一会话层信号；
+	// restore 后同一旧会话仍只返回 ErrSessionRevoked。
+	ErrSessionAccountSuspended = errors.New("account session revoked by suspension")
 )
 
 // IssuedSession 是签发/轮换后的会话快照。

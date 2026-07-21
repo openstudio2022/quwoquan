@@ -7,6 +7,7 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 
 	runtimeid "quwoquan_service/runtime/id"
+	credentialmodel "quwoquan_service/services/user-service/internal/domain/account/credential_binding/model"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 )
 
@@ -20,18 +21,14 @@ const (
 
 	originCodeAnonymousDevice = "ad"
 	originCodePhone           = "ph"
-	originCodeWechat          = "wx"
-	originCodeAlipay          = "al"
-	originCodeQq              = "qq"
-	originCodeApple           = "ap"
+	originCodeFederatedSlotA  = "f1"
+	originCodeFederatedSlotB  = "f2"
+	originCodeFederatedSlotC  = "f3"
 	originCodeMigratedSeed    = "mg"
 
 	identityOriginAnonymousDevice = "anonymous_device"
 	identityOriginPhone           = "phone"
-	identityOriginWechat          = "wechat"
-	identityOriginAlipay          = "alipay"
-	identityOriginQq              = "qq"
-	identityOriginApple           = "apple"
+	identityOriginFederated       = "federated"
 	identityOriginMigratedSeed    = "migrated_seed"
 
 	accountStateAnonymous = "anonymous"
@@ -52,8 +49,15 @@ func init() {
 
 func buildOwnerIdentity(credType string) (identityDescriptor, error) {
 	identityOrigin, originCode := identityOriginForCredentialType(credType)
-	if identityOrigin == "" || originCode == "" {
-		return identityDescriptor{}, fmt.Errorf("unsupported credential type: %s", credType)
+	return buildOwnerIdentityForOrigin(identityOrigin, originCode)
+}
+
+func buildOwnerIdentityForOrigin(
+	identityOrigin string,
+	originCode string,
+) (identityDescriptor, error) {
+	if strings.TrimSpace(identityOrigin) == "" || strings.TrimSpace(originCode) == "" {
+		return identityDescriptor{}, fmt.Errorf("identity origin is required")
 	}
 	entropyBody, err := generateIdentityEntropyBody()
 	if err != nil {
@@ -105,14 +109,12 @@ func identityOriginForCredentialType(credType string) (identityOrigin string, or
 		return identityOriginAnonymousDevice, originCodeAnonymousDevice
 	case credentialPhone, credentialCarrierPhone:
 		return identityOriginPhone, originCodePhone
-	case credentialWechat:
-		return identityOriginWechat, originCodeWechat
-	case credentialAlipay:
-		return identityOriginAlipay, originCodeAlipay
-	case credentialQq:
-		return identityOriginQq, originCodeQq
-	case credentialApple:
-		return identityOriginApple, originCodeApple
+	case string(credentialmodel.CredentialTypeFederatedSlotA):
+		return identityOriginFederated, originCodeFederatedSlotA
+	case string(credentialmodel.CredentialTypeFederatedSlotB):
+		return identityOriginFederated, originCodeFederatedSlotB
+	case string(credentialmodel.CredentialTypeFederatedSlotC):
+		return identityOriginFederated, originCodeFederatedSlotC
 	default:
 		return "", ""
 	}

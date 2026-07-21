@@ -212,6 +212,130 @@ void main() {
         expect(media.abortedSessions, isEmpty);
       },
     );
+
+    test(
+      'restart resumes the durable session with persisted idempotency keys',
+      () async {
+        final media = RecordingContentMediaFacet();
+        final coordinator = ContentMediaUploadCoordinator(media: media);
+        const bytes = <int>[9, 8, 7, 6];
+        final checkpoint = ContentMediaPreparationCheckpoint.forSource(
+          preparationIdentity: 'draft-durable-recovery',
+          slot: 'video:0',
+          mediaType: ContentMediaType.video,
+          sha256Digest: sha256.convert(bytes).toString(),
+        );
+        final initialized = await media.initUpload(
+          InitContentMediaUploadCommand(
+            mediaType: ContentMediaType.video,
+            contentType: 'video/mp4',
+            fileSize: bytes.length,
+            expectedSha256: sha256.convert(bytes).toString(),
+          ),
+          ContentMediaUploadCommandContext(
+            idempotencyKey: checkpoint.initIdempotencyKey,
+          ),
+        );
+        final persisted = <ContentMediaPreparationCheckpoint>[
+          checkpoint.copyWith(
+            sessionId: initialized.sessionId,
+            phase: ContentMediaPreparationPhase.uploading,
+          ),
+        ];
+
+        final uploaded = await coordinator.uploadPreparedSource(
+          source: PreparedContentMediaSource(
+            fileSize: bytes.length,
+            sha256Digest: sha256.convert(bytes).toString(),
+            openRead: () => Stream<List<int>>.value(bytes),
+          ),
+          mediaType: ContentMediaType.video,
+          contentType: 'video/mp4',
+          uploadStream: _drainUpload,
+          checkpoint: persisted.single,
+          onCheckpoint: (updated) async {
+            persisted
+              ..clear()
+              ..add(updated);
+          },
+        );
+
+        expect(uploaded.sessionId, initialized.sessionId);
+        expect(media.initCommands, hasLength(1));
+        expect(media.initIdempotencyKeys, <String>[
+          checkpoint.initIdempotencyKey,
+        ]);
+        expect(media.completeIdempotencyKeys, <String>[
+          checkpoint.completeIdempotencyKey,
+        ]);
+        expect(persisted.single.isCompleted, isTrue);
+        expect(persisted.single.assetId, uploaded.assetId);
+      },
+    );
+
+    test(
+      'unreconciled complete failure requests authoritative session cleanup',
+      () async {
+        final media = RecordingContentMediaFacet(
+          loseFirstCompleteResponse: true,
+          failUploadSessionRead: true,
+        );
+        final coordinator = ContentMediaUploadCoordinator(
+          media: media,
+          maxCompleteAttempts: 1,
+        );
+        const bytes = <int>[1, 2, 3, 4];
+
+        await expectLater(
+          coordinator.uploadPreparedSource(
+            source: PreparedContentMediaSource(
+              fileSize: bytes.length,
+              sha256Digest: sha256.convert(bytes).toString(),
+              openRead: () => Stream<List<int>>.value(bytes),
+            ),
+            mediaType: ContentMediaType.video,
+            contentType: 'video/mp4',
+            uploadStream: _drainUpload,
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(media.completedSessions, <String>['session_1']);
+        expect(media.abortedSessions, <String>['session_1']);
+      },
+    );
+
+    test(
+      'repeated pending complete failures issue one authoritative abort',
+      () async {
+        final media = RecordingContentMediaFacet(
+          failCompleteWithoutCommit: true,
+        );
+        final coordinator = ContentMediaUploadCoordinator(
+          media: media,
+          maxCompleteAttempts: 2,
+          objectUploadRetryBaseDelay: Duration.zero,
+        );
+        const bytes = <int>[1, 2, 3, 4];
+
+        await expectLater(
+          coordinator.uploadPreparedSource(
+            source: PreparedContentMediaSource(
+              fileSize: bytes.length,
+              sha256Digest: sha256.convert(bytes).toString(),
+              openRead: () => Stream<List<int>>.value(bytes),
+            ),
+            mediaType: ContentMediaType.video,
+            contentType: 'video/mp4',
+            uploadStream: _drainUpload,
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(media.completedSessions, <String>['session_1', 'session_1']);
+        expect(media.abortedSessions, <String>['session_1']);
+      },
+    );
   });
 }
 

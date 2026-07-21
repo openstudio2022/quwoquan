@@ -17,6 +17,7 @@ var (
 	ErrInvalidArgument                = errors.New("INTEGRATION.USER.invalid_argument")
 	ErrLocationPermissionRequired     = errors.New("INTEGRATION.USER.location_permission_required")
 	ErrUpstreamTimeout                = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
+	ErrLocationProviderUnavailable    = errors.New("INTEGRATION.MIDDLEWARE.location_provider_unavailable")
 	ErrInternalError                  = errors.New("INTEGRATION.SYSTEM.internal_error")
 	ErrInvalidExternalRequest         = errors.New("INTEGRATION.USER.invalid_external_request")
 	ErrUnsupportedOperation           = errors.New("INTEGRATION.USER.unsupported_operation")
@@ -57,6 +58,12 @@ func AppErrorFromLocationPermissionRequired(debugMessage string) *rerrors.AppErr
 func AppErrorFromUpstreamTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUpstreamTimeout.Error()))
 	return rerrors.NewAppError(code, "位置服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 5)
+}
+
+// AppErrorFromLocationProviderUnavailable returns *AppError for INTEGRATION.MIDDLEWARE.location_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromLocationProviderUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrLocationProviderUnavailable.Error()))
+	return rerrors.NewAppError(code, "位置服务暂不可用，请稍后重试", debugMessage).WithMetadata("location_provider_unavailable", 503).WithRecovery("retry", 5)
 }
 
 // AppErrorFromInternalError returns *AppError for INTEGRATION.SYSTEM.internal_error (user_message from errors.yaml).
@@ -110,49 +117,49 @@ func AppErrorFromDeadLetterCreated(debugMessage string) *rerrors.AppError {
 // AppErrorFromPushDeliveryInvalidRequest returns *AppError for INTEGRATION.USER.push_delivery_invalid_request (user_message from errors.yaml).
 func AppErrorFromPushDeliveryInvalidRequest(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushDeliveryInvalidRequest.Error()))
-	return rerrors.NewAppError(code, "推送请求参数不完整", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "silent", 0)
+	return rerrors.NewAppError(code, "推送请求参数不完整", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromPushEndpointResolutionFailed returns *AppError for INTEGRATION.MIDDLEWARE.push_endpoint_resolution_failed (user_message from errors.yaml).
 func AppErrorFromPushEndpointResolutionFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushEndpointResolutionFailed.Error()))
-	return rerrors.NewAppError(code, "推送端点暂时无法解析", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecoveryDirective("retry", "silent", 5)
+	return rerrors.NewAppError(code, "推送端点暂时无法解析", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 5)
 }
 
 // AppErrorFromPushProviderTimeout returns *AppError for INTEGRATION.MIDDLEWARE.push_provider_timeout (user_message from errors.yaml).
 func AppErrorFromPushProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "推送供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecoveryDirective("retry", "silent", 5)
+	return rerrors.NewAppError(code, "推送供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 5)
 }
 
 // AppErrorFromPushProviderRateLimited returns *AppError for INTEGRATION.MIDDLEWARE.push_provider_rate_limited (user_message from errors.yaml).
 func AppErrorFromPushProviderRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushProviderRateLimited.Error()))
-	return rerrors.NewAppError(code, "推送供应商请求繁忙，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "silent", 5)
+	return rerrors.NewAppError(code, "推送供应商请求繁忙，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 5)
 }
 
 // AppErrorFromPushProviderRejected returns *AppError for INTEGRATION.MIDDLEWARE.push_provider_rejected (user_message from errors.yaml).
 func AppErrorFromPushProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushProviderRejected.Error()))
-	return rerrors.NewAppError(code, "推送供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 502).WithRecoveryDirective("retry", "silent", 5)
+	return rerrors.NewAppError(code, "推送供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 502).WithRecovery("retry", 5)
 }
 
 // AppErrorFromPushEndpointPermanentlyInvalid returns *AppError for INTEGRATION.MIDDLEWARE.push_endpoint_permanently_invalid (user_message from errors.yaml).
 func AppErrorFromPushEndpointPermanentlyInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushEndpointPermanentlyInvalid.Error()))
-	return rerrors.NewAppError(code, "推送端点已失效", debugMessage).WithMetadata("resource_gone", 410).WithRecoveryDirective("absorb", "silent", 0)
+	return rerrors.NewAppError(code, "推送端点已失效", debugMessage).WithMetadata("resource_gone", 410).WithRecovery("absorb", 0)
 }
 
 // AppErrorFromPushProviderCredentialsInvalid returns *AppError for INTEGRATION.SYSTEM.push_provider_credentials_invalid (user_message from errors.yaml).
 func AppErrorFromPushProviderCredentialsInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushProviderCredentialsInvalid.Error()))
-	return rerrors.NewAppError(code, "推送供应商凭据无效", debugMessage).WithMetadata("credentials_invalid", 500).WithRecoveryDirective("escalate", "silent", 0)
+	return rerrors.NewAppError(code, "推送供应商凭据无效", debugMessage).WithMetadata("credentials_invalid", 500).WithRecovery("escalate", 0)
 }
 
 // AppErrorFromPushEndpointInvalidationFailed returns *AppError for INTEGRATION.MIDDLEWARE.push_endpoint_invalidation_failed (user_message from errors.yaml).
 func AppErrorFromPushEndpointInvalidationFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPushEndpointInvalidationFailed.Error()))
-	return rerrors.NewAppError(code, "推送端点失效状态暂时无法同步", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecoveryDirective("retry", "silent", 5)
+	return rerrors.NewAppError(code, "推送端点失效状态暂时无法同步", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 5)
 }
 
 // IsTimeout returns true if err is context.DeadlineExceeded or contains upstream timeout semantics.

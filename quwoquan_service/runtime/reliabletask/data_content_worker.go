@@ -85,8 +85,9 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 		Ref:            item.Ref,
 		Stage:          item.Stage,
 		PartitionKey:   item.PartitionKey,
+		IdempotencyKey: item.IdempotencyKey,
 	}
-	expectedKey, err := job.IdempotencyKey()
+	expectedKey, err := job.ValidateIdentity()
 	if err != nil {
 		return DataContentWorkItem{}, err
 	}

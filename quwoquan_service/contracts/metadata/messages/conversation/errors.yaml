@@ -7,6 +7,28 @@ description: |
   以及 Go errors.go 常量。
 
 errors:
+  - code: CHAT.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: invalidArgument
+    go_const: ErrInvalidArgument
+    user_message:
+      zh: "请求参数无效"
+      en: "Request parameters are invalid"
+
+  - code: CHAT.USER.circle_group_binding_write_forbidden
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: circleGroupBindingWriteForbidden
+    go_const: ErrCircleGroupBindingWriteForbidden
+    user_message:
+      zh: "圈群绑定只能由系统创建"
+      en: "Circle group bindings can only be created by the system"
+
   - code: CHAT.USER.conversation_not_found
     kind: USER
     reason: not_found
@@ -195,6 +217,28 @@ errors:
     user_message:
       zh: "只有群主或管理员可以执行该操作"
       en: "Only the group owner or an admin can perform this action"
+
+  - code: CHAT.USER.circle_group_managed_by_circle
+    kind: USER
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: circleGroupManagedByCircle
+    go_const: ErrCircleGroupManagedByCircle
+    user_message:
+      zh: "该群成员与角色由圈群管理，请在群组管理页操作"
+      en: "This group is managed by its circle group. Use group management instead."
+
+  - code: CHAT.SYSTEM.circle_group_binding_conflict
+    kind: SYSTEM
+    reason: projection_conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: circleGroupBindingConflict
+    go_const: ErrCircleGroupBindingConflict
+    user_message:
+      zh: "圈群会话绑定状态异常，请稍后重试"
+      en: "The circle group chat binding is inconsistent. Please try again later."
 
   - code: CHAT.USER.group_full
     kind: USER

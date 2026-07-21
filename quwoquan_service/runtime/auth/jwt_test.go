@@ -60,6 +60,7 @@ func TestSignAndVerifyAccessTokenContract(t *testing.T) {
 	}
 	if claims.Subject != "account-1" ||
 		claims.Persona != "persona-1" ||
+		claims.AuthEpoch != 1 ||
 		claims.TokenVersion != config.TokenVersion ||
 		claims.Issuer != config.Issuer ||
 		claims.Audience != config.Audience ||
@@ -69,6 +70,24 @@ func TestSignAndVerifyAccessTokenContract(t *testing.T) {
 	}
 	if claims.Scope != "user.read content.report.write" {
 		t.Fatalf("scope=%q", claims.Scope)
+	}
+}
+
+func TestAccessTokenPreservesExplicitAuthEpoch(t *testing.T) {
+	config := testTokenConfig(TokenTypeAccess)
+	token, err := mustSigner(t, config).Sign(TokenSubject{
+		AccountID: "account-epoch",
+		AuthEpoch: 7,
+	})
+	if err != nil {
+		t.Fatalf("sign access token with epoch: %v", err)
+	}
+	claims, err := mustVerifier(t, config).Verify(token)
+	if err != nil {
+		t.Fatalf("verify access token with epoch: %v", err)
+	}
+	if claims.AuthEpoch != 7 {
+		t.Fatalf("auth epoch=%d want=7", claims.AuthEpoch)
 	}
 }
 

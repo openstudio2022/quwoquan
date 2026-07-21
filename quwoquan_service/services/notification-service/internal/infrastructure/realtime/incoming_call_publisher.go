@@ -7,23 +7,23 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	notification "quwoquan_service/services/notification-service/internal/domain/notification"
 )
 
 type IncomingCallPublisher struct {
-	redis rtredis.Client
+	transport runtimemessaging.MessageTransport
 }
 
 func NewIncomingCallPublisher(
-	client rtredis.Client,
+	transport runtimemessaging.MessageTransport,
 ) (*IncomingCallPublisher, error) {
-	if client == nil {
+	if transport == nil {
 		return nil, errors.New(
-			"incoming call realtime publisher requires Redis",
+			"incoming call realtime publisher requires message transport",
 		)
 	}
-	return &IncomingCallPublisher{redis: client}, nil
+	return &IncomingCallPublisher{transport: transport}, nil
 }
 
 func (p *IncomingCallPublisher) DispatchIncomingCall(
@@ -47,10 +47,12 @@ func (p *IncomingCallPublisher) DispatchIncomingCall(
 	if err != nil {
 		return err
 	}
-	return p.redis.Publish(
+	return p.transport.PublishEphemeral(
 		ctx,
-		"rt:rtc:persona:"+strings.TrimSpace(job.TargetPersonaID),
-		string(payload),
+		runtimemessaging.EphemeralMessage{
+			Channel: "rt:rtc:persona:" + strings.TrimSpace(job.TargetPersonaID),
+			Payload: payload,
+		},
 	)
 }
 
@@ -69,9 +71,11 @@ func (p *IncomingCallPublisher) DispatchCancellation(
 	if err != nil {
 		return err
 	}
-	return p.redis.Publish(
+	return p.transport.PublishEphemeral(
 		ctx,
-		"rt:rtc:persona:"+strings.TrimSpace(personaID),
-		string(payload),
+		runtimemessaging.EphemeralMessage{
+			Channel: "rt:rtc:persona:" + strings.TrimSpace(personaID),
+			Payload: payload,
+		},
 	)
 }

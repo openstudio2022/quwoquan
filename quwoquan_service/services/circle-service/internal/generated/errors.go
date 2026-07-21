@@ -22,6 +22,7 @@ var (
 	ErrGroupStorageWriteFailed            = errors.New("CIRCLE.SYSTEM.group_storage_write_failed")
 	ErrGroupMembershipNotFound            = errors.New("CIRCLE.USER.group_membership_not_found")
 	ErrGroupMembershipAlreadyActive       = errors.New("CIRCLE.USER.group_membership_already_active")
+	ErrGroupMembershipFull                = errors.New("CIRCLE.USER.group_membership_full")
 	ErrGroupMembershipStateConflict       = errors.New("CIRCLE.USER.group_membership_state_conflict")
 	ErrGroupMembershipOwnerCannotLeave    = errors.New("CIRCLE.USER.group_membership_owner_cannot_leave")
 	ErrGroupMembershipOwnerCannotRemove   = errors.New("CIRCLE.USER.group_membership_owner_cannot_remove")
@@ -128,6 +129,12 @@ func AppErrorFromGroupMembershipNotFound(debugMessage string) *rerrors.AppError 
 func AppErrorFromGroupMembershipAlreadyActive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipAlreadyActive.Error()))
 	return rerrors.NewAppError(code, "已经加入该群组", debugMessage).WithMetadata("group_membership_already_active", 409).WithRecovery("refresh", 0)
+}
+
+// AppErrorFromGroupMembershipFull returns *AppError for CIRCLE.USER.group_membership_full (user_message from errors.yaml).
+func AppErrorFromGroupMembershipFull(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupMembershipFull.Error()))
+	return rerrors.NewAppError(code, "群组成员已达上限", debugMessage).WithMetadata("group_membership_full", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGroupMembershipStateConflict returns *AppError for CIRCLE.USER.group_membership_state_conflict (user_message from errors.yaml).

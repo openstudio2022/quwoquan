@@ -2,7 +2,11 @@ package processing
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +14,7 @@ import (
 	runtimemedia "quwoquan_service/runtime/media"
 	mediaprocessing "quwoquan_service/services/content-service/internal/application/media/processing"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
 const ImageProcessorProfile = "content_processing_image_baseline_v1"
@@ -21,7 +26,7 @@ func (p *FFmpegMediaProcessor) processImage(
 	ctx, cancel := context.WithTimeout(ctx, p.config.JobTimeout)
 	defer cancel()
 
-	workDir, err := os.MkdirTemp(p.config.WorkDir, "image-processing-")
+	workDir, err := p.createWorkDir("image-processing-")
 	if err != nil {
 		return mediaprocessing.ProcessOutcome{}, fmt.Errorf(
 			"create image processing work dir: %w",
@@ -87,6 +92,15 @@ func (p *FFmpegMediaProcessor) processImage(
 			deliveryProbe.Height,
 		)
 	}
+	dominantColor, lqip, contentProfile, err := p.imageDeliveryPresentation(
+		ctx,
+		deliveryPath,
+		workDir,
+		deliveryContentType,
+	)
+	if err != nil {
+		return mediaprocessing.ProcessOutcome{}, err
+	}
 
 	privateObjectKey := fmt.Sprintf(
 		"media/processed/image/%s/v%d/source%s",
@@ -114,6 +128,26 @@ func (p *FFmpegMediaProcessor) processImage(
 	); err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
 	}
+	if _, err := p.uploadFile(
+		ctx,
+		deliveryPath,
+		publicSliceKey,
+		deliveryContentType,
+	); err != nil {
+		return mediaprocessing.ProcessOutcome{}, fmt.Errorf(
+			"publish image delivery slice: %w",
+			err,
+		)
+	}
+	if err := p.verifyImageReadback(
+		ctx,
+		publicSliceKey,
+		filepath.Join(workDir, "public-slice-readback"+extension),
+		deliveryProbe.Width,
+		deliveryProbe.Height,
+	); err != nil {
+		return mediaprocessing.ProcessOutcome{}, err
+	}
 
 	return mediaprocessing.ProcessOutcome{
 		Descriptor: mediamodel.MediaProcessingDescriptor{
@@ -124,9 +158,143 @@ func (p *FFmpegMediaProcessor) processImage(
 				ImageDeliveryContentType: deliveryContentType,
 				ImageNormalizedObjectKey: privateObjectKey,
 				ImagePublicSliceKey:      publicSliceKey,
+				ImageDominantColor:       dominantColor,
+				ImageLQIP:                lqip,
+				ImageContentProfile:      contentProfile,
+				DerivativePolicyVersion:  contentgenerated.ContentImageDerivativePolicyVersion,
 			},
 		},
 	}, nil
+}
+
+// verifyImageReadback proves that the public delivery identity points at the
+// bytes just normalized. A successful private upload alone is insufficient:
+// descriptor activation must never make a CDN slice visible before it can be
+// fetched and decoded from the object store.
+func (p *FFmpegMediaProcessor) verifyImageReadback(
+	ctx context.Context,
+	publicSliceKey string,
+	readbackPath string,
+	expectedWidth int,
+	expectedHeight int,
+) error {
+	if err := p.downloadObject(ctx, publicSliceKey, readbackPath); err != nil {
+		return fmt.Errorf("read back image public slice %q: %w", publicSliceKey, err)
+	}
+	probe, err := p.probe(ctx, readbackPath)
+	if err != nil {
+		return fmt.Errorf("probe image public slice %q: %w", publicSliceKey, err)
+	}
+	if !probe.HasVideo || probe.Width != expectedWidth || probe.Height != expectedHeight {
+		return fmt.Errorf(
+			"image public slice %q readback dimensions=%dx%d, want %dx%d",
+			publicSliceKey,
+			probe.Width,
+			probe.Height,
+			expectedWidth,
+			expectedHeight,
+		)
+	}
+	return nil
+}
+
+func (p *FFmpegMediaProcessor) imageDeliveryPresentation(
+	ctx context.Context,
+	deliveryPath string,
+	workDir string,
+	deliveryContentType string,
+) (string, string, string, error) {
+	handle, err := os.Open(deliveryPath)
+	if err != nil {
+		return "", "", "", fmt.Errorf("open normalized image for presentation: %w", err)
+	}
+	defer handle.Close()
+	decoded, _, err := image.Decode(handle)
+	if err != nil {
+		return "", "", "", fmt.Errorf(
+			"decode normalized image for delivery descriptor: %w",
+			err,
+		)
+	}
+	dominantColor := sampledImageDominantColor(decoded)
+
+	lqipPath := filepath.Join(workDir, "lqip.jpg")
+	if _, err := runCommand(
+		ctx,
+		p.config.FFmpegPath,
+		"-hide_banner", "-loglevel", "error", "-y",
+		"-i", deliveryPath,
+		"-map", "0:v:0",
+		"-frames:v", "1",
+		"-vf", "scale=16:-2:flags=lanczos,setsar=1,format=yuvj420p",
+		"-q:v", "8",
+		lqipPath,
+	); err != nil {
+		if ctx.Err() != nil {
+			return "", "", "", fmt.Errorf(
+				"image delivery LQIP generation timed out: %w",
+				ctx.Err(),
+			)
+		}
+		return "", "", "", fmt.Errorf(
+			"ffmpeg image delivery LQIP execution failed: %v",
+			commandFailureSummary(err),
+		)
+	}
+	lqipBytes, err := os.ReadFile(lqipPath)
+	if err != nil || len(lqipBytes) == 0 {
+		if err != nil {
+			return "", "", "", fmt.Errorf(
+				"read image delivery LQIP artifact: %w",
+				err,
+			)
+		}
+		return "", "", "", fmt.Errorf(
+			"image delivery LQIP generation produced no artifact",
+		)
+	}
+	lqip := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(lqipBytes)
+	if len(lqip) > mediamodel.MaxImageLQIPDataURIBytes {
+		return "", "", "", &mediaprocessing.RejectionError{
+			Reason: "image delivery LQIP exceeds descriptor size limit",
+		}
+	}
+	contentProfile := "photographic"
+	if deliveryContentType == "image/png" {
+		contentProfile = "alpha_graphic"
+	}
+	return dominantColor, lqip, contentProfile, nil
+}
+
+func sampledImageDominantColor(source image.Image) string {
+	bounds := source.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return "#000000"
+	}
+	const sampleAxis = 64
+	stepX := max(1, width/sampleAxis)
+	stepY := max(1, height/sampleAxis)
+	var red, green, blue, samples uint64
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += stepY {
+		for x := bounds.Min.X; x < bounds.Max.X; x += stepX {
+			r, g, b, _ := source.At(x, y).RGBA()
+			red += uint64(r >> 8)
+			green += uint64(g >> 8)
+			blue += uint64(b >> 8)
+			samples++
+		}
+	}
+	if samples == 0 {
+		return "#000000"
+	}
+	return fmt.Sprintf(
+		"#%02X%02X%02X",
+		red/samples,
+		green/samples,
+		blue/samples,
+	)
 }
 
 func (p *FFmpegMediaProcessor) normalizeImage(
@@ -166,18 +334,17 @@ func (p *FFmpegMediaProcessor) normalizeImage(
 		if ctx.Err() != nil {
 			return fmt.Errorf("image normalization timed out: %w", ctx.Err())
 		}
-		return &mediaprocessing.RejectionError{
-			Reason: fmt.Sprintf(
-				"image normalization failed: %v",
-				commandFailureSummary(err),
-			),
-		}
+		return fmt.Errorf(
+			"ffmpeg image normalization execution failed: %v",
+			commandFailureSummary(err),
+		)
 	}
 	info, err := os.Stat(deliveryPath)
 	if err != nil || info.Size() <= 0 {
-		return &mediaprocessing.RejectionError{
-			Reason: "image normalization produced no decodable artifact",
+		if err != nil {
+			return fmt.Errorf("stat normalized image artifact: %w", err)
 		}
+		return fmt.Errorf("image normalization produced no delivery artifact")
 	}
 	return nil
 }

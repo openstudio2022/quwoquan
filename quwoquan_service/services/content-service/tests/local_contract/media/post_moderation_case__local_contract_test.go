@@ -213,13 +213,14 @@ func TestReportRevisionReadFailureKeepsOutboxCheckpointReplayable(t *testing.T) 
 	moderationService, _ := newModerationService(now)
 	reportStore := testsupport.NewReportStore()
 	report, err := reportmodel.Create(reportmodel.CreateParams{
-		ID:          "report-reader-failure",
-		ReporterID:  "reporter-reader-failure",
-		TargetType:  reportmodel.TargetPost,
-		TargetID:    "post-corrupt-revision",
-		Reason:      reportmodel.ReasonSpam,
-		Description: "reader failure must keep checkpoint replayable",
-		Now:         now,
+		ID:                "report-reader-failure",
+		ReporterID:        "reporter-reader-failure",
+		ReporterAccountID: "account-reporter-reader-failure",
+		TargetType:        reportmodel.TargetPost,
+		TargetID:          "post-corrupt-revision",
+		Reason:            reportmodel.ReasonSpam,
+		Description:       "reader failure must keep checkpoint replayable",
+		Now:               now,
 	})
 	if err != nil {
 		t.Fatalf("create report fixture: %v", err)

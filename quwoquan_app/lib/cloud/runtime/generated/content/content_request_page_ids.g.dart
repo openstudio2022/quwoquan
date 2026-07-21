@@ -30,6 +30,7 @@ class ContentRequestPageIds {
     'GetMediaAsset': 'content.media.get',
     'GetMediaAssetDeliveryReference': 'content.get.media.asset.delivery.reference',
     'GetMediaAssetReference': 'content.media.reference',
+    'GetMediaImageReprocessRun': 'content.get.media.image.reprocess.run',
     'GetMediaUploadSession': 'content.get.media.upload.session',
     'GetMyFootprint': 'content.footprint.list',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
@@ -54,6 +55,7 @@ class ContentRequestPageIds {
     'ListUserPosts': 'content.user.posts',
     'MarkIntersectionsVisited': 'content.mark.intersections.visited',
     'OpenPostModerationCase': 'content.open.post.moderation.case',
+    'PauseMediaImageReprocessRun': 'content.pause.media.image.reprocess.run',
     'PinComment': 'content.pin.comment',
     'PromotePostToWork': 'content.post.promote',
     'ReactToComment': 'content.react.to.comment',
@@ -62,11 +64,14 @@ class ContentRequestPageIds {
     'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
     'RestoreComment': 'content.restore.comment',
+    'ResumeMediaImageReprocessRun': 'content.resume.media.image.reprocess.run',
     'ReviewPostModerationCase': 'content.review.post.moderation.case',
     'RollbackFilterCatalogRelease': 'content.rollback.filter.catalog.release',
+    'RollbackMediaImageReprocessRun': 'content.rollback.media.image.reprocess.run',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
     'StageFilterCatalogRelease': 'content.stage.filter.catalog.release',
+    'StartMediaImageReprocessRun': 'content.start.media.image.reprocess.run',
     'SubmitPostPublication': 'content.post.publish',
     'SupersedePostModerationCase': 'content.supersede.post.moderation.case',
     'UnlikePost': 'content.post.unlike',
@@ -101,6 +106,7 @@ class ContentRequestPageIds {
   static const String getMediaAsset = 'content.media.get';
   static const String getMediaAssetDeliveryReference = 'content.get.media.asset.delivery.reference';
   static const String getMediaAssetReference = 'content.media.reference';
+  static const String getMediaImageReprocessRun = 'content.get.media.image.reprocess.run';
   static const String getMediaUploadSession = 'content.get.media.upload.session';
   static const String getMyFootprint = 'content.footprint.list';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
@@ -125,6 +131,7 @@ class ContentRequestPageIds {
   static const String listUserPosts = 'content.user.posts';
   static const String markIntersectionsVisited = 'content.mark.intersections.visited';
   static const String openPostModerationCase = 'content.open.post.moderation.case';
+  static const String pauseMediaImageReprocessRun = 'content.pause.media.image.reprocess.run';
   static const String pinComment = 'content.pin.comment';
   static const String promotePostToWork = 'content.post.promote';
   static const String reactToComment = 'content.react.to.comment';
@@ -133,11 +140,14 @@ class ContentRequestPageIds {
   static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';
   static const String restoreComment = 'content.restore.comment';
+  static const String resumeMediaImageReprocessRun = 'content.resume.media.image.reprocess.run';
   static const String reviewPostModerationCase = 'content.review.post.moderation.case';
   static const String rollbackFilterCatalogRelease = 'content.rollback.filter.catalog.release';
+  static const String rollbackMediaImageReprocessRun = 'content.rollback.media.image.reprocess.run';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String stageFilterCatalogRelease = 'content.stage.filter.catalog.release';
+  static const String startMediaImageReprocessRun = 'content.start.media.image.reprocess.run';
   static const String submitPostPublication = 'content.post.publish';
   static const String supersedePostModerationCase = 'content.supersede.post.moderation.case';
   static const String unlikePost = 'content.post.unlike';

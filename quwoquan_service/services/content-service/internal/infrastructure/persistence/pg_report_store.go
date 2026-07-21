@@ -17,31 +17,42 @@ import (
 )
 
 type PGReportStore struct {
-	db *sql.DB
+	db                            *sql.DB
+	reporterAccountBackfills      map[string]string
+	reporterAccountBackfillResult ReporterAccountBackfillResult
 }
 
 type reportRecord struct {
-	ID          string     `json:"id"`
-	Version     int64      `json:"version"`
-	ReporterID  string     `json:"reporterId"`
-	TargetType  string     `json:"targetType"`
-	TargetID    string     `json:"targetId"`
-	Reason      string     `json:"reason"`
-	Description string     `json:"description,omitempty"`
-	Status      string     `json:"status"`
-	ReviewerID  string     `json:"reviewerId,omitempty"`
-	Resolution  string     `json:"resolution,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	ResolvedAt  *time.Time `json:"resolvedAt,omitempty"`
+	ID                string     `json:"id"`
+	Version           int64      `json:"version"`
+	ReporterID        string     `json:"reporterId"`
+	ReporterAccountID string     `json:"reporterAccountId"`
+	TargetType        string     `json:"targetType"`
+	TargetID          string     `json:"targetId"`
+	Reason            string     `json:"reason"`
+	Description       string     `json:"description,omitempty"`
+	Status            string     `json:"status"`
+	ReviewerID        string     `json:"reviewerId,omitempty"`
+	Resolution        string     `json:"resolution,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+	ResolvedAt        *time.Time `json:"resolvedAt,omitempty"`
 }
 
 type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-func NewPGReportStore(db *sql.DB) (*PGReportStore, error) {
+func NewPGReportStore(
+	db *sql.DB,
+	options ...PGReportStoreOption,
+) (*PGReportStore, error) {
 	store := &PGReportStore{db: db}
+	for _, option := range options {
+		if err := option(store); err != nil {
+			return nil, err
+		}
+	}
 	if err := store.ensureSchema(context.Background()); err != nil {
 		return nil, err
 	}
@@ -54,6 +65,7 @@ CREATE TABLE IF NOT EXISTS reports (
   id VARCHAR(36) PRIMARY KEY,
   version BIGINT NOT NULL DEFAULT 1,
   reporter_id VARCHAR(64) NOT NULL,
+  reporter_account_id VARCHAR(64) NOT NULL,
   target_type VARCHAR(16) NOT NULL,
   target_id VARCHAR(64) NOT NULL,
   reason VARCHAR(32) NOT NULL,
@@ -67,7 +79,9 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS reporter_account_id VARCHAR(64);
 ALTER TABLE reports ALTER COLUMN reporter_id TYPE VARCHAR(64);
+ALTER TABLE reports ALTER COLUMN reporter_account_id TYPE VARCHAR(64);
 ALTER TABLE reports ALTER COLUMN reviewer_id TYPE VARCHAR(64);
 CREATE TABLE IF NOT EXISTS report_command_receipts (
   idempotency_key VARCHAR(128) PRIMARY KEY,
@@ -143,8 +157,35 @@ CREATE INDEX IF NOT EXISTS idx_report_receipts_expires ON report_command_receipt
 DROP INDEX IF EXISTS idx_report_outbox_unpublished;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_report_outbox_replay_order
   ON report_outbox(outbox_sequence ASC);`
-	_, err := s.db.ExecContext(ctx, ddl)
+	if _, err := s.db.ExecContext(ctx, ddl); err != nil {
+		return err
+	}
+	backfillResult, err := s.applyReporterAccountBackfills(ctx)
+	if err != nil {
+		return err
+	}
+	s.reporterAccountBackfillResult = backfillResult
+	_, err = s.db.ExecContext(ctx, `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM reports
+    WHERE reporter_account_id IS NULL OR BTRIM(reporter_account_id) = ''
+  ) THEN
+    RAISE EXCEPTION
+      'reports.reporter_account_id requires a verified account backfill before startup';
+  END IF;
+END;
+$$;
+ALTER TABLE reports ALTER COLUMN reporter_account_id SET NOT NULL;`)
 	return err
+}
+
+// ReporterAccountBackfillResult exposes only row counts so startup logs can
+// audit an applied migration without recording persona or account identifiers.
+func (s *PGReportStore) ReporterAccountBackfillResult() ReporterAccountBackfillResult {
+	return s.reporterAccountBackfillResult
 }
 
 func (s *PGReportStore) Load(
@@ -362,7 +403,7 @@ func (s *PGReportStore) List(
 		limit = 20
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+SELECT id, version, reporter_id, reporter_account_id, target_type, target_id, reason, description, status,
        reviewer_id, resolution, created_at, updated_at, resolved_at
 FROM reports
 ORDER BY created_at DESC
@@ -401,7 +442,7 @@ func (s *PGReportStore) ListByReporter(
 	)
 	if cursor == nil {
 		rows, err = s.db.QueryContext(ctx, `
-SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+SELECT id, version, reporter_id, reporter_account_id, target_type, target_id, reason, description, status,
        reviewer_id, resolution, created_at, updated_at, resolved_at
 FROM reports
 WHERE reporter_id = $1
@@ -409,7 +450,7 @@ ORDER BY created_at DESC, id DESC
 LIMIT $2`, strings.TrimSpace(reporterID), limit)
 	} else {
 		rows, err = s.db.QueryContext(ctx, `
-SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+SELECT id, version, reporter_id, reporter_account_id, target_type, target_id, reason, description, status,
        reviewer_id, resolution, created_at, updated_at, resolved_at
 FROM reports
 WHERE reporter_id = $1
@@ -442,7 +483,7 @@ LIMIT $4`,
 }
 
 const reportSelectByID = `
-SELECT id, version, reporter_id, target_type, target_id, reason, description, status,
+SELECT id, version, reporter_id, reporter_account_id, target_type, target_id, reason, description, status,
        reviewer_id, resolution, created_at, updated_at, resolved_at
 FROM reports
 WHERE id = $1`
@@ -511,12 +552,13 @@ func insertReport(
 ) error {
 	_, err := tx.ExecContext(ctx, `
 INSERT INTO reports (
-  id, version, reporter_id, target_type, target_id, reason, description, status,
+  id, version, reporter_id, reporter_account_id, target_type, target_id, reason, description, status,
   reviewer_id, resolution, created_at, updated_at, resolved_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		record.ID,
 		record.Version,
 		record.ReporterID,
+		record.ReporterAccountID,
 		record.TargetType,
 		record.TargetID,
 		record.Reason,
@@ -541,21 +583,23 @@ func updateReport(
 UPDATE reports
 SET version = $3,
     reporter_id = $4,
-    target_type = $5,
-    target_id = $6,
-    reason = $7,
-    description = $8,
-    status = $9,
-    reviewer_id = $10,
-    resolution = $11,
-    created_at = $12,
-    updated_at = $13,
-    resolved_at = $14
+    reporter_account_id = $5,
+    target_type = $6,
+    target_id = $7,
+    reason = $8,
+    description = $9,
+    status = $10,
+    reviewer_id = $11,
+    resolution = $12,
+    created_at = $13,
+    updated_at = $14,
+    resolved_at = $15
 WHERE id = $1 AND version = $2`,
 		record.ID,
 		expectedVersion,
 		record.Version,
 		record.ReporterID,
+		record.ReporterAccountID,
 		record.TargetType,
 		record.TargetID,
 		record.Reason,
@@ -646,6 +690,7 @@ func scanReportRecord(scanner rowScanner) (reportRecord, error) {
 		&record.ID,
 		&record.Version,
 		&record.ReporterID,
+		&record.ReporterAccountID,
 		&record.TargetType,
 		&record.TargetID,
 		&record.Reason,
@@ -672,37 +717,39 @@ func scanReportRecord(scanner rowScanner) (reportRecord, error) {
 
 func recordFromSnapshot(snapshot reportmodel.Snapshot) reportRecord {
 	return reportRecord{
-		ID:          snapshot.ID,
-		Version:     snapshot.Version,
-		ReporterID:  snapshot.ReporterID,
-		TargetType:  string(snapshot.TargetType),
-		TargetID:    snapshot.TargetID,
-		Reason:      string(snapshot.Reason),
-		Description: snapshot.Description,
-		Status:      string(snapshot.Status),
-		ReviewerID:  snapshot.ReviewerID,
-		Resolution:  string(snapshot.Resolution),
-		CreatedAt:   snapshot.CreatedAt,
-		UpdatedAt:   snapshot.UpdatedAt,
-		ResolvedAt:  snapshot.ResolvedAt,
+		ID:                snapshot.ID,
+		Version:           snapshot.Version,
+		ReporterID:        snapshot.ReporterID,
+		ReporterAccountID: snapshot.ReporterAccountID,
+		TargetType:        string(snapshot.TargetType),
+		TargetID:          snapshot.TargetID,
+		Reason:            string(snapshot.Reason),
+		Description:       snapshot.Description,
+		Status:            string(snapshot.Status),
+		ReviewerID:        snapshot.ReviewerID,
+		Resolution:        string(snapshot.Resolution),
+		CreatedAt:         snapshot.CreatedAt,
+		UpdatedAt:         snapshot.UpdatedAt,
+		ResolvedAt:        snapshot.ResolvedAt,
 	}
 }
 
 func (r reportRecord) aggregate() (*reportmodel.Report, error) {
 	aggregate, err := reportmodel.Restore(reportmodel.Snapshot{
-		ID:          r.ID,
-		Version:     r.Version,
-		ReporterID:  r.ReporterID,
-		TargetType:  reportmodel.TargetType(r.TargetType),
-		TargetID:    r.TargetID,
-		Reason:      reportmodel.Reason(r.Reason),
-		Description: r.Description,
-		Status:      reportmodel.Status(r.Status),
-		ReviewerID:  r.ReviewerID,
-		Resolution:  reportmodel.Resolution(r.Resolution),
-		CreatedAt:   r.CreatedAt,
-		UpdatedAt:   r.UpdatedAt,
-		ResolvedAt:  r.ResolvedAt,
+		ID:                r.ID,
+		Version:           r.Version,
+		ReporterID:        r.ReporterID,
+		ReporterAccountID: r.ReporterAccountID,
+		TargetType:        reportmodel.TargetType(r.TargetType),
+		TargetID:          r.TargetID,
+		Reason:            reportmodel.Reason(r.Reason),
+		Description:       r.Description,
+		Status:            reportmodel.Status(r.Status),
+		ReviewerID:        r.ReviewerID,
+		Resolution:        reportmodel.Resolution(r.Resolution),
+		CreatedAt:         r.CreatedAt,
+		UpdatedAt:         r.UpdatedAt,
+		ResolvedAt:        r.ResolvedAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("restore report %q: %w", r.ID, err)

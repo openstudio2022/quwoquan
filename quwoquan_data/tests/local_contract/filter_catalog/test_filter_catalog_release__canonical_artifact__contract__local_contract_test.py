@@ -10,6 +10,7 @@ from content.filter_catalog.artifact import (
     validate_repository,
 )
 from content.filter_catalog.codec import load_json_decimal
+from content.filter_catalog.environment_import import load_environment_import
 from content.filter_catalog.contract import (
     ADJUSTMENT_FIELD_NAMES,
     CatalogContractError,
@@ -44,17 +45,50 @@ def test_repository_artifact_bootstrap_and_environment_inputs_are_same_source():
     }
 
 
+def test_environment_import_exposes_only_the_bound_stage_payload():
+    environment_input = load_environment_import(
+        repo_root=REPO_ROOT,
+        environment="gamma",
+    )
+
+    assert environment_input.manifest_ref.endswith("/gamma.seed.json")
+    assert environment_input.canonical_artifact_ref.endswith(
+        "/filter_catalog_release.json"
+    )
+    assert environment_input.release_id == "filter-catalog-20260720-001"
+    assert environment_input.category_count == 10
+    assert environment_input.preset_count == 85
+    assert environment_input.activation_policy == "stage_then_activate"
+    assert environment_input.idempotency_key.startswith("filter-catalog:")
+    assert environment_input.operation_paths == {
+        "stage": "/internal/content/filter-catalog-releases",
+        "activate": "/internal/content/filter-catalog-releases/{releaseId}:activate",
+        "rollback": "/internal/content/filter-catalog-releases/{releaseId}:rollback",
+        "read": "/content/filter-catalog",
+    }
+    assert set(environment_input.stage_payload()) == {
+        "releaseId",
+        "sourceOwner",
+        "canonicalDigest",
+        "categories",
+        "presets",
+        "recommendedFallbackPresetIds",
+    }
+
+
 def test_digest_vector_fixes_cross_language_canonical_bytes():
     vector = digest_test_vector()
 
     assert vector["sha256"] == (
-        "01ccbcce8c97768447928166f4598f7a"
-        "1c67855f26344e87a6581ebf7c22d2f5"
+        "fba38ede15295f3bbee31375d9955e"
+        "dc0baf722b8c204dbf0575f4ab25401242"
     )
     assert vector["canonicalJsonUtf8"].startswith('{"categories":[')
     assert "\\u62cd" not in vector["canonicalJsonUtf8"]
     assert "80.5" in vector["canonicalJsonUtf8"]
     assert "80.500" not in vector["canonicalJsonUtf8"]
+    assert "0.0000001" in vector["canonicalJsonUtf8"]
+    assert "1e-7" not in vector["canonicalJsonUtf8"]
 
 
 def test_legacy_initialization_expands_exactly_fifteen_typed_adjustments():
@@ -107,6 +141,7 @@ def test_legacy_initialization_expands_exactly_fifteen_typed_adjustments():
 @pytest.mark.parametrize(
     "mutation",
     [
+        "duplicate_category_sort",
         "duplicate_preset",
         "unknown_category",
         "out_of_range",
@@ -118,10 +153,14 @@ def test_contract_rejects_catalog_invariant_violations(mutation: str):
     release = load_json_decimal(CANONICAL.read_text(encoding="utf-8"))
     assert isinstance(release, dict)
     invalid = deepcopy(release)
+    categories = invalid["categories"]
+    assert isinstance(categories, list)
     presets = invalid["presets"]
     assert isinstance(presets, list)
 
-    if mutation == "duplicate_preset":
+    if mutation == "duplicate_category_sort":
+        categories[1]["sort"] = categories[0]["sort"]
+    elif mutation == "duplicate_preset":
         presets[1]["presetId"] = presets[0]["presetId"]
     elif mutation == "unknown_category":
         presets[0]["categoryId"] = "missing"

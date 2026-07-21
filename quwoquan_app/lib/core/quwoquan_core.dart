@@ -59,7 +59,7 @@ export 'auth/auth_session.dart';
 export 'auth/auth_gate.dart';
 export 'auth/auth_continuation.dart';
 export 'auth/auth_legal_config.dart';
-export 'auth/one_tap_login_channel.dart';
+export 'platform/one_tap_login_native_bridge.dart';
 export 'errors/ui_error_semantics.dart';
 export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     show runtimeErrorDisplayMessage, runtimeErrorSemantic;

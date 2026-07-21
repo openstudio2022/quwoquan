@@ -1,0 +1,14 @@
+read_model: ChatConversationTimestamp
+description: Per-user Conversation timestamp row used by the local chat-cache incremental index.
+storage_backend: mongodb
+collection: conversation_user_states
+source_entities: [Conversation, ConversationUserState]
+fields:
+  - {name: conversationId, type: string}
+  - {name: type, type: string}
+  - {name: updatedAt, type: timestamp}
+  - {name: settingsUpdatedAt, type: timestamp}
+  - {name: lastMessageAt, type: timestamp}
+  - {name: lastMessageTime, type: timestamp}
+  - {name: lastMessagePreview, type: string}
+  - {name: unreadCount, type: int}

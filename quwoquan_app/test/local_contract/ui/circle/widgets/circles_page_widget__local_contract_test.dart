@@ -133,7 +133,7 @@ void main() {
       for (final label in <String>['校园', '旅行', '摄影', '科技', '车之家']) {
         expect(find.text(label), findsOneWidget);
       }
-      for (final removed in <String>['推荐', '遇见', '人文', '生活', '运动', '美食']) {
+      for (final removed in <String>['遇见', '人文', '生活', '运动', '美食']) {
         expect(find.text(removed), findsNothing);
       }
     });

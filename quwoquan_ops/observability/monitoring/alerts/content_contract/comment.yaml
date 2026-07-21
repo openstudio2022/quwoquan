@@ -11,7 +11,7 @@ groups:
           operation: "content.comment.BindMediaAssetsToComment"
           contract_metric: "content_comment_attachments_bind"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -21,7 +21,7 @@ groups:
           operation: "content.comment.BindMediaAssetsToComment"
           contract_metric: "content_comment_attachments_bind"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -31,7 +31,7 @@ groups:
           operation: "content.comment.CreateComment"
           contract_metric: "content_comment_create"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -41,7 +41,7 @@ groups:
           operation: "content.comment.CreateComment"
           contract_metric: "content_comment_create"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -51,7 +51,7 @@ groups:
           operation: "content.comment.DeleteComment"
           contract_metric: "content_comment_delete"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -61,7 +61,7 @@ groups:
           operation: "content.comment.DeleteComment"
           contract_metric: "content_comment_delete"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -71,7 +71,7 @@ groups:
           operation: "content.comment.HideComment"
           contract_metric: "content_comment_hide"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -81,7 +81,7 @@ groups:
           operation: "content.comment.HideComment"
           contract_metric: "content_comment_hide"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -171,7 +171,7 @@ groups:
           operation: "content.comment.PinComment"
           contract_metric: "content_comment_pin"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -181,7 +181,7 @@ groups:
           operation: "content.comment.PinComment"
           contract_metric: "content_comment_pin"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -191,7 +191,7 @@ groups:
           operation: "content.comment.RestoreComment"
           contract_metric: "content_comment_restore"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -201,7 +201,7 @@ groups:
           operation: "content.comment.RestoreComment"
           contract_metric: "content_comment_restore"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
@@ -211,7 +211,7 @@ groups:
           operation: "content.comment.UnpinComment"
           contract_metric: "content_comment_unpin"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
@@ -221,5 +221,5 @@ groups:
           operation: "content.comment.UnpinComment"
           contract_metric: "content_comment_unpin"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"

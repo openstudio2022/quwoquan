@@ -9,11 +9,11 @@ import (
 )
 
 type RoomService struct {
-	manager RoomManager
+	provider MediaRoomProvider
 }
 
-func NewRoomService(manager RoomManager) *RoomService {
-	return &RoomService{manager: manager}
+func NewRoomService(provider MediaRoomProvider) *RoomService {
+	return &RoomService{provider: provider}
 }
 
 func (s *RoomService) CreateRoom(ctx context.Context, roomName string, maxParticipants int) (err error) {
@@ -22,7 +22,7 @@ func (s *RoomService) CreateRoom(ctx context.Context, roomName string, maxPartic
 		attribute.Int("room.max_participants", maxParticipants))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	return s.manager.CreateRoom(ctx, roomName, maxParticipants)
+	return s.provider.CreateRoom(ctx, roomName, maxParticipants)
 }
 
 func (s *RoomService) DeleteRoom(ctx context.Context, roomName string) (err error) {
@@ -30,7 +30,7 @@ func (s *RoomService) DeleteRoom(ctx context.Context, roomName string) (err erro
 		attribute.String("room.name", roomName))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	return s.manager.DeleteRoom(ctx, roomName)
+	return s.provider.DeleteRoom(ctx, roomName)
 }
 
 func (s *RoomService) ListParticipants(ctx context.Context, roomName string) (_ []RoomParticipant, err error) {
@@ -38,7 +38,7 @@ func (s *RoomService) ListParticipants(ctx context.Context, roomName string) (_ 
 		attribute.String("room.name", roomName))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	return s.manager.ListParticipants(ctx, roomName)
+	return s.provider.ListParticipants(ctx, roomName)
 }
 
 func (s *RoomService) RemoveParticipant(ctx context.Context, roomName string, identity string) (err error) {
@@ -47,5 +47,5 @@ func (s *RoomService) RemoveParticipant(ctx context.Context, roomName string, id
 		attribute.String("participant.identity", identity))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	return s.manager.RemoveParticipant(ctx, roomName, identity)
+	return s.provider.RemoveParticipant(ctx, roomName, identity)
 }

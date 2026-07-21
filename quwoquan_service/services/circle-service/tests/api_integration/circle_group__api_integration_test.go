@@ -83,10 +83,14 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 	// 归档要求 group owner 角色；owner membership 由 relay 投影，测试直接预置读模型。
 	if _, err := mongoDB.Collection("circle_group_memberships").InsertOne(context.Background(), bson.M{
 		"_id": "cgm-owner", "version": 1, "circleId": "circle-group", "groupId": groupID,
-		"personaId": "persona-member", "role": "owner", "state": "joined",
+		"personaId": "persona-member", "role": "owner", "state": "active",
 		"createdAt": time.Now().UTC(), "updatedAt": time.Now().UTC(),
 	}); err != nil {
 		t.Fatal(err)
+	}
+	withOwner := executeGroupQuery(t, "/circles/circle-group/groups/"+groupID, "persona-member", "GetCircleGroup")
+	if withOwner.Code != http.StatusOK || decodeBody(t, withOwner)["memberCount"] != float64(1) {
+		t.Fatalf("CircleGroup reader must count canonical active members: status=%d body=%s", withOwner.Code, withOwner.Body.String())
 	}
 
 	// 归档是命名迁移；已归档后的新 key 落 no-op receipt、不递增版本，同 key 重放。
@@ -114,7 +118,7 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 
 	store := grouppersistence.NewMongoAggregateStore(mongoDB)
 	streamRelay := groupapp.NewOutboxRelay(
-		store, store, messaging.NewCircleGroupStreamPublisher(redisRouter.Scene("general")), "circle-group-stream-test",
+		store, store, messaging.NewCircleGroupStreamPublisher(circleMessageTransport), "circle-group-stream-test",
 	)
 	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 2 {
 		t.Fatalf("CircleGroup stream drain count=%d err=%v", count, err)

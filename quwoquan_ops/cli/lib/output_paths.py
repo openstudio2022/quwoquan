@@ -1,9 +1,10 @@
 """The only local output-root contract.
 
-``.qwq_output`` contains only release payloads, run evidence, process records
-and disposable caches. Deployment source configuration and certificate exports are
-outside the repository output tree; configuration/network truth stays in domain
-deploy assets and Ops environment manifests.
+``.qwq_output`` contains only redacted run evidence, observability records,
+process records and disposable caches. Deployment packages, rendered
+configuration and certificate exports are outside the repository output tree;
+configuration/network truth stays in domain deploy assets and Ops environment
+manifests.
 """
 from __future__ import annotations
 
@@ -14,8 +15,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output"
+DEFAULT_DEPLOY_WORK_ROOT = Path.home() / ".cache" / "quwoquan" / "deploy"
 DEPLOY_ENVS = frozenset({"alpha", "beta", "gamma", "prod"})
 ENV_SEGMENTS = DEPLOY_ENVS | {"repo"}
+DEFAULT_DEPLOY_TARGET_BY_ENV = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    "prod": "prod-hosted",
+}
 
 
 def safe_segment(value: str, *, fallback: str = "run") -> str:
@@ -69,22 +77,6 @@ def env_observability_run_dir(env_name: str, run_id: str) -> Path:
     return env_observability_root(env_name) / safe_segment(run_id)
 
 
-def env_release_root(env_name: str) -> Path:
-    return env_root(env_name) / "release"
-
-
-def app_release_dir(env_name: str) -> Path:
-    return env_release_root(env_name) / "app"
-
-
-def service_release_dir(env_name: str, service: str) -> Path:
-    return env_release_root(env_name) / "service" / safe_segment(service, fallback="service")
-
-
-def legal_static_release_dir(env_name: str) -> Path:
-    return env_release_root(env_name) / "legal-static"
-
-
 def env_local_root(env_name: str) -> Path:
     return env_root(env_name) / "local"
 
@@ -102,14 +94,77 @@ def target_cache_dir(target: str) -> Path:
 
 
 def deployment_work_root(target: str) -> Path:
-    """Ephemeral rendered deployment files; never a repository output/config source."""
+    """Return the external deployment workspace for configuration and payloads."""
     configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
     base = (
         Path(configured).expanduser()
         if configured
-        else Path.home() / ".cache" / "quwoquan" / "deploy"
+        else DEFAULT_DEPLOY_WORK_ROOT
     )
+    resolved_base = base.resolve()
+    try:
+        resolved_base.relative_to(output_root().expanduser().resolve())
+    except ValueError:
+        pass
+    else:
+        raise ValueError(
+            "QWQ_DEPLOY_WORK_ROOT must be outside QWQ_OUTPUT_ROOT; "
+            ".qwq_output cannot contain deployment configuration or payloads"
+        )
     return base / safe_segment(target, fallback="local")
+
+
+def deployment_target_for_env(env_name: str, *, target: str = "") -> str:
+    """Resolve the only deployment workspace target allowed for an environment."""
+    env = normalize_env(env_name)
+    requested = str(target or os.environ.get("QWQ_DEPLOY_TARGET", "")).strip()
+    if not requested:
+        return DEFAULT_DEPLOY_TARGET_BY_ENV[env]
+    if env_for_target(requested) != env:
+        raise ValueError(
+            f"deployment target {requested!r} does not belong to environment {env!r}"
+        )
+    return safe_segment(requested, fallback=DEFAULT_DEPLOY_TARGET_BY_ENV[env])
+
+
+def deployment_package_root(env_name: str, *, target: str = "") -> Path:
+    """Return the external deployment-payload root for one environment target."""
+    return deployment_work_root(
+        deployment_target_for_env(env_name, target=target)
+    ) / "packages"
+
+
+def app_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
+    return deployment_package_root(env_name, target=target) / "app"
+
+
+def service_deployment_package_dir(
+    env_name: str,
+    service: str,
+    *,
+    target: str = "",
+) -> Path:
+    return (
+        deployment_package_root(env_name, target=target)
+        / "service"
+        / safe_segment(service, fallback="service")
+    )
+
+
+def legal_static_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
+    return deployment_package_root(env_name, target=target) / "legal-static"
+
+
+def runtime_shared_deployment_package_dir(
+    env_name: str,
+    *,
+    target: str = "",
+) -> Path:
+    return deployment_package_root(env_name, target=target) / "runtime-shared"
+
+
+def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
+    return deployment_package_root(env_name, target=target) / "ops-portal"
 
 
 def certificate_export_dir(target: str) -> Path:

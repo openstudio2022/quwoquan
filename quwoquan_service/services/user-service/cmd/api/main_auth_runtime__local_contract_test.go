@@ -1,43 +1,43 @@
 package main
 
 import (
-	"context"
-	"strings"
+	"errors"
 	"testing"
 )
 
-func TestConfiguredExternalAuthProviderModeDefaultsToRequired(t *testing.T) {
-	t.Setenv("USER_AUTH_EXTERNAL_PROVIDER_MODE", "")
-	mode, err := configuredExternalAuthProviderMode()
-	if err != nil || mode != externalAuthProviderModeRequired {
-		t.Fatalf("expected required default, mode=%q err=%v", mode, err)
+func TestCarrierPhoneResolverFailsClosedWithoutCredentials(t *testing.T) {
+	t.Setenv("ALIYUN_DYPNS_ACCESS_KEY_ID", "")
+	t.Setenv("ALIYUN_DYPNS_ACCESS_KEY_SECRET", "")
+
+	if _, err := newCarrierPhoneResolver(); err == nil {
+		t.Fatal("missing carrier credentials must fail composition")
 	}
 }
 
-func TestConfiguredExternalAuthProviderModeRejectsUnknownValue(t *testing.T) {
-	t.Setenv("USER_AUTH_EXTERNAL_PROVIDER_MODE", "optional")
-	if _, err := configuredExternalAuthProviderMode(); err == nil {
-		t.Fatal("unknown external auth mode must fail startup")
+func TestFederatedLoginBindingsFailClosedWithoutCredentials(t *testing.T) {
+	t.Setenv("WECHAT_OAUTH_APP_ID", "")
+
+	if _, err := newFederatedLoginBindings(nil); err == nil {
+		t.Fatal("missing federated credentials must fail composition")
 	}
 }
 
-func TestAnonymousOnlyModeDisablesExternalProvidersWithoutFakingIdentity(t *testing.T) {
-	t.Setenv("USER_AUTH_EXTERNAL_PROVIDER_MODE", "anonymous_only")
-	client, err := socialAuthProviderClient(config{})
-	if err != nil {
-		t.Fatalf("anonymous_only social client: %v", err)
+func TestReleaseAuthenticationBindingsExposeBlockedCapabilityForDegradation(t *testing.T) {
+	t.Setenv("APP_ENV", "beta")
+	t.Setenv("ALIYUN_DYPNS_ACCESS_KEY_ID", "carrier-key")
+	t.Setenv("ALIYUN_DYPNS_ACCESS_KEY_SECRET", "carrier-secret")
+	t.Setenv("WECHAT_OAUTH_APP_ID", "wechat-app")
+
+	if _, err := newCarrierPhoneResolver(); !errors.Is(
+		err,
+		ErrAuthRuntimeCapabilityBlocked,
+	) {
+		t.Fatalf("blocked one-tap descriptor error = %v", err)
 	}
-	if client.Supports("wechat") || client.Supports("alipay") || client.Supports("qq") {
-		t.Fatal("anonymous_only must not claim an external provider is configured")
-	}
-	if _, err := client.Exchange(context.Background(), "wechat", "short-code", "ios", "1.0"); err == nil || !strings.Contains(err.Error(), "unavailable") {
-		t.Fatalf("disabled provider must return unavailable, err=%v", err)
-	}
-	resolver, err := oneTapResolver(config{})
-	if err != nil {
-		t.Fatalf("anonymous_only one-tap resolver: %v", err)
-	}
-	if _, _, err := resolver.ResolvePhone(context.Background(), "cm", "carrier-token"); err == nil {
-		t.Fatal("anonymous_only one-tap resolver must not fabricate a phone number")
+	if _, err := newFederatedLoginBindings(nil); !errors.Is(
+		err,
+		ErrAuthRuntimeCapabilityBlocked,
+	) {
+		t.Fatalf("blocked social-login descriptor error = %v", err)
 	}
 }

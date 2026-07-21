@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,5 +47,29 @@ func TestValidateAssistantEnumDefaultsAcceptsDeclaredParserDefault(t *testing.T)
 	})
 	if err != nil {
 		t.Fatalf("expected declared parser default to pass: %v", err)
+	}
+}
+
+func TestGenerateAssistantRuntimeEnumsGoWritesAndChecksExplicitServiceOutput(
+	t *testing.T,
+) {
+	output := filepath.Join(t.TempDir(), "assistant_runtime_enums.g.go")
+	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	if err := initializeContractGraph(metadataDir); err != nil {
+		t.Fatalf("initialize ContractGraph metadata source: %v", err)
+	}
+	if err := generateAssistantRuntimeEnumsGo(metadataDir, output, false); err != nil {
+		t.Fatalf("generate Assistant runtime Go enums: %v", err)
+	}
+	if err := generateAssistantRuntimeEnumsGo(metadataDir, output, true); err != nil {
+		t.Fatalf("check generated Assistant runtime Go enums: %v", err)
+	}
+
+	if err := os.WriteFile(output, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("write stale generated output: %v", err)
+	}
+	err := generateAssistantRuntimeEnumsGo(metadataDir, output, true)
+	if err == nil || !strings.Contains(err.Error(), "are stale") {
+		t.Fatalf("stale generated output error = %v, want stale diagnostic", err)
 	}
 }

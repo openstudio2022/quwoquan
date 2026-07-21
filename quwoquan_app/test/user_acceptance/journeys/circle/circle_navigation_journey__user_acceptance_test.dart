@@ -2,26 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AppendCircleBehaviorFactCommand, CircleBehaviorFactWriter;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
+
+import '../../../local_contract/ui/circle/typed_circle_query_test_double.dart';
 
 class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
   @override
   Future<void> append(AppendCircleBehaviorFactCommand command) async {}
 }
 
-Widget _scopedApp({CircleRepository? mock}) {
-  final repo = mock ?? MockCircleRepository();
+Widget _scopedApp({CircleQueryReader? circleQuery}) {
+  final alphaQueries = AlphaCircleQueryReader();
+  final query = circleQuery ?? alphaQueries;
+  final CircleDiscoveryFeedQueryReader discoveryQuery =
+      query is CircleDiscoveryFeedQueryReader
+      ? query as CircleDiscoveryFeedQueryReader
+      : CircleDiscoveryFeedQueryTestDouble(
+          (CircleDiscoveryFeedQuery query) => CircleDiscoveryFeedPageSlice(
+            circles: const <CircleProjection>[],
+            items: const <CircleFeedPostProjection>[],
+          ),
+        );
   return ProviderScope(
     overrides: [
-      circleRepositoryProvider.overrideWithValue(repo),
+      circlesListQueryProvider.overrideWithValue(query),
+      circleDetailQueryProvider.overrideWithValue(query),
+      circlesListDiscoveryFeedQueryProvider.overrideWithValue(discoveryQuery),
       // 游客态：对象行为信号守卫短路；页面遥测走 Mock 上报。
       resolvedOwnerUserIdProvider.overrideWithValue(''),
       circleDetailBehaviorFactWriterProvider.overrideWithValue(
@@ -92,7 +103,7 @@ void main() {
 
   group('旅程错误路径', () {
     testWidgets('旅程 B1：Repository 异常时列表页降级', (tester) async {
-      await tester.pumpWidget(_scopedApp(mock: _ErrorCircleRepository()));
+      await tester.pumpWidget(_scopedApp(circleQuery: _ErrorCircleQuery()));
       await tester.pumpAndSettle();
 
       expect(find.byType(CirclesHubPage), findsOneWidget);
@@ -127,7 +138,7 @@ void main() {
     });
 
     testWidgets('旅程 C2：空数据状态安全渲染', (tester) async {
-      await tester.pumpWidget(_scopedApp(mock: _EmptyCircleRepository()));
+      await tester.pumpWidget(_scopedApp(circleQuery: _EmptyCircleQuery()));
       await tester.pumpAndSettle();
 
       expect(find.byType(CirclesHubPage), findsOneWidget);
@@ -135,37 +146,20 @@ void main() {
   });
 }
 
-class _ErrorCircleRepository extends MockCircleRepository {
+class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-    String? subCategory,
-  }) async {
+  Future<CirclePageSlice> list(CircleListQuery query) async {
     throw Exception('Network error');
   }
 }
 
-class _EmptyCircleRepository extends MockCircleRepository {
+class _EmptyCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<List<CircleDto>> listCircles({
-    String? category,
-    String? domainId,
-    String? recommendFor,
-    String? cursor,
-    int limit = 20,
-    String? sort,
-    String? subCategory,
-  }) async {
-    return [];
-  }
+  Future<CirclePageSlice> list(CircleListQuery query) async =>
+      CirclePageSlice(items: const <CircleProjection>[]);
 
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
+  Future<CircleProjection> get(CircleDetailQuery query) async {
     return Future.error(Exception('Circle not found'));
   }
 }

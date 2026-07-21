@@ -196,14 +196,21 @@ func (s *AssistantService) SearchXiaoquResults(ctx context.Context, req assistan
 		if target == "" || strings.TrimSpace(citation.ObjectID) == "" {
 			continue
 		}
+		destination, ok := citationDestinationFromSearch(
+			target,
+			citation.ObjectID,
+			citation.URL,
+		)
+		if !ok {
+			continue
+		}
 		citations = append(citations, assistant.AssistantSearchCitationView{
 			CitationID:    citation.CitationID,
 			ObjectType:    target,
 			ObjectID:      citation.ObjectID,
 			Title:         citation.Title,
 			Snippet:       citation.Snippet,
-			URL:           citation.URL,
-			DeepLink:      citation.DeepLink,
+			Destination:   destination,
 			BadgeLabel:    citation.BadgeLabel,
 			SourceDomain:  citation.SourceDomain,
 			Score:         citation.Score,

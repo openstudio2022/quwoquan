@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	rtauth "quwoquan_service/runtime/auth"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/operation"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/realtime-gateway/internal/adapters/http"
@@ -36,10 +37,11 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	if err != nil {
 		t.Fatalf("new ticket service: %v", err)
 	}
+	eventSource := newTestEventSource(t, client)
 	hub, err := application.NewHub(
 		redisstore.NewLeaseStore(client),
 		redisstore.NewPresenceStore(client),
-		redisstore.NewEventSource(client),
+		eventSource,
 		"node-test",
 		slog.Default(),
 	)
@@ -48,7 +50,7 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	}
 	handler, err := httpadapter.NewHandler(
 		tickets,
-		redisstore.NewEventSource(client),
+		eventSource,
 		redisstore.NewPresenceStore(client),
 		redisstore.NewPresenceStore(client),
 		httpadapter.DefaultTransportConfig(),
@@ -68,6 +70,20 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	server := httptest.NewServer(withTestPrincipal(mux))
 	t.Cleanup(server.Close)
 	return &gatewayHarness{client: client, tickets: tickets, hub: hub, server: server}
+}
+
+func newTestEventSource(t *testing.T, client rtredis.Client) *redisstore.EventSource {
+	t.Helper()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"realtime-gateway-test",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("new message transport: %v", err)
+	}
+	return redisstore.NewEventSource(transport)
 }
 
 // withTestPrincipal 模拟 auth middleware：只有完整三元组才注入可信 principal。

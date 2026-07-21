@@ -19,6 +19,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -48,8 +49,7 @@ const int _kStartGroupChatMaxMembers = 1000;
 
 /// 发起群聊 / 添加成员两种模式的可观测命名（埋点事件属性，非路由/surface 契约）。
 const String _kCreateModePageName = PageNames.startGroupChat;
-const String _kAddMemberModePageName = 'group_add_members';
-final String _kStartGroupChatSurface = AppUiSurfaces.startGroupChat.id;
+const String _kAddMemberModePageName = PageNames.chatAddMembers;
 const String _kStartGroupChatRoute = AppRoutePaths.startGroupChat;
 const String _kStartGroupChatJourney = 'start_group_chat';
 
@@ -79,6 +79,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   late final String _wizardId;
   late final PageLifecycleObservability _pageObservability;
   late final JourneyEventTracker _journeyTracker;
+  late final ChatInteractionTelemetryTracker _chatTelemetryTracker;
   late final DateTime _enteredAt;
 
   List<ChatContactRowDto> _contacts = [];
@@ -87,10 +88,12 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
   int _lastSelectedCount = 0;
-  final Set<String> _selectionSources = <String>{};
 
   String get _analyticsPageName =>
       widget.isCreateMode ? _kCreateModePageName : _kAddMemberModePageName;
+  String get _analyticsSurfaceId => widget.isCreateMode
+      ? AppUiSurfaces.startGroupChat.id
+      : AppUiSurfaces.chatAddMembers.id;
 
   void _recordPageState({
     required String phase,
@@ -101,7 +104,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     _pageObservability.recordPageState(
       pageName: _analyticsPageName,
       route: _kStartGroupChatRoute,
-      surface: _kStartGroupChatSurface,
+      surface: _analyticsSurfaceId,
       phase: phase,
       error: error,
       itemCount: itemCount,
@@ -116,6 +119,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         '${widget.conversationId ?? 'create'}_${DateTime.now().microsecondsSinceEpoch}';
     _pageObservability = ref.read(pageLifecycleObservabilityProvider);
     _journeyTracker = ref.read(journeyEventTrackerProvider);
+    _chatTelemetryTracker = ref.read(chatInteractionTelemetryTrackerProvider);
     _enteredAt = DateTime.now();
     _recordPageState(phase: 'enter');
     _recordCompanionContextEnter();
@@ -281,7 +285,16 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final wasSelected = ref.read(wizardProvider).isSelected(member.userId);
     ref.read(wizardProvider.notifier).toggleMember(member);
     if (!wasSelected) {
-      _selectionSources.add('contact');
+      unawaited(
+        _chatTelemetryTracker.track(
+          action: ChatInteractionAction.candidateSourceSelect,
+          outcome: ChatInteractionOutcome.succeeded,
+          source: ChatInteractionSource.contacts,
+          memberCount: ref.read(wizardProvider).selectedMembers.length,
+          pageName: _analyticsPageName,
+          surfaceId: _analyticsSurfaceId,
+        ),
+      );
     }
   }
 
@@ -293,12 +306,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final isDark = ref.read(isDarkProvider);
     final sourceKey = source == StartGroupSource.circle ? 'circle' : 'group';
     unawaited(
-      _journeyTracker.trackAction(
-        journey: _kStartGroupChatJourney,
-        action: 'source_${sourceKey}_open',
+      _chatTelemetryTracker.track(
+        action: ChatInteractionAction.candidateSourceOpen,
+        outcome: ChatInteractionOutcome.succeeded,
+        source: source == StartGroupSource.circle
+            ? ChatInteractionSource.circle
+            : ChatInteractionSource.group,
         pageName: _analyticsPageName,
-        targetType: 'member_source',
-        targetKey: sourceKey,
+        surfaceId: _analyticsSurfaceId,
       ),
     );
     final applied = await Navigator.of(context).push<bool>(
@@ -315,19 +330,20 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     if (!mounted || applied != true) {
       return;
     }
-    _selectionSources.add(sourceKey);
     final selectedCount = ref
         .read(startGroupMemberWizardProvider(_wizardId))
         .selectedMembers
         .length;
     unawaited(
-      _journeyTracker.trackAction(
-        journey: _kStartGroupChatJourney,
-        action: 'source_${sourceKey}_selection_applied',
+      _chatTelemetryTracker.track(
+        action: ChatInteractionAction.candidateSourceSelect,
+        outcome: ChatInteractionOutcome.succeeded,
+        source: source == StartGroupSource.circle
+            ? ChatInteractionSource.circle
+            : ChatInteractionSource.group,
         pageName: _analyticsPageName,
-        targetType: 'member_source',
-        targetKey: sourceKey,
-        payload: <String, dynamic>{'selectedCount': selectedCount},
+        surfaceId: _analyticsSurfaceId,
+        memberCount: selectedCount,
       ),
     );
   }
@@ -340,28 +356,18 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     required int memberCount,
     Object? error,
   }) {
-    final action = widget.isCreateMode
-        ? (success ? 'create_success' : 'create_failed')
-        : (success ? 'add_members_success' : 'add_members_failed');
-    final selectionSourceResult = (_selectionSources.toList()..sort()).join(
-      '+',
-    );
     unawaited(
-      _journeyTracker.trackAction(
-        journey: _kStartGroupChatJourney,
-        action: action,
+      _chatTelemetryTracker.track(
+        action: widget.isCreateMode
+            ? ChatInteractionAction.groupCreate
+            : ChatInteractionAction.memberAdd,
+        outcome: success
+            ? ChatInteractionOutcome.succeeded
+            : ChatInteractionOutcome.failed,
         pageName: _analyticsPageName,
-        targetType: 'conversation',
-        targetKey: widget.conversationId ?? '',
-        entityType: 'conversation',
-        payload: <String, dynamic>{
-          'isCreateMode': widget.isCreateMode,
-          'memberCount': memberCount,
-          'result': selectionSourceResult.isEmpty
-              ? 'unknown'
-              : selectionSourceResult,
-          ...?widget.routeExtra?.toAnalyticsPayload(),
-        },
+        surfaceId: _analyticsSurfaceId,
+        memberCount: memberCount,
+        error: error,
       ),
     );
     _recordPageState(

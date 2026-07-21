@@ -271,7 +271,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://weather.cma.cn/shenzhen'),
+    );
   });
 
   testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (tester) async {
@@ -669,7 +672,10 @@ void main() {
               'label': '来源1',
               'claim': '深圳今天有雨，外出建议带伞。',
               'evidenceId': 'weather_ev_1',
-              'url': 'https://weather.cma.cn/shenzhen',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://weather.cma.cn/shenzhen',
+              },
               'title': '深圳天气预报 - 中国气象局',
               'source': 'weather.cma.cn',
               'snippet': '深圳今天有雨，外出建议带伞。',
@@ -698,7 +704,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://weather.cma.cn/shenzhen'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://weather.cma.cn/shenzhen'),
+    );
   });
 
   testWidgets('answerEvidenceBindings 会渲染为可点击递增角标', (tester) async {
@@ -715,7 +724,10 @@ void main() {
               'label': '来源1',
               'claim': '官方仓库',
               'evidenceId': 'evidence_1',
-              'url': 'https://github.com/flutter/flutter',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://github.com/flutter/flutter',
+              },
               'title': 'Flutter GitHub 仓库',
               'source': 'github.com',
               'snippet': 'Flutter SDK 与框架源码仓库',
@@ -725,7 +737,10 @@ void main() {
               'label': '来源2',
               'claim': '文档中心',
               'evidenceId': 'evidence_2',
-              'url': 'https://developer.mozilla.org/zh-CN/',
+              'destination': <String, dynamic>{
+                'kind': 'external',
+                'url': 'https://developer.mozilla.org/zh-CN/',
+              },
               'title': 'MDN Web Docs',
               'source': 'developer.mozilla.org',
               'snippet': '文档中心',
@@ -759,7 +774,10 @@ void main() {
     await tester.pump();
 
     expect(tappedRef, isNotNull);
-    expect(tappedRef!.url, equals('https://developer.mozilla.org/zh-CN/'));
+    expect(
+      tappedRef!.destination.url,
+      equals('https://developer.mozilla.org/zh-CN/'),
+    );
     expect(tappedRef!.source, equals('developer.mozilla.org'));
   });
 }

@@ -38,11 +38,25 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
             "enabled": True,
             "grayUpstream": "https://host.containers.internal:28443",
             "grayUpstreamTlsInsecureSkipVerify": True,
-            "dimensions": {
-                "appVersions": ["1.2.1"],
-                "userIds": ["user-gray-1"],
-                "provinces": ["330000"],
-                "carriers": ["chinamobile"],
+            "stageDimensions": {
+                "gray-initial": {
+                    "appVersions": ["1.2.1"],
+                    "userIds": ["user-gray-1"],
+                    "provinces": ["330000"],
+                    "carriers": ["chinamobile"],
+                },
+                "carry-on": {
+                    "appVersions": ["1.2.1"],
+                    "userIds": ["user-gray-1"],
+                    "provinces": ["330000"],
+                    "carriers": ["chinamobile"],
+                },
+                "full": {
+                    "appVersions": [],
+                    "userIds": [],
+                    "provinces": [],
+                    "carriers": [],
+                },
             },
         }
         policy.update(overrides)
@@ -50,7 +64,7 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
 
     def test_enabled_policy_compiles_matchers_for_all_dimensions(self) -> None:
         with patch.object(self.render, "_load_yaml", return_value=self._policy()):
-            block = self.render._render_gray_routing_block()
+            block = self.render._render_gray_routing_block("gray-initial")
         self.assertIn("@gray_appversions", block)
         self.assertIn("header X-Client-App-Version 1.2.1", block)
         self.assertIn("@gray_userids", block)
@@ -67,17 +81,27 @@ class GrayRoutingPolicyCompileTest(unittest.TestCase):
         with patch.object(
             self.render, "_load_yaml", return_value=self._policy(enabled=False)
         ):
-            self.assertEqual(self.render._render_gray_routing_block(), "")
+            self.assertEqual(self.render._render_gray_routing_block("gray-initial"), "")
 
     def test_empty_dimension_is_skipped(self) -> None:
         policy = self._policy()
-        policy["policy"]["dimensions"]["provinces"] = []
-        policy["policy"]["dimensions"]["carriers"] = []
+        stage = policy["policy"]["stageDimensions"]["gray-initial"]
+        stage["provinces"] = []
+        stage["carriers"] = []
         with patch.object(self.render, "_load_yaml", return_value=policy):
-            block = self.render._render_gray_routing_block()
+            block = self.render._render_gray_routing_block("gray-initial")
         self.assertIn("@gray_appversions", block)
         self.assertNotIn("@gray_provinces", block)
         self.assertNotIn("@gray_carriers", block)
+
+    def test_full_stage_compiles_no_gray_routing(self) -> None:
+        with patch.object(self.render, "_load_yaml", return_value=self._policy()):
+            self.assertEqual(self.render._render_gray_routing_block("full"), "")
+
+    def test_unknown_stage_fails_closed(self) -> None:
+        with patch.object(self.render, "_load_yaml", return_value=self._policy()):
+            with self.assertRaises(SystemExit):
+                self.render._render_gray_routing_block("unrecognized")
 
     def test_repo_policy_passes_verify_gate(self) -> None:
         result = subprocess.run(

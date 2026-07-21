@@ -1979,7 +1979,7 @@ def build_circle_doc(circles: list[dict[str, Any]], memberships: dict[str, list[
     photo_posts = [post["postId"] for post in posts if post["circleRef"] == "fixture_circle_photo"][:12]
     return {
         "schema": "circle.scenario-fixtures",
-        "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。",
+        "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 AlphaCircle typed facets。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "circle_core": {"description": "圈子列表、详情、默认群与成员共享真实图片种子。", "circles": circles_rows, "groups": groups, "members": members_doc, "files": files},

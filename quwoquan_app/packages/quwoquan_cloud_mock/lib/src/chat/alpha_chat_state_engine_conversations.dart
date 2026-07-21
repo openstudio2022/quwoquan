@@ -101,11 +101,6 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
   ChatFixtureObject createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) {
@@ -125,8 +120,6 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
     _newConversationSerial += 1;
     final id = 'fixture_conv_created_$_newConversationSerial';
     final now = _now().toIso8601String();
-    final normalizedCircleId = circleId?.trim() ?? '';
-    final normalizedCircleGroupId = circleGroupId?.trim() ?? '';
     final conversation = <String, Object?>{
       'id': id,
       'type': type,
@@ -134,18 +127,10 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
       'avatarUrl': type == 'group' ? groupAvatarFor(id) : '',
       'groupAvatarVersion': type == 'group' ? 1 : 0,
       'creatorId': currentUserId,
-      'circleId': normalizedCircleId,
-      if (normalizedCircleGroupId.isNotEmpty)
-        'circleGroupId': normalizedCircleGroupId,
-      'originType':
-          originType ??
-          _defaultOriginType(type, normalizedCircleId, normalizedCircleGroupId),
-      'bindingType':
-          bindingType ??
-          _defaultBindingType(normalizedCircleId, normalizedCircleGroupId),
-      'lifecyclePolicy':
-          lifecyclePolicy ??
-          _defaultLifecyclePolicy(normalizedCircleId, normalizedCircleGroupId),
+      'circleId': '',
+      'originType': type == 'group' ? 'ad_hoc_group' : 'direct_init',
+      'bindingType': 'none',
+      'lifecyclePolicy': 'persistent',
       'maxSeq': 0,
       'lastSeq': 0,
       'memberCount': memberIds.length + 1,
@@ -482,31 +467,3 @@ String _groupAvatarSourceHash(List<ChatFixtureObject> members) {
       )
       .join('|');
 }
-
-String _defaultOriginType(String type, String circleId, String circleGroupId) {
-  if (type != 'group') {
-    return 'direct_init';
-  }
-  if (circleGroupId.isNotEmpty) {
-    return 'circle_self_built_group';
-  }
-  if (circleId.isNotEmpty) {
-    return 'circle_default_group';
-  }
-  return 'ad_hoc_group';
-}
-
-String _defaultBindingType(String circleId, String circleGroupId) {
-  if (circleGroupId.isNotEmpty) {
-    return 'circle_group';
-  }
-  if (circleId.isNotEmpty) {
-    return 'circle';
-  }
-  return 'none';
-}
-
-String _defaultLifecyclePolicy(String circleId, String circleGroupId) =>
-    circleGroupId.isNotEmpty || circleId.isNotEmpty
-    ? 'bound_to_circle'
-    : 'persistent';

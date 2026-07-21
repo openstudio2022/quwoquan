@@ -193,7 +193,7 @@ flowchart LR
   - 发布链切换 `uploadPreparedSource` 流式上传（大文件不进内存）；进度回调贯通（bytes 粒度）→ 创作页进度条 + 取消；分片阈值决策（>50MB 分片，阈值入 metadata 配置）；上传失败纳入离线队列（断点续传消费 `GetMediaUploadSession` resume 契约，正好补齐 `CONTENT_MEDIA_GAMMA_UAT` 要求的 resume 证据）；「处理中」态表达（completeUpload 后 asset processing → 排队卡片「处理完成后自动发布」+ ready 通知续发）；`unauthorized` 改为引导重登（修 `_isRetryable`）。
   - 验收：大文件（≥200MB 模拟）上传内存水位断言；断网续传 local_contract + gamma 真机弱网 patrol；处理中→自动发布 UAT。
 - **批次 V-C Android 能力位收口（对应 GATE-V2）**
-  - 短期：`PlatformCapabilities` 登记 `videoEditExport` 能力位，Android 隐藏剪辑/静音入口（保留封面选择——纯 Dart 可用），入口语义诚实；`ios_video_editing_service` 迁 NativeBridge 防腐接口（清 R-XP4 存量），PlatformException 补遥测。
+  - 已完成：`quwoquan/video_editing` 已迁入 `core/platform/ios_video_editing_bridge.dart`，页面不再直接持有原生通道，R-XP4 存量 allowlist 已清零。剩余：`PlatformCapabilities` 登记 `videoEditExport` 能力位，Android 隐藏剪辑/静音入口（保留封面选择——纯 Dart 可用），入口语义诚实，并补齐原生失败遥测。
   - 长期（独立排期）：Android MediaCodec/Transformer 导出实现，能力位翻牌。
   - 验收：capability profile 驱动的双平台行为契约测试（R-XP9：同一批测试断言 iOS 显示入口/Android 隐藏入口）。
 - **批次 V-D 验收诚信与四环境（对应 GATE-V4/V5/V8）**
@@ -220,7 +220,7 @@ flowchart LR
    - ffmpeg 管线：probe → 统一归一转码（h264/aac/mp4/faststart/keyframe 2s，无音轨注入静音 AAC）→ 封面帧 → 预览轨道（5s 间隔、5 列 sprite、多 sprite 分片，全程满足 `preview_track_manifest.schema.json` 约束，与 media-canary 参数同源）→ `RecordMediaProcessingResult(ready)`；内容性失败（损坏/超 1h/不可解码）落 `rejected+原因`，基础设施失败重试不推进 checkpoint。
    - 装配：composition root 默认启用（`media_processing.disabled` 显式关闭口），ffmpeg 缺失 fail-fast；Dockerfile（apk/apt 双分支）安装 ffmpeg；worker health check `content_media_processing_worker` + Prometheus 指标（jobs_total/duration_seconds/outbox_pending）+ 新增积压/失败告警（`ContentMediaProcessingOutboxBacklog`/`ContentMediaProcessingJobFailures`，`quwoquan_alerts.yaml`）。
    - App 端 manifest 版本语义对齐：预览轨道身份收敛为 (assetId, trackVersion)，manifest.assetVersion 允许落后 descriptor（发布前封面命令会推进聚合版本），修复了 fixture 从未暴露的 UGC 版本竞态（`video_preview_track_remote.dart` + local_contract 测试 3/3 绿）。
-   - 测试：worker 编排 local_contract 5 用例绿（ready/rejected/基础设施重试/幂等跳过/image 跳过）；manifest/probe 契约 6 用例绿（1h 上限全区间 schema 约束）；新增 api_integration `TestMediaProcessingWorkerTurnsUploadedVideoReady`（真实 MinIO+Mongo+ffmpeg：带音轨/无音轨/垃圾字节三场景 + 发布绑定互通断言）。
+   - 测试：worker 编排 local_contract 5 用例绿（ready/rejected/基础设施重试/幂等跳过/image 跳过）；manifest/probe 契约 6 用例绿（1h 上限全区间 schema 约束）；新增 api_integration `TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors`（真实 MinIO+Mongo+ffmpeg：视频带音轨/无音轨、图片归一化和垃圾字节场景 + 发布绑定互通断言）。
    - 剩余（批次 V-A 尾项）：`media-processing-helper-read` 特性树 acceptance 回填、直通复用（合规视频免重编码）吞吐优化、`adaptive(hls_or_dash)` 决策登记随 4 裁决。
 3. Android 视频编辑长期路径维持待确认（R-XP8 三方包矩阵登记）；短期能力位收口归批次 V-C。
 4. HLS/DASH 排期维持待确认（现状 progressive fast-start MP4 已由 worker 真实交付，`fallback_to_original` 兜底语义成立）。

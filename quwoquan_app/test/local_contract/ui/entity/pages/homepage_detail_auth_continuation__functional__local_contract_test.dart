@@ -11,7 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_crea
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -25,6 +25,7 @@ void main() {
   late FlutterExceptionHandler? originalOnError;
 
   setUp(() {
+    AuthGate.resetDebounce();
     HttpOverrides.global = _NoNetworkHttpOverrides();
     originalOnError = FlutterError.onError;
     FlutterError.onError = (details) {
@@ -38,6 +39,7 @@ void main() {
   });
 
   tearDown(() {
+    AuthGate.resetDebounce();
     HttpOverrides.global = null;
     FlutterError.onError = originalOnError;
   });
@@ -49,6 +51,14 @@ void main() {
         overrides: <Override>[
           authSessionControllerProvider.overrideWith(
             _FlippableHomepageSession.new,
+          ),
+          activePersonaContextProvider.overrideWith(
+            (_) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'homepage-viewer-persona',
+              ownerUserId: 'homepage-viewer-owner',
+              displayName: '主页测试用户',
+              avatarUrl: '',
+            ),
           ),
           homepageFacetSetProvider.overrideWithValue(
             _UniversityHomepageRepository(),
@@ -154,6 +164,14 @@ void main() {
           authSessionControllerProvider.overrideWith(
             _FlippableHomepageSession.new,
           ),
+          activePersonaContextProvider.overrideWith(
+            (_) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'homepage-viewer-persona',
+              ownerUserId: 'homepage-viewer-owner',
+              displayName: '主页测试用户',
+              avatarUrl: '',
+            ),
+          ),
           homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             const MockHomepageIntroductionRepository(),
@@ -218,6 +236,14 @@ void main() {
           authSessionControllerProvider.overrideWith(
             _FlippableHomepageSession.new,
           ),
+          activePersonaContextProvider.overrideWith(
+            (_) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'homepage-viewer-persona',
+              ownerUserId: 'homepage-viewer-owner',
+              displayName: '主页测试用户',
+              avatarUrl: '',
+            ),
+          ),
           homepageFacetSetProvider.overrideWithValue(
             _ClaimedHomepageRepository(),
           ),
@@ -252,6 +278,83 @@ void main() {
     expect(conversations.createCalls, 1);
     expect(conversations.lastInitialMemberIds, <String>['owner-persona-1']);
     expect(find.text('会话:conversation-homepage-1'), findsOneWidget);
+    expect(container.read(authContinuationProvider), isNull);
+  });
+
+  testWidgets('游客关闭地点主页想去登录后留在公开详情且清除续接', (tester) async {
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (_, state) =>
+              HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => TextButton(
+            key: const ValueKey<String>('homepage-detail-login-close'),
+            onPressed: () {
+              ProviderScope.containerOf(
+                context,
+              ).read(authContinuationProvider.notifier).clear();
+              context.go(
+                state.uri.queryParameters[loginDismissFallbackQueryParam] ??
+                    AppRoutePaths.home,
+              );
+            },
+            child: const Text('CLOSE_LOGIN'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          authSessionControllerProvider.overrideWith(
+            _FlippableHomepageSession.new,
+          ),
+          homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            const MockHomepageIntroductionRepository(),
+          ),
+          currentUserIdProvider.overrideWithValue(''),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(UITextConstants.homepageWishlistAction));
+    await tester.pumpAndSettle();
+
+    final loginContext = tester.element(
+      find.byKey(const ValueKey<String>('homepage-detail-login-close')),
+    );
+    expect(
+      GoRouterState.of(
+        loginContext,
+      ).uri.queryParameters[loginGuestDismissPopQueryParam],
+      LoginDismissPolicy.safeFallback.name,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('homepage-detail-login-close')),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-login-close')),
+      findsNothing,
+    );
+    expect(find.text(UITextConstants.homepageWishlistAction), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomepageDetailPage)),
+    );
     expect(container.read(authContinuationProvider), isNull);
   });
 }
@@ -352,11 +455,6 @@ final class _RecordingConversationRepository extends Fake
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {

@@ -2,6 +2,8 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+
 class SkillSubscriptionSearchQueryPlanWire {
   const SkillSubscriptionSearchQueryPlanWire({
     this.rawText = "",
@@ -140,7 +142,7 @@ class SkillSubscriptionWire {
     required this.skillId,
     this.domainId = "",
     this.tagRefs = const <String>[],
-    this.status = "active",
+    this.status = SkillSubscriptionStatus.active,
     this.searchQueryPlan = const SkillSubscriptionSearchQueryPlanWire(),
     this.trigger = const SkillSubscriptionTriggerWire(),
     this.destination = const SkillSubscriptionDestinationWire(),
@@ -154,7 +156,7 @@ class SkillSubscriptionWire {
   final String skillId;
   final String domainId;
   final List<String> tagRefs;
-  final String status;
+  final SkillSubscriptionStatus status;
   final SkillSubscriptionSearchQueryPlanWire searchQueryPlan;
   final SkillSubscriptionTriggerWire trigger;
   final SkillSubscriptionDestinationWire destination;
@@ -168,7 +170,7 @@ class SkillSubscriptionWire {
         'skillId': skillId,
         'domainId': domainId,
         'tagRefs': tagRefs,
-        'status': status,
+        'status': status.wireName,
         'searchQueryPlan': searchQueryPlan.toJson(),
         'trigger': trigger.toJson(),
         'destination': destination.toJson(),
@@ -184,7 +186,7 @@ class SkillSubscriptionWire {
       skillId: (json['skillId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       tagRefs: _assistantStringList(json['tagRefs']),
-      status: (json['status'] as String?)?.trim() ?? "active",
+      status: parseSkillSubscriptionStatus((json['status'] as String?)?.trim() ?? "active"),
       searchQueryPlan: json['searchQueryPlan'] is Map ? SkillSubscriptionSearchQueryPlanWire.fromJson((json['searchQueryPlan'] as Map).cast<String, dynamic>()) : const SkillSubscriptionSearchQueryPlanWire(),
       trigger: json['trigger'] is Map ? SkillSubscriptionTriggerWire.fromJson((json['trigger'] as Map).cast<String, dynamic>()) : const SkillSubscriptionTriggerWire(),
       destination: json['destination'] is Map ? SkillSubscriptionDestinationWire.fromJson((json['destination'] as Map).cast<String, dynamic>()) : const SkillSubscriptionDestinationWire(),

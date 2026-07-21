@@ -70,7 +70,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 ) (ReactResult, error) {
 	model := r.Model
 	if model == nil {
-		model = DeterministicModelProvider{}
+		return ReactResult{}, fmt.Errorf("assistant model provider is not configured")
 	}
 	tools := r.Tools
 	if tools == nil {
@@ -102,13 +102,14 @@ func (r ReactRuntime) RunWithFinalTextSink(
 	for iteration := 1; iteration <= budget.MaxIterations; iteration++ {
 		reasoning := fmt.Sprintf("第 %d 轮：根据 skill=%s 规划工具、评估观察，再决定是否重规划。", iteration, skill.SkillID)
 		reasoningResp, err := model.Complete(ctx, ModelRequest{
-			TurnID:       turn.TurnID,
-			TraceID:      turn.TraceID,
-			SkillID:      skill.SkillID,
-			Stage:        "reasoning",
-			Prompt:       reasoning,
-			UserQuestion: turn.Input.Text,
-			ContextTurns: turn.ContextTurns,
+			TurnID:               turn.TurnID,
+			TraceID:              turn.TraceID,
+			SkillID:              skill.SkillID,
+			Stage:                "reasoning",
+			Prompt:               reasoning,
+			UserQuestion:         turn.Input.Text,
+			ContextTurns:         turn.ContextTurns,
+			IntersectionEvidence: turn.IntersectionEvidence,
 		})
 		if err != nil {
 			return ReactResult{}, err
@@ -216,14 +217,15 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			"userQuestion": turn.Input.Text,
 		}
 		evidenceResp, err := model.Complete(ctx, ModelRequest{
-			TurnID:       turn.TurnID,
-			TraceID:      turn.TraceID,
-			SkillID:      skill.SkillID,
-			Stage:        "evidence_processing",
-			Prompt:       "基于工具返回的结构化结果，生成面向用户的证据处理叙事（processingSummary）与要点（selectedKeyPoints）；references 仅摘录你认为可靠且相关的条目。",
-			Observation:  evidenceObservation,
-			UserQuestion: turn.Input.Text,
-			ContextTurns: turn.ContextTurns,
+			TurnID:               turn.TurnID,
+			TraceID:              turn.TraceID,
+			SkillID:              skill.SkillID,
+			Stage:                "evidence_processing",
+			Prompt:               "基于工具返回的结构化结果，生成面向用户的证据处理叙事（processingSummary）与要点（selectedKeyPoints）；references 仅摘录你认为可靠且相关的条目。",
+			Observation:          evidenceObservation,
+			UserQuestion:         turn.Input.Text,
+			ContextTurns:         turn.ContextTurns,
+			IntersectionEvidence: turn.IntersectionEvidence,
 		})
 		if err != nil {
 			return ReactResult{}, err
@@ -271,6 +273,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		Observation:             buildFinalObservationPayload(finalObservation, stepsOut),
 		UserQuestion:            turn.Input.Text,
 		ContextTurns:            turn.ContextTurns,
+		IntersectionEvidence:    turn.IntersectionEvidence,
 		SessionPreferenceFacts:  turn.SessionPreferenceFacts,
 		LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
 	}
@@ -291,6 +294,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			Observation:             buildFinalObservationPayload(finalObservation, stepsOut),
 			UserQuestion:            turn.Input.Text,
 			ContextTurns:            turn.ContextTurns,
+			IntersectionEvidence:    turn.IntersectionEvidence,
 			SessionPreferenceFacts:  turn.SessionPreferenceFacts,
 			LongTermPreferenceFacts: turn.LongTermPreferenceFacts,
 		})

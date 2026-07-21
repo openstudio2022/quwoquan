@@ -450,17 +450,12 @@ class _AppLogCacheTelemetrySink implements CacheTelemetrySink {
 /// Homepage facet bundle 只在 composition root 聚合同一 Remote 实例。
 /// 页面只能注入下方的窄 Query / CommandWriter capability。
 final homepageFacetSetProvider = Provider<HomepageFacetSet>((ref) {
-  final actorContext = ref.watch(homepageQueryActorContextProvider);
-  return RemoteHomepageRepository(
-    queryAdapter: ref.watch(_homepageQueryAdapterProvider),
-    client: ref.watch(generatedCloudOperationClientProvider),
-    commandContext: (clientPageId, surface) => CloudOperationInvocationContext(
-      surfaceId: surface.id,
-      routeId: surface.routeId,
-      clientPageId: clientPageId,
-      idempotencyKey: const Uuid().v4(),
-      actor: actorContext,
-    ),
+  final commandWriter = ref.watch(_homepageCommandWriterProvider);
+  return HomepageFacetProjectionAdapter(
+    query: ref.watch(_homepageQueryAdapterProvider),
+    candidateWriter: commandWriter,
+    claimRequestWriter: commandWriter,
+    statusReportWriter: commandWriter,
   );
 });
 
@@ -508,25 +503,175 @@ final _homepageQueryAdapterProvider = Provider<RemoteHomepageQueryAdapter>((
   );
 });
 
+/// production 命令写面只绑定 generated Remote adapter；不含 fixture 回退。
+final _homepageCommandWriterProvider = Provider<RemoteHomepageCommandWriter>((
+  ref,
+) {
+  final actorContext = ref.watch(homepageQueryActorContextProvider);
+  return RemoteHomepageCommandWriter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, surface) =>
+        CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          idempotencyKey: const Uuid().v4(),
+          actor: actorContext,
+        ),
+  );
+});
+
 /// Chat 域 production 组合根：单一 Remote 实例实现全部对象级 Facet，
 /// 下方对象 provider 只做类型收窄。production 恒为 Remote-only；alpha runner
 /// 与测试只覆盖本组合根即可让全部对象 Facet 走 Mock。
 final chatRepositoryCompositionProvider = Provider<ChatRepository>((ref) {
   final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return RemoteChatRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
-    mergeRequestContext: (base) async {
-      final ctx = ref.read(activePersonaContextProvider).asData?.value;
-      final resolvedOwnerUserId = ctx?.ownerUserId.trim() ?? '';
-      return CloudRequestHeaders.withOwnerSubAccountContext(
-        base,
-        ownerUserId: resolvedOwnerUserId.isNotEmpty
-            ? resolvedOwnerUserId
-            : ownerUserId,
-        subAccountId: ctx?.subAccountId ?? '',
-        subAccountContextVersion: ctx?.personaContextVersion ?? '',
+  final client = ref.watch(generatedCloudOperationClientProvider);
+
+  CloudOperationInvocationContext invocationContext(
+    AppUiSurface surface,
+    String clientPageId, {
+    String? idempotencyKey,
+  }) {
+    final persona = ref.read(activePersonaContextProvider).asData?.value;
+    final resolvedOwnerUserId = persona?.ownerUserId.trim() ?? '';
+    final accountId = resolvedOwnerUserId.isNotEmpty
+        ? resolvedOwnerUserId
+        : ownerUserId.trim();
+    final personaId = persona?.subAccountId.trim() ?? '';
+    return CloudOperationInvocationContext(
+      surfaceId: surface.id,
+      routeId: surface.routeId,
+      clientPageId: clientPageId,
+      actor: CloudOperationActorContext(
+        accountId: accountId.isEmpty ? null : accountId,
+        personaId: personaId.isEmpty ? null : personaId,
+      ),
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  final conversationQuery = RemoteChatConversationQuery(
+    client: client,
+    invocationContext: (clientPageId) {
+      final surface = switch (clientPageId) {
+        ChatRequestPageIds.getConversation ||
+        ChatRequestPageIds.getReceipts => AppUiSurfaces.chatDetail,
+        ChatRequestPageIds.getGroupHome => AppUiSurfaces.chatAnnouncement,
+        _ => AppUiSurfaces.chatList,
+      };
+      return invocationContext(surface, clientPageId);
+    },
+  );
+  final settingsConversationQuery = RemoteChatConversationQuery(
+    client: client,
+    invocationContext: (clientPageId) =>
+        invocationContext(AppUiSurfaces.chatSettings, clientPageId),
+  );
+  final conversationCommandWriter = RemoteChatConversationCommandWriter(
+    client: client,
+    invocationContext: (clientPageId, idempotencyKey) {
+      final surface = switch (clientPageId) {
+        ChatRequestPageIds.createConversation => AppUiSurfaces.startGroupChat,
+        ChatRequestPageIds.updateConversationTitle =>
+          AppUiSurfaces.chatSettings,
+        ChatRequestPageIds.updateAnnouncement => AppUiSurfaces.chatAnnouncement,
+        _ => AppUiSurfaces.chatManage,
+      };
+      return invocationContext(
+        surface,
+        clientPageId,
+        idempotencyKey: idempotencyKey,
       );
     },
+  );
+  final contactQuery = RemoteChatContactQuery(
+    client: client,
+    invocationContext: (clientPageId) {
+      final surface = switch (clientPageId) {
+        ChatRequestPageIds.listGroupCandidates ||
+        ChatRequestPageIds.listSelectableGroupConversations ||
+        ChatRequestPageIds.listSelectableGroupContactMembers =>
+          AppUiSurfaces.startGroupChat,
+        _ => AppUiSurfaces.chatList,
+      };
+      return invocationContext(surface, clientPageId);
+    },
+  );
+  final messageHomeQuery = RemoteChatMessageHomeQuery(
+    client: client,
+    invocationContext: (clientPageId) =>
+        invocationContext(AppUiSurfaces.chatList, clientPageId),
+  );
+  final membershipQuery = RemoteChatConversationMembershipQuery(
+    client: client,
+    invocationContext: (clientPageId) =>
+        invocationContext(AppUiSurfaces.chatManage, clientPageId),
+  );
+  final memberSearchQuery = RemoteChatConversationMembershipQuery(
+    client: client,
+    invocationContext: (clientPageId) =>
+        invocationContext(AppUiSurfaces.chatDetail, clientPageId),
+  );
+  final membershipCommandWriter = RemoteChatConversationMembershipCommandWriter(
+    client: client,
+    invocationContext: (clientPageId, idempotencyKey) {
+      final surface = switch (clientPageId) {
+        ChatRequestPageIds.addMembers => AppUiSurfaces.chatAddMembers,
+        ChatRequestPageIds.inviteAssistant ||
+        ChatRequestPageIds.removeAssistant => AppUiSurfaces.chatDetail,
+        ChatRequestPageIds.transferOwnership =>
+          AppUiSurfaces.chatTransferOwnership,
+        ChatRequestPageIds.updateGroupAdmins => AppUiSurfaces.chatAdmins,
+        _ => AppUiSurfaces.chatSettings,
+      };
+      return invocationContext(
+        surface,
+        clientPageId,
+        idempotencyKey: idempotencyKey,
+      );
+    },
+  );
+  final userStateCommandWriter = RemoteChatConversationUserStateCommandWriter(
+    client: client,
+    invocationContext: (clientPageId, idempotencyKey) {
+      final surface = clientPageId == ChatRequestPageIds.markAsRead
+          ? AppUiSurfaces.chatDetail
+          : AppUiSurfaces.chatSettings;
+      return invocationContext(
+        surface,
+        clientPageId,
+        idempotencyKey: idempotencyKey,
+      );
+    },
+  );
+  final messageQuery = RemoteChatMessageQuery(
+    client: client,
+    invocationContext: (clientPageId) =>
+        invocationContext(AppUiSurfaces.chatDetail, clientPageId),
+  );
+  final messageMutationWriter = RemoteChatMessageMutationWriter(
+    client: client,
+    invocationContext: (clientPageId, idempotencyKey) => invocationContext(
+      AppUiSurfaces.chatDetail,
+      clientPageId,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
+
+  return RemoteChatRepository(
+    conversationQuery: conversationQuery,
+    settingsConversationQuery: settingsConversationQuery,
+    conversationCommandWriter: conversationCommandWriter,
+    contactQuery: contactQuery,
+    inboxQuery: contactQuery,
+    messageHomeQuery: messageHomeQuery,
+    membershipQuery: membershipQuery,
+    memberSearchQuery: memberSearchQuery,
+    membershipCommandWriter: membershipCommandWriter,
+    userStateCommandWriter: userStateCommandWriter,
+    messageQuery: messageQuery,
+    messageMutationWriter: messageMutationWriter,
   );
 });
 
@@ -756,6 +901,15 @@ final journeyEventTrackerProvider = Provider<JourneyEventTracker>((ref) {
   );
 });
 
+/// 群聊创建、提及、水位与治理漏斗使用 metadata 生成的受限事件，不复用
+/// 可以携带业务对象标识的通用 product_action。
+final chatInteractionTelemetryTrackerProvider =
+    Provider<ChatInteractionTelemetryTracker>((ref) {
+      return ChatInteractionTelemetryTracker(
+        telemetryReporter: ref.watch(appTelemetryReporterProvider),
+      );
+    });
+
 /// Intersection Repository（读面；Mock 收敛归 R-ID10）
 final intersectionRepositoryProvider = Provider<IntersectionRepository>(
   (ref) => RemoteIntersectionRepository(
@@ -772,17 +926,6 @@ final intersectionVisitWriterProvider = Provider<IntersectionVisitWriter>((
   return RemoteIntersectionVisitWriter(
     httpClient: ref.watch(cloudHttpClientProvider),
   );
-});
-
-/// Circle 读投影 Repository。production composition 是 Remote-only；
-/// alpha runner 用 MockCircleRepository 显式 override，生产装配不可达 Mock。
-final circleRepositoryProvider = Provider<CircleRepository>((ref) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'CircleRepository is Remote-only in production composition; alpha must override it',
-    );
-  }
-  return RemoteCircleRepository(httpClient: ref.watch(cloudHttpClientProvider));
 });
 
 final activePersonaContextLoaderProvider = Provider<PersonaContextLoader>((

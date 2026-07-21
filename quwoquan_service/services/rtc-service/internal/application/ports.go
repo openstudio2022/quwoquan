@@ -99,17 +99,23 @@ type RoomParticipant struct {
 	State    string
 }
 
-// RoomManager 隔离应用层与具体 RTC 房间供应商。
-type RoomManager interface {
+// MediaSessionAccess 是参与者加入媒体房间所需的供应商中立访问材料。
+// 它只表达当前会话的连接能力，不承载 Adapter ID、凭据配置或供应商错误。
+type MediaSessionAccess struct {
+	AccessToken string `json:"accessToken"`
+}
+
+// MediaRoomProvider 隔离应用层与具体 RTC 房间供应商。
+type MediaRoomProvider interface {
 	CreateRoom(ctx context.Context, roomName string, maxParticipants int) error
 	DeleteRoom(ctx context.Context, roomName string) error
 	ListParticipants(ctx context.Context, roomName string) ([]RoomParticipant, error)
 	RemoveParticipant(ctx context.Context, roomName string, identity string) error
-}
-
-// CallTokenIssuer 为参与者签发加入房间所需的短期令牌。
-type CallTokenIssuer interface {
-	GenerateParticipantToken(roomName, participantIdentity string) (string, error)
+	IssueParticipantAccess(
+		ctx context.Context,
+		roomName string,
+		participantIdentity string,
+	) (MediaSessionAccess, error)
 }
 
 // CallEventPayload 是事件与实时信令共享的强类型载荷。

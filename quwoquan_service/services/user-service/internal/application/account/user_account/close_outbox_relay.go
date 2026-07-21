@@ -19,50 +19,50 @@ const (
 	closeOutboxInitialWait = time.Second
 )
 
-// UserAccountClosedPublisher 必须先写 durable stream，再返回成功。
-type UserAccountClosedPublisher interface {
-	PublishUserAccountClosed(
+// UserAccountEventPublisher 必须先写 durable stream，再返回成功。
+type UserAccountEventPublisher interface {
+	PublishUserAccountEvent(
 		ctx context.Context,
-		event accountports.CloseOutboxEvent,
+		event accountports.UserAccountOutboxEvent,
 		payload map[string]any,
 	) error
 }
 
-type CloseOutboxObserver interface {
+type UserAccountOutboxObserver interface {
 	RecordDelivery(result string)
 }
 
-// CloseOutboxRelay 负责 UserAccountClosed 的至少一次投递。
-type CloseOutboxRelay struct {
-	store     accountports.CloseOutboxStore
-	publisher UserAccountClosedPublisher
+// UserAccountOutboxRelay 负责 UserAccount 生命周期事件的至少一次投递。
+type UserAccountOutboxRelay struct {
+	store     accountports.UserAccountOutboxStore
+	publisher UserAccountEventPublisher
 	owner     string
 	now       func() time.Time
-	observer  CloseOutboxObserver
+	observer  UserAccountOutboxObserver
 }
 
-type CloseOutboxRelayOption func(*CloseOutboxRelay)
+type UserAccountOutboxRelayOption func(*UserAccountOutboxRelay)
 
-func WithCloseOutboxObserver(
-	observer CloseOutboxObserver,
-) CloseOutboxRelayOption {
-	return func(relay *CloseOutboxRelay) {
+func WithUserAccountOutboxObserver(
+	observer UserAccountOutboxObserver,
+) UserAccountOutboxRelayOption {
+	return func(relay *UserAccountOutboxRelay) {
 		relay.observer = observer
 	}
 }
 
-func NewCloseOutboxRelay(
-	store accountports.CloseOutboxStore,
-	publisher UserAccountClosedPublisher,
+func NewUserAccountOutboxRelay(
+	store accountports.UserAccountOutboxStore,
+	publisher UserAccountEventPublisher,
 	owner string,
-	options ...CloseOutboxRelayOption,
-) (*CloseOutboxRelay, error) {
+	options ...UserAccountOutboxRelayOption,
+) (*UserAccountOutboxRelay, error) {
 	if store == nil || publisher == nil || owner == "" {
 		return nil, errors.New(
-			"UserAccount close outbox relay requires store, publisher and owner",
+			"UserAccount outbox relay requires store, publisher and owner",
 		)
 	}
-	relay := &CloseOutboxRelay{
+	relay := &UserAccountOutboxRelay{
 		store:     store,
 		publisher: publisher,
 		owner:     owner,
@@ -77,12 +77,12 @@ func NewCloseOutboxRelay(
 }
 
 // RelayOnce 投递至多一条记录；返回 didWork 供测试和 drain loop 使用。
-func (relay *CloseOutboxRelay) RelayOnce(
+func (relay *UserAccountOutboxRelay) RelayOnce(
 	ctx context.Context,
 ) (didWork bool, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
-		"user.UserAccountClosedOutboxRelay",
+		"user.UserAccountOutboxRelay",
 	)
 	defer func() { rtobs.EndSpan(span, err) }()
 
@@ -108,7 +108,7 @@ func (relay *CloseOutboxRelay) RelayOnce(
 		relay.recordDelivery("failed")
 		return true, errors.Join(err, markErr)
 	}
-	if event.EventType != UserAccountClosedEventName {
+	if !isSupportedUserAccountEvent(event.EventType) {
 		err := fmt.Errorf(
 			"unsupported UserAccount outbox event %q",
 			event.EventType,
@@ -123,7 +123,7 @@ func (relay *CloseOutboxRelay) RelayOnce(
 		relay.recordDelivery("failed")
 		return true, errors.Join(err, markErr)
 	}
-	if err := relay.publisher.PublishUserAccountClosed(
+	if err := relay.publisher.PublishUserAccountEvent(
 		ctx,
 		event,
 		payload,
@@ -151,7 +151,7 @@ func (relay *CloseOutboxRelay) RelayOnce(
 	return true, nil
 }
 
-func (relay *CloseOutboxRelay) Run(ctx context.Context) {
+func (relay *UserAccountOutboxRelay) Run(ctx context.Context) {
 	ticker := time.NewTicker(closeOutboxPoll)
 	defer ticker.Stop()
 	for {
@@ -160,7 +160,7 @@ func (relay *CloseOutboxRelay) Run(ctx context.Context) {
 			if err != nil {
 				slog.ErrorContext(
 					ctx,
-					"UserAccount close outbox relay failed",
+					"UserAccount outbox relay failed",
 					slog.String("error", err.Error()),
 				)
 				break
@@ -191,8 +191,17 @@ func closeOutboxBackoff(attempt int) time.Duration {
 	return min(backoff, closeOutboxMaxBackoff)
 }
 
-func (relay *CloseOutboxRelay) recordDelivery(result string) {
+func (relay *UserAccountOutboxRelay) recordDelivery(result string) {
 	if relay.observer != nil {
 		relay.observer.RecordDelivery(result)
+	}
+}
+
+func isSupportedUserAccountEvent(eventType string) bool {
+	switch eventType {
+	case UserAccountClosedEventName, UserSuspendedEventName, UserRestoredEventName:
+		return true
+	default:
+		return false
 	}
 }

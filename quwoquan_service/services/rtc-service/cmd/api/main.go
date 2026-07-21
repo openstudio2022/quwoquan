@@ -35,6 +35,7 @@ import (
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/rtc-service/internal/infrastructure/providerbinding"
 )
 
 type redisSceneCfg struct {
@@ -72,12 +73,6 @@ type config struct {
 		Realtime redisSceneCfg `yaml:"realtime"`
 		General  redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
-
-	LiveKit struct {
-		URL       string `yaml:"url"`
-		APIKey    string `yaml:"api_key"`
-		APISecret string `yaml:"api_secret"`
-	} `yaml:"livekit"`
 }
 
 func main() {
@@ -132,6 +127,18 @@ func main() {
 	defer router.Close()
 
 	ctx := context.Background()
+	messageTransport, err := requireRTCMessageTransport(
+		ctx,
+		appEnv,
+		router,
+		map[string]string{
+			"general":  toSceneConfig(cfg.Redis.General).Mode,
+			"realtime": toSceneConfig(cfg.Redis.Realtime).Mode,
+		},
+	)
+	if err != nil {
+		log.Fatalf("rtc-service message transport preflight failed: %v", err)
+	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "rtc-service", SamplingRatio: 0.1})
 	defer otelShutdown()
@@ -148,14 +155,34 @@ func main() {
 		log.Fatalf("rtc-service call session indexes unavailable: %v", err)
 	}
 	callCache := rtccache.NewCallStateCache(router.Scene("general"))
-	realtimePublisher := mq.NewRealtimePublisher(router.Scene("realtime"))
+	realtimePublisher := mq.NewRealtimePublisher(messageTransport)
 
+	mediaBinding, err := providerbinding.ResolveMediaTransport(
+		appEnv,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("rtc-service media transport binding invalid: %v", err)
+	}
+	if mediaBinding.AdapterID != livekit.AdapterID {
+		log.Fatalf(
+			"rtc-service media transport adapter mismatch: got %q want %q",
+			mediaBinding.AdapterID,
+			livekit.AdapterID,
+		)
+	}
 	livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
-	livekitClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, livekitCB)
-	roomAdapter := livekit.NewLiveKitRoomAdapter(cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, livekit.WithHTTPClient(livekitClient))
+	livekitClient := rtgov.WrapClientWithCB(
+		&http.Client{Timeout: mediaBinding.Timeout},
+		livekitCB,
+	)
+	roomAdapter := livekit.NewLiveKitRoomAdapter(
+		mediaBinding.ConnectionURL,
+		mediaBinding.APIKey,
+		mediaBinding.APISecret,
+		livekit.WithHTTPClient(livekitClient),
+	)
 	domainSvc := callsession.NewCallSessionService()
-	roomSvc := application.NewRoomService(roomAdapter)
-	tokenIssuer := livekit.NewParticipantTokenIssuer(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
 
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
 	if userServiceBaseURL == "" && failFastEnvironment(appEnv) {
@@ -171,10 +198,8 @@ func main() {
 		callStore,
 		callCache,
 		domainSvc,
-		roomSvc,
-		tokenIssuer,
+		roomAdapter,
 		relationshipGate,
-		cfg.LiveKit.URL,
 	)
 	outboxRelay := application.NewCallOutboxRelay(
 		callStore,
@@ -385,7 +410,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -455,16 +480,6 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := os.Getenv("MONGO_DATABASE"); v != "" {
 		cfg.MongoDB.Database = v
-	}
-
-	if v := os.Getenv("LIVEKIT_URL"); v != "" {
-		cfg.LiveKit.URL = v
-	}
-	if v := os.Getenv("LIVEKIT_API_KEY"); v != "" {
-		cfg.LiveKit.APIKey = v
-	}
-	if v := os.Getenv("LIVEKIT_API_SECRET"); v != "" {
-		cfg.LiveKit.APISecret = v
 	}
 
 	applyRedisSceneEnv("RTC_REDIS_REALTIME", &cfg.Redis.Realtime)

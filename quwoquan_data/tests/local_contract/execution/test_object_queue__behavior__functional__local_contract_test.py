@@ -146,8 +146,9 @@ def test_reliabletask_backend_records_bridge_and_requires_envelope():
     assert reliable_ref is not None
     assert reliable_ref["taskType"] == "data.content_object.execute"
     assert reliable_ref["queue"] == "reliabletask.data.content_supply"
-    assert str(reliable_ref["idempotencyKey"]).count("|") == 3
-    assert str(reliable_ref["idempotencyKey"]).endswith("|author")
+    assert reliable_ref["idempotencyKey"] == (
+        f"{batch}|refProd|homepage|{FIXTURE_SOURCE_REVISION}|author"
+    )
     leased = oq.acquire_lease(batch, worker="w1", stage="author")
     packet = build_lease_packet(leased)
     assert packet["resultEnvelopeRequired"] is True
@@ -208,6 +209,36 @@ def test_reliabletask_idempotency_separates_object_stages():
     assert author_key != publish_key
     assert str(author_key).endswith("|author")
     assert str(publish_key).endswith("|publish")
+
+
+def test_reliabletask_idempotency_separates_immutable_executions():
+    metadata = {
+        "carrier": "homepage",
+        "entityRef": "entity/九寨沟",
+        "sourceRevision": FIXTURE_SOURCE_REVISION,
+    }
+    first_execution = _execution_id("reliabletask_first_execution")
+    retry_execution = _execution_id("reliabletask_retry_execution")
+    first = oq.enqueue_ref_job(
+        first_execution,
+        "entity/九寨沟",
+        "author",
+        queue_backend="reliabletask",
+        meta=metadata,
+    )
+    retry = oq.enqueue_ref_job(
+        retry_execution,
+        "entity/九寨沟",
+        "author",
+        queue_backend="reliabletask",
+        meta=metadata,
+    )
+
+    first_key = first.reliable_task_ref_document()["idempotencyKey"]
+    retry_key = retry.reliable_task_ref_document()["idempotencyKey"]
+    assert first_key != retry_key
+    assert str(first_key).startswith(f"{first_execution}|")
+    assert str(retry_key).startswith(f"{retry_execution}|")
 
 
 def test_author_job_with_content_type_requires_creator_assignment():

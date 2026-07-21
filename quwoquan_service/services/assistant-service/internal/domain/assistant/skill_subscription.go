@@ -1,11 +1,15 @@
 package assistant
 
-import "time"
+import (
+	"time"
+
+	assistantgenerated "quwoquan_service/services/assistant-service/internal/generated"
+)
 
 const (
-	SkillSubscriptionStatusActive   = "active"
-	SkillSubscriptionStatusPaused   = "paused"
-	SkillSubscriptionStatusArchived = "archived"
+	SkillSubscriptionStatusActive   = string(assistantgenerated.SkillSubscriptionStatusActive)
+	SkillSubscriptionStatusPaused   = string(assistantgenerated.SkillSubscriptionStatusPaused)
+	SkillSubscriptionStatusArchived = string(assistantgenerated.SkillSubscriptionStatusArchived)
 )
 
 type SkillSubscriptionOwner struct {

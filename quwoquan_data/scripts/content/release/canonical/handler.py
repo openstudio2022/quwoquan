@@ -7,9 +7,13 @@ import sys
 from pathlib import Path
 
 from core.control_types import EXECUTION_MILESTONES, RolloutMilestone
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, execution_root
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from content.release.canonical.aggregate_release import build_aggregate_release
+from content.release.canonical.provenance_backfill import (
+    CanonicalProvenanceBackfillError,
+    backfill_canonical_source_digests,
+)
 from content.release.canonical.two_province_closure import TwoProvinceClosureError, build_pre_environment_attestations
 from content.release.canonical.two_province_environment_closure import (
     TwoProvinceEnvironmentClosureError,
@@ -27,7 +31,7 @@ def handle_aggregate_release(args: argparse.Namespace) -> None:
         publish_root=Path(args.publish_root or PUBLISH_ROOT),
         release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
         release_id=str(args.release_id),
-        execution_roots=[execution_root(item) for item in execution_ids],
+        execution_ids=execution_ids,
         rollout_milestone=str(args.rollout_milestone),
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -39,6 +43,26 @@ def handle_baseline_release(args: argparse.Namespace) -> None:
         release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
         release_id=str(args.release_id),
     )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_backfill_canonical_provenance(args: argparse.Namespace) -> None:
+    execution_ids = [
+        item.strip() for item in str(args.execution_ids).split(",") if item.strip()
+    ]
+    if not execution_ids:
+        raise SystemExit("[release backfill-source-digest] --execution-ids 不能为空")
+    try:
+        report = backfill_canonical_source_digests(
+            publish_root=Path(args.publish_root or PUBLISH_ROOT),
+            source_revision=str(args.source_revision),
+            execution_ids=execution_ids,
+            repo_root=Path(args.repo_root).resolve(),
+        )
+    except CanonicalProvenanceBackfillError as exc:
+        raise SystemExit(
+            f"[release backfill-source-digest] GATE_BLOCK: {exc}"
+        ) from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -113,6 +137,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     baseline.add_argument("--publish-root")
     baseline.add_argument("--release-root")
     baseline.set_defaults(handler=handle_baseline_release)
+    provenance_backfill = commands.add_parser(
+        "backfill-source-digest",
+        help="仅从明确 Git commit 为 legacy canonical 补写缺失 provenance",
+    )
+    provenance_backfill.add_argument(
+        "--execution-ids",
+        required=True,
+        help="逗号分隔的 legacy canonical executionId",
+    )
+    provenance_backfill.add_argument(
+        "--source-revision",
+        required=True,
+        help="与 canonical manifest 完全一致的 immutable Git commit",
+    )
+    provenance_backfill.add_argument("--publish-root")
+    provenance_backfill.add_argument(
+        "--repo-root",
+        default=str(Path(__file__).resolve().parents[5]),
+    )
+    provenance_backfill.set_defaults(handler=handle_backfill_canonical_provenance)
     closure = commands.add_parser(
         "attest-two-province",
         help="仅在 rollout contract 的全部 execution/source/media/review 闭合后写入最终静态 attestations",

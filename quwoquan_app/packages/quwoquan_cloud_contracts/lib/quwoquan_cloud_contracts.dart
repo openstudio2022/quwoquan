@@ -1,6 +1,11 @@
 /// Accepted ContractGraph 生成的纯 Dart ABI。
 library;
 
+export 'src/chat/conversation_contracts.dart';
+export 'src/chat/conversation_membership_contracts.dart';
+export 'src/chat/conversation_user_state_contracts.dart';
+export 'src/chat/contact_contracts.dart';
+export 'src/chat/message_home_contracts.dart';
 export 'src/chat/message_contracts.dart';
 export 'src/content/post_queries.dart';
 export 'src/content/post_publication_contracts.dart';

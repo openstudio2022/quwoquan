@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -12,6 +13,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../support/runtime_failure_fixtures.dart';
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -98,6 +100,140 @@ void main() {
       writer.commands.map((command) => command.publishIntentId).toSet(),
       <String>{'intent-1'},
     );
+  });
+
+  test('媒体准备首击先持久化，后台队列不会提交未上传素材', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final writer = _SuccessfulPublicationWriter();
+    final container = _container(
+      writer: writer,
+      drafts: _RecordingDraftRepository(),
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+
+    await notifier.beginMediaPreparation(
+      command: _command(contentType: ContentPostType.image),
+      authorPersonaId: 'persona-publication',
+    );
+    await notifier.flushNow();
+
+    final intent = container
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single;
+    expect(intent.requiresMediaPreparation, isTrue);
+    expect(intent.command.mediaAssetIds, isEmpty);
+    expect(writer.commands, isEmpty);
+
+    await notifier.retryPending('draft-1');
+    expect(writer.commands, isEmpty);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'post_publication_intents_v1:user-publication',
+      ),
+      contains('"stage":"preparingMedia"'),
+    );
+  });
+
+  test('媒体准备检查点重启后保留资产身份和源摘要', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final first = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: _RecordingDraftRepository(),
+    );
+    final notifier = first.read(postPublicationIntentQueueProvider.notifier);
+    await notifier.beginMediaPreparation(
+      command: _command(contentType: ContentPostType.video),
+      authorPersonaId: 'persona-publication',
+    );
+    await notifier.recordPreparedMediaAsset(
+      'draft-1',
+      ContentMediaPreparationCheckpoint.forSource(
+        preparationIdentity: 'draft-1',
+        slot: 'video:0',
+        mediaType: ContentMediaType.video,
+        sha256Digest: 'sha256:video-source-digest',
+      ).copyWith(
+        sessionId: 'session-video-1',
+        assetId: 'video_asset_1',
+        phase: ContentMediaPreparationPhase.completed,
+      ),
+    );
+    first.dispose();
+
+    final recovered = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: _RecordingDraftRepository(),
+    );
+    addTearDown(recovered.dispose);
+    recovered.read(postPublicationIntentQueueProvider);
+    await _waitForHydration(recovered);
+
+    final checkpoint = recovered
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single
+        .preparedMediaAssets
+        .single;
+    expect(checkpoint.slot, 'video:0');
+    expect(checkpoint.mediaType, ContentMediaType.video);
+    expect(checkpoint.sha256Digest, 'sha256:video-source-digest');
+    expect(checkpoint.assetId, 'video_asset_1');
+    expect(checkpoint.sessionId, 'session-video-1');
+    expect(checkpoint.phase, ContentMediaPreparationPhase.completed);
+    expect(checkpoint.initIdempotencyKey, isNotEmpty);
+    expect(checkpoint.completeIdempotencyKey, isNotEmpty);
+    expect(checkpoint.abortIdempotencyKey, isNotEmpty);
+  });
+
+  test('放弃媒体准备前先与服务端会话对账并中止 pending session', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final media = RecordingContentMediaFacet();
+    final container = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: _RecordingDraftRepository(),
+      media: media,
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+    await notifier.beginMediaPreparation(
+      command: _command(contentType: ContentPostType.video),
+      authorPersonaId: 'persona-publication',
+    );
+    final checkpoint = ContentMediaPreparationCheckpoint.forSource(
+      preparationIdentity: 'draft-1',
+      slot: 'video:0',
+      mediaType: ContentMediaType.video,
+      sha256Digest: 'sha256:${_pendingVideoDigest}',
+    );
+    final initialized = await media.initUpload(
+      InitContentMediaUploadCommand(
+        mediaType: ContentMediaType.video,
+        contentType: 'video/mp4',
+        fileSize: 4,
+        expectedSha256: 'sha256:${_pendingVideoDigest}',
+      ),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: checkpoint.initIdempotencyKey,
+      ),
+    );
+    await notifier.recordPreparedMediaAsset(
+      'draft-1',
+      checkpoint.copyWith(
+        sessionId: initialized.sessionId,
+        phase: ContentMediaPreparationPhase.uploading,
+      ),
+    );
+
+    await notifier.cancelPending('draft-1');
+
+    expect(media.abortedSessions, <String>[initialized.sessionId]);
+    expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
   });
 
   test('媒体处理中按 metadata recovery=retry 入队而不是永久阻断', () async {
@@ -248,12 +384,35 @@ void main() {
     expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
     expect(drafts.deletedDraftIds, isEmpty);
   });
+
+  test('旧队列缺失阶段时安全恢复提交态并去重圈子投放目标', () {
+    final now = DateTime.utc(2026, 7, 20);
+    final stored =
+        LocalPostPublicationIntent(
+            command: _command(),
+            authorPersonaId: 'persona-publication',
+            circleIds: const <String>[],
+            createdAt: now,
+            nextAttemptAt: now,
+          ).toStorageMap()
+          ..remove('stage')
+          ..['circleIds'] = <String>[' circle-a ', 'circle-a', '', 'circle-b'];
+
+    final restored = LocalPostPublicationIntent.fromStorageMap(stored);
+
+    expect(restored.stage, LocalPostPublicationStage.submitting);
+    expect(restored.circleIds, <String>['circle-a', 'circle-b']);
+  });
 }
+
+const String _pendingVideoDigest =
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 ProviderContainer _container({
   required ContentPostPublicationWriter writer,
   required CreateDraftRepository drafts,
   ContentPostPublicationStatusReader? statusReader,
+  ContentMediaFacet? media,
 }) {
   return ProviderContainer(
     overrides: [
@@ -275,6 +434,8 @@ ProviderContainer _container({
                 ),
           ),
       createDraftRepositoryProvider.overrideWithValue(drafts),
+      if (media != null)
+        createContentMediaFacetProvider.overrideWithValue(media),
     ],
   );
 }
@@ -299,11 +460,13 @@ Future<void> _waitForPublication(_SuccessfulPublicationWriter writer) async {
   fail('publication queue did not replay');
 }
 
-SubmitContentPostPublicationCommand _command() {
+SubmitContentPostPublicationCommand _command({
+  ContentPostType contentType = ContentPostType.micro,
+}) {
   return SubmitContentPostPublicationCommand(
     publishIntentId: 'intent-1',
     localDraftId: 'draft-1',
-    contentType: ContentPostType.micro,
+    contentType: contentType,
     body: 'publish once',
   );
 }

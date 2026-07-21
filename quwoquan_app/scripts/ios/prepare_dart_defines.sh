@@ -55,6 +55,7 @@ import base64
 import json
 import shlex
 import sys
+from urllib.parse import urlparse
 
 runtime_defines = json.loads(sys.argv[1])
 existing = sys.argv[2].strip()
@@ -67,7 +68,38 @@ required_keys = {
     "MEDIA_IMAGE_CDN_BASE_URL",
     "MEDIA_VIDEO_CDN_BASE_URL",
     "MEDIA_UPLOAD_BASE_URL",
+    "RTC_MEDIA_CONNECTION_URL",
 }
+device_local_transport_keys = {
+    "CLOUD_GATEWAY_BASE_URL",
+    "MEDIA_AVATAR_CDN_BASE_URL",
+    "MEDIA_IMAGE_CDN_BASE_URL",
+    "MEDIA_VIDEO_CDN_BASE_URL",
+    "MEDIA_UPLOAD_BASE_URL",
+}
+
+
+def is_authorized_local_transport(raw: str, canonical: str) -> bool:
+    candidate = urlparse(raw.strip())
+    expected = urlparse(canonical.strip())
+    if not (
+        candidate.scheme == expected.scheme == "https"
+        and candidate.port == expected.port
+        and candidate.path == expected.path
+        and candidate.params == expected.params
+        and candidate.query == expected.query
+        and candidate.fragment == expected.fragment
+    ):
+        return False
+    candidate_host = (candidate.hostname or "").lower()
+    expected_host = (expected.hostname or "").lower()
+    if candidate_host == "localhost":
+        return True
+    public_suffix = ".quwoquan-env.test"
+    if not expected_host.endswith(public_suffix):
+        return False
+    local_host = expected_host[: -len(public_suffix)] + ".localhost"
+    return candidate_host == local_host
 
 merged = {}
 for encoded in filter(None, existing.split(",")):
@@ -80,7 +112,14 @@ for encoded in filter(None, existing.split(",")):
     key, value = decoded.split("=", 1)
     merged[key] = value
 
-merged.update(runtime_defines)
+for key, value in runtime_defines.items():
+    supplied = merged.get(key, "")
+    if (
+        key in device_local_transport_keys
+        and is_authorized_local_transport(supplied, value)
+    ):
+        continue
+    merged[key] = value
 missing = sorted(key for key in required_keys if not merged.get(key, "").strip())
 if missing:
     print(

@@ -41,6 +41,8 @@ type SLSEventLogStore struct {
 	now    func() time.Time
 }
 
+var _ application.ObservabilityLogSink = (*SLSEventLogStore)(nil)
+
 func NewSLSEventLogStore(client slsEventClient, config SLSConfig) (*SLSEventLogStore, error) {
 	if client == nil || strings.TrimSpace(config.Project) == "" || strings.TrimSpace(config.RawLogstore) == "" || strings.TrimSpace(config.StartupDiagnosticLogstore) == "" || strings.TrimSpace(config.RuntimeLogstore) == "" || strings.TrimSpace(config.AggregateLogstore) == "" {
 		return nil, fmt.Errorf("SLS telemetry configuration is incomplete")
@@ -228,7 +230,7 @@ func (s *SLSEventLogStore) GetRuntimeLogDrilldown(_ context.Context, query appli
 }
 
 func (s *SLSEventLogStore) GetEventSummary(_ context.Context, query application.EventSummaryQuery) (application.EventSummary, error) {
-	search := buildSLSFilter(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode, "", "event_dimensions")
+	search := buildSLSFilter(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.Result, query.ErrorCode, "", "event_dimensions")
 	sql := `SELECT logType,eventType,pageName,appVersion,networkClass,deviceManufacturer,deviceModel,journey,action,result,errorCode,sum(CAST(count AS BIGINT)) AS count,max(freshness) AS freshness,max(generatedThrough) AS generatedThrough,max(lagSeconds) AS lagSeconds GROUP BY logType,eventType,pageName,appVersion,networkClass,deviceManufacturer,deviceModel,journey,action,result,errorCode`
 	response, err := s.client.GetLogsV2(s.config.Project, s.config.AggregateLogstore, &sls.GetLogRequest{From: query.From.Unix(), To: query.To.Unix(), Query: search + " | " + sql, Lines: 100})
 	if err != nil {
@@ -528,7 +530,7 @@ func (s *SLSEventLogStore) ListDistinctSessions(
 }
 
 func (s *SLSEventLogStore) GetEventDrilldown(_ context.Context, query application.EventDrilldownQuery) (application.EventDrilldown, error) {
-	filter := buildSLSFilter(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.ErrorCode, query.SessionID, "")
+	filter := buildSLSFilter(query.LogType, query.EventType, query.PageName, query.AppVersion, query.NetworkClass, query.Result, query.ErrorCode, query.SessionID, "")
 	businessWindow := fmt.Sprintf(
 		`SELECT * WHERE from_iso8601_timestamp(occurredAt) >= from_iso8601_timestamp('%s') AND from_iso8601_timestamp(occurredAt) < from_iso8601_timestamp('%s') ORDER BY __time__ DESC LIMIT %d`,
 		escapeSLSSQLLiteral(query.From.UTC().Format(time.RFC3339Nano)),
@@ -569,71 +571,21 @@ func eventFields(record application.EventRecord) map[string]string {
 
 func recordExtensions(record application.EventRecordInput) map[string]string {
 	out := map[string]string{}
-	putInt := func(name string, value *int) {
-		if value != nil {
-			out[name] = strconv.Itoa(*value)
+	for name, value := range record.ExtensionValues() {
+		switch typed := value.(type) {
+		case string:
+			out[name] = typed
+		case int:
+			out[name] = strconv.Itoa(typed)
+		case float64:
+			out[name] = strconv.FormatFloat(typed, 'f', -1, 64)
+		case bool:
+			out[name] = strconv.FormatBool(typed)
+		case []string:
+			encoded, _ := json.Marshal(typed)
+			out[name] = string(encoded)
 		}
 	}
-	putString := func(name string, value *string) {
-		if value != nil {
-			out[name] = *value
-		}
-	}
-	putBool := func(name string, value *bool) {
-		if value != nil {
-			out[name] = strconv.FormatBool(*value)
-		}
-	}
-	putInt("durationMs", record.DurationMS)
-	putString("result", record.Result)
-	putString("callType", record.CallType)
-	putInt("participantCount", record.ParticipantCount)
-	putInt("connectTimeMs", record.ConnectTimeMS)
-	putBool("mediaConnected", record.MediaConnected)
-	putInt("reconnectCount", record.ReconnectCount)
-	putString("disconnectReason", record.DisconnectReason)
-	putString("networkQuality", record.NetworkQuality)
-	putString("failReasonCode", record.FailReasonCode)
-	putString("errorCode", record.ErrorCode)
-	putString("operationId", record.OperationID)
-	putString("requestId", record.RequestID)
-	putString("traceId", record.TraceID)
-	putString("recoveryAction", record.RecoveryAction)
-	putString("surfaceId", record.SurfaceID)
-	putString("detectionSource", record.DetectionSource)
-	putString("terminalState", record.TerminalState)
-	putInt("httpStatus", record.HTTPStatus)
-	if record.CallStack != nil {
-		encoded, _ := json.Marshal(record.CallStack)
-		out["callStack"] = string(encoded)
-	}
-	putInt("tClickToFirstFrameMs", record.TClickToFirstFrameMS)
-	putInt("tFirstFrameToShellMs", record.TFirstFrameToShellMS)
-	putInt("tShellToContentMs", record.TShellToContentMS)
-	putInt("tClickToContentMs", record.TClickToContentMS)
-	putBool("hasError", record.HasError)
-	putString("journey", record.Journey)
-	putString("action", record.Action)
-	putInt("readyMs", record.ReadyMS)
-	putInt("ttffMs", record.TTFFMS)
-	putInt("rebufferCount", record.RebufferCount)
-	putInt("rebufferMs", record.RebufferMS)
-	putInt("effectivePlaybackMs", record.EffectivePlaybackMS)
-	putInt("seekCount", record.SeekCount)
-	putInt("seekFailureCount", record.SeekFailureCount)
-	putInt("seekCommandMaxMs", record.SeekCommandMaxMS)
-	putInt("seekSettleMaxMs", record.SeekSettleMaxMS)
-	putInt("droppedFrames", record.DroppedFrames)
-	putInt("processedVideoFrames", record.ProcessedVideoFrames)
-	putInt("audioUnderrunCount", record.AudioUnderrunCount)
-	putString("rendererMode", record.RendererMode)
-	putString("decoderQueueMode", record.DecoderQueueMode)
-	putBool("decoderFallbackEnabled", record.DecoderFallbackEnabled)
-	putString("seekEvidenceSource", record.SeekEvidenceSource)
-	putInt("declaredDurationMs", record.DeclaredDurationMS)
-	putInt("observedDurationMs", record.ObservedDurationMS)
-	putBool("durationMismatch", record.DurationMismatch)
-	putString("playbackMode", record.PlaybackMode)
 	return out
 }
 
@@ -652,9 +604,9 @@ func slsLog(fields map[string]string, ingestedAt time.Time) *sls.Log {
 	return &sls.Log{Time: &seconds, TimeNs: &nanos, Contents: contents}
 }
 
-func buildSLSFilter(logType, eventType, pageName, appVersion, networkClass, errorCode, sessionID, rowKind string) string {
+func buildSLSFilter(logType, eventType, pageName, appVersion, networkClass, result, errorCode, sessionID, rowKind string) string {
 	clauses := []string{"*"}
-	for _, item := range []struct{ name, value string }{{"logType", logType}, {"eventType", eventType}, {"pageName", pageName}, {"appVersion", appVersion}, {"networkClass", networkClass}, {"errorCode", errorCode}, {"sessionId", sessionID}, {"rowKind", rowKind}} {
+	for _, item := range []struct{ name, value string }{{"logType", logType}, {"eventType", eventType}, {"pageName", pageName}, {"appVersion", appVersion}, {"networkClass", networkClass}, {"result", result}, {"errorCode", errorCode}, {"sessionId", sessionID}, {"rowKind", rowKind}} {
 		if item.value != "" {
 			clauses = append(clauses, fmt.Sprintf(`%s:%q`, item.name, escapeSLS(item.value)))
 		}

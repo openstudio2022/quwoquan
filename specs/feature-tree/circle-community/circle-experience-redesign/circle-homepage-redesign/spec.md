@@ -81,9 +81,18 @@
 - 组织主页模板默认不突出具体事物，除非该主页本身承接明确的具体事物业务。
 - 前台永远显示具体类目名，如 `关联学校 / 关联车型 / 关联酒店 / 关联景点`，不显示“实体”字样。
 
+### F8：圈子频道聚合流
+
+- 圈子频道默认只加载 `recommended`；用户主动切换“我的”后，已认证 Persona 才读取 `mine`。匿名“我的”显示安全空态与登录续接，不请求或推导成员圈子。
+- `ListCircleDiscoveryFeed` 一次返回圈子卡片与 `CircleFeedItemView`；category、subCategory、scope、sort、cursor、可见性与成员范围只由服务端解释。
+- 内容流采用稳定 keyset cursor。端侧保存 `nextCursor` 并追加服务端顺序，不得重新排序、通过本地成员集合切分 scope，或以 `listCircles → getCircleFeed` 进行 N+1 补造。
+- `CircleFeedItemView` 必含 `placementId`，并以显式强类型字段承载帖子、作者、媒体与展示位状态；页面不得将 `Post` 序列化为动态 Map 再恢复展示模型。
+- Circle、Membership、Post、Placement 变更后，聚合缓存最多 60 秒内收敛；加载、空态、非法 cursor/scope 和远端失败使用结构化恢复面。
+
 ## 不做什么（Out of Scope）
 
 - 不在本 L3 内冻结推荐算法和推荐训练链路。
+- 不在本 L3 内为 Remote 空结果或失败回退 Mock、fixture、客户端合成圈子/帖子或旧 Repository。
 - 不在本 L3 内定义具体事物的抓取、归一、展示和商业承接模型。
 - 不在本 L3 内冻结复杂拖拽编排、实时推送与在线协作。
 - 不在本 L3 内把群层升级为公开内容主时间线。

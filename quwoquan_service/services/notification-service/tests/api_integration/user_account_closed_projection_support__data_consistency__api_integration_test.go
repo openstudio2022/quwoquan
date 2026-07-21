@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/reliabletask"
 	streamadapter "quwoquan_service/services/notification-service/internal/adapters/stream"
 	"quwoquan_service/services/notification-service/internal/application"
@@ -32,8 +33,15 @@ func newAccountClosureIntegrationConsumer(
 	config := streamadapter.DefaultUserAccountClosedConsumerConfig()
 	config.MinIdle = 0
 	config.MaxAttempts = maxAttempts
-	consumer, err := streamadapter.NewUserAccountClosedConsumer(
+	transport, err := runtimemessaging.NewRedisMessageTransport(
 		notificationRedisClient,
+		notificationRedisClient,
+	)
+	if err != nil {
+		t.Fatalf("create message transport: %v", err)
+	}
+	consumer, err := streamadapter.NewUserAccountClosedConsumer(
+		transport,
 		notificationAccountClosure,
 		notificationAccountClosure,
 		"notification-account-closure-integration",

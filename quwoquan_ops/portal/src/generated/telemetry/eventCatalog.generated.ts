@@ -148,6 +148,28 @@ export const eventCatalog = {
       ]
     },
     {
+      "event_type": "chat_interaction_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "chatSource",
+        "mentionScope",
+        "governanceAction",
+        "watermarkResult",
+        "memberCountBucket",
+        "unreadCountBucket",
+        "surfaceId",
+        "durationMs",
+        "failReasonCode",
+        "recoveryAction"
+      ],
+      "required_extensions": [
+        "chatAction",
+        "chatOutcome"
+      ]
+    },
+    {
       "event_type": "performance_sample",
       "internal_priority": "normal",
       "log_type": "event",
@@ -178,6 +200,23 @@ export const eventCatalog = {
       ],
       "required_extensions": [
         "operationId",
+        "result"
+      ]
+    },
+    {
+      "event_type": "filter_catalog_load",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "failReasonCode"
+      ],
+      "required_extensions": [
+        "catalogSource",
+        "releaseIdHash",
+        "digestMatch",
+        "cacheAgeBucket",
         "result"
       ]
     },
@@ -387,6 +426,15 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "cacheAgeBucket": {
+      "enum": [
+        "not_applicable",
+        "under_1h",
+        "one_to_24h",
+        "over_24h"
+      ],
+      "type": "string"
+    },
     "callStack": {
       "item_max_length": 256,
       "max_items": 10,
@@ -397,6 +445,49 @@ export const eventCatalog = {
       "enum": [
         "audio",
         "video"
+      ],
+      "type": "string"
+    },
+    "catalogSource": {
+      "enum": [
+        "remote",
+        "verified_cache",
+        "bootstrap_replica"
+      ],
+      "type": "string"
+    },
+    "chatAction": {
+      "enum": [
+        "candidate_source_open",
+        "candidate_source_select",
+        "group_create",
+        "member_add",
+        "mention_select",
+        "mention_send",
+        "read_watermark",
+        "group_governance"
+      ],
+      "type": "string"
+    },
+    "chatOutcome": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "rejected",
+        "cancelled",
+        "unchanged"
+      ],
+      "type": "string"
+    },
+    "chatSource": {
+      "enum": [
+        "contacts",
+        "group",
+        "circle",
+        "roster",
+        "composer",
+        "conversation",
+        "settings"
       ],
       "type": "string"
     },
@@ -449,6 +540,9 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "digestMatch": {
+      "type": "bool"
+    },
     "disconnectReason": {
       "max_length": 128,
       "type": "string"
@@ -485,6 +579,18 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "governanceAction": {
+      "enum": [
+        "none",
+        "announcement_update",
+        "admin_assign",
+        "admin_revoke",
+        "ownership_transfer",
+        "member_remove",
+        "member_leave"
+      ],
+      "type": "string"
+    },
     "hasError": {
       "type": "bool"
     },
@@ -507,6 +613,26 @@ export const eventCatalog = {
     },
     "mediaConnected": {
       "type": "bool"
+    },
+    "memberCountBucket": {
+      "enum": [
+        "zero",
+        "one",
+        "two_to_five",
+        "six_to_fifty",
+        "fifty_one_to_five_hundred",
+        "five_hundred_one_to_one_thousand"
+      ],
+      "type": "string"
+    },
+    "mentionScope": {
+      "enum": [
+        "none",
+        "member",
+        "all",
+        "assistant"
+      ],
+      "type": "string"
     },
     "networkQuality": {
       "enum": [
@@ -592,6 +718,10 @@ export const eventCatalog = {
       "type": "int"
     },
     "recoveryAction": {
+      "max_length": 64,
+      "type": "string"
+    },
+    "releaseIdHash": {
       "max_length": 64,
       "type": "string"
     },
@@ -700,6 +830,27 @@ export const eventCatalog = {
         "failed",
         "cancelled",
         "stream_failure"
+      ],
+      "type": "string"
+    },
+    "unreadCountBucket": {
+      "enum": [
+        "zero",
+        "one",
+        "two_to_five",
+        "six_to_fifty",
+        "fifty_one_to_five_hundred",
+        "five_hundred_one_to_one_thousand"
+      ],
+      "type": "string"
+    },
+    "watermarkResult": {
+      "enum": [
+        "none",
+        "advanced",
+        "already_current",
+        "rejected",
+        "failed"
       ],
       "type": "string"
     },

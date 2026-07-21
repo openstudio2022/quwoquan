@@ -39,16 +39,14 @@ void main() {
       expect(friendMessage.senderName, '契约联系人');
       expect(
         friendMessage.senderAvatar,
-        contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png',
-        ),
+        isEmpty,
+        reason: '本地契约未注入媒体 endpoint 时，头像引用必须 fail-closed',
       );
       expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
-        contains(
-          '/media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png',
-        ),
+        isEmpty,
+        reason: '不得为测试重新引入本地 gateway 或 URL 拼接回退',
       );
     });
 

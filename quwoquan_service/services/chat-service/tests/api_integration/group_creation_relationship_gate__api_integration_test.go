@@ -199,7 +199,7 @@ func TestCreateConversation_Group_MixedMembersRejectsNonMutual(t *testing.T) {
 	}
 }
 
-func TestCreateConversation_Group_CircleBoundSkipsMutualGate(t *testing.T) {
+func TestCreateConversationRejectsCircleBindingBeforeRelationshipGate(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
 	svc := newGroupCreationConversationService(t, relationshipGateForContractTest(
 		t,
@@ -216,10 +216,14 @@ func TestCreateConversation_Group_CircleBoundSkipsMutualGate(t *testing.T) {
 		CreatorId:        "user_a",
 		InitialMemberIds: []string{"user_b"},
 	})
-	if err != nil {
-		t.Fatalf("circle-bound group should bypass mutual gate, got: %v", err)
+	if conv != nil {
+		t.Fatalf("client-supplied Circle binding must not create a conversation: %+v", conv)
 	}
-	if conv == nil || conv.ID == "" {
-		t.Fatal("expected conversation id")
+	appErr, ok := err.(*rterr.AppError)
+	if !ok {
+		t.Fatalf("expected structured circle binding rejection, got %T (%v)", err, err)
+	}
+	if got := appErr.Code.String(); got != "CHAT.USER.circle_group_binding_write_forbidden" {
+		t.Fatalf("code = %q, want CHAT.USER.circle_group_binding_write_forbidden", got)
 	}
 }

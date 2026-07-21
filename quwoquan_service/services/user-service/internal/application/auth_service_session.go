@@ -30,6 +30,13 @@ func (s *AuthService) issueLoginResult(
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("load profile: %v", err))
 	}
+	if err := ensureProfileCanLogin(profile); err != nil {
+		return nil, err
+	}
+	security, err := s.requireActiveAccountSecurity(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
 	if profile != nil && strings.TrimSpace(credType) != credentialAnonymousDevice {
 		updated := false
 		if strings.TrimSpace(profile.AccountState) == accountStateAnonymous {
@@ -57,7 +64,7 @@ func (s *AuthService) issueLoginResult(
 		return nil, err
 	}
 
-	accessToken, err := s.issueAccessToken(ownerID, activeSub)
+	accessToken, err := s.issueAccessToken(ownerID, activeSub, security.AuthEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +175,18 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("load profile: %v", err))
 	}
-	accessToken, err := s.issueAccessToken(issued.AccountID, activeSub)
+	if err := ensureProfileCanLogin(profile); err != nil {
+		return nil, err
+	}
+	security, err := s.requireActiveAccountSecurity(ctx, issued.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	accessToken, err := s.issueAccessToken(
+		issued.AccountID,
+		activeSub,
+		security.AuthEpoch,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +247,11 @@ func generateToken() (string, error) {
 }
 
 // issueAccessToken 只签发经统一 trust root 配置的短期 JWT。
-func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona) (string, error) {
+func (s *AuthService) issueAccessToken(
+	ownerID string,
+	activeSub *model.Persona,
+	authEpoch int64,
+) (string, error) {
 	if s.accessSigner == nil {
 		return "", generated.AppErrorFromInternalError("access token signer unavailable")
 	}
@@ -240,5 +262,6 @@ func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona)
 	return s.accessSigner.Sign(rtauth.TokenSubject{
 		AccountID: ownerID,
 		PersonaID: persona,
+		AuthEpoch: authEpoch,
 	})
 }

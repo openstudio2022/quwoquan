@@ -80,11 +80,15 @@ func containsQuery(values []string, query string) (bool, string) {
 }
 
 func clampSearchLimit(limit int, defaultLimit int) int {
+	return clampLimit(limit, defaultLimit, 100)
+}
+
+func clampLimit(limit int, defaultLimit int, maxLimit int) int {
 	if limit <= 0 {
 		return defaultLimit
 	}
-	if limit > 100 {
-		return 100
+	if limit > maxLimit {
+		return maxLimit
 	}
 	return limit
 }

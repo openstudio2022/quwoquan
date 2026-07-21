@@ -29,5 +29,5 @@ tests:
   api_integration:
     - quwoquan_service/services/content-service/tests/api_integration/post_profile_interaction_contract__api_integration_test.go
   user_acceptance:
-    - quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+    - quwoquan_app/test/user_acceptance/patrol/user/profile_interaction_projection__user_acceptance_test.dart
 environments: []

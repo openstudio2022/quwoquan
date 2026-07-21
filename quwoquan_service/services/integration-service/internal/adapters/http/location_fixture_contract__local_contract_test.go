@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/contractfixture"
-	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
 	"quwoquan_service/services/integration-service/internal/generated"
 )
@@ -40,7 +39,6 @@ func TestContractFixtureSeed_LocationPOIReadsViaHandler(t *testing.T) {
 	for _, item := range seed.POIs {
 		pois = append(pois, model.POI{
 			ID:        item.POIID,
-			Provider:  model.ProviderBaidu,
 			Name:      item.Name,
 			Address:   item.Address,
 			Latitude:  item.Lat,
@@ -48,7 +46,6 @@ func TestContractFixtureSeed_LocationPOIReadsViaHandler(t *testing.T) {
 		})
 	}
 	client := &fakeProviderClient{
-		name: model.ProviderBaidu,
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
 			return pois, nil
 		},
@@ -56,12 +53,7 @@ func TestContractFixtureSeed_LocationPOIReadsViaHandler(t *testing.T) {
 			return pois, nil
 		},
 	}
-	svc := application.NewService(
-		model.ProviderBaidu,
-		model.ProviderAMap,
-		map[model.Provider]model.ProviderClient{model.ProviderBaidu: client},
-		nil,
-	)
+	svc := newLocationService(t, client)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, generated.SearchPath+"?"+generated.QueryParamQ+"=西湖", nil)
 	rr := httptest.NewRecorder()

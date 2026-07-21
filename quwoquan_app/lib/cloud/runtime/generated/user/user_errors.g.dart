@@ -67,6 +67,8 @@ enum UserErrorCode {
   forbidden('USER.USER.forbidden', '无权访问该资源', 'Access denied', 403, 'surface', '', 0, ''),
   nicknameTaken('USER.USER.nickname_taken', '该昵称已被使用，请换一个', 'Nickname already taken, please choose another', 409, 'surface', '', 0, ''),
   invalidArgument('USER.USER.invalid_argument', '请求参数有误', 'Invalid request parameters', 400, 'surface', '', 0, ''),
+  accountEnforcementDecisionInvalid('USER.ACCOUNT.enforcement_decision_invalid', '账号处置决策无效', 'The account enforcement decision is invalid', 400, 'surface', '', 0, ''),
+  accountStateConflict('USER.ACCOUNT.state_conflict', '账号当前状态无法执行该操作', 'The account is not in a state that permits this action', 409, 'surface', '', 0, ''),
   rateLimited('USER.USER.rate_limited', '操作太频繁，请稍后重试', 'Too many requests, please retry later', 429, 'retry', '', 60, ''),
   internalError('USER.SYSTEM.internal_error', '登录服务暂不可用，请使用其他方式登录', 'Service error, please try again later', 500, 'surface', '', 0, ''),
   profileInvalidRegion('USER.PROFILE.invalid_region', '请选择有效的省市地区', 'Please choose a valid region', 400, 'surface', '', 0, ''),

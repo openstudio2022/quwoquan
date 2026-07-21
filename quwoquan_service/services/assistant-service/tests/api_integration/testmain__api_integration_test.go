@@ -19,6 +19,7 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
 	preferencefact "quwoquan_service/services/assistant-service/internal/application/assistant/preference_fact"
@@ -202,6 +203,7 @@ func initializeIntegrationStores(ctx context.Context) {
 }
 
 func newIntegrationAssistantService(opts ...application.AssistantServiceOption) *application.AssistantService {
+	messageTransport := newIntegrationMessageTransport()
 	baseOptions := []application.AssistantServiceOption{
 		application.WithLearningProfileStore(integrationProfileStore),
 		application.WithSkillSubscriptionStore(integrationSubscriptionStore),
@@ -210,7 +212,11 @@ func newIntegrationAssistantService(opts ...application.AssistantServiceOption) 
 			preferencefact.NewQueryFacade(integrationPreferenceStore),
 		),
 		application.WithEventPublisher(
-			messaging.NewRedisEventPublisher(integrationRedisClient, "assistant-service-api-integration", nil),
+			messaging.NewRedisEventPublisherWithTransport(
+				messageTransport,
+				"assistant-service-api-integration",
+				nil,
+			),
 		),
 	}
 	baseOptions = append(baseOptions, opts...)
@@ -220,6 +226,19 @@ func newIntegrationAssistantService(opts ...application.AssistantServiceOption) 
 		integrationRedisClient,
 		baseOptions...,
 	)
+}
+
+func newIntegrationMessageTransport() *runtimemessaging.RedisMessageTransport {
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"assistant-service-api-integration",
+		runtimemessaging.RedisMessageTransportAdapter,
+		integrationRedisClient,
+		integrationRedisClient,
+	)
+	if err != nil {
+		panic("assistant-service api_integration create message transport: " + err.Error())
+	}
+	return transport
 }
 
 func resetIntegrationState(t *testing.T) {

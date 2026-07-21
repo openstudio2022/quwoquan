@@ -81,3 +81,11 @@ scenarios:
       - 分页结果只包含当前 persona 自己提交的举报
       - 响应不包含 reviewerId 与内部处置字段
       - cursor 分页稳定且不会重复或跳过同 createdAt 的记录
+
+  - name: report_detail_is_typed_query_slice
+    operation: GetReport
+    go_func: TestReportCommandAndQueryFacetsStaySeparated
+    evidence: local_contract
+    assertions:
+      - query 只按 reportId 返回 ReportDetailSlice，不加载写入 aggregate
+      - 返回创建后的 canonical status 与可信 reporterId

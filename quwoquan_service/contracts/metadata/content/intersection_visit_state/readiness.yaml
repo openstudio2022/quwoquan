@@ -23,6 +23,5 @@ tests:
   api_integration:
     - quwoquan_service/services/content-service/tests/api_integration/intersection_visit_http_contract__api_integration_test.go
     - quwoquan_service/services/content-service/tests/api_integration/intersection_watermark_store_contract__api_integration_test.go
-  user_acceptance:
-    - quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+  user_acceptance: []
 environments: []

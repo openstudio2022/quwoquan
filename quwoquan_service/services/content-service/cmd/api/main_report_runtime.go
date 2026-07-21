@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"log/slog"
+	"os"
 	"time"
 
 	rthealth "quwoquan_service/runtime/health"
@@ -31,6 +32,12 @@ func buildReportRuntime(
 	if reportDSN == "" {
 		return nil, nil
 	}
+	reporterAccountBackfills, err := persistence.LoadReporterAccountBackfills(
+		os.Getenv("CONTENT_REPORT_ACCOUNT_BACKFILL_FILE"),
+	)
+	if err != nil {
+		log.Fatalf("content-service report account backfill input failed: %v", err)
+	}
 
 	db, err := sql.Open("postgres", reportDSN)
 	if err != nil {
@@ -40,9 +47,21 @@ func buildReportRuntime(
 	db.SetMaxIdleConns(3)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	reportStore, err := persistence.NewPGReportStore(db)
+	reportStore, err := persistence.NewPGReportStore(
+		db,
+		persistence.WithReporterAccountBackfills(reporterAccountBackfills),
+	)
 	if err != nil {
 		log.Fatalf("content-service report postgres init failed: %v", err)
+	}
+	if result := reportStore.ReporterAccountBackfillResult(); result.ReportsBackfilled > 0 ||
+		result.OutboxPayloadsBackfilled > 0 || result.ReceiptsBackfilled > 0 {
+		log.Printf(
+			"content-service report account backfill reports=%d outbox=%d receipts=%d",
+			result.ReportsBackfilled,
+			result.OutboxPayloadsBackfilled,
+			result.ReceiptsBackfilled,
+		)
 	}
 	healthChecker.Register("report-postgres", func(hctx context.Context) error {
 		return db.PingContext(hctx)

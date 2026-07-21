@@ -28,6 +28,9 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_service/services/assistant-service/internal/application/conversation_lifecycle__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/cmd/api/main__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/assistant/assistant_run_stream_resume__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
       - file: quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
     status: partial
     test_evidence:
@@ -45,7 +48,15 @@ gwt_acceptance:
         cases:
         - local_contract.assistant_run_learning.run_stream_policy.run_stream_protocol.gwt1_local_contract
         envs: *id001
-      supporting: []
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: run_stream_resume
+        cases:
+        - api_integration.assistant_run_learning.run_stream_policy.run_stream_protocol.run_stream_resume
+        envs:
+        - beta
+        - gamma
     notes: []
 execution:
   local_gate:

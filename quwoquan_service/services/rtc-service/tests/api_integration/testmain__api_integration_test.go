@@ -16,13 +16,13 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	rtchttp "quwoquan_service/services/rtc-service/internal/adapters/http"
 	"quwoquan_service/services/rtc-service/internal/adapters/mq"
 	"quwoquan_service/services/rtc-service/internal/application"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/livekit"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
 )
 
@@ -105,17 +105,23 @@ func TestMain(m *testing.M) {
 		panic("ensure rtc call session indexes: " + err.Error())
 	}
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
-	realtimePublisher := mq.NewRealtimePublisher(redisRouter.Scene("realtime"))
+	realtimeTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"rtc-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		redisRouter.Scene("realtime"),
+		redisRouter.Scene("general"),
+	)
+	if err != nil {
+		panic("construct rtc message transport: " + err.Error())
+	}
+	realtimePublisher := mq.NewRealtimePublisher(realtimeTransport)
 	domainSvc := callsession.NewCallSessionService()
-	tokenIssuer := livekit.NewParticipantTokenIssuer("testkey", "testsecret")
 	orchestrator := application.NewCallOrchestrator(
 		callStore,
 		callCache,
 		domainSvc,
-		nil,
-		tokenIssuer,
+		newTestMediaRoomProvider(),
 		application.AllowRelationshipGateForTest(),
-		"wss://livekit.test:7880",
 	)
 	testOrchestrator = orchestrator
 	outboxRelay := application.NewCallOutboxRelay(callStore, realtimePublisher)
@@ -144,6 +150,45 @@ func TestMain(m *testing.M) {
 	_ = redisRouter.Close()
 	_ = integrationRedis.Close(ctx)
 	os.Exit(code)
+}
+
+type testMediaRoomProvider struct{}
+
+func newTestMediaRoomProvider() *testMediaRoomProvider {
+	return &testMediaRoomProvider{}
+}
+
+func (*testMediaRoomProvider) CreateRoom(context.Context, string, int) error {
+	return nil
+}
+
+func (*testMediaRoomProvider) DeleteRoom(context.Context, string) error {
+	return nil
+}
+
+func (*testMediaRoomProvider) ListParticipants(
+	context.Context,
+	string,
+) ([]application.RoomParticipant, error) {
+	return nil, nil
+}
+
+func (*testMediaRoomProvider) RemoveParticipant(
+	context.Context,
+	string,
+	string,
+) error {
+	return nil
+}
+
+func (*testMediaRoomProvider) IssueParticipantAccess(
+	_ context.Context,
+	roomName string,
+	participantIdentity string,
+) (application.MediaSessionAccess, error) {
+	return application.MediaSessionAccess{
+		AccessToken: "test-access:" + roomName + ":" + participantIdentity,
+	}, nil
 }
 
 func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {

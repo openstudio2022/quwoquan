@@ -58,8 +58,8 @@ def build_empty_baseline_release(
             and header.get("canonicalMerkle") == object_closure_digest(final_root)
             and header.get("executionIds") == []
             and header.get("rolloutMilestone") == "baseline"
-            and header.get("sourceDigest") == source_digest.to_document()
-            and aggregate.get("sourceDigest") == source_digest.to_document()
+            and header.get("sourceDigests") == [source_digest.to_document()]
+            and aggregate.get("sourceDigests") == [source_digest.to_document()]
             and desired.get("desiredRefs") == _EMPTY_DESIRED_REFS
             and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
@@ -86,7 +86,7 @@ def build_empty_baseline_release(
                 "canonicalMerkle": canonical_merkle,
                 "executionIds": [],
                 "rolloutMilestone": "baseline",
-                "sourceDigest": source_digest.to_document(),
+                "sourceDigests": [source_digest.to_document()],
             },
         )
         _write_json(
@@ -129,7 +129,7 @@ def build_empty_baseline_release(
             creator_count=0,
             tag_count=0,
             canonical_merkle=canonical_merkle,
-            source_digest=source_digest,
+            source_digests=(source_digest,),
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
         ).to_document()

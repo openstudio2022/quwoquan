@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 )
 
 const (
@@ -156,7 +156,7 @@ func (h *Hub) Attach(
 func (h *Hub) pumpEvents(
 	ctx context.Context,
 	connection *activeConnection,
-	events <-chan rtredis.Message,
+	events <-chan runtimemessaging.EphemeralDelivery,
 ) {
 	for {
 		select {
@@ -167,7 +167,7 @@ func (h *Hub) pumpEvents(
 				connection.sink.Kick("subscription_closed")
 				return
 			}
-			if !connection.sink.Deliver(message.Payload) {
+			if !connection.sink.Deliver(string(message.Payload)) {
 				return
 			}
 		}

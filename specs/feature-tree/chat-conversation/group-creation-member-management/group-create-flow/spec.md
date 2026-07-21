@@ -112,7 +112,7 @@
 | 私建群创建 | `messages/conversation` |
 | 私建群/圈子来源 | `messages/conversation#ListSelectableGroupConversations` |
 | 来源分类 | `SelectableGroupConversationRow.circleId`；空为私建群，非空为圈子绑定群 |
-| 圈子群绑定 | `Circle.defaultPublicGroupId -> CircleGroup.conversationId`，聊天投影同步 `Conversation.circleId` |
+| 圈子群绑定 | `Circle.defaultPublicGroupId -> CircleGroup.conversationId`；双向 durable binding event 同步唯一的 `Conversation.circleGroupId`，不得读取 `Circle.conversationId` 或由客户端创建绑定会话 |
 | 互关判定 | `user` 关系能力真相源 |
 
 ### 6.2 建群 contract 要求
@@ -152,20 +152,27 @@
 
 ### 8.1 可观测与运营
 
-- 产品漏斗以 `product_action` 为单一事实源：
-  `source_group_open` / `source_circle_open` →
-  `source_*_selection_applied` → `create_success|create_failed`。
-- `create_*` 的 `result` 使用排序后的来源组合
-  `contact|group|circle`（如 `contact+circle`），用于来源转化分群；不携带 userId、
-  conversationId 或 circleId。
-- 服务黄金信号来自统一 `http_server_*` 指标：建群成功率/P95、候选源成功率/P95、
-  消息发送成功率/P95、群治理成功率/P95。
+- 产品漏斗以 metadata 生成的 `chat_interaction_outcome` 为唯一事实源：
+  `candidate_source_open` / `candidate_source_select` → `group_create`。每个事件必须
+  包含 `chatOutcome`，来源仅用 `chatSource=contacts|group|circle` 分群。
+- `memberCountBucket` 只允许登记闭集人数分桶；禁止以来源组合、userId、
+  conversationId、circleId、messageId、正文或昵称作为事件字段或 SLS 维度。
+- @成员、已读水位与群治理复用同一事件类型，分别使用 `mentionScope`、
+  `watermarkResult` 与 `governanceAction`；不得退回宽泛 `product_action`。
+- 产品漏斗由 SLS `app-product-telemetry-chat-funnel-hourly` 的 `chat_funnel` 行唯一聚合；
+  维度只能使用 `chatAction`、`chatOutcome`、来源、mention/governance/watermark 闭集与
+  人数/未读分桶，失败只经 `failReasonCode`、`recoveryAction` 下钻。
+- 服务黄金信号来自统一 `http_server_*` 和受控 Prometheus 指标：建群/候选源成功率与
+  P95，`chat_mention_command_total`、`chat_read_watermark_command_total`、
+  `chat_inbox_projection_event_lag_seconds` 与 `chat_inbox_projection_drain_total`。
 - Message/Conversation/Membership/UserState outbox relay 与 InboxProjector 必须注册
   `/healthz` 检查；durable sync 必须观测 hint-to-pull P95、fanout 失败率与
   requires-resync。
 - 告警与仪表盘唯一配置位于
   `quwoquan_ops/observability/monitoring/{alerts,dashboards}`；禁止在 App 或服务中
   复制阈值表。
+- beta integration、gamma release 和 prod 只读验收统一由
+  `stackctl verify` 选择群聊 lifecycle probe；prod 禁止写入，TLS 证书验证不得关闭。
 
 ## 9. 验收重点
 

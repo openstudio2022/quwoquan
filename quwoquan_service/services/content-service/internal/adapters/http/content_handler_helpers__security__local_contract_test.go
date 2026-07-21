@@ -35,6 +35,9 @@ func TestTrustedPrincipalOverridesClientActorSelectors(t *testing.T) {
 	if got := resolvePersonaID(request); got != "trusted-persona" {
 		t.Fatalf("persona id=%q, want trusted persona", got)
 	}
+	if got := resolveRecommendationActorID(request); got != "trusted-persona" {
+		t.Fatalf("recommendation actor=%q, want trusted persona", got)
+	}
 	if got := resolveDeviceActorID(request); got != "trusted-device" {
 		t.Fatalf("device actor id=%q, want trusted device", got)
 	}

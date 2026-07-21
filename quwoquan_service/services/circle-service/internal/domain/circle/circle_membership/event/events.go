@@ -5,6 +5,7 @@ package event
 const (
 	CircleMembershipRequested   = "CircleMembershipRequested"
 	CircleMembershipJoined      = "CircleMembershipJoined"
+	CircleMembershipApproved    = "CircleMembershipApproved"
 	CircleMembershipLeft        = "CircleMembershipLeft"
 	CircleMembershipRoleChanged = "CircleMembershipRoleChanged"
 	CircleMembershipRejected    = "CircleMembershipRejected"

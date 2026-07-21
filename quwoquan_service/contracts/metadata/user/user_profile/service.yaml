@@ -905,6 +905,125 @@ api_routes:
     response_type: CloseAccountResult
     request_encoder: encodeCloseAccountCommand
     response_decoder: decodeCloseAccountResult
+- actor: none
+  application:
+    kind: command
+    facet: AccountEnforcementCommandFacade
+    method: suspendAccount
+    aggregate_owner: UserAccount
+    mutation_target: UserAccount
+    invariant_target: UserAccount
+  description: >-
+    仅供受信 Product Ops enforcement 调用的内部封禁命令。服务必须验证调用方服务身份、
+    OIDC scope 与已审批 decision 绑定，在同一事务内将 active 变为 suspended、递增
+    authEpoch、撤销 refresh session、记录审计回执并发布 UserSuspended。closed 是不可逆
+    注销终态，绝不允许封禁命令把 closed 改回任何可用状态。
+  method: POST
+  operation: SuspendAccount
+  commercial:
+    status: blocked
+    block_reason: 受信 enforcement facade、auth epoch 校验、可逆下游投影与三层证据尚未实现
+    gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
+    target_story: account-suspension-and-appeal-lifecycle
+  path: /internal/user/accounts/{userId}/suspend
+  path_params: [userId]
+  request_entity: AccountEnforcementDecisionWire
+  request_fields: [decisionId, caseRef, decisionDigest, approvedAt]
+  response_entity: AccountEnforcementResultWire
+  response_fields: [accountState, authEpoch, decisionId, idempotentReplay, occurredAt]
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+  authorization:
+    principal: service
+    scopes: [user.account.enforcement.write]
+    ownership_policy: trusted_product_ops_enforcement_only
+  reliability:
+    timeout_ms: 3000
+    cancellation: none
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+    - USER.USER.unauthorized
+    - USER.USER.forbidden
+    - USER.USER.not_found
+    - USER.ACCOUNT.enforcement_decision_invalid
+    - USER.ACCOUNT.state_conflict
+    - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_account_suspend
+    trace: true
+    attributes: [outcome, error_code]
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.95
+- actor: none
+  application:
+    kind: command
+    facet: AccountEnforcementCommandFacade
+    method: restoreAccount
+    aggregate_owner: UserAccount
+    mutation_target: UserAccount
+    invariant_target: UserAccount
+  description: >-
+    仅消费受信 appeal approval 或运营恢复 decision。服务必须验证 Restore decision 与
+    case 审计链，将 suspended 原子迁回 active、递增 authEpoch 并发布 UserRestored；
+    不恢复旧 session/token、已删除数据或 closed 账号。
+  method: POST
+  operation: RestoreAccount
+  commercial:
+    status: blocked
+    block_reason: 受信 enforcement facade、auth epoch 校验、可逆下游投影与三层证据尚未实现
+    gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
+    target_story: account-suspension-and-appeal-lifecycle
+  path: /internal/user/accounts/{userId}/restore
+  path_params: [userId]
+  request_entity: AccountEnforcementDecisionWire
+  request_fields: [decisionId, caseRef, decisionDigest, approvedAt]
+  response_entity: AccountEnforcementResultWire
+  response_fields: [accountState, authEpoch, decisionId, idempotentReplay, occurredAt]
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+  authorization:
+    principal: service
+    scopes: [user.account.enforcement.write]
+    ownership_policy: trusted_product_ops_enforcement_only
+  reliability:
+    timeout_ms: 3000
+    cancellation: none
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+    - USER.USER.unauthorized
+    - USER.USER.forbidden
+    - USER.USER.not_found
+    - USER.ACCOUNT.enforcement_decision_invalid
+    - USER.ACCOUNT.state_conflict
+    - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: user_account_restore
+    trace: true
+    attributes: [outcome, error_code]
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.95
 consumers:
 - capabilities:
   - read_profile

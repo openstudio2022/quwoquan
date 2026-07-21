@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/services/content-service/internal/application/identity"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
 func TestSubmitMarkdownArticleContract(t *testing.T) {
@@ -210,10 +211,23 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 			"imageHeight":480,
 			"imageDeliveryContentType":"image/jpeg",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
-			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.jpg"
+			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.jpg",
+			"imageDominantColor":"#1A2B3C",
+			"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
+			"imageContentProfile":"photographic",
+			"imageDerivativePolicyVersion":1
 		}`, mediaID, mediaID),
 		identity.AnonymousFallbackSubAccountID,
 		"media-original-processing",
+	)
+	submitPublishedPostWithAuthor(
+		t,
+		identity.AnonymousFallbackSubAccountID,
+		fmt.Sprintf(
+			`{"contentType":"image","body":"原图授权可见性测试","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
+			mediaID,
+			mediaID,
+		),
 	)
 
 	accessReq := httptest.NewRequest(http.MethodPost, "/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
@@ -260,5 +274,112 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected one persisted original access fact, got %d", count)
+	}
+	deniedReq := httptest.NewRequest(
+		http.MethodPost,
+		"/content/media/"+mediaID+"/original:access",
+		strings.NewReader(`{"purpose":"view"}`),
+	)
+	deniedReq.Header.Set("Content-Type", "application/json")
+	deniedReq.Header.Set("X-Client-User-Id", "different-viewer")
+	deniedReq.Header.Set("Idempotency-Key", "media-original-access-denied")
+	deniedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(deniedRec, deniedReq)
+	assertRuntimeErrorResponse(
+		t,
+		deniedRec,
+		http.StatusForbidden,
+		contentgenerated.ErrOriginalAccessDenied.Error(),
+	)
+	for attempt := 0; attempt < 5; attempt++ {
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/content/media/"+mediaID+"/original:access",
+			strings.NewReader(`{"purpose":"view"}`),
+		)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+		request.Header.Set("Idempotency-Key", fmt.Sprintf("media-original-access-rate-%d", attempt))
+		recorder := httptest.NewRecorder()
+		testHandler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("original access grant %d failed: %d %s", attempt, recorder.Code, recorder.Body.String())
+		}
+	}
+	rateLimitedReq := httptest.NewRequest(
+		http.MethodPost,
+		"/content/media/"+mediaID+"/original:access",
+		strings.NewReader(`{"purpose":"view"}`),
+	)
+	rateLimitedReq.Header.Set("Content-Type", "application/json")
+	rateLimitedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	rateLimitedReq.Header.Set("Idempotency-Key", "media-original-access-rate-limited")
+	rateLimitedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rateLimitedRec, rateLimitedReq)
+	assertRuntimeErrorResponse(
+		t,
+		rateLimitedRec,
+		http.StatusTooManyRequests,
+		contentgenerated.ErrOriginalAccessRateLimited.Error(),
+	)
+	deniedAuditCount, err := mongoDB.Collection("media_original_access_facts").CountDocuments(
+		context.Background(),
+		bson.M{"assetId": mediaID, "outcome": "denied", "reason": "asset_policy"},
+	)
+	if err != nil {
+		t.Fatalf("count denied original access audits: %v", err)
+	}
+	if deniedAuditCount != 1 {
+		t.Fatalf("expected one denied original access audit, got %d", deniedAuditCount)
+	}
+	rateLimitedAuditCount, err := mongoDB.Collection("media_original_access_facts").CountDocuments(
+		context.Background(),
+		bson.M{
+			"assetId": mediaID, "outcome": "rate_limited",
+			"reason": "rate_limit_exhausted",
+		},
+	)
+	if err != nil {
+		t.Fatalf("count rate-limited original access audits: %v", err)
+	}
+	if rateLimitedAuditCount != 1 {
+		t.Fatalf("expected one rate-limited original access audit, got %d", rateLimitedAuditCount)
+	}
+	unreferencedMediaID := createReadyPublicationMediaAsset(
+		t,
+		identity.AnonymousFallbackSubAccountID,
+		"image",
+	)
+	unreferencedReq := httptest.NewRequest(
+		http.MethodPost,
+		"/content/media/"+unreferencedMediaID+"/original:access",
+		strings.NewReader(`{"purpose":"view"}`),
+	)
+	unreferencedReq.Header.Set("Content-Type", "application/json")
+	unreferencedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	unreferencedReq.Header.Set("Idempotency-Key", "media-original-access-unreferenced")
+	unreferencedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(unreferencedRec, unreferencedReq)
+	assertRuntimeErrorResponse(
+		t,
+		unreferencedRec,
+		http.StatusForbidden,
+		contentgenerated.ErrOriginalAccessDenied.Error(),
+	)
+	unreferencedAuditCount, err := mongoDB.Collection("media_original_access_facts").CountDocuments(
+		context.Background(),
+		bson.M{
+			"assetId": unreferencedMediaID, "outcome": "denied",
+			"reason": "post_visibility",
+		},
+	)
+	if err != nil {
+		t.Fatalf("count unreferenced media audit: %v", err)
+	}
+	if unreferencedAuditCount != 1 {
+		t.Fatalf(
+			"unreferenced media must have one Post visibility denial audit, got %d",
+			unreferencedAuditCount,
+		)
 	}
 }

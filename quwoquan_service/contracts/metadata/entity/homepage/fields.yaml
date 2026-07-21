@@ -19,9 +19,9 @@ entities:
         constraints: [NOT_NULL, DEFAULT_1]
         classification: INTERNAL
         log_policy: allow
-        api_exposure: read
+        api_exposure: drop
         ops_exposure: read
-        description: Homepage 聚合乐观并发版本；每次命令事实提交时原子递增
+        description: Homepage 聚合乐观并发版本；仅供命令处理和 Ops 审计使用，不进入公开响应
 
       - name: title
         source: title
@@ -55,12 +55,12 @@ entities:
         source: canonicalEntityId
         type: string
         constraints: [NOT_NULL]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: drop
         ops_exposure: read
         recommend_feature: true
-        description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键
+        description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键，不进入公开响应
 
       - name: lookupAliases
         source: lookupAliases
@@ -76,11 +76,11 @@ entities:
         source: objectPageTemplate
         type: string
         constraints: [NOT_NULL, DEFAULT_STANDARD]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: drop
         ops_exposure: read
-        description: 对象主页展示模板，如 standard、campus、travel_photo；由 homepageType 与运营配置共同决定
+        description: 对象主页展示模板，如 standard、campus、travel_photo；仅用于服务端投影与运营配置
 
       - name: status
         source: status
@@ -97,9 +97,9 @@ entities:
         type: enum
         enum_ref: HomepageSourceType
         constraints: [NOT_NULL]
-        classification: PUBLIC
+        classification: INTERNAL
         log_policy: allow
-        api_exposure: read
+        api_exposure: drop
         ops_exposure: read
 
       - name: sourceOwner

@@ -322,13 +322,15 @@ verify-public-vs-upstream-url-contract:
 	@python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
 
 verify-env-packaging:
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod --include-services >/dev/null
-	@python3 quwoquan_ops/gate/verify_environment_packaging_contract.py
-	@python3 quwoquan_ops/gate/verify_env_artifact_isolation.py
-	@python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
+	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
+	trap 'rm -rf "$$deploy_work_root"' EXIT; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services >/dev/null; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services >/dev/null; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services >/dev/null; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod --include-services >/dev/null; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
 
 observability-es-up:
 	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py up
@@ -942,6 +944,7 @@ gate-integration:
 gate-release:
 	@if [ "$(ENV)" != "gamma" ] && [ "$(ENV)" != "prod" ]; then echo "FAIL: ENV must be gamma or prod"; exit 2; fi
 	@$(MAKE) gate
+	@python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py --require-ready "$(ENV)"
 	@python3 quwoquan_ops/cli/stackctl.py verify --env "$(ENV)" --kind all --profile release
 
 # Deploy to beta integration K8s. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).

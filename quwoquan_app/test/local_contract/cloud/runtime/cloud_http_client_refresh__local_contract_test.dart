@@ -67,6 +67,34 @@ void main() {
     expect(requestCount, 1);
     expect(refreshCount, 1);
   });
+
+  test('403 账号限制也只触发一次 refresh，以便会话层安全清凭证', () async {
+    var requestCount = 0;
+    var refreshCount = 0;
+    final client = CloudHttpClient(
+      client: MockClient((request) async {
+        requestCount++;
+        return http.Response('{"code":"USER.AUTH.account_suspended"}', 403);
+      }),
+      authTokenProvider: const _StaticTokenProvider('pre-suspension-token'),
+      onUnauthorizedRefresh: (_) async {
+        refreshCount++;
+        // 真正的 refresh 在 AuthSessionController 中将解析 account_suspended、
+        // 清理本地凭证并返回 false；HTTP 客户端必须保留最初结构化 403。
+        return false;
+      },
+    );
+
+    await expectLater(
+      () => client.getJson(
+        Uri.parse('https://gateway.example.com/protected'),
+        headers: const <String, String>{'X-Client-Page-Id': 'test.page'},
+      ),
+      throwsA(isA<Exception>()),
+    );
+    expect(requestCount, 1);
+    expect(refreshCount, 1);
+  });
 }
 
 class _MemoryTokenProvider implements CloudAuthTokenProvider {

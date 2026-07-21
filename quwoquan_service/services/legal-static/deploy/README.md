@@ -5,12 +5,12 @@
 ## 目录与 URL
 
 - 源文件：`quwoquan_service/services/legal-static/source/manifest.yaml` 与 `quwoquan_service/services/legal-static/source/versions/<version>/<document>.html`
-- 包输出：`.qwq_output/env/<env>/release/legal-static/<version>/`
+- 包输出：`QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static/<version>/`
 - 稳定入口：`/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`
 - 版本入口：`/legal/<version>/<document>`
 - prod canonical：`https://quwoquan.com/legal/*`
 
-发布包会生成 `public/legal/...` 静态目录、`manifest.json`、`checksums.json`、`release_metadata.json`，并刷新 `.qwq_output/env/<env>/release/legal-static/current` 指针。gateway/CDN 只挂载 `current/public`，不读取业务服务镜像。
+发布包会生成 `public/legal/...` 静态目录、`manifest.json`、`checksums.json`、`release_metadata.json`，并刷新 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static/current` 指针。gateway/CDN 只挂载 `current/public`，不读取业务服务镜像。
 
 ## 命令
 

@@ -5,6 +5,8 @@ fields:
   - { name: assetId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read }
   - { name: viewerId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
   - { name: purpose, type: enum, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: outcome, type: enum, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: reason, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
   - { name: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
-  - { name: grantedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
-  - { name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: grantedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, description: 原图授权决策时间；denied/rate_limited 同样使用该字段记录决策时刻。 }
+  - { name: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, description: 仅 granted 的签名 URL 绝对到期时间；拒绝决策为空。 }

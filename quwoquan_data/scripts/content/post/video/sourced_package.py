@@ -16,6 +16,7 @@ from content.post.video.package_common import (
 from content.post.video.source_video import SourcedVideoAsset
 from core.asset_identity import compute_post_asset_id
 from core.io import write_json
+from core.runtime_policy import active_runtime_policy
 from core.schema import validate_result
 from governance.coverage.cold_start_supply import VideoDeliveryPolicy
 
@@ -99,7 +100,7 @@ def _transcode(
         check=False,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=active_runtime_policy().video_transcode_timeout_seconds,
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip().splitlines()

@@ -362,6 +362,43 @@ private final class StartupNativeTelemetryJournal {
       result(self?.readCellularGeneration() ?? "unknown")
     }
 
+    let localDevHttpsTrustChannel = FlutterMethodChannel(
+      name: "quwoquan/runtime/local_dev_https_trust",
+      binaryMessenger: binaryMessenger
+    )
+    localDevHttpsTrustChannel.setMethodCallHandler { call, result in
+      guard call.method == "localEnvDebugRootCertificate" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      // 仅由 Debug/Profile 本地 target 构建步骤注入，release 与公网 authority
+      // 不会请求或携带本地根证书。
+      guard let certificateURL = Bundle.main.url(
+        forResource: "local_env_debug_root",
+        withExtension: "crt"
+      ) else {
+        result(
+          FlutterError(
+            code: "LOCAL_HTTPS_TRUST_CA_UNAVAILABLE",
+            message: "Local HTTPS trust root is not bundled",
+            details: nil
+          )
+        )
+        return
+      }
+      do {
+        result(FlutterStandardTypedData(bytes: try Data(contentsOf: certificateURL)))
+      } catch {
+        result(
+          FlutterError(
+            code: "LOCAL_HTTPS_TRUST_CA_UNREADABLE",
+            message: "Local HTTPS trust root cannot be read",
+            details: nil
+          )
+        )
+      }
+    }
+
     let nativeCrashMarkerChannel = FlutterMethodChannel(
       name: "quwoquan/runtime/native_crash_marker",
       binaryMessenger: binaryMessenger

@@ -469,11 +469,9 @@ type ObjectPageContentSections struct {
 type ObjectPageBundle struct {
 	ObjectType          string                    `json:"objectType"`
 	ObjectID            string                    `json:"objectId"`
-	CanonicalEntityID   string                    `json:"canonicalEntityId"`
 	Title               string                    `json:"title"`
 	Subtitle            string                    `json:"subtitle,omitempty"`
 	CoverURL            string                    `json:"coverUrl,omitempty"`
-	ObjectPageTemplate  string                    `json:"objectPageTemplate"`
 	TagRefs             []string                  `json:"tagRefs"`
 	Stats               ObjectPageStats           `json:"stats"`
 	IntersectionReasons []json.RawMessage         `json:"intersectionReasons"`
@@ -482,13 +480,6 @@ type ObjectPageBundle struct {
 	RelatedObjects      []HomepageRelatedGroup    `json:"relatedObjects"`
 	RelationEdges       []json.RawMessage         `json:"relationEdges"`
 	AssistantContext    json.RawMessage           `json:"assistantContext,omitempty"`
-	RolloutContext      *ObjectPageRolloutContext `json:"rolloutContext,omitempty"`
-}
-
-type ObjectPageRolloutContext struct {
-	Cohort           string `json:"cohort,omitempty"`
-	City             string `json:"city,omitempty"`
-	ExperimentBucket string `json:"experimentBucket,omitempty"`
 }
 
 func (s *HomepageService) GetObjectPageBundle(
@@ -498,8 +489,8 @@ func (s *HomepageService) GetObjectPageBundle(
 	referralSource string,
 	feedRequestID string,
 	recommendationTraceID string,
-	experimentBucket string,
-	rolloutCohort string,
+	_ string,
+	_ string,
 ) (*ObjectPageBundle, error) {
 	homepage, err := s.GetHomepageForViewer(ctx, homepageID, viewerPersonaID)
 	if err != nil {
@@ -521,21 +512,13 @@ func (s *HomepageService) GetObjectPageBundle(
 			reasons = []json.RawMessage{}
 		}
 	}
-	var rollout *ObjectPageRolloutContext
-	if rolloutCohort != "" || experimentBucket != "" {
-		rollout = &ObjectPageRolloutContext{
-			Cohort: rolloutCohort, City: homepage.City, ExperimentBucket: experimentBucket,
-		}
-	}
 	return &ObjectPageBundle{
-		ObjectType:         "homepage",
-		ObjectID:           homepage.ID,
-		CanonicalEntityID:  homepage.CanonicalEntityID,
-		Title:              homepage.Title,
-		Subtitle:           homepage.Subtitle,
-		CoverURL:           homepage.CoverURL,
-		ObjectPageTemplate: homepage.ObjectPageTemplate,
-		TagRefs:            emptyStrings(homepage.CategoryTags),
+		ObjectType: "homepage",
+		ObjectID:   homepage.ID,
+		Title:      homepage.Title,
+		Subtitle:   homepage.Subtitle,
+		CoverURL:   homepage.CoverURL,
+		TagRefs:    emptyStrings(homepage.CategoryTags),
 		Stats: ObjectPageStats{
 			RatingCount:       homepage.RatingCount,
 			RelatedGroupCount: len(homepage.RelatedGroups),
@@ -551,7 +534,6 @@ func (s *HomepageService) GetObjectPageBundle(
 		RelatedObjects:   emptyRelatedGroups(homepage.RelatedGroups),
 		RelationEdges:    emptyRawMessages(homepage.RelationEdges),
 		AssistantContext: append(json.RawMessage(nil), homepage.AssistantContext...),
-		RolloutContext:   rollout,
 	}, nil
 }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import subprocess
@@ -121,6 +122,62 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(actual["mediaImageBaseUrl"], "https://localhost:19100")
         self.assertEqual(actual["mediaVideoBaseUrl"], "https://localhost:19100")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://localhost:19130")
+
+    def test_ios_build_preserves_only_authorized_local_transport_authority(self) -> None:
+        def resolved_gateway(supplied_gateway: str) -> str:
+            entries = {
+                "APP_RUNTIME_ENV": "gamma",
+                "CLOUD_GATEWAY_BASE_URL": supplied_gateway,
+            }
+            encoded = ",".join(
+                base64.b64encode(f"{key}={value}".encode("utf-8")).decode("ascii")
+                for key, value in entries.items()
+            )
+            environment = {
+                **os.environ,
+                "DART_DEFINES": encoded,
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(
+                        ROOT
+                        / "quwoquan_app"
+                        / "scripts"
+                        / "ios"
+                        / "prepare_dart_defines.sh"
+                    ),
+                ],
+                cwd=ROOT / "quwoquan_app",
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            export = next(
+                line
+                for line in result.stdout.splitlines()
+                if line.startswith("export DART_DEFINES=")
+            )
+            merged = {
+                key: value
+                for key, value in (
+                    base64.b64decode(item).decode("utf-8").split("=", 1)
+                    for item in export.split("=", 1)[1].split(",")
+                )
+            }
+            return merged["CLOUD_GATEWAY_BASE_URL"]
+
+        self.assertEqual(
+            resolved_gateway("https://gamma-api.localhost:19000"),
+            "https://gamma-api.localhost:19000",
+        )
+        self.assertEqual(
+            resolved_gateway("https://untrusted.localhost:19000"),
+            "https://gamma-api.quwoquan-env.test:19000",
+        )
 
     def test_effective_base_urls_keep_public_for_hosted_target(self) -> None:
         args = self._args(
@@ -285,7 +342,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn("--dart-define-from-file=", joined)
         self.assertNotIn("local-gamma-token", joined)
         self.assertNotIn("local-gamma-refresh", joined)
-        self.assertIn("--ios=17.2", command)
+        self.assertNotIn("--ios=17.2", command)
 
     def test_ios_auto_selection_uses_highest_xcode_compatible_runtime(self) -> None:
         devices = [
@@ -802,7 +859,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             / "dev_assistant_beta_gateway.py"
         ).read_text(encoding="utf-8")
         backing_ready = beta_manual.index(
-            "chat backing services must be ready before beta services start",
+            "real beta content data plane must be ready before beta services start",
         )
         assistant_start = beta_manual.index(
             'echo "[app-beta-manual] starting assistant-service beta',
@@ -819,7 +876,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'REDIS_GENERAL_ADDR="$CHAT_REDIS_ADDR"',
             'REDIS_REC_ADDR="$CHAT_REDIS_ADDR"',
             'ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}"',
+            "export CONTENT_PORT",
             "export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT",
+            "BETA_OBJECT_STORAGE_EDGE_PORT",
+            "BETA_SERVICE_CONFIG_ROOT",
+            "rec-model-service",
+            "content-service",
             'mkdir -p "$(dirname "$CHAT_SEED_LOG")"',
             'python3 "$BETA_MANUAL_RUNTIME_LOG_PROCESS"',
             '--event "chat-seed"',
@@ -837,6 +899,49 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn(') >"$CHAT_SEED_LOG" 2>&1', beta_manual)
         self.assertIn("BETA_MONGO_PORT", beta_backing_compose)
         self.assertIn("BETA_REDIS_PORT", beta_backing_compose)
+        self.assertIn("object-storage:", beta_backing_compose)
+        self.assertIn("rec-model-service:", beta_backing_compose)
+        self.assertIn("content-service:", beta_backing_compose)
+        self.assertIn("REPORT_DATABASE_URL", beta_backing_compose)
+        self.assertIn(
+            'CONTENT_EMBEDDING_ENDPOINT: "${CONTENT_EMBEDDING_ENDPOINT:-}"',
+            beta_backing_compose,
+        )
+        self.assertIn(
+            'CONTENT_EMBEDDING_API_KEY: "${CONTENT_EMBEDDING_API_KEY:-}"',
+            beta_backing_compose,
+        )
+        self.assertIn(
+            "beta_manual_require_content_embedding_binding",
+            beta_manual,
+        )
+        self.assertIn(
+            "beta content embedding provider prerequisite is missing",
+            beta_manual,
+        )
+        self.assertLess(
+            beta_manual.index(
+                "beta_manual_require_content_embedding_binding || return 1",
+            ),
+            beta_manual.index("beta_manual_ensure_docker_daemon || return 1"),
+        )
+        self.assertIn(
+            'CONFIG_VERSION: "${CONTENT_CONFIG_VERSION:-}"',
+            beta_backing_compose,
+        )
+        self.assertIn(
+            "BETA_CONTENT_RELEASE_CONFIG_VERSION",
+            beta_manual,
+        )
+        self.assertIn(
+            "CONTENT_CONFIG_VERSION=\"$BETA_CONTENT_RELEASE_CONFIG_VERSION\"",
+            beta_manual,
+        )
+        self.assertIn("--write-report-account-backfill", beta_manual)
+        self.assertIn('NOTIFICATION_SERVICE_ADDR=":${BETA_NOTIFICATION_PORT}"', beta_manual)
+        self.assertIn("@content_report path /content/reports", beta_manual)
+        self.assertIn("@notification_app_messages", beta_manual)
+        self.assertIn("BETA_FIXTURE_GATEWAY_PORT", beta_manual)
         self.assertIn('if path == "/user/sync":', beta_gateway)
         self.assertNotIn(
             'path.startswith("/chat") or path == "/user/sync"',
@@ -848,7 +953,14 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'if [[ "$WORKLOAD" == "content-release" ]]; then',
             beta_stack,
         )
-        self.assertIn("APP_BETA_CMD+=(--skip-assistant)", beta_stack)
+        self.assertIn("APP_BETA_CMD+=(--content-release)", beta_stack)
+        self.assertIn("beta_manual_start_content_release_stack", beta_manual)
+        self.assertIn('if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then', beta_manual)
+        self.assertIn("beta_manual_start_notification_service", beta_manual)
+        self.assertLess(
+            beta_manual.index('if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then'),
+            beta_manual.index('beta_manual_ensure_port_available "$CHAT_PORT"'),
+        )
         self.assertNotIn("_rewrite_media_urls", beta_gateway)
         self.assertNotIn("_join_media_base", beta_gateway)
         self.assertIn(
@@ -903,6 +1015,23 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             '"LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": "object-storage-edge"',
             ports,
         )
+        gamma_start = (
+            ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'CONTENT_EMBEDDING_ENDPOINT: "${LOCAL_GAMMA_EMBEDDING_ENDPOINT:-}"',
+            compose,
+        )
+        self.assertIn(
+            'CONTENT_EMBEDDING_API_KEY: "${LOCAL_GAMMA_EMBEDDING_API_KEY:-}"',
+            compose,
+        )
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" ]]; then',
+            gamma_start,
+        )
+        self.assertIn("embedding:", gamma_start)
+        self.assertIn("--write-report-account-backfill", gamma_start)
 
     def test_video_range_mime_preflight_precedes_patrol(self) -> None:
         with mock.patch.object(stackctl, "_local_target_runtime_ready", return_value=True):
@@ -1249,6 +1378,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("media-edge", roles)
         self.assertNotIn("platform-ops-edge", roles)
         self.assertNotIn("ops-portal", roles)
+
+    def test_beta_runtime_readiness_requires_real_report_dependencies(self) -> None:
+        roles = stackctl._expected_local_roles("beta-local")
+
+        self.assertIn("content-service", roles)
+        self.assertIn("notification-service", roles)
+        self.assertIn("fixture-gateway", roles)
 
     def test_stackctl_passes_explicit_remote_token_only_via_process_environment(self) -> None:
         target = {

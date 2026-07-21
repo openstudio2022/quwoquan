@@ -296,9 +296,10 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
     return _take(rows, limit);
   }
 
-  List<ChatFixtureObject> listSelectableGroupConversations({
+  ChatFixtureCursorPage listSelectableGroupConversations({
     String? query,
     String? source,
+    String? cursor,
     int limit = 20,
   }) {
     final normalizedQuery = query?.trim().toLowerCase() ?? '';
@@ -350,16 +351,22 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
         ),
       });
     }
-    return _take(rows, limit);
+    rows.sort(
+      (left, right) => _text(
+        left['conversationId'],
+      ).compareTo(_text(right['conversationId'])),
+    );
+    return _fixtureCursorPage(rows, cursor: cursor, limit: limit);
   }
 
-  List<ChatFixtureObject> listSelectableGroupContactMembers({
+  ChatFixtureCursorPage listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = 20,
   }) {
     if (_conversation(conversationId) == null) {
-      return const <ChatFixtureObject>[];
+      return const ChatFixtureCursorPage(items: <ChatFixtureObject>[]);
     }
     final normalizedQuery = query?.trim().toLowerCase() ?? '';
     final mutualIds = _mutualContactIds();
@@ -402,7 +409,15 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
         'isStarred': _bool(contact?['isStarred']),
       });
     }
-    return _take(rows, limit);
+    rows.sort((left, right) {
+      final displayName = _text(
+        left['displayName'],
+      ).compareTo(_text(right['displayName']));
+      return displayName != 0
+          ? displayName
+          : _text(left['userId']).compareTo(_text(right['userId']));
+    });
+    return _fixtureCursorPage(rows, cursor: cursor, limit: limit);
   }
 
   ChatFixtureObject getGroupSettings(String conversationId) {

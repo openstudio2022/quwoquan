@@ -5,14 +5,17 @@
 
 ## 最小价值
 
-rtc-service 可通过受控 LiveKit/TURN 能力创建房间并签发短期凭据，App 能在网络变化下建立、
-恢复和结束媒体连接，运营能以真实 QoE 指标决定灰度与回滚。
+rtc-service 可通过受控媒体房间传输能力创建房间并签发短期凭据；当前 LiveKit/TURN 仅作为
+infrastructure adapter。App 能在网络变化下建立、恢复和结束媒体连接，运营能以真实 QoE
+指标决定灰度与回滚。
 
 ## 职责边界
 
-- LiveKit Room 与 CallSession 一一映射。
-- rtc-service 通过 infrastructure port 创建/删除 Room、签发绑定 room/participant/grants 的 token。
-- `livekitUrl` 由服务配置下发，App 不硬编码。
+- 媒体 Room 与 CallSession 一一映射。
+- rtc-service 通过 `MediaRoomProvider` 创建/删除 Room、签发绑定 room/participant/grants 的
+  media access；vendor 实现仅位于 infrastructure adapter。
+- App 环境包将受控连接地址注入平台媒体 adapter；operation 仅返回
+  `mediaAccess.accessToken`，不透传 endpoint 或 vendor 专有字段。
 - coturn 负责 NAT 穿透；realtime-gateway 负责业务事件投递，两者不混用。
 - 媒体建连后必须调用 `ReportMediaConnected`，使 Participant/CallSession 状态可审计。
 - 屏幕共享使用 LiveKit screen track + CallSession start/stop command。
@@ -46,5 +49,5 @@ rtc-service 可通过受控 LiveKit/TURN 能力创建房间并签发短期凭据
 
 ## 验收
 
-需覆盖 Room/token、TURN、timeout/connected、screen share、弱网/重连、QoE emitter/rollup、
+需覆盖 Room/mediaAccess accessToken、环境包连接地址、TURN、timeout/connected、screen share、弱网/重连、QoE emitter/rollup、
 Gamma 真实媒体与 prod gray readback。受控 SLS Secret 缺失时保持 blocked。

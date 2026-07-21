@@ -171,13 +171,14 @@ func persistReportOutboxEvent(
 ) {
 	t.Helper()
 	aggregate, err := reportmodel.Create(reportmodel.CreateParams{
-		ID:          reportID,
-		ReporterID:  "reporter-1",
-		TargetType:  reportmodel.TargetPost,
-		TargetID:    "post-1",
-		Reason:      reportmodel.ReasonSpam,
-		Description: "local-contract fixture",
-		Now:         occurredAt,
+		ID:                reportID,
+		ReporterID:        "reporter-1",
+		ReporterAccountID: "account-reporter-1",
+		TargetType:        reportmodel.TargetPost,
+		TargetID:          "post-1",
+		Reason:            reportmodel.ReasonSpam,
+		Description:       "local-contract fixture",
+		Now:               occurredAt,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)

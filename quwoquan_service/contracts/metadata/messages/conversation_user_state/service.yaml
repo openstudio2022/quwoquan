@@ -44,6 +44,13 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 标记已读（已读水位 readSeq 单调推进 + unreadCount 重算，receiptEnabled 时写入 MessageReceipt；旧水位重放为 no-op 并返回当前状态）
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/conversation_user_state_contracts.dart
+      request_type: ChatMarkConversationMessageReadCommand
+      response_type: ChatCommandAck
+      request_encoder: encodeChatMarkConversationMessageReadCommand
+      response_decoder: decodeChatCommandAck
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.conversation_not_found, CHAT.USER.message_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -86,7 +93,17 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    description: 更新用户级会话设置（mute/pin，写入 ConversationUserState；目标状态已满足时持久化 no-op receipt）
+    description: |
+      更新用户级会话设置（mute/pin，写入 ConversationUserState；目标状态已满足时持久化
+      no-op receipt）。仅当前 ConversationMember 可调用；被移出、退群或从未加入的用户统一
+      返回 conversation_not_found，不能借设置命令创建或复活 ChatInbox 行。
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/conversation_user_state_contracts.dart
+      request_type: ChatUpdateConversationSettingsCommand
+      response_type: ChatCommandAck
+      request_encoder: encodeChatUpdateConversationSettingsCommand
+      response_decoder: decodeChatCommandAck
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required

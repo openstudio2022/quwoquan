@@ -60,8 +60,33 @@ func (h *ChatHandler) flattenInboxItems(ctx context.Context, items []application
 	return out
 }
 
+func conversationMemberToWire(
+	member model.ConversationMember,
+	currentUserID string,
+) map[string]any {
+	assistantSkillID := strings.TrimSpace(member.AssistantSkillId)
+	var assistantSkill any
+	if assistantSkillID != "" {
+		assistantSkill = assistantSkillID
+	}
+	return map[string]any{
+		"userId":           member.UserId,
+		"displayName":      member.DisplayName,
+		"avatarUrl":        member.AvatarUrl,
+		"role":             member.Role,
+		"memberType":       member.MemberType,
+		"assistantSkillId": assistantSkill,
+		"joinedAt":         formatOptionalTime(member.JoinedAt),
+		"isCurrentUser":    member.UserId == currentUserID,
+	}
+}
+
 func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.InboxItem) map[string]any {
 	conv := item.Conversation
+	lastMessageType := strings.TrimSpace(conv.LastMessageType)
+	if lastMessageType == "" {
+		lastMessageType = "text"
+	}
 	return map[string]any{
 		"id":                 conv.ID,
 		"type":               conv.Type,
@@ -69,6 +94,7 @@ func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.Inbo
 		"avatarUrl":          h.resolveConversationAvatarURL(ctx, conv),
 		"groupAvatarVersion": conv.GroupAvatarVersion,
 		"lastMessagePreview": conv.LastMessagePreview,
+		"lastMessageType":    lastMessageType,
 		"lastMessageTime":    conv.LastMessageTime,
 		"lastSeq":            conv.MaxSeq,
 		"unreadCount":        item.UserState.UnreadCount,
@@ -356,21 +382,21 @@ func (h *ChatHandler) resolveConversationAvatarURL(ctx context.Context, conv mod
 func messageToWire(slice application.MessageSlice) map[string]any {
 	msg := slice.Message
 	wire := map[string]any{
-		"id":                        msg.ID,
-		"conversationId":            msg.ConversationID,
-		"seq":                       msg.Seq,
-		"clientMsgId":               msg.ClientMessageID,
-		"senderId":                  msg.SenderID,
-		"senderDisplayNameSnapshot": msg.SenderDisplayNameSnapshot,
-		"senderAvatarUrlSnapshot":   msg.SenderAvatarURLSnapshot,
-		"type":                      msg.Type,
-		"content":                   msg.Content,
-		"mediaAssetId":              msg.MediaAssetID,
-		"card":                      msg.Card,
-		"replyToMessageId":          msg.ReplyToMessageID,
-		"mentions":                  msg.Mentions,
-		"status":                    msg.Status,
-		"timestamp":                 msg.Timestamp,
+		"id":               msg.ID,
+		"conversationId":   msg.ConversationID,
+		"seq":              msg.Seq,
+		"clientMsgId":      msg.ClientMessageID,
+		"senderId":         msg.SenderID,
+		"senderName":       msg.SenderDisplayNameSnapshot,
+		"senderAvatar":     msg.SenderAvatarURLSnapshot,
+		"type":             msg.Type,
+		"content":          msg.Content,
+		"mediaAssetId":     msg.MediaAssetID,
+		"card":             msg.Card,
+		"replyToMessageId": msg.ReplyToMessageID,
+		"mentions":         msg.Mentions,
+		"status":           msg.Status,
+		"timestamp":        msg.Timestamp,
 	}
 	if slice.Media != nil {
 		wire["mediaDeliveryUrl"] = slice.Media.DeliveryURL

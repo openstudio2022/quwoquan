@@ -36,8 +36,8 @@
 |---|---|---|
 | 聚合边界 | `CallSession` aggregate root + `CallParticipant` owned entity | 生命周期、人数上限、媒体控制与结束事实需要强一致 |
 | 信令投递 | rtc-service outbox；CallRinging 先入 durable stream，由 notification 以 per-persona/device presence 协调 realtime-first + ACK-gated push | 复用可信 ticket/auth_ack，同时避免在线/离线竞态与无条件双投递 |
-| 媒体路径 | LiveKit SFU + TURN | 1v1/多人使用同一媒体路径，避免双路径切换 |
-| Token | Initiate/Answer/Join 响应直接下发短期 token 与配置化 `livekitUrl` | 绑定 room/participant/grants，避免额外 token 查询与地址硬编码 |
+| 媒体路径 | `MediaRoomProvider` port；当前由 LiveKit SFU adapter + TURN 实现 | 业务层不依赖 vendor，1v1/多人仍共用同一媒体路径 |
+| 媒体访问 | Initiate/Answer/Join 响应直接下发 `mediaAccess(accessToken)`；端点由 App 环境包注入平台 adapter | 绑定 room/participant/grants，避免额外凭据查询、endpoint 透传、地址硬编码或 vendor 字段外泄 |
 | App 边界 | lifecycle / participant / media / screen-share / query 五个细粒度 Facet | 单 Facet ≤10 方法，production Remote-only |
 | 并发 | 服务端 version CAS + command receipt + 有限重放 | 客户端不掌握聚合版本，纯竞态可重放，业务冲突结构化返回 |
 | 历史 | `CallEnded` → chat `system_call_log` | 用户在发起通话的会话中理解和回流；独立聚合页 deferred |
@@ -227,10 +227,10 @@ native compile。真实 APNs/FCM 凭据下后台、锁屏、被杀唤醒、recei
 
 ## 8. 媒体、弱网与 PiP
 
-### 8.1 LiveKit
+### 8.1 媒体传输 adapter（当前为 LiveKit）
 
-- 每个 CallSession 对应一个 LiveKit Room。
-- Initiate/Answer/Join 响应下发 token 与 `livekitUrl`。
+- 每个 CallSession 对应一个媒体 Room；当前 LiveKit adapter 实现该基础设施能力。
+- Initiate/Answer/Join 响应下发 `mediaAccess(accessToken)`，不暴露 endpoint 或 vendor 字段。
 - 端侧连接后订阅真实 tracks；视频格无 track 时展示可解释状态，不渲染假画面。
 - 网络切换使用 LiveKit reconnect/ICE restart 能力；恢复不能新建 CallSession。
 

@@ -2,10 +2,19 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import (  # noqa: E402
+    app_deployment_package_dir,
+    deployment_package_root,
+    deployment_target_for_env,
+)
 FORBIDDEN_TOKENS = (
     "APP_DATA_SOURCE=mock",
     "test_fixtures",
@@ -23,10 +32,6 @@ PROD_SOURCES = [
 ]
 PROD_SOURCE_GLOBS = [
     ROOT.glob("quwoquan_service/services/*/configs/prod/config.yaml"),
-]
-PROD_ARTIFACT_GLOBS = [
-    ROOT.glob(".qwq_output/env/prod/release/app/**/*"),
-    ROOT.glob(".qwq_output/env/prod/release/service/*/**/*"),
 ]
 # 纯度校验对象是 prod「生效配置」（env overlay），不是配置分层的 dev 默认基层，
 # 也不是天然多环境的拓扑清单：
@@ -48,13 +53,23 @@ EXCLUDED_BASENAMES = frozenset(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scope", choices=("app", "all"), default="all")
+    parser.add_argument("--target", default="")
     return parser.parse_args()
 
 
-def iter_text_files(*, scope: str) -> list[Path]:
+def iter_text_files(*, scope: str, target: str) -> list[Path]:
     files = [path for path in PROD_SOURCES if path.is_file()]
-    artifact_groups = [PROD_ARTIFACT_GLOBS[0]] if scope == "app" else PROD_ARTIFACT_GLOBS
-    for group in PROD_SOURCE_GLOBS + artifact_groups:
+    target_name = deployment_target_for_env("prod", target=target)
+    artifact_groups = [
+        app_deployment_package_dir("prod", target=target_name).glob("**/*"),
+    ]
+    if scope != "app":
+        artifact_groups.append(
+            (deployment_package_root("prod", target=target_name) / "service").glob(
+                "**/*"
+            )
+        )
+    for group in [*PROD_SOURCE_GLOBS, *artifact_groups]:
         for path in group:
             if path.is_file() and path.name not in EXCLUDED_BASENAMES:
                 files.append(path)
@@ -65,11 +80,15 @@ def iter_text_files(*, scope: str) -> list[Path]:
 def main() -> int:
     args = parse_args()
     issues: list[str] = []
-    for path in iter_text_files(scope=args.scope):
+    for path in iter_text_files(scope=args.scope, target=args.target):
         text = path.read_text(encoding="utf-8", errors="replace")
         for token in FORBIDDEN_TOKENS:
             if token in text:
-                issues.append(f"{path.relative_to(ROOT)} contains forbidden token {token!r}")
+                try:
+                    display = path.relative_to(ROOT).as_posix()
+                except ValueError:
+                    display = path.as_posix()
+                issues.append(f"{display} contains forbidden token {token!r}")
 
     if issues:
         print("[verify_prod_package_purity] FAIL")

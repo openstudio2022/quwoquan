@@ -28,6 +28,7 @@ import (
 	importerapp "quwoquan_service/services/content-service/internal/application/importer"
 	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
+	mediareprocessapp "quwoquan_service/services/content-service/internal/application/media/reprocess"
 	moderationapp "quwoquan_service/services/content-service/internal/application/moderation"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
@@ -42,23 +43,24 @@ import (
 )
 
 type ContentHandler struct {
-	feedService               *feedapp.FeedService
-	postService               *postapp.Facades
-	postQueryService          *postapp.PostQueryFacade
-	commentService            *commentapp.Facades
-	reactionService           *reactionapp.Facades
-	reportService             *reportapp.Facades
-	moderationService         *moderationapp.Facades
-	outboundShareService      *outboundshareapp.Facades
-	profileInteractionService *profileinteractionapp.Facades
-	filterCatalogService      *filtercatalogapp.Facades
-	mediaService              *mediaapp.Facades
-	behaviorService           *behaviorapp.BehaviorService
-	importService             *importerapp.BulkImportService
-	intersectionService       *intersectionapp.IntersectionService
-	authorImpactStore         ports.AuthorImpactStore
-	authorImpactEvidenceStore ports.AuthorImpactEvidenceStore
-	healthChecker             *rthealth.Checker
+	feedService                *feedapp.FeedService
+	postService                *postapp.Facades
+	postQueryService           *postapp.PostQueryFacade
+	commentService             *commentapp.Facades
+	reactionService            *reactionapp.Facades
+	reportService              *reportapp.Facades
+	moderationService          *moderationapp.Facades
+	outboundShareService       *outboundshareapp.Facades
+	profileInteractionService  *profileinteractionapp.Facades
+	filterCatalogService       *filtercatalogapp.Facades
+	mediaService               *mediaapp.Facades
+	mediaImageReprocessService *mediareprocessapp.Service
+	behaviorService            *behaviorapp.BehaviorService
+	importService              *importerapp.BulkImportService
+	intersectionService        *intersectionapp.IntersectionService
+	authorImpactStore          ports.AuthorImpactStore
+	authorImpactEvidenceStore  ports.AuthorImpactEvidenceStore
+	healthChecker              *rthealth.Checker
 }
 
 // postDetailClientWire is the explicit GET /content/posts/{postId} contract.
@@ -231,6 +233,12 @@ func WithMediaService(service *mediaapp.Facades) ContentHandlerOption {
 	return func(handler *ContentHandler) { handler.mediaService = service }
 }
 
+func WithMediaImageReprocessService(
+	service *mediareprocessapp.Service,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.mediaImageReprocessService = service }
+}
+
 // WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
 func WithIntersectionService(svc *intersectionapp.IntersectionService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.intersectionService = svc }
@@ -381,8 +389,9 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params := BindGeneratedGetFeedParams(r, 20)
+	recommendationActorID := resolveRecommendationActorID(r)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
-		UserID:          resolveUserID(r),
+		UserID:          recommendationActorID,
 		ViewerPersonaID: resolvePersonaID(r),
 		SessionID:       resolveSessionID(r),
 		Identity:        params.Identity,
@@ -662,7 +671,8 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	}
 	currentOperation, ok := operation.FromContext(r.Context())
 	reporterID := strings.TrimSpace(currentOperation.Actor.PersonaID)
-	if !ok || reporterID == "" {
+	reporterAccountID := strings.TrimSpace(currentOperation.Actor.AccountID)
+	if !ok || reporterID == "" || reporterAccountID == "" {
 		writeHTTPError(
 			w,
 			r,
@@ -677,11 +687,12 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	_, err := h.reportService.CreateReport(
 		r.Context(),
 		reportapp.CreateReportCommand{
-			ReporterID:  reporterID,
-			TargetType:  body.TargetType,
-			TargetID:    body.TargetID,
-			Reason:      body.Reason,
-			Description: body.Description,
+			ReporterID:        reporterID,
+			ReporterAccountID: reporterAccountID,
+			TargetType:        body.TargetType,
+			TargetID:          body.TargetID,
+			Reason:            body.Reason,
+			Description:       body.Description,
 		},
 	)
 	if err != nil {

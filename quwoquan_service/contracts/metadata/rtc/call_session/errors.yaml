@@ -162,14 +162,14 @@ errors:
       zh: "操作太频繁，请稍后重试"
       en: "Too many requests, please wait"
 
-  - code: RTC.SYSTEM.livekit_unavailable
+  - code: RTC.SYSTEM.media_transport_unavailable
     kind: SYSTEM
     reason: upstream_error
     http_status: 503
     recovery_action: retry
     recovery_after_seconds: 3
-    dart_const: livekitUnavailable
-    go_const: ErrLivekitUnavailable
+    dart_const: mediaTransportUnavailable
+    go_const: ErrMediaTransportUnavailable
     user_message:
       zh: "通话服务暂时不可用，请稍后重试"
       en: "Call service temporarily unavailable"
@@ -184,15 +184,3 @@ errors:
     user_message:
       zh: "通话服务异常，请稍后重试"
       en: "Call service error, please try again"
-
-  - code: RTC.SYSTEM.token_generation_failed
-    kind: SYSTEM
-    reason: internal_error
-    http_status: 500
-    recovery_action: retry
-    recovery_after_seconds: 2
-    dart_const: tokenGenerationFailed
-    go_const: ErrTokenGenerationFailed
-    user_message:
-      zh: "连接通话服务失败，请重试"
-      en: "Failed to connect call service, please retry"

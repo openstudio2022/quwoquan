@@ -9,28 +9,23 @@ import (
 
 	rtfailures "quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/streaming"
-	"quwoquan_service/services/assistant-service/internal/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
 type AgentLoop struct {
-	Skills       SkillRuntime
-	React        ReactRuntime
-	Orchestrator orchestration.PhaseOrchestrator
-	Now          func() time.Time
+	Skills SkillRuntime
+	React  ReactRuntime
+	Now    func() time.Time
 }
 
 func NewAgentLoop(skills SkillRuntime, react ReactRuntime, now func() time.Time) *AgentLoop {
 	if skills == nil {
 		skills = DefaultSkillRuntime{}
 	}
-	if react.Model == nil {
-		react.Model = DeterministicModelProvider{}
-	}
 	if react.Tools == nil {
 		react.Tools = DefaultToolCoordinator{Now: now}
 	}
-	return &AgentLoop{Skills: skills, React: react, Orchestrator: orchestration.NewPhaseOrchestrator(now), Now: now}
+	return &AgentLoop{Skills: skills, React: react, Now: now}
 }
 
 func (l *AgentLoop) RunTurn(ctx context.Context, turn assistant.AssistantTurn) ([]streaming.Envelope, *rtfailures.Failure, error) {
@@ -51,7 +46,7 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		l = NewAgentLoop(nil, ReactRuntime{}, nil)
 	}
 	turnStartedAt := time.Now()
-	log.Printf("assistant agent turn_started conversationId=%s turnId=%s traceId=%s", turn.ConversationID, turn.TurnID, turn.TraceID)
+	log.Printf("assistant agent run_started conversationId=%s turnId=%s traceId=%s", turn.ConversationID, turn.TurnID, turn.TraceID)
 	projector := NewStreamProjectorAt(turn, l.Now, afterSeq)
 	events := []streaming.Envelope{}
 	appendEvent := func(envelope streaming.Envelope, err error) error {
@@ -66,44 +61,25 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		}
 		return nil
 	}
-	if err := appendEvent(projector.Event("assistant.turn.started", map[string]any{
-		"status": "running",
-		"input":  turn.Input,
+	if err := appendEvent(projector.Event(AssistantStreamEventRunStarted, map[string]any{
+		"status":    "running",
+		"restarted": afterSeq > 0,
 	})); err != nil {
 		return nil, nil, err
 	}
-	orchestratorStartedAt := time.Now()
-	runState, err := l.orchestrator().Run(ctx, turn)
-	orchestratorDurationMs := time.Since(orchestratorStartedAt).Milliseconds()
-	if err != nil {
-		log.Printf("assistant agent orchestrator_failed turnId=%s durationMs=%d err=%v", turn.TurnID, orchestratorDurationMs, err)
-		failure := modelFailure("phase_orchestrator", err)
+	if err := appendEvent(projector.Event(AssistantStreamEventProcessReplace, userProcessReplacePayload())); err != nil {
+		return nil, nil, err
+	}
+	if l.React.Model == nil {
+		failure := modelFailure("model_provider", fmt.Errorf("model provider is not configured"))
 		if appendErr := appendEvent(projector.Failure(
-			"assistant.turn.failed",
-			map[string]any{"status": "failed", "stage": "phase_orchestrator"},
+			AssistantStreamEventFailed,
+			map[string]any{"status": "failed"},
 			failure,
 		)); appendErr != nil {
 			return events, nil, appendErr
 		}
 		return events, &failure, nil
-	}
-	log.Printf("assistant agent orchestrator_done turnId=%s traceEvents=%d processFrames=%d journeyEntries=%d durationMs=%d", turn.TurnID, len(runState.TraceEvents), len(runState.ProcessTimeline), len(runState.Journey.Entries), orchestratorDurationMs)
-	for _, traceEvent := range runState.TraceEvents {
-		if err := appendEvent(projector.Event("assistant.trace", map[string]any{
-			"traceEvent": traceEvent,
-		})); err != nil {
-			return nil, nil, err
-		}
-	}
-	if err := appendEvent(projector.Event("assistant.journey.updated", map[string]any{
-		"journey": runState.Journey,
-	})); err != nil {
-		return nil, nil, err
-	}
-	if err := appendEvent(projector.Event("assistant.process_timeline.updated", map[string]any{
-		"processTimeline": runState.ProcessTimeline,
-	})); err != nil {
-		return nil, nil, err
 	}
 	skillStartedAt := time.Now()
 	skill, err := l.skills().SelectSkill(ctx, turn)
@@ -112,8 +88,8 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		log.Printf("assistant agent skill_select_failed turnId=%s durationMs=%d err=%v", turn.TurnID, skillDurationMs, err)
 		failure := modelFailure("skill_runtime", err)
 		if appendErr := appendEvent(projector.Failure(
-			"assistant.turn.failed",
-			map[string]any{"status": "failed", "stage": "skill_runtime"},
+			AssistantStreamEventFailed,
+			map[string]any{"status": "failed"},
 			failure,
 		)); appendErr != nil {
 			return events, nil, appendErr
@@ -121,27 +97,42 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		return events, &failure, nil
 	}
 	log.Printf("assistant agent skill_selected turnId=%s skillId=%s domainId=%s displayName=%s durationMs=%d", turn.TurnID, skill.SkillID, skill.DomainID, skill.DisplayName, skillDurationMs)
-	if err := appendEvent(projector.Event("assistant.skill.selected", map[string]any{
-		"skillId":      skill.SkillID,
-		"domainId":     skill.DomainID,
-		"displayName":  skill.DisplayName,
-		"promptPolicy": skill.PromptPolicy,
-		"toolPolicy":   skill.ToolPolicy,
-	})); err != nil {
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessAppend,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID: userProcessID(assistantUserProcessStageSkillSelection, 0),
+			Scope:     assistantUserProcessScopeRoot,
+			Stage:     assistantUserProcessStageSkillSelection,
+			Status:    assistantUserProcessStatusCompleted,
+			Order:     1,
+			SkillID:   skill.SkillID,
+			DomainID:  skill.DomainID,
+		}),
+	)); err != nil {
 		return nil, nil, err
 	}
-	if err := appendEvent(projector.Event("assistant.reasoning.started", map[string]any{
-		"skillId": skill.SkillID,
-	})); err != nil {
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessAppend,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID: userProcessID(assistantUserProcessStagePlanning, 1),
+			Scope:     assistantUserProcessScopeSkill,
+			Stage:     assistantUserProcessStagePlanning,
+			Status:    assistantUserProcessStatusActive,
+			Order:     2,
+			SkillID:   skill.SkillID,
+			DomainID:  skill.DomainID,
+		}),
+	)); err != nil {
 		return nil, nil, err
 	}
 	var streamedFailure *rtfailures.Failure
 	var answerStreamStartedAt time.Time
+	answerProcessStarted := false
 	reactStartedAt := time.Now()
 	result, err := l.React.RunWithFinalTextSink(ctx, turn, skill, func(step ReactStepResult) error {
-		return emitReactReasoning(ctx, projector, appendEvent, turn, skill, step, emit != nil)
+		return emitReactReasoning(projector, appendEvent, turn, skill, step)
 	}, func(step ReactStepResult) error {
-		failure, err := emitReactObservation(ctx, projector, appendEvent, turn, skill, step, emit != nil)
+		failure, err := emitReactObservation(projector, appendEvent, turn, skill, step)
 		if failure != nil {
 			streamedFailure = failure
 		}
@@ -150,7 +141,24 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		if answerStreamStartedAt.IsZero() {
 			answerStreamStartedAt = time.Now()
 		}
-		return appendEvent(projector.Event("assistant.answer.delta", map[string]any{
+		if !answerProcessStarted {
+			if err := appendEvent(projector.Event(
+				AssistantStreamEventProcessAppend,
+				userProcessPayload(AssistantUserProcess{
+					ProcessID: userProcessID(assistantUserProcessStageAnswerGeneration, 0),
+					Scope:     assistantUserProcessScopeAggregation,
+					Stage:     assistantUserProcessStageAnswerGeneration,
+					Status:    assistantUserProcessStatusActive,
+					Order:     999,
+					SkillID:   skill.SkillID,
+					DomainID:  skill.DomainID,
+				}),
+			)); err != nil {
+				return err
+			}
+			answerProcessStarted = true
+		}
+		return appendEvent(projector.Event(AssistantStreamEventAnswerDelta, map[string]any{
 			"text": delta.Text,
 		}))
 	})
@@ -159,8 +167,8 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 		log.Printf("assistant agent react_failed turnId=%s skillId=%s durationMs=%d err=%v", turn.TurnID, skill.SkillID, reactDurationMs, err)
 		failure := modelFailure("react_runtime", err)
 		if appendErr := appendEvent(projector.Failure(
-			"assistant.turn.failed",
-			map[string]any{"status": "failed", "stage": "react_runtime"},
+			AssistantStreamEventFailed,
+			map[string]any{"status": "failed"},
 			failure,
 		)); appendErr != nil {
 			return events, nil, appendErr
@@ -171,45 +179,58 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 	if streamedFailure != nil {
 		return events, streamedFailure, nil
 	}
-	if len(result.Steps) == 0 {
-		if err := appendEvent(projector.Event("assistant.model.delta", map[string]any{
-			"text":      result.ModelDelta,
-			"stage":     "reasoning",
-			"skillId":   skill.SkillID,
-			"reasoning": result.ReasoningText,
-		})); err != nil {
-			return nil, nil, err
-		}
-	}
-	if len(result.FinalClientTrace) > 0 {
-		if err := appendEvent(projector.Event("assistant.model.interaction", result.FinalClientTrace)); err != nil {
-			return nil, nil, err
-		}
-	}
 	if !result.FinalStreamed {
 		answerStreamStartedAt = time.Now()
-		if err := appendEvent(projector.Event("assistant.answer.delta", map[string]any{
+		if !answerProcessStarted {
+			if err := appendEvent(projector.Event(
+				AssistantStreamEventProcessAppend,
+				userProcessPayload(AssistantUserProcess{
+					ProcessID: userProcessID(assistantUserProcessStageAnswerGeneration, 0),
+					Scope:     assistantUserProcessScopeAggregation,
+					Stage:     assistantUserProcessStageAnswerGeneration,
+					Status:    assistantUserProcessStatusActive,
+					Order:     999,
+					SkillID:   skill.SkillID,
+					DomainID:  skill.DomainID,
+				}),
+			)); err != nil {
+				return nil, nil, err
+			}
+			answerProcessStarted = true
+		}
+		if err := appendEvent(projector.Event(AssistantStreamEventAnswerDelta, map[string]any{
 			"text": result.FinalText,
 		})); err != nil {
 			return nil, nil, err
 		}
 	}
-	if err := appendEvent(projector.Event("assistant.answer.final", map[string]any{
-		"text":       result.FinalText,
-		"stopReason": result.StopReason,
-	})); err != nil {
-		return nil, nil, err
+	if answerProcessStarted {
+		if err := appendEvent(projector.Event(
+			AssistantStreamEventProcessCommit,
+			userProcessPayload(AssistantUserProcess{
+				ProcessID: userProcessID(assistantUserProcessStageAnswerGeneration, 0),
+				Scope:     assistantUserProcessScopeAggregation,
+				Stage:     assistantUserProcessStageAnswerGeneration,
+				Status:    assistantUserProcessStatusCompleted,
+				Order:     999,
+				SkillID:   skill.SkillID,
+				DomainID:  skill.DomainID,
+			}),
+		)); err != nil {
+			return nil, nil, err
+		}
 	}
-	if err := appendEvent(projector.Event("assistant.turn.completed", map[string]any{
+	if err := appendEvent(projector.Event(AssistantStreamEventCompleted, map[string]any{
 		"status":      "completed",
+		"finalAnswer": result.FinalText,
 		"emergedTags": collectEmergedTags(result),
 	})); err != nil {
 		return nil, nil, err
 	}
 	answerStreamDurationMs := time.Since(answerStreamStartedAt).Milliseconds()
 	totalDurationMs := time.Since(turnStartedAt).Milliseconds()
-	log.Printf("assistant agent latency_summary turnId=%s orchestratorMs=%d skillMs=%d reactMs=%d answerStreamMs=%d totalMs=%d modelInteractions=%d steps=%d", turn.TurnID, orchestratorDurationMs, skillDurationMs, reactDurationMs, answerStreamDurationMs, totalDurationMs, resultModelInteractionCount(result), len(result.Steps))
-	log.Printf("assistant agent turn_completed conversationId=%s turnId=%s events=%d answerLen=%d", turn.ConversationID, turn.TurnID, len(events), len([]rune(result.FinalText)))
+	log.Printf("assistant agent latency_summary turnId=%s skillMs=%d reactMs=%d answerStreamMs=%d totalMs=%d modelInteractions=%d steps=%d", turn.TurnID, skillDurationMs, reactDurationMs, answerStreamDurationMs, totalDurationMs, resultModelInteractionCount(result), len(result.Steps))
+	log.Printf("assistant agent run_completed conversationId=%s turnId=%s events=%d answerLen=%d", turn.ConversationID, turn.TurnID, len(events), len([]rune(result.FinalText)))
 	return events, nil, nil
 }
 
@@ -227,278 +248,140 @@ func resultModelInteractionCount(result ReactResult) int {
 	return count
 }
 
-func pauseForVisibleProjection(ctx context.Context, enabled bool) {
-	if !enabled {
-		return
-	}
-	timer := time.NewTimer(350 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-	case <-timer.C:
-	}
-}
-
-func progressiveSnapshotFrames(snapshot map[string]any, field string) []map[string]any {
-	text := strings.TrimSpace(stringValue(snapshot[field]))
-	if text == "" {
-		return []map[string]any{snapshot}
-	}
-	runes := []rune(text)
-	if len(runes) <= 90 {
-		return []map[string]any{snapshot}
-	}
-	breakpoints := []int{len(runes) / 3, len(runes) * 2 / 3, len(runes)}
-	frames := []map[string]any{}
-	seen := map[int]bool{}
-	for _, end := range breakpoints {
-		if end <= 0 || seen[end] {
-			continue
-		}
-		seen[end] = true
-		frame := copyStringAnyMap(snapshot)
-		frame[field] = string(runes[:end])
-		frames = append(frames, frame)
-	}
-	if len(frames) == 0 {
-		return []map[string]any{snapshot}
-	}
-	return frames
-}
-
-func copyStringAnyMap(input map[string]any) map[string]any {
-	out := make(map[string]any, len(input))
-	for key, value := range input {
-		out[key] = value
-	}
-	return out
-}
-
-func emitReactReasoning(ctx context.Context, projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult, visibleStream bool) error {
+func emitReactReasoning(projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) error {
 	log.Printf("assistant agent react_reasoning turnId=%s skillId=%s iteration=%d tool=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName)
-	for _, interaction := range step.ModelInteractions {
-		if len(interaction) == 0 {
-			continue
-		}
-		if err := appendEvent(projector.Event("assistant.model.interaction", interaction)); err != nil {
-			return err
-		}
-	}
 	snapshot := buildUnderstandingSnapshotForStep(turn, step)
-	for _, frame := range progressiveSnapshotFrames(snapshot, "userFacingSummary") {
-		if err := appendEvent(projector.Event("assistant.plan.updated", map[string]any{
-			"iteration":             step.Iteration,
-			"skillId":               skill.SkillID,
-			"plan":                  step.Plan,
-			"understandingSnapshot": frame,
-			"debugTrace":            map[string]any{"reasoning": step.ReasoningText},
-		})); err != nil {
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessCommit,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID: userProcessID(assistantUserProcessStagePlanning, step.Iteration),
+			Scope:     assistantUserProcessScopeSkill,
+			Stage:     assistantUserProcessStagePlanning,
+			Status:    assistantUserProcessStatusCompleted,
+			Order:     step.Iteration*10 + 2,
+			Summary: userProcessSummary(
+				stringValue(snapshot["userFacingSummary"]),
+			),
+			SkillID:  skill.SkillID,
+			DomainID: skill.DomainID,
+		}),
+	)); err != nil {
+		return err
+	}
+	if toolName := strings.TrimSpace(step.Tool.Requested.ToolName); toolName != "" {
+		if err := appendEvent(projector.Event(
+			AssistantStreamEventProcessAppend,
+			userProcessPayload(AssistantUserProcess{
+				ProcessID: userProcessID(assistantUserProcessStageToolExecution, step.Iteration),
+				Scope:     assistantUserProcessScopeSkill,
+				Stage:     assistantUserProcessStageToolExecution,
+				Status:    assistantUserProcessStatusActive,
+				Order:     step.Iteration*10 + 3,
+				SkillID:   skill.SkillID,
+				DomainID:  skill.DomainID,
+				ToolName:  toolName,
+			}),
+		)); err != nil {
 			return err
 		}
-		pauseForVisibleProjection(ctx, visibleStream)
-	}
-	if err := appendEvent(projector.Event("assistant.model.delta", map[string]any{
-		"text":      step.ModelDelta,
-		"stage":     "reasoning",
-		"skillId":   skill.SkillID,
-		"iteration": step.Iteration,
-		"reasoning": step.ReasoningText,
-	})); err != nil {
-		return err
-	}
-	if err := appendEvent(projector.Event("assistant.search_query.generated", map[string]any{
-		"iteration":   step.Iteration,
-		"skillId":     skill.SkillID,
-		"searchPlans": buildSearchPlansForStep(turn, skill, step),
-		"debugTrace":  map[string]any{"structuredDelta": step.StructuredDelta},
-	})); err != nil {
-		return err
-	}
-	if err := appendEvent(projector.Event("assistant.search_query.accepted", map[string]any{
-		"iteration":           step.Iteration,
-		"skillId":             skill.SkillID,
-		"acceptedSearchPlans": buildAcceptedSearchPlansForStep(turn, skill, step),
-	})); err != nil {
-		return err
 	}
 	return nil
 }
 
-func emitReactObservation(ctx context.Context, projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult, visibleStream bool) (*rtfailures.Failure, error) {
+func emitReactObservation(projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) (*rtfailures.Failure, error) {
 	log.Printf("assistant agent react_step turnId=%s skillId=%s iteration=%d tool=%s observationLen=%d replan=%t", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName, len([]rune(step.Observation.Summary)), step.Replan)
-	evidenceInteractions := []map[string]any{}
-	if len(step.ModelInteractions) > 1 {
-		evidenceInteractions = step.ModelInteractions[1:]
-	}
-	for _, interaction := range evidenceInteractions {
-		if len(interaction) == 0 {
-			continue
-		}
-		if err := appendEvent(projector.Event("assistant.model.interaction", interaction)); err != nil {
-			return nil, err
-		}
-	}
-	if err := appendEvent(projector.Event("assistant.tool.requested", map[string]any{
-		"toolUse": step.Tool.Requested,
-	})); err != nil {
-		return nil, err
-	}
+	toolName := strings.TrimSpace(step.Tool.Requested.ToolName)
 	if step.Tool.Failure != nil {
 		log.Printf("assistant agent tool_failed turnId=%s skillId=%s iteration=%d tool=%s code=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName, step.Tool.Failure.Code)
-		if err := appendEvent(projector.Failure("assistant.failure", map[string]any{
-			"toolUse": step.Tool.Completed,
-			"stage":   "tool",
-		}, *step.Tool.Failure)); err != nil {
+		if err := appendEvent(projector.Event(
+			AssistantStreamEventProcessCommit,
+			userProcessPayload(AssistantUserProcess{
+				ProcessID: userProcessID(assistantUserProcessStageToolExecution, step.Iteration),
+				Scope:     assistantUserProcessScopeSkill,
+				Stage:     assistantUserProcessStageToolExecution,
+				Status:    assistantUserProcessStatusFailed,
+				Order:     step.Iteration*10 + 3,
+				SkillID:   skill.SkillID,
+				DomainID:  skill.DomainID,
+				ToolName:  toolName,
+			}),
+		)); err != nil {
 			return nil, err
 		}
-		if err := appendEvent(projector.Failure("assistant.turn.failed", map[string]any{
+		if err := appendEvent(projector.Failure(AssistantStreamEventFailed, map[string]any{
 			"status": "failed",
 		}, *step.Tool.Failure)); err != nil {
 			return nil, err
 		}
 		return step.Tool.Failure, nil
 	}
-	if step.Tool.Completed.Status == "waiting_confirmation" {
-		if err := appendEvent(projector.Event("assistant.user_confirmation.requested", map[string]any{
-			"toolUse": step.Tool.Completed,
-		})); err != nil {
-			return nil, err
-		}
-	}
-	if err := appendEvent(projector.Event("assistant.tool.completed", map[string]any{
-		"toolUse": step.Tool.Completed,
-	})); err != nil {
-		return nil, err
-	}
-	log.Printf("assistant agent tool_completed turnId=%s skillId=%s iteration=%d tool=%s status=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Completed.ToolName, step.Tool.Completed.Status)
 	retrievalProcessing := buildRetrievalProcessingForStep(step)
-	for _, frame := range progressiveSnapshotFrames(retrievalProcessing, "processingSummary") {
-		if err := appendEvent(projector.Event("assistant.observation.assessed", map[string]any{
-			"iteration":           step.Iteration,
-			"skillId":             skill.SkillID,
-			"observation":         step.Observation,
-			"replan":              step.Replan,
-			"replanReason":        step.ReplanReason,
-			"retrievalProcessing": frame,
-			"readiness": map[string]any{
-				"finalAnswerReady": !step.Replan,
-				"needReplan":       step.Replan,
-			},
-		})); err != nil {
-			return nil, err
-		}
-		pauseForVisibleProjection(ctx, visibleStream)
-	}
-	if step.Replan {
-		log.Printf("assistant agent replan_requested turnId=%s skillId=%s iteration=%d reason=%s", turn.TurnID, skill.SkillID, step.Iteration, step.ReplanReason)
-		if err := appendEvent(projector.Event("assistant.replan.requested", map[string]any{
-			"iteration":    step.Iteration,
-			"skillId":      skill.SkillID,
-			"replanReason": step.ReplanReason,
-		})); err != nil {
-			return nil, err
-		}
-	}
-	return nil, nil
-}
-
-func emitReactStep(projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) (*rtfailures.Failure, error) {
-	log.Printf("assistant agent react_step turnId=%s skillId=%s iteration=%d tool=%s observationLen=%d replan=%t", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName, len([]rune(step.Observation.Summary)), step.Replan)
-	for _, interaction := range step.ModelInteractions {
-		if len(interaction) == 0 {
-			continue
-		}
-		if err := appendEvent(projector.Event("assistant.model.interaction", interaction)); err != nil {
-			return nil, err
-		}
-	}
-	if err := appendEvent(projector.Event("assistant.plan.updated", map[string]any{
-		"iteration":             step.Iteration,
-		"skillId":               skill.SkillID,
-		"plan":                  step.Plan,
-		"understandingSnapshot": buildUnderstandingSnapshotForStep(turn, step),
-		"debugTrace":            map[string]any{"reasoning": step.ReasoningText},
-	})); err != nil {
-		return nil, err
-	}
-	if err := appendEvent(projector.Event("assistant.model.delta", map[string]any{
-		"text":      step.ModelDelta,
-		"stage":     "reasoning",
-		"skillId":   skill.SkillID,
-		"iteration": step.Iteration,
-		"reasoning": step.ReasoningText,
-	})); err != nil {
-		return nil, err
-	}
-	if err := appendEvent(projector.Event("assistant.search_query.generated", map[string]any{
-		"iteration":   step.Iteration,
-		"skillId":     skill.SkillID,
-		"searchPlans": buildSearchPlansForStep(turn, skill, step),
-		"debugTrace":  map[string]any{"structuredDelta": step.StructuredDelta},
-	})); err != nil {
-		return nil, err
-	}
-	if err := appendEvent(projector.Event("assistant.search_query.accepted", map[string]any{
-		"iteration":           step.Iteration,
-		"skillId":             skill.SkillID,
-		"acceptedSearchPlans": buildAcceptedSearchPlansForStep(turn, skill, step),
-	})); err != nil {
-		return nil, err
-	}
-	if err := appendEvent(projector.Event("assistant.tool.requested", map[string]any{
-		"toolUse": step.Tool.Requested,
-	})); err != nil {
-		return nil, err
-	}
-	if step.Tool.Failure != nil {
-		log.Printf("assistant agent tool_failed turnId=%s skillId=%s iteration=%d tool=%s code=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName, step.Tool.Failure.Code)
-		if err := appendEvent(projector.Failure("assistant.failure", map[string]any{
-			"toolUse": step.Tool.Completed,
-			"stage":   "tool",
-		}, *step.Tool.Failure)); err != nil {
-			return nil, err
-		}
-		if err := appendEvent(projector.Failure("assistant.turn.failed", map[string]any{
-			"status": "failed",
-		}, *step.Tool.Failure)); err != nil {
-			return nil, err
-		}
-		return step.Tool.Failure, nil
-	}
-	if step.Tool.Completed.Status == "waiting_confirmation" {
-		if err := appendEvent(projector.Event("assistant.user_confirmation.requested", map[string]any{
-			"toolUse": step.Tool.Completed,
-		})); err != nil {
-			return nil, err
-		}
-	}
-	if err := appendEvent(projector.Event("assistant.tool.completed", map[string]any{
-		"toolUse": step.Tool.Completed,
-	})); err != nil {
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessCommit,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID:              userProcessID(assistantUserProcessStageToolExecution, step.Iteration),
+			Scope:                  assistantUserProcessScopeSkill,
+			Stage:                  assistantUserProcessStageToolExecution,
+			Status:                 assistantUserProcessStatusCompleted,
+			Order:                  step.Iteration*10 + 3,
+			SkillID:                skill.SkillID,
+			DomainID:               skill.DomainID,
+			ToolName:               toolName,
+			SearchedDocumentCount:  intValue(retrievalProcessing["searchedDocumentCount"]),
+			ProcessedDocumentCount: intValue(retrievalProcessing["processedDocumentCount"]),
+			AcceptedDocumentCount:  intValue(retrievalProcessing["acceptedDocumentCount"]),
+		}),
+	)); err != nil {
 		return nil, err
 	}
 	log.Printf("assistant agent tool_completed turnId=%s skillId=%s iteration=%d tool=%s status=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Completed.ToolName, step.Tool.Completed.Status)
-	if err := appendEvent(projector.Event("assistant.observation.assessed", map[string]any{
-		"iteration":           step.Iteration,
-		"skillId":             skill.SkillID,
-		"observation":         step.Observation,
-		"replan":              step.Replan,
-		"replanReason":        step.ReplanReason,
-		"retrievalProcessing": buildRetrievalProcessingForStep(step),
-		"readiness": map[string]any{
-			"finalAnswerReady": !step.Replan,
-			"needReplan":       step.Replan,
-		},
-	})); err != nil {
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessAppend,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID: userProcessID(assistantUserProcessStageEvidenceReview, step.Iteration),
+			Scope:     assistantUserProcessScopeSkill,
+			Stage:     assistantUserProcessStageEvidenceReview,
+			Status:    assistantUserProcessStatusActive,
+			Order:     step.Iteration*10 + 4,
+			SkillID:   skill.SkillID,
+			DomainID:  skill.DomainID,
+		}),
+	)); err != nil {
+		return nil, err
+	}
+	if err := appendEvent(projector.Event(
+		AssistantStreamEventProcessCommit,
+		userProcessPayload(AssistantUserProcess{
+			ProcessID:              userProcessID(assistantUserProcessStageEvidenceReview, step.Iteration),
+			Scope:                  assistantUserProcessScopeSkill,
+			Stage:                  assistantUserProcessStageEvidenceReview,
+			Status:                 assistantUserProcessStatusCompleted,
+			Order:                  step.Iteration*10 + 4,
+			Summary:                userProcessSummary(stringValue(retrievalProcessing["processingSummary"])),
+			SkillID:                skill.SkillID,
+			DomainID:               skill.DomainID,
+			SearchedDocumentCount:  intValue(retrievalProcessing["searchedDocumentCount"]),
+			ProcessedDocumentCount: intValue(retrievalProcessing["processedDocumentCount"]),
+			AcceptedDocumentCount:  intValue(retrievalProcessing["acceptedDocumentCount"]),
+			AcceptedReferences:     userProcessReferences(retrievalProcessing["acceptedReferences"]),
+		}),
+	)); err != nil {
 		return nil, err
 	}
 	if step.Replan {
 		log.Printf("assistant agent replan_requested turnId=%s skillId=%s iteration=%d reason=%s", turn.TurnID, skill.SkillID, step.Iteration, step.ReplanReason)
-		if err := appendEvent(projector.Event("assistant.replan.requested", map[string]any{
-			"iteration":    step.Iteration,
-			"skillId":      skill.SkillID,
-			"replanReason": step.ReplanReason,
-		})); err != nil {
+		if err := appendEvent(projector.Event(
+			AssistantStreamEventProcessAppend,
+			userProcessPayload(AssistantUserProcess{
+				ProcessID: userProcessID(assistantUserProcessStagePlanning, step.Iteration+1),
+				Scope:     assistantUserProcessScopeSkill,
+				Stage:     assistantUserProcessStagePlanning,
+				Status:    assistantUserProcessStatusActive,
+				Order:     (step.Iteration+1)*10 + 2,
+				SkillID:   skill.SkillID,
+				DomainID:  skill.DomainID,
+			}),
+		)); err != nil {
 			return nil, err
 		}
 	}
@@ -510,27 +393,6 @@ func (l *AgentLoop) skills() SkillRuntime {
 		return l.Skills
 	}
 	return DefaultSkillRuntime{}
-}
-
-func (l *AgentLoop) orchestrator() orchestration.PhaseOrchestrator {
-	if l != nil && len(l.Orchestrator.Phases()) > 0 {
-		return l.Orchestrator
-	}
-	now := func() time.Time { return time.Now().UTC() }
-	if l != nil && l.Now != nil {
-		now = l.Now
-	}
-	return orchestration.NewPhaseOrchestrator(now)
-}
-
-func appendFailureEvents(projector *StreamProjector, events []streaming.Envelope, failure rtfailures.Failure) []streaming.Envelope {
-	if envelope, err := projector.Failure("assistant.failure", map[string]any{"stage": "agent_loop"}, failure); err == nil {
-		events = append(events, envelope)
-	}
-	if envelope, err := projector.Failure("assistant.turn.failed", map[string]any{"status": "failed"}, failure); err == nil {
-		events = append(events, envelope)
-	}
-	return events
 }
 
 func modelFailure(stage string, err error) rtfailures.Failure {

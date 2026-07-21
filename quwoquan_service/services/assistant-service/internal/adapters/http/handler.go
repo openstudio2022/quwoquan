@@ -651,7 +651,7 @@ func (h *Handler) handleStreamRunEvents(w http.ResponseWriter, r *http.Request) 
 		writeStreamingSSEEnvelope(w, streaming.Envelope{
 			EventID:   runID + ":error",
 			StreamID:  runID,
-			EventType: "turn_failed",
+			EventType: string(application.AssistantStreamEventFailed),
 			Seq:       afterSeq + uint64(emitted) + 1,
 			TraceID:   turn.TraceID,
 			Payload: map[string]any{

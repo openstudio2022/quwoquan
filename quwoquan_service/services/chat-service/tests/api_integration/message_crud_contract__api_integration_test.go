@@ -197,6 +197,54 @@ func TestListMessages(t *testing.T) {
 	if len(items) != 5 {
 		t.Errorf("expected 5 messages, got %d", len(items))
 	}
+	first, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("message item must be object, got %T", items[0])
+	}
+	if _, exists := first["senderDisplayNameSnapshot"]; exists {
+		t.Fatalf("wire must not leak storage snapshot field names: %#v", first)
+	}
+	if _, exists := first["senderAvatarUrlSnapshot"]; exists {
+		t.Fatalf("wire must not leak storage snapshot field names: %#v", first)
+	}
+	if _, ok := first["senderName"].(string); !ok {
+		t.Fatalf("wire must expose canonical senderName: %#v", first)
+	}
+	if _, ok := first["senderAvatar"].(string); !ok {
+		t.Fatalf("wire must expose canonical senderAvatar: %#v", first)
+	}
+
+	code, firstPage := doGet(
+		t,
+		"/chat/conversations/"+convId+"/messages?limit=2",
+		"user_test_001",
+	)
+	if code != http.StatusOK {
+		t.Fatalf("first message page status=%d body=%#v", code, firstPage)
+	}
+	nextBeforeSeq, ok := firstPage["nextBeforeSeq"].(float64)
+	if !ok || nextBeforeSeq <= 0 {
+		t.Fatalf("first message page must expose nextBeforeSeq: %#v", firstPage)
+	}
+	if _, legacyCursorPresent := firstPage["cursor"]; legacyCursorPresent {
+		t.Fatalf("message page must not emit retired cursor: %#v", firstPage)
+	}
+	code, secondPage := doGet(
+		t,
+		fmt.Sprintf(
+			"/chat/conversations/%s/messages?limit=2&beforeSeq=%d",
+			convId,
+			int64(nextBeforeSeq),
+		),
+		"user_test_001",
+	)
+	if code != http.StatusOK {
+		t.Fatalf("second message page status=%d body=%#v", code, secondPage)
+	}
+	secondItems, ok := secondPage["items"].([]any)
+	if !ok || len(secondItems) != 2 {
+		t.Fatalf("second message page must contain two items: %#v", secondPage)
+	}
 }
 
 func TestMessageOperationsDenyNonMemberPersona(t *testing.T) {

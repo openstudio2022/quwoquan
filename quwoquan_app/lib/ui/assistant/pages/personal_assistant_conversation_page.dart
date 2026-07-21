@@ -11,6 +11,7 @@ import 'package:quwoquan_app/app/navigation/generated/page_access_internal_route
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
@@ -83,6 +84,7 @@ class _PersonalAssistantConversationPageState
       final notifier = ref.read(
         personalAssistantStreamControllerProvider.notifier,
       );
+      notifier.setOpenContext(widget.assistantOpenContext);
       unawaited(
         (requestedConversationId.isEmpty
                 ? notifier.ensureHistoryInitialized()
@@ -159,27 +161,29 @@ class _PersonalAssistantConversationPageState
   }
 
   Future<void> _openReference(AssistantCitation citation) async {
-    final url = citation.url.trim();
-    if (url.isEmpty) return;
-    final uri = Uri.tryParse(url);
-    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
-      await Clipboard.setData(ClipboardData(text: url));
-      return;
+    final destination = citation.resolvedDestination;
+    switch (destination) {
+      case InternalCitationDestination():
+        context.push(destination.routePath);
+      case ExternalCitationDestination():
+        await Navigator.of(context).push(
+          CupertinoPageRoute<void>(
+            // 携带 metadata 登记的 internal location，pageAccess observer 据此
+            // 记录 webview 页的进入/停留（assistant_reference_webview_modal）。
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.assistantConversationReferenceWeb,
+            ),
+            builder: (_) => AssistantReferenceWebViewPage(
+              initialUrl: destination.uri.toString(),
+              title: citation.title,
+              source: citation.source,
+            ),
+          ),
+        );
+      case null:
+        // 未知对象、无 destination 和非 HTTPS URL 均不可打开，避免错误回退。
+        return;
     }
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        // 携带 metadata 登记的 internal location，pageAccess observer 据此
-        // 记录 webview 页的进入/停留（assistant_reference_webview_modal）。
-        settings: const RouteSettings(
-          name: PageAccessInternalRoutes.assistantConversationReferenceWeb,
-        ),
-        builder: (_) => AssistantReferenceWebViewPage(
-          initialUrl: url,
-          title: citation.title,
-          source: citation.source,
-        ),
-      ),
-    );
   }
 
   @override
@@ -470,9 +474,7 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                     horizontal: AppSpacing.md,
                     vertical: AppSpacing.xs,
                   ),
-                  minimumSize: const Size.square(
-                    AppSpacing.minInteractiveSize,
-                  ),
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
                   onPressed: ref
                       .read(personalAssistantStreamControllerProvider.notifier)
                       .stopGeneration,

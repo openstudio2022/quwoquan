@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ const (
 	MaxImageDimension                = 8_192
 	MaxImagePixels             int64 = 64_000_000
 	MaxImageDeliveryDimension        = 2_560
+	MaxImageLQIPDataURIBytes         = 8_192
 )
 
 var (
@@ -42,42 +44,49 @@ const (
 
 // MediaAssetSnapshot is the persistence boundary for MediaAsset.
 type MediaAssetSnapshot struct {
-	ID                           string
-	Version                      int64
-	OwnerID                      string
-	SourceSessionID              string
-	ObjectKey                    string
-	SHA256                       string
-	MediaType                    string
-	ContentType                  string
-	FileSize                     int64
-	AccessPolicy                 AccessPolicy
-	ProcessingStatus             ProcessingStatus
-	ProcessingFailureReason      string
-	ProcessorProfile             string
-	ImageWidth                   int
-	ImageHeight                  int
-	ImageDeliveryContentType     string
-	ImageNormalizedObjectKey     string
-	ImagePublicSliceKey          string
-	VerifiedDurationMs           int64
-	VideoWidth                   int
-	VideoHeight                  int
-	VideoCodec                   string
-	VideoContainer               string
-	VideoAudioCodec              string
-	VideoKeyframeIntervalMs      int
-	VideoFastStart               bool
-	VideoPublicSliceKey          string
-	CoverPublicSliceKey          string
-	PreviewTrackVersion          int
-	PreviewTrackManifestSliceKey string
-	CoverStrategy                string
-	ManualCoverAssetID           string
-	CoverFrameTimeMs             int64
-	CreatedAt                    time.Time
-	UpdatedAt                    time.Time
-	ProcessedAt                  *time.Time
+	ID                            string
+	Version                       int64
+	OwnerID                       string
+	SourceSessionID               string
+	ObjectKey                     string
+	SHA256                        string
+	MediaType                     string
+	ContentType                   string
+	FileSize                      int64
+	AccessPolicy                  AccessPolicy
+	ProcessingStatus              ProcessingStatus
+	ProcessingVersion             int64
+	ProcessingFailureReason       string
+	ProcessorProfile              string
+	ImageWidth                    int
+	ImageHeight                   int
+	ImageDeliveryContentType      string
+	ImageNormalizedObjectKey      string
+	ImagePublicSliceKey           string
+	ImageDominantColor            string
+	ImageLQIP                     string
+	ImageContentProfile           string
+	ImageDerivativePolicyVersion  int
+	ActiveImageDescriptorRevision int
+	ImageDescriptorRevisions      []ImageDescriptorRevision
+	VerifiedDurationMs            int64
+	VideoWidth                    int
+	VideoHeight                   int
+	VideoCodec                    string
+	VideoContainer                string
+	VideoAudioCodec               string
+	VideoKeyframeIntervalMs       int
+	VideoFastStart                bool
+	VideoPublicSliceKey           string
+	CoverPublicSliceKey           string
+	PreviewTrackVersion           int
+	PreviewTrackManifestSliceKey  string
+	CoverStrategy                 string
+	ManualCoverAssetID            string
+	CoverFrameTimeMs              int64
+	CreatedAt                     time.Time
+	UpdatedAt                     time.Time
+	ProcessedAt                   *time.Time
 }
 
 // VideoProcessingDescriptor is the trusted output produced by the VOD worker.
@@ -112,6 +121,24 @@ type ImageProcessingDescriptor struct {
 	ImageDeliveryContentType string
 	ImageNormalizedObjectKey string
 	ImagePublicSliceKey      string
+	ImageDominantColor       string
+	ImageLQIP                string
+	ImageContentProfile      string
+	DerivativePolicyVersion  int
+}
+
+// ImageDescriptorRevision is an owned MediaAsset value. It preserves the
+// immutable object/slice identities of each verified image presentation so a
+// reprocess run can atomically switch or restore the active descriptor without
+// creating a second MediaAsset.
+type ImageDescriptorRevision struct {
+	Revision           int
+	PreviousRevision   int
+	ProcessingVersion  int64
+	Descriptor         ImageProcessingDescriptor
+	ActivatedByRunID   string
+	ActivatedAt        time.Time
+	CleanupCandidateAt *time.Time
 }
 
 // MediaProcessingDescriptor is a typed union. Exactly one member is populated
@@ -139,42 +166,49 @@ type CreateMediaAssetParams struct {
 // MediaAsset is a durable, independently authorized media object. It never
 // derives its owner or processing state from PostService process-local maps.
 type MediaAsset struct {
-	id                           string
-	version                      int64
-	ownerID                      string
-	sourceSessionID              string
-	objectKey                    string
-	sha256                       string
-	mediaType                    string
-	contentType                  string
-	fileSize                     int64
-	accessPolicy                 AccessPolicy
-	processingStatus             ProcessingStatus
-	processingFailureReason      string
-	processorProfile             string
-	imageWidth                   int
-	imageHeight                  int
-	imageDeliveryContentType     string
-	imageNormalizedObjectKey     string
-	imagePublicSliceKey          string
-	verifiedDurationMs           int64
-	videoWidth                   int
-	videoHeight                  int
-	videoCodec                   string
-	videoContainer               string
-	videoAudioCodec              string
-	videoKeyframeIntervalMs      int
-	videoFastStart               bool
-	videoPublicSliceKey          string
-	coverPublicSliceKey          string
-	previewTrackVersion          int
-	previewTrackManifestSliceKey string
-	coverStrategy                string
-	manualCoverAssetID           string
-	coverFrameTimeMs             int64
-	createdAt                    time.Time
-	updatedAt                    time.Time
-	processedAt                  *time.Time
+	id                            string
+	version                       int64
+	ownerID                       string
+	sourceSessionID               string
+	objectKey                     string
+	sha256                        string
+	mediaType                     string
+	contentType                   string
+	fileSize                      int64
+	accessPolicy                  AccessPolicy
+	processingStatus              ProcessingStatus
+	processingVersion             int64
+	processingFailureReason       string
+	processorProfile              string
+	imageWidth                    int
+	imageHeight                   int
+	imageDeliveryContentType      string
+	imageNormalizedObjectKey      string
+	imagePublicSliceKey           string
+	imageDominantColor            string
+	imageLQIP                     string
+	imageContentProfile           string
+	imageDerivativePolicyVersion  int
+	activeImageDescriptorRevision int
+	imageDescriptorRevisions      []ImageDescriptorRevision
+	verifiedDurationMs            int64
+	videoWidth                    int
+	videoHeight                   int
+	videoCodec                    string
+	videoContainer                string
+	videoAudioCodec               string
+	videoKeyframeIntervalMs       int
+	videoFastStart                bool
+	videoPublicSliceKey           string
+	coverPublicSliceKey           string
+	previewTrackVersion           int
+	previewTrackManifestSliceKey  string
+	coverStrategy                 string
+	manualCoverAssetID            string
+	coverFrameTimeMs              int64
+	createdAt                     time.Time
+	updatedAt                     time.Time
+	processedAt                   *time.Time
 }
 
 func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
@@ -209,42 +243,49 @@ func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
 
 func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 	asset := &MediaAsset{
-		id:                           strings.TrimSpace(snapshot.ID),
-		version:                      snapshot.Version,
-		ownerID:                      strings.TrimSpace(snapshot.OwnerID),
-		sourceSessionID:              strings.TrimSpace(snapshot.SourceSessionID),
-		objectKey:                    strings.TrimSpace(snapshot.ObjectKey),
-		sha256:                       normalizeDigest(snapshot.SHA256),
-		mediaType:                    strings.TrimSpace(snapshot.MediaType),
-		contentType:                  strings.TrimSpace(snapshot.ContentType),
-		fileSize:                     snapshot.FileSize,
-		accessPolicy:                 snapshot.AccessPolicy,
-		processingStatus:             snapshot.ProcessingStatus,
-		processingFailureReason:      strings.TrimSpace(snapshot.ProcessingFailureReason),
-		processorProfile:             strings.TrimSpace(snapshot.ProcessorProfile),
-		imageWidth:                   snapshot.ImageWidth,
-		imageHeight:                  snapshot.ImageHeight,
-		imageDeliveryContentType:     strings.TrimSpace(snapshot.ImageDeliveryContentType),
-		imageNormalizedObjectKey:     strings.TrimSpace(snapshot.ImageNormalizedObjectKey),
-		imagePublicSliceKey:          strings.TrimSpace(snapshot.ImagePublicSliceKey),
-		verifiedDurationMs:           snapshot.VerifiedDurationMs,
-		videoWidth:                   snapshot.VideoWidth,
-		videoHeight:                  snapshot.VideoHeight,
-		videoCodec:                   strings.TrimSpace(snapshot.VideoCodec),
-		videoContainer:               strings.TrimSpace(snapshot.VideoContainer),
-		videoAudioCodec:              strings.TrimSpace(snapshot.VideoAudioCodec),
-		videoKeyframeIntervalMs:      snapshot.VideoKeyframeIntervalMs,
-		videoFastStart:               snapshot.VideoFastStart,
-		videoPublicSliceKey:          strings.TrimSpace(snapshot.VideoPublicSliceKey),
-		coverPublicSliceKey:          strings.TrimSpace(snapshot.CoverPublicSliceKey),
-		previewTrackVersion:          snapshot.PreviewTrackVersion,
-		previewTrackManifestSliceKey: strings.TrimSpace(snapshot.PreviewTrackManifestSliceKey),
-		coverStrategy:                strings.TrimSpace(snapshot.CoverStrategy),
-		manualCoverAssetID:           strings.TrimSpace(snapshot.ManualCoverAssetID),
-		coverFrameTimeMs:             snapshot.CoverFrameTimeMs,
-		createdAt:                    snapshot.CreatedAt.UTC(),
-		updatedAt:                    snapshot.UpdatedAt.UTC(),
-		processedAt:                  cloneTime(snapshot.ProcessedAt),
+		id:                            strings.TrimSpace(snapshot.ID),
+		version:                       snapshot.Version,
+		ownerID:                       strings.TrimSpace(snapshot.OwnerID),
+		sourceSessionID:               strings.TrimSpace(snapshot.SourceSessionID),
+		objectKey:                     strings.TrimSpace(snapshot.ObjectKey),
+		sha256:                        normalizeDigest(snapshot.SHA256),
+		mediaType:                     strings.TrimSpace(snapshot.MediaType),
+		contentType:                   strings.TrimSpace(snapshot.ContentType),
+		fileSize:                      snapshot.FileSize,
+		accessPolicy:                  snapshot.AccessPolicy,
+		processingStatus:              snapshot.ProcessingStatus,
+		processingVersion:             snapshot.ProcessingVersion,
+		processingFailureReason:       strings.TrimSpace(snapshot.ProcessingFailureReason),
+		processorProfile:              strings.TrimSpace(snapshot.ProcessorProfile),
+		imageWidth:                    snapshot.ImageWidth,
+		imageHeight:                   snapshot.ImageHeight,
+		imageDeliveryContentType:      strings.TrimSpace(snapshot.ImageDeliveryContentType),
+		imageNormalizedObjectKey:      strings.TrimSpace(snapshot.ImageNormalizedObjectKey),
+		imagePublicSliceKey:           strings.TrimSpace(snapshot.ImagePublicSliceKey),
+		imageDominantColor:            strings.TrimSpace(snapshot.ImageDominantColor),
+		imageLQIP:                     strings.TrimSpace(snapshot.ImageLQIP),
+		imageContentProfile:           strings.TrimSpace(snapshot.ImageContentProfile),
+		imageDerivativePolicyVersion:  snapshot.ImageDerivativePolicyVersion,
+		activeImageDescriptorRevision: snapshot.ActiveImageDescriptorRevision,
+		imageDescriptorRevisions:      cloneImageDescriptorRevisions(snapshot.ImageDescriptorRevisions),
+		verifiedDurationMs:            snapshot.VerifiedDurationMs,
+		videoWidth:                    snapshot.VideoWidth,
+		videoHeight:                   snapshot.VideoHeight,
+		videoCodec:                    strings.TrimSpace(snapshot.VideoCodec),
+		videoContainer:                strings.TrimSpace(snapshot.VideoContainer),
+		videoAudioCodec:               strings.TrimSpace(snapshot.VideoAudioCodec),
+		videoKeyframeIntervalMs:       snapshot.VideoKeyframeIntervalMs,
+		videoFastStart:                snapshot.VideoFastStart,
+		videoPublicSliceKey:           strings.TrimSpace(snapshot.VideoPublicSliceKey),
+		coverPublicSliceKey:           strings.TrimSpace(snapshot.CoverPublicSliceKey),
+		previewTrackVersion:           snapshot.PreviewTrackVersion,
+		previewTrackManifestSliceKey:  strings.TrimSpace(snapshot.PreviewTrackManifestSliceKey),
+		coverStrategy:                 strings.TrimSpace(snapshot.CoverStrategy),
+		manualCoverAssetID:            strings.TrimSpace(snapshot.ManualCoverAssetID),
+		coverFrameTimeMs:              snapshot.CoverFrameTimeMs,
+		createdAt:                     snapshot.CreatedAt.UTC(),
+		updatedAt:                     snapshot.UpdatedAt.UTC(),
+		processedAt:                   cloneTime(snapshot.ProcessedAt),
 	}
 	if err := asset.validate(); err != nil {
 		return nil, err
@@ -281,16 +322,19 @@ func (a *MediaAsset) RecordProcessingResult(
 	}
 	processedAt := a.updatedAt
 	a.processingStatus = status
+	a.processingVersion = a.version
 	a.processingFailureReason = strings.TrimSpace(failureReason)
 	if status == ProcessingStatusReady {
 		switch a.mediaType {
 		case "image":
-			a.processorProfile = strings.TrimSpace(descriptor.Image.ProcessorProfile)
-			a.imageWidth = descriptor.Image.ImageWidth
-			a.imageHeight = descriptor.Image.ImageHeight
-			a.imageDeliveryContentType = strings.TrimSpace(descriptor.Image.ImageDeliveryContentType)
-			a.imageNormalizedObjectKey = strings.TrimSpace(descriptor.Image.ImageNormalizedObjectKey)
-			a.imagePublicSliceKey = strings.TrimSpace(descriptor.Image.ImagePublicSliceKey)
+			a.applyImageDescriptor(descriptor.Image)
+			a.imageDescriptorRevisions = []ImageDescriptorRevision{{
+				Revision:          1,
+				ProcessingVersion: a.processingVersion,
+				Descriptor:        a.ImageProcessingDescriptor(),
+				ActivatedAt:       processedAt,
+			}}
+			a.activeImageDescriptorRevision = 1
 		case "video":
 			a.processorProfile = strings.TrimSpace(descriptor.Video.ProcessorProfile)
 			a.verifiedDurationMs = descriptor.Video.VerifiedDurationMs
@@ -339,9 +383,13 @@ func (a *MediaAsset) validateProcessingDescriptor(
 			(strings.TrimSpace(image.ImageDeliveryContentType) != "image/jpeg" &&
 				strings.TrimSpace(image.ImageDeliveryContentType) != "image/png") ||
 			strings.TrimSpace(image.ImageNormalizedObjectKey) == "" ||
-			strings.TrimSpace(image.ImagePublicSliceKey) == "" {
+			strings.TrimSpace(image.ImagePublicSliceKey) == "" ||
+			!validImageDominantColor(image.ImageDominantColor) ||
+			!validImageLQIP(image.ImageLQIP) ||
+			!validImageContentProfile(image.ImageContentProfile) ||
+			image.DerivativePolicyVersion <= 0 {
 			return fmt.Errorf(
-				"%w: ready image requires a bounded normalized JPEG/PNG descriptor",
+				"%w: ready image requires a complete bounded delivery descriptor",
 				ErrInvalidMediaAsset,
 			)
 		}
@@ -411,6 +459,40 @@ func (a *MediaAsset) validateProcessingDescriptor(
 		}
 	}
 	return nil
+}
+
+func validImageDominantColor(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != 7 || value[0] != '#' {
+		return false
+	}
+	for _, character := range value[1:] {
+		if !((character >= '0' && character <= '9') ||
+			(character >= 'a' && character <= 'f') ||
+			(character >= 'A' && character <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func validImageLQIP(value string) bool {
+	value = strings.TrimSpace(value)
+	const prefix = "data:image/jpeg;base64,"
+	if !strings.HasPrefix(value, prefix) || len(value) > MaxImageLQIPDataURIBytes {
+		return false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, prefix))
+	return err == nil && len(decoded) > 0
+}
+
+func validImageContentProfile(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "photographic", "alpha_graphic":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *MediaAsset) ChangeAccessPolicy(ownerID string, policy AccessPolicy, now time.Time) error {
@@ -626,7 +708,165 @@ func (a *MediaAsset) ImageProcessingDescriptor() ImageProcessingDescriptor {
 		ImageDeliveryContentType: a.imageDeliveryContentType,
 		ImageNormalizedObjectKey: a.imageNormalizedObjectKey,
 		ImagePublicSliceKey:      a.imagePublicSliceKey,
+		ImageDominantColor:       a.imageDominantColor,
+		ImageLQIP:                a.imageLQIP,
+		ImageContentProfile:      a.imageContentProfile,
+		DerivativePolicyVersion:  a.imageDerivativePolicyVersion,
 	}
+}
+
+func (a *MediaAsset) ActiveImageDescriptorRevision() int {
+	if a == nil {
+		return 0
+	}
+	return a.activeImageDescriptorRevision
+}
+
+func (a *MediaAsset) ImageDescriptorRevisions() []ImageDescriptorRevision {
+	if a == nil {
+		return nil
+	}
+	return cloneImageDescriptorRevisions(a.imageDescriptorRevisions)
+}
+
+func (a *MediaAsset) ImageDescriptorActivationForRun(
+	runID string,
+) (ImageDescriptorRevision, bool) {
+	if a == nil || strings.TrimSpace(runID) == "" {
+		return ImageDescriptorRevision{}, false
+	}
+	for index := len(a.imageDescriptorRevisions) - 1; index >= 0; index-- {
+		revision := a.imageDescriptorRevisions[index]
+		if revision.ActivatedByRunID == strings.TrimSpace(runID) {
+			return revision, true
+		}
+	}
+	return ImageDescriptorRevision{}, false
+}
+
+// ActivateReprocessedImageDescriptor installs a verified new descriptor. The
+// caller owns the MediaAsset expected-version CAS; this method only performs
+// aggregate-local validation and the all-or-nothing active-pointer mutation.
+func (a *MediaAsset) ActivateReprocessedImageDescriptor(
+	runID string,
+	descriptor ImageProcessingDescriptor,
+	now time.Time,
+) (previousRevision int, activatedRevision int, err error) {
+	if a == nil || a.mediaType != "image" || a.processingStatus != ProcessingStatusReady {
+		return 0, 0, fmt.Errorf(
+			"%w: descriptor reprocess requires a ready image asset",
+			ErrInvalidMediaAssetTransition,
+		)
+	}
+	if strings.TrimSpace(runID) == "" {
+		return 0, 0, fmt.Errorf("%w: descriptor reprocess run id is required", ErrInvalidMediaAsset)
+	}
+	if len(a.imageDescriptorRevisions) == 0 ||
+		a.activeImageDescriptorRevision <= 0 ||
+		len(a.imageDescriptorRevisions) >= 32 {
+		return 0, 0, fmt.Errorf("%w: image descriptor revision state is invalid", ErrInvalidMediaAsset)
+	}
+	if err := a.validateProcessingDescriptor(
+		ProcessingStatusReady,
+		MediaProcessingDescriptor{Image: descriptor},
+		a.version+1,
+	); err != nil {
+		return 0, 0, err
+	}
+	previousIndex := a.imageDescriptorRevisionIndex(a.activeImageDescriptorRevision)
+	if previousIndex < 0 {
+		return 0, 0, fmt.Errorf("%w: active image descriptor revision is missing", ErrInvalidMediaAsset)
+	}
+	previousRevision = a.activeImageDescriptorRevision
+	if err := a.advance(now); err != nil {
+		return 0, 0, err
+	}
+	cleanupAt := a.updatedAt
+	a.imageDescriptorRevisions[previousIndex].CleanupCandidateAt = &cleanupAt
+	activatedRevision = a.nextImageDescriptorRevision()
+	a.applyImageDescriptor(descriptor)
+	a.processingVersion = a.version
+	a.imageDescriptorRevisions = append(a.imageDescriptorRevisions, ImageDescriptorRevision{
+		Revision:          activatedRevision,
+		PreviousRevision:  previousRevision,
+		ProcessingVersion: a.processingVersion,
+		Descriptor:        a.ImageProcessingDescriptor(),
+		ActivatedByRunID:  strings.TrimSpace(runID),
+		ActivatedAt:       a.updatedAt,
+	})
+	a.activeImageDescriptorRevision = activatedRevision
+	return previousRevision, activatedRevision, nil
+}
+
+// RollbackImageDescriptorRevision restores a descriptor recorded by this
+// aggregate. It refuses to overwrite an active descriptor belonging to another
+// run, so a stale rollback cannot undo a later successful reprocess.
+func (a *MediaAsset) RollbackImageDescriptorRevision(
+	runID string,
+	previousRevision int,
+	activatedRevision int,
+	now time.Time,
+) error {
+	if a == nil || a.mediaType != "image" || a.processingStatus != ProcessingStatusReady {
+		return fmt.Errorf(
+			"%w: descriptor rollback requires a ready image asset",
+			ErrInvalidMediaAssetTransition,
+		)
+	}
+	if strings.TrimSpace(runID) == "" || previousRevision <= 0 || activatedRevision <= 0 {
+		return fmt.Errorf("%w: descriptor rollback identity is invalid", ErrInvalidMediaAsset)
+	}
+	if a.activeImageDescriptorRevision != activatedRevision {
+		return fmt.Errorf("%w: descriptor rollback would overwrite a newer activation", ErrInvalidMediaAssetTransition)
+	}
+	activeIndex := a.imageDescriptorRevisionIndex(activatedRevision)
+	previousIndex := a.imageDescriptorRevisionIndex(previousRevision)
+	if activeIndex < 0 || previousIndex < 0 ||
+		strings.TrimSpace(a.imageDescriptorRevisions[activeIndex].ActivatedByRunID) != strings.TrimSpace(runID) {
+		return fmt.Errorf("%w: descriptor rollback audit does not match", ErrInvalidMediaAssetTransition)
+	}
+	if err := a.advance(now); err != nil {
+		return err
+	}
+	cleanupAt := a.updatedAt
+	a.imageDescriptorRevisions[activeIndex].CleanupCandidateAt = &cleanupAt
+	previous := a.imageDescriptorRevisions[previousIndex]
+	a.applyImageDescriptor(previous.Descriptor)
+	a.processingVersion = previous.ProcessingVersion
+	a.activeImageDescriptorRevision = previous.Revision
+	return nil
+}
+
+func (a *MediaAsset) imageDescriptorRevisionIndex(revision int) int {
+	for index, candidate := range a.imageDescriptorRevisions {
+		if candidate.Revision == revision {
+			return index
+		}
+	}
+	return -1
+}
+
+func (a *MediaAsset) nextImageDescriptorRevision() int {
+	next := 1
+	for _, revision := range a.imageDescriptorRevisions {
+		if revision.Revision >= next {
+			next = revision.Revision + 1
+		}
+	}
+	return next
+}
+
+func (a *MediaAsset) applyImageDescriptor(descriptor ImageProcessingDescriptor) {
+	a.processorProfile = strings.TrimSpace(descriptor.ProcessorProfile)
+	a.imageWidth = descriptor.ImageWidth
+	a.imageHeight = descriptor.ImageHeight
+	a.imageDeliveryContentType = strings.TrimSpace(descriptor.ImageDeliveryContentType)
+	a.imageNormalizedObjectKey = strings.TrimSpace(descriptor.ImageNormalizedObjectKey)
+	a.imagePublicSliceKey = strings.TrimSpace(descriptor.ImagePublicSliceKey)
+	a.imageDominantColor = strings.TrimSpace(descriptor.ImageDominantColor)
+	a.imageLQIP = strings.TrimSpace(descriptor.ImageLQIP)
+	a.imageContentProfile = strings.TrimSpace(descriptor.ImageContentProfile)
+	a.imageDerivativePolicyVersion = descriptor.DerivativePolicyVersion
 }
 
 func (a *MediaAsset) ProcessingDescriptor() MediaProcessingDescriptor {
@@ -648,43 +888,65 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		return MediaAssetSnapshot{}
 	}
 	return MediaAssetSnapshot{
-		ID:                           a.id,
-		Version:                      a.version,
-		OwnerID:                      a.ownerID,
-		SourceSessionID:              a.sourceSessionID,
-		ObjectKey:                    a.objectKey,
-		SHA256:                       a.sha256,
-		MediaType:                    a.mediaType,
-		ContentType:                  a.contentType,
-		FileSize:                     a.fileSize,
-		AccessPolicy:                 a.accessPolicy,
-		ProcessingStatus:             a.processingStatus,
-		ProcessingFailureReason:      a.processingFailureReason,
-		ProcessorProfile:             a.processorProfile,
-		ImageWidth:                   a.imageWidth,
-		ImageHeight:                  a.imageHeight,
-		ImageDeliveryContentType:     a.imageDeliveryContentType,
-		ImageNormalizedObjectKey:     a.imageNormalizedObjectKey,
-		ImagePublicSliceKey:          a.imagePublicSliceKey,
-		VerifiedDurationMs:           a.verifiedDurationMs,
-		VideoWidth:                   a.videoWidth,
-		VideoHeight:                  a.videoHeight,
-		VideoCodec:                   a.videoCodec,
-		VideoContainer:               a.videoContainer,
-		VideoAudioCodec:              a.videoAudioCodec,
-		VideoKeyframeIntervalMs:      a.videoKeyframeIntervalMs,
-		VideoFastStart:               a.videoFastStart,
-		VideoPublicSliceKey:          a.videoPublicSliceKey,
-		CoverPublicSliceKey:          a.coverPublicSliceKey,
-		PreviewTrackVersion:          a.previewTrackVersion,
-		PreviewTrackManifestSliceKey: a.previewTrackManifestSliceKey,
-		CoverStrategy:                a.coverStrategy,
-		ManualCoverAssetID:           a.manualCoverAssetID,
-		CoverFrameTimeMs:             a.coverFrameTimeMs,
-		CreatedAt:                    a.createdAt,
-		UpdatedAt:                    a.updatedAt,
-		ProcessedAt:                  cloneTime(a.processedAt),
+		ID:                            a.id,
+		Version:                       a.version,
+		OwnerID:                       a.ownerID,
+		SourceSessionID:               a.sourceSessionID,
+		ObjectKey:                     a.objectKey,
+		SHA256:                        a.sha256,
+		MediaType:                     a.mediaType,
+		ContentType:                   a.contentType,
+		FileSize:                      a.fileSize,
+		AccessPolicy:                  a.accessPolicy,
+		ProcessingStatus:              a.processingStatus,
+		ProcessingVersion:             a.processingVersion,
+		ProcessingFailureReason:       a.processingFailureReason,
+		ProcessorProfile:              a.processorProfile,
+		ImageWidth:                    a.imageWidth,
+		ImageHeight:                   a.imageHeight,
+		ImageDeliveryContentType:      a.imageDeliveryContentType,
+		ImageNormalizedObjectKey:      a.imageNormalizedObjectKey,
+		ImagePublicSliceKey:           a.imagePublicSliceKey,
+		ImageDominantColor:            a.imageDominantColor,
+		ImageLQIP:                     a.imageLQIP,
+		ImageContentProfile:           a.imageContentProfile,
+		ImageDerivativePolicyVersion:  a.imageDerivativePolicyVersion,
+		ActiveImageDescriptorRevision: a.activeImageDescriptorRevision,
+		ImageDescriptorRevisions:      cloneImageDescriptorRevisions(a.imageDescriptorRevisions),
+		VerifiedDurationMs:            a.verifiedDurationMs,
+		VideoWidth:                    a.videoWidth,
+		VideoHeight:                   a.videoHeight,
+		VideoCodec:                    a.videoCodec,
+		VideoContainer:                a.videoContainer,
+		VideoAudioCodec:               a.videoAudioCodec,
+		VideoKeyframeIntervalMs:       a.videoKeyframeIntervalMs,
+		VideoFastStart:                a.videoFastStart,
+		VideoPublicSliceKey:           a.videoPublicSliceKey,
+		CoverPublicSliceKey:           a.coverPublicSliceKey,
+		PreviewTrackVersion:           a.previewTrackVersion,
+		PreviewTrackManifestSliceKey:  a.previewTrackManifestSliceKey,
+		CoverStrategy:                 a.coverStrategy,
+		ManualCoverAssetID:            a.manualCoverAssetID,
+		CoverFrameTimeMs:              a.coverFrameTimeMs,
+		CreatedAt:                     a.createdAt,
+		UpdatedAt:                     a.updatedAt,
+		ProcessedAt:                   cloneTime(a.processedAt),
 	}
+}
+
+func cloneImageDescriptorRevisions(
+	revisions []ImageDescriptorRevision,
+) []ImageDescriptorRevision {
+	if len(revisions) == 0 {
+		return nil
+	}
+	cloned := make([]ImageDescriptorRevision, len(revisions))
+	for index, revision := range revisions {
+		cloned[index] = revision
+		cloned[index].ActivatedAt = revision.ActivatedAt.UTC()
+		cloned[index].CleanupCandidateAt = cloneTime(revision.CleanupCandidateAt)
+	}
+	return cloned
 }
 
 func (a *MediaAsset) validate() error {
@@ -709,28 +971,35 @@ func (a *MediaAsset) validate() error {
 	}
 	switch a.processingStatus {
 	case ProcessingStatusProcessing:
-		if a.processedAt != nil || a.processingFailureReason != "" {
+		if a.processedAt != nil || a.processingVersion != 0 || a.processingFailureReason != "" {
 			return fmt.Errorf("%w: processing asset carries final result", ErrInvalidMediaAsset)
 		}
 	case ProcessingStatusReady:
-		if a.processedAt == nil || a.processingFailureReason != "" {
+		if a.processedAt == nil ||
+			((a.mediaType == "image" || a.mediaType == "video") && a.processingVersion <= 0) ||
+			a.processingFailureReason != "" {
 			return fmt.Errorf("%w: ready asset state is inconsistent", ErrInvalidMediaAsset)
 		}
 		if err := a.validateProcessingDescriptor(
 			ProcessingStatusReady,
 			a.ProcessingDescriptor(),
-			a.version,
+			a.processingVersion,
 		); err != nil {
 			return err
 		}
+		if a.mediaType == "image" {
+			if err := a.validateImageDescriptorRevisions(); err != nil {
+				return err
+			}
+		}
 	case ProcessingStatusRejected:
-		if a.processedAt == nil || a.processingFailureReason == "" {
+		if a.processedAt == nil || a.processingVersion <= 0 || a.processingFailureReason == "" {
 			return fmt.Errorf("%w: rejected asset state is inconsistent", ErrInvalidMediaAsset)
 		}
 		if err := a.validateProcessingDescriptor(
 			ProcessingStatusRejected,
 			MediaProcessingDescriptor{},
-			a.version,
+			a.processingVersion,
 		); err != nil {
 			return err
 		}
@@ -738,6 +1007,46 @@ func (a *MediaAsset) validate() error {
 		if a.processingFailureReason != "" {
 			return fmt.Errorf("%w: deleted asset carries failure reason", ErrInvalidMediaAsset)
 		}
+	}
+	return nil
+}
+
+func (a *MediaAsset) validateImageDescriptorRevisions() error {
+	if len(a.imageDescriptorRevisions) == 0 ||
+		len(a.imageDescriptorRevisions) > 32 ||
+		a.activeImageDescriptorRevision <= 0 {
+		return fmt.Errorf("%w: ready image descriptor revision state is missing", ErrInvalidMediaAsset)
+	}
+	activeFound := false
+	seen := make(map[int]struct{}, len(a.imageDescriptorRevisions))
+	for _, revision := range a.imageDescriptorRevisions {
+		if revision.Revision <= 0 || revision.ProcessingVersion <= 0 ||
+			revision.PreviousRevision < 0 ||
+			revision.PreviousRevision == revision.Revision ||
+			revision.ActivatedAt.IsZero() {
+			return fmt.Errorf("%w: image descriptor revision is invalid", ErrInvalidMediaAsset)
+		}
+		if _, exists := seen[revision.Revision]; exists {
+			return fmt.Errorf("%w: image descriptor revision is duplicated", ErrInvalidMediaAsset)
+		}
+		seen[revision.Revision] = struct{}{}
+		if err := a.validateProcessingDescriptor(
+			ProcessingStatusReady,
+			MediaProcessingDescriptor{Image: revision.Descriptor},
+			revision.ProcessingVersion,
+		); err != nil {
+			return err
+		}
+		if revision.Revision == a.activeImageDescriptorRevision {
+			activeFound = true
+			if revision.Descriptor != a.ImageProcessingDescriptor() ||
+				revision.ProcessingVersion != a.processingVersion {
+				return fmt.Errorf("%w: active image descriptor revision diverges", ErrInvalidMediaAsset)
+			}
+		}
+	}
+	if !activeFound {
+		return fmt.Errorf("%w: active image descriptor revision is absent", ErrInvalidMediaAsset)
 	}
 	return nil
 }

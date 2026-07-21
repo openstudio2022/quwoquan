@@ -160,6 +160,7 @@ func cleanAll(t *testing.T) {
 		persona_relationship_command_receipts, persona_relationship_outbox,
 		personas_command_receipts, personas_outbox,
 		account_sessions, account_sessions_outbox, user_account_outbox,
+		user_account_enforcement_receipts,
 		profile_update_proposals, profile_update_proposals_command_receipts, profile_update_proposals_outbox,
 		greeting_requests, credential_bindings, credential_bindings_outbox,
 		user_devices, device_push_endpoints, user_settings_outbox, anonymous_device_bindings,

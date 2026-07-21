@@ -14,9 +14,11 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show accountSessionLoginCommandWriterProvider;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show LoginAnonymousCommand;
 
@@ -41,6 +43,8 @@ const String _patrolT4RefreshToken = String.fromEnvironment(
 
 bool _patrolAppStarted = false;
 Completer<void>? _runtimeAnonymousSessionReady;
+String _runtimeAnonymousSessionFailure = '';
+Future<void>? _runtimeAnonymousSessionLogin;
 
 bool get _usesRuntimeAnonymousSession =>
     _patrolSessionMode == 'local_gamma_anonymous';
@@ -72,18 +76,19 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
   await $.pump();
   await $.pump(const Duration(milliseconds: 300));
   if (_usesRuntimeAnonymousSession) {
-    _startRuntimeAnonymousSessionFromMountedApp();
+    await _startRuntimeAnonymousSessionFromMountedApp();
     await _runtimeAnonymousSessionGate().future.timeout(
       const Duration(seconds: 15),
       onTimeout: () => throw StateError(
-        'Patrol local Gamma anonymous session did not become ready',
+        'Patrol local Gamma anonymous session did not become ready'
+        '${_runtimeAnonymousSessionFailure.isEmpty ? '' : ': $_runtimeAnonymousSessionFailure'}',
       ),
     );
   }
   await $.pump(const Duration(seconds: 1));
 }
 
-void _startRuntimeAnonymousSessionFromMountedApp() {
+Future<void> _startRuntimeAnonymousSessionFromMountedApp() async {
   final navigators = find.byType(Navigator).evaluate();
   if (navigators.isEmpty) {
     throw StateError(
@@ -92,9 +97,60 @@ void _startRuntimeAnonymousSessionFromMountedApp() {
   }
   final container = ProviderScope.containerOf(navigators.first);
   // UAT 已绕过欢迎流程，不能依赖欢迎页时序间接打开 auth restore gate。
-  // 这里只驱动真实 production Remote composition 发起匿名登录，不注入会话或假数据。
+  // 这里先完成真实本地 HTTPS 信任安装，再驱动 production Remote composition
+  // 发起匿名登录；不注入会话或假数据。
+  await LocalDevHttpsTrust.installForCurrentRuntime();
   container.read(startupAuthRestoreGateProvider.notifier).open();
   container.read(authSessionControllerProvider);
+  _runtimeAnonymousSessionLogin ??= _authenticateLocalGammaAnonymously(
+    container,
+  );
+  unawaited(_runtimeAnonymousSessionLogin!);
+}
+
+Future<void> _authenticateLocalGammaAnonymously(
+  ProviderContainer container,
+) async {
+  final gate = _runtimeAnonymousSessionGate();
+  try {
+    final result = await container
+        .read(accountSessionLoginCommandWriterProvider)
+        .loginAnonymous(
+          LoginAnonymousCommand(
+            installId: 'patrol-local-gamma-two-province',
+            deviceFingerprintHash: 'patrol-local-gamma-two-province',
+            platform: CloudRequestHeaders.platform(),
+            appVersion: 'local-e2e',
+          ),
+        );
+    final controller = container.read(authSessionControllerProvider.notifier);
+    await controller.applyLoginGrant(result);
+    final session = container.read(authSessionControllerProvider);
+    if (!session.isAuthenticated || session.activeSubAccountId.trim().isEmpty) {
+      throw StateError(
+        'anonymous login did not install a complete authenticated session',
+      );
+    }
+    if (!gate.isCompleted) {
+      gate.complete();
+    }
+  } catch (error, stackTrace) {
+    _runtimeAnonymousSessionFailure = _describeRuntimeAnonymousSessionFailure(
+      error,
+    );
+    if (!gate.isCompleted) {
+      // 仅暴露已结构化的错误码、状态和类别；原始 CloudException 不含网络根因，
+      // 会使 Patrol 只报 APP.SYSTEM.unknown_error，无法判断是 TLS、网关还是鉴权。
+      gate.completeError(
+        StateError(
+          'Patrol local Gamma anonymous session failed: '
+          '$_runtimeAnonymousSessionFailure, '
+          'localHttpsTrustInstalled=${LocalDevHttpsTrust.isInstalled}',
+        ),
+        stackTrace,
+      );
+    }
+  }
 }
 
 Future<void> patrolGoTo(
@@ -168,18 +224,9 @@ AuthSessionState buildPatrolAnonymousPublicVideoSession() =>
     const AuthSessionState(status: AuthSessionStatus.guest);
 
 final class _PatrolAuthSessionController extends AuthSessionController {
-  bool _runtimeAnonymousLoginStarted = false;
-
   @override
   AuthSessionState build() {
     if (_usesRuntimeAnonymousSession) {
-      final startupPrerequisitesReady = ref.watch(
-        startupAuthRestoreGateProvider,
-      );
-      if (startupPrerequisitesReady && !_runtimeAnonymousLoginStarted) {
-        _runtimeAnonymousLoginStarted = true;
-        unawaited(_authenticateLocalGammaAnonymously());
-      }
       return const AuthSessionState.restoring();
     }
     if (_usesAnonymousPublicVideoSession) {
@@ -192,43 +239,18 @@ final class _PatrolAuthSessionController extends AuthSessionController {
       subAccountId: kPatrolT4CurrentSubAccountId,
     );
   }
+}
 
-  Future<void> _authenticateLocalGammaAnonymously() async {
-    final gate = _runtimeAnonymousSessionGate();
-    try {
-      final result = await ref
-          .read(accountSessionLoginCommandWriterProvider)
-          .loginAnonymous(
-            LoginAnonymousCommand(
-              installId: 'patrol-local-gamma-two-province',
-              deviceFingerprintHash: 'patrol-local-gamma-two-province',
-              platform: CloudRequestHeaders.platform(),
-              appVersion: 'local-e2e',
-            ),
-          );
-      final subAccountId = result.activeSub?.subAccountId.trim() ?? '';
-      final session = buildPatrolAcceptanceSession(
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        ownerId: result.ownerId,
-        subAccountId: subAccountId,
-      );
-      if (ref.mounted) {
-        state = session;
-      }
-      if (!gate.isCompleted) {
-        gate.complete();
-      }
-    } catch (error, stackTrace) {
-      if (ref.mounted) {
-        state = AuthSessionState(
-          status: AuthSessionStatus.guest,
-          errorMessage: 'Patrol local Gamma anonymous login failed',
-        );
-      }
-      if (!gate.isCompleted) {
-        gate.completeError(error, stackTrace);
-      }
-    }
+String _describeRuntimeAnonymousSessionFailure(Object error) {
+  if (error is CloudException) {
+    final code = error.code?.trim() ?? '';
+    final status = error.statusCode?.toString() ?? '';
+    return [
+      if (code.isNotEmpty) 'code=$code',
+      if (status.isNotEmpty) 'status=$status',
+      'kind=${error.type.name}',
+      if (error.cause != null) 'cause=${error.cause.runtimeType}',
+    ].join(', ');
   }
+  return 'kind=${error.runtimeType}';
 }

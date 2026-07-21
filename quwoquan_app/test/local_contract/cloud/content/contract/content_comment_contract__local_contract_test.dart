@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -96,6 +97,20 @@ void main() {
         ],
         'personaContextVersion': 7,
       });
+    });
+
+    test('创建评论 operation 声明频控的结构化恢复语义', () {
+      final operation = appCloudOperationContracts[
+        AppCloudOperationIds.contentCommentCreateComment
+      ];
+
+      expect(operation, isNotNull);
+      expect(
+        operation!.errorCodes,
+        contains(ContentErrorCode.commentRateLimited.code),
+      );
+      expect(ContentErrorCode.commentRateLimited.httpStatus, 429);
+      expect(ContentErrorCode.commentRateLimited.recoveryAction, 'retry');
     });
   });
 }

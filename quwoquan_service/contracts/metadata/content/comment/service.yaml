@@ -40,6 +40,8 @@ api_routes:
       - CONTENT.USER.comment_not_found
       - CONTENT.USER.comment_parent_invalid
       - CONTENT.USER.comment_too_long
+      - CONTENT.USER.comment_attachment_limit_exceeded
+      - CONTENT.USER.comment_rate_limited
       - CONTENT.USER.idempotency_conflict
       - CONTENT.USER.version_conflict
       - CONTENT.SYSTEM.storage_write_failed
@@ -267,6 +269,7 @@ api_routes:
       - CONTENT.USER.unauthorized
       - CONTENT.USER.comment_not_found
       - CONTENT.USER.comment_forbidden_delete
+      - CONTENT.USER.comment_attachment_limit_exceeded
       - CONTENT.USER.version_conflict
       - CONTENT.USER.idempotency_conflict
       - CONTENT.SYSTEM.storage_write_failed

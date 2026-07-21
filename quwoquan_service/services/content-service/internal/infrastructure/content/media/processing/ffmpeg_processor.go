@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	"image/draw"
@@ -23,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	runtimemedia "quwoquan_service/runtime/media"
@@ -40,6 +42,7 @@ const (
 	coverJPEGQuality         = 3  // ffmpeg -q:v scale (2..31, lower is better)
 	frameJPEGQuality         = 5  // preview frames tolerate stronger compression
 	spriteJPEGQuality        = 80 // Go image/jpeg quality (1..100)
+	defaultWorkDirFreeBytes  = 512 * 1024 * 1024
 )
 
 // ObjectStore is the narrow storage capability the pipeline needs. The
@@ -57,6 +60,10 @@ type Config struct {
 	WorkDir string
 	// JobTimeout bounds one asset end to end. Zero means 15 minutes.
 	JobTimeout time.Duration
+	// MinWorkDirFreeBytes prevents FFmpeg from beginning a job that would
+	// predictably exhaust the shared scratch volume. Zero uses the commercial
+	// floor; capacity failure is infrastructure-retryable, never a rejection.
+	MinWorkDirFreeBytes int64
 }
 
 type FFmpegMediaProcessor struct {
@@ -80,6 +87,9 @@ func NewFFmpegMediaProcessor(objects ObjectStore, config Config) (*FFmpegMediaPr
 	}
 	if config.JobTimeout <= 0 {
 		config.JobTimeout = 15 * time.Minute
+	}
+	if config.MinWorkDirFreeBytes <= 0 {
+		config.MinWorkDirFreeBytes = defaultWorkDirFreeBytes
 	}
 	for _, binary := range []string{config.FFmpegPath, config.FFprobePath} {
 		if _, err := exec.LookPath(binary); err != nil {
@@ -106,7 +116,7 @@ func (p *FFmpegMediaProcessor) Process(
 	ctx, cancel := context.WithTimeout(ctx, p.config.JobTimeout)
 	defer cancel()
 
-	workDir, err := os.MkdirTemp(p.config.WorkDir, "media-processing-")
+	workDir, err := p.createWorkDir("media-processing-")
 	if err != nil {
 		return mediaprocessing.ProcessOutcome{}, fmt.Errorf("create media processing work dir: %w", err)
 	}
@@ -256,6 +266,27 @@ func (p *FFmpegMediaProcessor) Process(
 	}, nil
 }
 
+func (p *FFmpegMediaProcessor) createWorkDir(prefix string) (string, error) {
+	workRoot := strings.TrimSpace(p.config.WorkDir)
+	if workRoot == "" {
+		workRoot = os.TempDir()
+	}
+	var filesystem syscall.Statfs_t
+	if err := syscall.Statfs(workRoot, &filesystem); err != nil {
+		return "", fmt.Errorf("inspect media processing work dir %q: %w", workRoot, err)
+	}
+	available := int64(filesystem.Bavail) * int64(filesystem.Bsize)
+	if available < p.config.MinWorkDirFreeBytes {
+		return "", fmt.Errorf(
+			"media processing work dir %q has %d free bytes, requires at least %d",
+			workRoot,
+			available,
+			p.config.MinWorkDirFreeBytes,
+		)
+	}
+	return os.MkdirTemp(workRoot, prefix)
+}
+
 type deliverySlices struct {
 	prefix   string
 	video    string
@@ -316,10 +347,17 @@ func (p *FFmpegMediaProcessor) probe(ctx context.Context, path string) (VideoPro
 		if ctx.Err() != nil {
 			return VideoProbe{}, fmt.Errorf("media probe interrupted: %w", ctx.Err())
 		}
-		// ffprobe 无法读取通常意味着字节不是可解码媒体，属内容性失败。
-		return VideoProbe{}, &mediaprocessing.RejectionError{
-			Reason: fmt.Sprintf("media probe failed: %v", commandFailureSummary(err)),
+		if isUndecodableMediaSource(err) {
+			return VideoProbe{}, &mediaprocessing.RejectionError{
+				Reason: "uploaded media cannot be decoded",
+			}
 		}
+		// 外部二进制的退出、运行时库和宿主资源故障不能被固化成用户内容
+		// 拒绝；只有成功 probe 后的确定性内容约束才使用 RejectionError。
+		return VideoProbe{}, fmt.Errorf(
+			"ffprobe execution failed: %v",
+			commandFailureSummary(err),
+		)
 	}
 	return ParseFFprobeOutput(output)
 }
@@ -360,10 +398,10 @@ func (p *FFmpegMediaProcessor) transcode(
 		if ctx.Err() != nil {
 			return fmt.Errorf("video transcode timed out: %w", ctx.Err())
 		}
-		// 转码失败视为内容不可归一（损坏/不支持的封装）。
-		return &mediaprocessing.RejectionError{
-			Reason: fmt.Sprintf("video transcode failed: %v", commandFailureSummary(err)),
-		}
+		return fmt.Errorf(
+			"ffmpeg transcode execution failed: %v",
+			commandFailureSummary(err),
+		)
 	}
 	return nil
 }
@@ -597,9 +635,37 @@ func runCommand(ctx context.Context, binary string, args ...string) ([]byte, err
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
-		return nil, fmt.Errorf("%s failed: %w: %s", binary, err, strings.TrimSpace(stderr.String()))
+		return nil, &commandExecutionError{
+			binary: binary,
+			cause:  err,
+			stderr: strings.TrimSpace(stderr.String()),
+		}
 	}
 	return stdout.Bytes(), nil
+}
+
+type commandExecutionError struct {
+	binary string
+	cause  error
+	stderr string
+}
+
+func (err *commandExecutionError) Error() string {
+	return fmt.Sprintf("%s failed: %v: %s", err.binary, err.cause, err.stderr)
+}
+
+func (err *commandExecutionError) Unwrap() error {
+	return err.cause
+}
+
+func isUndecodableMediaSource(err error) bool {
+	var commandErr *commandExecutionError
+	if !errors.As(err, &commandErr) {
+		return false
+	}
+	diagnostic := strings.ToLower(commandErr.stderr)
+	return strings.Contains(diagnostic, "invalid data found when processing input") ||
+		strings.Contains(diagnostic, "moov atom not found")
 }
 
 func commandFailureSummary(err error) string {

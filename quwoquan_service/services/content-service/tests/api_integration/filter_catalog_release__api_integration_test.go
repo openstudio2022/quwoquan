@@ -115,6 +115,28 @@ func TestFilterCatalogStageRejectsInvalidPayloadAndDigest(t *testing.T) {
 		"CONTENT.USER.filter_catalog_invalid_argument",
 	)
 
+	duplicateCategorySort := validFilterCatalogStageFixture(
+		t,
+		"filter-release-duplicate-category-sort",
+		12,
+	)
+	duplicateCategorySort.Categories[1].Sort =
+		duplicateCategorySort.Categories[0].Sort
+	response = performFilterCatalogRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/internal/content/filter-catalog-releases",
+		duplicateCategorySort,
+		"filter-stage-duplicate-category-sort",
+	)
+	assertFilterCatalogRuntimeError(
+		t,
+		response,
+		http.StatusBadRequest,
+		"CONTENT.USER.filter_catalog_invalid_argument",
+	)
+
 	digestMismatch := validFilterCatalogStageFixture(t, "filter-release-bad-digest", 12)
 	digestMismatch.CanonicalDigest = strings.Repeat("0", 64)
 	response = performFilterCatalogRequest(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -22,14 +23,16 @@ const (
 	outboxCollection     = "circle_group_membership_outbox"
 	sequenceCollection   = "circle_group_membership_outbox_sequences"
 	checkpointCollection = "circle_group_membership_projection_checkpoints"
+	capacityCollection   = "circle_group_membership_capacity_counters"
 )
 
 type MongoAggregateStore struct {
-	memberships *mongo.Collection
-	receipts    *mongo.Collection
-	outbox      *mongo.Collection
-	sequences   *mongo.Collection
-	checkpoints *mongo.Collection
+	memberships      *mongo.Collection
+	receipts         *mongo.Collection
+	outbox           *mongo.Collection
+	sequences        *mongo.Collection
+	checkpoints      *mongo.Collection
+	capacityCounters *mongo.Collection
 }
 
 func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
@@ -39,7 +42,7 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 	return &MongoAggregateStore{
 		memberships: database.Collection(membershipCollection), receipts: database.Collection(receiptCollection),
 		outbox: database.Collection(outboxCollection), sequences: database.Collection(sequenceCollection),
-		checkpoints: database.Collection(checkpointCollection),
+		checkpoints: database.Collection(checkpointCollection), capacityCounters: database.Collection(capacityCollection),
 	}
 }
 
@@ -103,6 +106,9 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request ports.Comm
 		if applyErr != nil {
 			return nil, applyErr
 		}
+		if capacityErr := store.adjustActiveMemberCapacity(txCtx, currentPointer, next); capacityErr != nil {
+			return nil, capacityErr
+		}
 		if !found {
 			if _, insertErr := store.memberships.InsertOne(txCtx, documentFrom(next)); insertErr != nil {
 				if mongo.IsDuplicateKeyError(insertErr) {
@@ -159,6 +165,75 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request ports.Comm
 		return ports.CommitReceipt{}, err
 	}
 	return committed, nil
+}
+
+// adjustActiveMemberCapacity maintains a single per-group ledger in the same
+// Mongo transaction as the authoritative membership document and its outbox.
+// The ledger is an invariant lock, not a read model: it serializes concurrent
+// active-state transitions so two snapshots cannot admit a 1001st member.
+func (store *MongoAggregateStore) adjustActiveMemberCapacity(
+	ctx context.Context,
+	current *model.CircleGroupMembership,
+	next model.CircleGroupMembership,
+) error {
+	delta := model.ActiveMembershipDelta(current, next)
+	if delta == 0 {
+		return nil
+	}
+	groupID := strings.TrimSpace(next.GroupID)
+	if groupID == "" {
+		return model.ErrInvalidChange
+	}
+
+	var counter struct {
+		ActiveMemberCount int64 `bson:"activeMemberCount"`
+	}
+	err := store.capacityCounters.FindOne(ctx, bson.M{"_id": groupID}).Decode(&counter)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		activeCount, countErr := store.memberships.CountDocuments(ctx, bson.M{
+			"groupId": groupID, "state": model.CircleGroupMembershipStateActive,
+		})
+		if countErr != nil {
+			return countErr
+		}
+		nextCount := activeCount + delta
+		if nextCount > model.MaxActiveMembersPerGroup {
+			return model.ErrGroupFull
+		}
+		if nextCount < 0 {
+			return fmt.Errorf("CircleGroupMembership capacity ledger underflow for group %q", groupID)
+		}
+		_, insertErr := store.capacityCounters.InsertOne(ctx, bson.M{
+			"_id": groupID, "activeMemberCount": nextCount, "updatedAt": next.UpdatedAt.UTC(),
+		})
+		if mongo.IsDuplicateKeyError(insertErr) {
+			return model.ErrVersionConflict
+		}
+		return insertErr
+	}
+	if err != nil {
+		return err
+	}
+
+	nextCount := counter.ActiveMemberCount + delta
+	if nextCount > model.MaxActiveMembersPerGroup {
+		return model.ErrGroupFull
+	}
+	if nextCount < 0 {
+		return fmt.Errorf("CircleGroupMembership capacity ledger underflow for group %q", groupID)
+	}
+	result, updateErr := store.capacityCounters.UpdateOne(ctx, bson.M{
+		"_id": groupID, "activeMemberCount": counter.ActiveMemberCount,
+	}, bson.M{
+		"$set": bson.M{"activeMemberCount": nextCount, "updatedAt": next.UpdatedAt.UTC()},
+	})
+	if updateErr != nil {
+		return updateErr
+	}
+	if result.MatchedCount != 1 {
+		return model.ErrVersionConflict
+	}
+	return nil
 }
 
 func (store *MongoAggregateStore) load(ctx context.Context, filter any) (model.CircleGroupMembership, bool, error) {

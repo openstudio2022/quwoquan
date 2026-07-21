@@ -16,14 +16,19 @@ var (
 	ErrConversationNotFound            = errors.New("ASSISTANT.USER.conversation_not_found")
 	ErrConversationStorageUnavailable  = errors.New("ASSISTANT.SYSTEM.conversation_storage_unavailable")
 	ErrDecisionParseFailed             = errors.New("ASSISTANT.SYSTEM.decision_parse_failed")
+	ErrFinanceProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.finance_provider_unavailable")
+	ErrIntersectionEvidenceNotFound    = errors.New("ASSISTANT.USER.intersection_evidence_not_found")
+	ErrIntersectionEvidenceUnavailable = errors.New("ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable")
 	ErrInvalidActionPayload            = errors.New("ASSISTANT.USER.invalid_action_payload")
 	ErrLearningEventInvalid            = errors.New("ASSISTANT.USER.learning_event_invalid")
 	ErrLearningSinkUnavailable         = errors.New("ASSISTANT.SYSTEM.learning_sink_unavailable")
 	ErrMarkdownBlockParseFailed        = errors.New("ASSISTANT.SYSTEM.markdown_block_parse_failed")
+	ErrModelProviderUnavailable        = errors.New("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
 	ErrPreferenceInvalidArgument       = errors.New("ASSISTANT.USER.preference_invalid_argument")
 	ErrPreferenceNotFound              = errors.New("ASSISTANT.USER.preference_not_found")
 	ErrPreferenceRestoreExpired        = errors.New("ASSISTANT.USER.preference_restore_expired")
 	ErrPreferenceStorageUnavailable    = errors.New("ASSISTANT.SYSTEM.preference_storage_unavailable")
+	ErrPublicSearchProviderUnavailable = errors.New("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
 	ErrRunIdempotencyConflict          = errors.New("ASSISTANT.USER.run_idempotency_conflict")
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
 	ErrRunNotFound                     = errors.New("ASSISTANT.USER.run_not_found")
@@ -42,6 +47,7 @@ var (
 	ErrToolObservationInvalid          = errors.New("ASSISTANT.SYSTEM.tool_observation_invalid")
 	ErrUnauthorized                    = errors.New("ASSISTANT.USER.unauthorized")
 	ErrUpstreamTimeout                 = errors.New("ASSISTANT.MIDDLEWARE.upstream_timeout")
+	ErrWeatherProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
 )
 
 // AppErrorFromConsentInvalidArgument returns *AppError for ASSISTANT.USER.consent_invalid_argument (user_message from errors.yaml).
@@ -86,6 +92,24 @@ func AppErrorFromDecisionParseFailed(debugMessage string) *rterr.AppError {
 	return rterr.NewAppError(code, "回复结构解析失败，已回退为文本输出", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 1)
 }
 
+// AppErrorFromFinanceProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.finance_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromFinanceProviderUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.finance_provider_unavailable")
+	return rterr.NewAppError(code, "金融行情数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromIntersectionEvidenceNotFound returns *AppError for ASSISTANT.USER.intersection_evidence_not_found (user_message from errors.yaml).
+func AppErrorFromIntersectionEvidenceNotFound(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.intersection_evidence_not_found")
+	return rterr.NewAppError(code, "这条交集线索已失效或不可访问", debugMessage).WithMetadata("not_found", 404).WithRecovery("refresh", 0)
+}
+
+// AppErrorFromIntersectionEvidenceUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable (user_message from errors.yaml).
+func AppErrorFromIntersectionEvidenceUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable")
+	return rterr.NewAppError(code, "交集证据暂时无法核验，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
 // AppErrorFromInvalidActionPayload returns *AppError for ASSISTANT.USER.invalid_action_payload (user_message from errors.yaml).
 func AppErrorFromInvalidActionPayload(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.invalid_action_payload")
@@ -110,6 +134,12 @@ func AppErrorFromMarkdownBlockParseFailed(debugMessage string) *rterr.AppError {
 	return rterr.NewAppError(code, "格式化卡片渲染失败，已回退为文本展示", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 1)
 }
 
+// AppErrorFromModelProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.model_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromModelProviderUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
+	return rterr.NewAppError(code, "助手模型服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
 // AppErrorFromPreferenceInvalidArgument returns *AppError for ASSISTANT.USER.preference_invalid_argument (user_message from errors.yaml).
 func AppErrorFromPreferenceInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.preference_invalid_argument")
@@ -132,6 +162,12 @@ func AppErrorFromPreferenceRestoreExpired(debugMessage string) *rterr.AppError {
 func AppErrorFromPreferenceStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.preference_storage_unavailable")
 	return rterr.NewAppError(code, "偏好服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromPublicSearchProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.public_search_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromPublicSearchProviderUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
+	return rterr.NewAppError(code, "公开信息检索暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromRunIdempotencyConflict returns *AppError for ASSISTANT.USER.run_idempotency_conflict (user_message from errors.yaml).
@@ -240,4 +276,10 @@ func AppErrorFromUnauthorized(debugMessage string) *rterr.AppError {
 func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.upstream_timeout")
 	return rterr.NewAppError(code, "请求超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 8)
+}
+
+// AppErrorFromWeatherProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.weather_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromWeatherProviderUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
+	return rterr.NewAppError(code, "天气数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }

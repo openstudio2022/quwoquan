@@ -477,6 +477,7 @@ jobs:
           python3 quwoquan_ops/cli/stackctl.py up --target beta-local --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-up"
           python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-health"
           python3 quwoquan_ops/cli/stackctl.py inspect --target beta-local --scope all --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-inspect"
+          python3 quwoquan_ops/cli/stackctl.py verify --env beta --kind all --profile integration --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-verify"
       - id: run_matrix
         name: Run mobile matrix environments
         working-directory: ${{ github.workspace }}/repo
@@ -522,6 +523,39 @@ jobs:
                 if [ "${matrix_kind}" = "chat-avatar" ]; then
                   python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
+                elif [ "${matrix_kind}" = "user-profile" ]; then
+                  if [ "${env_name}" != "gamma" ]; then
+                    echo "::error::user-profile device journey is only defined for gamma; received env=${env_name}"
+                    matrix_exit_code=2
+                  else
+                    profile_target="$(python3 - <<'PY'
+                    import json
+                    from pathlib import Path
+
+                    suites = json.loads(
+                        Path("quwoquan_ops/environments/gamma_validation_suites.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    journey = suites["uiJourneys"].get("user_profile_journey_patrol")
+                    if not isinstance(journey, dict):
+                        raise SystemExit("user_profile_journey_patrol is not registered")
+                    if journey.get("runner") != "patrol":
+                        raise SystemExit("user_profile_journey_patrol must use patrol")
+                    target = str(journey.get("target") or "").strip()
+                    if not target:
+                        raise SystemExit("user_profile_journey_patrol target is missing")
+                    print(target)
+                    PY
+                    )"
+                    bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+                      --platform "${platform}" \
+                      --target "${profile_target}" \
+                      --gateway-base-url "${GAMMA_BASE_URL}" \
+                      --media-avatar-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
+                      --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/user-profile-${platform}.json"
+                    matrix_exit_code=$?
+                  fi
                 elif [ "${matrix_kind}" = "environment-smoke" ]; then
                   smoke_supported=1
                   case "${env_name}" in

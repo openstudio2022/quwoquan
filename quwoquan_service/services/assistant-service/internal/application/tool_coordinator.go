@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	rtid "quwoquan_service/runtime/id"
 	toolpkg "quwoquan_service/services/assistant-service/internal/application/tool"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
+	assistantgenerated "quwoquan_service/services/assistant-service/internal/generated"
 )
 
 type ToolRequest struct {
@@ -61,7 +64,7 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	completedAt := now.Add(2 * time.Millisecond)
 	completed.CompletedAt = &completedAt
 	if c.ForceFail {
-		failure := toolFailure(toolName, "mock tool forced failure")
+		failure := toolFailure(toolName, errors.New("mock tool forced failure"))
 		completed.Status = "failed"
 		completed.Failure = &failure
 		return ToolExecution{Requested: requested, Completed: completed, Failure: &failure}, nil
@@ -72,7 +75,7 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	}
 	meta, ok := registry.Metadata(toolName)
 	if !ok {
-		failure := toolFailure(toolName, "tool is not registered")
+		failure := toolFailure(toolName, errors.New("tool is not registered"))
 		completed := requested
 		completed.Status = "failed"
 		completed.Failure = &failure
@@ -84,7 +87,7 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	requested.RequiresConfirmation = meta.RequiresConfirmation
 	requested.Input = c.input(req)
 	if err := registry.ValidateInput(toolName, requested.Input); err != nil {
-		failure := toolFailure(toolName, err.Error())
+		failure := toolFailure(toolName, err)
 		completed := requested
 		completed.Status = "failed"
 		completed.Failure = &failure
@@ -113,7 +116,7 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 		History:  append([]string{}, req.History...),
 	})
 	if err != nil {
-		failure := toolFailure(toolName, err.Error())
+		failure := toolFailure(toolName, err)
 		completed.Status = "failed"
 		completed.Failure = &failure
 		return ToolExecution{Requested: requested, Completed: completed, Failure: &failure}, nil
@@ -151,9 +154,23 @@ func (c DefaultToolCoordinator) input(req ToolRequest) map[string]any {
 	}
 }
 
-func toolFailure(toolName, reason string) rtfailures.Failure {
+func toolFailure(toolName string, cause error) rtfailures.Failure {
+	code := "ASSISTANT.MIDDLEWARE.tool_unavailable"
+	var providerFailure ProviderFailure
+	if errors.As(cause, &providerFailure) {
+		switch providerFailure.Capability {
+		case "public_search":
+			code = assistantgenerated.ErrPublicSearchProviderUnavailable.Error()
+		case "weather":
+			code = assistantgenerated.ErrWeatherProviderUnavailable.Error()
+		case "finance":
+			code = assistantgenerated.ErrFinanceProviderUnavailable.Error()
+		case "model":
+			code = assistantgenerated.ErrModelProviderUnavailable.Error()
+		}
+	}
 	return rtfailures.Failure{
-		Code:   "ASSISTANT.MIDDLEWARE.tool_unavailable",
+		Code:   code,
 		Origin: rtfailures.OriginRemoteDependency,
 		Kind:   rtfailures.KindUnavailable,
 		Nature: rtfailures.NatureTransient,
@@ -163,7 +180,15 @@ func toolFailure(toolName, reason string) rtfailures.Failure {
 		},
 		Context: rtfailures.Context{Attributes: []rtfailures.ContextAttribute{
 			{Key: "toolName", Value: toolName},
-			{Key: "reason", Value: reason},
+			{Key: "reason", Value: safeToolFailureReason(cause)},
 		}},
 	}.Normalized()
+}
+
+func safeToolFailureReason(cause error) string {
+	var providerFailure ProviderFailure
+	if errors.As(cause, &providerFailure) {
+		return string(providerFailure.Reason)
+	}
+	return fmt.Sprintf("%T", cause)
 }

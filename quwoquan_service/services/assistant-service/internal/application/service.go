@@ -63,6 +63,16 @@ type PreferenceSnapshotReader interface {
 	) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error)
 }
 
+// IntersectionEvidenceReader 是 assistant 对 content 公开对象 Reader 的专属 port。
+// 它必须以调用 actor 授权读取当前事实，而不能信任客户端交集卡的展示内容。
+type IntersectionEvidenceReader interface {
+	ResolveAuthorizedIntersectionEvidence(
+		ctx context.Context,
+		personaID string,
+		refs []assistant.AssistantIntersectionEvidenceRef,
+	) ([]assistant.AuthorizedIntersectionEvidence, error)
+}
+
 type AssistantService struct {
 	events                     EventStore
 	profiles                   LearningProfileStore
@@ -76,6 +86,7 @@ type AssistantService struct {
 	creationGrounding          CreationSuggestGrounding
 	xiaoquSearch               XiaoquSearchReader
 	intersectionInbox          IntersectionInboxReader
+	intersectionEvidence       IntersectionEvidenceReader
 	chatGrounding              ChatGroundingClient
 	agentLoop                  *AgentLoop
 	conversationRuns           ConversationRunStore
@@ -126,6 +137,10 @@ func WithCreationSuggestGrounding(grounding CreationSuggestGrounding) AssistantS
 
 func WithIntersectionInboxReader(reader IntersectionInboxReader) AssistantServiceOption {
 	return func(s *AssistantService) { s.intersectionInbox = reader }
+}
+
+func WithIntersectionEvidenceReader(reader IntersectionEvidenceReader) AssistantServiceOption {
+	return func(s *AssistantService) { s.intersectionEvidence = reader }
 }
 
 func WithIntersectionReminderPolicy(policy IntersectionReminderPolicy) AssistantServiceOption {

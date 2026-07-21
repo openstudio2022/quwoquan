@@ -42,6 +42,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
     from content.execution.queue.jobs import enqueue_ref_job
     from core.control_types import QueueBackend
     from core.paths import execution_root
+    from core.source_digest import current_source_digest
     from core.tree_integrity import tree_integrity_stats
 
     execution = execution_root(EXECUTION_ID)
@@ -55,6 +56,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
         {
             "executionId": EXECUTION_ID,
             "createdAt": "2026-07-20T05:00:00Z",
+            "sourceDigest": current_source_digest().to_document(),
         },
     )
     _write_json(
@@ -159,6 +161,7 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
             "entityRef": payload["entityRef"],
             "carrier": payload["carrier"],
             "sourceRevision": payload["sourceRevision"],
+            "idempotencyKey": payload["idempotencyKey"],
             "jobId": payload["jobId"],
             "executionId": payload["executionId"],
             "ref": payload["ref"],

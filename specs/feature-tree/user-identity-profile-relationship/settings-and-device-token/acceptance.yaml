@@ -46,6 +46,47 @@ sit_acceptance:
         - local_contract.user_identity_profile_relationship.settings_and_device_token.sit1.sit1_local_contract
         envs: *id001
     notes: []
+  SIT2:
+    title: 账号封禁、恢复与申诉可逆处置 SIT
+    done_when:
+    - Product Ops 受信 decision 驱动 UserAccount active↔suspended；closed 账号永不允许恢复。
+    - Suspend 原子递增 auth epoch、撤销 session/refresh，认证与服务鉴权拒绝 suspended 或旧 epoch token。
+    - Content、Chat、Circle、Notification、Search 与 Recommendation 以可逆 restriction projection 收敛，Restore 不复用注销删除器。
+    - moderation/appeal workflow、审批链、case/ref/request/trace/evidence audit 和 retry/DLQ 可审计。
+    performance_points:
+    - Suspend/Restore 命令 p95 不高于 1.5 秒；旧 token 拒绝目标不高于 30 秒。
+    - 下游 restriction projection 在 5 分钟内收敛，pending、重试和 DLQ 有告警。
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: account_suspension_state_machine_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.settings_and_device_token.account_suspension.state_machine
+        envs:
+        - local
+      - layer: api_integration
+        execution_profile: integration
+        suite: account_suspension_cross_domain_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.settings_and_device_token.account_suspension.cross_domain_projection
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: account_suspension_recovery_uat
+        cases:
+        - user_acceptance.user_identity_profile_relationship.settings_and_device_token.account_suspension.recovery
+        envs:
+        - gamma_local
+    notes:
+    - 封禁/恢复未实施前保持 pending；不得以 CloseAccount 证据、Widget fake 或单一服务测试代替。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

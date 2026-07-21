@@ -30,9 +30,8 @@ type CallOrchestrator struct {
 	cache         CallStateCache
 	domainService *callsession.CallSessionService
 	roomService   *RoomService
-	tokenIssuer   CallTokenIssuer
+	mediaProvider MediaRoomProvider
 	relationships RelationshipGate
-	livekitURL    string
 	now           func() time.Time
 }
 
@@ -51,23 +50,24 @@ func NewCallOrchestrator(
 	repo CallStore,
 	cache CallStateCache,
 	domainSvc *callsession.CallSessionService,
-	roomSvc *RoomService,
-	tokenIssuer CallTokenIssuer,
+	mediaProvider MediaRoomProvider,
 	relationships RelationshipGate,
-	livekitURL string,
 	options ...CallOrchestratorOption,
 ) *CallOrchestrator {
 	if relationships == nil {
 		relationships = DenyRelationshipGate()
 	}
+	var roomService *RoomService
+	if mediaProvider != nil {
+		roomService = NewRoomService(mediaProvider)
+	}
 	orchestrator := &CallOrchestrator{
 		repo:          repo,
 		cache:         cache,
 		domainService: domainSvc,
-		roomService:   roomSvc,
-		tokenIssuer:   tokenIssuer,
+		roomService:   roomService,
+		mediaProvider: mediaProvider,
 		relationships: relationships,
-		livekitURL:    strings.TrimSpace(livekitURL),
 		now:           time.Now,
 	}
 	for _, option := range options {
@@ -87,9 +87,8 @@ type InitiateCallRequest struct {
 }
 
 type InitiateCallResponse struct {
-	Session    *model.CallSession `json:"session"`
-	Token      string             `json:"token"`
-	LivekitURL string             `json:"livekitUrl"`
+	Session     *model.CallSession `json:"session"`
+	MediaAccess MediaSessionAccess `json:"mediaAccess"`
 }
 
 func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallRequest) (*InitiateCallResponse, error) {
@@ -100,7 +99,7 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	digest := commandDigest("InitiateCall", req)
 	if replayed, found, err := o.replay(ctx, actorID, "InitiateCall", digest); err != nil || found {
 		if found {
-			return o.initiateResponse(ctx, replayed.Session, actorID), nil
+			return o.initiateResponse(ctx, replayed.Session, actorID)
 		}
 		return nil, err
 	}
@@ -123,10 +122,15 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	session.UpdatedAt = now
 	o.domainService.SetRinging(session)
 
-	if o.roomService != nil {
-		if err := o.roomService.CreateRoom(ctx, session.RoomID, session.MaxParticipants); err != nil {
-			return nil, generated.AppErrorFromLivekitUnavailable("create room: " + err.Error())
-		}
+	if o.roomService == nil {
+		return nil, generated.AppErrorFromMediaTransportUnavailable(
+			"media room provider is unavailable",
+		)
+	}
+	if err := o.roomService.CreateRoom(ctx, session.RoomID, session.MaxParticipants); err != nil {
+		return nil, generated.AppErrorFromMediaTransportUnavailable(
+			"media room creation failed",
+		)
 	}
 
 	ringingTargets := o.participantIDs(session, actorID, true)
@@ -154,22 +158,24 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	if err != nil {
 		return nil, err
 	}
-	return o.initiateResponse(ctx, result.Session, actorID), nil
+	return o.initiateResponse(ctx, result.Session, actorID)
 }
 
-func (o *CallOrchestrator) initiateResponse(ctx context.Context, session *model.CallSession, actorID string) *InitiateCallResponse {
-	token := ""
-	if o.tokenIssuer != nil {
-		token, _ = o.tokenIssuer.GenerateParticipantToken(session.RoomID, actorID)
+func (o *CallOrchestrator) initiateResponse(
+	ctx context.Context,
+	session *model.CallSession,
+	actorID string,
+) (*InitiateCallResponse, error) {
+	mediaAccess, err := o.issueMediaAccess(ctx, session.RoomID, actorID)
+	if err != nil {
+		return nil, err
 	}
-	return &InitiateCallResponse{Session: session, Token: token, LivekitURL: o.livekitURL}
+	return &InitiateCallResponse{Session: session, MediaAccess: mediaAccess}, nil
 }
 
 type AnswerCallResponse struct {
-	Session    *model.CallSession `json:"session"`
-	Token      string             `json:"token"`
-	RoomID     string             `json:"roomId"`
-	LivekitURL string             `json:"livekitUrl"`
+	Session     *model.CallSession `json:"session"`
+	MediaAccess MediaSessionAccess `json:"mediaAccess"`
 }
 
 func (o *CallOrchestrator) AnswerCall(ctx context.Context, callID, userID string) (*AnswerCallResponse, error) {
@@ -182,11 +188,11 @@ func (o *CallOrchestrator) AnswerCall(ctx context.Context, callID, userID string
 	if err != nil {
 		return nil, err
 	}
-	token := ""
-	if o.tokenIssuer != nil {
-		token, _ = o.tokenIssuer.GenerateParticipantToken(result.RoomID, userID)
+	mediaAccess, err := o.issueMediaAccess(ctx, result.RoomID, userID)
+	if err != nil {
+		return nil, err
 	}
-	return &AnswerCallResponse{Session: result, Token: token, RoomID: result.RoomID, LivekitURL: o.livekitURL}, nil
+	return &AnswerCallResponse{Session: result, MediaAccess: mediaAccess}, nil
 }
 
 func (o *CallOrchestrator) RejectCall(ctx context.Context, callID, userID string) (*model.CallSession, error) {
@@ -229,9 +235,8 @@ func (o *CallOrchestrator) HangupCall(ctx context.Context, callID, userID string
 }
 
 type JoinCallResponse struct {
-	Session    *model.CallSession `json:"session"`
-	Token      string             `json:"token"`
-	LivekitURL string             `json:"livekitUrl"`
+	Session     *model.CallSession `json:"session"`
+	MediaAccess MediaSessionAccess `json:"mediaAccess"`
 }
 
 func (o *CallOrchestrator) JoinCall(
@@ -251,15 +256,37 @@ func (o *CallOrchestrator) JoinCall(
 	if err != nil {
 		return nil, err
 	}
-	token := ""
-	if o.tokenIssuer != nil {
-		token, _ = o.tokenIssuer.GenerateParticipantToken(result.RoomID, userID)
+	mediaAccess, err := o.issueMediaAccess(ctx, result.RoomID, userID)
+	if err != nil {
+		return nil, err
 	}
 	return &JoinCallResponse{
-		Session:    result,
-		Token:      token,
-		LivekitURL: o.livekitURL,
+		Session:     result,
+		MediaAccess: mediaAccess,
 	}, nil
+}
+
+func (o *CallOrchestrator) issueMediaAccess(
+	ctx context.Context,
+	roomID string,
+	participantID string,
+) (MediaSessionAccess, error) {
+	if o.mediaProvider == nil {
+		return MediaSessionAccess{}, generated.AppErrorFromMediaTransportUnavailable(
+			"media access provider is unavailable",
+		)
+	}
+	access, err := o.mediaProvider.IssueParticipantAccess(
+		ctx,
+		roomID,
+		participantID,
+	)
+	if err != nil || strings.TrimSpace(access.AccessToken) == "" {
+		return MediaSessionAccess{}, generated.AppErrorFromMediaTransportUnavailable(
+			"media access issuance failed",
+		)
+	}
+	return access, nil
 }
 
 func (o *CallOrchestrator) LeaveCall(ctx context.Context, callID, userID string) (*model.CallSession, error) {
@@ -274,7 +301,7 @@ func (o *CallOrchestrator) LeaveCall(ctx context.Context, callID, userID string)
 	})
 }
 
-// ReportMediaConnected 记录端侧媒体建连事实（LiveKit 首帧连通后上报）。
+// ReportMediaConnected 记录端侧媒体建连事实（首帧媒体连通后上报）。
 // ≥2 人 connected 时会话进入 in_call 并记录 startedAt；已 connected 的重复
 // 上报按 no-op receipt 幂等；CallConnected 事件推送全部参与者。
 func (o *CallOrchestrator) ReportMediaConnected(ctx context.Context, callID, userID string) (*model.CallSession, error) {

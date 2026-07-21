@@ -3,23 +3,24 @@ entity: MediaOriginalAccessFact
 object_kind: append_only_fact
 
 description: |
-  MediaAsset 完成访问策略与 owner 校验后追加的原始媒体授权审计事实。
-  事实、幂等 receipt 与 outbox 在同一 Mongo transaction 落盘；重放不得延长授权有效期。
+  MediaAsset、引用 Post 可见性与按 viewer/media/purpose 限流判定后追加的原始媒体访问审计事实。
+  事实、幂等 receipt 与 grant 额度保留在同一 Mongo transaction 落盘；重放不得延长授权有效期。
 
 storage_backend: mongodb
 cache_layer: none
-capabilities: [append_only, idempotent_append, outbox]
+capabilities: [append_only, idempotent_append, rate_limited]
 taggable: false
 vector_enabled: false
 
 business_rules:
-  - 只有 ready 的 image 或 video MediaAsset 可以产生授权事实
-  - viewer 必须通过 MediaAsset 访问策略和 BOLA 校验
-  - 同一 idempotencyKey 只产生一个 auditId、一个绝对 expiresAt 和一条 outbox 事件
-  - 重放返回原绝对 expiresAt，禁止刷新或延长签名 URL 生命周期
+  - ready image 的 grant、访问策略/可见性拒绝和 rate-limit 拒绝都必须产生不可变审计事实
+  - viewer 必须通过 MediaAsset 访问策略、已发布引用 Post 的可见性和 BOLA 校验
+  - 限流键为 viewerId + assetId + purpose；窗口与额度只由 original_access_policy 声明，拒绝请求不签发 URL
+  - 同一 idempotencyKey 只产生一个 auditId、一个 outcome、一个 reason 和一条 outbox 事件
+  - granted replay 返回原绝对 expiresAt，禁止刷新或延长签名 URL 生命周期；非 granted 的 expiresAt 为空
 
 lifecycle:
-  states: [granted]
+  states: [granted, denied, rate_limited]
   immutable: true
 
 ddd_layer_mapping:
@@ -28,4 +29,3 @@ ddd_layer_mapping:
   application: internal/application/media
   persistence: internal/infrastructure/persistence/media_original_access_mongo_sink.go
   adapter_rest: internal/adapters/http
-  adapter_event: internal/infrastructure/messaging

@@ -16,6 +16,10 @@ var (
 	telemetryIngestDuration   *prometheus.HistogramVec
 	telemetryLogstoreDuration *prometheus.HistogramVec
 	appExperienceEventTotal   *prometheus.CounterVec
+	contentPublicationEvents  *prometheus.CounterVec
+	contentPublishVisible     *prometheus.HistogramVec
+	videoPreviewTrackLoads    *prometheus.CounterVec
+	videoPreviewTrackLoadTime *prometheus.HistogramVec
 )
 
 func registerTelemetryMetrics() {
@@ -42,11 +46,39 @@ func registerTelemetryMetrics() {
 			Name: "ops_app_experience_events_total",
 			Help: "Accepted App experience facts used by ANR, jank, error, and startup SLOs.",
 		}, []string{"event_type", "result"})
+		contentPublicationEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_content_publication_events_total",
+			Help: "Accepted content-publication funnel facts by bounded stage and outcome.",
+		}, []string{
+			"publication_stage",
+			"content_type",
+			"object_state",
+			"result",
+			"background_retry_terminal",
+		})
+		contentPublishVisible = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_content_publish_to_visible_seconds",
+			Help:    "Client-observed elapsed time from publication start to visible result.",
+			Buckets: []float64{1, 5, 15, 30, 60, 120, 300, 600, 900, 1800, 3600},
+		}, []string{"content_type", "result"})
+		videoPreviewTrackLoads = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_video_preview_track_loads_total",
+			Help: "Accepted video preview-track manifest loads by bounded result.",
+		}, []string{"result"})
+		videoPreviewTrackLoadTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_video_preview_track_load_duration_seconds",
+			Help:    "Client-observed preview-track manifest load latency.",
+			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 30},
+		}, []string{"result"})
 		registerCollector(&telemetryIngestBatchTotal)
 		registerCollector(&telemetryIngestEventTotal)
 		registerCollector(&telemetryIngestDuration)
 		registerCollector(&telemetryLogstoreDuration)
 		registerCollector(&appExperienceEventTotal)
+		registerCollector(&contentPublicationEvents)
+		registerCollector(&contentPublishVisible)
+		registerCollector(&videoPreviewTrackLoads)
+		registerCollector(&videoPreviewTrackLoadTime)
 	})
 }
 
@@ -80,8 +112,46 @@ func recordAppExperienceEvents(records []application.EventRecordInput) {
 				result = *record.Result
 			}
 			appExperienceEventTotal.WithLabelValues(record.EventType, result).Inc()
+		case "content_publication":
+			stage := telemetryString(record.PublicationStage, "unknown")
+			contentType := telemetryString(record.ContentType, "unknown")
+			objectState := telemetryString(record.ObjectState, "unknown")
+			result := telemetryString(record.Result, "unknown")
+			retryTerminal := telemetryString(
+				record.BackgroundRetryTerminal,
+				"not_applicable",
+			)
+			contentPublicationEvents.WithLabelValues(
+				stage,
+				contentType,
+				objectState,
+				result,
+				retryTerminal,
+			).Inc()
+			if stage == "published" {
+				if record.DurationMS != nil && *record.DurationMS >= 0 {
+					contentPublishVisible.WithLabelValues(contentType, result).Observe(
+						float64(*record.DurationMS) / 1000,
+					)
+				}
+			}
+		case "video_preview_track_load":
+			result := telemetryString(record.Result, "unknown")
+			videoPreviewTrackLoads.WithLabelValues(result).Inc()
+			if record.DurationMS != nil && *record.DurationMS >= 0 {
+				videoPreviewTrackLoadTime.WithLabelValues(result).Observe(
+					float64(*record.DurationMS) / 1000,
+				)
+			}
 		}
 	}
+}
+
+func telemetryString(value *string, fallback string) string {
+	if value == nil || *value == "" {
+		return fallback
+	}
+	return *value
 }
 
 type instrumentedEventLogStore struct {

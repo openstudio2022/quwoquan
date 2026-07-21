@@ -20,6 +20,7 @@ void main() {
   late Directory tempDirectory;
   late ActorQueuePartition partition;
   late ActorQueueStorage storage;
+  late List<ActorQueueSignal> actorSignals;
 
   setUp(() async {
     tempDirectory = await Directory.systemTemp.createTemp('telemetry_outbox_');
@@ -30,7 +31,11 @@ void main() {
       personaId: _personaId,
       deviceId: _deviceId,
     );
-    storage = ActorQueueStorage(keyStore: _MemoryKeyStore());
+    actorSignals = <ActorQueueSignal>[];
+    storage = ActorQueueStorage(
+      keyStore: _MemoryKeyStore(),
+      signalObserver: actorSignals.add,
+    );
   });
 
   tearDown(() async {
@@ -86,7 +91,7 @@ void main() {
     expect(await otherActor.pendingCount(), 0);
   });
 
-  test('422 整批进入加密 DLQ，401 保留密封批次等待主体变化', () async {
+  test('单条 422 进入加密 DLQ，401 保留密封批次等待主体变化', () async {
     final invalidTransport = _RecordingTransport()..statusCode = 422;
     final invalid = AppTelemetryOutbox(
       partition: partition,
@@ -114,7 +119,31 @@ void main() {
     expect(await blocked.pendingCount(), 1);
   });
 
-  test('容量不足先删普通事件，只有全是异常时才把异常移入 DLQ', () async {
+  test('单条无效事件不会使同批有效事件进入 DLQ', () async {
+    final transport = _SelectiveInvalidEventTransport();
+    final outbox = AppTelemetryOutbox(
+      partition: partition,
+      storage: storage,
+      transport: transport,
+      now: () => _testNow,
+    );
+    await outbox.enqueue(_record(1));
+    await outbox.enqueue(_record(2, eventType: 'undeclared_event'));
+
+    expect(await outbox.flush(), AppTelemetryFlushResult.deadLettered);
+    expect(await outbox.pendingCount(), 0);
+    final dlq = await storage.open(partition, '${kAppTelemetryOutboxName}_dlq');
+    expect(dlq, isNotNull);
+    expect(dlq!.length, 1);
+    expect(
+      transport.acceptedEventTypes,
+      contains('page_open'),
+      reason: '合法事件必须在隔离发送后得到确认',
+    );
+    expect(transport.bodies, hasLength(3), reason: '先尝试原批次，再按原顺序逐条隔离');
+  });
+
+  test('容量不足将普通事件移入 DLQ 并保留 critical 事实', () async {
     final signals = <AppTelemetryDeliveryDegradation>[];
     final outbox = AppTelemetryOutbox(
       partition: partition,
@@ -124,27 +153,47 @@ void main() {
       maxBytes: 1024 * 1024,
       deliveryObserver: (kind, _) => signals.add(kind),
     );
-    await outbox.enqueue(_record(1, droppable: true));
-    await outbox.enqueue(_record(2, logType: 'error'));
-    expect(await outbox.pendingCount(), 1);
-    expect(signals, contains(AppTelemetryDeliveryDegradation.dropped));
-
-    await outbox.enqueue(_record(3, logType: 'error'));
+    expect(
+      await outbox.enqueue(_record(1, droppable: true)),
+      AppTelemetryEnqueueResult.persisted,
+    );
+    expect(
+      await outbox.enqueue(_record(2, logType: 'error', critical: true)),
+      AppTelemetryEnqueueResult.persisted,
+    );
     expect(await outbox.pendingCount(), 1);
     expect(signals, contains(AppTelemetryDeliveryDegradation.deadLettered));
+    expect(
+      actorSignals.map((signal) => signal.kind),
+      contains(ActorQueueSignalKind.overflowMoved),
+    );
+    final dlq = await storage.open(partition, '${kAppTelemetryOutboxName}_dlq');
+    expect(dlq, isNotNull);
+    expect(dlq!.length, 1);
+
+    expect(
+      await outbox.enqueue(_record(3, logType: 'error', critical: true)),
+      AppTelemetryEnqueueResult.persisted,
+    );
+    expect(await outbox.pendingCount(), 2);
+    expect(signals, contains(AppTelemetryDeliveryDegradation.retrying));
   });
 }
 
 AppTelemetryQueuedRecord _record(
   int index, {
   String logType = 'event',
+  String? eventType,
   bool droppable = false,
+  bool critical = false,
 }) {
   final now = DateTime.utc(2026, 7, 18, 8, 0, index);
+  final resolvedEventType =
+      eventType ?? (logType == 'error' ? 'runtime_exception' : 'page_open');
   return AppTelemetryQueuedRecord(
     wire: <String, Object?>{
       'logType': logType,
-      'eventType': logType == 'error' ? 'runtime_exception' : 'page_open',
+      'eventType': resolvedEventType,
       'sessionId': 's.Z3Vlc3Q.1',
       'pageName': 'home',
       'occurredAt': now.toIso8601String(),
@@ -155,10 +204,11 @@ AppTelemetryQueuedRecord _record(
       if (logType == 'error') 'errorCode': 'APP.RUNTIME.test',
     },
     logType: logType,
-    eventType: logType == 'error' ? 'runtime_exception' : 'page_open',
+    eventType: resolvedEventType,
     enqueuedAt: now,
     expiresAt: now.add(const Duration(hours: 24)),
     droppable: droppable,
+    critical: critical,
   );
 }
 
@@ -187,6 +237,31 @@ final class _RecordingTransport implements AppTelemetryTransport {
       acceptedCount: (decoded['events']! as List<Object?>).length,
       duplicateBatch: bodies.length > 1,
     );
+  }
+}
+
+final class _SelectiveInvalidEventTransport implements AppTelemetryTransport {
+  final List<String> bodies = <String>[];
+  final List<String> acceptedEventTypes = <String>[];
+
+  @override
+  Future<AppTelemetryBatchAck> sendSealedBatch({
+    required String canonicalBody,
+    required String idempotencyKey,
+  }) async {
+    bodies.add(canonicalBody);
+    final decoded = jsonDecode(canonicalBody) as Map<String, Object?>;
+    final events = decoded['events']! as List<Object?>;
+    if (events.length > 1) {
+      throw CloudErrorMapper.fromStatusCode(422);
+    }
+    final event = events.single as Map<String, Object?>;
+    final eventType = event['eventType']! as String;
+    if (eventType == 'undeclared_event') {
+      throw CloudErrorMapper.fromStatusCode(422);
+    }
+    acceptedEventTypes.add(eventType);
+    return const AppTelemetryBatchAck(acceptedCount: 1, duplicateBatch: false);
   }
 }
 

@@ -10,7 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/internal/domain/location/model"
 	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
 )
 
@@ -28,21 +27,11 @@ type config struct {
 	} `yaml:"mongodb"`
 	Integration struct {
 		Location struct {
-			PrimaryProvider model.Provider `yaml:"primary_provider"`
-			BackupProvider  model.Provider `yaml:"backup_provider"`
-			Provider        model.Provider `yaml:"provider"`
-			TimeoutMs       int            `yaml:"timeout_ms"`
-
 			NearbyDefaultRadiusMeters int     `yaml:"nearby_default_radius_meters"`
 			NearbyDefaultLimit        int     `yaml:"nearby_default_limit"`
 			SearchDefaultLimit        int     `yaml:"search_default_limit"`
 			DefaultLatitude           float64 `yaml:"default_latitude"`
 			DefaultLongitude          float64 `yaml:"default_longitude"`
-
-			BaiduAK      string `yaml:"baidu_ak"`
-			AMapKey      string `yaml:"amap_key"`
-			BaiduBaseURL string `yaml:"baidu_base_url"`
-			AMapBaseURL  string `yaml:"amap_base_url"`
 		} `yaml:"location"`
 		ExternalInteraction struct {
 			CallbackSecret string                     `yaml:"callback_secret"`
@@ -104,11 +93,9 @@ func loadRuntimeConfig() (config, error) {
 		if configVersion != "" {
 			versionFile := filepath.Join(
 				configRoot,
-				"quwoquan_service",
-				"services",
-				serviceName,
-				"configs",
 				"releases",
+				"config",
+				serviceName,
 				configVersion+".yaml",
 			)
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
@@ -159,8 +146,39 @@ func mergeConfigFile(cfg *config, path string) error {
 	if err != nil {
 		return err
 	}
+	if err := rejectRetiredLocationProviderConfig(raw, path); err != nil {
+		return err
+	}
 	if err := yaml.Unmarshal(raw, cfg); err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
+}
+
+func rejectRetiredLocationProviderConfig(raw []byte, path string) error {
+	var document map[string]any
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("parse %s for location provider validation: %w", path, err)
+	}
+	integration, _ := document["integration"].(map[string]any)
+	location, _ := integration["location"].(map[string]any)
+	for _, key := range []string{
+		"provider",
+		"primary_provider",
+		"backup_provider",
+		"baidu_ak",
+		"amap_key",
+		"baidu_base_url",
+		"amap_base_url",
+		"timeout_ms",
+	} {
+		if _, found := location[key]; found {
+			return fmt.Errorf(
+				"%s: integration.location.%s is retired; use the generated external provider binding",
+				path,
+				key,
+			)
+		}
 	}
 	return nil
 }
@@ -168,9 +186,6 @@ func mergeConfigFile(cfg *config, path string) error {
 func normalizeDefaults(cfg *config) {
 	if strings.TrimSpace(cfg.Service.HTTP.Addr) == "" {
 		cfg.Service.HTTP.Addr = ":18086"
-	}
-	if cfg.Integration.Location.TimeoutMs <= 0 {
-		cfg.Integration.Location.TimeoutMs = 1200
 	}
 	if cfg.Integration.Location.NearbyDefaultRadiusMeters <= 0 {
 		cfg.Integration.Location.NearbyDefaultRadiusMeters = 3000
@@ -186,27 +201,6 @@ func normalizeDefaults(cfg *config) {
 	}
 	if cfg.Integration.Location.DefaultLongitude == 0 {
 		cfg.Integration.Location.DefaultLongitude = 104.0648
-	}
-	if cfg.Integration.Location.PrimaryProvider == "" {
-		if cfg.Integration.Location.Provider != "" {
-			cfg.Integration.Location.PrimaryProvider = cfg.Integration.Location.Provider
-		} else {
-			cfg.Integration.Location.PrimaryProvider = model.ProviderBaidu
-		}
-	}
-	if cfg.Integration.Location.BackupProvider == "" ||
-		cfg.Integration.Location.BackupProvider == cfg.Integration.Location.PrimaryProvider {
-		if cfg.Integration.Location.PrimaryProvider == model.ProviderBaidu {
-			cfg.Integration.Location.BackupProvider = model.ProviderAMap
-		} else {
-			cfg.Integration.Location.BackupProvider = model.ProviderBaidu
-		}
-	}
-	if cfg.Integration.Location.BaiduBaseURL == "" {
-		cfg.Integration.Location.BaiduBaseURL = "https://api.map.baidu.com"
-	}
-	if cfg.Integration.Location.AMapBaseURL == "" {
-		cfg.Integration.Location.AMapBaseURL = "https://restapi.amap.com"
 	}
 	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
 		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
@@ -338,6 +332,9 @@ func invalidRequiredConfigValue(value string) bool {
 }
 
 func applyEnvOverrides(cfg *config) error {
+	if err := rejectRetiredLocationProviderEnvOverrides(); err != nil {
+		return err
+	}
 	if value := strings.TrimSpace(os.Getenv("MONGO_URI")); value != "" {
 		cfg.MongoDB.URI = value
 	}
@@ -353,19 +350,6 @@ func applyEnvOverrides(cfg *config) error {
 	if value := os.Getenv("INTEGRATION_SERVICE_ADDR"); value != "" {
 		cfg.Service.HTTP.Addr = value
 	}
-	if value := os.Getenv("INTEGRATION_LOCATION_PRIMARY_PROVIDER"); value != "" {
-		cfg.Integration.Location.PrimaryProvider = model.Provider(strings.ToLower(value))
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_BACKUP_PROVIDER"); value != "" {
-		cfg.Integration.Location.BackupProvider = model.Provider(strings.ToLower(value))
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_TIMEOUT_MS"); value != "" {
-		timeoutMs, err := parsePositiveIntEnv("INTEGRATION_LOCATION_TIMEOUT_MS", value)
-		if err != nil {
-			return err
-		}
-		cfg.Integration.Location.TimeoutMs = timeoutMs
-	}
 	if value := os.Getenv("INTEGRATION_LOCATION_DEFAULT_LATITUDE"); value != "" {
 		latitude, err := strconv.ParseFloat(value, 64)
 		if err != nil {
@@ -380,18 +364,6 @@ func applyEnvOverrides(cfg *config) error {
 		}
 		cfg.Integration.Location.DefaultLongitude = longitude
 	}
-	if value := os.Getenv("INTEGRATION_LOCATION_BAIDU_AK"); value != "" {
-		cfg.Integration.Location.BaiduAK = value
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_AMAP_KEY"); value != "" {
-		cfg.Integration.Location.AMapKey = value
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_BAIDU_BASE_URL"); value != "" {
-		cfg.Integration.Location.BaiduBaseURL = value
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_AMAP_BASE_URL"); value != "" {
-		cfg.Integration.Location.AMapBaseURL = value
-	}
 	if err := applyExternalProviderEnv(
 		&cfg.Integration.ExternalInteraction.SMS,
 		"INTEGRATION_SMS",
@@ -405,6 +377,23 @@ func applyEnvOverrides(cfg *config) error {
 	}
 	if value := strings.TrimSpace(os.Getenv("INTEGRATION_CALLBACK_SECRET")); value != "" {
 		cfg.Integration.ExternalInteraction.CallbackSecret = value
+	}
+	return nil
+}
+
+func rejectRetiredLocationProviderEnvOverrides() error {
+	for _, key := range []string{
+		"INTEGRATION_LOCATION_PROVIDER",
+		"INTEGRATION_LOCATION_PRIMARY_PROVIDER",
+		"INTEGRATION_LOCATION_BACKUP_PROVIDER",
+		"INTEGRATION_LOCATION_TIMEOUT_MS",
+	} {
+		if _, found := os.LookupEnv(key); found {
+			return fmt.Errorf(
+				"%s is retired; use the generated external provider binding",
+				key,
+			)
+		}
 	}
 	return nil
 }

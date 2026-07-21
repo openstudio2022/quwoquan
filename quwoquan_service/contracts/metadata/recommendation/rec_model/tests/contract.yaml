@@ -9,6 +9,8 @@ scenarios:
     assertions:
       - 曝光 eventId 从 feedRequestId+targetId+eventType 确定性派生并作为 _id 提交
       - 同一 feed 批次同一内容重放写入被 _id 唯一约束拒绝且按已存在处理
+      - 事实字段严格映射 eventId/userId/personaId/occurredAt、labels.contentType 与 context.feedRequestId/rank/在线特征快照
+      - occurredAt 以 BSON datetime 持久化；无效 RFC3339 输入 fail-closed，禁止字符串时间轴漂移
       - modelReleaseId 在模型分桶命中时透传；rule 分桶为空（NULLABLE）
 
   - name: feedback_request_correlation
@@ -18,6 +20,7 @@ scenarios:
     assertions:
       - 反馈 eventId 从 feedRequestId+targetId+action 派生（缺 feedRequestId 回退 clientEventId）
       - 反馈与曝光经 requestId+targetId 最终一致关联；无曝光行主键依赖
+      - 反馈携带同一 userId/personaId、context.feedRequestId/contentType/duration 与 labels.action
       - 客户端行为事件先经 rec:event_dedup Redis 去重再进 learning 信封
 
   - name: facts_are_service_internal

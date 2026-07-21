@@ -101,6 +101,53 @@ func (r *MongoPostQueryReader) FindPostDetail(
 	return detail, true, nil
 }
 
+func (r *MongoPostQueryReader) ListPostsReferencingMedia(
+	ctx context.Context,
+	mediaAssetID string,
+) ([]postports.MediaReferencedPostSlice, error) {
+	if err := r.ready(); err != nil {
+		return nil, err
+	}
+	mediaAssetID = strings.TrimSpace(mediaAssetID)
+	if mediaAssetID == "" {
+		return nil, errors.New("media reference query requires media asset id")
+	}
+
+	cursor, err := r.coll.Find(
+		ctx,
+		bson.D{
+			{Key: "mediaAssetIds", Value: mediaAssetID},
+			{Key: "status", Value: bson.D{{Key: "$ne", Value: "deleted"}}},
+		},
+		options.Find().
+			SetProjection(bson.D{
+				{Key: "_id", Value: 1},
+				{Key: "authorId", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "visibility", Value: 1},
+				{Key: "moderationStatus", Value: 1},
+			}).
+			SetSort(bson.D{{Key: "_id", Value: 1}}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("find Post media references: %w", err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	references := make([]postports.MediaReferencedPostSlice, 0)
+	for cursor.Next(ctx) {
+		var reference postports.MediaReferencedPostSlice
+		if err := cursor.Decode(&reference); err != nil {
+			return nil, fmt.Errorf("decode Post media reference: %w", err)
+		}
+		references = append(references, reference)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate Post media references: %w", err)
+	}
+	return references, nil
+}
+
 func (r *MongoPostQueryReader) ListAuthorPosts(
 	ctx context.Context,
 	request postports.AuthorPostReadRequest,

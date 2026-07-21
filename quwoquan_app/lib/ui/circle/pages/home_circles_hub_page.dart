@@ -76,14 +76,30 @@ double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
 
 enum _HomeCirclesModuleTab { recommended, mine }
 
-class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
-  Set<String> _myCircleIds = <String>{};
+final class _CirclesHubFeedPage {
+  const _CirclesHubFeedPage({
+    required this.circles,
+    required this.items,
+    required this.loadedAt,
+    this.nextCursor,
+  });
 
+  final List<CircleDto> circles;
+  final List<CircleHubFeedPostEntry> items;
+  final DateTime loadedAt;
+  final String? nextCursor;
+}
+
+class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   String _activeCategoryId = '';
   _HomeCirclesModuleTab _activeModuleTab = _HomeCirclesModuleTab.recommended;
   final Map<String, String> _activeSubCategoryIdsByCategory =
       <String, String>{};
   final GlobalKey _categoryBarKey = GlobalKey();
+  final ScrollController _scrollController = ScrollController();
+  final Map<String, _CirclesHubFeedPage> _feedPages =
+      <String, _CirclesHubFeedPage>{};
+  final Set<String> _loadingFeedKeys = <String>{};
   late List<CircleHubFeedPostEntry> _circleFeedItems;
   // 分类配置的唯一真相源是 metadata 投影的 generated 常量。
   final Map<String, CircleCategoryTabConfigDto> _categoryConfig =
@@ -103,7 +119,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     super.initState();
     _pageEnteredAt = DateTime.now();
     _circleFeedItems = [];
-    unawaited(_bootstrapHubData());
+    _scrollController.addListener(_loadMoreWhenNeeded);
+    unawaited(_loadActiveFeed());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -119,6 +136,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
 
   @override
   void dispose() {
+    _scrollController
+      ..removeListener(_loadMoreWhenNeeded)
+      ..dispose();
     final tracker = _behaviorTracker;
     if (tracker != null) {
       tracker.trackDwell(
@@ -132,100 +152,143 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     super.dispose();
   }
 
-  Future<void> _bootstrapHubData() async {
+  void _loadMoreWhenNeeded() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter > AppSpacing.containerMd) {
+      return;
+    }
+    unawaited(_loadActiveFeed(loadMore: true));
+  }
+
+  String _feedPageKey({
+    required CircleDiscoveryFeedScope scope,
+    required String categoryId,
+    required String subCategoryId,
+  }) {
+    return '${scope.wireValue}|$categoryId|$subCategoryId|recommended';
+  }
+
+  Future<void> _loadActiveFeed({bool loadMore = false}) async {
     final requestGeneration = ++_bootstrapGeneration;
-    if (mounted) {
+    final categoryId = _effectiveActiveCategoryId;
+    final subCategoryId = _effectiveSubCategoryId(
+      categoryId,
+      _visibleSubCategoriesFor(categoryId),
+    );
+    final scope = _activeModuleTab == _HomeCirclesModuleTab.mine
+        ? CircleDiscoveryFeedScope.mine
+        : CircleDiscoveryFeedScope.recommended;
+    final key = _feedPageKey(
+      scope: scope,
+      categoryId: categoryId,
+      subCategoryId: subCategoryId,
+    );
+    if (_loadingFeedKeys.contains(key)) {
+      return;
+    }
+    final previous = _feedPages[key];
+    if (loadMore &&
+        (previous == null || (previous.nextCursor?.isEmpty ?? true))) {
+      return;
+    }
+    if (!loadMore &&
+        previous != null &&
+        DateTime.now().difference(previous.loadedAt) <
+            const Duration(seconds: 60)) {
+      if (mounted) {
+        setState(() {
+          _circleFeedItems = previous.items;
+          _hubCircleDtos = previous.circles;
+          _isBootstrapping = false;
+          _pageErrorSemantic = null;
+        });
+      }
+      return;
+    }
+    _loadingFeedKeys.add(key);
+    if (mounted && !loadMore && previous == null) {
       setState(() {
         _isBootstrapping = true;
         _pageErrorSemantic = null;
       });
     }
-    Object? bootstrapError;
-    var nextFeedItems = <CircleHubFeedPostEntry>[];
-    var nextCircleDtos = <CircleDto>[];
-    var nextMyCircleIds = <String>{};
 
     try {
-      final categoryId = _effectiveActiveCategoryId;
-      final subCategoryId = _effectiveSubCategoryId(
-        categoryId,
-        _visibleSubCategoriesFor(categoryId),
-      );
-      final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
-      final hasActivePersona =
-          accountId.isNotEmpty &&
-          (await ref.read(
-            activePersonaContextProvider.future,
-          )).subAccountId.trim().isNotEmpty;
-      final queryReader = ref.read(circlesListDiscoveryFeedQueryProvider);
-      final scopes = <CircleDiscoveryFeedScope>[
-        CircleDiscoveryFeedScope.recommended,
-        if (hasActivePersona) CircleDiscoveryFeedScope.mine,
-      ];
-      final pages = await Future.wait(
-        scopes.map(
-          (scope) => queryReader.listDiscoveryFeed(
+      // Mine 在入口层经 AuthGate 限制；只在已登录的实际切换后发送第二个 scope。
+      if (scope == CircleDiscoveryFeedScope.mine) {
+        final persona = await ref.read(activePersonaContextProvider.future);
+        if (persona.subAccountId.trim().isEmpty) {
+          return;
+        }
+      }
+      final page = await ref
+          .read(circlesListDiscoveryFeedQueryProvider)
+          .listDiscoveryFeed(
             CircleDiscoveryFeedQuery(
               category: categoryId,
               subCategory: subCategoryId,
               scope: scope,
-              limit: 200,
+              cursor: loadMore ? previous?.nextCursor : null,
+              limit: 20,
             ),
-          ),
-        ),
-      );
-      final circleMapper = ref.read(circleProjectionMapperProvider);
-      final postMapper = ref.read(contentPostProjectionMapperProvider);
-      final circlesById = <String, CircleDto>{};
-      final entriesByIdentity =
-          <({String circleId, String postId}), CircleHubFeedPostEntry>{};
-      for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
-        final page = pages[pageIndex];
-        if (scopes[pageIndex] == CircleDiscoveryFeedScope.mine) {
-          nextMyCircleIds = page.circles
-              .map((circle) => circle.circleId)
-              .where((circleId) => circleId.isNotEmpty)
-              .toSet();
-        }
-        for (final circle in page.circles) {
-          circlesById[circle.circleId] = circleMapper.toDto(circle);
-        }
-        for (final projection in page.items) {
-          final post = postMapper.toDto(projection.post);
-          entriesByIdentity[(
-            circleId: projection.circleId,
-            postId: post.id,
-          )] = CircleHubFeedPostEntry.fromProjection(
-            projection: projection,
-            post: post,
           );
-        }
+      final circleMapper = ref.read(circleProjectionMapperProvider);
+      final currentCircles = loadMore
+          ? <CircleDto>[...?previous?.circles]
+          : <CircleDto>[];
+      final currentItems = loadMore
+          ? <CircleHubFeedPostEntry>[...?previous?.items]
+          : <CircleHubFeedPostEntry>[];
+      final circlesById = <String, CircleDto>{
+        for (final circle in currentCircles) circle.id: circle,
+      };
+      final itemsByPlacementId = <String, CircleHubFeedPostEntry>{
+        for (final entry in currentItems) entry.placementId: entry,
+      };
+      for (final circle in page.circles) {
+        final dto = circleMapper.toDto(circle);
+        circlesById[dto.id] = dto;
       }
-      nextCircleDtos = circlesById.values.toList(growable: false);
-      nextFeedItems = entriesByIdentity.values.toList(growable: true);
+      for (final projection in page.items) {
+        final entry = CircleHubFeedPostEntry.fromProjection(
+          projection: projection,
+        );
+        itemsByPlacementId[entry.placementId] = entry;
+      }
+      final resolved = _CirclesHubFeedPage(
+        circles: circlesById.values.toList(growable: false),
+        items: itemsByPlacementId.values.toList(growable: false),
+        loadedAt: DateTime.now(),
+        nextCursor: page.nextCursor,
+      );
+      _feedPages[key] = resolved;
+      if (mounted && requestGeneration == _bootstrapGeneration) {
+        setState(() {
+          _circleFeedItems = resolved.items;
+          _hubCircleDtos = resolved.circles;
+          _isBootstrapping = false;
+          _pageErrorSemantic = null;
+        });
+      }
     } catch (error) {
-      bootstrapError = error;
-      nextCircleDtos = <CircleDto>[];
-      nextFeedItems = <CircleHubFeedPostEntry>[];
+      if (mounted && requestGeneration == _bootstrapGeneration) {
+        setState(() {
+          if (!loadMore) {
+            _circleFeedItems = <CircleHubFeedPostEntry>[];
+            _hubCircleDtos = <CircleDto>[];
+          }
+          _isBootstrapping = false;
+          _pageErrorSemantic = runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          );
+        });
+      }
+    } finally {
+      _loadingFeedKeys.remove(key);
     }
-
-    if (!mounted || requestGeneration != _bootstrapGeneration) {
-      return;
-    }
-    setState(() {
-      _circleFeedItems = nextFeedItems;
-      _hubCircleDtos = nextCircleDtos;
-      _myCircleIds = nextMyCircleIds;
-      _isBootstrapping = false;
-      _pageErrorSemantic = bootstrapError == null
-          ? null
-          : runtimeErrorSemantic(
-              context,
-              error: bootstrapError,
-              category: UiErrorCategory.pageLoad,
-              scope: UiErrorScope.page,
-            );
-    });
   }
 
   List<Map<String, String>> get _allCategories {
@@ -299,7 +362,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     setState(() {
       _activeSubCategoryIdsByCategory[categoryId] = subCategoryId;
     });
-    unawaited(_bootstrapHubData());
+    unawaited(_loadActiveFeed());
   }
 
   void _handleCategorySwipeDragEnd(DragEndDetails details) {
@@ -329,7 +392,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     setState(() {
       _activeCategoryId = visibleCategoryIds[nextIndex];
     });
-    unawaited(_bootstrapHubData());
+    unawaited(_loadActiveFeed());
   }
 
   bool _isCategoryBarVisible() {
@@ -344,34 +407,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     return bottom > 0 && top < MediaQuery.sizeOf(context).height;
   }
 
-  bool _isMyCircleId(String circleId) => _myCircleIds.contains(circleId);
-
-  List<CircleDto> _moduleCirclesFor(
-    _HomeCirclesModuleTab tab,
-    String categoryId,
-  ) {
-    final isMineMode = tab == _HomeCirclesModuleTab.mine;
-    final source =
-        _hubCircleDtos
-            .where((circle) {
-              return isMineMode
-                  ? _isMyCircleId(circle.id)
-                  : !_isMyCircleId(circle.id);
-            })
-            .toList(growable: true)
-          ..sort((left, right) {
-            return right.memberCount.compareTo(left.memberCount);
-          });
-    if (categoryId == 'all') {
-      return source.take(_maxHomeCircleRailItems - 1).toList(growable: false);
-    }
-    final categoryFiltered = source
-        .where((circle) => circle.category == categoryId)
-        .toList(growable: false);
-    final fallbackPool = categoryFiltered.isNotEmpty
-        ? categoryFiltered
-        : source;
-    return fallbackPool
+  List<CircleDto> _moduleCirclesFor(_HomeCirclesModuleTab _, String __) {
+    // scope/category/sort 已由聚合读模型冻结；客户端只截断首屏 rail，不重排或重过滤。
+    return _hubCircleDtos
         .take(_maxHomeCircleRailItems - 1)
         .toList(growable: false);
   }
@@ -401,64 +439,19 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
             circleId: circleId,
             categoryId: sourceCircle?.category ?? 'all',
             typeLabel: hubCircleStoryTypeLabel(entry.post),
-            isMine: _isMyCircleId(circleId),
+            isMine: tab == _HomeCirclesModuleTab.mine,
             feedEntry: entry,
           );
         })
         .toList(growable: false);
-    final isMineMode = tab == _HomeCirclesModuleTab.mine;
-    final modeFiltered = pool.where(
-      (item) => isMineMode ? item.isMine : !item.isMine,
-    );
-    final ordered = modeFiltered.toList(growable: false);
-    if (categoryId == 'all') {
-      return ordered.take(3).toList(growable: false);
-    }
-    final categoryFiltered = ordered
-        .where((item) => item.categoryId == categoryId)
-        .toList(growable: false);
-    return categoryFiltered.take(3).toList(growable: false);
+    return pool.take(3).toList(growable: false);
   }
 
   List<CircleHubFeedPostEntry> _filteredLevelOnePosts(
-    _HomeCirclesModuleTab tab,
-    String categoryId, {
+    _HomeCirclesModuleTab _,
+    String __, {
     String? subCategoryId,
-  }) {
-    final circleById = <String, CircleDto>{
-      for (final circle in _hubCircleDtos) circle.id: circle,
-    };
-    final isMineMode = tab == _HomeCirclesModuleTab.mine;
-    final modeFiltered = _circleFeedItems
-        .where((entry) {
-          final circleId = entry.circleId;
-          return isMineMode
-              ? _isMyCircleId(circleId)
-              : !_isMyCircleId(circleId);
-        })
-        .toList(growable: false);
-    final categoryFiltered = modeFiltered
-        .where((entry) {
-          final circleId = entry.circleId;
-          final circle = circleById[circleId];
-          return circle?.category == categoryId;
-        })
-        .toList(growable: false);
-    final scopedByCategory = categoryId == 'all'
-        ? modeFiltered
-        : categoryFiltered;
-    final resolvedSubCategory = subCategoryId?.trim() ?? '';
-    if (resolvedSubCategory.isEmpty) {
-      return scopedByCategory;
-    }
-    final subCategoryFiltered = scopedByCategory
-        .where(
-          (entry) =>
-              circleById[entry.circleId]?.subCategory == resolvedSubCategory,
-        )
-        .toList(growable: false);
-    return subCategoryFiltered;
-  }
+  }) => _circleFeedItems;
 
   bool _supportsViewer(PostBaseDto post) {
     return post.supportsUnifiedViewer;
@@ -551,7 +544,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
             onAction: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
-                await _bootstrapHubData();
+                await _loadActiveFeed();
               }
             },
           ),
@@ -592,6 +585,17 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       effectiveActiveCategoryId,
       subCategoryId: effectiveActiveSubCategoryId,
     );
+    final activeScope = _activeModuleTab == _HomeCirclesModuleTab.mine
+        ? CircleDiscoveryFeedScope.mine
+        : CircleDiscoveryFeedScope.recommended;
+    final activeFeedKey = _feedPageKey(
+      scope: activeScope,
+      categoryId: effectiveActiveCategoryId,
+      subCategoryId: effectiveActiveSubCategoryId,
+    );
+    final activeFeedPage = _feedPages[activeFeedKey];
+    final isLoadingMore = _loadingFeedKeys.contains(activeFeedKey);
+    final hasMore = activeFeedPage?.nextCursor?.isNotEmpty ?? false;
 
     return Material(
       type: MaterialType.transparency,
@@ -626,7 +630,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                       setState(() {
                         _activeCategoryId = nextCategoryId;
                       });
-                      unawaited(_bootstrapHubData());
+                      unawaited(_loadActiveFeed());
                     },
                     onHorizontalDragEnd: _handleCategorySwipeDragEnd,
                   ),
@@ -636,6 +640,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                     onSwipe: _handleCategorySwipe,
                     child: CustomScrollView(
                       key: TestKeys.homeCirclesScrollView,
+                      controller: _scrollController,
                       physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics(),
                       ),
@@ -655,9 +660,29 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                             ),
                             onModuleTabChanged: (nextTab) {
                               if (nextTab == _activeModuleTab) return;
+                              if (nextTab == _HomeCirclesModuleTab.mine &&
+                                  !AuthGate.isAuthenticated(ref)) {
+                                runWhenLoggedIn(
+                                  ref,
+                                  context,
+                                  AuthGateReason.followingFeed,
+                                  () async {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _activeModuleTab = nextTab;
+                                    });
+                                    await _loadActiveFeed();
+                                  },
+                                  dismissFallback: AppRoutePaths.home,
+                                  dismissPolicy:
+                                      LoginDismissPolicy.safeFallback,
+                                );
+                                return;
+                              }
                               setState(() {
                                 _activeModuleTab = nextTab;
                               });
+                              unawaited(_loadActiveFeed());
                             },
                             onSeeMoreTap: () {
                               final uri = Uri(
@@ -716,6 +741,19 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                               ? activeCategory.value.label
                               : effectiveActiveCategoryId,
                         ),
+                        if (hasMore || isLoadingMore)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(
+                                AppSpacing.containerMd,
+                              ),
+                              child: Center(
+                                child: isLoadingMore
+                                    ? const CupertinoActivityIndicator()
+                                    : const SizedBox.shrink(),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

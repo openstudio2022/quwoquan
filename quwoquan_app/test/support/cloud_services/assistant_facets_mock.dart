@@ -682,6 +682,8 @@ class AlphaAssistantFacets
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
+    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
+        const <AssistantIntersectionEvidenceRef>[],
   }) async {
     return AssistantTurnEnvelopeWire(
       turnId: 'atn_mock_personal_assistant',
@@ -720,66 +722,67 @@ class AlphaAssistantFacets
     required String runId,
   }) async* {
     final createdAt = DateTime.now().toUtc().toIso8601String();
-    final toolUse = ToolUseWire(
-      toolUseId: 'tu_mock_personal_assistant',
-      turnId: runId,
-      toolName: 'web_search',
-      input: const <String, dynamic>{'query': '找私助 mock stream'},
-      status: 'requested',
-      createdAt: createdAt,
-    );
-    final completedToolUse = ToolUseWire(
-      toolUseId: toolUse.toolUseId,
-      turnId: runId,
-      toolName: toolUse.toolName,
-      input: toolUse.input,
-      status: 'completed',
-      result: const <String, dynamic>{
-        'provider': 'mock',
-        'summary': '找私助 mock stream 已完成工具观察。',
-        'references': <Map<String, dynamic>>[],
-      },
-      createdAt: createdAt,
-      completedAt: createdAt,
-    );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.turn.started',
+      eventId: '$runId:run_started',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 1,
-      eventType: 'turn_started',
-      payload: const <String, dynamic>{'status': 'running'},
+      eventType: 'run_started',
+      payload: const <String, dynamic>{'status': 'running', 'restarted': false},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.requested',
+      eventId: '$runId:process_replace',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 2,
-      eventType: 'tool_use_requested',
-      payload: <String, dynamic>{'toolUse': toolUse.toJson()},
+      eventType: 'process_replace',
+      payload: const <String, dynamic>{'processes': <Object?>[]},
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.tool.completed',
+      eventId: '$runId:tool_execution',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 3,
-      eventType: 'tool_result_received',
-      payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
+      eventType: 'process_append',
+      payload: const <String, dynamic>{
+        'process': <String, dynamic>{
+          'processId': 'tool_execution',
+          'scope': 'skill',
+          'stage': 'tool_execution',
+          'status': 'completed',
+          'order': 1,
+          'summary': '已完成可用信息的核对。',
+          'toolName': 'web_search',
+        },
+      },
       createdAt: createdAt,
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$runId:assistant.answer.final',
+      eventId: '$runId:answer_delta',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 4,
-      eventType: 'final_answer',
+      eventType: 'answer_delta',
       payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      schema: 'assistant_stream_event',
+      eventId: '$runId:completed',
+      conversationId: 'acv_mock_personal_assistant',
+      turnId: runId,
+      seq: 5,
+      eventType: 'completed',
+      payload: const <String, dynamic>{
+        'status': 'completed',
+        'finalAnswer': '找私助 mock stream 已接通。',
+      },
       createdAt: createdAt,
     );
   }

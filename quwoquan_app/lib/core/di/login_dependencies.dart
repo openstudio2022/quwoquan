@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/core/platform/one_tap_login_native_bridge.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 

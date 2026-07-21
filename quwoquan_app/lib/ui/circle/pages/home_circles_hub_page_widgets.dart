@@ -110,6 +110,29 @@ class _CirclesGlobalHeader extends StatelessWidget {
             ],
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
+          CupertinoSlidingSegmentedControl<_HomeCirclesModuleTab>(
+            groupValue: activeModuleTab,
+            children: <_HomeCirclesModuleTab, Widget>{
+              _HomeCirclesModuleTab.recommended: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                ),
+                child: Text(UITextConstants.circleScenarioRecommended),
+              ),
+              _HomeCirclesModuleTab.mine: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                ),
+                child: Text(UITextConstants.circleScenarioMine),
+              ),
+            },
+            onValueChanged: (value) {
+              if (value != null) {
+                onModuleTabChanged(value);
+              }
+            },
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
           SizedBox(
             height: _circleRailHeight(context),
             child: ListView.separated(

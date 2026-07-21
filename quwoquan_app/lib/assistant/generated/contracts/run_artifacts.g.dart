@@ -5,6 +5,7 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class RunArtifactsAnswerDecisionCore {
   const RunArtifactsAnswerDecisionCore({
@@ -143,7 +144,7 @@ class AnswerEvidenceBinding {
     this.label = "",
     this.claim = "",
     this.evidenceId = "",
-    this.url = "",
+    required this.destination,
     this.title = "",
     this.source = "",
     this.snippet = "",
@@ -153,7 +154,7 @@ class AnswerEvidenceBinding {
   final String label;
   final String claim;
   final String evidenceId;
-  final String url;
+  final CitationDestination destination;
   final String title;
   final String source;
   final String snippet;
@@ -163,7 +164,7 @@ class AnswerEvidenceBinding {
         'label': label,
         'claim': claim,
         'evidenceId': evidenceId,
-        'url': url,
+        'destination': destination.toJson(),
         'title': title,
         'source': source,
         'snippet': snippet,
@@ -175,12 +176,13 @@ class AnswerEvidenceBinding {
       label: (json['label'] as String?)?.trim() ?? "",
       claim: (json['claim'] as String?)?.trim() ?? "",
       evidenceId: (json['evidenceId'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
+      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       title: (json['title'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
       snippet: (json['snippet'] as String?)?.trim() ?? "",
     );
   }
+
 }
 
 class AnswerEvidenceBindingFields {
@@ -188,7 +190,7 @@ class AnswerEvidenceBindingFields {
   static const String label = 'label';
   static const String claim = 'claim';
   static const String evidenceId = 'evidenceId';
-  static const String url = 'url';
+  static const String destination = 'destination';
   static const String title = 'title';
   static const String source = 'source';
   static const String snippet = 'snippet';
@@ -412,7 +414,7 @@ class EvidenceLedgerEntry {
     this.dimensionLabel = "",
     this.searchPlanId = "",
     this.title = "",
-    this.url = "",
+    required this.destination,
     this.source = "",
     this.sourceHost = "",
     this.sourceTier = "",
@@ -430,7 +432,7 @@ class EvidenceLedgerEntry {
   final String dimensionLabel;
   final String searchPlanId;
   final String title;
-  final String url;
+  final CitationDestination destination;
   final String source;
   final String sourceHost;
   final String sourceTier;
@@ -448,7 +450,7 @@ class EvidenceLedgerEntry {
         'dimensionLabel': dimensionLabel,
         'searchPlanId': searchPlanId,
         'title': title,
-        'url': url,
+        'destination': destination.toJson(),
         'source': source,
         'sourceHost': sourceHost,
         'sourceTier': sourceTier,
@@ -468,7 +470,7 @@ class EvidenceLedgerEntry {
       dimensionLabel: (json['dimensionLabel'] as String?)?.trim() ?? "",
       searchPlanId: (json['searchPlanId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
+      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       source: (json['source'] as String?)?.trim() ?? "",
       sourceHost: (json['sourceHost'] as String?)?.trim() ?? "",
       sourceTier: (json['sourceTier'] as String?)?.trim() ?? "",
@@ -480,6 +482,7 @@ class EvidenceLedgerEntry {
       retrievedAt: (json['retrievedAt'] as String?)?.trim() ?? "",
     );
   }
+
 }
 
 class EvidenceLedgerEntryFields {
@@ -489,7 +492,7 @@ class EvidenceLedgerEntryFields {
   static const String dimensionLabel = 'dimensionLabel';
   static const String searchPlanId = 'searchPlanId';
   static const String title = 'title';
-  static const String url = 'url';
+  static const String destination = 'destination';
   static const String source = 'source';
   static const String sourceHost = 'sourceHost';
   static const String sourceTier = 'sourceTier';

@@ -49,6 +49,8 @@ api_routes:
       response_type: ChatSendMessageResult
       request_encoder: encodeChatSendMessageCommand
       response_decoder: decodeChatSendMessageResult
+    response_body: ChatSendMessageResult
+    response_body_kind: object
     description: |
       发送消息（一次提交：clientMsgId 是唯一幂等身份，Idempotency-Key header 必须等于 body clientMsgId，
       不一致即拒绝；服务端按 uq_messages_client_message 唯一约束 + 事务内 seq 分配保证重放返回首个
@@ -101,6 +103,13 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 撤回消息（2 分钟内有效；已撤回消息重复撤回为 no-op 并重放原回执）
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      request_type: ChatRecallMessageCommand
+      response_type: ChatCommandAck
+      request_encoder: encodeChatRecallMessageCommand
+      response_decoder: decodeChatCommandAck
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.USER.message_recall_forbidden, CHAT.USER.message_recall_expired, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required
@@ -144,8 +153,16 @@ api_routes:
       reader: MessageHistoryReader
       slice: MessagePageSlice
     description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
-    query_params: [afterSeq, beforeSeq, cursor, limit]
+    query_params: [afterSeq, beforeSeq, limit]
     response_entity: Message
+    response_body: ChatMessageClient
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      request_type: ChatListMessagesQuery
+      response_type: ChatMessagePageSlice
+      request_encoder: encodeChatListMessagesQuery
+      response_decoder: decodeChatMessagePageSlice
     security:
       auth_mode: required
       principal: persona
@@ -187,6 +204,14 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
+    response_body: ChatMessageSyncSlice
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      request_type: ChatSyncMessagesQuery
+      response_type: ChatMessageSyncSlice
+      request_encoder: encodeChatSyncMessagesQuery
+      response_decoder: decodeChatMessageSyncSlice
     error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
     security:
       auth_mode: required

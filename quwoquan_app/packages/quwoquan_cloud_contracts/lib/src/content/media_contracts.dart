@@ -171,6 +171,13 @@ final class ContentMediaAssetSlice {
     required this.status,
     required this.accessPolicy,
     required this.cdnUrl,
+    this.imageWidth,
+    this.imageHeight,
+    this.imageDeliveryContentType,
+    this.imageDominantColor,
+    this.imageLqip,
+    this.imageContentProfile,
+    this.imageDerivativePolicyVersion,
   });
 
   final String assetId;
@@ -181,6 +188,13 @@ final class ContentMediaAssetSlice {
   final ContentMediaProcessingStatus status;
   final ContentMediaAccessPolicy accessPolicy;
   final Uri cdnUrl;
+  final int? imageWidth;
+  final int? imageHeight;
+  final String? imageDeliveryContentType;
+  final String? imageDominantColor;
+  final String? imageLqip;
+  final String? imageContentProfile;
+  final int? imageDerivativePolicyVersion;
 }
 
 final class ContentMediaOriginalAccessGrant {
@@ -327,6 +341,16 @@ ContentMediaAssetSlice decodeContentMediaAssetSlice(Object? value) {
     status: _processingStatus(map, 'status'),
     accessPolicy: _accessPolicy(map, 'accessPolicy'),
     cdnUrl: _uri(map, 'cdnUrl'),
+    imageWidth: _optionalPositiveInteger(map, 'imageWidth'),
+    imageHeight: _optionalPositiveInteger(map, 'imageHeight'),
+    imageDeliveryContentType: _optionalString(map, 'imageDeliveryContentType'),
+    imageDominantColor: _optionalString(map, 'imageDominantColor'),
+    imageLqip: _optionalString(map, 'imageLqip'),
+    imageContentProfile: _optionalString(map, 'imageContentProfile'),
+    imageDerivativePolicyVersion: _optionalPositiveInteger(
+      map,
+      'imageDerivativePolicyVersion',
+    ),
   );
 }
 
@@ -396,6 +420,13 @@ int _positiveInteger(Map<String, Object?> map, String key) {
   final value = _integer(map, key);
   if (value <= 0) throw FormatException('$key must be > 0');
   return value;
+}
+
+int? _optionalPositiveInteger(Map<String, Object?> map, String key) {
+  if (!map.containsKey(key) || map[key] == null) {
+    return null;
+  }
+  return _positiveInteger(map, key);
 }
 
 int _nonNegativeInteger(Map<String, Object?> map, String key) {

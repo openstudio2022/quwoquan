@@ -28,6 +28,9 @@ gwt_acceptance:
     - 贴底选择器在 200ms 目标内出现，搜索只消费 ListMembers typed 结果。
     - 输入框插入 @显示名 与尾随空格，并以主题语义色显示。
     - SendMessage.mentions 只包含仍存在于正文中的稳定 userId，删除 token 后不得误发提醒。
+    - mention_select 与 mention_send 记录为 metadata 生成的
+      chat_interaction_outcome，仅携带 mentionScope、chatOutcome 和人数/未读分桶；
+      不得上报成员 ID、会话 ID、消息 ID、显示名或正文。
     done_when:
     - 输入、选择、删除与发送行为有 local_contract，Mock 与 Remote 参数一致。
     edge_cases:
@@ -39,11 +42,12 @@ gwt_acceptance:
     performance_points:
     - 选择器首批结果 P95 小于 200ms，单次最多 50 项。
     tests:
-      planned:
+      planned: []
+      recorded:
+      - quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
       - quwoquan_app/test/local_contract/ui/chat/widgets/chat_mention_picker__local_contract_test.dart
-      - quwoquan_app/test/local_contract/ui/chat/pages/chat_conversation_page_composer__local_contract_test.dart
-      recorded: []
-    status: pending
+      - quwoquan_app/test/local_contract/ui/chat/providers/chat_message_provider__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -55,7 +59,8 @@ gwt_acceptance:
         envs:
         - local
       supporting: []
-    notes: []
+    notes:
+    - 2026-07-21 已在本地复验 picker、token 删除和 SendMessage.mentions 透传；Remote 参数与真实输入法旅程尚无 gamma_local 证据，不能标记 implemented。
   GWT2:
     title: 服务端目标校验与提及未读
     given:
@@ -67,6 +72,8 @@ gwt_acceptance:
     - 仅 owner/admin 可使用 __all__；普通成员越权被拒且不泄露名册信息。
     - 普通提及只推进目标用户 mentionUnreadCount；__all__ 推进除发送者外全部 user 成员。
     - MarkAsRead 后 unreadCount 与 mentionUnreadCount 均回到服务端权威值。
+    - read_watermark 使用 chat_interaction_outcome 的 watermarkResult 与
+      unreadCountBucket 记录成功、幂等、拒绝或失败结果，且不携带 readSeq 或对象 ID。
     done_when:
     - HTTP、Mongo Message、outbox 与 ConversationUserState 由 api_integration 证明一致且重放幂等。
     edge_cases:
@@ -80,10 +87,11 @@ gwt_acceptance:
     performance_points:
     - 服务端校验随 mentions 数量线性增长且最多 50 次目标查找。
     tests:
-      planned:
+      planned: []
+      recorded:
       - quwoquan_service/services/chat-service/tests/api_integration/message_mention_contract__api_integration_test.go
-      recorded: []
-    status: pending
+      - quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/chat/alpha_message_writer__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: api_integration
@@ -103,7 +111,8 @@ gwt_acceptance:
         - local_contract.chat.mention.mock_role_and_membership_parity
         envs:
         - local
-    notes: []
+    notes:
+    - 2026-07-21 本地已复验 canonical round-trip、越权拒绝、部分已读、延迟投影与重放幂等；beta 环境尚未留证。
   GWT3:
     title: 气泡高亮与主页跳转
     given:
@@ -125,11 +134,10 @@ gwt_acceptance:
     performance_points:
     - 高亮解析相对正文长度与 mentions 数量线性增长，不影响列表 60fps。
     tests:
-      planned:
+      planned: []
+      recorded:
       - quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
-      - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
-      recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -140,15 +148,9 @@ gwt_acceptance:
         - local_contract.chat.mention.profile_target
         envs:
         - local
-      supporting:
-      - layer: user_acceptance
-        execution_profile: release
-        suite: chat_group_management_journey
-        cases:
-        - user_acceptance.chat.group.mention_to_profile
-        envs:
-        - gamma_local
-    notes: []
+      supporting: []
+    notes:
+    - 2026-07-21 气泡高亮与稳定点击目标 local_contract 已复验；双账号提醒到主页的 gamma_local UAT 尚无实跑证据，保持 GATE_BLOCK，不能以无实际 mention 行为的群管理旅程冒充覆盖。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

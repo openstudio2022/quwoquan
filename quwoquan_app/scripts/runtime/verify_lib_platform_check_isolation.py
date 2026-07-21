@@ -12,6 +12,7 @@ This gate scans quwoquan_app/lib (excluding the platform ACL itself) for:
     `BasicMessageChannel(`
   - page-private width breakpoints: `MediaQuery...width > <num>` / `.width >= <num>`
     style hard-coded layout breakpoints (must use AppSpacing breakpoints).
+  - platform SDK imports:          LiveKit / CallKit / native video SDKs
 
 Current occurrences are recorded as an allowlist baseline; new ones fail.
 Allowlist may only shrink (only-decrease).
@@ -52,6 +53,12 @@ CHECKS: list[tuple[str, re.Pattern[str]]] = [
     (
         "private_breakpoint",
         re.compile(r"\.width\s*(?:>=|>|<=|<)\s*\d{2,4}(?:\.\d+)?"),
+    ),
+    (
+        "platform_sdk_import",
+        re.compile(
+            r"package:(?:livekit_client|flutter_callkit_incoming|video_thumbnail)/"
+        ),
     ),
 ]
 

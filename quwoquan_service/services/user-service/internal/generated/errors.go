@@ -76,6 +76,8 @@ var (
 	ErrForbidden                           = errors.New("USER.USER.forbidden")
 	ErrNicknameTaken                       = errors.New("USER.USER.nickname_taken")
 	ErrInvalidArgument                     = errors.New("USER.USER.invalid_argument")
+	ErrAccountEnforcementDecisionInvalid   = errors.New("USER.ACCOUNT.enforcement_decision_invalid")
+	ErrAccountStateConflict                = errors.New("USER.ACCOUNT.state_conflict")
 	ErrRateLimited                         = errors.New("USER.USER.rate_limited")
 	ErrInternalError                       = errors.New("USER.SYSTEM.internal_error")
 	ErrProfileInvalidRegion                = errors.New("USER.PROFILE.invalid_region")
@@ -476,6 +478,18 @@ func AppErrorFromNicknameTaken(debugMessage string) *rerrors.AppError {
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
 	return rerrors.NewAppError(code, "请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromAccountEnforcementDecisionInvalid returns *AppError for USER.ACCOUNT.enforcement_decision_invalid (user_message from errors.yaml).
+func AppErrorFromAccountEnforcementDecisionInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementDecisionInvalid.Error()))
+	return rerrors.NewAppError(code, "账号处置决策无效", debugMessage).WithMetadata("enforcement_decision_invalid", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromAccountStateConflict returns *AppError for USER.ACCOUNT.state_conflict (user_message from errors.yaml).
+func AppErrorFromAccountStateConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAccountStateConflict.Error()))
+	return rerrors.NewAppError(code, "账号当前状态无法执行该操作", debugMessage).WithMetadata("state_conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for USER.USER.rate_limited (user_message from errors.yaml).

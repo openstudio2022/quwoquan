@@ -158,9 +158,18 @@ Prometheus、锁、CAS、回滚目标任一不可用时停止。
   report ACK；
 - ACK 包含 service/instance/image/config/desired/effective/source/updatedAt；
 - Portal drift 的 expected set 从 workload topology 派生，缺 ACK 本身就是 drift；
+- 发布包挂载的 `CONFIG_ROOT` 只允许一条 release 配置路径：
+  `releases/config/<service>/<configVersion>.yaml`。服务启动 loader 与 platform
+  ConfigSnapshot 必须消费同一文件；禁止在运行时工件中复制
+  `quwoquan_service/services/**` 的仓库目录形状。版本文件缺失或解析失败必须使
+  beta/gamma/prod 启动失败，不能以空配置或默认值继续；
 - appVersion/userId 来自可信请求上下文；
 - province/carrier 在边缘从可信代理 IP 信息解析，先删除客户端同名头再重建；
 - 解析失败即维度未知，不默认命中。
+- 灰度路由仅消费 `gray_routing_policy.yaml.policy.stageDimensions`：`gray-initial`
+  与 `carry-on` 各自声明 appVersion/userId/province/carrier 的 OR 匹配集，`full`
+  必须四维全空。禁止保留第二个全局 `dimensions` 集合；未知 rollout stage 使渲染
+  fail-closed，不能静默退化为稳定流量。
 
 ## 8. 数据与验收诚信
 

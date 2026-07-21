@@ -44,9 +44,9 @@ def handle_coverage_discover(args: argparse.Namespace) -> None:
         CoverageMatrixGuardrails,
         completed_discovery_shards,
         coverage_matrix_status,
-        finalize_discovery_source_cells,
         prepare_coverage_matrix,
     )
+    from governance.coverage.coverage_finalize import finalize_discovery_source_cells
 
     provinces = _provinces_arg(args)
     if not provinces:

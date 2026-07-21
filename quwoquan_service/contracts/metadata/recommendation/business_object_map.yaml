@@ -62,6 +62,7 @@ objects:
     append_only_fact:
     - id
     - requestId
+    - userId
     - scenario
     - rank
     - modelBucket
@@ -132,6 +133,7 @@ objects:
   storage_role: append_only
   local_identity_reasons:
     requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
+    userId: recommendation actor key; persona is preferred but device/anonymous actors have no canonical Persona aggregate reference
 - access:
     commands: append_only_sink
     cross_context: event_only
@@ -143,6 +145,7 @@ objects:
     append_only_fact:
     - id
     - requestId
+    - userId
     - personaId
     - targetType
     - targetId
@@ -190,3 +193,4 @@ objects:
   storage_role: append_only
   local_identity_reasons:
     requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object reference
+    userId: recommendation actor key; persona is preferred but device/anonymous actors have no canonical Persona aggregate reference

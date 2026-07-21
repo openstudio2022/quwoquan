@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from core.control_types import RolloutMilestone
+from core.source_digest import current_source_digest
 from governance.coverage import cold_start_supply
 from governance.coverage.cold_start_supply import (
     cold_start_execution_parameters,
@@ -47,44 +48,21 @@ def _write_homepage_binding(
     *,
     execution_id: str,
     refs: tuple[str, ...],
-    names: tuple[str, ...],
 ) -> None:
-    tasks_root = tmp_path / "tasks"
     publish_root = tmp_path / "publish"
-    root = tasks_root / execution_id
-    _write_json(
-        root / "0.plan/target_set.json",
-        {
-            "executionId": execution_id,
-            "selectionPolicy": "frozen",
-            "sourceRef": "quwoquan_data/verticals/travel/coverage/中国/浙江省",
-            "targetCount": len(refs),
-            "targetRefs": list(refs),
-            "targets": [
-                {"name": name, "entityType": ref.rsplit("/", 1)[0]}
-                for name, ref in zip(names, refs, strict=True)
-            ],
-        },
-    )
-    _write_json(
-        root / "publish_ref.json",
-        {
-            "schema": "quwoquan_data.execution_publish_ref",
-            "executionId": execution_id,
-            "canonicalPublishRoot": "quwoquan_data/publish",
-            "publishedRefs": {"entities": list(refs), "posts": []},
-        },
-    )
     for ref in refs:
         object_root = publish_root / "entities" / ref
         object_root.mkdir(parents=True, exist_ok=True)
         (object_root / "page.md").write_text("正文", encoding="utf-8")
-        (object_root / "manifest.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(
-        cold_start_supply,
-        "execution_root",
-        lambda candidate: tasks_root / candidate,
-    )
+        _write_json(
+            object_root / "manifest.json",
+            {
+                "schema": "quwoquan_data.entity_object",
+                "executionId": execution_id,
+                "entityRef": f"/entity/{ref}",
+                "sourceDigest": current_source_digest().to_document(),
+            },
+        )
     monkeypatch.setattr(cold_start_supply, "PUBLISH_ROOT", publish_root)
 
 
@@ -139,7 +117,6 @@ def test_canary_cold_start_uses_contract_canary_targets_after_homepage_publish(
         monkeypatch,
         execution_id=homepage_execution_id,
         refs=zhejiang.canary_entity_refs,
-        names=zhejiang.canary_targets,
     )
 
     parameters = cold_start_execution_parameters(
@@ -169,12 +146,6 @@ def test_canary_cold_start_blocks_when_bound_homepages_are_not_canonical(
     homepage_execution_id = (
         "20260719--travel-homepage-coverage--cn-sichuan--canary-901"
     )
-    tasks_root = tmp_path / "tasks"
-    monkeypatch.setattr(
-        cold_start_supply,
-        "execution_root",
-        lambda candidate: tasks_root / candidate,
-    )
     monkeypatch.setattr(cold_start_supply, "PUBLISH_ROOT", tmp_path / "publish")
     try:
         cold_start_execution_parameters(
@@ -182,6 +153,6 @@ def test_canary_cold_start_blocks_when_bound_homepages_are_not_canonical(
             homepage_execution_id=homepage_execution_id,
         )
     except ValueError as exc:
-        assert "homepage target set" in str(exc)
+        assert "canonical homepage" in str(exc)
     else:
         raise AssertionError("cold-start without bound canonical homepages must block")

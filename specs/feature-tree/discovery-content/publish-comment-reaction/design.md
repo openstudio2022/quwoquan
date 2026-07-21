@@ -129,6 +129,8 @@ canonical catalog artifact
 
 `active →(作者 CAS 软删) deleted`；`active →(operator HideComment) hidden →(operator RestoreComment) active`；`active|hidden →(PostDeleted 级联) tombstoned`。deleted/tombstoned 为终态。前台列表只读 active；「我的评论」向作者展示 hidden 状态标记；计数排除非 active。
 
+Comment 删除、置顶、附件绑定与治理均为命名状态迁移：HTTP 不接受调用方 version，application 层加载当前 aggregate 后以内部 CAS 提交，并只对纯技术冲突有界重放同一领域意图；这既避免客户端快照覆盖，也不把版本冲突作为正常用户失败。附件数量上限由 Comment 聚合在创建与后绑定两条写路径执行，避免 metadata `MAX_ITEMS_9` 只停留在生成契约。
+
 ### 排序与 hotScore 投影
 
 - 一级评论两档服务端排序：`hot`（默认）与 `latest`；置顶段永远在前。

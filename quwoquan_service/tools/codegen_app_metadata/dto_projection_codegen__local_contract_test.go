@@ -111,6 +111,7 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 			{Name: "id", Source: "id", DartType: "String"},
 			{Name: "mentions", Source: "mentions", DartType: "List<String>", Nullable: true},
 			{Name: "timestamp", Source: "timestamp", DartType: "DateTime", Nullable: true},
+			{Name: "createdAt", Source: "createdAt", DartType: "DateTime"},
 		},
 	}
 
@@ -121,6 +122,7 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 		"!m.containsKey('id') || m['id'] == null || (m['id'] is! String)",
 		"m.containsKey('mentions') && m['mentions'] != null && (m['mentions'] is! List || (m['mentions'] as List).any((value) => value is! String))",
 		"DateTime.tryParse(m['timestamp'] as String) == null",
+		"createdAt: DateTime.parse(m['createdAt'] as String)",
 		"'timestamp': timestamp?.toIso8601String()",
 	} {
 		if !strings.Contains(generated, expected) {

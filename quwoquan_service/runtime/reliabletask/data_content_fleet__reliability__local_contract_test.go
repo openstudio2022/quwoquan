@@ -37,7 +37,7 @@ func (r *captureReadyIndex) Ack(context.Context, ReadyIndexMessage) error { retu
 
 func dataJob(i int) DataContentJob {
 	entity := fmt.Sprintf("entity/地点/景区/%03d", i)
-	return DataContentJob{
+	job := DataContentJob{
 		EntityRef:      entity,
 		Carrier:        "homepage",
 		SourceRevision: fmt.Sprintf("sha256:%064d", i+1),
@@ -47,13 +47,23 @@ func dataJob(i int) DataContentJob {
 		Stage:          "author",
 		PartitionKey:   entity,
 	}
+	return bindDataJob(job)
+}
+
+func bindDataJob(job DataContentJob) DataContentJob {
+	key, err := job.ExpectedIdempotencyKey()
+	if err != nil {
+		panic(err)
+	}
+	job.IdempotencyKey = key
+	return job
 }
 
 func dataPublishJob(i int) DataContentJob {
 	job := dataJob(i)
 	job.JobID = fmt.Sprintf("publish-job-%03d", i)
 	job.Stage = "publish"
-	return job
+	return bindDataJob(job)
 }
 
 func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
@@ -76,7 +86,7 @@ func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	if first.OutboxID != second.OutboxID {
-		t.Fatalf("same entity+carrier+sourceRevision+stage duplicated outbox: %s != %s", first.OutboxID, second.OutboxID)
+		t.Fatalf("same execution identity duplicated outbox: %s != %s", first.OutboxID, second.OutboxID)
 	}
 	tasks, err := fleet.Dispatch(ctx, 10)
 	if err != nil {
@@ -84,6 +94,71 @@ func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
 	}
 	if len(tasks) != 0 {
 		t.Fatalf("idempotent replay must not republish completed task: %d", len(tasks))
+	}
+}
+
+func TestDataContentFleetRetryExecutionDoesNotReusePriorTask(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	fleet := DataContentFleet{Store: store, WorkerID: "worker-retry"}
+
+	original := dataJob(1)
+	first, err := fleet.Declare(ctx, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry := original
+	retry.ExecutionID = "20260720--travel-homepage-coverage--cn-zhejiang--canary-002"
+	retry.JobID = "job-001-retry"
+	retry = bindDataJob(retry)
+	second, err := fleet.Declare(ctx, retry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.OutboxID == second.OutboxID {
+		t.Fatalf(
+			"new retry execution reused prior task outbox %q",
+			first.OutboxID,
+		)
+	}
+
+	tasks, err := fleet.Dispatch(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("execution-scoped declarations dispatched=%d want=2", len(tasks))
+	}
+}
+
+func TestDataContentFleetAuditedRecoveryReleasesNewLease(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	fleet := DataContentFleet{
+		Store:    store,
+		WorkerID: "worker-recovery",
+		Retry:    RetryPolicy{MaxAttempts: 1},
+	}
+	job := dataPublishJob(3)
+	if _, err := fleet.Declare(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fleet.Dispatch(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := fleet.ProcessOne(ctx, func(context.Context, ReliableAsyncTask) error {
+		return errors.New("canonical target was present before audited cleanup")
+	}); err != nil || !processed {
+		t.Fatalf("expected terminal publish failure: processed=%v err=%v", processed, err)
+	}
+	recovered, err := fleet.RecoverAuditedDeadJobs(ctx, []DataContentJob{job})
+	if err != nil || recovered != 1 {
+		t.Fatalf("audited dead-task recovery=%d err=%v", recovered, err)
+	}
+	if processed, err := fleet.ProcessOne(ctx, func(context.Context, ReliableAsyncTask) error {
+		return nil
+	}); err != nil || !processed {
+		t.Fatalf("recovered task did not receive a new lease: processed=%v err=%v", processed, err)
 	}
 }
 
@@ -171,13 +246,18 @@ func TestDataContentFleetLoadRecoveryAndDeadLetter(t *testing.T) {
 }
 
 func TestDataContentJobRequiresStableIdentity(t *testing.T) {
-	if _, err := (DataContentJob{EntityRef: "e", Carrier: "homepage"}).IdempotencyKey(); err == nil {
+	if _, err := (DataContentJob{EntityRef: "e", Carrier: "homepage"}).ExpectedIdempotencyKey(); err == nil {
 		t.Fatal("missing sourceRevision must fail closed")
 	}
 	job := dataJob(1)
 	job.ExecutionID = ""
-	if _, err := job.IdempotencyKey(); err == nil {
+	if _, err := job.ExpectedIdempotencyKey(); err == nil {
 		t.Fatal("missing executionId must fail closed")
+	}
+	job = dataJob(1)
+	job.IdempotencyKey = "mismatched-key"
+	if _, err := job.ValidateIdentity(); err == nil {
+		t.Fatal("mismatched declared idempotencyKey must fail closed")
 	}
 }
 
@@ -187,11 +267,11 @@ func TestDataContentJobIdempotencySeparatesObjectStages(t *testing.T) {
 	publish.JobID = "job-publish-001"
 	publish.Stage = "publish"
 
-	authorKey, err := author.IdempotencyKey()
+	authorKey, err := author.ExpectedIdempotencyKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishKey, err := publish.IdempotencyKey()
+	publishKey, err := publish.ExpectedIdempotencyKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +646,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 	job := dataJob(1)
-	key, err := job.IdempotencyKey()
+	key, err := job.ValidateIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +692,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		t.Fatalf("contract fixture was misreported as commercial throughput: %#v", fixtureOnly)
 	}
 	publishJob := dataPublishJob(1)
-	publishKey, err := publishJob.IdempotencyKey()
+	publishKey, err := publishJob.ValidateIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -652,7 +732,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 	job := dataPublishJob(1)
-	key, err := job.IdempotencyKey()
+	key, err := job.ValidateIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}

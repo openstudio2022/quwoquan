@@ -65,7 +65,6 @@ type RunArtifacts struct {
 
 type AssistantRunObservabilityPayload struct {
 	TraceID          string         `json:"traceId,omitempty"`
-	ModelProvider    string         `json:"modelProvider,omitempty"`
 	SkillID          string         `json:"skillId,omitempty"`
 	DomainID         string         `json:"domainId,omitempty"`
 	PhaseDurationsMs map[string]int `json:"phaseDurationsMs,omitempty"`

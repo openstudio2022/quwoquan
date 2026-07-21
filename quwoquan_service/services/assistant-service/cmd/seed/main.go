@@ -110,6 +110,17 @@ func run(parent context.Context, options commandOptions) error {
 	if err := router.PingAll(ctx); err != nil {
 		return runtimewiring.NewDependencyError("redis", "connectivity", err)
 	}
+	messageTransport, err := requireAssistantSeedMessageTransport(
+		ctx,
+		options.Environment,
+		router,
+		map[string]string{
+			"general": cfg.Redis.General.Mode,
+		},
+	)
+	if err != nil {
+		return runtimewiring.NewDependencyError("runtime.message.transport", "preflight", err)
+	}
 
 	deps, err := runtimewiring.OpenPersistentDependencies(ctx, cfg)
 	if err != nil {
@@ -123,7 +134,11 @@ func run(parent context.Context, options commandOptions) error {
 		}
 	}()
 
-	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), assistantServiceName+"-seed", nil)
+	publisher := messaging.NewRedisEventPublisherWithTransport(
+		messageTransport,
+		assistantServiceName+"-seed",
+		nil,
+	)
 	service := application.NewAssistantService(
 		deps.EventStore,
 		deps.ConsentStore,

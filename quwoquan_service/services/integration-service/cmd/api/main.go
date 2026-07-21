@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -26,8 +27,8 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 	httpadapter "quwoquan_service/services/integration-service/internal/adapters/http"
 	"quwoquan_service/services/integration-service/internal/application"
-	"quwoquan_service/services/integration-service/internal/domain/location/model"
 	"quwoquan_service/services/integration-service/internal/infrastructure/provider"
+	"quwoquan_service/services/integration-service/internal/infrastructure/providerbinding"
 )
 
 func main() {
@@ -68,6 +69,17 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
+	locationBinding, locationBindingErr := providerbinding.ResolveLocationLookup(
+		cfg.Environment,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	locationCapabilityBlocked := errors.Is(
+		locationBindingErr,
+		providerbinding.ErrLocationLookupCapabilityBlocked,
+	)
+	if locationBindingErr != nil && !locationCapabilityBlocked {
+		return fmt.Errorf("location provider binding invalid: %w", locationBindingErr)
+	}
 
 	ctx, cancelRuntime := context.WithCancel(context.Background())
 	defer cancelRuntime()
@@ -101,34 +113,48 @@ func run() error {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
 
-	factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
-	factoryCfg.Timeout = time.Duration(cfg.Integration.Location.TimeoutMs) * time.Millisecond
-	factoryCfg.MaxRetries = 0
-	factoryCfg.RetryBackoff = 0
-	factoryCfg.RetryOnCodes = map[int]struct{}{}
-	logCfg := rthttp.HTTPClientMiddlewareConfig{
-		Service:           "integration-service",
-		Origin:            "cloud",
-		Direction:         "outbound",
-		SourceID:          "integration-service.map-provider",
-		Src:               "integration-service",
-		ServiceName:       "integration-service",
-		ServiceInstanceID: "local",
+	var locationService *application.Service
+	locationAdapter := "blocked"
+	locationTimeout := int64(0)
+	if locationCapabilityBlocked {
+		locationService, err = application.NewService(
+			provider.NewUnavailableLocationProvider(locationBindingErr.Error()),
+		)
+	} else {
+		factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
+		factoryCfg.Timeout = locationBinding.Timeout
+		factoryCfg.MaxRetries = 0
+		factoryCfg.RetryBackoff = 0
+		factoryCfg.RetryOnCodes = map[int]struct{}{}
+		logCfg := rthttp.HTTPClientMiddlewareConfig{
+			Service:           "integration-service",
+			Origin:            "cloud",
+			Direction:         "outbound",
+			SourceID:          "integration-service.map-provider",
+			Src:               "integration-service",
+			ServiceName:       "integration-service",
+			ServiceInstanceID: "local",
+		}
+		mapObservedClient := rthttp.NewObservedHTTPClient(
+			nil,
+			factoryCfg,
+			logCfg,
+			ioLogger,
+			processLogger,
+			exceptionLogger,
+		)
+		mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+		cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
+		locationProvider, providerErr := provider.NewLocationProvider(locationBinding, cbClient)
+		if providerErr != nil {
+			return fmt.Errorf("location provider initialization failed: %w", providerErr)
+		}
+		locationService, err = application.NewService(locationProvider)
+		locationAdapter = locationBinding.AdapterID
+		locationTimeout = locationBinding.Timeout.Milliseconds()
 	}
-	mapObservedClient := rthttp.NewObservedHTTPClient(
-		nil,
-		factoryCfg,
-		logCfg,
-		ioLogger,
-		processLogger,
-		exceptionLogger,
-	)
-
-	mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
-	cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
-	clients := map[model.Provider]model.ProviderClient{
-		model.ProviderBaidu: provider.NewBaiduClient(cfg.Integration.Location.BaiduBaseURL, cfg.Integration.Location.BaiduAK, cbClient),
-		model.ProviderAMap:  provider.NewAMapClient(cfg.Integration.Location.AMapBaseURL, cfg.Integration.Location.AMapKey, cbClient),
+	if err != nil {
+		return fmt.Errorf("location application service initialization failed: %w", err)
 	}
 
 	mongoClient, err := mongodb.Connect(
@@ -165,22 +191,6 @@ func run() error {
 		}
 	}
 	_ = prometheus.Register(reliabletask.NewMetricsCollector(reliableStore))
-	catalogClient := provider.NewMongoCatalogClient(
-		mongoClient.Database(cfg.MongoDB.Database),
-	)
-	catalogIndexCtx, cancelCatalogIndexes := context.WithTimeout(ctx, 30*time.Second)
-	catalogIndexErr := catalogClient.EnsureIndexes(catalogIndexCtx)
-	cancelCatalogIndexes()
-	if catalogIndexErr != nil {
-		return fmt.Errorf("location catalog EnsureIndexes failed: %w", catalogIndexErr)
-	}
-	clients[model.ProviderCatalog] = catalogClient
-	locationService := application.NewService(
-		cfg.Integration.Location.PrimaryProvider,
-		cfg.Integration.Location.BackupProvider,
-		clients,
-		log.Default(),
-	)
 
 	externalObservedClient := newExternalObservedHTTPClient(
 		cfg,
@@ -282,11 +292,10 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf(
-		"integration-service listening on %s primary=%s backup=%s timeout_ms=%d",
+		"integration-service listening on %s location_adapter=%s timeout_ms=%d",
 		cfg.Service.HTTP.Addr,
-		cfg.Integration.Location.PrimaryProvider,
-		cfg.Integration.Location.BackupProvider,
-		cfg.Integration.Location.TimeoutMs,
+		locationAdapter,
+		locationTimeout,
 	)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		cancelRuntime()

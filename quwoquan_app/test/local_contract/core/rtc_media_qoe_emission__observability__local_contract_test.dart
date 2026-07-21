@@ -86,12 +86,12 @@ void main() {
       callType: 'audio',
       participantCount: 2,
       abandonedBeforeAcceptance: false,
-      failReasonCode: RtcErrorCode.livekitUnavailable.code,
+      failReasonCode: RtcErrorCode.mediaTransportUnavailable.code,
     );
     expect(failedTerminal!.result, RtcMediaQoeResult.connectFailed);
     expect(
       failedTerminal.failReasonCode,
-      RtcErrorCode.livekitUnavailable.code,
+      RtcErrorCode.mediaTransportUnavailable.code,
     );
   });
 

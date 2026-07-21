@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -110,7 +110,7 @@ Widget _buildHarness({
       currentUserIdProvider.overrideWithValue('user_001'),
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       ...mockContentFacetOverrides(MockContentRepository()),
-      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
     child: ScreenUtilInit(

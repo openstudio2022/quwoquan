@@ -156,6 +156,10 @@ func (h *Handler) handleCreateAppMessage(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handler) handleListAppMessages(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := authenticatedAccountID(w, r)
+	if !ok {
+		return
+	}
 	limit, err := parseLimit(r.URL.Query().Get("limit"))
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -167,7 +171,7 @@ func (h *Handler) handleListAppMessages(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	slice, err := h.appMessageQueries.ListInbox(r.Context(), application.AppMessageInboxQuery{
-		UserID:      actorAccountID(r),
+		UserID:      accountID,
 		MessageType: r.URL.Query().Get("type"),
 		Read:        read,
 		Cursor:      r.URL.Query().Get("cursor"),
@@ -181,7 +185,11 @@ func (h *Handler) handleListAppMessages(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) handleGetAppMessage(w http.ResponseWriter, r *http.Request) {
-	message, err := h.appMessageQueries.GetDetail(r.Context(), actorAccountID(r), r.PathValue("messageId"))
+	accountID, ok := authenticatedAccountID(w, r)
+	if !ok {
+		return
+	}
+	message, err := h.appMessageQueries.GetDetail(r.Context(), accountID, r.PathValue("messageId"))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -190,7 +198,11 @@ func (h *Handler) handleGetAppMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleAckAppMessage(w http.ResponseWriter, r *http.Request) {
-	message, err := h.appMessageCommands.Acknowledge(r.Context(), actorAccountID(r), r.PathValue("messageId"))
+	accountID, ok := authenticatedAccountID(w, r)
+	if !ok {
+		return
+	}
+	message, err := h.appMessageCommands.Acknowledge(r.Context(), accountID, r.PathValue("messageId"))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -199,7 +211,11 @@ func (h *Handler) handleAckAppMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleReadAppMessage(w http.ResponseWriter, r *http.Request) {
-	message, err := h.appMessageCommands.MarkRead(r.Context(), actorAccountID(r), r.PathValue("messageId"))
+	accountID, ok := authenticatedAccountID(w, r)
+	if !ok {
+		return
+	}
+	message, err := h.appMessageCommands.MarkRead(r.Context(), accountID, r.PathValue("messageId"))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -208,7 +224,11 @@ func (h *Handler) handleReadAppMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleUnreadCount(w http.ResponseWriter, r *http.Request) {
-	slice, err := h.appMessageQueries.GetUnreadCount(r.Context(), actorAccountID(r))
+	accountID, ok := authenticatedAccountID(w, r)
+	if !ok {
+		return
+	}
+	slice, err := h.appMessageQueries.GetUnreadCount(r.Context(), accountID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -272,8 +292,23 @@ func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
 	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
-func actorAccountID(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+func authenticatedAccountID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	accountID := ""
+	if ok {
+		accountID = strings.TrimSpace(principal.Actor.AccountID)
+	}
+	if accountID == "" {
+		writeHTTPError(
+			w,
+			r,
+			generated.AppErrorFromUnauthorized(
+				"app message inbox requires a trusted account principal",
+			),
+		)
+		return "", false
+	}
+	return accountID, true
 }
 
 func parseLimit(raw string) (int, error) {

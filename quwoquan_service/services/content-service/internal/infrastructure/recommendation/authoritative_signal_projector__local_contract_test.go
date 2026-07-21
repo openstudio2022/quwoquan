@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	runtimelearning "quwoquan_service/runtime/learning"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
@@ -34,6 +35,19 @@ func (c *capturedSignals) ProcessSignalBatch(_ context.Context, signals []rtrec.
 
 type capturedEvents struct {
 	events []ports.RawBehaviorEvent
+}
+
+type capturedLearningEvents struct {
+	events []runtimelearning.Event
+}
+
+func (c *capturedLearningEvents) RecordEvent(_ context.Context, event runtimelearning.Event) error {
+	c.events = append(c.events, event)
+	return nil
+}
+
+func (*capturedLearningEvents) RecordScorecard(context.Context, runtimelearning.Scorecard) error {
+	return nil
 }
 
 func (c *capturedEvents) InsertBatch(_ context.Context, events []ports.RawBehaviorEvent) error {
@@ -121,6 +135,32 @@ func TestReactionSignalProjector_ClearedAndNonLikeIgnored(t *testing.T) {
 	}
 	if len(signals.batches) != 0 {
 		t.Fatalf("cleared/comment-target facts must not produce signals, got %+v", signals.batches)
+	}
+}
+
+func TestAuthoritativeSignalSkipsLearningWithoutFeedRequestID(t *testing.T) {
+	sink, signals, events := testSink()
+	learning := &capturedLearningEvents{}
+	sink.AttachFeedback(rtrec.NewFeedbackRecorder(learning))
+
+	if err := sink.emit(context.Background(), rtrec.BehaviorSignal{
+		UserID: "user_1", SessionID: "outbox-session", ContentID: "post_1",
+		Action: "like", ClientEventID: "authoritative:reaction:r1:1",
+	}); err != nil {
+		t.Fatalf("unattributed authoritative signal must remain processable: %v", err)
+	}
+	if len(signals.batches) != 1 || len(events.events) != 1 {
+		t.Fatalf(
+			"unattributed authoritative signal must preserve HotPath and behavior projection: signals=%+v events=%+v",
+			signals.batches,
+			events.events,
+		)
+	}
+	if len(learning.events) != 0 {
+		t.Fatalf(
+			"unattributed authoritative signal must not emit an unjoinable learning fact: %+v",
+			learning.events,
+		)
 	}
 }
 

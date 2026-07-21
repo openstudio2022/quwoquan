@@ -86,6 +86,23 @@ entities:
     - username
     web:
       path_template: u/{username}
+
+# canonical search object type → 已登记 link template。codegen 以此生成站内
+# CitationDestination 的 deep link 与 route path；未知 object type 不产生可点击引用。
+citation_destinations:
+  internal:
+    - object_type: chat.conversation
+      entity: chat
+    - object_type: circle.circle
+      entity: circle
+    - object_type: content.post
+      entity: post
+    - object_type: entity.homepage
+      entity: entity_homepage
+    - object_type: user.profile
+      entity: user
+  external:
+    allowed_schemes: [https]
 runtime_origin_binding:
   dart_define_key: PUBLIC_WEB_BASE_URL
   description: '公网可复制链接的 origin 仅来自运行时：

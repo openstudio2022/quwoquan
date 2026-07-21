@@ -14,9 +14,9 @@ func TestCredentialBindingLifecycleIsOneWay(t *testing.T) {
 	bound, err := bindingmodel.Bind(bindingmodel.BindParams{
 		ID:             "binding-1",
 		OwnerID:        "account-1",
-		CredentialType: bindingmodel.CredentialTypeWechat,
-		CredentialKey:  "wechat-subject-ref",
-		DisplayLabel:   "微信",
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+		CredentialKey:  "federated-subject-ref",
+		DisplayLabel:   "联邦账号",
 		EventID:        "event-bound-1",
 		BoundAt:        boundAt,
 	})
@@ -65,9 +65,9 @@ func TestCredentialBindingRecoverableCredentialTypes(t *testing.T) {
 	recoverable := []bindingmodel.CredentialType{
 		bindingmodel.CredentialTypePhone,
 		bindingmodel.CredentialTypeCarrierPhone,
-		bindingmodel.CredentialTypeWechat,
-		bindingmodel.CredentialTypeAlipay,
-		bindingmodel.CredentialTypeQQ,
+		bindingmodel.CredentialTypeFederatedSlotA,
+		bindingmodel.CredentialTypeFederatedSlotB,
+		bindingmodel.CredentialTypeFederatedSlotC,
 		bindingmodel.CredentialTypeApple,
 		bindingmodel.CredentialTypePasskey,
 	}

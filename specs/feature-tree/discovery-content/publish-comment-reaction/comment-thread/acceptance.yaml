@@ -245,6 +245,7 @@ gwt_acceptance:
         - file: quwoquan_app/test/local_contract/cloud/content/contract/content_comment_contract__local_contract_test.dart
         - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_input_overlay__local_contract_test.dart
         - file: quwoquan_service/services/content-service/internal/adapters/http/comment_operations__local_contract_test.go
+        - file: quwoquan_service/services/content-service/tests/local_contract/comment_aggregate__command_query__local_contract_test.go
         - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
     status: partial
     test_evidence:
@@ -388,12 +389,13 @@ gwt_acceptance:
       supporting: []
 
   GWT12:
-    title: 置顶与删除使用 aggregate version CAS
-    given: [Post owner 和 Comment author 已读取当前 version]
+    title: 置顶与删除以服务端内部 CAS 执行命名意图
+    given: [Post owner 和 Comment author 分别发起置顶或删除意图]
     when: [执行 pin/unpin 或 delete]
     then:
       - 置顶仅允许 Post owner 操作一级 Comment。
-      - 陈旧 version 返回稳定 conflict，不覆盖新状态。
+      - 服务端加载当前 aggregate version，以有界内部 CAS 重放纯技术冲突；调用方不携带 expectedVersion/If-Match。
+      - 相同 Idempotency-Key 重放原 receipt，不覆盖后续状态。
     done_when: [aggregate、HTTP、Mongo API 与 App widget 契约一致]
     edge_cases: [回复置顶, 非 owner, 重复幂等命令]
     contract_refs: [content.comment.PinComment, content.comment.UnpinComment, content.comment.DeleteComment]
@@ -490,7 +492,7 @@ gwt_acceptance:
     when: [作者删除、operator 隐藏/恢复，或宿主 Post 删除]
     then:
       - 状态只允许 active→deleted、active→hidden→active、active|hidden→tombstoned。
-      - deleted/tombstoned 为终态，非法迁移与陈旧 expectedVersion 返回稳定 conflict。
+      - deleted/tombstoned 为终态，非法迁移返回稳定 conflict；调用方不传 expectedVersion，服务端仅对内部技术 CAS 冲突有界重放。
       - 前台列表、回复和计数只包含 active；作者私有投影可见 hidden 状态。
       - 举报只写既有 Report 聚合，ResolveReport 通过治理命令处置并保留 CommentModerated 审计事实。
     done_when: [状态机、HTTP、真实 Mongo/outbox、Report 协作和 operator 权限负例全部通过]

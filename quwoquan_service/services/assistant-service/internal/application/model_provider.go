@@ -21,6 +21,7 @@ type ModelRequest struct {
 	Observation             map[string]any
 	UserQuestion            string
 	ContextTurns            []assistant.AssistantConversationContextTurn
+	IntersectionEvidence    []assistant.AuthorizedIntersectionEvidence
 	SessionPreferenceFacts  []preferencemodel.Snapshot
 	LongTermPreferenceFacts []preferencemodel.Snapshot
 	SkillCatalog            []skillpkg.Manifest
@@ -52,9 +53,10 @@ type DeterministicModelProvider struct{}
 
 func deterministicClientTrace(req ModelRequest, responseText string) map[string]any {
 	prompt := fmt.Sprintf(
-		"%s%s%s\n用户问题：%s",
+		"%s%s%s%s\n用户问题：%s",
 		req.Prompt,
 		FormatModelContextForPrompt(req.ContextTurns),
+		FormatAuthorizedIntersectionEvidenceForPrompt(req.IntersectionEvidence),
 		FormatModelPreferencesForPrompt(
 			req.SessionPreferenceFacts,
 			req.LongTermPreferenceFacts,
@@ -101,6 +103,35 @@ func FormatModelPreferencesForPrompt(
 		if instruction := preferenceInstruction(kind, effective[kind]); instruction != "" {
 			lines = append(lines, "- "+instruction)
 		}
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
+// FormatAuthorizedIntersectionEvidenceForPrompt 只序列化 content Reader 已回查的
+// 当前事实；禁止把客户端交集卡标题、标签、URL 或样本透传给模型。
+func FormatAuthorizedIntersectionEvidenceForPrompt(
+	evidence []assistant.AuthorizedIntersectionEvidence,
+) string {
+	if len(evidence) == 0 {
+		return ""
+	}
+	lines := []string{
+		"\n经当前账号授权回查的交集事实（仅可据此说明，不得补造未列出的细节）：",
+	}
+	for _, item := range evidence {
+		text := strings.TrimSpace(item.PrimaryText)
+		if text == "" {
+			continue
+		}
+		target := strings.TrimSpace(item.ObjectTypeRef) + "/" + strings.TrimSpace(item.ObjectID)
+		meta := strings.TrimSpace(item.SourceRef)
+		if dimension := strings.TrimSpace(item.Dimension); dimension != "" {
+			meta += " · " + dimension
+		}
+		lines = append(lines, fmt.Sprintf("- [%s；%s] %s", target, meta, text))
 	}
 	if len(lines) == 1 {
 		return ""

@@ -91,9 +91,9 @@
 | 类型 | 创建方式 | 解散能力 | 生命周期 |
 |---|---|---|---|
 | `group` 私建群 | 全局入口手动创建 | 仅群主可解散 | `active -> dissolved` |
-| `group`（`circleId` 非空）圈子绑定默认群 | 由圈子绑定/事件同步 | 禁止单独解散 | 绑定 `Circle.conversationId` |
+| `group`（`circleGroupId` 非空）圈群绑定会话 | 仅由 CircleGroup outbox 事件供应 | 禁止 Chat 侧单独解散或治理成员 | 绑定 `CircleGroup.conversationId` |
 
-危险操作的服务端校验必须基于“是否绑定 `circleId`”这类生命周期真相源，而不是只靠前端隐藏按钮。
+危险操作的服务端校验必须基于 `circleGroupId` 这类生命周期真相源，而不是只靠前端隐藏按钮。CircleGroupMembership 是圈群成员与角色的唯一写入者；chat-service 只以可重放 durable projector 落地其成员事实。
 
 ### KD-5：后续加人与初始建群复用同一成员资格规则
 
@@ -183,9 +183,9 @@
 
 ### circle contract
 
-- 继续使用 `Circle.conversationId`
-- 继续使用 `autoSyncChat`
-- 明确圈子群不可解散的消费边界
+- `CircleGroup.conversationId` 与 `Conversation.circleGroupId` 由双向 durable binding event 维护，一对一且唯一
+- CircleGroupMembership active / left / removed / role_changed 驱动 Chat 名册；Chat 不接受圈群绑定字段或成员治理字段的普通 HTTP 写入
+- 明确圈群不可解散、不可转让群主、不可在 Chat 侧编辑管理员的消费边界
 
 ### user contract
 

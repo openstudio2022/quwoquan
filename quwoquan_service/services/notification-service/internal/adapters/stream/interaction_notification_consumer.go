@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/notification-service/internal/application"
 )
 
@@ -38,8 +38,13 @@ type InteractionFailureStore interface {
 	ClearInteractionFailure(ctx context.Context, stream string, messageID string) error
 }
 
+type DurableMessageTransport interface {
+	runtimemessaging.MessageTransport
+	runtimemessaging.DurableDeliveryTransport
+}
+
 type InteractionNotificationConsumer struct {
-	redis       rtredis.Client
+	transport   DurableMessageTransport
 	facade      *application.AppMessageCommandFacade
 	failures    InteractionFailureStore
 	consumer    string
@@ -52,15 +57,15 @@ type InteractionNotificationConsumer struct {
 }
 
 func NewInteractionNotificationConsumer(
-	redis rtredis.Client,
+	transport DurableMessageTransport,
 	facade *application.AppMessageCommandFacade,
 	failures InteractionFailureStore,
 	consumer string,
 	logger *slog.Logger,
 ) (*InteractionNotificationConsumer, error) {
-	if redis == nil || facade == nil || failures == nil {
+	if transport == nil || facade == nil || failures == nil {
 		return nil, fmt.Errorf(
-			"interaction notification consumer requires redis, app message facade, and failure store",
+			"interaction notification consumer requires message transport, app message facade, and failure store",
 		)
 	}
 	if logger == nil {
@@ -71,19 +76,24 @@ func NewInteractionNotificationConsumer(
 		consumer = "notification-interaction-projector"
 	}
 	return &InteractionNotificationConsumer{
-		redis:    redis,
-		facade:   facade,
-		failures: failures,
-		consumer: consumer,
-		streams:  append([]string(nil), application.InteractionNotificationStreams...),
-		minIdle:  interactionDefaultMinIdleTime,
-		logger:   logger,
+		transport: transport,
+		facade:    facade,
+		failures:  failures,
+		consumer:  consumer,
+		streams:   append([]string(nil), application.InteractionNotificationStreams...),
+		minIdle:   interactionDefaultMinIdleTime,
+		logger:    logger,
 	}, nil
 }
 
 func (c *InteractionNotificationConsumer) EnsureGroups(ctx context.Context) error {
 	for _, stream := range c.streams {
-		if err := c.redis.XGroupCreateMkStream(ctx, stream, interactionConsumerGroup, "0"); err != nil {
+		if err := c.transport.EnsureDurableConsumerGroup(
+			ctx,
+			stream,
+			interactionConsumerGroup,
+			"0",
+		); err != nil {
 			return fmt.Errorf("ensure consumer group for %s: %w", stream, err)
 		}
 	}
@@ -153,15 +163,23 @@ func (c *InteractionNotificationConsumer) processStream(
 	ctx context.Context,
 	stream string,
 ) (int, error) {
-	claimed, _, err := c.redis.XAutoClaim(
+	claimed, _, err := c.transport.ReclaimDurable(
 		ctx, stream, interactionConsumerGroup, c.consumer, c.minIdle, "0-0",
 		interactionDefaultBatch,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("auto-claim %s: %w", stream, err)
 	}
-	fresh, err := c.redis.XReadGroup(ctx, interactionConsumerGroup, c.consumer,
-		map[string]string{stream: ">"}, interactionDefaultBatch, 100*time.Millisecond)
+	fresh, err := c.transport.ReadDurable(
+		ctx,
+		runtimemessaging.StreamReadRequest{
+			Stream:   stream,
+			Group:    interactionConsumerGroup,
+			Consumer: c.consumer,
+			Count:    interactionDefaultBatch,
+			Block:    100 * time.Millisecond,
+		},
+	)
 	if err != nil {
 		return 0, fmt.Errorf("read %s: %w", stream, err)
 	}
@@ -182,7 +200,7 @@ func (c *InteractionNotificationConsumer) processStream(
 func (c *InteractionNotificationConsumer) processMessage(
 	ctx context.Context,
 	stream string,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) error {
 	event, err := normalizeInteractionMessage(stream, message)
 	if err == nil {
@@ -200,7 +218,7 @@ func (c *InteractionNotificationConsumer) processMessage(
 	}
 	if err != nil {
 		attempts, recordErr := c.failures.RecordInteractionFailure(
-			ctx, stream, message.ID, message.Values["eventId"], err,
+			ctx, stream, message.ID, durableFieldValue(message.Fields, "eventId"), err,
 		)
 		if recordErr != nil {
 			return fmt.Errorf("record interaction failure: %w", recordErr)
@@ -212,20 +230,38 @@ func (c *InteractionNotificationConsumer) processMessage(
 			)
 		}
 		dlqStream := stream + interactionDLQSuffix
-		if _, dlqErr := c.redis.XAdd(
-			ctx, dlqStream, interactionDLQValues(stream, message, err, attempts),
+		if _, dlqErr := c.transport.AppendDurable(
+			ctx,
+			runtimemessaging.DurableMessage{
+				Stream: dlqStream,
+				Fields: interactionDLQFields(stream, message, err, attempts),
+			},
 		); dlqErr != nil {
 			return fmt.Errorf("append interaction DLQ %s: %w", dlqStream, dlqErr)
 		}
-		if expireErr := c.redis.Expire(ctx, dlqStream, interactionDLQRetention); expireErr != nil {
+		if expireErr := c.transport.SetDurableRetention(
+			ctx,
+			dlqStream,
+			interactionDLQRetention,
+		); expireErr != nil {
 			return fmt.Errorf("refresh interaction DLQ retention: %w", expireErr)
 		}
-		if ackErr := c.redis.XAck(ctx, stream, interactionConsumerGroup, message.ID); ackErr != nil {
+		if ackErr := c.transport.AckDurable(
+			ctx,
+			stream,
+			interactionConsumerGroup,
+			message.ID,
+		); ackErr != nil {
 			return fmt.Errorf("ack dead-lettered interaction event: %w", ackErr)
 		}
 		return c.failures.ClearInteractionFailure(ctx, stream, message.ID)
 	}
-	if err := c.redis.XAck(ctx, stream, interactionConsumerGroup, message.ID); err != nil {
+	if err := c.transport.AckDurable(
+		ctx,
+		stream,
+		interactionConsumerGroup,
+		message.ID,
+	); err != nil {
 		return fmt.Errorf("ack interaction event on %s: %w", stream, err)
 	}
 	return c.failures.ClearInteractionFailure(ctx, stream, message.ID)
@@ -236,9 +272,9 @@ func (c *InteractionNotificationConsumer) processMessage(
 // 类型字段，eventType 是 content/circle 信封的类型字段。
 func normalizeInteractionMessage(
 	stream string,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 ) (application.InteractionStreamEvent, error) {
-	values := message.Values
+	values := durableFieldsToMap(message.Fields)
 	eventType := strings.TrimSpace(values["eventType"])
 	if eventType == "" {
 		eventType = strings.TrimSpace(values["eventName"])
@@ -268,9 +304,11 @@ func normalizeInteractionMessage(
 	}, nil
 }
 
-func uniqueStreamMessages(groups ...[]rtredis.StreamMessage) []rtredis.StreamMessage {
+func uniqueStreamMessages(
+	groups ...[]runtimemessaging.StreamDelivery,
+) []runtimemessaging.StreamDelivery {
 	seen := make(map[string]struct{})
-	result := make([]rtredis.StreamMessage, 0)
+	result := make([]runtimemessaging.StreamDelivery, 0)
 	for _, messages := range groups {
 		for _, message := range messages {
 			if _, exists := seen[message.ID]; exists {
@@ -283,12 +321,13 @@ func uniqueStreamMessages(groups ...[]rtredis.StreamMessage) []rtredis.StreamMes
 	return result
 }
 
-func interactionDLQValues(
+func interactionDLQFields(
 	stream string,
-	message rtredis.StreamMessage,
+	message runtimemessaging.StreamDelivery,
 	cause error,
 	attempts int64,
-) map[string]string {
+) []runtimemessaging.DurableField {
+	messageValues := durableFieldsToMap(message.Fields)
 	values := map[string]string{
 		"sourceStream":   stream,
 		"streamId":       message.ID,
@@ -296,10 +335,10 @@ func interactionDLQValues(
 		"attempts":       strconv.FormatInt(attempts, 10),
 		"deadLetteredAt": time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	for key, value := range message.Values {
+	for key, value := range messageValues {
 		values[key] = value
 	}
-	return values
+	return durableFieldsFromMap(values)
 }
 
 func (c *InteractionNotificationConsumer) recordSuccess() {

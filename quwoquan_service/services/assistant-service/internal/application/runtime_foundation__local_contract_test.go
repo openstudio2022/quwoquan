@@ -40,7 +40,11 @@ func TestRuntimeFoundationSmoke(t *testing.T) {
 		t.Fatalf("recovery action = %s", decision.Action)
 	}
 
-	envelope, err := streaming.NewEnvelope("assistant.turn.started", 1, map[string]string{"turnId": turnID})
+	envelope, err := streaming.NewEnvelope(
+		string(AssistantStreamEventRunStarted),
+		1,
+		map[string]string{"turnId": turnID},
+	)
 	if err != nil {
 		t.Fatalf("NewEnvelope() error = %v", err)
 	}

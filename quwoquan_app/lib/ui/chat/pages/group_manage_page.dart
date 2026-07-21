@@ -114,6 +114,8 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
       isDark,
     );
     final loadError = membersState.error;
+    final circleGroupID = membersState.groupSettings.circleGroupId.trim();
+    final circleID = membersState.groupSettings.circleId.trim();
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
@@ -133,6 +135,47 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                   await notifier.load();
                 }
               },
+            )
+          : circleGroupID.isNotEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+                right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+                top: AppSpacing.intraGroupSm,
+                bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                SettingsInsetGroupedSection(
+                  isDark: isDark,
+                  density: SettingsInsetSectionDensity.compact,
+                  child: SettingsInsetFormRow(
+                    isDark: isDark,
+                    label: ChatText.circleGroupManagedNotice,
+                    trailing: Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconMedium,
+                      color: chevronColor,
+                    ),
+                    onTap: circleID.isEmpty
+                        ? null
+                        : () => context.go(
+                            AppRoutePaths.circleDetail(id: circleID),
+                          ),
+                  ),
+                ),
+                SizedBox(
+                  height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+                ),
+                Text(
+                  ChatText.openCircleGroupManagement,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: SettingsSemanticConstants.labelColor(isDark),
+                  ),
+                ),
+              ],
             )
           : SizedBox.expand(
               child: ListView(

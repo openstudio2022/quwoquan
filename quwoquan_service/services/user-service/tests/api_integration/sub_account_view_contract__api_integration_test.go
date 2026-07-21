@@ -9,6 +9,21 @@ import (
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 )
 
+func seedSubAccountViewViewer(t *testing.T) map[string]string {
+	t.Helper()
+	createTestProfile(t, "viewer_subject", "viewer_subject")
+	createTestPersonaFull(
+		t,
+		"viewer_subject_persona_record",
+		"viewer_subject",
+		"viewer_subject_persona",
+		"资料查看者",
+		"open",
+		true,
+	)
+	return authHeadersForPersona("viewer_subject", "viewer_subject_persona")
+}
+
 func TestSubAccountView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "owner_me_profile", "owner_me")
@@ -99,7 +114,13 @@ func TestSubAccountView_GetSubAccountProfile(t *testing.T) {
 		t.Fatalf("seed public persona background: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/public_view", "", authHeaders("viewer_subject"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/public_view",
+		"",
+		seedSubAccountViewViewer(t),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get sub-account profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -153,7 +174,13 @@ func TestSubAccountView_PersonaAvatarVersionOverridesOwner(t *testing.T) {
 		t.Fatalf("seed owner avatar version: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/persona_avatar_handle", "", authHeaders("viewer_subject"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/persona_avatar_handle",
+		"",
+		seedSubAccountViewViewer(t),
+	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get persona profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -175,7 +202,13 @@ func TestSubAccountView_StrictPersonaReturnsNotFound(t *testing.T) {
 		t.Fatalf("seed user_handle: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/strict_hidden", "", authHeaders("viewer_subject"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/strict_hidden",
+		"",
+		seedSubAccountViewViewer(t),
+	)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("strict persona should be hidden with 404, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -190,7 +223,13 @@ func TestSubAccountView_RetiredPersonaReturnsNotFound(t *testing.T) {
 	}
 	seedPersonaPostHistory(t, "sa_retired_profile")
 
-	rec := doRequest(t, http.MethodGet, "/user/retired_hidden", "", authHeaders("viewer_subject"))
+	rec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/retired_hidden",
+		"",
+		seedSubAccountViewViewer(t),
+	)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("retired persona should be hidden with 404, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -210,11 +249,24 @@ func TestSubAccountMetrics_PublicReadAndVisibilityMiss(t *testing.T) {
 		t.Fatalf("seed hidden handle: %v", err)
 	}
 
-	visibleRec := doRequest(t, http.MethodGet, "/user/metrics_visible", "", authHeaders("viewer_subject"))
+	viewerHeaders := seedSubAccountViewViewer(t)
+	visibleRec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/metrics_visible",
+		"",
+		viewerHeaders,
+	)
 	if visibleRec.Code != http.StatusOK {
 		t.Fatalf("expected visible persona 200, got %d: %s", visibleRec.Code, visibleRec.Body.String())
 	}
-	hiddenRec := doRequest(t, http.MethodGet, "/user/metrics_hidden", "", authHeaders("viewer_subject"))
+	hiddenRec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/metrics_hidden",
+		"",
+		viewerHeaders,
+	)
 	if hiddenRec.Code != http.StatusNotFound {
 		t.Fatalf("expected strict persona 404, got %d: %s", hiddenRec.Code, hiddenRec.Body.String())
 	}

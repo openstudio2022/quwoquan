@@ -120,6 +120,21 @@ void main() {
 
       expect(find.text(ChatText.dissolveGroupChat), findsOneWidget);
     });
+
+    testWidgets('圈群绑定会话不显示 Chat 侧治理动作', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _CircleGroupManagedSettingsRepo()),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text(ChatText.circleGroupManagedNotice), findsOneWidget);
+      expect(find.byType(CupertinoSwitch), findsNothing);
+      expect(find.text(ChatText.transferOwnership), findsNothing);
+      expect(find.text(ChatText.groupAdmins), findsNothing);
+      expect(find.text(ChatText.dissolveGroupChat), findsNothing);
+    });
   });
 
   group('GroupManagePage — 交互契约', () {
@@ -187,6 +202,17 @@ class _ErrorSettingsRepo extends MockChatRepository {
   @override
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
     throw Exception('settings error');
+  }
+}
+
+class _CircleGroupManagedSettingsRepo extends MockChatRepository {
+  @override
+  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
+    return ChatGroupSettingsDto(
+      conversationType: 'group',
+      circleId: 'fixture_circle',
+      circleGroupId: 'fixture_circle_group',
+    );
   }
 }
 

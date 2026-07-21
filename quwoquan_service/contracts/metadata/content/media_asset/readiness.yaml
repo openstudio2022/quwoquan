@@ -16,6 +16,7 @@ implementation:
   store:
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_asset.go
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_checkpoint.go
+    - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_processing_dead_letter.go
   outbox:
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_asset.go
     - quwoquan_service/services/content-service/internal/infrastructure/persistence/media_mongo_outbox.go

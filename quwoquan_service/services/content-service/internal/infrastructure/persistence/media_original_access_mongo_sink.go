@@ -2,12 +2,15 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
 	mediaports "quwoquan_service/services/content-service/internal/domain/media/ports"
@@ -15,13 +18,15 @@ import (
 )
 
 type mediaOriginalAccessFactDocument struct {
-	AuditID        string    `bson:"_id"`
-	AssetID        string    `bson:"assetId"`
-	ViewerID       string    `bson:"viewerId"`
-	Purpose        string    `bson:"purpose"`
-	IdempotencyKey string    `bson:"idempotencyKey"`
-	GrantedAt      time.Time `bson:"grantedAt"`
-	ExpiresAt      time.Time `bson:"expiresAt"`
+	AuditID        string     `bson:"_id"`
+	AssetID        string     `bson:"assetId"`
+	ViewerID       string     `bson:"viewerId"`
+	Purpose        string     `bson:"purpose"`
+	Outcome        string     `bson:"outcome"`
+	Reason         string     `bson:"reason"`
+	IdempotencyKey string     `bson:"idempotencyKey"`
+	GrantedAt      time.Time  `bson:"grantedAt"`
+	ExpiresAt      *time.Time `bson:"expiresAt,omitempty"`
 }
 
 type mediaOriginalAccessReceiptDocument struct {
@@ -42,6 +47,11 @@ func (s *MongoMediaStore) AppendMediaOriginalAccess(
 			"media original access append requires command digest",
 		)
 	}
+	if strings.EqualFold(request.Fact.Outcome, "granted") && !request.RateLimit.IsValid() {
+		return mediaports.MediaOriginalAccessAppendResult{}, errors.New(
+			"media original access append requires a valid rate limit policy",
+		)
+	}
 	if replayed, found, err := s.findMediaOriginalAccessReceipt(ctx, request.Fact.IdempotencyKey, request.CommandDigest); err != nil || found {
 		return replayed, err
 	}
@@ -57,6 +67,15 @@ func (s *MongoMediaStore) AppendMediaOriginalAccess(
 		} else if found {
 			result = replayed
 			return nil, nil
+		}
+		if strings.EqualFold(request.Fact.Outcome, "granted") {
+			if rateLimitErr := s.reserveMediaOriginalAccessRateLimit(
+				txCtx,
+				request.Fact,
+				request.RateLimit,
+			); rateLimitErr != nil {
+				return nil, rateLimitErr
+			}
 		}
 		factDocument := mediaOriginalAccessFactDocumentFrom(request.Fact)
 		if _, insertErr := s.originalAccessFacts.InsertOne(txCtx, factDocument); insertErr != nil {
@@ -74,6 +93,45 @@ func (s *MongoMediaStore) AppendMediaOriginalAccess(
 		return mediaports.MediaOriginalAccessAppendResult{}, err
 	}
 	return result, nil
+}
+
+func (s *MongoMediaStore) reserveMediaOriginalAccessRateLimit(
+	ctx context.Context,
+	fact mediamodel.MediaOriginalAccessFact,
+	limit mediaports.MediaOriginalAccessRateLimit,
+) error {
+	windowStart := fact.GrantedAt.UTC().Truncate(limit.Window)
+	keyInput := strings.Join([]string{
+		strings.TrimSpace(fact.ViewerID),
+		strings.TrimSpace(fact.AssetID),
+		strings.TrimSpace(fact.Purpose),
+		windowStart.Format(time.RFC3339Nano),
+	}, ":")
+	digest := sha256.Sum256([]byte(keyInput))
+	limitID := hex.EncodeToString(digest[:])
+	_, err := s.originalAccessRateLimits.UpdateOne(
+		ctx,
+		bson.D{
+			{Key: "_id", Value: limitID},
+			{Key: "count", Value: bson.D{{Key: "$lt", Value: limit.MaxGrants}}},
+		},
+		bson.D{
+			{Key: "$inc", Value: bson.D{{Key: "count", Value: 1}}},
+			{Key: "$setOnInsert", Value: bson.D{
+				{Key: "expiresAt", Value: windowStart.Add(limit.Window)},
+			}},
+		},
+		options.UpdateOne().SetUpsert(true),
+	)
+	if mongo.IsDuplicateKeyError(err) {
+		return contentgenerated.AppErrorFromOriginalAccessRateLimited(
+			"media original access rate limit exhausted",
+		)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *MongoMediaStore) findMediaOriginalAccessReceipt(
@@ -98,17 +156,28 @@ func (s *MongoMediaStore) findMediaOriginalAccessReceipt(
 }
 
 func mediaOriginalAccessFactDocumentFrom(fact mediamodel.MediaOriginalAccessFact) mediaOriginalAccessFactDocument {
+	var expiresAt *time.Time
+	if !fact.ExpiresAt.IsZero() {
+		value := fact.ExpiresAt.UTC()
+		expiresAt = &value
+	}
 	return mediaOriginalAccessFactDocument{
 		AuditID: fact.AuditID, AssetID: fact.AssetID, ViewerID: fact.ViewerID,
-		Purpose: fact.Purpose, IdempotencyKey: fact.IdempotencyKey,
-		GrantedAt: fact.GrantedAt.UTC(), ExpiresAt: fact.ExpiresAt.UTC(),
+		Purpose: fact.Purpose, Outcome: fact.Outcome, Reason: fact.Reason,
+		IdempotencyKey: fact.IdempotencyKey,
+		GrantedAt:      fact.GrantedAt.UTC(), ExpiresAt: expiresAt,
 	}
 }
 
 func mediaOriginalAccessFactFromDocument(document mediaOriginalAccessFactDocument) mediamodel.MediaOriginalAccessFact {
+	var expiresAt time.Time
+	if document.ExpiresAt != nil {
+		expiresAt = document.ExpiresAt.UTC()
+	}
 	return mediamodel.MediaOriginalAccessFact{
 		AuditID: document.AuditID, AssetID: document.AssetID, ViewerID: document.ViewerID,
-		Purpose: document.Purpose, IdempotencyKey: document.IdempotencyKey,
-		GrantedAt: document.GrantedAt.UTC(), ExpiresAt: document.ExpiresAt.UTC(),
+		Purpose: document.Purpose, Outcome: document.Outcome, Reason: document.Reason,
+		IdempotencyKey: document.IdempotencyKey,
+		GrantedAt:      document.GrantedAt.UTC(), ExpiresAt: expiresAt,
 	}
 }

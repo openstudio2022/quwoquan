@@ -15,6 +15,9 @@ import (
 	iplocation "quwoquan_service/services/content-service/internal/application/iplocation"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	mediaprocessing "quwoquan_service/services/content-service/internal/application/media/processing"
+	mediareprocess "quwoquan_service/services/content-service/internal/application/media/reprocess"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
 	mediaprocinfra "quwoquan_service/services/content-service/internal/infrastructure/content/media/processing"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
@@ -22,9 +25,10 @@ import (
 )
 
 type mediaRuntimeComposition struct {
-	mediaService       *mediaapp.Facades
-	mediaObjectGateway *mediainfra.ObjectGateway
-	commentServiceCore *commentapp.CommentService
+	mediaService               *mediaapp.Facades
+	mediaImageReprocessService *mediareprocess.Service
+	mediaObjectGateway         *mediainfra.ObjectGateway
+	commentServiceCore         *commentapp.CommentService
 }
 
 // buildMediaRuntime 装配 OSS、媒体对象 Facade、处理 worker 与评论属地依赖。
@@ -32,12 +36,14 @@ func buildMediaRuntime(
 	ctx context.Context,
 	cfg config,
 	appEnv string,
+	instanceID string,
 	logger *slog.Logger,
 	healthChecker *rthealth.Checker,
 	mediaStore *persistence.MongoMediaStore,
 	commentDataAdapter *persistence.MongoCommentDataAdapter,
 	reactionStore *persistence.MongoContentReactionStore,
 	recDB *mongo.Database,
+	postMediaReader postports.MediaReferencedPostReader,
 	viewerBlockReader *recinfra.PersonaBlockReader,
 ) (mediaRuntimeComposition, func()) {
 	ossCfg := runtimemedia.OSSConfig{
@@ -75,7 +81,16 @@ func buildMediaRuntime(
 	if mediaStore == nil {
 		log.Fatal("content-service MediaUploadSession/MediaAsset store is not configured")
 	}
-	mediaServiceCore := mediaapp.NewMediaService(mediaapp.BindDataPorts(mediaStore), mediaObjectGateway)
+	if postMediaReader == nil || viewerBlockReader == nil {
+		log.Fatal("content-service Post media visibility reader is not configured")
+	}
+	mediaServiceCore := mediaapp.NewMediaService(
+		mediaapp.BindDataPorts(mediaStore),
+		mediaObjectGateway,
+		mediaapp.WithOriginalAccessPostVisibilityReader(
+			postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
+		),
+	)
 	mediaService := mediaapp.BindFacades(mediaServiceCore)
 
 	// Media processing worker 是 media outbox 的唯一生产消费者。图片与视频发布
@@ -83,11 +98,12 @@ func buildMediaRuntime(
 	mediaProcessor, processorErr := mediaprocinfra.NewFFmpegMediaProcessor(
 		ossPresigner,
 		mediaprocinfra.Config{
-			Bucket:      ossCfg.Bucket,
-			FFmpegPath:  cfg.MediaProcessing.FFmpegPath,
-			FFprobePath: cfg.MediaProcessing.FFprobePath,
-			WorkDir:     cfg.MediaProcessing.WorkDir,
-			JobTimeout:  time.Duration(cfg.MediaProcessing.JobTimeoutMs) * time.Millisecond,
+			Bucket:              ossCfg.Bucket,
+			FFmpegPath:          cfg.MediaProcessing.FFmpegPath,
+			FFprobePath:         cfg.MediaProcessing.FFprobePath,
+			WorkDir:             cfg.MediaProcessing.WorkDir,
+			JobTimeout:          time.Duration(cfg.MediaProcessing.JobTimeoutMs) * time.Millisecond,
+			MinWorkDirFreeBytes: cfg.MediaProcessing.MinWorkDirFreeBytes,
 		},
 	)
 	if processorErr != nil {
@@ -99,7 +115,8 @@ func buildMediaRuntime(
 		mediaStore,
 		mediaProcessor,
 		mediaServiceCore,
-		mediaprocessing.WithObserver(mediaprocinfra.MetricsObserver{}),
+		mediaStore,
+		mediaprocessing.WithObserver(mediaprocinfra.NewMetricsObserver()),
 	)
 	workerInterval := time.Duration(cfg.MediaProcessing.IntervalMs) * time.Millisecond
 	if workerInterval <= 0 {
@@ -111,9 +128,37 @@ func buildMediaRuntime(
 		}
 	}()
 	healthChecker.Register("content_media_processing_worker", func(_ context.Context) error {
-		return mediaProcessingWorker.Healthy(15 * time.Minute)
+		return mediaProcessingWorker.Ready(15 * time.Minute)
 	})
 	log.Printf("content-service media processing worker enabled interval=%s", workerInterval)
+
+	// Image reprocess shares the trusted FFmpeg processor and MediaAsset command
+	// facet, but owns a separate operational run cursor/lease. It therefore can
+	// later extract as a worker service without creating a second media state
+	// machine or changing normal upload processing.
+	mediaImageReprocessService := mediareprocess.NewService(mediaStore, mediaStore)
+	mediaImageReprocessWorker := mediareprocess.NewWorker(
+		mediaStore,
+		mediaStore,
+		mediaProcessor,
+		mediaService,
+		"content-media-image-reprocess-"+strings.TrimSpace(instanceID),
+	)
+	go func() {
+		ticker := time.NewTicker(workerInterval)
+		defer ticker.Stop()
+		for {
+			if _, err := mediaImageReprocessWorker.Drain(ctx, 10); err != nil && ctx.Err() == nil {
+				logger.Error("content media image reprocess worker batch failed", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	log.Printf("content-service media image reprocess worker enabled interval=%s", workerInterval)
 
 	commentIPLocationResolver, closeIPLocationResolver, err :=
 		buildCommentIPLocationResolver(cfg, appEnv, newIP2RegionResolver)
@@ -144,8 +189,9 @@ func buildMediaRuntime(
 	)
 
 	return mediaRuntimeComposition{
-		mediaService:       mediaService,
-		mediaObjectGateway: mediaObjectGateway,
-		commentServiceCore: commentServiceCore,
+		mediaService:               mediaService,
+		mediaImageReprocessService: mediaImageReprocessService,
+		mediaObjectGateway:         mediaObjectGateway,
+		commentServiceCore:         commentServiceCore,
 	}, closeIPLocationResolver
 }

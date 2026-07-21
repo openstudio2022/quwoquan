@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/internal/platform/testinfra"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
 	reportapp "quwoquan_service/services/entity-service/internal/application/homepage_status_report"
@@ -29,6 +30,7 @@ func runStatusReportMongoContainer(
 			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", recovered)
 		}
 	}()
+	testinfra.ConfigureLocalContainerRuntime()
 	return mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
 }
 

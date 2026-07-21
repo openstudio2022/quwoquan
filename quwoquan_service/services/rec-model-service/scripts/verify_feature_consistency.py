@@ -370,6 +370,7 @@ def check_context_feature_registry():
 
 
 RETIRED_SKEWED_ITEM_FEATURES = ("bodyLength", "aspectRatio", "hasCover")
+RETIRED_DEAD_USER_PROJECTION_FIELDS = ("sourceDistribution",)
 
 
 def check_n3_feature_skew_contract():
@@ -432,6 +433,30 @@ def check_n3_feature_skew_contract():
         for feature in RETIRED_SKEWED_ITEM_FEATURES:
             if re.search(rf"""["']{re.escape(feature)}["']\s*:""", content):
                 issues.append(f"{label} still emits retired feature '{feature}'")
+
+    # sourceDistribution 从未进入 registry、在线模型或不可变训练快照；继续维护
+    # 它只会制造一条不可消费的宽表写路径，故作为 N3-3 死特征彻底退役。
+    for label, path in (
+        (
+            "UserFeatureVector",
+            SERVICE_ROOT / "runtime" / "recommendation" / "feature.go",
+        ),
+        (
+            "RecommendFeatureProjector",
+            SERVICE_ROOT
+            / "services"
+            / "content-service"
+            / "internal"
+            / "infrastructure"
+            / "recommendation"
+            / "recommend_feature.go",
+        ),
+        ("generate_seed_data.py", SCRIPT_DIR / "generate_seed_data.py"),
+    ):
+        content = path.read_text(encoding="utf-8")
+        for field in RETIRED_DEAD_USER_PROJECTION_FIELDS:
+            if field in content:
+                issues.append(f"{label} still exposes retired dead field '{field}'")
 
     return issues
 
@@ -531,7 +556,7 @@ def main():
         "likeLevel", "shareLevel", "eventLevel",
         "topicAffinities", "audienceAffinities", "formatAffinities",
         "entityAffinities", "entityInstanceAffinities",
-        "typeENER", "avgEngagementDepth", "sourceDistribution",
+        "typeENER", "avgEngagementDepth",
     ]
     for field in required_fields:
         if field not in go_fields:

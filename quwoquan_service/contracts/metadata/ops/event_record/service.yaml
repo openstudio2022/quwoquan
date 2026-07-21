@@ -232,7 +232,7 @@ api_routes:
     path: /ops/events/summary
     operation: GetEventSummary
     actor: account
-    query_params: [logType, eventType, pageName, appVersion, networkClass, errorCode, from, to]
+    query_params: [logType, eventType, pageName, appVersion, networkClass, result, errorCode, from, to]
     application:
       kind: query
       facet: EventAnalyticsQueryFacade
@@ -277,7 +277,7 @@ api_routes:
     path: /ops/events/drilldown
     operation: GetEventDrilldown
     actor: account
-    query_params: [logType, eventType, pageName, appVersion, networkClass, errorCode, sessionId, from, to, limit]
+    query_params: [logType, eventType, pageName, appVersion, networkClass, result, errorCode, sessionId, from, to, limit]
     application:
       kind: query
       facet: EventAnalyticsQueryFacade

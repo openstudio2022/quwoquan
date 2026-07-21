@@ -1,17 +1,18 @@
 part of 'entity_repository.dart';
 
-abstract class HomepageIntroductionRepository {
+abstract interface class HomepageIntroductionRepository {
   Future<HomepageIntroduction?> getHomepageIntroduction(
     String homepageId, {
     CloudOperationCancellationSignal? cancellation,
   });
 }
 
-class RemoteHomepageIntroductionRepository
+/// 将 pure-contract 介绍页投影为 App DTO；不绑定 Remote 或 alpha 实现。
+class HomepageIntroductionProjectionAdapter
     implements HomepageIntroductionRepository {
-  RemoteHomepageIntroductionRepository({required this.queryAdapter});
+  HomepageIntroductionProjectionAdapter({required this.query});
 
-  final RemoteHomepageQueryAdapter queryAdapter;
+  final HomepageIntroductionQuery query;
 
   @override
   Future<HomepageIntroduction?> getHomepageIntroduction(
@@ -19,7 +20,7 @@ class RemoteHomepageIntroductionRepository
     CloudOperationCancellationSignal? cancellation,
   }) async {
     return homepageIntroductionFromContract(
-      await queryAdapter.getHomepageIntroduction(
+      await query.getHomepageIntroduction(
         homepageId,
         cancellation: cancellation,
       ),

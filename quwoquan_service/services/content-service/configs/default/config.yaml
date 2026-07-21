@@ -85,10 +85,8 @@ rec_model_service:
 
 # Embedding service (default: disabled)
 embedding:
-  endpoint: ""
-  api_key: ""
-  model: "text-embedding-3-small"
   enabled: false
+  vector_recall_enabled: false
 
 # Object storage (default: local MinIO)
 oss:
@@ -110,6 +108,7 @@ media_processing:
   ffmpeg_path: "ffmpeg"
   ffprobe_path: "ffprobe"
   job_timeout_ms: 900000
+  min_work_dir_free_bytes: 536870912
 
 # Unified search index — WRITE side (content.search_index_worker).
 # content-service is the indexing producer for the shared ES/OpenSearch index that

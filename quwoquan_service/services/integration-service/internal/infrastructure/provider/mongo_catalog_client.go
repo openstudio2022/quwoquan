@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
+	"quwoquan_service/services/integration-service/internal/domain/location/ports"
 )
 
 const locationCatalogCollection = "location_pois"
@@ -19,6 +20,8 @@ const locationCatalogCollection = "location_pois"
 type MongoCatalogClient struct {
 	collection *mongo.Collection
 }
+
+var _ ports.LocationProvider = (*MongoCatalogClient)(nil)
 
 type catalogPOIDocument struct {
 	POIID          string `bson:"poiId"`
@@ -37,10 +40,6 @@ func NewMongoCatalogClient(database *mongo.Database) *MongoCatalogClient {
 	return &MongoCatalogClient{
 		collection: database.Collection(locationCatalogCollection),
 	}
-}
-
-func (c *MongoCatalogClient) Name() model.Provider {
-	return model.ProviderCatalog
 }
 
 func (c *MongoCatalogClient) EnsureIndexes(ctx context.Context) error {
@@ -149,7 +148,6 @@ func (c *MongoCatalogClient) find(
 		}
 		items = append(items, model.POI{
 			ID:             document.POIID,
-			Provider:       model.ProviderCatalog,
 			Name:           document.Name,
 			Address:        document.Address,
 			Latitude:       latitude,

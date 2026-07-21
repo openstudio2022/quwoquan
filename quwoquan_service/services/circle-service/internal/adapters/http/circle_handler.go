@@ -286,20 +286,7 @@ func (h *CircleHandler) handleGetStats(w http.ResponseWriter, r *http.Request, c
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": statsWirePayload(stats)})
-}
-
-// statsWirePayload 保持既有 wire 键集合（documented keys 见
-// projections/circle_stats_wire.yaml）。
-func statsWirePayload(stats application.CircleStatsWire) map[string]any {
-	return map[string]any{
-		"totalMembers":      stats.TotalMembers,
-		"weeklyActive":      stats.WeeklyActive,
-		"totalPosts":        stats.TotalPosts,
-		"totalDiscussions":  stats.TotalDiscussions,
-		"storageUsedBytes":  stats.StorageUsedBytes,
-		"storageQuotaBytes": stats.StorageQuotaBytes,
-	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": stats})
 }
 
 func (h *CircleHandler) handleGetImpact(w http.ResponseWriter, r *http.Request, circleID string) {

@@ -2,7 +2,6 @@
 """Gate: discourage `dynamic` as a formal parameter type under lib/ui/content.
 
 Platform / JSON decode boundaries may still use `Object?` or `Map<String, dynamic>`.
-Excludes: entry/services/ios_video_editing_service.dart (MethodChannel payloads).
 
 Run from repo root:
   python3 quwoquan_app/scripts/content/verify_ui_content_no_dynamic_parameters.py
@@ -21,17 +20,12 @@ _PARAM_DYNAMIC = re.compile(
     r"(?:\(|,)\s*dynamic\s+\w+|\bvoid\s+\w+\s*\(\s*dynamic\s+\w+"
 )
 
-_EXCLUDE_SUBPATH = "entry/services/ios_video_editing_service.dart"
-
-
 def main() -> int:
     bad: list[str] = []
     for path in sorted(CONTENT_UI.rglob("*.dart")):
         if "/generated/" in str(path) or path.name.endswith(".g.dart"):
             continue
         rel = path.relative_to(ROOT)
-        if str(rel).endswith(_EXCLUDE_SUBPATH):
-            continue
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError:

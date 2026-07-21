@@ -510,6 +510,15 @@ func assistantRenderFromJsonValue(field assistantContractField, schema *assistan
 	case "object":
 		if field.Ref != "" {
 			className := assistantResolveRefClassName(field.Ref, schema, index)
+			if field.Required && field.Default == nil {
+				return fmt.Sprintf(
+					"%s is Map ? %s.fromJson((%s as Map).cast<String, dynamic>()) : (throw FormatException('required object field %s is missing'))",
+					jsonAccessor,
+					className,
+					jsonAccessor,
+					field.Name,
+				)
+			}
 			if field.Default != nil {
 				fallback := assistantRenderDefaultValue(field, schema, index)
 				return fmt.Sprintf("%s is Map ? %s.fromJson((%s as Map).cast<String, dynamic>()) : %s", jsonAccessor, className, jsonAccessor, fallback)

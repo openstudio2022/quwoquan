@@ -23,8 +23,11 @@ import (
 )
 
 type externalProviderContractRuntime struct {
-	server *httptest.Server
-	client application.ExternalAuthProviderClient
+	server      *httptest.Server
+	wechat      application.FederatedIdentityVerifier
+	alipay      application.FederatedIdentityVerifier
+	alipayIssue application.FederatedAuthorizationIssuer
+	qq          application.FederatedIdentityVerifier
 }
 
 func startExternalProviderContractRuntime() (*externalProviderContractRuntime, error) {
@@ -46,14 +49,20 @@ func startExternalProviderContractRuntime() (*externalProviderContractRuntime, e
 	})
 	server := httptest.NewServer(mux)
 
-	configs := map[string]integration.ProviderOAuthConfig{
-		application.SocialProviderWechat: {
+	wechat, err := integration.NewWechatFederatedIdentityVerifier(
+		integration.ProviderOAuthConfig{
 			AppID:       "wechat-contract-app",
 			AppSecret:   "wechat-contract-secret",
 			TokenURL:    server.URL + "/wechat/token",
 			UserInfoURL: server.URL + "/wechat/user",
 		},
-		application.SocialProviderAlipay: {
+		server.Client(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build wechat verifier: %w", err)
+	}
+	alipay, alipayIssue, err := integration.NewAlipayFederatedIdentityVerifier(
+		integration.ProviderOAuthConfig{
 			AppID:                "alipay-contract-app",
 			AppPrivateKeyPEM:     encodeRSAPrivateKey(merchantPrivateKey),
 			PlatformPublicKeyPEM: encodeRSAPublicKey(&platformPrivateKey.PublicKey),
@@ -61,14 +70,27 @@ func startExternalProviderContractRuntime() (*externalProviderContractRuntime, e
 			TokenURL:             server.URL + "/alipay",
 			UserInfoURL:          server.URL + "/alipay",
 		},
-		application.SocialProviderQq: {
+		server.Client(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build alipay verifier: %w", err)
+	}
+	qq, err := integration.NewQqFederatedIdentityVerifier(
+		integration.ProviderOAuthConfig{
 			AppID:       "qq-contract-app",
 			UserInfoURL: server.URL + "/qq/user",
 		},
+		server.Client(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build qq verifier: %w", err)
 	}
 	return &externalProviderContractRuntime{
-		server: server,
-		client: integration.NewHTTPExternalAuthProviderClient(configs, server.Client()),
+		server:      server,
+		wechat:      wechat,
+		alipay:      alipay,
+		alipayIssue: alipayIssue,
+		qq:          qq,
 	}, nil
 }
 
@@ -246,26 +268,25 @@ func writeJSON(writer http.ResponseWriter, value any) {
 }
 
 func TestExternalProviderContractRuntime_ProductionClientExchangesAllProviders(t *testing.T) {
-	if externalProviderRuntime == nil || externalProviderRuntime.client == nil {
+	if externalProviderRuntime == nil {
 		t.Fatal("external provider contract runtime is not initialized")
 	}
 	cases := []struct {
-		provider string
+		name     string
+		verifier application.FederatedIdentityVerifier
 		code     string
 	}{
-		{provider: application.SocialProviderWechat, code: "wechat-contract-direct"},
-		{provider: application.SocialProviderAlipay, code: "alipay-contract-direct"},
-		{provider: application.SocialProviderQq, code: qqAuthorizationTicket("qq-access-direct", "qq-open-direct")},
+		{name: "wechat", verifier: externalProviderRuntime.wechat, code: "wechat-contract-direct"},
+		{name: "alipay", verifier: externalProviderRuntime.alipay, code: "alipay-contract-direct"},
+		{name: "qq", verifier: externalProviderRuntime.qq, code: qqAuthorizationTicket("qq-access-direct", "qq-open-direct")},
 	}
 	for _, item := range cases {
-		identity, err := externalProviderRuntime.client.Exchange(
-			context.Background(), item.provider, item.code, "ios", "1.0.0",
-		)
+		identity, err := item.verifier.Verify(context.Background(), item.code)
 		if err != nil {
-			t.Fatalf("exchange %s: %v", item.provider, err)
+			t.Fatalf("exchange %s: %v", item.name, err)
 		}
-		if identity.Provider != item.provider || identity.StableKey() == "" || identity.AvatarURL == "" {
-			t.Fatalf("unexpected %s identity: %#v", item.provider, identity)
+		if identity.CredentialKey == "" || identity.AvatarURL == "" {
+			t.Fatalf("unexpected %s identity: %#v", item.name, identity)
 		}
 	}
 }

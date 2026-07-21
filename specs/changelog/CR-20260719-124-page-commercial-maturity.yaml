@@ -48,7 +48,7 @@ entries:
           - quwoquan_app/test/user_acceptance/pages/chat/chat_conversation/chat_conversation_page__user_acceptance_test.dart
           - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
           - quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
-          - quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+          - quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart
     notes: |
       本 CR 在全部专项门禁、核心页 local_contract/user_acceptance 和 production
       dependency purity 通过前保持 in_progress。

@@ -22,6 +22,7 @@ import (
 	registrationapp "quwoquan_service/services/user-service/internal/application/account/device_registration"
 	credentialmodel "quwoquan_service/services/user-service/internal/domain/account/credential_binding/model"
 	credentialports "quwoquan_service/services/user-service/internal/domain/account/credential_binding/ports"
+	accountports "quwoquan_service/services/user-service/internal/domain/account/user_account/ports"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
@@ -30,10 +31,6 @@ import (
 const (
 	credentialPhone           = "phone"
 	credentialCarrierPhone    = "carrier_phone"
-	credentialWechat          = "wechat"
-	credentialAlipay          = "alipay"
-	credentialQq              = "qq"
-	credentialApple           = "apple"
 	credentialAnonymousDevice = "anonymous_device"
 
 	defaultIsolationLevel = "open"
@@ -63,14 +60,14 @@ type AuthService struct {
 	consents                 userrepo.ConsentRecordStore
 	anonymousDevices         userrepo.AnonymousDeviceBindingStore
 	shardDirectory           *ShardDirectory
-	oneTapResolver           OneTapPhoneResolver
+	carrierPhoneResolver     CarrierPhoneResolver
 	otp                      OtpCodeStore
 	authenticationChallenges *challengeapp.AuthenticationChallengeCommandFacade
 	otpCodeSealer            OTPCodeSealer
 	otpCodeGenerator         func() (string, error)
 	externalClient           ExternalInteractionClient
-	socialProviders          ExternalAuthProviderClient
 	accessSigner             *rtauth.Signer
+	accountSecurity          accountports.AccountSecurityReader
 	nicknamePrefix           string
 }
 
@@ -78,10 +75,6 @@ type AuthServiceOption func(*AuthService)
 
 type OTPCodeSealer interface {
 	Seal(secret otpseal.Secret, binding otpseal.Binding) (string, error)
-}
-
-type OneTapPhoneResolver interface {
-	ResolvePhone(ctx context.Context, vendor, carrierToken string) (phone string, displayLabel string, err error)
 }
 
 // OtpCodeStore 抽象手机号验证码的存储与限频，实现位于 infrastructure/cache。
@@ -107,7 +100,6 @@ func NewAuthService(
 		credentials:      credentials,
 		anonymousDevices: anonymousDevices,
 		shardDirectory:   shardDirectory,
-		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
 		nicknamePrefix:   defaultNewUserNicknamePrefix,
 		otpCodeGenerator: generateOtpCode,
 	}
@@ -122,6 +114,16 @@ func NewAuthService(
 func WithCredentialCommands(facet credentialapp.CommandFacet) AuthServiceOption {
 	return func(s *AuthService) {
 		s.credentialCommands = facet
+	}
+}
+
+// WithAccountSecurityReader 注入 UserAccount 的权威状态与安全代次 Reader。
+// 认证、refresh 与已认证账号请求都必须对 Reader 故障 fail-closed。
+func WithAccountSecurityReader(
+	reader accountports.AccountSecurityReader,
+) AuthServiceOption {
+	return func(s *AuthService) {
+		s.accountSecurity = reader
 	}
 }
 
@@ -173,10 +175,10 @@ func WithConsentRecordStore(repo userrepo.ConsentRecordStore) AuthServiceOption 
 	}
 }
 
-func WithOneTapPhoneResolver(resolver OneTapPhoneResolver) AuthServiceOption {
+func WithCarrierPhoneResolver(resolver CarrierPhoneResolver) AuthServiceOption {
 	return func(s *AuthService) {
 		if resolver != nil {
-			s.oneTapResolver = resolver
+			s.carrierPhoneResolver = resolver
 		}
 	}
 }
@@ -201,16 +203,6 @@ func WithAuthenticationChallenges(
 func WithExternalInteractionClient(client ExternalInteractionClient) AuthServiceOption {
 	return func(s *AuthService) {
 		s.externalClient = client
-	}
-}
-
-// WithExternalAuthProviderClient 注入社交登录（微信/支付宝/QQ）票据置换实现。
-// 所有 Remote 环境只注入真实 HTTP provider；alpha fixture 不进入服务进程。
-func WithExternalAuthProviderClient(client ExternalAuthProviderClient) AuthServiceOption {
-	return func(s *AuthService) {
-		if client != nil {
-			s.socialProviders = client
-		}
 	}
 }
 
@@ -341,7 +333,38 @@ func (s *AuthService) UnbindCredential(
 
 // createOwnerAccount creates a new user_profiles row + default persona + initial credential.
 func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey, displayLabel string) (string, error) {
-	identity, err := buildOwnerIdentity(credType)
+	identityOrigin, originCode := identityOriginForCredentialType(credType)
+	return s.createOwnerAccountWithIdentity(
+		ctx,
+		credentialmodel.CredentialType(credType),
+		credKey,
+		displayLabel,
+		identityOrigin,
+		originCode,
+	)
+}
+
+func (s *AuthService) createOwnerAccountForFederatedIdentity(
+	ctx context.Context,
+	identity VerifiedFederatedIdentity,
+) (string, error) {
+	return s.createOwnerAccount(
+		ctx,
+		string(identity.CredentialType),
+		identity.CredentialKey,
+		identity.DisplayName,
+	)
+}
+
+func (s *AuthService) createOwnerAccountWithIdentity(
+	ctx context.Context,
+	credentialType credentialmodel.CredentialType,
+	credentialKey string,
+	displayLabel string,
+	identityOrigin string,
+	originCode string,
+) (string, error) {
+	identity, err := buildOwnerIdentityForOrigin(identityOrigin, originCode)
 	if err != nil {
 		return "", err
 	}
@@ -360,16 +383,17 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 		Nickname:                 s.buildDefaultNickname(),
 		NicknameCustomized:       false,
 		Status:                   "active",
-		AccountState:             accountStateForCredentialType(credType),
-		IdentityOrigin:           identityOriginValue(credType),
+		AccountState:             accountStateForCredentialType(string(credentialType)),
+		IdentityOrigin:           identityOrigin,
 		LogicalShard:             identity.LogicalShard,
-		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(credType),
+		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(string(credentialType)),
 		IdentityTags:             "{}",
 		ProfileVersion:           1,
 		SubAccountCount:          1,
 	}
-	if credType == credentialPhone || credType == credentialCarrierPhone {
-		profile.Phone = credKey
+	if credentialType == credentialmodel.CredentialType(credentialPhone) ||
+		credentialType == credentialmodel.CredentialType(credentialCarrierPhone) {
+		profile.Phone = credentialKey
 	}
 
 	if err := s.profiles.Create(ctx, profile); err != nil {
@@ -402,8 +426,8 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 		ctx,
 		ownerID,
 		credentialapp.BindCredentialCommand{
-			CredentialType: credentialmodel.CredentialType(credType),
-			CredentialKey:  credKey,
+			CredentialType: credentialType,
+			CredentialKey:  credentialKey,
 			DisplayLabel:   displayLabel,
 		},
 	)
@@ -510,6 +534,48 @@ func ensureProfileCanLogin(profile *model.UserProfile) error {
 	default:
 		return nil
 	}
+}
+
+func (s *AuthService) requireActiveAccountSecurity(
+	ctx context.Context,
+	accountID string,
+) (accountports.AccountSecuritySnapshot, error) {
+	if s.accountSecurity == nil {
+		return accountports.AccountSecuritySnapshot{},
+			generated.AppErrorFromInternalError(
+				"UserAccount security reader is unavailable",
+			)
+	}
+	snapshot, err := s.accountSecurity.ReadAccountSecurity(
+		ctx,
+		strings.TrimSpace(accountID),
+	)
+	if errors.Is(err, accountports.ErrAccountNotFound) {
+		return accountports.AccountSecuritySnapshot{},
+			generated.AppErrorFromUserNotFound("account not found")
+	}
+	if err != nil {
+		return accountports.AccountSecuritySnapshot{},
+			generated.AppErrorFromInternalError(
+				"UserAccount security state is unavailable",
+			)
+	}
+	switch strings.TrimSpace(snapshot.AccountState) {
+	case "suspended":
+		return accountports.AccountSecuritySnapshot{},
+			generated.AppErrorFromAccountSuspended("account suspended")
+	case "closed":
+		return accountports.AccountSecuritySnapshot{},
+			generated.AppErrorFromAccountDeleted("account closed")
+	case "active", "anonymous":
+		if snapshot.AuthEpoch > 0 {
+			return snapshot, nil
+		}
+	}
+	return accountports.AccountSecuritySnapshot{},
+		generated.AppErrorFromInternalError(
+			"UserAccount security state is invalid",
+		)
 }
 
 // buildDefaultNickname 生成首次创建用户的系统默认昵称：

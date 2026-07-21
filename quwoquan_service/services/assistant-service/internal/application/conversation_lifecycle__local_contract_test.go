@@ -251,8 +251,8 @@ func TestCancelledTurnStreamReplayEmitsCancelledEvent(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("StreamTurn replay: %v", err)
 	}
-	if len(events) != 1 || events[0].EventType != "assistant.turn.cancelled" {
-		t.Fatalf("cancelled replay must emit assistant.turn.cancelled, got %#v", events)
+	if len(events) != 1 || events[0].EventType != string(AssistantStreamEventCancelled) {
+		t.Fatalf("cancelled replay must emit cancelled, got %#v", events)
 	}
 }
 
@@ -309,7 +309,7 @@ func TestRunEventJournalResumesStrictlyAfterLastEventID(t *testing.T) {
 			t.Fatalf("resumed seq=%d afterSeq=%d", envelope.Seq, afterSeq)
 		}
 	}
-	if resumed[len(resumed)-1].EventType != "turn_completed" {
+	if resumed[len(resumed)-1].EventType != string(AssistantStreamEventCompleted) {
 		t.Fatalf("last event=%s", resumed[len(resumed)-1].EventType)
 	}
 }

@@ -10,6 +10,7 @@ from typing import Any, Mapping
 from PIL import Image
 
 from core.control_types import SourcePolicyRevision
+from core.source_digest import SourceDigest, SourceDigestError
 from content.release.canonical.creator_projection import project_creator_object
 from content.release.canonical.object_transaction_contract import (
     EXPECTED_OBJECT_SCHEMAS,
@@ -158,6 +159,12 @@ def build_post_object_transaction_package(
     execution_id = _execution_id(str(manifest.get("executionId") or ""))
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
+    try:
+        source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+    except SourceDigestError as exc:
+        raise ObjectTransactionError(
+            f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
+        ) from exc
     canonical_ref = _safe_rel(object_ref.removeprefix("posts/"), label="objectRef").as_posix()
     source = execution_root / "posts" / canonical_ref
     source_manifest = _read_json(source / "manifest.json")
@@ -312,7 +319,8 @@ def build_post_object_transaction_package(
                 }
             )
             canonical_assets.append({**raw, "objectKey": object_key})
-        if not cas_rows:
+        publish_media_mode = str(source_manifest.get("publishMediaMode") or "").strip()
+        if not cas_rows and publish_media_mode != "text_only":
             raise ObjectTransactionError("post transaction requires at least one rights-bound asset")
 
         creator_ref = _creator_ref(source_manifest)
@@ -339,6 +347,7 @@ def build_post_object_transaction_package(
             **source_manifest,
             "schema": EXPECTED_OBJECT_SCHEMAS["posts"],
             "executionId": execution_id,
+            "sourceDigest": source_digest.to_document(),
             "finalContentRef": final_content_ref,
             "sourceCatalogRef": "source_catalog.json",
             "rightsRef": "rights.json",

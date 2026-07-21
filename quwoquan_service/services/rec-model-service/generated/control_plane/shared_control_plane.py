@@ -123,7 +123,9 @@ _SHARED_CONTROL_PLANE_JSON = r'''{
       "audit_required",
       "rollback_supported",
       "rollout_guard",
-      "idempotency"
+      "idempotency",
+      "auth_mode",
+      "principal"
     ],
     "required_fields": [
       "operation",

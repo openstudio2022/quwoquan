@@ -17,19 +17,21 @@ import (
 )
 
 const (
-	groupCollection           = "circle_groups"
-	groupReceiptCollection    = "circle_group_command_receipts"
-	groupOutboxCollection     = "circle_group_outbox"
-	groupSequenceCollection   = "circle_group_outbox_sequences"
-	groupCheckpointCollection = "circle_group_projection_checkpoints"
+	groupCollection               = "circle_groups"
+	groupReceiptCollection        = "circle_group_command_receipts"
+	groupOutboxCollection         = "circle_group_outbox"
+	groupSequenceCollection       = "circle_group_outbox_sequences"
+	groupCheckpointCollection     = "circle_group_projection_checkpoints"
+	groupBindingReceiptCollection = "circle_group_conversation_binding_receipts"
 )
 
 type MongoAggregateStore struct {
-	groups      *mongo.Collection
-	receipts    *mongo.Collection
-	outbox      *mongo.Collection
-	sequences   *mongo.Collection
-	checkpoints *mongo.Collection
+	groups          *mongo.Collection
+	receipts        *mongo.Collection
+	outbox          *mongo.Collection
+	sequences       *mongo.Collection
+	checkpoints     *mongo.Collection
+	bindingReceipts *mongo.Collection
 }
 
 func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
@@ -39,7 +41,8 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 	return &MongoAggregateStore{
 		groups: database.Collection(groupCollection), receipts: database.Collection(groupReceiptCollection),
 		outbox: database.Collection(groupOutboxCollection), sequences: database.Collection(groupSequenceCollection),
-		checkpoints: database.Collection(groupCheckpointCollection),
+		checkpoints:     database.Collection(groupCheckpointCollection),
+		bindingReceipts: database.Collection(groupBindingReceiptCollection),
 	}
 }
 
@@ -48,12 +51,19 @@ func (store *MongoAggregateStore) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "circleId", Value: 1}, {Key: "status", Value: 1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_circle_group_list")},
 		{Keys: bson.D{{Key: "circleId", Value: 1}, {Key: "name", Value: 1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_circle_group_search")},
 		{Keys: bson.D{{Key: "circleId", Value: 1}, {Key: "isDefaultPublicGroup", Value: 1}}, Options: options.Index().SetName("idx_circle_group_default").SetUnique(true).SetPartialFilterExpression(bson.M{"isDefaultPublicGroup": true, "status": groupmodel.CircleGroupStatusActive})},
+		{Keys: bson.D{{Key: "conversationId", Value: 1}}, Options: options.Index().SetName("uq_circle_group_conversation").SetSparse(true).SetUnique(true)},
 	}); err != nil {
 		return err
 	}
 	if _, err := store.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
 		Options: options.Index().SetName("idx_circle_group_receipt_expiry").SetExpireAfterSeconds(0),
+	}); err != nil {
+		return err
+	}
+	if _, err := store.bindingReceipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "eventId", Value: 1}}, Options: options.Index().SetName("uq_circle_group_conversation_binding_event").SetUnique(true)},
+		{Keys: bson.D{{Key: "conversationId", Value: 1}}, Options: options.Index().SetName("uq_circle_group_conversation_binding_conversation").SetUnique(true)},
 	}); err != nil {
 		return err
 	}
@@ -74,6 +84,95 @@ func (store *MongoAggregateStore) Load(ctx context.Context, groupID string) (gro
 		return groupmodel.CircleGroup{}, false, err
 	}
 	return value, true, nil
+}
+
+// BindConversation consumes the Chat-produced durable binding fact. The
+// receipt and CircleGroup.conversationId write share one Mongo transaction:
+// duplicate/reclaimed events are no-ops, while a second different conversation
+// for the same CircleGroup is a hard consistency conflict.
+func (store *MongoAggregateStore) BindConversation(
+	ctx context.Context,
+	eventID string,
+	circleID string,
+	groupID string,
+	conversationID string,
+) error {
+	eventID = strings.TrimSpace(eventID)
+	circleID = strings.TrimSpace(circleID)
+	groupID = strings.TrimSpace(groupID)
+	conversationID = strings.TrimSpace(conversationID)
+	if eventID == "" || circleID == "" || groupID == "" || conversationID == "" {
+		return groupmodel.ErrInvalidChange
+	}
+	session, err := store.groups.Database().Client().StartSession()
+	if err != nil {
+		return err
+	}
+	defer session.EndSession(ctx)
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		var receipt struct {
+			CircleID       string `bson:"circleId"`
+			GroupID        string `bson:"groupId"`
+			ConversationID string `bson:"conversationId"`
+		}
+		receiptErr := store.bindingReceipts.FindOne(
+			txCtx,
+			bson.M{"eventId": eventID},
+		).Decode(&receipt)
+		if receiptErr == nil {
+			if receipt.CircleID == circleID && receipt.GroupID == groupID &&
+				receipt.ConversationID == conversationID {
+				return nil, nil
+			}
+			return nil, groupmodel.ErrVersionConflict
+		}
+		if !errors.Is(receiptErr, mongo.ErrNoDocuments) {
+			return nil, receiptErr
+		}
+		group, found, loadErr := store.Load(txCtx, groupID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if !found || group.CircleID != circleID {
+			return nil, groupmodel.ErrInvalidChange
+		}
+		if existing := strings.TrimSpace(group.ConversationID); existing != "" {
+			if existing != conversationID {
+				return nil, groupmodel.ErrVersionConflict
+			}
+		} else {
+			result, updateErr := store.groups.UpdateOne(
+				txCtx,
+				bson.M{
+					"_id":      groupID,
+					"circleId": circleID,
+					"$or": bson.A{
+						bson.M{"conversationId": ""},
+						bson.M{"conversationId": bson.M{"$exists": false}},
+					},
+				},
+				bson.M{"$set": bson.M{
+					"conversationId": conversationID,
+					"updatedAt":      time.Now().UTC(),
+				}},
+			)
+			if updateErr != nil {
+				return nil, updateErr
+			}
+			if result.MatchedCount != 1 {
+				return nil, groupmodel.ErrVersionConflict
+			}
+		}
+		_, insertErr := store.bindingReceipts.InsertOne(txCtx, bson.M{
+			"eventId": eventID, "circleId": circleID, "groupId": groupID,
+			"conversationId": conversationID, "createdAt": time.Now().UTC(),
+		})
+		if mongo.IsDuplicateKeyError(insertErr) {
+			return nil, groupmodel.ErrVersionConflict
+		}
+		return nil, insertErr
+	})
+	return err
 }
 
 func (store *MongoAggregateStore) Commit(ctx context.Context, request groupports.CommitRequest) (groupports.CommitReceipt, error) {
@@ -143,8 +242,8 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request groupports
 		eventType := groupEventType(request.Change.Kind)
 		payloadJSON, marshalErr := json.Marshal(groupEventPayload{
 			GroupID: next.ID, Version: next.Version, CircleID: next.CircleID,
-			GroupType: next.GroupType, CreatedByPersonaID: next.CreatedByPersonaID,
-			Status: next.Status, OccurredAt: next.UpdatedAt.UTC(),
+			GroupType: next.GroupType, Name: next.Name, CreatedByPersonaID: next.CreatedByPersonaID,
+			Status: next.Status, CreatedAt: next.CreatedAt.UTC(), UpdatedAt: next.UpdatedAt.UTC(),
 		})
 		if marshalErr != nil {
 			return nil, marshalErr
@@ -277,9 +376,12 @@ type groupEventPayload struct {
 	Version            int64                        `json:"version"`
 	CircleID           string                       `json:"circleId"`
 	GroupType          groupmodel.CircleGroupType   `json:"groupType"`
+	Name               string                       `json:"name"`
 	CreatedByPersonaID string                       `json:"createdByPersonaId"`
 	Status             groupmodel.CircleGroupStatus `json:"status"`
-	OccurredAt         time.Time                    `json:"occurredAt"`
+	CreatedAt          time.Time                    `json:"createdAt"`
+	UpdatedAt          time.Time                    `json:"updatedAt"`
 }
 
 var _ groupports.AggregateStore = (*MongoAggregateStore)(nil)
+var _ groupports.ConversationBindingWriter = (*MongoAggregateStore)(nil)

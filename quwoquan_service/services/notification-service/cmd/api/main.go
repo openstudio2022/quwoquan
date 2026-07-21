@@ -343,17 +343,31 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("interaction notification consumer requires Redis: %w", err)
 	}
+	generalRedisDB, err := requiredNonNegativeIntEnv(
+		"NOTIFICATION_REDIS_GENERAL_DB",
+	)
+	if err != nil {
+		return err
+	}
+	realtimeRedisDB, err := requiredNonNegativeIntEnv(
+		"NOTIFICATION_REDIS_REALTIME_DB",
+	)
+	if err != nil {
+		return err
+	}
 	redisRouter, err := platformredis.NewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"general": {
 				Mode:     "standalone",
 				Addr:     redisAddr,
 				Password: os.Getenv("REDIS_PASSWORD"),
+				DB:       generalRedisDB,
 			},
 			"realtime": {
 				Mode:     "standalone",
 				Addr:     redisAddr,
 				Password: os.Getenv("REDIS_PASSWORD"),
+				DB:       realtimeRedisDB,
 			},
 		},
 		DefaultScene: "general",
@@ -362,6 +376,18 @@ func run() error {
 		return fmt.Errorf("notification redis init failed: %w", err)
 	}
 	defer redisRouter.Close()
+	messageTransport, err := requireNotificationAPIMessageTransport(
+		ctx,
+		getenvOrDefault("APP_ENV", "alpha"),
+		redisRouter,
+		map[string]string{
+			"general":  "standalone",
+			"realtime": "standalone",
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("notification message transport construction failed: %w", err)
+	}
 	interactionFailures := persistence.NewMongoInteractionFailureStore(
 		mongoClient.Database(mongoDatabase),
 	)
@@ -372,7 +398,7 @@ func run() error {
 		return fmt.Errorf("interaction failure store EnsureIndexes failed: %w", failureIndexErr)
 	}
 	interactionConsumer, err := streamadapter.NewInteractionNotificationConsumer(
-		redisRouter.Scene("general"),
+		messageTransport,
 		appMessageCommands,
 		interactionFailures,
 		getenvOrDefault("NOTIFICATION_CONSUMER_NAME", "notification-interaction-projector"),
@@ -383,7 +409,7 @@ func run() error {
 	}
 	go interactionConsumer.Run(ctx, 250*time.Millisecond)
 	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
-		redisRouter.Scene("general"),
+		messageTransport,
 		accountClosureProjection,
 		accountClosureProjection,
 		getenvOrDefault(
@@ -416,7 +442,7 @@ func run() error {
 		accountClosureConsumer.Run(ctx)
 	}()
 	incomingPublisher, err := realtimeclient.NewIncomingCallPublisher(
-		redisRouter.Scene("realtime"),
+		messageTransport,
 	)
 	if err != nil {
 		return fmt.Errorf("incoming call realtime publisher init failed: %w", err)
@@ -435,7 +461,7 @@ func run() error {
 		return fmt.Errorf("incoming call coordinator init failed: %w", err)
 	}
 	rtcConsumer, err := streamadapter.NewRTCIncomingCallConsumer(
-		redisRouter.Scene("realtime"),
+		messageTransport,
 		incomingCoordinator,
 		getenvOrDefault(
 			"NOTIFICATION_RTC_CONSUMER_NAME",
@@ -714,6 +740,18 @@ func requiredPositiveIntEnv(key string) (int, error) {
 		return 0, fmt.Errorf("%s is required", key)
 	}
 	return parsePositiveInt(key, raw)
+}
+
+func requiredNonNegativeIntEnv(key string) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", key)
+	}
+	return value, nil
 }
 
 func positiveIntEnvOrDefault(key string, fallback int) (int, error) {

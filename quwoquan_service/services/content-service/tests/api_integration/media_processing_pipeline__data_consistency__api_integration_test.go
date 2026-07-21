@@ -26,20 +26,23 @@ import (
 	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	mediaapp "quwoquan_service/services/content-service/internal/application/media"
 	mediaprocessing "quwoquan_service/services/content-service/internal/application/media/processing"
+	mediareprocess "quwoquan_service/services/content-service/internal/application/media/reprocess"
 	mediamodel "quwoquan_service/services/content-service/internal/domain/media/model"
+	mediareprocessmodel "quwoquan_service/services/content-service/internal/domain/media_reprocess/model"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 	mediainfra "quwoquan_service/services/content-service/internal/infrastructure/content/media"
 	mediaprocinfra "quwoquan_service/services/content-service/internal/infrastructure/content/media/processing"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
-// TestMediaProcessingWorkerTurnsUploadedVideoReady 验证 UGC 视频链路的
-// 「complete → media outbox → worker 转码 → RecordMediaProcessingResult(ready)
-// → 发布可绑定」全链在真实 MinIO + 真实 Mongo + 真实 ffmpeg 上成立——
-// 这条链此前只能靠 fixture 或测试直接伪造 processing-result。
+// TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors 验证 UGC
+// 视频和图片链路的「complete → media outbox → worker 处理 →
+// RecordMediaProcessingResult(ready) → 发布可绑定」全链在真实 MinIO、Mongo 和
+// ffmpeg 上成立。这条链此前只能靠 fixture 或测试直接伪造 processing-result。
 //
 // 基础设施依赖：Docker（testcontainers，与本包其它测试一致）与 ffmpeg/ffprobe
 // 二进制；两者任一缺失都视为环境装配失败而不是跳过。
-func TestMediaProcessingWorkerTurnsUploadedVideoReady(t *testing.T) {
+func TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors(t *testing.T) {
 	for _, binary := range []string{"ffmpeg", "ffprobe"} {
 		if _, err := exec.LookPath(binary); err != nil {
 			t.Fatalf("media processing api_integration requires %s on PATH: %v", binary, err)
@@ -57,6 +60,80 @@ func TestMediaProcessingWorkerTurnsUploadedVideoReady(t *testing.T) {
 		asset := harness.requireReadyAsset(t, ctx, assetID)
 		harness.assertDeliveryArtifacts(t, ctx, asset)
 		harness.assertBindingSlice(t, ctx, assetID)
+	})
+
+	t.Run("image_is_normalized_before_public_slice_materialization", func(t *testing.T) {
+		sourcePath := renderTestImage(t)
+		assetID := harness.uploadImage(t, ctx, sourcePath, "normalization")
+		harness.drainWorker(t, ctx)
+		asset := harness.requireReadyImage(t, ctx, assetID)
+		harness.assertImageBindingUsesNormalizedSource(t, ctx, asset)
+	})
+
+	t.Run("image_descriptor_reprocess_activates_and_rolls_back_verified_revision", func(t *testing.T) {
+		sourcePath := renderTestImage(t)
+		assetID := harness.uploadImage(t, ctx, sourcePath, "reprocess")
+		harness.drainWorker(t, ctx)
+		before := harness.requireReadyImage(t, ctx, assetID)
+		beforeDescriptor := before.ImageProcessingDescriptor()
+
+		control := mediareprocess.NewService(harness.mediaStore, harness.mediaStore)
+		run, _, err := control.Start(
+			commandmeta.WithIdempotencyKey(ctx, "reprocess-start-"+assetID),
+			mediareprocess.StartCommand{
+				RunID:    "reprocess-" + assetID,
+				AssetIDs: []string{assetID},
+			},
+			contentgenerated.ContentImageDerivativePolicyVersion,
+		)
+		if err != nil {
+			t.Fatalf("start image reprocess run: %v", err)
+		}
+		worker := mediareprocess.NewWorker(
+			harness.mediaStore,
+			harness.mediaStore,
+			harness.processor,
+			harness.service,
+			"media-processing-e2e-reprocess",
+		)
+		if handled, err := worker.Drain(ctx, 1); err != nil || handled != 1 {
+			t.Fatalf("drain image reprocess=(handled=%d, err=%v)", handled, err)
+		}
+		activeRun, err := control.Get(ctx, run.RunID())
+		if err != nil {
+			t.Fatalf("read completed image reprocess run: %v", err)
+		}
+		if activeRun.Status() != mediareprocessmodel.StatusCompleted {
+			t.Fatalf("reprocess run status=%s, want completed", activeRun.Status())
+		}
+		after := harness.requireReadyImage(t, ctx, assetID)
+		if after.ActiveImageDescriptorRevision() != 2 ||
+			after.ImageProcessingDescriptor().ImagePublicSliceKey == beforeDescriptor.ImagePublicSliceKey {
+			t.Fatalf("reprocess did not activate a distinct descriptor revision: %+v", after.Snapshot())
+		}
+		harness.assertImageBindingUsesNormalizedSource(t, ctx, after)
+
+		if _, _, err := control.StartRollback(
+			commandmeta.WithIdempotencyKey(ctx, "reprocess-rollback-"+assetID),
+			run.RunID(),
+		); err != nil {
+			t.Fatalf("start image reprocess rollback: %v", err)
+		}
+		if handled, err := worker.Drain(ctx, 1); err != nil || handled != 1 {
+			t.Fatalf("drain image reprocess rollback=(handled=%d, err=%v)", handled, err)
+		}
+		rolledBack, err := control.Get(ctx, run.RunID())
+		if err != nil {
+			t.Fatalf("read rolled-back image reprocess run: %v", err)
+		}
+		if rolledBack.Status() != mediareprocessmodel.StatusRolledBack {
+			t.Fatalf("rollback status=%s, want rolled_back", rolledBack.Status())
+		}
+		restored := harness.requireReadyImage(t, ctx, assetID)
+		if restored.ActiveImageDescriptorRevision() != 1 ||
+			restored.ImageProcessingDescriptor().ImagePublicSliceKey != beforeDescriptor.ImagePublicSliceKey {
+			t.Fatalf("rollback did not restore old descriptor: %+v", restored.Snapshot())
+		}
 	})
 
 	t.Run("video_without_audio_gets_silent_track", func(t *testing.T) {
@@ -101,6 +178,7 @@ type mediaProcessingHarness struct {
 	mediaStore *persistence.MongoMediaStore
 	service    *mediaapp.MediaService
 	worker     *mediaprocessing.Worker
+	processor  mediaprocessing.Processor
 	sequence   int
 }
 
@@ -169,7 +247,7 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 		t.Fatalf("build ffmpeg processor: %v", err)
 	}
 	worker := mediaprocessing.NewWorker(
-		mediaStore, mediaStore, mediaStore, processor, service,
+		mediaStore, mediaStore, mediaStore, processor, service, mediaStore,
 	)
 	return &mediaProcessingHarness{
 		bucket:     bucket,
@@ -179,6 +257,7 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 		mediaStore: mediaStore,
 		service:    service,
 		worker:     worker,
+		processor:  processor,
 	}
 }
 
@@ -205,8 +284,31 @@ func renderTestVideo(t *testing.T, withAudio bool) string {
 	return outputPath
 }
 
-// uploadVideo drives the real client contract: init grant, presigned PUT,
-// complete with SHA-256 verification. It returns the processing asset id.
+func renderTestImage(t *testing.T) string {
+	t.Helper()
+	outputPath := filepath.Join(t.TempDir(), "source.png")
+	command := exec.Command(
+		"ffmpeg",
+		"-hide_banner",
+		"-loglevel",
+		"error",
+		"-y",
+		"-f",
+		"lavfi",
+		"-i",
+		"color=c=orange:s=640x480",
+		"-frames:v",
+		"1",
+		outputPath,
+	)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("render test image: %v: %s", err, stderr.String())
+	}
+	return outputPath
+}
+
 func (h *mediaProcessingHarness) uploadVideo(
 	t *testing.T,
 	ctx context.Context,
@@ -214,10 +316,34 @@ func (h *mediaProcessingHarness) uploadVideo(
 	label string,
 ) string {
 	t.Helper()
+	return h.uploadVisualMedia(t, ctx, sourcePath, label, "video", "video/mp4")
+}
+
+func (h *mediaProcessingHarness) uploadImage(
+	t *testing.T,
+	ctx context.Context,
+	sourcePath string,
+	label string,
+) string {
+	t.Helper()
+	return h.uploadVisualMedia(t, ctx, sourcePath, label, "image", "image/png")
+}
+
+// uploadVisualMedia drives the real client contract: init grant, presigned
+// streaming PUT, and complete with SHA-256 verification.
+func (h *mediaProcessingHarness) uploadVisualMedia(
+	t *testing.T,
+	ctx context.Context,
+	sourcePath string,
+	label string,
+	mediaType string,
+	contentType string,
+) string {
+	t.Helper()
 	h.sequence++
 	payload, err := os.ReadFile(sourcePath)
 	if err != nil {
-		t.Fatalf("read source video: %v", err)
+		t.Fatalf("read %s source: %v", mediaType, err)
 	}
 	digest := sha256.Sum256(payload)
 	digestHex := "sha256:" + hex.EncodeToString(digest[:])
@@ -228,7 +354,7 @@ func (h *mediaProcessingHarness) uploadVideo(
 		"media-processing-init-"+label,
 	)
 	init, err := h.service.InitMediaUpload(initContext, mediaapp.InitMediaUploadCommand{
-		OwnerID: owner, MediaType: "video", ContentType: "video/mp4",
+		OwnerID: owner, MediaType: mediaType, ContentType: contentType,
 		FileSize: int64(len(payload)), ExpectedSHA256: digestHex,
 	})
 	if err != nil {
@@ -240,12 +366,12 @@ func (h *mediaProcessingHarness) uploadVideo(
 	if err != nil {
 		t.Fatalf("build presigned PUT: %v", err)
 	}
-	request.Header.Set("Content-Type", "video/mp4")
+	request.Header.Set("Content-Type", contentType)
 	request.Header.Set("X-Amz-Checksum-Sha256", base64.StdEncoding.EncodeToString(digest[:]))
 	request.Header.Set("X-Amz-Meta-Sha256", digestHex)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		t.Fatalf("PUT %s video bytes: %v", label, err)
+		t.Fatalf("PUT %s %s bytes: %v", label, mediaType, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -268,7 +394,11 @@ func (h *mediaProcessingHarness) uploadVideo(
 		t.Fatalf("load %s asset: found=%v err=%v", label, found, err)
 	}
 	if asset.ProcessingStatus() != mediamodel.ProcessingStatusProcessing {
-		t.Fatalf("uploaded video must start processing, got %s", asset.ProcessingStatus())
+		t.Fatalf(
+			"uploaded %s must start processing, got %s",
+			mediaType,
+			asset.ProcessingStatus(),
+		)
 	}
 	return completed.AssetID
 }
@@ -306,6 +436,40 @@ func (h *mediaProcessingHarness) requireReadyAsset(
 		descriptor.VideoPublicSliceKey == "" || descriptor.CoverPublicSliceKey == "" ||
 		descriptor.PreviewTrackManifestSliceKey == "" {
 		t.Fatalf("ready descriptor violates the delivery contract: %+v", descriptor)
+	}
+	return asset
+}
+
+func (h *mediaProcessingHarness) requireReadyImage(
+	t *testing.T,
+	ctx context.Context,
+	assetID string,
+) *mediamodel.MediaAsset {
+	t.Helper()
+	asset, found, err := h.mediaStore.LoadMediaAsset(ctx, assetID)
+	if err != nil || !found {
+		t.Fatalf("load processed image: found=%v err=%v", found, err)
+	}
+	if asset.ProcessingStatus() != mediamodel.ProcessingStatusReady {
+		t.Fatalf(
+			"image must be ready after worker drain, got %s (reason=%q)",
+			asset.ProcessingStatus(),
+			asset.ProcessingFailureReason(),
+		)
+	}
+	descriptor := asset.ImageProcessingDescriptor()
+	if descriptor.ProcessorProfile == "" ||
+		descriptor.ImageWidth <= 0 ||
+		descriptor.ImageHeight <= 0 ||
+		descriptor.ImageNormalizedObjectKey == "" ||
+		descriptor.ImagePublicSliceKey == "" ||
+		descriptor.ImageDominantColor == "" ||
+		descriptor.ImageLQIP == "" ||
+		descriptor.ImageContentProfile == "" ||
+		descriptor.DerivativePolicyVersion <= 0 ||
+		(descriptor.ImageDeliveryContentType != "image/jpeg" &&
+			descriptor.ImageDeliveryContentType != "image/png") {
+		t.Fatalf("ready image descriptor violates the delivery contract: %+v", descriptor)
 	}
 	return asset
 }
@@ -408,6 +572,45 @@ func (h *mediaProcessingHarness) assertDeliveryArtifacts(
 	}
 	if codecs["video"] != "h264" || codecs["audio"] != "aac" {
 		t.Fatalf("delivery mp4 is not normalized h264/aac: %v", codecs)
+	}
+}
+
+func (h *mediaProcessingHarness) assertImageBindingUsesNormalizedSource(
+	t *testing.T,
+	ctx context.Context,
+	asset *mediamodel.MediaAsset,
+) {
+	t.Helper()
+	descriptor := asset.ImageProcessingDescriptor()
+	if descriptor.ImageNormalizedObjectKey == asset.ObjectKey() {
+		t.Fatalf(
+			"image normalized source must not reuse private upload object: %q",
+			descriptor.ImageNormalizedObjectKey,
+		)
+	}
+	if _, err := h.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(h.bucket), Key: aws.String(descriptor.ImageNormalizedObjectKey),
+	}); err != nil {
+		t.Fatalf("normalized image artifact %q is missing: %v", descriptor.ImageNormalizedObjectKey, err)
+	}
+	if _, err := h.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(h.bucket), Key: aws.String(descriptor.ImagePublicSliceKey),
+	}); err != nil {
+		t.Fatalf(
+			"processing must read back public image slice before descriptor activation %q: %v",
+			descriptor.ImagePublicSliceKey,
+			err,
+		)
+	}
+
+	reader := mediainfra.NewPostBindingReader(h.mediaStore, h.gateway)
+	bindings, err := reader.FindMediaAssetsForBinding(ctx, []string{asset.ID()})
+	if err != nil {
+		t.Fatalf("find image binding: %v", err)
+	}
+	binding, found := bindings[asset.ID()]
+	if !found || !binding.Ready || binding.PublicSliceKey != descriptor.ImagePublicSliceKey {
+		t.Fatalf("image binding did not expose canonical normalized slice: %+v", binding)
 	}
 }
 

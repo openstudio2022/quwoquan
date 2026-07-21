@@ -36,7 +36,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "AbortMediaUpload":
 		h.handleAbortMediaUpload(w, r)
 	case "ActivateFilterCatalogRelease":
-		h.handleNotImplemented(w, r, operation)
+		h.handleActivateFilterCatalogRelease(w, r)
 	case "BeginReportReview":
 		h.handleBeginReportReview(w, r)
 	case "BindMediaAssetsToComment":
@@ -69,7 +69,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GenerateArticleSummary":
 		h.handleGenerateArticleSummary(w, r)
 	case "GetActiveFilterCatalog":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetActiveFilterCatalog(w, r)
 	case "GetAppConfig":
 		h.handleGetAppConfig(w, r)
 	case "GetAuthorImpact":
@@ -92,6 +92,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetMediaAssetDeliveryReference(w, r)
 	case "GetMediaAssetReference":
 		h.handleGetMediaAssetReference(w, r)
+	case "GetMediaImageReprocessRun":
+		h.handleGetMediaImageReprocessRun(w, r)
 	case "GetMediaUploadSession":
 		h.handleGetMediaUploadSession(w, r)
 	case "GetMyFootprint":
@@ -149,6 +151,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleMarkIntersectionsVisited(w, r)
 	case "OpenPostModerationCase":
 		h.handleOpenPostModerationCase(w, r)
+	case "PauseMediaImageReprocessRun":
+		h.handlePauseMediaImageReprocessRun(w, r)
 	case "PinComment":
 		h.handleSetCommentPinned(
 			w,
@@ -175,16 +179,22 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 			r,
 			strings.TrimSpace(r.PathValue("commentId")),
 		)
+	case "ResumeMediaImageReprocessRun":
+		h.handleResumeMediaImageReprocessRun(w, r)
 	case "ReviewPostModerationCase":
 		h.handleReviewPostModerationCase(w, r)
 	case "RollbackFilterCatalogRelease":
-		h.handleNotImplemented(w, r, operation)
+		h.handleRollbackFilterCatalogRelease(w, r)
+	case "RollbackMediaImageReprocessRun":
+		h.handleRollbackMediaImageReprocessRun(w, r)
 	case "SelectAutoVideoCover":
 		h.handleSelectAutoVideoCover(w, r)
 	case "SelectManualVideoCover":
 		h.handleSelectManualVideoCover(w, r)
 	case "StageFilterCatalogRelease":
-		h.handleNotImplemented(w, r, operation)
+		h.handleStageFilterCatalogRelease(w, r)
+	case "StartMediaImageReprocessRun":
+		h.handleStartMediaImageReprocessRun(w, r)
 	case "SubmitPostPublication":
 		h.handleSubmitPostPublication(w, r)
 	case "SupersedePostModerationCase":
@@ -269,6 +279,11 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases", operation: "StageFilterCatalogRelease"},
 	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases/{releaseId}:activate", operation: "ActivateFilterCatalogRelease"},
 	{method: "POST", pathTemplate: "/internal/content/filter-catalog-releases/{releaseId}:rollback", operation: "RollbackFilterCatalogRelease"},
+	{method: "POST", pathTemplate: "/internal/content/media-image-reprocess-runs", operation: "StartMediaImageReprocessRun"},
+	{method: "GET", pathTemplate: "/internal/content/media-image-reprocess-runs/{runId}", operation: "GetMediaImageReprocessRun"},
+	{method: "POST", pathTemplate: "/internal/content/media-image-reprocess-runs/{runId}:pause", operation: "PauseMediaImageReprocessRun"},
+	{method: "POST", pathTemplate: "/internal/content/media-image-reprocess-runs/{runId}:resume", operation: "ResumeMediaImageReprocessRun"},
+	{method: "POST", pathTemplate: "/internal/content/media-image-reprocess-runs/{runId}:rollback", operation: "RollbackMediaImageReprocessRun"},
 	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}", operation: "GetOwnedMediaAsset"},
 	{method: "PATCH", pathTemplate: "/internal/content/media/{mediaId}:access-policy", operation: "UpdateMediaAssetAccessPolicy"},
 	{method: "GET", pathTemplate: "/internal/content/media/{mediaId}:delivery-reference", operation: "GetMediaAssetDeliveryReference"},

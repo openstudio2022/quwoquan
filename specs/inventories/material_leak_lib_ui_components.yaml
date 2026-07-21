@@ -1564,10 +1564,6 @@ files:
     zone: ui
     material_import: none
     imports_cupertino: false
-  - path: quwoquan_app/lib/ui/content/entry/services/ios_video_editing_service.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: false
   - path: quwoquan_app/lib/ui/content/entry/services/publish_circle_services.dart
     zone: ui
     material_import: none

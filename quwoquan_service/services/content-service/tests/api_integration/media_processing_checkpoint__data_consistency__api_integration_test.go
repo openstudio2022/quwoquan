@@ -75,6 +75,92 @@ func TestMongoMediaProjectionCheckpointIsMonotonicAcrossReplicas(t *testing.T) {
 	}
 }
 
+func TestMongoMediaProcessingLeaseHasSingleOwnerAndRejectsStaleCheckpointWrite(t *testing.T) {
+	consumer := fmt.Sprintf("media-processing-lease-%d", time.Now().UnixNano())
+	collection := mongoDB.Collection("media_projection_checkpoints")
+	t.Cleanup(func() {
+		_, _ = collection.DeleteOne(context.Background(), bson.M{"_id": consumer})
+	})
+
+	replicaA := persistence.NewMongoMediaStore(mongoDB.Collection("media_upload_sessions"))
+	replicaB := persistence.NewMongoMediaStore(mongoDB.Collection("media_upload_sessions"))
+	now := time.Date(2032, time.April, 5, 6, 7, 8, 0, time.UTC)
+	ttl := 30 * time.Second
+
+	acquired, err := replicaA.TryAcquireMediaProcessingLease(
+		context.Background(),
+		consumer,
+		"replica-a",
+		now,
+		ttl,
+	)
+	if err != nil || !acquired {
+		t.Fatalf("replica A acquire lease: acquired=%v err=%v", acquired, err)
+	}
+	acquired, err = replicaB.TryAcquireMediaProcessingLease(
+		context.Background(),
+		consumer,
+		"replica-b",
+		now.Add(time.Second),
+		ttl,
+	)
+	if err != nil || acquired {
+		t.Fatalf("replica B acquired active lease: acquired=%v err=%v", acquired, err)
+	}
+
+	first := mediaCheckpointForTest(now.Add(2*time.Second), "evt-001")
+	advanced, err := replicaA.SaveMediaProcessingCheckpointWithLease(
+		context.Background(),
+		consumer,
+		"replica-a",
+		first,
+		now.Add(2*time.Second),
+		ttl,
+	)
+	if err != nil || !advanced {
+		t.Fatalf("active owner advance checkpoint: advanced=%v err=%v", advanced, err)
+	}
+
+	takeoverAt := now.Add(33 * time.Second)
+	acquired, err = replicaB.TryAcquireMediaProcessingLease(
+		context.Background(),
+		consumer,
+		"replica-b",
+		takeoverAt,
+		ttl,
+	)
+	if err != nil || !acquired {
+		t.Fatalf("replica B acquire expired lease: acquired=%v err=%v", acquired, err)
+	}
+	second := mediaCheckpointForTest(takeoverAt, "evt-002")
+	advanced, err = replicaA.SaveMediaProcessingCheckpointWithLease(
+		context.Background(),
+		consumer,
+		"replica-a",
+		second,
+		takeoverAt,
+		ttl,
+	)
+	if err != nil || advanced {
+		t.Fatalf("stale owner advanced checkpoint: advanced=%v err=%v", advanced, err)
+	}
+	advanced, err = replicaB.SaveMediaProcessingCheckpointWithLease(
+		context.Background(),
+		consumer,
+		"replica-b",
+		second,
+		takeoverAt,
+		ttl,
+	)
+	if err != nil || !advanced {
+		t.Fatalf("takeover owner advance checkpoint: advanced=%v err=%v", advanced, err)
+	}
+	got, err := replicaA.LoadCheckpoint(context.Background(), consumer)
+	if err != nil || got != second {
+		t.Fatalf("checkpoint after lease takeover=%q err=%v want=%q", got, err, second)
+	}
+}
+
 func mediaCheckpointForTest(occurredAt time.Time, eventID string) string {
 	return occurredAt.UTC().Format(time.RFC3339Nano) + "|" + eventID
 }

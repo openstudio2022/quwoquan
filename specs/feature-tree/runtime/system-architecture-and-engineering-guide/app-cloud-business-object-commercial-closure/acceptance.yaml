@@ -674,7 +674,7 @@ gwt_acceptance:
         - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
         - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
         - file: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
-        - file: quwoquan_app/test/user_acceptance/journeys/user/profile_tab_navigation_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart
         - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
         - file: quwoquan_app/test/user_acceptance/journeys/user/persona_management_journey__user_acceptance_test.dart
         - file: quwoquan_app/test/user_acceptance/journeys/user/user_settings_save_reopen_journey__user_acceptance_test.dart

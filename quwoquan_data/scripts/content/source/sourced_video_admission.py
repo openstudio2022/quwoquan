@@ -10,6 +10,7 @@ import cv2
 import imageio_ffmpeg
 
 from core.image_safety import assess_image
+from core.runtime_policy import active_runtime_policy
 
 
 def probe_sourced_video(path: Path) -> dict[str, object]:
@@ -129,7 +130,7 @@ def probe_audio_stream(path: Path) -> dict[str, object]:
         check=False,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=active_runtime_policy().video_probe_timeout_seconds,
     )
     detail = completed.stderr
     has_audio = bool(re.search(r"Stream #.+Audio:", detail))

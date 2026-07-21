@@ -1,0 +1,10 @@
+read_model: ChatMessageReceipt
+description: Message receipt fact row exposed only to eligible Conversation members.
+storage_backend: mongodb
+collection: message_receipts
+source_entities: [MessageReceipt]
+fields:
+  - {name: userId, type: string}
+  - {name: messageId, type: string}
+  - {name: status, type: string}
+  - {name: updatedAt, type: timestamp}

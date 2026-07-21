@@ -232,12 +232,14 @@ func (s *CircleService) SearchCircles(
 // CircleStatsWire 是 GetCircleStats 的稳定回读投影，键集合与
 // contracts/metadata/social/circle/projections/circle_stats_wire.yaml 对齐。
 type CircleStatsWire struct {
-	TotalMembers      int64 `json:"totalMembers"`
-	WeeklyActive      int64 `json:"weeklyActive"`
-	TotalPosts        int64 `json:"totalPosts"`
-	TotalDiscussions  int64 `json:"totalDiscussions"`
-	StorageUsedBytes  int64 `json:"storageUsedBytes"`
-	StorageQuotaBytes int64 `json:"storageQuotaBytes"`
+	CircleID          string `json:"circleId"`
+	MemberCount       int64  `json:"memberCount"`
+	PostCount         int64  `json:"postCount"`
+	DiscussionCount   int64  `json:"discussionCount"`
+	WeeklyActiveCount int64  `json:"weeklyActiveCount"`
+	LikeCount         int64  `json:"likeCount"`
+	StorageUsedBytes  int64  `json:"storageUsedBytes"`
+	StorageQuotaBytes int64  `json:"storageQuotaBytes"`
 }
 
 func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (CircleStatsWire, error) {
@@ -252,10 +254,12 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (Ci
 		return CircleStatsWire{}, err
 	}
 	return CircleStatsWire{
-		TotalMembers:      c.MemberCount,
-		WeeklyActive:      c.WeeklyActiveCount,
-		TotalPosts:        c.PostCount,
-		TotalDiscussions:  0,
+		CircleID:          c.ID,
+		MemberCount:       c.MemberCount,
+		PostCount:         c.PostCount,
+		DiscussionCount:   0,
+		WeeklyActiveCount: c.WeeklyActiveCount,
+		LikeCount:         0,
 		StorageUsedBytes:  c.StorageUsedBytes,
 		StorageQuotaBytes: c.StorageQuotaBytes,
 	}, nil
@@ -348,6 +352,19 @@ func (s *CircleService) GetCircleFeed(
 		err = generated.AppErrorFromInternalError("circle feed reader is not configured")
 		return CircleFeedSlice{}, err
 	}
+	circle, findErr := s.GetCircle(ctx, circleID)
+	if findErr != nil {
+		err = findErr
+		return CircleFeedSlice{}, err
+	}
+	if circle.Status != model.CircleStatusActive ||
+		circle.Visibility != model.CircleVisibilityPublic {
+		// This endpoint is deliberately public-only. Returning not-found for
+		// non-public or inactive records avoids disclosing their existence;
+		// member-only feed policy must be introduced as a separate typed facet.
+		err = generated.AppErrorFromCircleNotFound("public circle feed is unavailable")
+		return CircleFeedSlice{}, err
+	}
 	items, nextCursor, readErr := s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
 		Identity: identity,
 		Type:     contentType,
@@ -392,8 +409,16 @@ func (s *CircleService) ListCircleDiscoveryFeed(
 		err = generated.AppErrorFromInvalidArgument("scope must be recommended or mine")
 		return CircleDiscoveryFeedSlice{}, err
 	}
-	if query.Limit <= 0 || query.Limit > 200 {
-		err = generated.AppErrorFromInvalidArgument("limit must be in 1..200")
+	if query.Limit <= 0 || query.Limit > 50 {
+		err = generated.AppErrorFromInvalidArgument("limit must be in 1..50")
+		return CircleDiscoveryFeedSlice{}, err
+	}
+	query.Sort = strings.TrimSpace(query.Sort)
+	if query.Sort == "" {
+		query.Sort = "recommended"
+	}
+	if query.Sort != "recommended" && query.Sort != "active" && query.Sort != "latest" {
+		err = generated.AppErrorFromInvalidArgument("sort must be recommended, active or latest")
 		return CircleDiscoveryFeedSlice{}, err
 	}
 	if current, ok := operation.FromContext(ctx); ok {
@@ -407,6 +432,10 @@ func (s *CircleService) ListCircleDiscoveryFeed(
 	}
 	result, readErr := s.discoveryFeed.ListCircleDiscoveryFeed(ctx, query)
 	if readErr != nil {
+		if errors.Is(readErr, ErrInvalidCircleFeedCursor) {
+			err = generated.AppErrorFromInvalidArgument(readErr.Error())
+			return CircleDiscoveryFeedSlice{}, err
+		}
 		err = generated.AppErrorFromInternalError(readErr.Error())
 		return CircleDiscoveryFeedSlice{}, err
 	}

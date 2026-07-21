@@ -35,6 +35,13 @@ var assistantWrongDestinationIncidentsTotal = promauto.NewCounter(prometheus.Cou
 	Help: "Proactive delivery destination validation failures (potential mis-delivery).",
 })
 
+// assistantMentionedConsumerDLQTotal records messages durably moved from the
+// @小趣 consumer group to its replayable dead-letter stream.
+var assistantMentionedConsumerDLQTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "assistant_mentioned_consumer_dlq_total",
+	Help: "Assistant-mentioned consumer messages moved to the replayable dead-letter stream.",
+})
+
 func recordAssistantFirstVisibleResponse(elapsed time.Duration) {
 	if elapsed <= 0 {
 		return
@@ -54,4 +61,12 @@ func recordAssistantGroundingOutcome(success bool) {
 // subscription 投递前校验失败时）。
 func RecordAssistantWrongDestinationIncident() {
 	assistantWrongDestinationIncidentsTotal.Inc()
+}
+
+// RecordAssistantMentionedConsumerDLQ is called only after a failed @小趣
+// mention has been retained in the DLQ and ACKed from the source consumer
+// group, so alert volume is a count of recoverable dead letters rather than
+// repeated processing attempts.
+func RecordAssistantMentionedConsumerDLQ() {
+	assistantMentionedConsumerDLQTotal.Inc()
 }

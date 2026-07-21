@@ -1,9 +1,11 @@
 package local_contract
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -76,6 +78,61 @@ func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 	}
 	if summary.TotalCount != 0 {
 		t.Fatalf("invalid batch must not partially write: %+v", summary)
+	}
+}
+
+func TestTelemetryGeneratedInputAcceptsCataloguedProductAndChatExtensions(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store, store)
+	now := time.Now().UTC().Add(-time.Minute)
+	productAction := validEvent("product_action", "event", now)
+	journey, action := "chat_group", "create"
+	objectType, objectID := "conversation", "opaque-object-id"
+	targetType, targetID := "conversation", "opaque-target-id"
+	productAction.Journey = &journey
+	productAction.Action = &action
+	productAction.ObjectType = &objectType
+	productAction.ObjectID = &objectID
+	productAction.TargetType = &targetType
+	productAction.TargetID = &targetID
+
+	chatOutcome := validEvent("chat_interaction_outcome", "event", now)
+	chatAction, outcome := "group_create", "succeeded"
+	source, memberBucket := "circle", "two_to_five"
+	chatOutcome.ChatAction = &chatAction
+	chatOutcome.ChatOutcome = &outcome
+	chatOutcome.ChatSource = &source
+	chatOutcome.MemberCountBucket = &memberBucket
+
+	ack, err := service.ReportEventBatch(
+		context.Background(),
+		digestKey("generated-event-input-catalog"),
+		[]application.EventRecordInput{productAction, chatOutcome},
+	)
+	if err != nil || ack.AcceptedCount != 2 {
+		t.Fatalf("catalogued product/chat extensions must be accepted: ack=%+v err=%v", ack, err)
+	}
+}
+
+func TestTelemetryGeneratedInputStrictlyRejectsUndeclaredExtensions(t *testing.T) {
+	validBody := []byte(`{"events":[{"logType":"event","eventType":"chat_interaction_outcome","sessionId":"s.Z3Vlc3RfdGVzdA.1","pageName":"chat_detail","occurredAt":"2026-07-21T01:00:00Z","deviceManufacturer":"Apple","deviceModel":"iPhone","appVersion":"1.0.0","networkClass":"wifi","devicePlatform":"ios","chatAction":"mention_send","chatOutcome":"succeeded","mentionScope":"member"}]}`)
+	var accepted struct {
+		Events []application.EventRecordInput `json:"events"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(validBody))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&accepted); err != nil {
+		t.Fatalf("catalogued chat event must decode: %v", err)
+	}
+	if len(accepted.Events) != 1 || accepted.Events[0].ChatAction == nil {
+		t.Fatalf("decoded chat event lost typed extension: %+v", accepted.Events)
+	}
+
+	invalidBody := []byte(`{"events":[{"logType":"event","eventType":"chat_interaction_outcome","sessionId":"s.Z3Vlc3RfdGVzdA.1","pageName":"chat_detail","occurredAt":"2026-07-21T01:00:00Z","deviceManufacturer":"Apple","deviceModel":"iPhone","appVersion":"1.0.0","networkClass":"wifi","devicePlatform":"ios","chatAction":"mention_send","chatOutcome":"succeeded","conversationId":"forbidden"}]}`)
+	decoder = json.NewDecoder(bytes.NewReader(invalidBody))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&accepted); err == nil {
+		t.Fatal("undeclared conversationId must fail strict event decoding")
 	}
 }
 

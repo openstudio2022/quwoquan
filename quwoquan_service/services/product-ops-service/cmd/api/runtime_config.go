@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	platformredis "quwoquan_service/internal/platform/redis"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rtredis "quwoquan_service/runtime/redis"
+	opsgenerated "quwoquan_service/services/product-ops-service/internal/generated"
 
 	"gopkg.in/yaml.v3"
 )
@@ -93,7 +95,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -187,6 +189,69 @@ func applyEnvOverrides(cfg *config) {
 	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Project), "${") {
 		cfg.SLS.Project = ""
 	}
+}
+
+func resolveSLSBinding(
+	cfg config,
+	appEnv string,
+	configProvider runtimeconfig.RuntimeConfigProvider,
+) (config, error) {
+	if appEnv == "alpha" {
+		return cfg, nil
+	}
+	if configProvider == nil {
+		return config{}, fmt.Errorf("runtime.log.sink binding has no runtime config provider")
+	}
+	descriptor, found := opsgenerated.ExternalProviderBindingFor(appEnv, "runtime.log.sink")
+	if !found || descriptor.State != "enabled" || descriptor.AdapterID != "ext.observability.aliyun_sls" {
+		return config{}, fmt.Errorf("runtime.log.sink binding is unavailable for environment=%s", appEnv)
+	}
+	for _, environmentKey := range descriptor.SecretEnvironmentKeys {
+		if _, ok := configProvider.GetString(environmentKey); !ok {
+			return config{}, fmt.Errorf(
+				"runtime.log.sink secret material is unavailable for environment=%s",
+				appEnv,
+			)
+		}
+	}
+	requiredEndpoint := func(role string) (string, error) {
+		environmentKey := strings.TrimSpace(descriptor.EndpointEnvironmentKeys[role])
+		value, ok := configProvider.GetString(environmentKey)
+		if environmentKey == "" || !ok {
+			return "", fmt.Errorf(
+				"runtime.log.sink endpoint material is unavailable for role=%s",
+				role,
+			)
+		}
+		return value, nil
+	}
+	var err error
+	if cfg.SLS.Region, err = requiredEndpoint("region"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.Endpoint, err = requiredEndpoint("endpoint"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.Project, err = requiredEndpoint("project"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.RawLogstore, err = requiredEndpoint("raw_logstore"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.StartupDiagnosticLogstore, err = requiredEndpoint("startup_diagnostic_logstore"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.RuntimeLogstore, err = requiredEndpoint("runtime_logstore"); err != nil {
+		return config{}, err
+	}
+	if cfg.SLS.AggregateLogstore, err = requiredEndpoint("aggregate_logstore"); err != nil {
+		return config{}, err
+	}
+	cfg.SLS.TimeoutMS = descriptor.TimeoutMilliseconds
+	if cfg.SLS.TimeoutMS <= 0 {
+		return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
+	}
+	return cfg, nil
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -296,16 +361,16 @@ func operatorOIDCRequired(appEnv string) bool {
 	}
 }
 
-func buildRedisRouter(cfg config) (*rtredis.Router, error) {
+func buildRedisRouter(cfg config) (*rtredis.Router, map[string]string, error) {
 	recScene, err := buildRedisSceneConfig("rec", cfg.Redis.Rec)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	generalScene, err := buildRedisSceneConfig("general", cfg.Redis.General)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return platformredis.NewRouter(rtredis.RouterConfig{
+	router, err := platformredis.NewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec":      recScene,
 			"general":  generalScene,
@@ -314,6 +379,12 @@ func buildRedisRouter(cfg config) (*rtredis.Router, error) {
 		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
 		DefaultScene: rtredis.GeneratedDefaultScene,
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return router, map[string]string{
+		"general": generalScene.Mode,
+	}, nil
 }
 
 func buildRedisSceneConfig(name string, cfg redisSceneCfg) (rtredis.SceneConfig, error) {

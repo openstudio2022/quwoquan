@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/circle-service/internal/application"
 )
 
@@ -94,10 +94,10 @@ func normalizeAccountSubjects(values []string) []string {
 }
 
 func uniqueUserAccountMessages(
-	groups ...[]rtredis.StreamMessage,
-) []rtredis.StreamMessage {
+	groups ...[]runtimemessaging.StreamDelivery,
+) []runtimemessaging.StreamDelivery {
 	seen := make(map[string]struct{})
-	result := make([]rtredis.StreamMessage, 0)
+	result := make([]runtimemessaging.StreamDelivery, 0)
 	for _, messages := range groups {
 		for _, message := range messages {
 			if _, exists := seen[message.ID]; exists {
@@ -110,27 +110,28 @@ func uniqueUserAccountMessages(
 	return result
 }
 
-func userAccountClosedDLQValues(
-	message rtredis.StreamMessage,
+func userAccountClosedDLQFields(
+	message runtimemessaging.StreamDelivery,
 	errorDigest string,
 	attempts int64,
-) map[string]string {
-	eventName := strings.TrimSpace(message.Values["eventName"])
+) []runtimemessaging.DurableField {
+	values := durableFieldValues(message.Fields)
+	eventName := strings.TrimSpace(values["eventName"])
 	if eventName == "" {
 		eventName = "unknown"
 	}
-	return map[string]string{
+	return durableFieldsFromValues(map[string]string{
 		"deadLetterId":    irreversiblyIdentifyUserAccountMessage(message.ID),
 		"sourceStream":    UserAccountEventStream,
 		"sourceStreamId":  message.ID,
 		"eventName":       eventName,
-		"eventIdDigest":   irreversibleDigest(message.Values["eventId"]),
-		"accountIdDigest": irreversibleDigest(message.Values["accountId"]),
-		"payloadDigest":   irreversibleDigest(message.Values["payload"]),
+		"eventIdDigest":   irreversibleDigest(values["eventId"]),
+		"accountIdDigest": irreversibleDigest(values["accountId"]),
+		"payloadDigest":   irreversibleDigest(values["payload"]),
 		"errorDigest":     errorDigest,
 		"attempts":        strconv.FormatInt(attempts, 10),
 		"deadLetteredAt":  time.Now().UTC().Format(time.RFC3339Nano),
-	}
+	})
 }
 
 func irreversiblyIdentifyUserAccountMessage(messageID string) string {

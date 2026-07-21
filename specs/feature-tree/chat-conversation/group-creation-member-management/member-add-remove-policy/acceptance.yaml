@@ -7,11 +7,13 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: group-creation-member-management
 scope:
-  summary: 群成员进出治理策略：加人授权与关系 gate、移出角色矩阵、自愿退群语义、解散终态。
+  summary: 群成员进出治理策略：加人授权与关系 gate、移出角色矩阵、自愿退群语义、离群收件箱清理与解散终态。
   in_scope:
   - AddMembers 操作者须为活跃成员；新成员互关/拉黑 gate（圈子绑定群跳过）；上限 group_full
   - RemoveMember 仅 owner/admin；owner 不可被移出；admin 仅可移出普通成员；禁止 self-remove
   - LeaveConversation 自愿退群（owner 须先转让 group_owner_must_transfer_before_leave）
+  - 被移出或主动退群的用户在同一事务失去 ConversationUserState / ChatInbox 行；迟到 MessageSent 投影为 no-op，
+    并向当事人投递一次终态 realtime 事件以清除本地会话与离线搜索缓存
   - dissolved 终态下成员命令返回 conversation_dissolved
   out_of_scope:
   - 入群申请/审批与扫码进群（JoinRequest 对象链独立工作包）
@@ -27,10 +29,13 @@ gwt_acceptance:
     - 非成员加人被拒（not_found 信息隐藏）；非互关/拉黑目标被拒；超限返回 group_full。
     - 普通成员移出他人被拒；owner 不可被移出；admin 不可移出 admin；self-remove 被引导走退群。
     - 成员退群成功且 roster 收敛；owner 退群返回须先转让；解散后成员命令返回 conversation_dissolved。
+    - 被移出或主动退群后，当事人的 ChatInbox 不再含该会话；终态 realtime 事件只投递给当事人与剩余活跃成员，
+      端侧立即清除会话/离线搜索缓存，迟到消息投影不重建收件箱行。
     done_when:
-    - metadata ownership_policy 由服务端强制执行且三层证据齐备。
+    - metadata ownership_policy 由服务端强制执行，离群后的收件箱删除、迟到投影幂等与端侧缓存清理均有三层证据。
     edge_cases:
     - 重复退群 / 重复加人 no-op 幂等重放。
+    - 被移除用户尝试更新会话设置必须按 non-member 的 conversation_not_found 拒绝，不能重建收件箱行。
     contract_refs:
     - quwoquan_service/contracts/metadata/messages/conversation_membership/service.yaml#AddMembers
     - quwoquan_service/contracts/metadata/messages/conversation_membership/service.yaml#RemoveMember
@@ -42,8 +47,10 @@ gwt_acceptance:
       recorded:
       - quwoquan_service/services/chat-service/tests/api_integration/group_governance_authorization__security__api_integration_test.go
       - quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
+      - quwoquan_service/services/chat-service/internal/adapters/mq/event_publisher__local_contract_test.go
       - quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
       - quwoquan_app/test/local_contract/ui/chat/chat_member_roster_consistency__local_contract_test.dart
+      - quwoquan_app/test/local_contract/cloud/realtime/realtime_message_sent_handler__local_contract_test.dart
       - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
     status: implemented
     test_evidence:
@@ -56,6 +63,7 @@ gwt_acceptance:
         - api_integration.chat.membership.remove_role_matrix_enforced
         - api_integration.chat.membership.leave_owner_must_transfer
         - api_integration.chat.membership.dissolved_commands_rejected
+        - api_integration.chat.membership.removed_or_left_user_loses_inbox_access
         envs:
         - beta
       - layer: local_contract
@@ -64,6 +72,7 @@ gwt_acceptance:
         cases:
         - local_contract.chat_conversation.group_creation_member_management.member_add_remove_policy.remove_entry_role_gate
         - local_contract.chat_conversation.group_creation_member_management.member_add_remove_policy.leave_uses_leave_conversation
+        - local_contract.chat_conversation.group_creation_member_management.member_add_remove_policy.terminal_realtime_evicts_local_cache
         envs:
         - local
       supporting:

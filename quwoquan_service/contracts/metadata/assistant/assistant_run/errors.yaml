@@ -30,6 +30,31 @@ errors:
       zh: "执行请求参数有误"
       en: "Assistant run request is invalid"
 
+  - code: ASSISTANT.USER.intersection_evidence_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    recovery_action: refresh
+    dart_const: intersectionEvidenceNotFound
+    go_const: ErrIntersectionEvidenceNotFound
+    l10n_key: assistant.error.intersection_evidence_not_found
+    user_message:
+      zh: "这条交集线索已失效或不可访问"
+      en: "This intersection evidence is no longer available"
+
+  - code: ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable
+    kind: MIDDLEWARE
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: intersectionEvidenceUnavailable
+    go_const: ErrIntersectionEvidenceUnavailable
+    l10n_key: assistant.error.intersection_evidence_unavailable
+    user_message:
+      zh: "交集证据暂时无法核验，请稍后重试"
+      en: "Intersection evidence cannot be verified right now"
+
   - code: ASSISTANT.USER.run_idempotency_conflict
     kind: USER
     reason: idempotency_conflict
@@ -117,6 +142,58 @@ errors:
     user_message:
       zh: "请求超时，请稍后重试"
       en: "Request timed out, please try again later"
+
+  - code: ASSISTANT.MIDDLEWARE.model_provider_unavailable
+    kind: MIDDLEWARE
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: modelProviderUnavailable
+    go_const: ErrModelProviderUnavailable
+    l10n_key: assistant.error.model_provider_unavailable
+    user_message:
+      zh: "助手模型服务暂不可用，请稍后重试"
+      en: "Assistant model service is temporarily unavailable"
+
+  - code: ASSISTANT.MIDDLEWARE.public_search_provider_unavailable
+    kind: MIDDLEWARE
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: publicSearchProviderUnavailable
+    go_const: ErrPublicSearchProviderUnavailable
+    l10n_key: assistant.error.public_search_provider_unavailable
+    user_message:
+      zh: "公开信息检索暂不可用，请稍后重试"
+      en: "Public search is temporarily unavailable"
+
+  - code: ASSISTANT.MIDDLEWARE.weather_provider_unavailable
+    kind: MIDDLEWARE
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: weatherProviderUnavailable
+    go_const: ErrWeatherProviderUnavailable
+    l10n_key: assistant.error.weather_provider_unavailable
+    user_message:
+      zh: "天气数据暂不可用，请稍后重试"
+      en: "Weather data is temporarily unavailable"
+
+  - code: ASSISTANT.MIDDLEWARE.finance_provider_unavailable
+    kind: MIDDLEWARE
+    reason: unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: financeProviderUnavailable
+    go_const: ErrFinanceProviderUnavailable
+    l10n_key: assistant.error.finance_provider_unavailable
+    user_message:
+      zh: "金融行情数据暂不可用，请稍后重试"
+      en: "Financial market data is temporarily unavailable"
 
   - code: ASSISTANT.SYSTEM.tool_observation_invalid
     kind: SYSTEM

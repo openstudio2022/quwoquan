@@ -22,7 +22,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ContactHomeRow'
+                                $ref: '#/components/schemas/ListContactHomePage'
                 default:
                     description: Runtime failure
                     content:
@@ -49,7 +49,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ChatContactListRow'
+                                $ref: '#/components/schemas/ListContactsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -76,7 +76,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ListConversationsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -109,8 +109,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/Conversation'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ChatConversation'
                 default:
                     description: Runtime failure
                     content:
@@ -143,7 +147,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ChatConversation'
                 default:
                     description: Runtime failure
                     content:
@@ -186,7 +190,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ChatConversation'
                 default:
                     description: Runtime failure
                     content:
@@ -303,7 +307,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ChatConversation'
                 default:
                     description: Runtime failure
                     content:
@@ -420,7 +424,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ChatConversation'
                 default:
                     description: Runtime failure
                     content:
@@ -493,7 +497,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ConversationMember'
+                                $ref: '#/components/schemas/ListMembersPage'
                 default:
                     description: Runtime failure
                     content:
@@ -604,7 +608,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Message'
+                                $ref: '#/components/schemas/ListMessagesPage'
                 default:
                     description: Runtime failure
                     content:
@@ -642,8 +646,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/Message'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ChatSendMessageResult'
                 default:
                     description: Runtime failure
                     content:
@@ -771,7 +779,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/MessageReceipt'
+                                $ref: '#/components/schemas/GetReceiptsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -884,7 +892,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SyncMessagesResponse'
+                                $ref: '#/components/schemas/ChatMessageSyncSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -911,7 +919,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/BatchGetConversationsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -938,7 +946,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Conversation'
+                                $ref: '#/components/schemas/ListConversationTimestampsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -965,7 +973,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ChatContactListRow'
+                                $ref: '#/components/schemas/ListGroupCandidatesPage'
                 default:
                     description: Runtime failure
                     content:
@@ -1025,7 +1033,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ChatInbox'
+                                $ref: '#/components/schemas/ListInboxPage'
                 default:
                     description: Runtime failure
                     content:
@@ -1052,7 +1060,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/MessageHomeRow'
+                                $ref: '#/components/schemas/ListMessageHomePage'
                 default:
                     description: Runtime failure
                     content:
@@ -1079,7 +1087,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SelectableGroupConversationRow'
+                                $ref: '#/components/schemas/ListSelectableGroupConversationsPage'
                 default:
                     description: Runtime failure
                     content:
@@ -1112,7 +1120,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ChatContactListRow'
+                                $ref: '#/components/schemas/ListSelectableGroupContactMembersPage'
                 default:
                     description: Runtime failure
                     content:
@@ -1131,15 +1139,58 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AddMembersRequest
             x-contract-placeholder: true
+        BatchGetConversationsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatConversation'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatConversation
         ChatContactListRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatContactListRow
             x-contract-placeholder: true
+        ChatConversation:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatConversation
+            x-contract-placeholder: true
+        ChatConversationTimestamp:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatConversationTimestamp
+            x-contract-placeholder: true
         ChatInbox:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatInbox
+            x-contract-placeholder: true
+        ChatMessageClient:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatMessageClient
+            x-contract-placeholder: true
+        ChatMessageReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatMessageReceipt
+            x-contract-placeholder: true
+        ChatMessageSyncSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatMessageSyncSlice
+            x-contract-placeholder: true
+        ChatSendMessageResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatSendMessageResult
             x-contract-placeholder: true
         ContactHomeRow:
             type: object
@@ -1151,11 +1202,24 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: Conversation
             x-contract-placeholder: true
-        ConversationMember:
+        ConversationMemberListRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ConversationMember
+            x-contract-entity: ConversationMemberListRow
             x-contract-placeholder: true
+        GetReceiptsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatMessageReceipt'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatMessageReceipt
         GroupHome:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1171,6 +1235,149 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: LeaveConversationRequest
             x-contract-placeholder: true
+        ListContactHomePage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ContactHomeRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ContactHomeRow
+        ListContactsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatContactListRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatContactListRow
+        ListConversationTimestampsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatConversationTimestamp'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatConversationTimestamp
+        ListConversationsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatConversation'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatConversation
+        ListGroupCandidatesPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatContactListRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatContactListRow
+        ListInboxPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatInbox'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatInbox
+        ListMembersPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ConversationMemberListRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ConversationMemberListRow
+        ListMessageHomePage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MessageHomeRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: MessageHomeRow
+        ListMessagesPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatMessageClient'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatMessageClient
+        ListSelectableGroupContactMembersPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatContactListRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: ChatContactListRow
+        ListSelectableGroupConversationsPage:
+            type: object
+            required:
+                - items
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SelectableGroupConversationRow'
+                nextCursor:
+                    type: string
+                    nullable: true
+            x-contract-entity: SelectableGroupConversationRow
         MarkAsReadRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1186,11 +1393,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MessageHomeRow
             x-contract-placeholder: true
-        MessageReceipt:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: MessageReceipt
-            x-contract-placeholder: true
         RecallMessageRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1200,11 +1402,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SelectableGroupConversationRow
-            x-contract-placeholder: true
-        SyncMessagesResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SyncMessagesResponse
             x-contract-placeholder: true
         TransferOwnershipRequest:
             type: object

@@ -26,6 +26,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -1187,6 +1188,8 @@ class RemoteAssistantRepository
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
+    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
+        const <AssistantIntersectionEvidenceRef>[],
   }) async {
     final uri = _assistantUri(
       AssistantApiMetadata.startAssistantRunPath(
@@ -1212,6 +1215,12 @@ class RemoteAssistantRepository
         'domainId': domainId,
         'input': <String, dynamic>{'text': text},
         'trigger': const <String, dynamic>{'type': 'user_message'},
+        if (intersectionEvidenceRefs.isNotEmpty)
+          'contextSnapshot': <String, dynamic>{
+            'intersectionEvidenceRefs': intersectionEvidenceRefs
+                .map((ref) => ref.toJson())
+                .toList(growable: false),
+          },
       }),
     );
     _debugAssistantRepository(
@@ -1369,8 +1378,7 @@ class RemoteAssistantRepository
           _debugAssistantRepository(
             'sse event type=${decoded.event.eventType} '
             'seq=${decoded.event.seq} runId=$runId '
-            'skill=${decoded.event.payload['skillId'] ?? ''} '
-            'tool=${_assistantToolNameFromPayload(decoded.event.payload)}',
+            'process=${AssistantRunStreamEvent.fromWire(decoded.event).process?.stage ?? ''}',
           );
           yield decoded;
         }
@@ -1493,6 +1501,12 @@ _AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
       'AssistantStreamEvent.payload must be an object',
     );
   }
+  if (parseAssistantRunStreamEventType(envelope['eventType'] as String) ==
+      AssistantRunStreamEventType.unknown) {
+    throw FormatException(
+      'AssistantStreamEvent.eventType is unsupported: ${envelope['eventType']}',
+    );
+  }
   return _AssistantSseFrame(
     event: AssistantStreamEventWire.fromJson(envelope),
     lastEventId: lastEventId,
@@ -1500,10 +1514,7 @@ _AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
 }
 
 bool _isAssistantTerminalStreamEvent(AssistantStreamEventWire event) {
-  return switch (event.eventType) {
-    'turn_completed' || 'turn_failed' || 'turn_cancelled' => true,
-    _ => false,
-  };
+  return parseAssistantRunStreamEventType(event.eventType).isTerminal;
 }
 
 bool _isAssistantStreamRetryable(CloudException error) {
@@ -1529,12 +1540,4 @@ String _assistantDebugSnippet(String value, {int maxLength = 120}) {
     return normalized;
   }
   return '${normalized.substring(0, maxLength)}...';
-}
-
-String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
-  final raw = payload['toolUse'];
-  if (raw is Map) {
-    return (raw['toolName'] ?? '').toString().trim();
-  }
-  return '';
 }

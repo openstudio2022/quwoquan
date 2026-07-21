@@ -845,6 +845,27 @@ flowchart LR
 | `IntersectionRepresentativeActor` | 人数句前的代表人锚点（头像/名字/可点击目标/隐私态） | 不替代完整证据列表，不用于本地拼装结论句 |
 | `IntersectionActionHint` | 交集或影响的下一步建议（关注、打招呼、进入圈子、查看路线等） | 不承载事实证据，不决定排序 |
 
+### 9.5 小趣交集证据 handoff（授权回查单轨）
+
+对象页、视频书和任何 `dispatch: assistant` 交集入口只能提交
+`AssistantIntersectionEvidenceRef`：
+
+```text
+intersectionId + evidenceId(pointSummarySnapshotId) + sourceRef + objectTypeRef + objectId
+```
+
+- 此引用只表达“请解释哪一条交集”，不是事实正文；App 不得传递或拼接标题、`primaryText`、
+  标签、样本、人数、URL 或深链作为 grounding 真相。
+- assistant-service 必须以当前 persona 调用 content 的公开交集 Reader，重新核验该
+  `intersectionId`、快照、kind 和目标对象；通过后才可写入模型 prompt、run evidence ledger
+  和 citation。
+- 当前事实不存在、证据快照失效、actor 无权访问、`sourceRef` 或目标不一致时必须
+  fail-closed，返回 assistant metadata 定义的结构化失败；不得静默忽略引用后继续把客户端
+  内容当作事实，也不得回退到 generic post。
+- 小趣回答中的引用使用 `CitationDestination`：站内只承载 canonical object type/id 与
+  metadata 生成的 deep link，站外只承载已校验 HTTPS URL。未知对象、无链接或无权限时不
+  渲染可点击 citation。
+
 ---
 
 ## 10. contract card 模板

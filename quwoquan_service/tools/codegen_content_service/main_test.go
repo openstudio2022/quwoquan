@@ -48,6 +48,10 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 		"DismissReport",
 		"ResolveReport",
 		"GetCurrentPostModerationCase",
+		"StageFilterCatalogRelease",
+		"ActivateFilterCatalogRelease",
+		"RollbackFilterCatalogRelease",
+		"GetActiveFilterCatalog",
 	} {
 		if _, found := operations[operation]; !found {
 			t.Errorf("route packet is missing %s", operation)
@@ -78,11 +82,14 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 
 	for operation, handler := range map[string]string{
 		"BeginReportReview":              "handleBeginReportReview",
+		"ActivateFilterCatalogRelease":   "handleActivateFilterCatalogRelease",
 		"BindMediaAssetsToComment":       "handleBindMediaAssetsToComment",
 		"CreateComment":                  "handleCreateComment",
 		"CreateOutboundShare":            "handleCreateOutboundShare",
 		"DeleteComment":                  "handleDeleteComment",
 		"DismissReport":                  "handleDismissReport",
+		"GetActiveFilterCatalog":         "handleGetActiveFilterCatalog",
+		"GetMediaImageReprocessRun":      "handleGetMediaImageReprocessRun",
 		"GetReport":                      "handleGetReport",
 		"GetCurrentPostModerationCase":   "handleGetCurrentPostModerationCase",
 		"GetMediaAssetReference":         "handleGetMediaAssetReference",
@@ -95,9 +102,15 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"ListMyReports":                  "handleListMyReports",
 		"ListReports":                    "handleListReports",
 		"PinComment":                     "handleSetCommentPinned",
+		"PauseMediaImageReprocessRun":    "handlePauseMediaImageReprocessRun",
 		"ReactToComment":                 "handleReactToComment",
 		"ResolveReport":                  "handleResolveReport",
 		"RestoreComment":                 "handleRestoreComment",
+		"ResumeMediaImageReprocessRun":   "handleResumeMediaImageReprocessRun",
+		"RollbackFilterCatalogRelease":   "handleRollbackFilterCatalogRelease",
+		"RollbackMediaImageReprocessRun": "handleRollbackMediaImageReprocessRun",
+		"StageFilterCatalogRelease":      "handleStageFilterCatalogRelease",
+		"StartMediaImageReprocessRun":    "handleStartMediaImageReprocessRun",
 		"SubmitPostPublication":          "handleSubmitPostPublication",
 		"UpdatePostSettings":             "handleUpdatePostSettings",
 		"PromotePostToWork":              "handlePromotePostToWork",

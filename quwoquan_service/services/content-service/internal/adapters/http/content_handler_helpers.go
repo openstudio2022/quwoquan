@@ -114,6 +114,17 @@ func resolvePersonaID(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 }
 
+// resolveRecommendationActorID returns the same public actor key consumed by
+// behavior ingestion, recommendation features, exposure governance, and
+// intersection read models. AccountID is an authentication owner and must not
+// become a competing recommendation-state key.
+func resolveRecommendationActorID(r *http.Request) string {
+	if actorID, ok := verifiedOperationActorID(r); ok {
+		return actorID
+	}
+	return resolvePersonaID(r)
+}
+
 // resolveDeviceActorID always prefers the verified device principal. Query and
 // header values remain only for isolated transport tests without auth middleware.
 func resolveDeviceActorID(r *http.Request) string {

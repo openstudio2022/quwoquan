@@ -31,4 +31,3 @@ query_scenarios:
       - 不暴露 reviewerId 与内部处置细节
     dart_tests:
       - quwoquan_app/test/local_contract/cloud/content/report_query_contract__functional__local_contract_test.dart
-      - quwoquan_app/test/user_acceptance/pages/settings/my_reports/my_reports_page__user_acceptance_test.dart

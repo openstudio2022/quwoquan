@@ -77,6 +77,7 @@ void main() {
     expect(observer.selected, <FilterCatalogSource>[
       FilterCatalogSource.verifiedCache,
     ]);
+    expect(resolved.cacheVerifiedAt, DateTime.utc(2026));
   });
 
   test(
@@ -178,25 +179,47 @@ final class _FakeBootstrap implements FilterCatalogBootstrapReader {
 }
 
 final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
-  _MemoryVerifiedStore({this.snapshot, this.failWrites = false});
+  _MemoryVerifiedStore({
+    FilterCatalogSnapshot? snapshot,
+    this.failWrites = false,
+  }) : _entry = snapshot == null
+           ? null
+           : VerifiedFilterCatalogCacheEntry(
+               snapshot: snapshot,
+               verifiedAt: DateTime.utc(2026),
+             );
 
-  FilterCatalogSnapshot? snapshot;
+  VerifiedFilterCatalogCacheEntry? _entry;
   final bool failWrites;
   int clearCount = 0;
+
+  FilterCatalogSnapshot? get snapshot => _entry?.snapshot;
+
+  set snapshot(FilterCatalogSnapshot? value) {
+    _entry = value == null
+        ? null
+        : VerifiedFilterCatalogCacheEntry(
+            snapshot: value,
+            verifiedAt: DateTime.utc(2026),
+          );
+  }
 
   @override
   Future<void> clear() async {
     clearCount += 1;
-    snapshot = null;
+    _entry = null;
   }
 
   @override
-  Future<FilterCatalogSnapshot?> read() async => snapshot;
+  Future<VerifiedFilterCatalogCacheEntry?> read() async => _entry;
 
   @override
   Future<void> write(FilterCatalogSnapshot value) async {
     if (failWrites) throw StateError('cache unavailable');
-    snapshot = value;
+    _entry = VerifiedFilterCatalogCacheEntry(
+      snapshot: value,
+      verifiedAt: DateTime.now().toUtc(),
+    );
   }
 }
 
@@ -210,8 +233,8 @@ final class _RecordingObserver implements FilterCatalogResolutionObserver {
   }
 
   @override
-  void sourceSelected(FilterCatalogSource source, String releaseId) {
-    selected.add(source);
+  void sourceSelected(ResolvedFilterCatalog resolved) {
+    selected.add(resolved.source);
   }
 }
 

@@ -62,7 +62,6 @@ gwt_acceptance:
       - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_half_sheet/assistant_half_sheet_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/personal_assistant_dialog/personal_assistant_dialog_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_history/assistant_history_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_feedback/assistant_feedback_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/search/global_search_landing/global_search_landing_page__user_acceptance_test.dart

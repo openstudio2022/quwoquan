@@ -33,7 +33,6 @@ journeys:
     domain_services:
       - user-identity-profile-relationship
       - runtime
-      - integration
     uat_refs:
       - UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     status: specified
@@ -77,7 +76,7 @@ journeys:
       - user-identity-profile-relationship
       - circle-community
       - tag-interest-taxonomy
-      - integration
+      - runtime
       - product-ops-growth
     uat_refs:
       - UAT_CONTENT_CREATION_TO_PUBLICATION
@@ -119,6 +118,7 @@ journeys:
       - message-direct-and-greeting-upgrade
       - message-group-entry-matrix
       - message-assistant-in-conversation
+      - message-call-and-offline-delivery
     domain_services:
       - chat-conversation
       - user-identity-profile-relationship
@@ -126,6 +126,7 @@ journeys:
       - shared-homepage-network
       - assistant-run-learning
       - global-search-experience
+      - runtime
     uat_refs:
       - UAT_MESSAGE_SOCIAL_CONNECTION
     status: specified
@@ -224,7 +225,7 @@ scenarios:
       - user-identity-profile-relationship
       - circle-community
       - tag-interest-taxonomy
-      - integration
+      - runtime
       - product-ops-growth
     business_capabilities:
       - discovery-content/content-type-framework
@@ -253,7 +254,7 @@ scenarios:
       - discovery-content
       - user-identity-profile-relationship
       - circle-community
-      - integration
+      - runtime
       - product-ops-growth
     business_capabilities:
       - discovery-content/publish-comment-reaction
@@ -263,18 +264,22 @@ scenarios:
       - discovery-content/publish-comment-reaction/filter-catalog-release
       - discovery-content/publish-comment-reaction/post-create-update
       - discovery-content/media-processing-helper-read/media-status-pipeline
+      - discovery-content/media-processing-helper-read/image-delivery-variants
       - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/acceptance.yaml
       - specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/acceptance.yaml
       - specs/feature-tree/discovery-content/publish-comment-reaction/acceptance.yaml#SIT3
       - specs/feature-tree/discovery-content/media-processing-helper-read/acceptance.yaml#SIT1
+      - specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/acceptance.yaml
       - specs/feature-tree/acceptance.yaml#UAT_CONTENT_CREATION_TO_PUBLICATION
     boundary_notes:
       - 图片编辑会话是纯端侧 runtime session，确认结果才进入 MediaUploadSession；编辑器不拥有云端上传、处理或公开 URL。
       - 滤镜目录由 FilterCatalogRelease 单轨发布；App 仅消费 active release、verified cache 或同源 bootstrap replica。
       - 端侧流式读取并上传本地原图，发布 payload 只携带 MediaAsset ID，不携带本地路径或临时 URL。
-      - 图片 MediaAsset 完成校验后直接 ready；Post 发布、圈子 placement 与公开性仍由各自对象真相源治理。
+      - 图片 MediaAsset 上传完成后进入 processing，经受信解码、尺寸/像素守卫与归一化后才可 ready；Post 发布、圈子 placement 与公开性仍由各自对象真相源治理。
+      - 图片 delivery profile 是同一 ready MediaAsset 的 metadata 生成 CDN 派生；原图只在 Post
+        可见性与 asset policy 同时允许时经短时授权访问，不把 variants 或 grants 伪装成第二媒体对象。
       - 上传、发布与结果回流进入产品遥测，不进入推荐行为 ReportBehaviors。
     status: specified
 
@@ -285,7 +290,7 @@ scenarios:
       - discovery-content
       - user-identity-profile-relationship
       - circle-community
-      - integration
+      - runtime
       - product-ops-growth
     business_capabilities:
       - discovery-content/publish-comment-reaction
@@ -304,7 +309,7 @@ scenarios:
     boundary_notes:
       - 本地原视频按流式上传进入私有 CAS；Post 只绑定 ready 的视频与封面 MediaAsset。
       - content-service 内媒体处理模块是独立功能边界，可替换 adapter 后拆分部署，但不复制聚合状态机。
-      - 首发播放交付是 H.264/AAC progressive fast-start MP4；adaptive flag 关闭时不得宣称 HLS/DASH 已交付。
+      - 首发播放契约只包含 H.264/AAC progressive fast-start MP4；metadata 不登记 adaptive profile/flag，HLS/DASH 必须作为独立增量完整验收后再进入契约。
     status: specified
 
   - id: identity-entry-persona-continuation
@@ -313,23 +318,25 @@ scenarios:
     domain_services:
       - user-identity-profile-relationship
       - runtime
-      - integration
     business_capabilities:
       - user-identity-profile-relationship/onboarding-and-identity-entry
       - user-identity-profile-relationship/auth-profile-snapshot
       - user-identity-profile-relationship/persona-follow-graph
+      - user-identity-profile-relationship/settings-and-device-token
       - runtime/runtime-client-foundation
     stories:
       - user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
       - user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing
       - user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow
       - user-identity-profile-relationship/persona-follow-graph/persona-management
+      - user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle
       - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_BUSINESS_OBJECT_COMMERCIALIZATION
     boundary_notes:
       - UserAccount 只承担账号/认证/安全，公开业务动作使用 Persona；ActorContext 明确 accountId/personaId/deviceActorId。
       - 登录关闭回安全状态，登录成功通过 AuthContinuation 恢复目标动作；不得通过旧路由或 fallback 绕过双目标合同。
+      - 被运营限制的账号只展示结构化受限说明与申诉续接；恢复必须经新的受信会话后再续接原目标，不能使用旧 token 或恢复 closed 账号。
     status: specified
 
   - id: cold-start-safe-handoff-and-telemetry
@@ -522,6 +529,7 @@ scenarios:
     stories:
       - chat-conversation/group-creation-member-management/group-create-flow
       - chat-conversation/group-creation-member-management/group-candidate-source-orchestration
+      - circle-community/circle-collaboration-tools/circle-group-chat-binding-sync
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
       - specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/acceptance.yaml
@@ -542,11 +550,14 @@ scenarios:
     business_capabilities:
       - circle-community/activity-member-governance
       - circle-community/circle-collaboration-tools
+      - circle-community/circle-experience-redesign
       - shared-homepage-network/homepage-discovery-and-attach-journey
       - chat-conversation/group-creation-member-management
     stories:
       - circle-community/activity-member-governance/circle-lifecycle
       - circle-community/activity-member-governance/member-role-permission
+      - circle-community/circle-collaboration-tools/circle-group-chat-binding-sync
+      - circle-community/circle-experience-redesign/circle-homepage-redesign
       - shared-homepage-network/homepage-discovery-and-attach-journey/homepage-entry-and-preview
       - chat-conversation/group-creation-member-management/group-create-flow
       - runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
@@ -575,6 +586,38 @@ scenarios:
     boundary_notes:
       - 小趣以 ConversationMember.memberType=assistant 参与 direct/group conversation；assistant-service 负责回复生成，chat-conversation 负责成员、消息、同步和审计。
       - 个人助手全屏会话与会话内 @小趣 共享助手 runtime，不维护第二套助手逻辑。
+    status: specified
+
+  - id: message-call-and-offline-delivery
+    title: 会话内音视频通话与离线来电可靠送达
+    parent_journey: message-social-connection
+    domain_services:
+      - chat-conversation
+      - user-identity-profile-relationship
+      - runtime
+    business_capabilities:
+      - chat-conversation/realtime-call
+      - chat-conversation/list-detail-message-delivery
+      - runtime/runtime-external-integration
+      - user-identity-profile-relationship/persona-follow-graph
+    stories:
+      - chat-conversation/realtime-call/one-to-one-call
+      - chat-conversation/realtime-call/group-call
+      - chat-conversation/realtime-call/call-experience
+      - chat-conversation/realtime-call/media-infrastructure
+      - runtime/runtime-external-integration/provider-adapter-conformance-suite
+      - runtime/runtime-external-integration/capability-provider-commercial-readiness-gate
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/chat-conversation/realtime-call/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-external-integration/acceptance.yaml
+    boundary_notes:
+      - CallSession/CallParticipant、关系门禁、在线 realtime 与会话 system_call_log 归
+        chat-conversation；Push/SMS 等外部 Provider 的合同、Adapter 证据和准出归 runtime。
+      - 离线 ring/cancel 必须复用同一 deliveryKey 并有真实 provider receipt 与设备 readback；
+        本地 payload、模拟器、编译成功或替代 Provider 不能冒充目标 Adapter 完成。
+      - Gamma/Prod 缺 APNs/FCM/LiveKit/SLS 等 required Provider 时 fail-closed，不允许自动
+        切 Mock 或用站内通知伪装系统来电。
     status: specified
 
   - id: assistant-context-grounded-answering

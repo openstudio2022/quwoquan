@@ -12,7 +12,7 @@
 | post-create-update | 发布/更新/删除帖子 | 已实现 |
 | **text-post-commercial-publication** | 写文字从正文优先编辑、显式 micro/article 确认、发布前安全准入、可靠意图队列到发布结果回流、交集事实和运营漏斗 | 商用收口中（2026-07-20） |
 | **image-editing** | 照片发布前的纯端侧像素编辑：零占位工具、统一像素引擎、文件快照撤销/重做、放弃保护与页面观测；完成后仅把本地结果交回 MediaUploadSession 链路 | 本地商用基线已实现（2026-07-20） |
-| **filter-catalog-release** | 不可变滤镜目录发布：Data publish Stage/Activate/Rollback、public typed Reader、App verified cache 与同源 bootstrap replica | 规格与验收已冻结，开发中（2026-07-20） |
+| **filter-catalog-release** | 不可变滤镜目录发布：Data publish Stage/Activate/Rollback、public typed Reader、App verified cache 与同源 bootstrap replica | 端云实现与本地契约已完成；四环境发布/UAT 证据收集中（2026-07-21） |
 | reaction-state-counter | 点赞/收藏/分享计数与一致性 | 已实现 |
 | 行为上报 | ReportBehaviors（impression/click/dwell/dislike/report/share/comment） | 已实现 |
 

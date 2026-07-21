@@ -127,10 +127,11 @@ void main() {
         await store.write(snapshot);
         final restored = await store.read();
 
-        expect(restored?.releaseId, snapshot.releaseId);
-        expect(restored?.canonicalDigest, snapshot.canonicalDigest);
-        expect(restored?.categoryCount, snapshot.categoryCount);
-        expect(restored?.presetCount, snapshot.presetCount);
+        expect(restored?.snapshot.releaseId, snapshot.releaseId);
+        expect(restored?.snapshot.canonicalDigest, snapshot.canonicalDigest);
+        expect(restored?.snapshot.categoryCount, snapshot.categoryCount);
+        expect(restored?.snapshot.presetCount, snapshot.presetCount);
+        expect(restored?.verifiedAt, isNotNull);
       },
     );
   });
@@ -152,21 +153,35 @@ FilterCatalogCoordinator _coordinator({
 }
 
 final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
-  FilterCatalogSnapshot? value;
+  VerifiedFilterCatalogCacheEntry? _entry;
   int clearCount = 0;
+
+  FilterCatalogSnapshot? get value => _entry?.snapshot;
+
+  set value(FilterCatalogSnapshot? snapshot) {
+    _entry = snapshot == null
+        ? null
+        : VerifiedFilterCatalogCacheEntry(
+            snapshot: snapshot,
+            verifiedAt: DateTime.utc(2026),
+          );
+  }
 
   @override
   Future<void> clear() async {
     clearCount += 1;
-    value = null;
+    _entry = null;
   }
 
   @override
-  Future<FilterCatalogSnapshot?> read() async => value;
+  Future<VerifiedFilterCatalogCacheEntry?> read() async => _entry;
 
   @override
   Future<void> write(FilterCatalogSnapshot snapshot) async {
-    value = snapshot;
+    _entry = VerifiedFilterCatalogCacheEntry(
+      snapshot: snapshot,
+      verifiedAt: DateTime.now().toUtc(),
+    );
   }
 }
 
@@ -207,8 +222,8 @@ final class _RecordingObserver implements FilterCatalogResolutionObserver {
   }
 
   @override
-  void sourceSelected(FilterCatalogSource source, String releaseId) {
-    selected.add(source);
+  void sourceSelected(ResolvedFilterCatalog resolved) {
+    selected.add(resolved.source);
   }
 }
 

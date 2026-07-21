@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 )
 
 // TrustedIdentity 是 realtime 的单轨可信身份：account 只承载安全主体，
@@ -89,5 +89,5 @@ type EventSource interface {
 	SubscribeIdentity(
 		ctx context.Context,
 		identity TrustedIdentity,
-	) (rtredis.Subscription, error)
+	) (runtimemessaging.EphemeralSubscription, error)
 }

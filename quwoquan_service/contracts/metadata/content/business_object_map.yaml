@@ -337,6 +337,7 @@ objects:
     - fileSize
     - accessPolicy
     - processingStatus
+    - processingVersion
     - processingFailureReason
     - processorProfile
     - verifiedDurationMs
@@ -352,6 +353,11 @@ objects:
     - imageWidth
     - imageHeight
     - imageDeliveryContentType
+    - imageDominantColor
+    - imageLqip
+    - imageContentProfile
+    - imageDerivativePolicyVersion
+    - activeImageDescriptorRevision
     - imageNormalizedObjectKey
     - imagePublicSliceKey
     - previewTrackVersion
@@ -362,7 +368,8 @@ objects:
     - createdAt
     - updatedAt
     - processedAt
-    owned_value: []
+    owned_value:
+    - imageDescriptorRevisions
     projection: []
     reference:
     - ownerId
@@ -415,6 +422,74 @@ objects:
     target_object: content.MediaAsset
   source_document: content/media_asset/fields.yaml
   source_entity: MediaAsset
+  storage_backend: mongodb
+  storage_role: authoritative
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: Media
+  canonical_object: MediaImageReprocessRun
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - runId
+    - version
+    - targetDerivativePolicyVersion
+    - status
+    - assetIds
+    - nextAssetIndex
+    - processedCount
+    - failedCount
+    - rollbackIndex
+    - failureReason
+    - startedAt
+    - pausedAt
+    - completedAt
+    - rolledBackAt
+    - updatedAt
+    owned_value:
+    - activations
+    - assetId
+    - previousRevision
+    - activatedRevision
+    - activatedAt
+    projection: []
+    reference:
+    - assetIds
+    - assetId
+    transport_only: []
+  identity:
+    fields:
+    - runId
+    version_field: version
+    version_source: field
+  invariant_refs:
+  - content/media_image_reprocess_run/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - content/media_image_reprocess_run/aggregate.yaml#lifecycle
+  member_bounds:
+    MediaImageReprocessActivation: 500
+  mutation_entrypoints:
+  - StartMediaImageReprocessRun
+  - PauseMediaImageReprocessRun
+  - ResumeMediaImageReprocessRun
+  - RollbackMediaImageReprocessRun
+  object_kind: aggregate_root
+  relationships:
+  - access: command_facade
+    cardinality: N:N
+    consistency: eventual
+    kind: reference
+    name: targetAssets
+    on_delete: retain
+    reference_fields:
+    - assetIds
+    - assetId
+    target_object: content.MediaAsset
+  source_document: content/media_image_reprocess_run/fields.yaml
+  source_entity: MediaImageReprocessRun
   storage_backend: mongodb
   storage_role: authoritative
 - access:
@@ -633,6 +708,8 @@ objects:
     - assetId
     - viewerId
     - purpose
+    - outcome
+    - reason
     - idempotencyKey
     - grantedAt
     - expiresAt
@@ -1165,6 +1242,7 @@ objects:
     - id
     - version
     - reporterId
+    - reporterAccountId
     - reason
     - description
     - status
@@ -1179,6 +1257,7 @@ objects:
     projection: []
     reference:
     - reporterId
+    - reporterAccountId
     - targetType
     - targetId
     - reviewerId
@@ -1224,6 +1303,15 @@ objects:
     reference_fields:
     - reporterId
     target_object: user.Persona
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: reporterAccount
+    on_delete: retain
+    reference_fields:
+    - reporterAccountId
+    target_object: user.UserAccount
   - access: named_reader
     cardinality: N:1
     consistency: eventual

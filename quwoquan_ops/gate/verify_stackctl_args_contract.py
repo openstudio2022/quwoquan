@@ -26,9 +26,18 @@ def main() -> int:
     issues: list[str] = []
 
     help_result = run(["python3", str(STACKCTL), "--help"])
-    required_commands = ("package", "content-readiness", "deploy", "roll")
+    required_commands = (
+        "package",
+        "content-readiness",
+        "filter-catalog",
+        "deploy",
+        "roll",
+    )
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
-        issues.append("stackctl --help must list package, content-readiness, roll and deploy commands")
+        issues.append(
+            "stackctl --help must list package, content-readiness, filter-catalog, "
+            "roll and deploy commands"
+        )
 
     readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
     if (
@@ -66,6 +75,18 @@ def main() -> int:
         issues.append("stackctl up --help must expose --env/--device-id/--workload")
     if "--gateway-base-url" in up_help.stdout:
         issues.append("stackctl up user surface must not expose gateway override flags")
+
+    filter_catalog_help = run(["python3", str(STACKCTL), "filter-catalog", "--help"])
+    if (
+        filter_catalog_help.returncode != 0
+        or "--target" not in filter_catalog_help.stdout
+        or "--action" not in filter_catalog_help.stdout
+        or "--base-url" in filter_catalog_help.stdout
+        or "prod-hosted" not in filter_catalog_help.stdout
+    ):
+        issues.append(
+            "stackctl filter-catalog must bind target/action and forbid API URL overrides"
+        )
 
     roll_help = run(["python3", str(STACKCTL), "roll", "--help"])
     if roll_help.returncode != 0 or "--mode" not in roll_help.stdout or "--target" not in roll_help.stdout:

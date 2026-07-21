@@ -181,7 +181,7 @@ func (s *productService) handleReportRuntimeLogBatch(w http.ResponseWriter, r *h
 
 // handleInternalRuntimeLogIngest 是云侧服务日志上云的内部通道：各服务的
 // RuntimeLogExportWriter 已在源头完成 canonical 校验与扁平化，这里以机器凭据
-// fail-closed 接收并直写 runtime logstore。app sourceType 禁止走本通道，
+// fail-closed 接收，并经与 App 相同的 RuntimeLogService 幂等账本落库。app sourceType 禁止走本通道，
 // 防止绕过端侧已验证 actor 的公共 ingest。
 func (s *productService) handleInternalRuntimeLogIngest(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
@@ -232,37 +232,31 @@ func (s *productService) handleInternalRuntimeLogIngest(w http.ResponseWriter, r
 		writeEventAppError(w, r, productopsgenerated.AppErrorFromRuntimeLogBatchInvalid("record count must be 1..50"))
 		return
 	}
-	now := time.Now().UTC()
-	records := make([]application.RuntimeLogRecord, 0, recordCount)
 	for index, fields := range body.Records {
-		for _, required := range []string{"schema", "occurredAt", "logKind", "severity", "signal", "message", "resourceSourceType", "resourceService"} {
-			if strings.TrimSpace(fields[required]) == "" {
-				result = "invalid"
-				writeEventAppError(w, r, productopsgenerated.AppErrorFromRuntimeLogBatchInvalid(
-					"record["+strconv.Itoa(index)+"] misses "+required))
-				return
-			}
-		}
 		if fields["resourceSourceType"] == "app" {
 			result = "invalid"
 			writeEventAppError(w, r, productopsgenerated.AppErrorFromRuntimeLogBatchInvalid(
-				"app records must use the verified public ingest"))
+				"record["+strconv.Itoa(index)+"] app records must use the verified public ingest"))
 			return
 		}
-		records = append(records, application.RuntimeLogRecord{
-			Fields:     fields,
-			BatchKey:   batchKey,
-			BatchIndex: index,
-			IngestedAt: now,
-		})
 	}
-	if err := s.runtimeLogStore.PutRuntimeLogBatch(r.Context(), batchKey, records); err != nil {
+	ack, err := s.runtimeLogs.ReportTrustedRuntimeLogBatch(r.Context(), batchKey, body.Records)
+	if err != nil {
+		if errors.Is(err, application.ErrInvalidRuntimeLogBatch) {
+			result = "invalid"
+			writeEventAppError(w, r, productopsgenerated.AppErrorFromRuntimeLogBatchInvalid(err.Error()))
+			return
+		}
 		result = "unavailable"
 		writeEventAppError(w, r, productopsgenerated.AppErrorFromRuntimeLogstoreUnavailable(err.Error()))
 		return
 	}
-	result = "accepted"
-	writeJSON(w, http.StatusOK, map[string]any{"acceptedCount": recordCount})
+	if ack.DuplicateBatch {
+		result = "duplicate"
+	} else {
+		result = "accepted"
+	}
+	writeJSON(w, http.StatusOK, ack)
 }
 
 func (s *productService) handleGetEventSummary(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +276,7 @@ func (s *productService) handleGetEventSummary(w http.ResponseWriter, r *http.Re
 		PageName:     strings.TrimSpace(r.URL.Query().Get("pageName")),
 		AppVersion:   strings.TrimSpace(r.URL.Query().Get("appVersion")),
 		NetworkClass: strings.TrimSpace(r.URL.Query().Get("networkClass")),
+		Result:       strings.TrimSpace(r.URL.Query().Get("result")),
 		ErrorCode:    strings.TrimSpace(r.URL.Query().Get("errorCode")),
 		From:         from,
 		To:           to,
@@ -342,6 +337,7 @@ func (s *productService) handleGetEventDrilldown(w http.ResponseWriter, r *http.
 		PageName:      strings.TrimSpace(r.URL.Query().Get("pageName")),
 		AppVersion:    strings.TrimSpace(r.URL.Query().Get("appVersion")),
 		NetworkClass:  strings.TrimSpace(r.URL.Query().Get("networkClass")),
+		Result:        strings.TrimSpace(r.URL.Query().Get("result")),
 		ErrorCode:     strings.TrimSpace(r.URL.Query().Get("errorCode")),
 		SessionID:     strings.TrimSpace(r.URL.Query().Get("sessionId")),
 		From:          from,

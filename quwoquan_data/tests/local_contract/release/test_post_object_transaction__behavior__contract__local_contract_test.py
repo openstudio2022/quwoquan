@@ -15,6 +15,7 @@ from content.release.canonical.object_transaction_audit import (
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package,
 )
+from core.source_digest import current_source_digest
 from core.tree_integrity import tree_integrity_stats
 
 
@@ -41,7 +42,11 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     )
     _write_json(
         execution / "execution_manifest.json",
-        {"executionId": EXECUTION_ID, "createdAt": "2026-07-18T04:00:00Z"},
+        {
+            "executionId": EXECUTION_ID,
+            "createdAt": "2026-07-18T04:00:00Z",
+            "sourceDigest": current_source_digest().to_document(),
+        },
     )
     _write_json(
         execution / "sources/commons/assets/index.json",
@@ -137,6 +142,29 @@ def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -
     assert validate_canonical_publish(publish)["status"] == "passed"
 
 
+def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["contentType"] = "article"
+    manifest["carrier"] = "article"
+    manifest["publishMediaMode"] = "text_only"
+    manifest["assets"] = []
+    _write_json(manifest_path, manifest)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    asset_refs = json.loads(
+        (package / "object/asset.refs.json").read_text(encoding="utf-8")
+    )
+    assert asset_refs == {"assets": []}
+
+
 def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     tmp_path: Path,
 ) -> None:
@@ -179,7 +207,11 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     poster_id = "west-lake-video-cover"
     _write_json(
         execution / "execution_manifest.json",
-        {"executionId": execution_id, "createdAt": "2026-07-18T04:00:00Z"},
+        {
+            "executionId": execution_id,
+            "createdAt": "2026-07-18T04:00:00Z",
+            "sourceDigest": current_source_digest().to_document(),
+        },
     )
     _write_json(
         post / "manifest.json",

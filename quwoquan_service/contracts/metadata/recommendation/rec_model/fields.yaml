@@ -9,30 +9,32 @@ entities:
   RecommendationExposureFact:
     description: 推荐曝光不可变事实（rec_impression 信封投影）。
     fields:
-      - { name: id, type: string, constraints: [PK, NOT_NULL], description: 从 requestId+targetId 确定性派生的 dedupe 身份 }
-      - { name: requestId, type: string, constraints: [NOT_NULL], description: feedRequestId，曝光批次的归因键 }
-      - { name: personaId, type: string, constraints: [NOT_NULL] }
-      - { name: scenario, type: string, constraints: [NOT_NULL] }
-      - { name: targetType, type: string, constraints: [NOT_NULL] }
-      - { name: targetId, type: string, constraints: [NOT_NULL] }
-      - { name: rank, type: int, constraints: [NOT_NULL] }
-      - { name: modelBucket, type: string, constraints: [NOT_NULL], description: 本次命中的评分轨道（rule/model，AB 分桶结果） }
-      - { name: modelVersion, type: string, constraints: [NULLABLE], description: model 分桶时的 champion/challenger 轨道；rule 分桶为空 }
-      - { name: modelReleaseId, type: string, constraints: [NULLABLE], description: 模型服务实际命中的 registry 发布身份；rule 或模型故障降级时为空 }
-      - { name: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], description: 在线评分读取用户与候选特征后的统一快照时刻 }
-      - { name: userFeatureSnapshot, type: object, constraints: [NOT_NULL], description: 本次候选在线评分实际消费的稀疏用户特征；训练只允许消费此不可变快照 }
-      - { name: itemFeatureSnapshot, type: object, constraints: [NOT_NULL], description: 本次候选在线评分实际消费的候选特征；训练只允许消费此不可变快照 }
-      - { name: exposedAt, type: timestamp, constraints: [NOT_NULL] }
+      - { name: id, source: eventId, type: string, constraints: [PK, NOT_NULL], description: 从 requestId+targetId 确定性派生的 dedupe 身份 }
+      - { name: requestId, source: context.feedRequestId, type: string, constraints: [NOT_NULL], description: feedRequestId，曝光批次的归因键 }
+      - { name: userId, source: userId, type: string, constraints: [NOT_NULL], description: 推荐状态的业务 actor 键；persona 优先、无 persona 时可为匿名/设备 actor }
+      - { name: personaId, source: personaId, type: string, constraints: [NULLABLE], description: 经过认证的 persona 身份；匿名或设备 actor 时为空 }
+      - { name: scenario, source: scenario, type: string, constraints: [NOT_NULL] }
+      - { name: targetType, source: labels.contentType, type: string, constraints: [NOT_NULL] }
+      - { name: targetId, source: targetId, type: string, constraints: [NOT_NULL] }
+      - { name: rank, source: context.rank, type: int, constraints: [NOT_NULL], description: 服务端重排后的全局一基序位，禁止消费端侧 position }
+      - { name: modelBucket, source: context.modelBucket, type: string, constraints: [NOT_NULL], description: 本次命中的评分轨道（rule/model，AB 分桶结果） }
+      - { name: modelVersion, source: context.modelVersion, type: string, constraints: [NULLABLE], description: model 分桶时的 champion/challenger 轨道；rule 分桶为空 }
+      - { name: modelReleaseId, source: context.modelReleaseId, type: string, constraints: [NULLABLE], description: 模型服务实际命中的 registry 发布身份；rule 或模型故障降级时为空 }
+      - { name: featureSnapshotAt, source: context.featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], description: 在线评分读取用户与候选特征后的统一快照时刻 }
+      - { name: userFeatureSnapshot, source: context.userFeatureSnapshot, type: object, constraints: [NOT_NULL], description: 本次候选在线评分实际消费的稀疏用户特征；训练只允许消费此不可变快照 }
+      - { name: itemFeatureSnapshot, source: context.itemFeatureSnapshot, type: object, constraints: [NOT_NULL], description: 本次候选在线评分实际消费的候选特征；训练只允许消费此不可变快照 }
+      - { name: exposedAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL] }
 
   RecommendationFeedbackFact:
     description: 推荐点击、停留、隐藏等不可变反馈事实（rec_engagement 信封投影）；
       与曝光经 requestId+targetId 最终一致关联，不持有曝光行主键。
     fields:
-      - { name: id, type: string, constraints: [PK, NOT_NULL] }
-      - { name: requestId, type: string, constraints: [NOT_NULL], description: feedRequestId，与曝光同批归因 }
-      - { name: personaId, type: string, constraints: [NOT_NULL] }
-      - { name: targetType, type: string, constraints: [NOT_NULL] }
-      - { name: targetId, type: string, constraints: [NOT_NULL] }
-      - { name: feedbackType, type: string, constraints: [NOT_NULL] }
-      - { name: value, type: float64, constraints: [NULLABLE], description: 停留时长/评分等数值信号 }
-      - { name: occurredAt, type: timestamp, constraints: [NOT_NULL] }
+      - { name: id, source: eventId, type: string, constraints: [PK, NOT_NULL] }
+      - { name: requestId, source: context.feedRequestId, type: string, constraints: [NOT_NULL], description: feedRequestId，与曝光同批归因 }
+      - { name: userId, source: userId, type: string, constraints: [NOT_NULL], description: 推荐状态的业务 actor 键；persona 优先、无 persona 时可为匿名/设备 actor }
+      - { name: personaId, source: personaId, type: string, constraints: [NULLABLE], description: 经过认证的 persona 身份；匿名或设备 actor 时为空 }
+      - { name: targetType, source: context.contentType, type: string, constraints: [NOT_NULL] }
+      - { name: targetId, source: targetId, type: string, constraints: [NOT_NULL] }
+      - { name: feedbackType, source: labels.action, type: string, constraints: [NOT_NULL] }
+      - { name: value, source: context.duration, type: float64, constraints: [NULLABLE], description: 停留时长/评分等数值信号 }
+      - { name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL] }

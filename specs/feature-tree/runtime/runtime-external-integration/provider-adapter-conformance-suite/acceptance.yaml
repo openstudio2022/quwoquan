@@ -1,0 +1,155 @@
+version: 2
+node:
+  id: provider-adapter-conformance-suite
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite
+  title: Provider Adapter 统一 Conformance Suite
+  parent_domain_service: runtime
+  parent_business_capability: runtime-external-integration
+scope:
+  summary: >
+    对所有 Provider Adapter 执行同一公共场景和能力专项场景，并生成可防伪、可聚合的
+    Alpha/Beta/Gamma 三层测试证据。
+  in_scope:
+  - 公共 scenario、fault model、能力专项 profile 和原生 harness
+  - 3×3 evidence schema、digest/freshness、观测引用、清理回执与防假绿
+  - output/Secret/PII 隔离
+  out_of_scope:
+  - 用一套跨语言测试代码替代各语言原生 harness
+  - 在测试中动态 skip 不可用 Provider 或回退 Mock
+gwt_acceptance:
+  GWT1_common_and_specialized_profiles:
+    title: 公共场景不可删减且能力专项语义可扩展
+    given:
+    - Registry 中存在已登记 Capability 与 Adapter，并声明 canonical Port 和 conformance profile。
+    when:
+    - Conformance compiler 解析公共场景、能力专项场景和该 Adapter 的 harness 映射。
+    then:
+    - 每个 required 公共场景恰有一个可执行映射，专项场景只能追加不能覆盖或删除公共场景。
+    done_when:
+    - success、validation、auth、network/DNS、timeout、throttle、retry、idempotency、
+      callback ordering、redaction、observability 均被同一 Adapter 执行。
+    edge_cases:
+    - Adapter 声明未知 scenario、重复映射、缺 required 场景或将专项场景标为公共场景时阻断。
+    contract_refs:
+    - specs/feature-tree/runtime/runtime-external-integration/spec.md
+    - quwoquan_ops/environments/provider_conformance_manifest.yaml
+    performance_points:
+    - manifest 编译 P95 不超过 2 秒。
+    tests:
+      planned:
+      - quwoquan_ops/tests/local_contract/provider_conformance_evidence__contract__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: conformance_manifest_contract
+        cases:
+        - local_contract.runtime.runtime_external_integration.provider_conformance.manifest_contract
+        envs: [local]
+        test_object: metadata
+        quality_facet: contract
+      supporting: []
+    notes: []
+  GWT2_nine_cell_execution:
+    title: 三环境三层测试九格均有真实执行结果
+    given:
+    - Alpha、Beta、Gamma Binding 已选择对应 Adapter，测试数据和 cleanup 合同完整。
+    when:
+    - 对同一 Capability 执行 local_contract、api_integration 和 user_acceptance。
+    then:
+    - 聚合报告恰含九个 required cell，且每格 Provider、网络边界、数据和环境语义匹配。
+    done_when:
+    - local_contract 对对应环境 Adapter 类运行离线 harness；api_integration 使用真实协议；
+      user_acceptance 验证真实用户或运营结果。
+    - runtime.message.transport 的 user_acceptance 只接受受控 endpoint/auth/seed 下的原生设备
+      chat @ assistant Remote journey；缺该 harness 时 prerequisite 必须 fail-closed，
+      memory Redis、fixture consumer、UI mock 和 Provider override 不得产生 passed cell。
+    edge_cases:
+    - 复制其他环境报告、替换 Adapter、旧 digest、跨环境复用 run ID 或缺 cleanup receipt 时阻断。
+    contract_refs:
+    - specs/03_TESTING_STRATEGY.md
+    - specs/feature-tree/runtime/runtime-external-integration/acceptance.yaml#SIT3_provider_conformance_3x3
+    performance_points:
+    - 聚合判定 P95 不超过 5 秒。
+    tests:
+      planned:
+      - quwoquan_ops/tests/acceptance/api_integration/external_provider_governance__api_integration_test.py
+      - quwoquan_ops/tests/acceptance/user_acceptance/external_provider_governance__user_acceptance_test.py
+      - quwoquan_ops/tests/local_contract/provider_conformance_runner__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: conformance_evidence_aggregator
+        cases:
+        - local_contract.runtime.runtime_external_integration.provider_conformance.evidence_aggregator
+        envs: [alpha, beta, gamma]
+        test_object: quality_gate
+        quality_facet: contract
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: conformance_remote_protocol
+        cases:
+        - api_integration.runtime.runtime_external_integration.provider_conformance.remote_protocol
+        envs: [beta, gamma]
+        test_object: api_operation
+        quality_facet: reliability
+      - layer: user_acceptance
+        execution_profile: release
+        suite: conformance_user_journey
+        cases:
+        - user_acceptance.runtime.runtime_external_integration.provider_conformance.user_journey
+        envs: [gamma_local]
+        test_object: workflow
+        quality_facet: experience
+    notes: []
+  GWT3_no_fake_no_leak:
+    title: 假报告、动态跳过、输出越界和敏感信息均 fail-closed
+    given:
+    - 聚合器收到 report、观测 artifact 与 output path。
+    when:
+    - report 含 NOT_RUN/required skip/零断言/dry-run，或路径/内容含配置、Secret、TLS、PII。
+    then:
+    - 对应 cell 判 FAIL，Adapter/Capability readiness 均不能提升。
+    done_when:
+    - 所有负例有自动化测试且 gate_repo/CI 执行同一检查。
+    edge_cases:
+    - symlink 逃逸、合法目录下隐藏 `.env`、伪造 exit_code=0、只给日志无断言均阻断。
+    contract_refs:
+    - quwoquan_ops/environments/output_layout_manifest.yaml
+    - specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
+    performance_points: []
+    tests:
+      planned:
+      - quwoquan_ops/tests/local_contract/provider_conformance_evidence__contract__local_contract_test.py
+      - quwoquan_ops/tests/local_contract/test_output_paths_layout__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: conformance_no_fake_no_leak
+        cases:
+        - local_contract.runtime.runtime_external_integration.provider_conformance.no_fake_no_leak
+        envs: [local]
+        test_object: security_policy
+        quality_facet: security
+      supporting: []
+    notes: []
+execution:
+  local_gate:
+  - python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+  - python3 quwoquan_ops/gate/verify_output_layout.py
+  - python3 quwoquan_ops/gate/verify_output_path_source_contract.py
+  profile_gates:
+  - make gate
+  - make gate-integration ENV=beta
+  - make gate-integration ENV=gamma
+  - make gate-release ENV=gamma

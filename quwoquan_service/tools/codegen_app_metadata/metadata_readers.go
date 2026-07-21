@@ -286,6 +286,47 @@ func readContentMediaUploadPolicy(
 	return &parsed, nil
 }
 
+func readContentImageVariantPolicy(
+	path string,
+) (*contentImageVariantPolicyFile, error) {
+	var parsed contentImageVariantPolicyFile
+	if err := decodeMetadataDocument(path, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Schema != "content_image_variant_policy" ||
+		parsed.DerivativePolicyVersion <= 0 {
+		return nil, fmt.Errorf(
+			"image variant policy requires schema and positive derivative policy version",
+		)
+	}
+	expected := map[string]struct {
+		width      int
+		format     string
+		quality    int
+		processing string
+	}{
+		"thumbnail": {320, "webp", 80, "image/resize,w_320/format,webp/quality,q_80"},
+		"display":   {960, "webp", 82, "image/resize,w_960/format,webp/quality,q_82"},
+		"cover":     {1280, "webp", 85, "image/resize,w_1280/format,webp/quality,q_85"},
+		"full":      {2048, "webp", 90, "image/resize,w_2048/format,webp/quality,q_90"},
+	}
+	if len(parsed.Profiles) != len(expected) {
+		return nil, fmt.Errorf("image variant policy has unexpected profiles")
+	}
+	for name, want := range expected {
+		profile, ok := parsed.Profiles[name]
+		if !ok ||
+			profile.Width != want.width ||
+			profile.Format != want.format ||
+			profile.Quality != want.quality ||
+			profile.Processing != want.processing ||
+			strings.TrimSpace(profile.Scene) == "" {
+			return nil, fmt.Errorf("image variant policy %s is invalid", name)
+		}
+	}
+	return &parsed, nil
+}
+
 func readRequestContext(path string) (*requestContextFile, error) {
 	var parsed requestContextFile
 	return &parsed, decodeMetadataDocument(path, &parsed)

@@ -27,12 +27,24 @@ events:
     recommend_impact: cold_start_profile
 
   - name: UserSuspended
-    description: 用户账户停用
+    description: >
+      受信运营 Suspend decision 已原子生效。下游必须落可逆 restriction projection，
+      隐藏可见性/拒绝写入/抑制投递；不得调用 UserAccountClosed 的删除或匿名化路径。
     producer: user-service
-    consumers: [content-service, chat-service, circle-service, notification-service]
-    channel: event_store
-    payload_entity: UserAccount
-    payload_fields: [userId, status]
+    consumers: [content-service, chat-service, circle-service, notification-service, search-service]
+    channel: events.user.account
+    payload_entity: UserAccountEnforcementPayload
+    payload_fields: [userId, personaIds, accountState, authEpoch, decisionRef, occurredAt]
+
+  - name: UserRestored
+    description: >
+      受信 Restore decision 已原子生效。下游只能恢复可逆 restriction projection；
+      不得恢复 closed 账号、旧 session/token、已删除数据或已过期通知。
+    producer: user-service
+    consumers: [content-service, chat-service, circle-service, notification-service, search-service]
+    channel: events.user.account
+    payload_entity: UserAccountEnforcementPayload
+    payload_fields: [userId, personaIds, accountState, authEpoch, decisionRef, occurredAt]
 
   - name: UserAccountClosed
     description: >

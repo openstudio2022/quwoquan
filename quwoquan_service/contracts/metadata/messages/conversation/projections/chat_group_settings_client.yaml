@@ -26,3 +26,9 @@ client_projection:
       nullable: false
       source: circleId
       default: "''"
+
+    - name: circleGroupId
+      dart_type: String
+      nullable: false
+      source: circleGroupId
+      default: "''"

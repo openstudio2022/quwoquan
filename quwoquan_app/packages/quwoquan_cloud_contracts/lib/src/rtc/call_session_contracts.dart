@@ -25,7 +25,7 @@ abstract interface class CallParticipantCommandWriter {
 
   Future<CallSessionDto> inviteToCall(RtcInviteToCallCommand command);
 
-  /// 端侧 LiveKit 首帧媒体连通后上报；≥2 人 connected 时会话进入 in_call。
+  /// 端侧首帧媒体连通后上报；≥2 人 connected 时会话进入 in_call。
   Future<CallSessionDto> reportMediaConnected(RtcCallIdCommand command);
 }
 
@@ -409,42 +409,48 @@ final class CallSessionDto {
   );
 }
 
+final class RtcMediaSessionAccessDto {
+  const RtcMediaSessionAccessDto({required this.accessToken});
+
+  final String accessToken;
+
+  factory RtcMediaSessionAccessDto.fromMap(Map<Object?, Object?> map) {
+    final accessToken = _stringField(map, 'accessToken');
+    if (accessToken == null) {
+      throw const FormatException('mediaAccess must contain accessToken');
+    }
+    return RtcMediaSessionAccessDto(accessToken: accessToken);
+  }
+}
+
 final class RtcInitiateCallResultDto {
   const RtcInitiateCallResultDto({
     required this.session,
-    this.token = '',
-    this.livekitUrl = '',
+    required this.mediaAccess,
   });
 
   final CallSessionDto session;
-  final String token;
-  final String livekitUrl;
+  final RtcMediaSessionAccessDto mediaAccess;
 }
 
 final class RtcAnswerCallResultDto {
   const RtcAnswerCallResultDto({
     required this.session,
-    this.token = '',
-    this.roomId = '',
-    this.livekitUrl = '',
+    required this.mediaAccess,
   });
 
   final CallSessionDto session;
-  final String token;
-  final String roomId;
-  final String livekitUrl;
+  final RtcMediaSessionAccessDto mediaAccess;
 }
 
 final class RtcJoinCredentialsDto {
   const RtcJoinCredentialsDto({
     required this.session,
-    required this.token,
-    this.livekitUrl = '',
+    required this.mediaAccess,
   });
 
   final CallSessionDto session;
-  final String token;
-  final String livekitUrl;
+  final RtcMediaSessionAccessDto mediaAccess;
 
   String get roomId => session.roomId;
   String get callId => session.callId;
@@ -466,8 +472,9 @@ RtcInitiateCallResultDto decodeRtcInitiateCallResult(Object? response) {
     session: CallSessionDto.fromMap(
       _nestedObject(root, 'session', 'InitiateCall result'),
     ),
-    token: _stringField(root, 'token') ?? '',
-    livekitUrl: _stringField(root, 'livekitUrl') ?? '',
+    mediaAccess: RtcMediaSessionAccessDto.fromMap(
+      _nestedObject(root, 'mediaAccess', 'InitiateCall result'),
+    ),
   );
 }
 
@@ -478,9 +485,9 @@ RtcAnswerCallResultDto decodeRtcAnswerCallResult(Object? response) {
   );
   return RtcAnswerCallResultDto(
     session: session,
-    token: _stringField(root, 'token') ?? '',
-    roomId: _stringField(root, 'roomId') ?? session.roomId,
-    livekitUrl: _stringField(root, 'livekitUrl') ?? '',
+    mediaAccess: RtcMediaSessionAccessDto.fromMap(
+      _nestedObject(root, 'mediaAccess', 'AnswerCall result'),
+    ),
   );
 }
 
@@ -490,8 +497,9 @@ RtcJoinCredentialsDto decodeRtcJoinCallResult(Object? response) {
     session: CallSessionDto.fromMap(
       _nestedObject(root, 'session', 'JoinCall result'),
     ),
-    token: _stringField(root, 'token') ?? '',
-    livekitUrl: _stringField(root, 'livekitUrl') ?? '',
+    mediaAccess: RtcMediaSessionAccessDto.fromMap(
+      _nestedObject(root, 'mediaAccess', 'JoinCall result'),
+    ),
   );
 }
 

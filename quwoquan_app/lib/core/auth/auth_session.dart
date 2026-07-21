@@ -48,6 +48,7 @@ enum AuthPromptReason {
   firstRun,
   manualLoggedOut,
   sessionExpired,
+  accountSuspended,
   actionRequired,
 }
 
@@ -371,10 +372,7 @@ class AuthSessionStore {
   Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     final prefs = await _prefsFactory();
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
-    await _secureStorage.write(
-      key: _accessTokenKey,
-      value: result.accessToken,
-    );
+    await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
     await _secureStorage.write(
       key: _refreshTokenKey,
       value: result.refreshToken,
@@ -550,7 +548,6 @@ class AuthSessionStore {
     return '';
   }
 }
-
 
 class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
   const ProviderBackedCloudAuthTokenProvider(this._readAccessToken);

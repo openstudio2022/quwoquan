@@ -25,6 +25,7 @@ enums:
   PostStatus: [pending_review, published, rejected, deleted]
   Visibility: [public, private]
   AssistantUsePolicy: [inherit, exclude]
+  CitationDestinationKind: [internal, external]
   PostSourceType: [original, repost, quote]
   DistributionState: [active, removed, cascade_deleted]
   TombstoneLookupResult: [deleted, not_found]

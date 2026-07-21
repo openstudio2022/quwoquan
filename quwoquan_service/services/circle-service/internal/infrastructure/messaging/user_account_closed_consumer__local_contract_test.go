@@ -201,7 +201,7 @@ func TestUserAccountClosedConsumerDeadLettersAfterBoundedRetriesWithoutPII(
 	}
 	var logs bytes.Buffer
 	consumer, err := NewUserAccountClosedConsumerWithConfig(
-		redisSpy,
+		newCircleTestMessageTransport(t, redisSpy),
 		projection,
 		projection,
 		"local-contract",
@@ -322,7 +322,7 @@ func newUserAccountClosedTestConsumer(
 ) *UserAccountClosedConsumer {
 	t.Helper()
 	consumer, err := NewUserAccountClosedConsumerWithConfig(
-		client,
+		newCircleTestMessageTransport(t, client),
 		projection,
 		projection,
 		"local-contract",

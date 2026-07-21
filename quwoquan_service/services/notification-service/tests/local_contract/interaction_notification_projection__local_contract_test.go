@@ -104,19 +104,19 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 		{
 			name: "resolved report notifies reporter",
 			event: contentEvent(t, "content.report.resolved", "report-1:3", map[string]any{
-				"reportId": "report-1", "reporterId": "reporter-1",
+				"reportId": "report-1", "reporterAccountId": "account-reporter-1",
 				"targetType": "post", "targetId": "post-1", "resolution": "delete_content",
 			}),
-			recipient: "reporter-1", messageType: "content", source: "report_result",
+			recipient: "account-reporter-1", messageType: "content", source: "report_result",
 			targetType: "report", targetID: "report-1",
 		},
 		{
 			name: "dismissed report notifies reporter",
 			event: contentEvent(t, "content.report.dismissed", "report-2:3", map[string]any{
-				"reportId": "report-2", "reporterId": "reporter-1",
+				"reportId": "report-2", "reporterAccountId": "account-reporter-1",
 				"targetType": "post", "targetId": "post-2",
 			}),
-			recipient: "reporter-1", messageType: "content", source: "report_result",
+			recipient: "account-reporter-1", messageType: "content", source: "report_result",
 			targetType: "report", targetID: "report-2",
 		},
 		{
@@ -162,6 +162,33 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 				"circleOwnerPersonaId": "owner-1", "personaId": "actor-1", "state": "active",
 			}),
 			recipient: "owner-1", messageType: "circle", source: "circle_member",
+			targetType: "circle", targetID: "circle-1",
+		},
+		{
+			name: "circle membership request notifies circle owner",
+			event: contentEvent(t, "CircleMembershipRequested", "m-2:CircleMembershipRequested:1", map[string]any{
+				"id": "m-2", "circleId": "circle-1",
+				"circleOwnerPersonaId": "owner-1", "personaId": "actor-1", "state": "pending",
+			}),
+			recipient: "owner-1", messageType: "circle", source: "circle_member_request",
+			targetType: "circle", targetID: "circle-1",
+		},
+		{
+			name: "circle membership approval notifies applicant",
+			event: contentEvent(t, "CircleMembershipApproved", "m-2:CircleMembershipApproved:2", map[string]any{
+				"id": "m-2", "circleId": "circle-1",
+				"circleOwnerPersonaId": "owner-1", "personaId": "actor-1", "state": "active",
+			}),
+			recipient: "actor-1", messageType: "circle", source: "circle_member_request",
+			targetType: "circle", targetID: "circle-1",
+		},
+		{
+			name: "circle membership rejection notifies applicant",
+			event: contentEvent(t, "CircleMembershipRejected", "m-3:CircleMembershipRejected:2", map[string]any{
+				"id": "m-3", "circleId": "circle-1",
+				"circleOwnerPersonaId": "owner-1", "personaId": "actor-1", "state": "rejected",
+			}),
+			recipient: "actor-1", messageType: "circle", source: "circle_member_request",
 			targetType: "circle", targetID: "circle-1",
 		},
 		{
@@ -430,6 +457,12 @@ func TestProjectionFailsClosedOnIncompletePayload(t *testing.T) {
 			event: contentEvent(t, "PostPublished", "evt-quote-bad", map[string]any{
 				"authorId": "resharer-1", "sourcePostId": "post-1",
 				"sourcePostAuthorId": "author-1",
+			}),
+		},
+		{
+			name: "report result rejects persona-only recipient",
+			event: contentEvent(t, "content.report.resolved", "report-bad:3", map[string]any{
+				"reportId": "report-bad", "reporterId": "persona-only-reporter",
 			}),
 		},
 	}

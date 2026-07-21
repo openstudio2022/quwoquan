@@ -15,6 +15,7 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	embeddingapp "quwoquan_service/services/content-service/internal/application/embedding"
 	postevent "quwoquan_service/services/content-service/internal/domain/post/event"
 )
 
@@ -39,7 +40,7 @@ const (
 // cfg.Embedding.Enabled + 引擎源接线控制（S0 flag-off，S1 内容池阈值开启）。
 type EmbeddingProjector struct {
 	coll        *mongo.Collection
-	embedder    EmbeddingProvider
+	embedder    embeddingapp.EmbeddingGateway
 	budget      rtredis.Client
 	dailyBudget int
 	logger      *slog.Logger
@@ -59,7 +60,7 @@ func WithEmbeddingDailyBudget(budget int) EmbeddingProjectorOption {
 
 func NewEmbeddingProjector(
 	db *mongo.Database,
-	embedder EmbeddingProvider,
+	embedder embeddingapp.EmbeddingGateway,
 	budget rtredis.Client,
 	logger *slog.Logger,
 	opts ...EmbeddingProjectorOption,

@@ -1,0 +1,56 @@
+entity: MediaImageReprocessRun
+domain: CONTENT
+
+errors:
+  - code: CONTENT.USER.media_image_reprocess_invalid_argument
+    kind: USER
+    reason: media_image_reprocess_invalid_argument
+    http_status: 400
+    recovery_action: surface
+    go_const: ErrMediaImageReprocessInvalidArgument
+    dart_const: mediaImageReprocessInvalidArgument
+    user_message:
+      zh: 图片重处理请求无效
+      en: The image reprocessing request is invalid.
+  - code: CONTENT.USER.media_image_reprocess_run_not_found
+    kind: USER
+    reason: media_image_reprocess_run_not_found
+    http_status: 404
+    recovery_action: surface
+    go_const: ErrMediaImageReprocessRunNotFound
+    dart_const: mediaImageReprocessRunNotFound
+    user_message:
+      zh: 图片重处理任务不存在
+      en: The image reprocessing run was not found.
+  - code: CONTENT.USER.media_image_reprocess_invalid_transition
+    kind: USER
+    reason: media_image_reprocess_invalid_transition
+    http_status: 409
+    recovery_action: refresh
+    go_const: ErrMediaImageReprocessInvalidTransition
+    dart_const: mediaImageReprocessInvalidTransition
+    user_message:
+      zh: 图片重处理任务当前不能执行此操作
+      en: The image reprocessing run cannot perform this operation now.
+  - code: CONTENT.USER.media_image_reprocess_version_conflict
+    kind: USER
+    reason: media_image_reprocess_version_conflict
+    http_status: 409
+    recovery_action: refresh
+    go_const: ErrMediaImageReprocessVersionConflict
+    dart_const: mediaImageReprocessVersionConflict
+    user_message:
+      zh: 图片重处理任务状态已变化，请重试
+      en: The image reprocessing run changed. Please retry.
+
+  - code: CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
+    kind: SYSTEM
+    reason: media_image_reprocess_storage_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    go_const: ErrMediaImageReprocessStorageUnavailable
+    dart_const: mediaImageReprocessStorageUnavailable
+    user_message:
+      zh: 图片重处理存储暂不可用
+      en: Image reprocessing storage is temporarily unavailable.

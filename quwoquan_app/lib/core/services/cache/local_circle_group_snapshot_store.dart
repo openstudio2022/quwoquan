@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -53,7 +52,7 @@ class LocalCircleGroupSnapshotStore {
 
   Future<bool> ensureSeeded({
     required LocalSearchNamespace namespace,
-    required CircleRepository circleRepository,
+    required CircleQueryReader circleQuery,
     required CircleGroupQueryReader circleGroupQuery,
     int circleLimit = 12,
     int groupsPerCircle = 20,
@@ -74,7 +73,7 @@ class LocalCircleGroupSnapshotStore {
       }
       final future = _seedFromRemote(
         namespace: namespace,
-        circleRepository: circleRepository,
+        circleQuery: circleQuery,
         circleGroupQuery: circleGroupQuery,
         circleLimit: circleLimit,
         groupsPerCircle: groupsPerCircle,
@@ -198,15 +197,17 @@ class LocalCircleGroupSnapshotStore {
 
   Future<void> _seedFromRemote({
     required LocalSearchNamespace namespace,
-    required CircleRepository circleRepository,
+    required CircleQueryReader circleQuery,
     required CircleGroupQueryReader circleGroupQuery,
     required int circleLimit,
     required int groupsPerCircle,
   }) async {
-    final circles = await circleRepository.listCircles(limit: circleLimit);
+    final circles = (await circleQuery.list(
+      CircleListQuery(limit: circleLimit),
+    )).items;
     final snapshots = <LocalCircleGroupSnapshotRecord>[];
     for (final circle in circles) {
-      final circleId = _string(circle.id);
+      final circleId = _string(circle.circleId);
       if (circleId.isEmpty) {
         continue;
       }

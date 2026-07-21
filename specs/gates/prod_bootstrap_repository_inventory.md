@@ -17,7 +17,7 @@
 | `userProfileRepositoryProvider` | `RemoteUserProfileRepository` | `MockUserProfileRepository` |
 | `personaRelationshipBlockWriterProvider` / `blockedListQueryProvider` | `RemotePersonaRelationshipFacet` | alpha adapter 仅位于 `quwoquan_cloud_mock` |
 | `homeFeedContentReportCommandWriterProvider` / `workBrowserContentReportCommandWriterProvider` / `userProfileContentReportCommandWriterProvider` | `RemoteContentReportAdapter`（context 由各 surface Provider 固定） | `AlphaContentReportAdapter`（仅 `quwoquan_cloud_mock`，override 位于 alpha runner） |
-| `circleRepositoryProvider` | `RemoteCircleRepository` | `MockCircleRepository` |
+| Circle object-level typed facet providers | Remote generated-client adapters | alpha `AlphaCircle*` typed facets only in `quwoquan_cloud_mock` |
 | `searchRepositoryProvider` | `RemoteSearchRepository` | `MockSearchRepository` |
 | `rtcCall*Provider` 对象级 Facet | `RemoteCall*` generated-client adapters | alpha adapters 仅位于 `quwoquan_cloud_mock` |
 | `userSettingsCommandWriterProvider` / `userSettingsQueryReaderProvider` | `RemoteUserSettingsCommandWriter` / `RemoteUserSettingsQueryReader` | alpha adapter 仅位于 `quwoquan_cloud_mock` |

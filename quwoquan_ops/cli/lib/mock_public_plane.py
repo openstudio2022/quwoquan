@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.output_paths import legal_static_release_dir
+from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 
 
 class MockPublicPlaneHandler(BaseHTTPRequestHandler):
@@ -366,7 +366,9 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         configured = type(self).legal_static_root.strip()
         if configured:
             return Path(configured).expanduser().resolve()
-        return (legal_static_release_dir(self.runtime_env) / "current" / "public").resolve()
+        return (
+            legal_static_deployment_package_dir(self.runtime_env) / "current" / "public"
+        ).resolve()
 
     def _resolve_legal_static_path(self, path: str) -> Path | None:
         root = self._legal_root()

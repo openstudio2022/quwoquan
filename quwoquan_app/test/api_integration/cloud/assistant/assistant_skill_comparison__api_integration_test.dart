@@ -73,7 +73,7 @@ void main() {
         final selectedSkillIds = <String>{
           for (final event in state.events)
             if (_looksLikeSkillSelection(event.payload))
-              (event.payload['skillId'] ?? '').toString(),
+              _processString(event.payload, 'skillId'),
         }..remove('');
         final toolNames = <String>{
           for (final event in state.events) _toolNameForEvent(event.payload),
@@ -244,8 +244,7 @@ double _scoreVerticalQaRun({
   )) {
     score += 1.5;
   }
-  if (eventTypes.contains('final_answer') ||
-      eventTypes.contains('assistant.answer.final')) {
+  if (eventTypes.contains('completed')) {
     score += 1;
   }
   return score;
@@ -305,7 +304,7 @@ void _expectScreenClass(WidgetTester tester) {
 }
 
 String _toolNameForEvent(Map<String, dynamic> payload) {
-  final raw = payload['toolUse'];
+  final raw = payload['process'];
   if (raw is Map) {
     return (raw['toolName'] ?? '').toString();
   }
@@ -313,9 +312,16 @@ String _toolNameForEvent(Map<String, dynamic> payload) {
 }
 
 bool _looksLikeSkillSelection(Map<String, dynamic> payload) {
-  return payload.containsKey('skillId') &&
-      payload.containsKey('domainId') &&
-      payload.containsKey('promptPolicy');
+  final raw = payload['process'];
+  return raw is Map &&
+      raw['stage'] == 'skill_selection' &&
+      raw.containsKey('skillId') &&
+      raw.containsKey('domainId');
+}
+
+String _processString(Map<String, dynamic> payload, String key) {
+  final raw = payload['process'];
+  return raw is Map ? (raw[key] ?? '').toString() : '';
 }
 
 void _printEvalResult(Map<String, dynamic> result) {

@@ -23,10 +23,7 @@ func TestContract_JoinCall(t *testing.T) {
 		t.Errorf("expected status=in_call after join, got %v", session["status"])
 	}
 
-	token, _ := joinResp["token"].(string)
-	if token == "" {
-		t.Error("join response missing token")
-	}
+	extractMediaAccess(t, joinResp)
 }
 
 func TestContract_LeaveCall(t *testing.T) {

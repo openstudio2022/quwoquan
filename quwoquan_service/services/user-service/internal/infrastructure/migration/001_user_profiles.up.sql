@@ -5,6 +5,9 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id                  VARCHAR(96) PRIMARY KEY,
     account_state            VARCHAR(32) NOT NULL DEFAULT 'active',
+    auth_epoch               BIGINT NOT NULL DEFAULT 1,
+    suspension_case_ref      VARCHAR(128),
+    suspended_at             TIMESTAMPTZ,
     identity_origin          VARCHAR(32) NOT NULL DEFAULT 'phone',
     logical_shard            INTEGER NOT NULL DEFAULT 0,
     anonymous_retention_policy VARCHAR(32) NOT NULL DEFAULT 'preserve',
@@ -40,5 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_nickname ON user_profiles (nickname
 CREATE INDEX IF NOT EXISTS idx_user_profiles_phone ON user_profiles (phone);
 
 CREATE INDEX IF NOT EXISTS idx_user_profiles_status ON user_profiles (status);
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_account_state ON user_profiles (account_state);
 
 CREATE INDEX IF NOT EXISTS gin_user_profiles_search ON user_profiles USING GIN (nickname gin_trgm_ops, bio gin_trgm_ops);

@@ -198,6 +198,13 @@ scenarios:
     operation: GetCounters
     go_func: TestGetCounters
     command: GetCounters
+  - name: get_entity_wishlist_state_contract
+    operation: GetEntityWishlistState
+    go_func: TestEntityWishlistStateTracksBehaviorProjection
+    command: GetEntityWishlistState
+    assertions:
+      - 只读取当前 actor 对 canonical object 的行为投影
+      - 写入和取消 wishlist 后的读取状态与投影一致
   - name: generate_article_summary_contract
     operation: GenerateArticleSummary
     go_func: TestGenerateArticleSummaryContract

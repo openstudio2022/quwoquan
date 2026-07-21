@@ -46,71 +46,9 @@ type VisitStats struct {
 	Items       []VisitRecord `json:"items"`
 }
 
-// EventRecordInput 是 /ops/events 唯一 wire shape。公共上下文字段之外只允许
-// event_catalog.yaml 中登记的强类型扩展；JSON decoder 会拒绝任何未知字段。
-type EventRecordInput struct {
-	LogType                string   `json:"logType"`
-	EventType              string   `json:"eventType"`
-	SessionID              string   `json:"sessionId"`
-	PageName               string   `json:"pageName"`
-	OccurredAt             string   `json:"occurredAt"`
-	DeviceManufacturer     string   `json:"deviceManufacturer"`
-	DeviceModel            string   `json:"deviceModel"`
-	AppVersion             string   `json:"appVersion"`
-	NetworkClass           string   `json:"networkClass"`
-	DevicePlatform         string   `json:"devicePlatform"`
-	DurationMS             *int     `json:"durationMs,omitempty"`
-	Result                 *string  `json:"result,omitempty"`
-	CallType               *string  `json:"callType,omitempty"`
-	ParticipantCount       *int     `json:"participantCount,omitempty"`
-	ConnectTimeMS          *int     `json:"connectTimeMs,omitempty"`
-	MediaConnected         *bool    `json:"mediaConnected,omitempty"`
-	ReconnectCount         *int     `json:"reconnectCount,omitempty"`
-	DisconnectReason       *string  `json:"disconnectReason,omitempty"`
-	NetworkQuality         *string  `json:"networkQuality,omitempty"`
-	FailReasonCode         *string  `json:"failReasonCode,omitempty"`
-	ErrorCode              *string  `json:"errorCode,omitempty"`
-	OperationID            *string  `json:"operationId,omitempty"`
-	RequestID              *string  `json:"requestId,omitempty"`
-	TraceID                *string  `json:"traceId,omitempty"`
-	RecoveryAction         *string  `json:"recoveryAction,omitempty"`
-	SurfaceID              *string  `json:"surfaceId,omitempty"`
-	DetectionSource        *string  `json:"detectionSource,omitempty"`
-	SampledFrames          *int     `json:"sampledFrames,omitempty"`
-	JankyFrames            *int     `json:"jankyFrames,omitempty"`
-	WorstFrameMS           *int     `json:"worstFrameMs,omitempty"`
-	JankThresholdMS        *int     `json:"jankThresholdMs,omitempty"`
-	TerminalState          *string  `json:"terminalState,omitempty"`
-	HTTPStatus             *int     `json:"httpStatus,omitempty"`
-	CallStack              []string `json:"callStack,omitempty"`
-	TClickToFirstFrameMS   *int     `json:"tClickToFirstFrameMs,omitempty"`
-	TFirstFrameToShellMS   *int     `json:"tFirstFrameToShellMs,omitempty"`
-	TShellToContentMS      *int     `json:"tShellToContentMs,omitempty"`
-	TClickToContentMS      *int     `json:"tClickToContentMs,omitempty"`
-	HasError               *bool    `json:"hasError,omitempty"`
-	Journey                *string  `json:"journey,omitempty"`
-	Action                 *string  `json:"action,omitempty"`
-	ReadyMS                *int     `json:"readyMs,omitempty"`
-	TTFFMS                 *int     `json:"ttffMs,omitempty"`
-	RebufferCount          *int     `json:"rebufferCount,omitempty"`
-	RebufferMS             *int     `json:"rebufferMs,omitempty"`
-	EffectivePlaybackMS    *int     `json:"effectivePlaybackMs,omitempty"`
-	SeekCount              *int     `json:"seekCount,omitempty"`
-	SeekFailureCount       *int     `json:"seekFailureCount,omitempty"`
-	SeekCommandMaxMS       *int     `json:"seekCommandMaxMs,omitempty"`
-	SeekSettleMaxMS        *int     `json:"seekSettleMaxMs,omitempty"`
-	DroppedFrames          *int     `json:"droppedFrames,omitempty"`
-	ProcessedVideoFrames   *int     `json:"processedVideoFrames,omitempty"`
-	AudioUnderrunCount     *int     `json:"audioUnderrunCount,omitempty"`
-	RendererMode           *string  `json:"rendererMode,omitempty"`
-	DecoderQueueMode       *string  `json:"decoderQueueMode,omitempty"`
-	DecoderFallbackEnabled *bool    `json:"decoderFallbackEnabled,omitempty"`
-	SeekEvidenceSource     *string  `json:"seekEvidenceSource,omitempty"`
-	DeclaredDurationMS     *int     `json:"declaredDurationMs,omitempty"`
-	ObservedDurationMS     *int     `json:"observedDurationMs,omitempty"`
-	DurationMismatch       *bool    `json:"durationMismatch,omitempty"`
-	PlaybackMode           *string  `json:"playbackMode,omitempty"`
-}
+// EventRecordInput 是 /ops/events 唯一 wire shape。它直接由 event_catalog.yaml
+// 生成，保证严格 JSON 解码、验证和 SLS 投影不会遗漏已登记的扩展字段。
+type EventRecordInput = generated.EventRecordInput
 
 type EventRecord struct {
 	EventRecordInput
@@ -125,8 +63,8 @@ type EventBatchAck struct {
 }
 
 type EventSummaryQuery struct {
-	LogType, EventType, PageName, AppVersion, NetworkClass, ErrorCode string
-	From, To                                                          time.Time
+	LogType, EventType, PageName, AppVersion, NetworkClass, Result, ErrorCode string
+	From, To                                                                  time.Time
 }
 
 type EventSummary struct {
@@ -142,10 +80,10 @@ type EventSummary struct {
 }
 
 type EventDrilldownQuery struct {
-	LogType, EventType, PageName, AppVersion, NetworkClass, ErrorCode, SessionID string
-	From, To                                                                     time.Time
-	Limit                                                                        int
-	RevealSession                                                                bool
+	LogType, EventType, PageName, AppVersion, NetworkClass, Result, ErrorCode, SessionID string
+	From, To                                                                             time.Time
+	Limit                                                                                int
+	RevealSession                                                                        bool
 }
 
 type EventDrilldownItem struct {
@@ -578,7 +516,7 @@ func validateEvent(input EventRecordInput, now time.Time) error {
 	if err != nil || occurredAt.Before(now.Add(-72*time.Hour)) || occurredAt.After(now.Add(5*time.Minute)) {
 		return fmt.Errorf("occurredAt outside accepted window")
 	}
-	extensions := input.extensions()
+	extensions := input.ExtensionValues()
 	extensions["devicePlatform"] = input.DevicePlatform
 	for required := range definition.RequiredExtensions {
 		if _, ok := extensions[required]; !ok {
@@ -598,164 +536,6 @@ func validateEvent(input EventRecordInput, now time.Time) error {
 		}
 	}
 	return nil
-}
-
-func (input EventRecordInput) extensions() map[string]any {
-	out := map[string]any{}
-	if input.DurationMS != nil {
-		out["durationMs"] = *input.DurationMS
-	}
-	if input.Result != nil {
-		out["result"] = *input.Result
-	}
-	if input.CallType != nil {
-		out["callType"] = *input.CallType
-	}
-	if input.ParticipantCount != nil {
-		out["participantCount"] = *input.ParticipantCount
-	}
-	if input.ConnectTimeMS != nil {
-		out["connectTimeMs"] = *input.ConnectTimeMS
-	}
-	if input.MediaConnected != nil {
-		out["mediaConnected"] = *input.MediaConnected
-	}
-	if input.ReconnectCount != nil {
-		out["reconnectCount"] = *input.ReconnectCount
-	}
-	if input.DisconnectReason != nil {
-		out["disconnectReason"] = *input.DisconnectReason
-	}
-	if input.NetworkQuality != nil {
-		out["networkQuality"] = *input.NetworkQuality
-	}
-	if input.FailReasonCode != nil {
-		out["failReasonCode"] = *input.FailReasonCode
-	}
-	if input.ErrorCode != nil {
-		out["errorCode"] = *input.ErrorCode
-	}
-	if input.OperationID != nil {
-		out["operationId"] = *input.OperationID
-	}
-	if input.RequestID != nil {
-		out["requestId"] = *input.RequestID
-	}
-	if input.TraceID != nil {
-		out["traceId"] = *input.TraceID
-	}
-	if input.RecoveryAction != nil {
-		out["recoveryAction"] = *input.RecoveryAction
-	}
-	if input.SurfaceID != nil {
-		out["surfaceId"] = *input.SurfaceID
-	}
-	if input.DetectionSource != nil {
-		out["detectionSource"] = *input.DetectionSource
-	}
-	if input.SampledFrames != nil {
-		out["sampledFrames"] = *input.SampledFrames
-	}
-	if input.JankyFrames != nil {
-		out["jankyFrames"] = *input.JankyFrames
-	}
-	if input.WorstFrameMS != nil {
-		out["worstFrameMs"] = *input.WorstFrameMS
-	}
-	if input.JankThresholdMS != nil {
-		out["jankThresholdMs"] = *input.JankThresholdMS
-	}
-	if input.TerminalState != nil {
-		out["terminalState"] = *input.TerminalState
-	}
-	if input.HTTPStatus != nil {
-		out["httpStatus"] = *input.HTTPStatus
-	}
-	if input.CallStack != nil {
-		out["callStack"] = input.CallStack
-	}
-	if input.TClickToFirstFrameMS != nil {
-		out["tClickToFirstFrameMs"] = *input.TClickToFirstFrameMS
-	}
-	if input.TFirstFrameToShellMS != nil {
-		out["tFirstFrameToShellMs"] = *input.TFirstFrameToShellMS
-	}
-	if input.TShellToContentMS != nil {
-		out["tShellToContentMs"] = *input.TShellToContentMS
-	}
-	if input.TClickToContentMS != nil {
-		out["tClickToContentMs"] = *input.TClickToContentMS
-	}
-	if input.HasError != nil {
-		out["hasError"] = *input.HasError
-	}
-	if input.Journey != nil {
-		out["journey"] = *input.Journey
-	}
-	if input.Action != nil {
-		out["action"] = *input.Action
-	}
-	if input.ReadyMS != nil {
-		out["readyMs"] = *input.ReadyMS
-	}
-	if input.TTFFMS != nil {
-		out["ttffMs"] = *input.TTFFMS
-	}
-	if input.RebufferCount != nil {
-		out["rebufferCount"] = *input.RebufferCount
-	}
-	if input.RebufferMS != nil {
-		out["rebufferMs"] = *input.RebufferMS
-	}
-	if input.EffectivePlaybackMS != nil {
-		out["effectivePlaybackMs"] = *input.EffectivePlaybackMS
-	}
-	if input.SeekCount != nil {
-		out["seekCount"] = *input.SeekCount
-	}
-	if input.SeekFailureCount != nil {
-		out["seekFailureCount"] = *input.SeekFailureCount
-	}
-	if input.SeekCommandMaxMS != nil {
-		out["seekCommandMaxMs"] = *input.SeekCommandMaxMS
-	}
-	if input.SeekSettleMaxMS != nil {
-		out["seekSettleMaxMs"] = *input.SeekSettleMaxMS
-	}
-	if input.DroppedFrames != nil {
-		out["droppedFrames"] = *input.DroppedFrames
-	}
-	if input.ProcessedVideoFrames != nil {
-		out["processedVideoFrames"] = *input.ProcessedVideoFrames
-	}
-	if input.AudioUnderrunCount != nil {
-		out["audioUnderrunCount"] = *input.AudioUnderrunCount
-	}
-	if input.RendererMode != nil {
-		out["rendererMode"] = *input.RendererMode
-	}
-	if input.DecoderQueueMode != nil {
-		out["decoderQueueMode"] = *input.DecoderQueueMode
-	}
-	if input.DecoderFallbackEnabled != nil {
-		out["decoderFallbackEnabled"] = *input.DecoderFallbackEnabled
-	}
-	if input.SeekEvidenceSource != nil {
-		out["seekEvidenceSource"] = *input.SeekEvidenceSource
-	}
-	if input.DeclaredDurationMS != nil {
-		out["declaredDurationMs"] = *input.DeclaredDurationMS
-	}
-	if input.ObservedDurationMS != nil {
-		out["observedDurationMs"] = *input.ObservedDurationMS
-	}
-	if input.DurationMismatch != nil {
-		out["durationMismatch"] = *input.DurationMismatch
-	}
-	if input.PlaybackMode != nil {
-		out["playbackMode"] = *input.PlaybackMode
-	}
-	return out
 }
 
 func validateExtension(name string, value any) error {

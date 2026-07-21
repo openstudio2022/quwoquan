@@ -124,5 +124,51 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('decodes message keyset page and encodes sequence bounds', () {
+      final request = encodeChatListMessagesQuery(
+        ChatListMessagesQuery(
+          conversationId: 'conversation-1',
+          beforeSeq: 42,
+          limit: 20,
+        ),
+      );
+      final page = decodeChatMessagePageSlice(<String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{
+            'id': 'message-41',
+            'conversationId': 'conversation-1',
+            'seq': 41,
+            'clientMsgId': 'client-message-41',
+            'senderId': 'user-1',
+            'senderName': '',
+            'senderAvatar': '',
+            'type': 'text',
+            'content': '你好',
+            'mediaAssetId': '',
+            'card': null,
+            'replyToMessageId': '',
+            'mentions': <String>[],
+            'status': 'sent',
+            'timestamp': '2026-07-21T06:00:00Z',
+          },
+        ],
+        'nextBeforeSeq': 41,
+      });
+
+      expect(request.queryParameters, <String, String>{
+        'limit': '20',
+        'beforeSeq': '42',
+      });
+      expect(page.items.single.content, '你好');
+      expect(page.nextBeforeSeq, 41);
+      expect(
+        () => decodeChatMessagePageSlice(<String, Object?>{
+          'items': <Object?>[],
+          'cursor': 'retired',
+        }),
+        throwsFormatException,
+      );
+    });
   });
 }

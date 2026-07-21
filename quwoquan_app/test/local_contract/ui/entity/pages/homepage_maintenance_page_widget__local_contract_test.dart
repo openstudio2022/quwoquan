@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
@@ -147,9 +147,10 @@ void main() {
     expect(repository.detailLoadCalls, 2);
     expect(find.byType(AppFormErrorCard), findsNothing);
     expect(
-      tester.widget<CupertinoTextField>(
-        find.byType(CupertinoTextField).first,
-      ).controller?.text,
+      tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField).first)
+          .controller
+          ?.text,
       isNot('过期资料'),
     );
   });

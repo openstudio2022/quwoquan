@@ -105,48 +105,11 @@ func detectLoop(toolName string, history []string, window int) error {
 	return nil
 }
 
-// BaseRegistry 只登记无需外部数据源的设备动作 proposal。
+// BaseRegistry 不提供任何可执行工具。
 //
-// 检索类工具必须由 composition root 显式绑定真实 adapter；这里不得提供合成文档、
-// fixture 或失败后伪成功，否则引用会把测试数据冒充为事实。
+// 所有工具都必须由 composition root 显式绑定经过端到端验证的真实 adapter。
+// 设备动作在存在确认命令、端侧 continuation 与审计闭环前不得登记，避免把 proposal
+// 冒充为已执行动作。检索类同样不得提供合成文档、fixture 或失败后伪成功。
 func BaseRegistry() Registry {
-	registry := NewRegistry()
-	registry.Register(Metadata{
-		ToolName:             "app_action",
-		DisplayName:          "应用操作",
-		Description:          "向端侧提出应用动作 proposal，必须由端侧确认后执行。",
-		Placement:            PlacementDeviceAction,
-		RequiredInputKeys:    []string{"actionType"},
-		RequiresConfirmation: true,
-		Resilience:           DefaultMetadata("app_action").Resilience,
-		Recovery: RecoveryPolicy{
-			Action:             "request_confirmation",
-			DisruptionLevel:    "permissionCard",
-			UserVisibleSummary: "需要用户确认后执行本机动作",
-		},
-	}, nil)
-	for _, meta := range []Metadata{
-		deviceProposalMetadata("scheduler", "日程调度", "向端侧提出日程、待办或提醒 proposal。"),
-		deviceProposalMetadata("deep_link", "深链跳转", "向端侧提出打开应用内或外部目标的 proposal。"),
-		deviceProposalMetadata("intent_bridge", "意图桥接", "向端侧提出系统 intent 或平台能力 proposal。"),
-	} {
-		registry.Register(meta, nil)
-	}
-	return registry
-}
-
-func deviceProposalMetadata(toolName, displayName, description string) Metadata {
-	meta := DefaultMetadata(toolName)
-	meta.DisplayName = displayName
-	meta.Description = description
-	meta.Placement = PlacementDeviceAction
-	meta.RequiredInputKeys = []string{"query"}
-	meta.RequiredOutputKeys = nil
-	meta.RequiresConfirmation = true
-	meta.Recovery = RecoveryPolicy{
-		Action:             "request_confirmation",
-		DisruptionLevel:    "permissionCard",
-		UserVisibleSummary: "需要用户确认后执行本机动作",
-	}
-	return meta
+	return NewRegistry()
 }

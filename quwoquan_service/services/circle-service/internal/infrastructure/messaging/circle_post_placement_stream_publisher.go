@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	rtredis "quwoquan_service/runtime/redis"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 )
 
@@ -18,15 +17,15 @@ const (
 )
 
 type CirclePostPlacementStreamPublisher struct {
-	redis rtredis.Client
+	transport durableStreamTransport
 }
 
-func NewCirclePostPlacementStreamPublisher(redis rtredis.Client) *CirclePostPlacementStreamPublisher {
-	return &CirclePostPlacementStreamPublisher{redis: redis}
+func NewCirclePostPlacementStreamPublisher(transport durableStreamTransport) *CirclePostPlacementStreamPublisher {
+	return &CirclePostPlacementStreamPublisher{transport: transport}
 }
 
 func (publisher *CirclePostPlacementStreamPublisher) Publish(ctx context.Context, event placementports.OutboxEvent) error {
-	if publisher == nil || publisher.redis == nil {
+	if publisher == nil || publisher.transport == nil {
 		return fmt.Errorf("CirclePostPlacement stream publisher is not configured")
 	}
 	if strings.TrimSpace(event.EventID) == "" || strings.TrimSpace(event.EventType) == "" ||
@@ -36,16 +35,13 @@ func (publisher *CirclePostPlacementStreamPublisher) Publish(ctx context.Context
 	if !json.Valid(event.Payload) {
 		return fmt.Errorf("CirclePostPlacement event payload is not valid JSON")
 	}
-	if _, err := publisher.redis.XAdd(ctx, CirclePostPlacementStream, map[string]string{
+	if err := appendCircleDurableRecord(ctx, publisher.transport, CirclePostPlacementStream, map[string]string{
 		"eventId": event.EventID, "eventType": event.EventType,
 		"aggregateType": "CirclePostPlacement", "aggregateId": event.AggregateID,
 		"aggregateVersion": strconv.FormatInt(event.AggregateVersion, 10),
 		"payload":          string(event.Payload), "occurredAt": event.OccurredAt.UTC().Format(time.RFC3339Nano),
-	}); err != nil {
+	}, CirclePostPlacementStreamRetention); err != nil {
 		return fmt.Errorf("append CirclePostPlacement stream: %w", err)
-	}
-	if err := publisher.redis.Expire(ctx, CirclePostPlacementStream, CirclePostPlacementStreamRetention); err != nil {
-		return fmt.Errorf("refresh CirclePostPlacement stream retention: %w", err)
 	}
 	return nil
 }

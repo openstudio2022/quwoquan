@@ -219,7 +219,7 @@ func (readers *MongoReaders) memberCounts(ctx context.Context, groupIDs []string
 		return result, nil
 	}
 	rows, err := readers.groupMemberships.Aggregate(ctx, mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"groupId": bson.M{"$in": groupIDs}, "state": "joined"}}},
+		{{Key: "$match", Value: bson.M{"groupId": bson.M{"$in": groupIDs}, "state": "active"}}},
 		{{Key: "$group", Value: bson.M{"_id": "$groupId", "count": bson.M{"$sum": 1}}}},
 	})
 	if err != nil {

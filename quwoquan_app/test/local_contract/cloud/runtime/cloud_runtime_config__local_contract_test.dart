@@ -12,6 +12,7 @@ void main() {
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
           mediaUploadBaseUrl: 'https://upload.example.test',
+          rtcMediaConnectionUrl: 'wss://rtc.example.test',
         ),
         returnsNormally,
       );
@@ -26,6 +27,7 @@ void main() {
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
           mediaUploadBaseUrl: 'https://upload.example.test',
+          rtcMediaConnectionUrl: 'wss://rtc.example.test',
         ),
         throwsA(
           isA<CloudRuntimeConfigurationException>().having(
@@ -49,6 +51,7 @@ void main() {
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
           mediaUploadBaseUrl: 'https://upload.example.test',
+          rtcMediaConnectionUrl: 'wss://rtc.example.test',
         ),
         throwsA(isA<CloudRuntimeConfigurationException>()),
       );

@@ -18,6 +18,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
     @staticmethod
     def _render_env(tmp: str) -> tuple[dict[str, str], Path]:
         output_root = Path(tmp) / ".qwq_output"
+        deploy_root = Path(tmp) / "deploy"
+        package_root = deploy_root / "prod-hosted" / "packages"
         artifact_manifest = Path(tmp) / "release-artifact-manifest.json"
         artifact_manifest.write_text("{}\n", encoding="utf-8")
         service_names = [
@@ -36,7 +38,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             "rtc-service",
         ]
         for service in service_names:
-            package = output_root / "env/prod/release/service" / service
+            package = package_root / "service" / service
             package.mkdir(parents=True, exist_ok=True)
             default_config = package / "default_config.yaml"
             environment_config = package / "config.yaml"
@@ -65,10 +67,11 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-        legal = output_root / "env/prod/release/legal-static/current/public"
+        legal = package_root / "legal-static/current/public"
         legal.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ)
         env["QWQ_OUTPUT_ROOT"] = str(output_root)
+        env["QWQ_DEPLOY_WORK_ROOT"] = str(deploy_root)
         return env, output_root
 
     def test_render_service_plane_outputs_onebox_subset(self) -> None:
@@ -182,6 +185,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 notification_env["NOTIFICATION_REDIS_ADDR"],
                 "host.containers.internal:19420",
             )
+            self.assertEqual(notification_env["NOTIFICATION_REDIS_GENERAL_DB"], "1")
+            self.assertEqual(notification_env["NOTIFICATION_REDIS_REALTIME_DB"], "4")
             self.assertEqual(
                 notification_env["NOTIFICATION_REALTIME_BASE_URL"],
                 "http://host.containers.internal:"
@@ -236,6 +241,25 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 )
             )
             self.assertIs(entity_prod["es"]["enabled"], False)
+            # 服务启动与 Platform ConfigSnapshot 共同消费同一发布包路径；
+            # 不得复制旧的 repository-shaped config tree。
+            for service in report["configServices"]:
+                release = (
+                    out_dir
+                    / "runtime/config-root/releases/config"
+                    / service
+                    / "local-gamma-v1.yaml"
+                )
+                self.assertTrue(release.is_file(), release)
+                self.assertEqual(
+                    yaml.safe_load(release.read_text(encoding="utf-8"))["config"][
+                        "version"
+                    ],
+                    "local-gamma-v1",
+                )
+            self.assertFalse(
+                (out_dir / "runtime/config-root/quwoquan_service").exists()
+            )
 
     def test_render_gray_instance_uses_non_prod_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -330,7 +354,10 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 "mongodb://host.containers.internal:19410/?directConnection=true",
             )
             self.assertEqual(rtc_env["REDIS_ADDR"], "host.containers.internal:19420")
-            self.assertIn("PROD_LIVEKIT_PUBLIC_URL", rtc_env["LIVEKIT_URL"])
+            self.assertIn(
+                "PROD_RTC_MEDIA_CONNECTION_URL",
+                rtc_env["RTC_MEDIA_CONNECTION_URL"],
+            )
             self.assertNotIn("depends_on", compose["services"]["realtime-gateway"])
             self.assertNotIn("depends_on", compose["services"]["rtc-service"])
             env_text = (out_dir / "stack.env").read_text(encoding="utf-8")
@@ -351,7 +378,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "service"
             env, _ = self._render_env(tmp)
-            report = Path(tmp) / ".qwq_output/env/prod/release/service/content-service/report.json"
+            report = Path(tmp) / "deploy/prod-hosted/packages/service/content-service/report.json"
             report.write_text("{}\n", encoding="utf-8")
             result = subprocess.run(
                 [

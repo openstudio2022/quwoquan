@@ -73,11 +73,11 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
             compose,
         )
         self.assertIn(
-            'LIVEKIT_URL: "${LOCAL_GAMMA_LIVEKIT_PUBLIC_URL:-'
+            'RTC_MEDIA_CONNECTION_URL: "${LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL:-'
             'wss://gamma-rtc.quwoquan-env.test:19000}"',
             compose,
         )
-        self.assertNotIn("LIVEKIT_URL: ws://livekit-sfu:7880", compose)
+        self.assertNotIn("RTC_MEDIA_CONNECTION_URL: ws://livekit-sfu:7880", compose)
         for service_name in ("realtime-gateway", "rtc-service"):
             service = compose_model["services"][service_name]
             self.assertNotIn("build", service)

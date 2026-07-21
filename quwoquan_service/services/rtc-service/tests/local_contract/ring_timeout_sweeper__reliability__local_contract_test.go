@@ -160,9 +160,7 @@ func newSweeperOrchestrator(store application.CallStore, now time.Time) *applica
 		noopCallStateCache{},
 		callsession.NewCallSessionService(),
 		nil,
-		nil,
 		application.AllowRelationshipGateForTest(),
-		"",
 		application.WithClock(func() time.Time { return now }),
 	)
 }

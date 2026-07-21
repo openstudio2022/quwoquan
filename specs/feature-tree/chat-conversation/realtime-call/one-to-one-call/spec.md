@@ -15,9 +15,9 @@
 - CallSession 状态只允许
   `initiated -> ringing -> connecting -> in_call -> ended`。
 - `callType` 只允许 `audio | video`，不接受其他别名。
-- 发起/接听分别调用 `InitiateCall` / `AnswerCall`；响应直接携带短期 LiveKit token 与
-  `livekitUrl`。
-- LiveKit 媒体可用后调用 `ReportMediaConnected`；不能把 AnswerCall 成功等同媒体已接通。
+- 发起/接听分别调用 `InitiateCall` / `AnswerCall`；响应直接携带 provider-neutral
+  `mediaAccess(accessToken)`，连接地址仅由 App 环境包注入平台媒体 adapter。
+- 媒体传输可用后调用 `ReportMediaConnected`；不能把 AnswerCall 成功等同媒体已接通。
 - 拒绝、取消、挂断分别调用 `RejectCall`、`CancelCall`、`HangupCall`。
 - 30 秒无应答写 `endReason=no_answer`；`timeout` 保留给系统超时语义。
 - 在线 CallRinging/CallEnded 只经 realtime-gateway 单通道投递。

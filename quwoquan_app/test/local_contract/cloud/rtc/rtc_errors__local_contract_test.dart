@@ -72,21 +72,17 @@ void main() {
       expect(code!.httpStatus, 429);
     });
 
-    test('parse livekit_unavailable → livekitUnavailable', () {
-      final code = RtcErrorCode.fromCode('RTC.SYSTEM.livekit_unavailable');
-      expect(code, RtcErrorCode.livekitUnavailable);
+    test('parse media_transport_unavailable → mediaTransportUnavailable', () {
+      final code = RtcErrorCode.fromCode(
+        'RTC.SYSTEM.media_transport_unavailable',
+      );
+      expect(code, RtcErrorCode.mediaTransportUnavailable);
       expect(code!.httpStatus, 503);
     });
 
     test('parse internal_error → internalError', () {
       final code = RtcErrorCode.fromCode('RTC.SYSTEM.internal_error');
       expect(code, RtcErrorCode.internalError);
-      expect(code!.httpStatus, 500);
-    });
-
-    test('parse token_generation_failed → tokenGenerationFailed', () {
-      final code = RtcErrorCode.fromCode('RTC.SYSTEM.token_generation_failed');
-      expect(code, RtcErrorCode.tokenGenerationFailed);
       expect(code!.httpStatus, 500);
     });
   });
@@ -105,8 +101,8 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 17（含 version_conflict / idempotency_conflict，录制已删除）', () {
-      expect(RtcErrorCode.values.length, 17);
+    test('enum 总数 = 16（含 media_transport_unavailable）', () {
+      expect(RtcErrorCode.values.length, 16);
     });
 
     test('关系门禁错误码已贯通端侧', () {
@@ -134,13 +130,12 @@ void main() {
       expect(RtcErrorCode.alreadyInCall.isUserError, isTrue);
       expect(RtcErrorCode.rateLimited.isUserError, isTrue);
       expect(RtcErrorCode.internalError.isUserError, isFalse);
-      expect(RtcErrorCode.livekitUnavailable.isUserError, isFalse);
+      expect(RtcErrorCode.mediaTransportUnavailable.isUserError, isFalse);
     });
 
     test('isSystemError 分类正确', () {
-      expect(RtcErrorCode.livekitUnavailable.isSystemError, isTrue);
+      expect(RtcErrorCode.mediaTransportUnavailable.isSystemError, isTrue);
       expect(RtcErrorCode.internalError.isSystemError, isTrue);
-      expect(RtcErrorCode.tokenGenerationFailed.isSystemError, isTrue);
       expect(RtcErrorCode.callNotFound.isSystemError, isFalse);
       expect(RtcErrorCode.rateLimited.isSystemError, isFalse);
     });

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	homepageports "quwoquan_service/services/entity-service/internal/domain/homepage/ports"
 	claimports "quwoquan_service/services/entity-service/internal/domain/homepage_claim_request/ports"
@@ -15,13 +16,14 @@ import (
 func TestHomepageLifecyclePublishersPreserveDurableIdentity(t *testing.T) {
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()
+	transport := newEntityTestMessageTransport(t, client)
 	occurredAt := time.Date(2026, 7, 20, 9, 30, 0, 0, time.UTC)
 	payload, err := json.Marshal(map[string]any{"homepageId": "homepage-42"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := NewHomepageLifecycleStreamPublisher(client).Publish(
+	if err := NewHomepageLifecycleStreamPublisher(transport).Publish(
 		ctx,
 		homepageports.OutboxEvent{
 			EventID:          "homepage-42:2:HomepagePublished",
@@ -34,7 +36,7 @@ func TestHomepageLifecyclePublishersPreserveDurableIdentity(t *testing.T) {
 	); err != nil {
 		t.Fatalf("publish homepage event: %v", err)
 	}
-	if err := NewHomepageClaimLifecycleStreamPublisher(client).Publish(
+	if err := NewHomepageClaimLifecycleStreamPublisher(transport).Publish(
 		ctx,
 		claimports.OutboxEvent{
 			EventID:          "claim-7:2:HomepageClaimReviewed",
@@ -47,7 +49,7 @@ func TestHomepageLifecyclePublishersPreserveDurableIdentity(t *testing.T) {
 	); err != nil {
 		t.Fatalf("publish claim event: %v", err)
 	}
-	if err := NewHomepageStatusLifecycleStreamPublisher(client).Publish(
+	if err := NewHomepageStatusLifecycleStreamPublisher(transport).Publish(
 		ctx,
 		statusports.OutboxEvent{
 			EventID:          "report-9:2:HomepageStatusReportReviewed",
@@ -109,7 +111,9 @@ func TestHomepageLifecyclePublishersPreserveDurableIdentity(t *testing.T) {
 }
 
 func TestHomepageLifecyclePublisherRejectsInvalidPayload(t *testing.T) {
-	publisher := NewHomepageLifecycleStreamPublisher(rtredis.NewMemoryClient())
+	publisher := NewHomepageLifecycleStreamPublisher(
+		newEntityTestMessageTransport(t, rtredis.NewMemoryClient()),
+	)
 	err := publisher.Publish(
 		context.Background(),
 		homepageports.OutboxEvent{
@@ -124,4 +128,21 @@ func TestHomepageLifecyclePublisherRejectsInvalidPayload(t *testing.T) {
 	if err == nil {
 		t.Fatal("invalid payload must fail before XADD")
 	}
+}
+
+func newEntityTestMessageTransport(
+	t *testing.T,
+	client rtredis.Client,
+) *runtimemessaging.RedisMessageTransport {
+	t.Helper()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"entity-service-test",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("new entity test message transport: %v", err)
+	}
+	return transport
 }

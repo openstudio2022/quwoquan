@@ -14,6 +14,7 @@ scope:
   - content-service Store/Reader/Facade/HTTP 装配和单 active 原子切换。
   - App RemoteFilterCatalogQuery、VerifiedFilterCatalogStore、coordinator 与图片编辑器注入。
   - canonical catalog artifact、四环境 seed、bootstrap replica 和 digest 同源门禁。
+  - "`qwq-data filter-catalog publish` 与 `stackctl filter-catalog` 的受信环境发布、只读回查和 prod gray 防误触边界。"
   out_of_scope:
   - EditRecipe、FilterUsageFact、FilterUsageStatsView 与圈子交集。
   - 图片像素算法和 MediaAsset variants。
@@ -28,16 +29,26 @@ gwt_acceptance:
     - 新 release 原子变为 active，旧 active 变为 retired，同一环境只有一个 active。
     - 分类、预设、推荐列表和调整参数在 Stage 后不可修改。
     done_when: [Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS]
-    edge_cases: [未知 release、非法引用、重复 ID、越界参数、半写入事务回滚]
+    edge_cases: [未知 release、非法引用、重复 ID、重复分类排序、越界参数、半写入事务回滚]
     contract_refs:
     - quwoquan_service/contracts/metadata/content/filter_catalog_release/aggregate.yaml
     - quwoquan_service/contracts/metadata/content/filter_catalog_release/service.yaml
     performance_points: [Stage/Activate P95 <= 1000ms]
     tests:
-      planned:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/filter_catalog_release__functional__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/filter_catalog_release__api_integration_test.go
-      recorded: []
-    status: pending
+    status: partial
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: filter_catalog_stage_activate
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.filter_catalog.stage_activate_get_rollback
+        envs: [gamma]
+      supporting: []
   GWT2:
     title: active catalog 可公开读取且可原子回滚
     given: [环境已有 active release 和至少一个 retired release]
@@ -53,10 +64,20 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/filter_catalog_release/tests/contract.yaml
     performance_points: [GetActiveFilterCatalog P95 <= 300ms]
     tests:
-      planned:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/filter_catalog_release__functional__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/filter_catalog_release__api_integration_test.go
-      recorded: []
-    status: pending
+    status: partial
+    test_evidence:
+      primary:
+      - layer: api_integration
+        execution_profile: integration
+        suite: filter_catalog_public_read_rollback
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.filter_catalog.stage_activate_get_rollback
+        envs: [gamma]
+      supporting: []
   GWT3:
     title: App 只消费 typed release 并具备可证明离线能力
     given: [App production composition 已注入 RemoteFilterCatalogQuery 和 VerifiedFilterCatalogStore]
@@ -75,11 +96,28 @@ gwt_acceptance:
     performance_points: [warm cache 加载 P95 <= 100ms]
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_filter_catalog__local_contract_test.dart
       - file: quwoquan_app/test/api_integration/cloud/content/filter_catalog_remote__api_integration_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/filter/image_editor_filter_models__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_coordinator__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_filter_catalog__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        execution_profile: baseline
+        suite: filter_catalog_verified_cache
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.filter_catalog.typed_mapping_and_verified_cache
+        envs: [local]
+      supporting:
+      - layer: api_integration
+        execution_profile: integration
+        suite: filter_catalog_remote_mapping
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.filter_catalog.remote_read_contract
+        envs: [gamma]
   GWT4:
     title: 四环境发布、观测和回滚证据闭环
     given: [alpha/beta/gamma/prod manifest 均声明 FilterCatalogRelease seed 或发布输入]
@@ -88,16 +126,35 @@ gwt_acceptance:
     - 每个环境可证明 releaseId、digest、presetCount 与 active 状态。
     - gamma 完成在线获取、编辑器展示、离线重启与回滚后再获取。
     - 读取、Stage、Activate、Rollback 指标与告警可查询，日志不含图片和用户身份。
-    done_when: [stackctl verify 与 CONTENT_MEDIA_GAMMA_UAT 证据均 recorded]
+    done_when:
+    - canonical binding、环境 import payload、发布 HTTP path、Idempotency-Key 和回执脱敏均由 local_contract 覆盖。
+    - beta/gamma 的 stackctl Stage→Activate→GET 与 App 在线/离线证据均 recorded。
+    - prod gray Stage/Activate、public GET 与 Rollback 证据均 recorded，且 activation 未绕过显式人工批准。
+    - stackctl verify 与 CONTENT_MEDIA_GAMMA_UAT 证据均 recorded。
     edge_cases: [环境无 active release、digest 漂移、回滚目标缺失]
     contract_refs:
     - specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md
     performance_points: [active catalog availability >= 99.9%]
     tests:
       planned:
-      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_app/test/api_integration/cloud/content/filter_catalog_remote__api_integration_test.dart
+      recorded:
+      - file: quwoquan_data/tests/local_contract/filter_catalog/test_filter_catalog_release__canonical_artifact__contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/filter_catalog/test_filter_catalog_release__publish_plane__local_contract_test.py
+      - file: quwoquan_ops/tests/local_contract/filter_catalog_release_stackctl__security__local_contract_test.py
+      - file: quwoquan_ops/tests/local_contract/test_filter_catalog_observability__local_contract_test.py
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        execution_profile: release
+        suite: filter_catalog_release_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.filter_catalog.online_offline_rollback
+        envs: [gamma_local, prod]
+        rollout_stages: [gray_initial]
+      supporting: []
 quality_facets: [functional, reliability, data_consistency, security, observability, performance]
 test_object: workflow
 slo_refs:
@@ -138,12 +195,20 @@ test_evidence:
     quality_facet: experience
 tests:
   planned:
-  - file: quwoquan_service/services/content-service/tests/api_integration/filter_catalog_release__api_integration_test.go
-  - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
-  - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_filter_catalog__local_contract_test.dart
   - file: quwoquan_app/test/api_integration/cloud/content/filter_catalog_remote__api_integration_test.dart
-  - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
-  recorded: []
+  recorded:
+  - file: quwoquan_service/services/content-service/tests/local_contract/filter_catalog_release__functional__local_contract_test.go
+  - file: quwoquan_service/services/content-service/tests/api_integration/filter_catalog_release__api_integration_test.go
+  - file: quwoquan_service/tools/codegen_content_service/main_test.go
+  - file: quwoquan_app/test/local_contract/ui/filter/image_editor_filter_models__local_contract_test.dart
+  - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_contract__local_contract_test.dart
+  - file: quwoquan_app/test/local_contract/cloud/content/filter_catalog_coordinator__local_contract_test.dart
+  - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_filter_catalog__local_contract_test.dart
+  - file: quwoquan_data/tests/local_contract/filter_catalog/test_filter_catalog_release__canonical_artifact__contract__local_contract_test.py
+  - file: quwoquan_data/tests/local_contract/filter_catalog/test_filter_catalog_release__publish_plane__local_contract_test.py
+  - file: quwoquan_ops/tests/local_contract/filter_catalog_release_stackctl__security__local_contract_test.py
+  - file: quwoquan_ops/tests/local_contract/test_filter_catalog_observability__local_contract_test.py
+  - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
 execution:
   local_gate:
   - make verify-metadata

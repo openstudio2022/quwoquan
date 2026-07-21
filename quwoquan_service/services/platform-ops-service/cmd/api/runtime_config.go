@@ -63,7 +63,7 @@ func loadPlatformRuntimeConfig(serviceName, appEnv, configRoot, configVersion st
 			return platformRuntimeConfig{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergePlatformRuntimeFile(&cfg, versionFile); err != nil {
 				return platformRuntimeConfig{}, fmt.Errorf("read version config: %w", err)
 			}

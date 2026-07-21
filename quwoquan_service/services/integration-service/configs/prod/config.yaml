@@ -6,10 +6,6 @@ service:
 
 integration:
   location:
-    provider: "baidu"
-    primary_provider: "baidu"
-    backup_provider: "amap"
-    timeout_ms: 1000
     nearby_default_radius_meters: 3000
     nearby_default_limit: 20
     search_default_limit: 20

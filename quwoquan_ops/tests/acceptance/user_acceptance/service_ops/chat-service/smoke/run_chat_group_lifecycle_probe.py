@@ -8,7 +8,6 @@ import datetime as dt
 import hashlib
 import json
 import os
-import ssl
 import sys
 import time
 import urllib.error
@@ -63,7 +62,7 @@ def _parse_args() -> argparse.Namespace:
         or "http://127.0.0.1:18080",
     )
     parser.add_argument("--resolve-host", default="127.0.0.1")
-    parser.add_argument("--auth-token-env", default="PROD_ACCEPTANCE_AUTH_TOKEN")
+    parser.add_argument("--auth-token-env", default="PROD_TEST_AUTH_TOKEN")
     parser.add_argument("--mutating", action="store_true")
     parser.add_argument("--require-nonempty-sources", action="store_true")
     parser.add_argument("--expected-group-id", default="")
@@ -164,7 +163,6 @@ class ProbeClient:
             with urllib.request.urlopen(
                 request,
                 timeout=12,
-                context=ssl._create_unverified_context(),
             ) as response:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
@@ -226,6 +224,72 @@ def _conversation_id(payload: dict[str, Any]) -> str:
     if not value:
         raise ProbeFailure("contract_mismatch", "CreateConversation returned no canonical id")
     return value
+
+
+def _message_id(payload: dict[str, Any]) -> str:
+    body = _data(payload)
+    value = str(body.get("messageId") or body.get("id") or "").strip()
+    if not value:
+        raise ProbeFailure("contract_mismatch", "SendMessage returned no canonical id")
+    return value
+
+
+def _mentioned_message_visible(
+    items: list[dict[str, Any]],
+    *,
+    message_id: str,
+    mentioned_user_id: str,
+) -> bool:
+    for item in items:
+        item_id = str(item.get("messageId") or item.get("id") or "").strip()
+        if item_id != message_id:
+            continue
+        mentions = item.get("mentions")
+        if not isinstance(mentions, list):
+            raise ProbeFailure(
+                "contract_mismatch",
+                "mentioned message has no mentions array",
+            )
+        if mentioned_user_id not in {str(value).strip() for value in mentions}:
+            raise ProbeFailure(
+                "mention_round_trip_failed",
+                "mentioned member was not preserved by ListMessages",
+            )
+        return True
+    return False
+
+
+def _wait_for_mentioned_message(
+    client: ProbeClient,
+    conversation_id: str,
+    *,
+    message_id: str,
+    mentioned_user_id: str,
+    timeout_seconds: float,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        items = _items(
+            client.request(
+                "GET",
+                "/chat/conversations/"
+                + urllib.parse.quote(conversation_id)
+                + "/messages?limit=100",
+                operation_id="ListMessages",
+            ),
+            "mentioned message list",
+        )
+        if _mentioned_message_visible(
+            items,
+            message_id=message_id,
+            mentioned_user_id=mentioned_user_id,
+        ):
+            return
+        time.sleep(1.0)
+    raise ProbeFailure(
+        "mention_round_trip_timeout",
+        "mentioned message did not reach ListMessages before timeout",
+    )
 
 
 def _wait_for_inbox(
@@ -402,19 +466,43 @@ def main() -> int:
                 operation_id="SendMessage",
                 idempotency_key="chat-group-send-" + run_id,
             )
-            message_id = str(_data(message).get("messageId") or "").strip()
-            if not message_id:
-                raise ProbeFailure("contract_mismatch", "SendMessage returned no messageId")
+            message_id = _message_id(message)
+            mentioned_message = client.request(
+                "POST",
+                "/chat/conversations/"
+                + urllib.parse.quote(created_id)
+                + "/messages",
+                body={
+                    "type": "text",
+                    "content": "群聊商业闭环提及探针",
+                    "clientMsgId": "chat-group-mention-" + run_id,
+                    "mentions": [member_id],
+                },
+                operation_id="SendMessage",
+                idempotency_key="chat-group-mention-" + run_id,
+            )
+            mentioned_message_id = _message_id(mentioned_message)
+            _wait_for_mentioned_message(
+                client,
+                created_id,
+                message_id=mentioned_message_id,
+                mentioned_user_id=member_id,
+                timeout_seconds=args.timeout_seconds,
+            )
             report["journeyEvidence"] = {
                 "conversationIdHash": _stable_hash(created_id),
                 "messageIdHash": _stable_hash(message_id),
+                "mentionedMessageIdHash": _stable_hash(mentioned_message_id),
+                "mentionedMemberHash": _stable_hash(member_id),
                 "conversationReadable": True,
                 "inboxProjected": True,
                 "messageAccepted": True,
+                "mentionRoundTrip": True,
                 "cleanup": "pending",
             }
             report["steps"].append({"name": "create_to_inbox", "status": "passed"})
             report["steps"].append({"name": "send_message", "status": "passed"})
+            report["steps"].append({"name": "mention_round_trip", "status": "passed"})
 
         report["status"] = "passed"
         return_code = 0

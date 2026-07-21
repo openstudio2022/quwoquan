@@ -1,17 +1,25 @@
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CreateCircleService {
   const CreateCircleService();
 
   Future<List<CreateCircleOption>> listCircles(
-    CircleRepository circleRepository,
+    CircleQueryReader circleQuery,
   ) async {
-    final result = await circleRepository.listCircles(limit: 20);
+    final result = await circleQuery.list(const CircleListQuery(limit: 20));
     final out = <CreateCircleOption>[];
-    for (final dto in result) {
-      if (dto.id.isEmpty || dto.name.isEmpty) continue;
-      out.add(CreateCircleOption.fromCircleDto(dto));
+    for (final circle in result.items) {
+      if (circle.circleId.isEmpty || circle.name.isEmpty) continue;
+      out.add(
+        CreateCircleOption(
+          id: circle.circleId,
+          name: circle.name,
+          memberCount: circle.memberCount,
+          postCount: circle.postCount,
+          coverUrl: circle.coverUrl,
+        ),
+      );
     }
     return out;
   }

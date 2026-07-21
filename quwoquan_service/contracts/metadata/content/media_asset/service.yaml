@@ -52,8 +52,8 @@ api_routes:
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.9
-    request_fields: [processingStatus, failureReason, processorProfile, imageWidth, imageHeight, imageDeliveryContentType, imageNormalizedObjectKey, imagePublicSliceKey, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, videoPublicSliceKey, coverPublicSliceKey, previewTrackVersion, previewTrackManifestSliceKey]
-    response_fields: [assetId, version, processingStatus, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, previewTrackVersion, replayed]
+    request_fields: [processingStatus, failureReason, processorProfile, imageWidth, imageHeight, imageDeliveryContentType, imageNormalizedObjectKey, imagePublicSliceKey, imageDominantColor, imageLqip, imageContentProfile, imageDerivativePolicyVersion, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, videoPublicSliceKey, coverPublicSliceKey, previewTrackVersion, previewTrackManifestSliceKey]
+    response_fields: [assetId, version, processingStatus, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, imageDominantColor, imageLqip, imageContentProfile, imageDerivativePolicyVersion, verifiedDurationMs, videoWidth, videoHeight, videoCodec, videoContainer, videoAudioCodec, videoKeyframeIntervalMs, videoFastStart, previewTrackVersion, replayed]
     security:
       auth_mode: required
       token_transport: bearer
@@ -133,6 +133,7 @@ api_routes:
     error_codes:
       - CONTENT.USER.unauthorized
       - CONTENT.USER.media_not_found
+      - CONTENT.USER.media_not_ready
       - CONTENT.SYSTEM.storage_read_failed
     privacy:
       request_classification: INTERNAL
@@ -145,7 +146,7 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
+    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, imageDominantColor, imageLqip, imageContentProfile, imageDerivativePolicyVersion, cdnUrl]
     security:
       auth_mode: required
       token_transport: bearer
@@ -240,7 +241,7 @@ api_routes:
       latency_p95_ms: 400
       availability_percent: 99.9
     query_params: [ownerPersonaId]
-    response_fields: [assetId, ownerPersonaId, processingStatus, mediaType, contentType, fileSize, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
+    response_fields: [assetId, ownerPersonaId, processingStatus, mediaType, contentType, fileSize, imageWidth, imageHeight, imageDeliveryContentType, imageDominantColor, imageLqip, imageContentProfile, imageDerivativePolicyVersion, cdnUrl]
     security:
       auth_mode: required
       principal: service
@@ -287,7 +288,7 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, cdnUrl]
+    response_fields: [assetId, version, mediaType, contentType, fileSize, status, accessPolicy, imageWidth, imageHeight, imageDeliveryContentType, imageDominantColor, imageLqip, imageContentProfile, imageDerivativePolicyVersion, cdnUrl]
     client_contract:
       dart_import: ../content/media_contracts.dart
       request_type: GetContentMediaAssetQuery
@@ -318,10 +319,7 @@ api_routes:
       principal: persona
       ownership_policy: asset_owner
     commercial:
-      status: blocked
-      block_reason: MediaAsset typed Facet and aggregate command are complete; Gamma video-cover page evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -376,10 +374,7 @@ api_routes:
       principal: persona
       ownership_policy: asset_owner
     commercial:
-      status: blocked
-      block_reason: MediaAsset typed Facet and aggregate command are complete; Gamma video-cover page evidence remains required
-      gap_id: CONTENT_MEDIA_GAMMA_UAT
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     reliability:
       timeout_ms: 5000
       cancellation: supported

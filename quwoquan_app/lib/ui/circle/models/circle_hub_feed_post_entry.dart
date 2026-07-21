@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/remote/circle/circle_feed_post_projection_mapper.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -37,7 +38,24 @@ final class CircleHubFeedPostEntry {
       circleId: circleId,
       placementId: placementId,
       post: post,
-      presentation: PostReadPresentation.fromPostBase(post, wire: post.toMap()),
+      presentation: PostReadPresentation(
+        postId: post.id,
+        contentType: post.type,
+        contentIdentity: post.identity,
+        displayName: post.displayName,
+        avatarUrl: post.avatarUrl,
+        title: post.normalizedTitle,
+        body: post.normalizedBody,
+        coverUrl: post.mediaCoverUrl,
+        likeCount: post.likeCount,
+        commentCount: post.commentCount,
+        shareCount: post.shareCount,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        publishedAt: post.publishedAt,
+        articleTemplate: post.articleTemplate,
+        articleFontPreset: post.articleFontPreset,
+      ),
       pinned: pinned,
       featured: featured,
       pinnedAt: pinnedAt,
@@ -47,12 +65,13 @@ final class CircleHubFeedPostEntry {
 
   factory CircleHubFeedPostEntry.fromProjection({
     required CircleFeedPostProjection projection,
-    required PostBaseDto post,
+    CircleFeedPostProjectionMapper mapper =
+        const CircleFeedPostProjectionMapper(),
   }) {
     return CircleHubFeedPostEntry.fromPost(
       circleId: projection.circleId,
       placementId: projection.placementId,
-      post: post,
+      post: mapper.toDto(projection.post),
       pinned: projection.pinned,
       featured: projection.featured,
       pinnedAt: projection.pinnedAt,

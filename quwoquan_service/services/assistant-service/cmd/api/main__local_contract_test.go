@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,7 +12,9 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
-	rtgov "quwoquan_service/runtime/governance"
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtredis "quwoquan_service/runtime/redis"
+	assistantgenerated "quwoquan_service/services/assistant-service/internal/generated"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/searchclient"
 )
 
@@ -187,71 +191,35 @@ func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
 	}
 }
 
-func TestCommercialEnvironmentsAlwaysRejectDeterministicProviders(t *testing.T) {
-	canonicalSearch, err := searchclient.New(
-		"http://127.0.0.1:18095",
-		&http.Client{Timeout: 100 * time.Millisecond},
-	)
-	if err != nil {
-		t.Fatalf("build canonical search client: %v", err)
+func TestGeneratedProviderBindingsFailClosedWithoutEnabledMaterial(t *testing.T) {
+	configProvider := runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{}}
+	newEgressClient := func(_ string, _ int) *http.Client {
+		return &http.Client{Timeout: time.Second}
 	}
-	for _, appEnv := range []string{"beta", "gamma", "prod"} {
+	for _, appEnv := range []string{"alpha", "beta", "gamma", "prod"} {
 		if _, err := buildModelProvider(
-			providerCfg{Provider: "deterministic"},
 			appEnv,
+			configProvider,
+			newEgressClient,
 		); err == nil {
-			t.Fatalf("%s deterministic model provider must fail closed", appEnv)
-		}
-		if _, err := buildSearchRegistry(
-			providerCfg{Provider: "disabled"},
-			canonicalSearch,
-			appEnv,
-		); err == nil {
-			t.Fatalf("%s disabled search provider must fail closed", appEnv)
+			t.Fatalf("%s incomplete binding must fail closed", appEnv)
 		}
 	}
-}
-
-func TestModelDebugContentLogIsAlphaOnly(t *testing.T) {
-	if err := validateAssistantModelDebugLogPolicy("alpha", true); err != nil {
-		t.Fatalf("alpha explicit model debug log should be allowed: %v", err)
-	}
-	for _, appEnv := range []string{"beta", "gamma", "prod"} {
-		if err := validateAssistantModelDebugLogPolicy(appEnv, true); err == nil {
-			t.Fatalf("%s model content debug log must fail closed", appEnv)
-		}
-	}
-}
-
-func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
-	if got := searchProviderTimeout(0); got != 8*time.Second {
-		t.Fatalf("default search timeout=%s, want 8s", got)
-	}
-	client := searchHTTPClient(10_000)
-	if client.Timeout != 10*time.Second {
-		t.Fatalf("client timeout=%s, want 10s", client.Timeout)
-	}
-	cbTransport, ok := client.Transport.(*rtgov.CBTransport)
-	if !ok {
-		t.Fatalf("transport type=%T, want *runtimegovernance.CBTransport", client.Transport)
-	}
-	transport, ok := cbTransport.Base.(*http.Transport)
-	if !ok {
-		t.Fatalf("base transport type=%T, want *http.Transport", cbTransport.Base)
-	}
-	if transport.TLSHandshakeTimeout != 10*time.Second {
-		t.Fatalf("tls handshake timeout=%s, want 10s", transport.TLSHandshakeTimeout)
-	}
-	if got := searchProviderTimeout(45_000); got != 10*time.Second {
-		t.Fatalf("capped search timeout=%s, want 10s", got)
+	if _, err := buildModelProvider(
+		"unknown",
+		configProvider,
+		newEgressClient,
+	); err == nil {
+		t.Fatal("unknown environment binding must fail closed")
 	}
 }
 
 func TestBuildSearchRegistryRequiresCanonicalSearchServiceAndNeverRegistersMock(t *testing.T) {
 	if _, err := buildSearchRegistry(
-		providerCfg{Provider: "disabled"},
 		nil,
 		"alpha",
+		runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{}},
+		func(_ string, _ int) *http.Client { return &http.Client{Timeout: time.Second} },
 	); err == nil {
 		t.Fatal("missing search-service URL must fail closed")
 	}
@@ -263,9 +231,10 @@ func TestBuildSearchRegistryRequiresCanonicalSearchServiceAndNeverRegistersMock(
 		t.Fatalf("build search client: %v", err)
 	}
 	registry, err := buildSearchRegistry(
-		providerCfg{Provider: "disabled"},
 		canonicalSearch,
 		"alpha",
+		runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{}},
+		func(_ string, _ int) *http.Client { return &http.Client{Timeout: time.Second} },
 	)
 	if err != nil {
 		t.Fatalf("build canonical app_search registry: %v", err)
@@ -278,123 +247,131 @@ func TestBuildSearchRegistryRequiresCanonicalSearchServiceAndNeverRegistersMock(
 	}
 }
 
-func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
-	if !shouldTryWeatherLookup("", "Shenzhen weather", "", "Shenzhen", nil) {
-		t.Fatal("weather intent with locationSearchName should route to weather lookup")
-	}
-	if !shouldTryWeatherLookup("", "outdoor plan", "", "", map[string]any{
-		"searchQueries": []any{
-			map[string]any{"dimension": "weather", "query": "Shenzhen forecast"},
+func TestRequireAssistantAPIMessageTransportUsesDescriptorAndFailsClosed(t *testing.T) {
+	const capability = runtimemessaging.RuntimeMessageTransportCapability
+	router := rtredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {Mode: "memory"},
 		},
-	}) {
-		t.Fatal("weather searchQueries should route to weather lookup")
-	}
-}
-
-func TestShouldNotTryWeatherLookupForNonWeatherQuestionEvenWithLocation(t *testing.T) {
-	if shouldTryWeatherLookup(
-		"knowledge_general",
-		"云服务配置推荐",
-		"北京",
-		"Beijing",
-		map[string]any{
-			"searchQueries": []any{
-				map[string]any{"dimension": "规格/价格", "query": "云服务器 ECS 实例规格 价格"},
-			},
-		},
-	) {
-		t.Fatal("non-weather cloud query should not be hijacked by weather lookup")
-	}
-}
-
-func TestWeatherAuthorityReferencesPrioritizeNationalAndRegionalSources(t *testing.T) {
-	summary := withLocalWeatherAuthoritySummary("Hangzhou tian qi", "杭州，浙江", "MET Norway", "MET Norway 实时天气：杭州。")
-	if !strings.Contains(summary, "国家级气象服务入口与可解析的省/自治区/直辖市气象局") {
-		t.Fatalf("summary should foreground national and regional authority sources: %s", summary)
-	}
-	if !strings.Contains(summary, "MET Norway 仅作为") {
-		t.Fatalf("summary should demote structured provider to supplement: %s", summary)
-	}
-	refs := withLocalWeatherAuthorityReferences("Hangzhou tian qi", "杭州，浙江", []map[string]any{
-		{
-			"title":  "Open-Meteo Forecast API - 杭州，浙江",
-			"url":    "https://open-meteo.com/en/docs",
-			"source": "open_meteo_forecast",
-		},
+		DefaultScene: "general",
 	})
-	if len(refs) < 5 {
-		t.Fatalf("refs len=%d, want national/regional authority refs plus API ref", len(refs))
-	}
-	want := []string{
-		"weather_com_cn",
-		"national_meteorological_center",
-		"china_meteorological_administration",
-		"zhejiang_meteorological_bureau",
-		"open_meteo_forecast",
-	}
-	for i, source := range want {
-		if refs[i]["source"] != source {
-			t.Fatalf("refs[%d].source=%v, want %s; refs=%#v", i, refs[i]["source"], source, refs)
-		}
-		if refs[i]["rank"] != i+1 {
-			t.Fatalf("refs[%d].rank=%v, want %d", i, refs[i]["rank"], i+1)
-		}
-	}
-}
+	t.Cleanup(func() { _ = router.Close() })
 
-func TestExtractDuckDuckGoResultsIncludesURLAndSourceHost(t *testing.T) {
-	raw := `
-<div class="result">
-  <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fsupport.huaweicloud.com%2Fprice-desc-ecs%2Fecs_01_0001.html">弹性云服务器 ECS 价格详情 - 华为云</a>
-  <div class="result__snippet">官方价格详情页，包含按需和包年包月说明。</div>
-</div>`
-	summary, refs := extractDuckDuckGoResults(raw)
-	if !strings.Contains(summary, "官方价格详情页") {
-		t.Fatalf("summary=%q should include snippet", summary)
-	}
-	if len(refs) != 1 {
-		t.Fatalf("refs len=%d, want 1", len(refs))
-	}
-	if refs[0]["url"] != "https://support.huaweicloud.com/price-desc-ecs/ecs_01_0001.html" {
-		t.Fatalf("url=%v", refs[0]["url"])
-	}
-	if refs[0]["source"] != "support.huaweicloud.com" {
-		t.Fatalf("source=%v", refs[0]["source"])
-	}
-}
-
-func TestPreferredSearchQueriesKeepsStructuredAndFallbackQueries(t *testing.T) {
-	queries := preferredSearchQueries(
-		map[string]any{
-			"query": "云桌面 按需计费 关机 还收费吗",
-			"searchQueries": []any{
-				map[string]any{"dimension": "billing", "query": "云桌面 按需计费 关机 收费"},
-				map[string]any{"dimension": "pricing", "query": "云桌面 按需计费 价格"},
-			},
-		},
-		"云桌面 按需计费 关机 还收费吗",
+	transport, err := requireAssistantAPIMessageTransport(
+		context.Background(),
+		"alpha",
+		router,
+		map[string]string{"general": "memory"},
 	)
-	if len(queries) != 3 {
-		t.Fatalf("queries=%v, want 3 unique queries", queries)
+	if err != nil {
+		t.Fatalf("alpha fixture transport error = %v", err)
 	}
-	if !containsString(queries, "云桌面 按需计费 关机 收费") {
-		t.Fatalf("queries=%v should include structured billing query", queries)
+	if transport == nil {
+		t.Fatal("alpha fixture transport is nil")
 	}
-	if !containsString(queries, "云桌面 按需计费 价格") {
-		t.Fatalf("queries=%v should include structured pricing query", queries)
+
+	bindings := assistantgenerated.ExternalProviderBindings["beta"]
+	original, hadBinding := bindings[capability]
+	t.Cleanup(func() {
+		if hadBinding {
+			bindings[capability] = original
+			return
+		}
+		delete(bindings, capability)
+	})
+	enabledRedis := assistantgenerated.ExternalProviderBinding{
+		State:               "enabled",
+		AdapterID:           runtimemessaging.RedisMessageTransportAdapter,
+		TimeoutMilliseconds: 100,
 	}
-	if !containsString(queries, "云桌面 按需计费 关机 还收费吗") {
-		t.Fatalf("queries=%v should include fallback query", queries)
+	tests := []struct {
+		name       string
+		binding    assistantgenerated.ExternalProviderBinding
+		found      bool
+		router     *rtredis.Router
+		sceneModes map[string]string
+	}{
+		{
+			name:       "binding missing",
+			found:      false,
+			router:     router,
+			sceneModes: map[string]string{"general": "standalone"},
+		},
+		{
+			name: "unexpected adapter",
+			binding: assistantgenerated.ExternalProviderBinding{
+				State:               "enabled",
+				AdapterID:           "infra.message.nats",
+				TimeoutMilliseconds: 100,
+			},
+			found:      true,
+			router:     router,
+			sceneModes: map[string]string{"general": "standalone"},
+		},
+		{
+			name:       "memory outside alpha fixture",
+			binding:    enabledRedis,
+			found:      true,
+			router:     router,
+			sceneModes: map[string]string{"general": "memory"},
+		},
+		{
+			name:       "Redis preflight failure",
+			binding:    enabledRedis,
+			found:      true,
+			router:     unavailableMessageTransportRouter(t),
+			sceneModes: map[string]string{"general": "standalone"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.found {
+				bindings[capability] = test.binding
+			} else {
+				delete(bindings, capability)
+			}
+			if _, err := requireAssistantAPIMessageTransport(
+				context.Background(),
+				"beta",
+				test.router,
+				test.sceneModes,
+			); err == nil {
+				t.Fatal("message transport error = nil, want fail-closed")
+			}
+		})
 	}
 }
 
-func containsString(values []string, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
-		}
+type unavailableMessageTransportClient struct {
+	rtredis.Client
+}
+
+func (unavailableMessageTransportClient) Ping(context.Context) error {
+	return errors.New("Redis unavailable")
+}
+
+func (unavailableMessageTransportClient) Close() error {
+	return nil
+}
+
+func unavailableMessageTransportRouter(t *testing.T) *rtredis.Router {
+	t.Helper()
+	router, err := rtredis.NewRouterWithFactory(
+		rtredis.RouterConfig{
+			Scenes: map[string]rtredis.SceneConfig{
+				"general": {Mode: "standalone"},
+			},
+			DefaultScene: "general",
+		},
+		func(rtredis.SceneConfig) (rtredis.Client, error) {
+			return unavailableMessageTransportClient{}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewRouterWithFactory() error = %v", err)
 	}
-	return false
+	t.Cleanup(func() { _ = router.Close() })
+	return router
 }
 
 func writeConfig(t *testing.T, root, env, content string) {

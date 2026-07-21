@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	rterr "quwoquan_service/runtime/errors"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
@@ -86,7 +87,21 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
 		application.WithChatGroundingClient(chatclient.NewClient(chatHTTP.Client(), chatHTTP.URL)),
 	)
-	consumer := messaging.NewAssistantMentionedConsumer(redis, service, "e2e-worker", nil)
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"assistant-service-local-contract",
+		runtimemessaging.RedisMessageTransportFixture,
+		redis,
+		redis,
+	)
+	if err != nil {
+		t.Fatalf("NewRedisMessageTransportForRoot() error = %v", err)
+	}
+	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+		transport,
+		service,
+		"e2e-worker",
+		nil,
+	)
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
 	}

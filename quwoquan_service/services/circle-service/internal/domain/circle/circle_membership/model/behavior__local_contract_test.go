@@ -63,7 +63,7 @@ func TestCircleMembershipApprovalStateMachine(t *testing.T) {
 		PersonaID: requested.PersonaID, ExpectedVersion: requested.Version,
 		OccurredAt: now.Add(2 * time.Minute),
 	}).Apply(&requested)
-	if err != nil || eventType != "CircleMembershipJoined" ||
+	if err != nil || eventType != "CircleMembershipApproved" ||
 		approved.State != CircleMembershipStateActive || approved.JoinedAt.IsZero() {
 		t.Fatalf("approve=%+v event=%q err=%v", approved, eventType, err)
 	}

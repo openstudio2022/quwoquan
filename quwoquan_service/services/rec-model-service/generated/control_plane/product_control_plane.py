@@ -9,6 +9,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "moderation_summary",
       "experiment_health",
       "recommendation_guardrail",
+      "rtc_media_qoe",
       "sla_watch"
     ]
   },
@@ -56,6 +57,37 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "risk_level": "medium",
       "source_entity": "ProductMetricSnapshot",
       "view_model": "ProductMetricSnapshot"
+    },
+    {
+      "analytics_views": [
+        {
+          "drilldown_route_id": "product.dashboard",
+          "view_id": "rtc_media_qoe_24h",
+          "widget_types": [
+            "metric_strip",
+            "hourly_timeseries",
+            "freshness_badge"
+          ]
+        }
+      ],
+      "deployment_profile": "latency_sensitive",
+      "label": "RTC 媒体 QoE 24 小时权威回读",
+      "object_kind": "dashboard",
+      "object_type": "rtc_media_qoe_summary",
+      "operations": [
+        {
+          "contract_operation_id": "ops.event_record.GetRtcMediaQoeSummary",
+          "method": "GET",
+          "operation": "GetRtcMediaQoeSummary",
+          "path": "/ops/events/rtc-media-qoe/summary",
+          "scopes": [
+            "ops.telemetry.read"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "EventRecord",
+      "view_model": "RtcMediaQoeSummarySlice"
     },
     {
       "deployment_profile": "audit_heavy",
@@ -198,7 +230,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "ListHomepageCandidates",
           "path": "/homepages/candidates",
           "scopes": [
-            "ops.entity_homepage.read"
+            "ops.case.read"
           ]
         },
         {
@@ -206,7 +238,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "IntakeHomepageCandidate",
           "path": "/homepages/candidates",
           "scopes": [
-            "ops.entity_homepage.write"
+            "ops.case.write"
           ]
         },
         {
@@ -216,7 +248,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "PublishHomepageCandidate",
           "path": "/homepages/candidates/{homepageId}:publish",
           "scopes": [
-            "ops.entity_homepage.write"
+            "ops.case.write"
           ]
         }
       ],
@@ -235,7 +267,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "ListHomepageClaimRequests",
           "path": "/homepage-claim-requests",
           "scopes": [
-            "ops.entity_homepage.read"
+            "ops.case.read"
           ]
         },
         {
@@ -245,7 +277,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "ReviewHomepageClaimRequest",
           "path": "/homepages/{homepageId}/claim-requests/{claimRequestId}:review",
           "scopes": [
-            "ops.entity_homepage.write"
+            "ops.case.write"
           ]
         }
       ],
@@ -264,7 +296,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "ListHomepageStatusReports",
           "path": "/homepage-status-reports",
           "scopes": [
-            "ops.entity_homepage.read"
+            "ops.case.read"
           ]
         },
         {
@@ -274,7 +306,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           "operation": "ReviewHomepageStatusReport",
           "path": "/homepages/{homepageId}/status-reports/{reportId}:review",
           "scopes": [
-            "ops.entity_homepage.write"
+            "ops.case.write"
           ]
         }
       ],

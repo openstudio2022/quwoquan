@@ -18,18 +18,7 @@ redis:
   general:
     mode: standalone
     addr: ""
-    db: 1
-
-model_provider:
-  provider: openai_compatible
-  base_url: "https://api.xiaomimimo.com/v1"
-  model: "mimo-v2-flash"
-  api_key_env: "PERSONAL_ASSISTANT_MIMO_API_KEY"
-  timeout_ms: 60000
-
-search_provider:
-  provider: duckduckgo_html
-  timeout_ms: 30000
+    db: 0
 
 notification_service:
   base_url: "http://notification-service:18087"

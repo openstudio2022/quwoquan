@@ -39,6 +39,19 @@ type AggregateStore interface {
 	RecordNoopReceipt(context.Context, NoopReceipt) (CommitReceipt, error)
 }
 
+// ConversationBindingWriter is the internal durable-event write port for the
+// one-to-one CircleGroup.conversationId binding. No HTTP command receives this
+// capability.
+type ConversationBindingWriter interface {
+	BindConversation(
+		ctx context.Context,
+		eventID string,
+		circleID string,
+		groupID string,
+		conversationID string,
+	) error
+}
+
 type CirclePolicySlice struct {
 	CircleID string
 	State    string

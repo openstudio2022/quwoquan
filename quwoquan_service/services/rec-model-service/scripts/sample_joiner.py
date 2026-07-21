@@ -6,7 +6,7 @@ write multi-label training samples to rec_training_samples.
 Event schema (MongoSink):
   eventType: "rec_impression" | "rec_engagement"
   scenario:  "content_feed"
-  occurredAt: RFC3339 string
+  occurredAt: BSON datetime（MongoSink 由 RFC3339 事件边界规范化）
   createdAt:  datetime (Mongo server time)
   userId / targetId: string
   labels:  {sessionId, contentType, recallPath, action}

@@ -84,6 +84,9 @@ func TestMain(m *testing.M) {
 	if productOpsEmbeddedPG != nil {
 		_ = productOpsEmbeddedPG.Stop()
 	}
+	if productOpsEmbeddedPGRuntimePath != "" {
+		_ = os.RemoveAll(productOpsEmbeddedPGRuntimePath)
+	}
 	cancelCleanup()
 	os.Exit(code)
 }
@@ -183,9 +186,13 @@ func TestPostgresTelemetryLocalCompositionUsesTypedPortsAndIsolatableSchema(t *t
 
 	service := application.NewTelemetryService(store, store, store)
 	occurredAt := time.Now().UTC().Add(-time.Minute)
+	callType := "audio"
+	connectTimeMS := 120
+	mediaConnected := true
+	reconnectCount := 0
 	event := application.EventRecordInput{
 		LogType:            "event",
-		EventType:          "page_open",
+		EventType:          "rtc_media_qoe",
 		SessionID:          "s.dXNlci0x.1",
 		PageName:           "home",
 		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
@@ -194,13 +201,24 @@ func TestPostgresTelemetryLocalCompositionUsesTypedPortsAndIsolatableSchema(t *t
 		AppVersion:         "1.0.0",
 		NetworkClass:       "wifi",
 		DevicePlatform:     "ios",
+		CallType:           &callType,
+		ConnectTimeMS:      &connectTimeMS,
+		MediaConnected:     &mediaConnected,
+		ReconnectCount:     &reconnectCount,
 	}
-	if _, err := service.ReportEventBatch(ctx, strings.Repeat("a", 64), []application.EventRecordInput{event}); err != nil {
+	detected := "detected"
+	ignored := "ignored"
+	event.Result = &detected
+	ignoredEvent := event
+	ignoredEvent.SessionID = "s.dXNlci0y.1"
+	ignoredEvent.Result = &ignored
+	if _, err := service.ReportEventBatch(ctx, strings.Repeat("a", 64), []application.EventRecordInput{event, ignoredEvent}); err != nil {
 		t.Fatalf("report event batch: %v", err)
 	}
 	summary, err := service.GetEventSummary(ctx, application.EventSummaryQuery{
-		From: time.Now().UTC().Add(-time.Hour),
-		To:   time.Now().UTC().Add(time.Minute),
+		Result: "detected",
+		From:   time.Now().UTC().Add(-time.Hour),
+		To:     time.Now().UTC().Add(time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("get postgres summary: %v", err)
@@ -209,9 +227,10 @@ func TestPostgresTelemetryLocalCompositionUsesTypedPortsAndIsolatableSchema(t *t
 		t.Fatalf("unexpected postgres summary: %+v", summary)
 	}
 	drilldown, err := service.GetEventDrilldown(ctx, application.EventDrilldownQuery{
-		From:  time.Now().UTC().Add(-time.Hour),
-		To:    time.Now().UTC().Add(time.Minute),
-		Limit: 10,
+		Result: "detected",
+		From:   time.Now().UTC().Add(-time.Hour),
+		To:     time.Now().UTC().Add(time.Minute),
+		Limit:  10,
 	})
 	if err != nil {
 		t.Fatalf("get postgres drilldown: %v", err)

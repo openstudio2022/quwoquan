@@ -291,6 +291,7 @@ class UITextConstants {
   static const String authGateTitleCreate = '登录后发布内容';
   static const String authGateTitleComment = '登录后继续评论';
   static const String authGateTitleLike = '登录后继续点赞';
+  static const String authGateTitleWishlist = '登录后标记想去';
   static const String authGateTitleFollow = '登录后继续关注';
   static const String authGateTitleFollowingFeed = '登录后查看关注';
   static const String authGateTitleShare = '登录后同步分享记录';
@@ -309,6 +310,7 @@ class UITextConstants {
   static const String authGateSubtitleCreate = '保存草稿、发布记录和后续互动通知。';
   static const String authGateSubtitleComment = '评论会沉淀到内容页，并跟随账号同步。';
   static const String authGateSubtitleLike = '登录后可跨设备同步点赞记录。';
+  static const String authGateSubtitleWishlist = '想去状态会同步到账号，并用于发现共同目的地。';
   static const String authGateSubtitleFollow = '关注关系会写入账号，后续可在关注流查看。';
   static const String authGateSubtitleFollowingFeed = '汇总你关注的人、圈子和地点的最新动态。';
   static const String authGateSubtitleShare = '同步分享记录，方便后续回看和归因。';
@@ -327,6 +329,7 @@ class UITextConstants {
   static const String authGatePromptCreate = '登录后即可发布内容';
   static const String authGatePromptComment = '登录后即可评论，评论会按账号发布并沉淀到对象页';
   static const String authGatePromptLike = '登录后即可点赞';
+  static const String authGatePromptWishlist = '登录后即可标记想去';
   static const String authGatePromptFollow = '登录后即可关注';
   static const String authGatePromptFollowingFeed = '登录后查看你关注的人、圈子和地点动态';
   static const String authGatePromptShare = '登录后即可同步分享';
@@ -1733,11 +1736,14 @@ class UITextConstants {
   static const String publishTaskPendingReviewStatus = '审核中';
   static const String publishTaskRejectedStatus = '未通过审核';
   static const String publishTaskSubmittingStatus = '正在提交';
+  static const String publishTaskPreparingMediaStatus = '等待继续上传';
   static const String publishTaskRetryWaitingStatus = '等待重试';
   static const String publishTaskBlockedStatus = '需要处理';
   static const String publishTaskFinalizingStatus = '正在完成分发';
   static const String publishTaskPendingReviewDescription = '内容尚未公开，可随时刷新审核结果';
   static const String publishTaskRejectedDescription = '草稿仍保留，修改后可重新发布';
+  static const String publishTaskPreparingMediaDescription =
+      '媒体尚未上传完成，继续编辑即可恢复上传';
   static const String publishTaskRetryWaitingDescription = '网络或服务恢复后会自动重试';
   static const String publishTaskPersonaChangedDescription = '请切换回原发布身份后重试';
   static const String publishTaskInvalidReceiptDescription = '发布状态异常，草稿已安全保留';

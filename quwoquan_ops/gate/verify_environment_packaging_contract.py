@@ -17,7 +17,11 @@ from quwoquan_ops.cli.lib.environment_topology import (
     app_artifact_policy,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.output_paths import app_release_dir, service_release_dir
+from quwoquan_ops.cli.lib.output_paths import (
+    app_deployment_package_dir,
+    deployment_target_for_env,
+    service_deployment_package_dir,
+)
 
 
 def expected_services() -> list[str]:
@@ -85,6 +89,7 @@ def validate_provenance(report: dict[str, object], package_dir: Path) -> list[st
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", choices=ENVIRONMENTS, default="")
+    parser.add_argument("--target", default="")
     return parser.parse_args()
 
 
@@ -95,7 +100,12 @@ def main() -> int:
     envs = [args.env] if args.env else list(ENVIRONMENTS)
 
     for env_name in envs:
-        app_dir = app_release_dir(env_name)
+        try:
+            target_name = deployment_target_for_env(env_name, target=args.target)
+        except ValueError as exc:
+            issues.append(str(exc))
+            continue
+        app_dir = app_deployment_package_dir(env_name, target=target_name)
         report_path = app_dir / "report.json"
         cfg_path = app_dir / "app_runtime.yaml"
         if not report_path.is_file():
@@ -118,7 +128,15 @@ def main() -> int:
     services = expected_services()
     for service in services:
         for env_name in envs:
-            service_dir = service_release_dir(env_name, service)
+            try:
+                target_name = deployment_target_for_env(env_name, target=args.target)
+            except ValueError:
+                continue
+            service_dir = service_deployment_package_dir(
+                env_name,
+                service,
+                target=target_name,
+            )
             report_path = service_dir / "report.json"
             cfg_path = service_dir / "config.yaml"
             default_cfg_path = service_dir / "default_config.yaml"

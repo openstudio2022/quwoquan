@@ -20,10 +20,10 @@
 
 - 一个 release 最多包含 32 个分类、256 个预设；每个预设必须引用同 release 内已启用分类。
 - `releaseId`、`canonicalDigest`、分类、预设和推荐列表在 Stage 成功后不可变。
-- 分类 ID、预设 ID、同分类排序必须唯一；`original` 必须存在且调整参数全为 0。
+- 分类 ID、分类排序、预设 ID、同分类预设排序必须唯一；`original` 必须存在且调整参数全为 0。
 - `defaultStrength` 范围为 `[0, 100]`；15 项调整参数范围为 `[-100, 100]`。
 - 同一环境同一时刻只能有一个 `active` release。
-- public Reader 只返回完整校验通过的 active release；禁止返回 staged/rejected/半写入目录。
+- public Reader 只返回完整校验通过的 active release；禁止返回 staged 或半写入目录。
 - `Stage` 以 digest 和 Idempotency-Key 幂等；同 key 不同 payload 返回冲突。
 - `Activate` 只允许 `staged -> active`，旧 active 原子进入 `retired`。
 - `Rollback` 只允许目标 `retired -> active`，当前 active 原子进入 `retired`；重复目标已 active 为 no-op receipt。
@@ -40,10 +40,20 @@ canonical catalog artifact
   -> RollbackFilterCatalogRelease
   -> active
 
-invalid artifact -> rejected
+invalid artifact -> stable validation failure (no persisted release)
 ```
 
 Stage、Activate、Rollback 均由受信 data publish plane 调用；App 只有公开只读能力 `GetActiveFilterCatalog`。
+
+- 唯一发布入口为 `qwq-data filter-catalog publish`：它先验证 canonical binding，再从
+  metadata 解析 operation path，以稳定 Idempotency-Key 执行 Stage/Activate/Rollback，
+  并以 public GET 回读 `releaseId`、digest 和成员计数。发布回执不得记录 bearer、
+  目录全文、用户身份或图片内容。
+- beta/gamma 仅可经 `stackctl filter-catalog --target <beta-local|gamma-local>` 调用；
+  stackctl 在进程内签发最小权限的本地 `service` principal
+  (`content.filter_catalog.manage`)，只经子进程环境变量传递 bearer。prod 不签发本地
+  token，必须由受控 secret 提供 service principal；`activate` 还必须显式声明
+  `--prod-gray-activation`，防止 Stage 被误当作已放量。
 
 ## 端云读取与离线策略
 
@@ -78,6 +88,9 @@ content-service ActiveFilterCatalogReader
 - beta/gamma 必须完成 Stage→Activate→GET→App 映射→离线 cache 重启验证。
 - prod 发布先 Stage 校验，再灰度 Activate；回滚只执行 `RollbackFilterCatalogRelease`，不回滚 App 二进制。
 - 发布证据必须记录 releaseId、digest、presetCount、激活时间和回滚目标，不记录目录内容全文。
+- `stackctl verify` 的 integration/release profile 对 beta、gamma、prod-hosted 自动追加
+  public active-release readback；它只读，不会隐式 Stage 或 Activate。实际 mutation
+  仍需显式 `stackctl filter-catalog`，避免环境巡检改变业务状态。
 
 ## Out of Scope
 

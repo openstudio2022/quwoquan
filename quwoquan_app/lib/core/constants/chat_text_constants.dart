@@ -155,6 +155,8 @@ abstract final class ChatText {
   static const String groupChatDissolvedToast = '群聊已解散';
   static const String dissolveGroupChatFailedToast = '解散群聊失败，请稍后重试';
   static const String addMember = '添加成员', groupManagement = '群管理';
+  static const String circleGroupManagedNotice = '该群由圈群管理';
+  static const String openCircleGroupManagement = '前往圈子详情管理';
   static const String removeMemberEntry = '移出成员';
   static const String removeMemberConfirmPrefix = '将 ';
   static const String removeMemberConfirmSuffix = ' 移出群聊？';

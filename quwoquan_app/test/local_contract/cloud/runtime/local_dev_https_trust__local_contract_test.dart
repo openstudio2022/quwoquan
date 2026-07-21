@@ -38,6 +38,27 @@ void main() {
       );
     });
 
+    test('installs for iOS Simulator non-release local HTTPS bases', () {
+      expect(
+        LocalDevHttpsTrust.shouldInstallForRuntime(
+          isReleaseMode: false,
+          isAndroid: false,
+          isIos: true,
+          runtimeBases: const <String>['https://gamma-api.localhost:19000'],
+        ),
+        isTrue,
+      );
+      expect(
+        LocalDevHttpsTrust.shouldInstallForRuntime(
+          isReleaseMode: true,
+          isAndroid: false,
+          isIos: true,
+          runtimeBases: const <String>['https://gamma-api.localhost:19000'],
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'does not install for release, non-Android, public bases, or cleartext',
       () {

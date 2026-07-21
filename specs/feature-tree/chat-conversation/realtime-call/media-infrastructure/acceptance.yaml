@@ -7,9 +7,9 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: LiveKit Room/token、TURN、realtime-gateway 事件、离线来电与 RTC media QoE 运行准出。
+  summary: MediaRoomProvider/mediaAccess、当前 LiveKit adapter、TURN、realtime-gateway 事件、离线来电与 RTC media QoE 运行准出。
   in_scope:
-  - server-issued LiveKit token/livekitUrl 与 ReportMediaConnected
+  - server-issued mediaAccess(accessToken)、App 环境包连接地址与 ReportMediaConnected
   - realtime-gateway call/participant/screen_share wire
   - PushKit/FCM 商用来电链与 Web 前台 realtime 降级
   - QoE emitter、rollup、dashboard/alert 与灰度 readback
@@ -17,19 +17,19 @@ scope:
   - 通话录制媒体管道、本期 E2EE、P2P 双路径
 gwt_acceptance:
   GWT1_room_token_realtime:
-    title: Room/token 与 realtime-gateway 单通道对齐
+    title: Room/mediaAccess 与 realtime-gateway 单通道对齐
     given:
     - 合法 persona 发起或接听 CallSession。
     when:
-    - rtc-service 创建 Room、签发 token 并发布 CallRinging/CallConnected/CallEnded。
+    - rtc-service 通过 MediaRoomProvider 创建 Room、签发 mediaAccess 并发布 CallRinging/CallConnected/CallEnded。
     then:
-    - App 从响应消费 livekitUrl/token，在线事件只经可信 realtime connection 投递并按 client_ws_type 解析。
+    - App 从响应消费 mediaAccess，在线事件只经可信 realtime connection 投递并按 client_ws_type 解析。
     done_when:
-    - Room、token、auth_ack、wire type、ReportMediaConnected 与状态机有端云证据。
+    - Room、mediaAccess、auth_ack、wire type、ReportMediaConnected 与状态机有端云证据。
     edge_cases:
-    - ticket 伪造/重放、token 过期、LiveKit 不可用、未知 wire type。
+    - ticket 伪造/重放、access token 过期、媒体传输不可用、未知 wire type。
     contract_refs:
-    - rtc/call_session/aggregate.yaml#livekit_integration
+    - rtc/call_session/aggregate.yaml
     - rtc/call_session/events.yaml
     - rtc/call_session/service.yaml#ReportMediaConnected
     performance_points:

@@ -93,3 +93,51 @@ def test_execution_model_contract__writes_schema_checked_runtime_evidence__local
 
     payload = read_json(tmp_path / "evidence/model_readiness.json")
     assert payload["reviewer"]["modelFamily"] == "gpt"
+
+
+def test_execution_model_contract__controller_requires_matching_durable_proof__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    execution_id = "20260713--travel-homepage-coverage--cn-zhejiang--canary-903"
+    monkeypatch.setattr(runner, "execution_root", lambda _execution_id: tmp_path)
+    report = {
+        "ready": True,
+        "runtime": "local",
+        "author": {
+            "model": "composer",
+            "modelFamily": "composer",
+            "startup": {
+                "ready": True,
+                "status": "finished",
+                "errorClass": "",
+                "errorCode": "",
+                "httpStatus": None,
+                "runtime": "local",
+                "model": "composer",
+                "cacheHit": False,
+            },
+        },
+        "reviewer": {
+            "model": "gpt-5.5",
+            "modelFamily": "gpt",
+            "startup": {
+                "ready": True,
+                "status": "finished",
+                "errorClass": "",
+                "errorCode": "",
+                "httpStatus": None,
+                "runtime": "local",
+                "model": "gpt-5.5",
+                "cacheHit": False,
+            },
+        },
+    }
+    runner.write_execution_model_readiness(execution_id, report)
+
+    runner.require_execution_model_readiness(execution_id, _recipe())
+
+    report["author"]["model"] = "other-model"
+    runner.write_execution_model_readiness(execution_id, report)
+    with pytest.raises(RuntimeError, match="does not match"):
+        runner.require_execution_model_readiness(execution_id, _recipe())

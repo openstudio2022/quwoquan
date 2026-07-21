@@ -6,14 +6,14 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_repository_mock.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 
 import '../../../../support/homepage_remote_test_support.dart';
 
@@ -78,7 +78,7 @@ void main() {
     expect(rows.single['circleId'], 'g');
   });
 
-  group('MockHomepageRepository', () {
+  group('AlphaHomepageFacet projection adapter', () {
     late MockHomepageRepository repo;
 
     setUp(() {
@@ -112,6 +112,7 @@ void main() {
       final detail = await repo.getHomepageDetail(id);
       expect(detail.id, id);
       expect(detail.title, '西湖景区');
+      expect(detail.reviewSummary?.averageRating, 4.7);
       expect(detail.reviewSummary?.highlightTags, isNotEmpty);
 
       final shell = await repo.getHomepageShell(id);
@@ -119,7 +120,7 @@ void main() {
       expect(shell.relatedGroups, isNotEmpty);
 
       final review = await repo.getHomepageReviewSummary(id);
-      expect(review.ratingCount, greaterThan(0));
+      expect(review.ratingCount, 328);
       expect(review.highlightTags, isNotEmpty);
 
       final groups = await repo.getHomepageRelatedGroups(id);
@@ -144,38 +145,32 @@ void main() {
       expect(bundle.canonicalEntityId, 'entity:sight:west_lake');
       expect(bundle.objectPageTemplate, isNotEmpty);
       expect(bundle.tagRefs, isNotEmpty);
-      expect(bundle.intersectionReasons, isNotEmpty);
-      expect(bundle.intersectionReasons.first.intersectionPoints, isNotEmpty);
-      expect(bundle.intersectionReasons.first.primaryText, isNotEmpty);
+      expect(bundle.intersectionReasons, isEmpty);
       expect(bundle.highlightItems, isNotEmpty);
       expect(bundle.relatedObjects, isNotEmpty);
-      expect(bundle.relationEdges, isNotEmpty);
+      expect(bundle.relationEdges, isEmpty);
       expect(bundle.assistantContext?.referralSource, 'entity_page');
       expect(bundle.assistantContext?.feedRequestId, 'feed-1');
-      expect(bundle.assistantContext?.relationEdgeIds, isNotEmpty);
+      expect(bundle.assistantContext?.relationEdgeIds, isEmpty);
       expect(bundle.rolloutContext?.cohort, 'city-hz');
-      expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
+      expect(bundle.rolloutContext?.relationEvidenceEnabled, isFalse);
     });
 
     test(
-      'getHomepageDetail 支持 homepageId / canonicalEntityId / 数据工程 entityRef',
+      'getHomepageDetail 支持 metadata 声明的 homepageId 与 canonicalEntityId',
       () async {
         const homepageId = 'homepage_sight_emeishan';
         final byHomepageId = await repo.getHomepageDetail(homepageId);
         expect(byHomepageId.title, '峨眉山');
 
         final byCanonical = await repo.getHomepageDetail(
-          'entity:sight:homepage_sight_emeishan',
+          'entity:sight:emeishan',
         );
         expect(byCanonical.id, homepageId);
 
-        final byEntityRef = await repo.getHomepageDetail('Entity/旅行/景区/峨眉山');
-        expect(byEntityRef.id, homepageId);
-
-        final bundle = await repo.getObjectPageBundle('Entity/旅行/景区/峨眉山');
+        final bundle = await repo.getObjectPageBundle('entity:sight:emeishan');
         expect(bundle.objectId, homepageId);
-        expect(bundle.highlightItems, isNotEmpty);
-        expect(bundle.relatedObjects, isNotEmpty);
+        expect(bundle.canonicalEntityId, 'entity:sight:emeishan');
       },
     );
 
@@ -190,6 +185,25 @@ void main() {
       );
       final emptyGroups = await r.getHomepageRelatedGroups(created.id);
       expect(emptyGroups, isEmpty);
+    });
+
+    test('fixture 缺少主页时映射为 metadata 生成的 not-found 语义', () async {
+      await expectLater(
+        repo.getHomepageDetail('missing-homepage-id'),
+        throwsA(
+          isA<CloudException>()
+              .having(
+                (error) => error.code,
+                'code',
+                EntityErrorCode.homepageNotFound.code,
+              )
+              .having(
+                (error) => error.userMessage,
+                'userMessage',
+                EntityErrorCode.homepageNotFound.defaultMessage,
+              ),
+        ),
+      );
     });
 
     test(
@@ -250,15 +264,15 @@ void main() {
     );
   });
 
-  group('HomepageMockData 强类型种子', () {
-    test('cloneHomepageSeeds 深拷贝与静态模板隔离', () {
-      final a = HomepageMockData.cloneHomepageSeeds();
-      final b = HomepageMockData.cloneHomepageSeeds();
-      expect(
-        identical(a.first, HomepageMockData.homepageDetailTemplates.first),
-        isFalse,
-      );
-      expect(identical(a.first.categoryTags, b.first.categoryTags), isFalse);
+  group('Alpha fixture typed adapter', () {
+    test('每个 adapter 只读取不可变 fixture，不共享可变 command 状态', () async {
+      final first = MockHomepageRepository();
+      final second = MockHomepageRepository();
+      final a = await first.getHomepageDetail('homepage_sight_west_lake');
+      final b = await second.getHomepageDetail('homepage_sight_west_lake');
+
+      expect(identical(a, b), isFalse);
+      expect(a.canonicalEntityId, 'entity:sight:west_lake');
     });
   });
 

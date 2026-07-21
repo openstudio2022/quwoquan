@@ -289,26 +289,30 @@ func mediaAssetResult(
 	videoDescriptor := asset.VideoProcessingDescriptor()
 	imageDescriptor := asset.ImageProcessingDescriptor()
 	return MediaAssetCommandResult{
-		AssetID:                  asset.ID(),
-		Version:                  asset.Version(),
-		ProcessingStatus:         asset.ProcessingStatus(),
-		AccessPolicy:             asset.AccessPolicy(),
-		CoverStrategy:            asset.CoverStrategy(),
-		ManualCoverAssetID:       asset.ManualCoverAssetID(),
-		CoverFrameTimeMs:         asset.CoverFrameTimeMs(),
-		ImageWidth:               imageDescriptor.ImageWidth,
-		ImageHeight:              imageDescriptor.ImageHeight,
-		ImageDeliveryContentType: imageDescriptor.ImageDeliveryContentType,
-		VerifiedDurationMs:       videoDescriptor.VerifiedDurationMs,
-		VideoWidth:               videoDescriptor.VideoWidth,
-		VideoHeight:              videoDescriptor.VideoHeight,
-		VideoCodec:               videoDescriptor.VideoCodec,
-		VideoContainer:           videoDescriptor.VideoContainer,
-		VideoAudioCodec:          videoDescriptor.VideoAudioCodec,
-		VideoKeyframeIntervalMs:  videoDescriptor.VideoKeyframeIntervalMs,
-		VideoFastStart:           videoDescriptor.VideoFastStart,
-		PreviewTrackVersion:      videoDescriptor.PreviewTrackVersion,
-		Replayed:                 replayed,
+		AssetID:                      asset.ID(),
+		Version:                      asset.Version(),
+		ProcessingStatus:             asset.ProcessingStatus(),
+		AccessPolicy:                 asset.AccessPolicy(),
+		CoverStrategy:                asset.CoverStrategy(),
+		ManualCoverAssetID:           asset.ManualCoverAssetID(),
+		CoverFrameTimeMs:             asset.CoverFrameTimeMs(),
+		ImageWidth:                   imageDescriptor.ImageWidth,
+		ImageHeight:                  imageDescriptor.ImageHeight,
+		ImageDeliveryContentType:     imageDescriptor.ImageDeliveryContentType,
+		ImageDominantColor:           imageDescriptor.ImageDominantColor,
+		ImageLQIP:                    imageDescriptor.ImageLQIP,
+		ImageContentProfile:          imageDescriptor.ImageContentProfile,
+		ImageDerivativePolicyVersion: imageDescriptor.DerivativePolicyVersion,
+		VerifiedDurationMs:           videoDescriptor.VerifiedDurationMs,
+		VideoWidth:                   videoDescriptor.VideoWidth,
+		VideoHeight:                  videoDescriptor.VideoHeight,
+		VideoCodec:                   videoDescriptor.VideoCodec,
+		VideoContainer:               videoDescriptor.VideoContainer,
+		VideoAudioCodec:              videoDescriptor.VideoAudioCodec,
+		VideoKeyframeIntervalMs:      videoDescriptor.VideoKeyframeIntervalMs,
+		VideoFastStart:               videoDescriptor.VideoFastStart,
+		PreviewTrackVersion:          videoDescriptor.PreviewTrackVersion,
+		Replayed:                     replayed,
 	}
 }
 
@@ -412,6 +416,20 @@ type mediaAssetCreatedPayload struct {
 type mediaAssetProcessingUpdatedPayload struct {
 	AssetID    string                      `json:"assetId"`
 	Processing mediamodel.ProcessingStatus `json:"processingStatus"`
+}
+
+type mediaAssetImageDescriptorActivatedPayload struct {
+	AssetID           string `json:"assetId"`
+	RunID             string `json:"runId"`
+	PreviousRevision  int    `json:"previousRevision"`
+	ActivatedRevision int    `json:"activatedRevision"`
+}
+
+type mediaAssetImageDescriptorRolledBackPayload struct {
+	AssetID           string `json:"assetId"`
+	RunID             string `json:"runId"`
+	PreviousRevision  int    `json:"previousRevision"`
+	ActivatedRevision int    `json:"activatedRevision"`
 }
 
 type mediaAssetAccessPolicyUpdatedPayload struct {

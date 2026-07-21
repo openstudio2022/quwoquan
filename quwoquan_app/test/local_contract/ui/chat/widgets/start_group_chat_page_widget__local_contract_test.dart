@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
@@ -119,11 +120,6 @@ class _RejectingCreateChatRepository extends MockChatRepository {
   Future<ChatConversationCreatedDto> createConversation({
     required String type,
     String? title,
-    String? circleId,
-    String? circleGroupId,
-    String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
@@ -151,41 +147,75 @@ class _SelectableGroupChatRepository extends MockChatRepository {
   _SelectableGroupChatRepository({
     required this.groups,
     required this.membersByConversation,
+    this.pageSize = CloudApiDefaults.pageLimit,
   });
 
   final List<SelectableGroupConversationRowDto> groups;
   final Map<String, List<ChatContactRowDto>> membersByConversation;
+  final int pageSize;
+  final List<String?> groupQueries = <String?>[];
+  final List<String?> memberQueries = <String?>[];
 
   @override
-  Future<List<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRowDto>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return groups
+    groupQueries.add(query);
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+    final rows = groups
         .where(
           (row) =>
-              source == ChatSelectableGroupSource.all ||
-              (source == ChatSelectableGroupSource.group &&
-                  row.circleId.isEmpty) ||
-              (source == ChatSelectableGroupSource.circle &&
-                  row.circleId.isNotEmpty),
+              (source == ChatSelectableGroupSource.all ||
+                  (source == ChatSelectableGroupSource.group &&
+                      row.circleId.isEmpty) ||
+                  (source == ChatSelectableGroupSource.circle &&
+                      row.circleId.isNotEmpty)) &&
+              (normalizedQuery.isEmpty ||
+                  row.title.toLowerCase().contains(normalizedQuery)),
         )
-        .take(limit)
         .toList(growable: false);
+    return _page(rows, cursor: cursor, limit: limit);
   }
 
   @override
-  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
+    String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return (membersByConversation[conversationId] ??
-            const <ChatContactRowDto>[])
-        .take(limit)
-        .toList(growable: false);
+    memberQueries.add(query);
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+    final rows =
+        (membersByConversation[conversationId] ?? const <ChatContactRowDto>[])
+            .where(
+              (member) =>
+                  normalizedQuery.isEmpty ||
+                  member.displayName.toLowerCase().contains(normalizedQuery),
+            )
+            .toList(growable: false);
+    return _page(rows, cursor: cursor, limit: limit);
+  }
+
+  CursorPage<T> _page<T>(
+    List<T> items, {
+    required String? cursor,
+    required int limit,
+  }) {
+    final start = cursor == null
+        ? 0
+        : int.parse(cursor.substring('offset:'.length));
+    final normalizedLimit = limit <= 0 ? 1 : limit;
+    final effectiveLimit = pageSize.clamp(1, normalizedLimit);
+    final end = (start + effectiveLimit).clamp(0, items.length);
+    return CursorPage<T>(
+      items: items.sublist(start, end),
+      nextCursor: end < items.length ? 'offset:$end' : null,
+    );
   }
 }
 
@@ -333,10 +363,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final createEvents = ops.recorded
-        .where((event) => event.action == 'create_success')
+        .where(
+          (event) =>
+              event.eventType == 'chat_interaction_outcome' &&
+              event.extensions['chatAction'] == 'group_create' &&
+              event.extensions['chatOutcome'] == 'succeeded',
+        )
         .toList(growable: false);
     expect(createEvents, isNotEmpty);
-    expect(createEvents.last.extensions['journey'], 'start_group_chat');
+    expect(createEvents.last.extensions['memberCountBucket'], 'one');
     expect(
       createEvents.last.extensions.containsKey('intersectionEvidenceId'),
       isFalse,
@@ -762,12 +797,20 @@ void main() {
     // 主页已选区块展示新并入成员。
     expect(find.text(ChatText.startGroupChatSelectedCount(1)), findsOneWidget);
     expect(
-      ops.recorded.any((event) => event.action == 'source_group_open'),
+      ops.recorded.any(
+        (event) =>
+            event.eventType == 'chat_interaction_outcome' &&
+            event.extensions['chatAction'] == 'candidate_source_open' &&
+            event.extensions['chatSource'] == 'group',
+      ),
       isTrue,
     );
     expect(
       ops.recorded.any(
-        (event) => event.action == 'source_group_selection_applied',
+        (event) =>
+            event.eventType == 'chat_interaction_outcome' &&
+            event.extensions['chatAction'] == 'candidate_source_select' &&
+            event.extensions['chatSource'] == 'group',
       ),
       isTrue,
     );
@@ -775,11 +818,119 @@ void main() {
     await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
     final createEvent = ops.recorded.lastWhere(
-      (event) => event.action == 'create_success',
+      (event) =>
+          event.eventType == 'chat_interaction_outcome' &&
+          event.extensions['chatAction'] == 'group_create' &&
+          event.extensions['chatOutcome'] == 'succeeded',
     );
-    expect(createEvent.extensions['result'], 'group');
+    expect(createEvent.extensions['memberCountBucket'], 'one');
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('群与成员选择器按 cursor 加载更多并保序去重', (tester) async {
+    _suppressImageErrors();
+
+    final repository = _SelectableGroupChatRepository(
+      pageSize: 2,
+      groups: <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_1',
+          title: '分页群一',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_2',
+          title: '分页群二',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_page_3',
+          title: '分页群三',
+          friendMemberCount: 3,
+          memberCount: 4,
+        ),
+      ],
+      membersByConversation: <String, List<ChatContactRowDto>>{
+        'conv_page_3': <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'user_page_1',
+            displayName: '分页成员一',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+          ChatContactRowDto(
+            userId: 'user_page_2',
+            displayName: '分页成员二',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+          ChatContactRowDto(
+            userId: 'user_page_3',
+            displayName: '分页成员三',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+        ],
+      },
+    );
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+      findsNothing,
+    );
+
+    final groupSearch = find.byType(CupertinoSearchTextField).last;
+    await tester.enterText(groupSearch, '分页群三');
+    await tester.pumpAndSettle();
+    expect(repository.groupQueries.last, '分页群三');
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+      findsOneWidget,
+    );
+    await tester.enterText(groupSearch, '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-group-picker-load-more')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_page_3')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_page_3'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-member-picker-load-more')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_page_3'),
+      ),
+      findsOneWidget,
+    );
+    final memberSearch = find.byType(CupertinoSearchTextField).last;
+    await tester.enterText(memberSearch, '分页成员三');
+    await tester.pumpAndSettle();
+    expect(repository.memberQueries.last, '分页成员三');
   });
 
   testWidgets('图四超长群名 + 朋友数不触发 RenderFlex overflow', (tester) async {

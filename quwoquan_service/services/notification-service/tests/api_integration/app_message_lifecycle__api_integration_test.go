@@ -10,6 +10,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	httpadapter "quwoquan_service/services/notification-service/internal/adapters/http"
 	"quwoquan_service/services/notification-service/internal/application"
 )
@@ -95,6 +97,47 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 		t.Fatalf("list items=%#v", items)
 	}
 
+	// 收件箱身份只能来自经认证中间件写入的 principal；调用方伪造
+	// X-Client-User-Id 不能读取任何账户的通知。
+	forgedOnly := httptest.NewRequest(
+		http.MethodGet,
+		"/app-messages?limit=20",
+		nil,
+	)
+	forgedOnly.Header.Set("X-Client-User-Id", "account_001")
+	forgedOnlyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(forgedOnlyResponse, forgedOnly)
+	if forgedOnlyResponse.Code != http.StatusUnauthorized {
+		t.Fatalf(
+			"header-only inbox request status=%d body=%s; want 401",
+			forgedOnlyResponse.Code,
+			forgedOnlyResponse.Body.String(),
+		)
+	}
+
+	trustedOther := httptest.NewRequest(
+		http.MethodGet,
+		"/app-messages?limit=20",
+		nil,
+	)
+	trustedOther.Header.Set("X-Client-User-Id", "account_001")
+	trustedOther = trustedOther.WithContext(rtauth.WithPrincipal(
+		trustedOther.Context(),
+		rtauth.Principal{Actor: operation.ActorContext{AccountID: "account_002"}},
+	))
+	trustedOtherResponse := httptest.NewRecorder()
+	handler.ServeHTTP(trustedOtherResponse, trustedOther)
+	if trustedOtherResponse.Code != http.StatusOK {
+		t.Fatalf(
+			"trusted-principal inbox request status=%d body=%s",
+			trustedOtherResponse.Code,
+			trustedOtherResponse.Body.String(),
+		)
+	}
+	if got := decodeResponse(t, trustedOtherResponse)["items"]; len(got.([]any)) != 0 {
+		t.Fatalf("forged header leaked account_001 inbox to account_002: %#v", got)
+	}
+
 	isolated := requestAppMessage(t, handler, http.MethodGet, "/app-messages/"+messageID, "account_002", "", nil)
 	if isolated.Code != http.StatusNotFound {
 		t.Fatalf("cross-account get status=%d body=%s", isolated.Code, isolated.Body.String())
@@ -149,6 +192,10 @@ func requestAppMessage(
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))
 	if actorID != "" {
 		req.Header.Set("X-Client-User-Id", actorID)
+		req = req.WithContext(rtauth.WithPrincipal(
+			req.Context(),
+			rtauth.Principal{Actor: operation.ActorContext{AccountID: actorID}},
+		))
 	}
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)

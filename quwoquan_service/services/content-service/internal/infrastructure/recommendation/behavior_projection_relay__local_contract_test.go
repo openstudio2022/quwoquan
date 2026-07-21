@@ -142,3 +142,43 @@ func TestRelayPayloadEventsAreConsumableByProjectorHelpers(t *testing.T) {
 		t.Fatalf("parsed payload lost contentId: %v", parsed[0])
 	}
 }
+
+func TestBehaviorProjectionScanFilter_ZeroLagIncludesCurrentSecond(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 4, 0, 0, 999_000_000, time.UTC)
+	lastID := bson.NewObjectIDFromTimestamp(now.Add(-time.Second))
+	relay := &BehaviorProjectionRelay{watermarkLag: 0}
+
+	filter := relay.scanFilter(lastID, now)
+	bounds, ok := filter["_id"].(bson.M)
+	if !ok {
+		t.Fatalf("zero-lag scan must preserve resume cursor, filter=%#v", filter)
+	}
+	if got := bounds["$gt"]; got != lastID {
+		t.Fatalf("zero-lag scan cursor=%v, want %v", got, lastID)
+	}
+	if _, exists := bounds["$lt"]; exists {
+		t.Fatalf(
+			"zero-lag scan must not use second-granularity upper bound; current-second events would be skipped: %#v",
+			bounds,
+		)
+	}
+}
+
+func TestBehaviorProjectionScanFilter_PositiveLagKeepsWatermark(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 4, 0, 10, 0, time.UTC)
+	relay := &BehaviorProjectionRelay{watermarkLag: 2 * time.Second}
+
+	filter := relay.scanFilter(bson.ObjectID{}, now)
+	bounds, ok := filter["_id"].(bson.M)
+	if !ok {
+		t.Fatalf("positive-lag scan must retain watermark, filter=%#v", filter)
+	}
+	got, ok := bounds["$lt"].(bson.ObjectID)
+	if !ok {
+		t.Fatalf("watermark must be ObjectID, got %T", bounds["$lt"])
+	}
+	wantAt := now.Add(-2 * time.Second)
+	if !got.Timestamp().Equal(wantAt) {
+		t.Fatalf("watermark timestamp=%s, want %s", got.Timestamp(), wantAt)
+	}
+}

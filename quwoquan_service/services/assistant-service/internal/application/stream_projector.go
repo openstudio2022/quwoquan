@@ -26,36 +26,38 @@ func NewStreamProjectorAt(
 	return &StreamProjector{Turn: turn, Now: now, seq: afterSeq}
 }
 
-func (p *StreamProjector) Event(eventType string, payload map[string]any) (streaming.Envelope, error) {
+func (p *StreamProjector) Event(eventType AssistantStreamEventType, payload map[string]any) (streaming.Envelope, error) {
 	return p.event(eventType, payload, nil)
 }
 
-func (p *StreamProjector) Failure(eventType string, payload map[string]any, failure rtfailures.Failure) (streaming.Envelope, error) {
+func (p *StreamProjector) Failure(eventType AssistantStreamEventType, payload map[string]any, failure rtfailures.Failure) (streaming.Envelope, error) {
 	normalized := failure.Normalized()
 	return p.event(eventType, payload, &normalized)
 }
 
-func (p *StreamProjector) event(eventType string, payload map[string]any, failure *rtfailures.Failure) (streaming.Envelope, error) {
+func (p *StreamProjector) event(eventType AssistantStreamEventType, payload map[string]any, failure *rtfailures.Failure) (streaming.Envelope, error) {
+	if err := requireAssistantStreamEventType(eventType); err != nil {
+		return streaming.Envelope{}, err
+	}
 	p.seq++
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	canonicalType := canonicalStreamEventType(eventType)
 	payload["schema"] = "assistant_stream_event"
 	payload["conversationId"] = p.Turn.ConversationID
 	payload["turnId"] = p.Turn.TurnID
-	payload["eventType"] = canonicalType
+	payload["eventType"] = string(eventType)
 	payload["seq"] = p.seq
 	payload["traceId"] = p.Turn.TraceID
-	envelope, err := streaming.NewEnvelope(eventType, p.seq, payload)
+	envelope, err := streaming.NewEnvelope(string(eventType), p.seq, payload)
 	if err != nil {
 		return streaming.Envelope{}, err
 	}
-	envelope.EventID = p.Turn.TurnID + ":" + eventType + ":" + time.Duration(p.seq).String()
+	envelope.EventID = p.Turn.TurnID + ":" + string(eventType) + ":" + time.Duration(p.seq).String()
 	envelope.StreamID = p.Turn.TurnID
-	envelope.Topic = "assistant.turn"
+	envelope.Topic = "assistant.run"
 	envelope.TraceID = p.Turn.TraceID
-	envelope.EventType = canonicalType
+	envelope.EventType = string(eventType)
 	envelope.Payload = payload
 	envelope.RuntimeFailure = failure
 	envelope.CreatedAt = p.now().Add(time.Duration(p.seq) * time.Millisecond)
@@ -67,49 +69,4 @@ func (p *StreamProjector) now() time.Time {
 		return p.Now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-func canonicalStreamEventType(eventType string) string {
-	switch eventType {
-	case "assistant.turn.started":
-		return "turn_started"
-	case "assistant.skill.selected":
-		return "understanding_updated"
-	case "assistant.reasoning.started", "assistant.model.delta":
-		return "journey_step_updated"
-	case "assistant.plan.updated":
-		return "plan_updated"
-	case "assistant.search_query.generated":
-		return "search_query_generated"
-	case "assistant.observation.assessed":
-		return "observation_assessed"
-	case "assistant.replan.requested":
-		return "replan_requested"
-	case "assistant.trace":
-		return "understanding_updated"
-	case "assistant.journey.updated":
-		return "journey_step_updated"
-	case "assistant.process_timeline.updated":
-		return "journey_step_updated"
-	case "assistant.tool.requested":
-		return "tool_use_requested"
-	case "assistant.tool.completed":
-		return "tool_result_received"
-	case "assistant.user_confirmation.requested":
-		return "user_confirmation_requested"
-	case "assistant.failure", "assistant.turn.failed":
-		return "turn_failed"
-	case "assistant.answer.delta":
-		return "partial_answer"
-	case "assistant.answer.reset":
-		return "answer_reset"
-	case "assistant.answer.final":
-		return "final_answer"
-	case "assistant.turn.completed":
-		return "turn_completed"
-	case "assistant.turn.cancelled":
-		return "turn_cancelled"
-	default:
-		return eventType
-	}
 }

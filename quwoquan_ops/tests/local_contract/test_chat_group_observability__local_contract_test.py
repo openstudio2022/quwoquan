@@ -14,7 +14,14 @@ DASHBOARD = (
 )
 SYNC_METRICS = ROOT / "quwoquan_service/runtime/sync/metrics.go"
 CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/main.go"
+CHAT_COMMERCIAL_METRICS = (
+    ROOT
+    / "quwoquan_service/services/chat-service/internal/application/commercial_metrics.go"
+)
 PROMETHEUS_CONFIG = ROOT / "quwoquan_ops/observability/monitoring/prometheus.yml"
+PRODUCT_TELEMETRY = (
+    ROOT / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+)
 
 
 class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
@@ -30,14 +37,44 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
         self.assertIn("> 0.5", create_latency["expr"])
         self.assertIn("500ms", create_latency["annotations"]["summary"])
 
+        candidate_error_rate = rules["ChatGroupCandidateSourceErrorRateHigh"]
+        self.assertIn(
+            '/chat/selectable-group-conversations(/[^/]+/contact-members)?',
+            candidate_error_rate["expr"],
+        )
+        self.assertIn("> 0.02", candidate_error_rate["expr"])
+        self.assertEqual(candidate_error_rate["for"], "10m")
+        self.assertEqual(candidate_error_rate["labels"]["severity"], "critical")
+
+        candidate_latency = rules["ChatGroupCandidateSourceLatencyHigh"]
+        self.assertIn("histogram_quantile(0.95", candidate_latency["expr"])
+        self.assertIn("> 0.5", candidate_latency["expr"])
+        self.assertEqual(candidate_latency["for"], "10m")
+        self.assertEqual(candidate_latency["labels"]["severity"], "warning")
+
         for name in (
             "ChatSyncHintToPullLatencyHigh",
             "ChatSyncPatchFanoutFailureRateHigh",
             "ChatSyncRequiresResync",
+            "ChatMentionCommandFailureRateHigh",
+            "ChatReadWatermarkCommandFailureRateHigh",
+            "ChatInboxProjectionLagHigh",
+            "ChatInboxProjectionDrainFailures",
         ):
             expression = rules[name]["expr"]
-            self.assertIn('instance=~"chat-service(:[0-9]+)?"', expression)
-            self.assertNotIn('service="chat-service"', expression)
+            if name.startswith("ChatSync"):
+                self.assertIn('instance=~"chat-service(:[0-9]+)?"', expression)
+                self.assertNotIn('service="chat-service"', expression)
+
+        self.assertIn("chat_mention_command_total", rules["ChatMentionCommandFailureRateHigh"]["expr"])
+        self.assertIn(
+            "chat_read_watermark_command_total",
+            rules["ChatReadWatermarkCommandFailureRateHigh"]["expr"],
+        )
+        self.assertIn(
+            "chat_inbox_projection_event_lag_seconds_bucket",
+            rules["ChatInboxProjectionLagHigh"]["expr"],
+        )
 
     def test_sync_alert_metrics_have_real_emitters_and_scrape_target(self) -> None:
         source = SYNC_METRICS.read_text(encoding="utf-8")
@@ -78,6 +115,33 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
             'quwoquan_runtime_media_sync_patch_fanout_total{service="chat-service"',
             expressions,
         )
+        self.assertIn("chat_mention_command_total", expressions)
+        self.assertIn("chat_read_watermark_command_total", expressions)
+        self.assertIn("chat_inbox_projection_event_lag_seconds_bucket", expressions)
+
+    def test_chat_commercial_metrics_and_sls_funnel_share_low_cardinality_contract(self) -> None:
+        metrics = CHAT_COMMERCIAL_METRICS.read_text(encoding="utf-8")
+        for metric in (
+            "chat_mention_command_total",
+            "chat_read_watermark_command_total",
+            "chat_inbox_projection_event_lag_seconds",
+            "chat_inbox_projection_drain_total",
+        ):
+            self.assertIn(metric, metrics)
+        self.assertNotIn("conversation_id", metrics)
+        self.assertNotIn("message_id", metrics)
+        self.assertNotIn("user_id", metrics)
+
+        telemetry = yaml.safe_load(PRODUCT_TELEMETRY.read_text(encoding="utf-8"))
+        jobs = telemetry["spec"]["scheduledSql"]["jobs"]
+        chat_job = next(job for job in jobs if job["name"] == "app-product-telemetry-chat-funnel-hourly")
+        self.assertEqual(chat_job["rowKind"], "chat_funnel")
+        self.assertIn("eventType:chat_interaction_outcome", chat_job["sql"])
+        self.assertIn("chatAction", chat_job["sql"])
+        self.assertIn("chatOutcome", chat_job["sql"])
+        self.assertNotIn("conversationId", chat_job["sql"])
+        self.assertNotIn("messageId", chat_job["sql"])
+        self.assertNotIn("userId", chat_job["sql"])
 
 
 if __name__ == "__main__":

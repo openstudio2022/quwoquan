@@ -145,13 +145,13 @@ func scenarioToolPolicy(t *testing.T, skillID string) []string {
 func assertM11TypedStream(t *testing.T, events []streaming.Envelope) {
 	t.Helper()
 	wantOrder := []string{
-		"turn_started",
-		"plan_updated",
-		"search_query_generated",
-		"tool_use_requested",
-		"tool_result_received",
-		"observation_assessed",
-		"final_answer",
+		string(AssistantStreamEventRunStarted),
+		string(AssistantStreamEventProcessReplace),
+		string(AssistantStreamEventProcessAppend),
+		string(AssistantStreamEventProcessCommit),
+		string(AssistantStreamEventAnswerDelta),
+		string(AssistantStreamEventProcessCommit),
+		string(AssistantStreamEventCompleted),
 	}
 	cursor := 0
 	for _, want := range wantOrder {
@@ -197,15 +197,15 @@ func skillMatchesScenario(actual, expected string) bool {
 func finalAnswerText(t *testing.T, events []streaming.Envelope) string {
 	t.Helper()
 	for _, event := range events {
-		if event.EventType != "final_answer" {
+		if event.EventType != string(AssistantStreamEventCompleted) {
 			continue
 		}
-		text, _ := event.Payload["text"].(string)
+		text, _ := event.Payload["finalAnswer"].(string)
 		if strings.TrimSpace(text) == "" {
-			t.Fatalf("final_answer missing payload.text: %#v", event.Payload)
+			t.Fatalf("completed missing payload.finalAnswer: %#v", event.Payload)
 		}
 		return text
 	}
-	t.Fatalf("missing final_answer event")
+	t.Fatalf("missing completed event")
 	return ""
 }

@@ -31,7 +31,7 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 		t.Fatal(err)
 	}
 	consumer := messaging.NewContentPostConsumer(
-		redisRouter.Scene("general"), projection, projection, "circle-api-integration", nil,
+		circleMessageTransport, projection, projection, "circle-api-integration", nil,
 	)
 	values := map[string]string{
 		"eventId": "post-stream:PostPublished:2", "eventType": "PostPublished",
@@ -104,7 +104,7 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 
 	streamRelay := placementapp.NewOutboxRelay(
 		store, store,
-		messaging.NewCirclePostPlacementStreamPublisher(redisRouter.Scene("general")),
+		messaging.NewCirclePostPlacementStreamPublisher(circleMessageTransport),
 		"circle-placement-api-integration-stream",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 1 {

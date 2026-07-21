@@ -122,9 +122,9 @@ func TestApplyEnvOverrides_RecModelService(t *testing.T) {
 	}
 }
 
-// N2-3 embedding 配置路径契约：凭据只经运行时环境注入（gamma compose 声明
-// CONTENT_EMBEDDING_* 注入路径），默认关闭；写入管线与向量召回读通道独立控制。
-func TestApplyEnvOverrides_EmbeddingConfigPath(t *testing.T) {
+// endpoint 与密钥只允许 infrastructure adapter 读取，cmd/api 的通用 config
+// 覆盖不能把供应商 Binding 细节带入组合根。
+func TestApplyEnvOverrides_DoesNotReadEmbeddingBinding(t *testing.T) {
 	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "https://embed.example.test/v1")
 	t.Setenv("CONTENT_EMBEDDING_API_KEY", "test-key")
 	t.Setenv("CONTENT_EMBEDDING_MODEL", "text-embedding-3-large")
@@ -132,31 +132,18 @@ func TestApplyEnvOverrides_EmbeddingConfigPath(t *testing.T) {
 	t.Setenv("CONTENT_EMBEDDING_VECTOR_RECALL_ENABLED", "true")
 	cfg := config{}
 	applyEnvOverrides(&cfg)
-	if cfg.Embedding.Endpoint != "https://embed.example.test/v1" {
-		t.Errorf("Embedding.Endpoint: got %q", cfg.Embedding.Endpoint)
-	}
-	if cfg.Embedding.APIKey != "test-key" {
-		t.Errorf("Embedding.APIKey: got %q", cfg.Embedding.APIKey)
-	}
-	if cfg.Embedding.Model != "text-embedding-3-large" {
-		t.Errorf("Embedding.Model: got %q", cfg.Embedding.Model)
-	}
-	if !cfg.Embedding.Enabled {
-		t.Error("Embedding.Enabled should be true")
-	}
-	if !cfg.Embedding.VectorRecallEnabled {
-		t.Error("Embedding.VectorRecallEnabled should be true")
+	if cfg.Embedding.Enabled || cfg.Embedding.VectorRecallEnabled {
+		t.Fatalf("cmd/api must not read embedding Binding environment: %+v", cfg.Embedding)
 	}
 }
 
-func TestApplyEnvOverrides_EmbeddingDefaultsClosed(t *testing.T) {
+func TestApplyEnvOverrides_EmbeddingFeatureFlagsStayInConfig(t *testing.T) {
 	cfg := config{}
+	cfg.Embedding.Enabled = true
+	cfg.Embedding.VectorRecallEnabled = true
 	applyEnvOverrides(&cfg)
-	if cfg.Embedding.Enabled || cfg.Embedding.VectorRecallEnabled {
-		t.Fatalf("embedding must stay disabled without env credentials: %+v", cfg.Embedding)
-	}
-	if cfg.Embedding.Endpoint != "" || cfg.Embedding.APIKey != "" {
-		t.Fatalf("embedding credentials must not materialize from nowhere: %+v", cfg.Embedding)
+	if !cfg.Embedding.Enabled || !cfg.Embedding.VectorRecallEnabled {
+		t.Fatalf("embedding feature flags must remain config-owned: %+v", cfg.Embedding)
 	}
 }
 
@@ -257,7 +244,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 	}
 	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "default"), 0o755))
 	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "beta"), 0o755))
-	must(os.MkdirAll(filepath.Join(root, "quwoquan_service", "services", "content-service", "configs", "releases"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "releases", "config", "content-service"), 0o755))
 
 	must(os.WriteFile(
 		filepath.Join(root, "configs", "content-service", "default", "config.yaml"),
@@ -270,7 +257,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 		0o644,
 	))
 	must(os.WriteFile(
-		filepath.Join(root, "quwoquan_service", "services", "content-service", "configs", "releases", "v2026.02.28.0.yaml"),
+		filepath.Join(root, "releases", "config", "content-service", "v2026.02.28.0.yaml"),
 		[]byte("config:\n  version: \"v2026.02.28.0\"\n"),
 		0o644,
 	))
@@ -365,9 +352,54 @@ func TestPreflightConfig_AcceptsCompleteCommercialComposition(t *testing.T) {
 		accountClosureSubjectHMACEnv,
 		"content-account-closure-test-secret-32",
 	)
+	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "https://embedding.example.test/v1/embeddings")
+	t.Setenv("CONTENT_EMBEDDING_API_KEY", "embedding-test-key")
 	cfg := validCommercialConfig()
+	cfg.Embedding.Enabled = true
 	if err := preflightConfig(cfg, "gamma"); err != nil {
 		t.Fatalf("expected complete commercial composition, got %v", err)
+	}
+}
+
+func TestPreflightConfig_AllowsDisabledEmbeddingPipelineWithoutBinding(
+	t *testing.T,
+) {
+	t.Setenv(
+		accountClosureSubjectHMACEnv,
+		"content-account-closure-test-secret-32",
+	)
+	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "")
+	t.Setenv("CONTENT_EMBEDDING_API_KEY", "")
+	cfg := validCommercialConfig()
+	cfg.Embedding.Enabled = false
+
+	if err := preflightConfig(cfg, "beta"); err != nil {
+		t.Fatalf(
+			"embedding-disabled content release configuration must not require binding: %v",
+			err,
+		)
+	}
+}
+
+func TestPreflightConfig_FailsClosedWithoutEmbeddingBindingOutsideAlpha(t *testing.T) {
+	t.Setenv(
+		accountClosureSubjectHMACEnv,
+		"content-account-closure-test-secret-32",
+	)
+	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "")
+	t.Setenv("CONTENT_EMBEDDING_API_KEY", "embedding-secret-must-not-leak")
+
+	cfg := validCommercialConfig()
+	cfg.Embedding.Enabled = true
+	err := preflightConfig(cfg, "gamma")
+	if err == nil {
+		t.Fatal("commercial runtime accepted a missing embedding endpoint")
+	}
+	if !strings.Contains(err.Error(), "embedding binding material") {
+		t.Fatalf("expected embedding binding failure, got %v", err)
+	}
+	if strings.Contains(err.Error(), "embedding-secret-must-not-leak") {
+		t.Fatalf("embedding preflight leaked secret: %v", err)
 	}
 }
 

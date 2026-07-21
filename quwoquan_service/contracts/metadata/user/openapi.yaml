@@ -303,6 +303,94 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    /internal/user/accounts/{userId}/restore:
+        post:
+            operationId: RestoreAccount
+            x-contract-operation-id: user.user_profile.RestoreAccount
+            x-object-id: user.user_profile
+            x-actor: none
+            x-application:
+                kind: command
+                facet: AccountEnforcementCommandFacade
+                method: restoreAccount
+                aggregateOwner: UserAccount
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AccountEnforcementDecisionWire'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementResultWire'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/user/accounts/{userId}/suspend:
+        post:
+            operationId: SuspendAccount
+            x-contract-operation-id: user.user_profile.SuspendAccount
+            x-object-id: user.user_profile
+            x-actor: none
+            x-application:
+                kind: command
+                facet: AccountEnforcementCommandFacade
+                method: suspendAccount
+                aggregateOwner: UserAccount
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AccountEnforcementDecisionWire'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementResultWire'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/user/personas/{personaId}/push-destinations:
         get:
             operationId: ResolveIncomingCallPushDestinations
@@ -2601,6 +2689,16 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        AccountEnforcementDecisionWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AccountEnforcementDecisionWire
+            x-contract-placeholder: true
+        AccountEnforcementResultWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AccountEnforcementResultWire
+            x-contract-placeholder: true
         ActivatePersonaRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。

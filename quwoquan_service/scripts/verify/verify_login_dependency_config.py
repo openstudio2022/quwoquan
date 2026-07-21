@@ -25,6 +25,22 @@ USER_INTEGRATION = (
     / "infrastructure"
     / "integration"
 )
+USER_APPLICATION = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "user-service"
+    / "internal"
+    / "application"
+)
+USER_DOMAIN = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "user-service"
+    / "internal"
+    / "domain"
+)
 USER_DOCKERFILE = ROOT / "quwoquan_service" / "services" / "user-service" / "deploy" / "Dockerfile"
 GAMMA_COMPOSE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
 ENVIRONMENTS = ("default", "alpha", "beta", "gamma", "prod")
@@ -72,18 +88,53 @@ def verify_config(env: str, config: Mapping[str, object]) -> list[str]:
     base_url = integration.get("external_interaction_base_url")
     if not isinstance(base_url, str) or not base_url.startswith("https://"):
         failures.append(f"{env}: integration.external_interaction_base_url must use https")
-    social = integration.get("social")
-    if not isinstance(social, Mapping) or not isinstance(social.get("providers"), Mapping):
-        failures.append(f"{env}: integration.social.providers must be a mapping")
-    one_tap = integration.get("one_tap")
-    if not isinstance(one_tap, Mapping) or one_tap.get("resolver") != "aliyun":
-        failures.append(f"{env}: integration.one_tap.resolver must be aliyun")
+    for retired_selector in ("social", "one_tap"):
+        if retired_selector in integration:
+            failures.append(
+                f"{env}: integration.{retired_selector} must not select an authentication adapter"
+            )
     otp = integration.get("otp")
     expected_otp_mode = "provider" if env == "prod" else "fixed_test"
     if not isinstance(otp, Mapping) or otp.get("mode") != expected_otp_mode:
         failures.append(
             f"{env}: integration.otp.mode must be {expected_otp_mode}"
         )
+    return failures
+
+
+def verify_auth_boundary_isolation() -> list[str]:
+    failures: list[str] = []
+    forbidden_vendor_tokens = ("wechat", "alipay", "aliyun", "qq")
+    for source_root in (USER_APPLICATION, USER_DOMAIN):
+        for path in source_root.rglob("*.go"):
+            source = path.read_text(encoding="utf-8").lower()
+            for token in forbidden_vendor_tokens:
+                if token in source:
+                    failures.append(
+                        f"vendor token {token!r} leaked into application/domain source: {path}"
+                    )
+    composition = (USER_CMD_API / "main_auth_runtime.go").read_text(encoding="utf-8")
+    for retired_selector in (
+        "USER_AUTH_EXTERNAL_PROVIDER_MODE",
+        "socialAuthProviderClient",
+        "oneTapResolver",
+        "map[string]userintegration.ProviderOAuthConfig",
+    ):
+        if retired_selector in composition:
+            failures.append(
+                f"auth composition must not retain runtime provider selection: {retired_selector}"
+            )
+    for required_binding in (
+        "newFederatedLoginBindings",
+        "NewWechatFederatedIdentityVerifier",
+        "NewAlipayFederatedIdentityVerifier",
+        "NewQqFederatedIdentityVerifier",
+        "newCarrierPhoneResolver",
+    ):
+        if required_binding not in composition:
+            failures.append(
+                f"auth composition is missing explicit fail-closed binding: {required_binding}"
+            )
     return failures
 
 
@@ -138,6 +189,7 @@ def main() -> int:
             failures.append(f"{env}: config file missing: {config_path}")
             continue
         failures.extend(verify_config(env, load_mapping(config_path)))
+    failures.extend(verify_auth_boundary_isolation())
     failures.extend(verify_nonprod_source_isolation())
     if failures:
         for failure in failures:

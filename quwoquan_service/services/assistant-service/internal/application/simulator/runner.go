@@ -102,7 +102,7 @@ func (p scriptedModelProvider) Complete(_ context.Context, req app.ModelRequest)
 			}
 		}
 	}
-	return app.ModelResponse{Text: "scripted model fallback", FinishReason: "stop"}, nil
+	return app.ModelResponse{}, fmt.Errorf("replay script has no response for stage %q", req.Stage)
 }
 
 type replaySkillRuntime struct {
@@ -174,20 +174,6 @@ func (e scriptedToolExecutor) Execute(_ context.Context, req app.ToolRequest) (a
 		}
 		completed.Status = "completed"
 		completed.Result = step.Result
-		if req.ToolName == "app_action" {
-			requested.Placement = "device_action"
-			requested.RequiresConfirmation = true
-			completed = requested
-			completed.Status = "waiting_confirmation"
-			completed.Result = map[string]any{
-				"proposal": map[string]any{
-					"toolName":             req.ToolName,
-					"placement":            "device_action",
-					"input":                input,
-					"requiresConfirmation": true,
-				},
-			}
-		}
 		return app.ToolExecution{Requested: requested, Completed: completed}, nil
 	}
 	return app.ToolExecution{}, fmt.Errorf("scripted tool %q not found", req.ToolName)

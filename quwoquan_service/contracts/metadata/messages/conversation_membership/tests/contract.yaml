@@ -42,7 +42,16 @@ scenarios:
     assertions:
       - only_owner_or_admin_can_remove
       - removed_state_receipt_outbox_same_transaction
+      - removed_user_state_deleted_atomically_and_inbox_row_disappears
+      - terminal_realtime_event_reaches_removed_user_once
       - removing_absent_member_is_noop_replay
+
+  - name: leave_member_cleans_inbox_and_stale_projection
+    command: LeaveConversation
+    assertions:
+      - left_user_state_deleted_atomically_and_inbox_row_disappears
+      - delayed_message_sent_after_leave_is_noop
+      - non_member_cannot_recreate_user_state_through_settings
 
   - name: transfer_ownership_cas
     command: TransferOwnership
@@ -57,6 +66,13 @@ scenarios:
       - admin_set_replaced_atomically
       - identical_set_is_noop_receipt
       - event_ConversationMemberRoleChanged_via_outbox
+
+  - name: circle_group_membership_is_not_mutable_from_chat_http
+    command: AddMembers / RemoveMember / LeaveConversation / TransferOwnership / UpdateGroupAdmins
+    assertions:
+      - circleGroupId_bound_conversation_returns_circle_group_managed_by_circle
+      - rejected_command_does_not_write_membership_receipt_or_user_state
+      - Chat_membership_is_changed_only_by_CircleGroupMembership_durable_projector
 
   - name: assistant_invite_remove_lifecycle
     command: InviteAssistant / RemoveAssistant

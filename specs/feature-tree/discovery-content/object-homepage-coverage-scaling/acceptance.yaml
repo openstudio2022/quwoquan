@@ -36,12 +36,14 @@ sit_acceptance:
       - file: quwoquan_data/tests/local_contract/governance/test_coverage_merge__behavior__functional__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_service/runtime/reliabletask/data_content_fleet__reliability__local_contract_test.go
       - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
       recorded:
       - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/governance/test_coverage_merge__behavior__functional__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_service/runtime/reliabletask/data_content_fleet__reliability__local_contract_test.go
       - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
     status: pending
     test_evidence:

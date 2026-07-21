@@ -20,9 +20,9 @@ type CredentialType string
 const (
 	CredentialTypePhone           CredentialType = "phone"
 	CredentialTypeCarrierPhone    CredentialType = "carrier_phone"
-	CredentialTypeWechat          CredentialType = "wechat"
-	CredentialTypeAlipay          CredentialType = "alipay"
-	CredentialTypeQQ              CredentialType = "qq"
+	CredentialTypeFederatedSlotA  CredentialType = "federated_slot_a"
+	CredentialTypeFederatedSlotB  CredentialType = "federated_slot_b"
+	CredentialTypeFederatedSlotC  CredentialType = "federated_slot_c"
 	CredentialTypeApple           CredentialType = "apple"
 	CredentialTypePasskey         CredentialType = "passkey"
 	CredentialTypeAnonymousDevice CredentialType = "anonymous_device"
@@ -32,9 +32,9 @@ func (credentialType CredentialType) Valid() bool {
 	switch credentialType {
 	case CredentialTypePhone,
 		CredentialTypeCarrierPhone,
-		CredentialTypeWechat,
-		CredentialTypeAlipay,
-		CredentialTypeQQ,
+		CredentialTypeFederatedSlotA,
+		CredentialTypeFederatedSlotB,
+		CredentialTypeFederatedSlotC,
 		CredentialTypeApple,
 		CredentialTypePasskey,
 		CredentialTypeAnonymousDevice:

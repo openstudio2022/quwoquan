@@ -42,7 +42,7 @@ def _report(*, passed: bool = True) -> dict[str, object]:
         "finalizedWithinStageBudgetRate": 1.0,
         "duplicatePublishCount": 0,
         "missingObjectCount": 0,
-        "idempotencyKey": "entity+carrier+sourceRevision+stage",
+        "idempotencyKey": "executionId+entity+carrier+sourceRevision+stage",
         "completedAt": "2026-07-20T05:00:00Z",
     }
 

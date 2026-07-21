@@ -27,6 +27,13 @@ type RuntimeLogStore interface {
 	GetRuntimeLogDrilldown(context.Context, RuntimeLogDrilldownQuery) (RuntimeLogDrilldown, error)
 }
 
+// ObservabilityLogSink 是 product-ops 对外部日志供应商的统一端口。
+// 同一实现统一承载事件、启动诊断和运行时日志协议；调用方仍只依赖各自所需的窄接口。
+type ObservabilityLogSink interface {
+	EventLogStore
+	RuntimeLogStore
+}
+
 type RuntimeLogSummaryQuery struct {
 	Signal, Severity, ErrorCode, Fingerprint, SourceType, Service, AppVersion string
 	From, To                                                                  time.Time
@@ -135,6 +142,85 @@ func (s *RuntimeLogService) ReportRuntimeLogBatch(
 		}
 	}
 
+	return s.reportRecords(ctx, batchKey, records)
+}
+
+// ReportTrustedRuntimeLogBatch accepts flattened fields emitted by the Go
+// RuntimeLogExportWriter. The internal handler authenticates the producer
+// before calling it; this method still validates the canonical minimum and
+// shares the exact durable idempotency ledger used by public App diagnostics.
+func (s *RuntimeLogService) ReportTrustedRuntimeLogBatch(
+	ctx context.Context,
+	batchKey string,
+	inputs []map[string]string,
+) (EventBatchAck, error) {
+	if len(inputs) == 0 ||
+		len(inputs) > runtimeobservability.CatalogMaxBatchItems ||
+		len(batchKey) != 64 {
+		return EventBatchAck{}, ErrInvalidRuntimeLogBatch
+	}
+	now := s.now().UTC()
+	records := make([]RuntimeLogRecord, len(inputs))
+	for index, fields := range inputs {
+		for _, required := range []string{
+			"schema",
+			"occurredAt",
+			"logKind",
+			"severity",
+			"signal",
+			"message",
+			"resourceSourceType",
+			"resourceService",
+		} {
+			if strings.TrimSpace(fields[required]) == "" {
+				return EventBatchAck{}, fmt.Errorf(
+					"%w: record[%d] misses %s",
+					ErrInvalidRuntimeLogBatch,
+					index,
+					required,
+				)
+			}
+		}
+		if fields["schema"] != runtimeobservability.ObservabilitySchema {
+			return EventBatchAck{}, fmt.Errorf(
+				"%w: record[%d] has an invalid schema",
+				ErrInvalidRuntimeLogBatch,
+				index,
+			)
+		}
+		signalPrefix, _, hasSeparator := strings.Cut(fields["signal"], ".")
+		if !hasSeparator || fields["resourceSourceType"] != signalPrefix {
+			return EventBatchAck{}, fmt.Errorf(
+				"%w: record[%d] has an invalid producer resource",
+				ErrInvalidRuntimeLogBatch,
+				index,
+			)
+		}
+		occurredAt, err := time.Parse(time.RFC3339Nano, fields["occurredAt"])
+		if err != nil ||
+			occurredAt.Before(now.Add(-72*time.Hour)) ||
+			occurredAt.After(now.Add(5*time.Minute)) {
+			return EventBatchAck{}, fmt.Errorf(
+				"%w: record[%d] occurredAt outside accepted window",
+				ErrInvalidRuntimeLogBatch,
+				index,
+			)
+		}
+		records[index] = RuntimeLogRecord{
+			Fields:     fields,
+			BatchKey:   batchKey,
+			BatchIndex: index,
+			IngestedAt: now,
+		}
+	}
+	return s.reportRecords(ctx, batchKey, records)
+}
+
+func (s *RuntimeLogService) reportRecords(
+	ctx context.Context,
+	batchKey string,
+	records []RuntimeLogRecord,
+) (EventBatchAck, error) {
 	state, err := s.ledger.Begin(ctx, "runtime:"+batchKey, len(records))
 	if err != nil {
 		return EventBatchAck{}, err

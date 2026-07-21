@@ -31,9 +31,11 @@ void main() {
       linkedHomepageType: 'post',
       linkedHomepageTitle: 'ht',
     );
-    final m = encodeCreateCircleCommand(command).body;
+    final rawBody = encodeCreateCircleCommand(command).body;
+    expect(rawBody, isA<Map<String, Object?>>());
+    final body = rawBody! as Map<String, Object?>;
     for (final k in CircleWriteWireWritableKeys.createCircle) {
-      expect(m.containsKey(k), isTrue, reason: 'missing $k');
+      expect(body.containsKey(k), isTrue, reason: 'missing $k');
     }
   });
 }

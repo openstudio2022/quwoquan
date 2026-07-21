@@ -5,14 +5,29 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 enum FilterCatalogSource { remote, verifiedCache, bootstrapReplica }
 
 final class ResolvedFilterCatalog {
-  const ResolvedFilterCatalog({required this.snapshot, required this.source});
+  const ResolvedFilterCatalog({
+    required this.snapshot,
+    required this.source,
+    this.cacheVerifiedAt,
+  });
 
   final FilterCatalogSnapshot snapshot;
   final FilterCatalogSource source;
+  final DateTime? cacheVerifiedAt;
+}
+
+final class VerifiedFilterCatalogCacheEntry {
+  const VerifiedFilterCatalogCacheEntry({
+    required this.snapshot,
+    required this.verifiedAt,
+  });
+
+  final FilterCatalogSnapshot snapshot;
+  final DateTime verifiedAt;
 }
 
 abstract interface class VerifiedFilterCatalogStore {
-  Future<FilterCatalogSnapshot?> read();
+  Future<VerifiedFilterCatalogCacheEntry?> read();
 
   Future<void> write(FilterCatalogSnapshot snapshot);
 
@@ -28,7 +43,7 @@ abstract interface class FilterCatalogIntegrityVerifier {
 }
 
 abstract interface class FilterCatalogResolutionObserver {
-  void sourceSelected(FilterCatalogSource source, String releaseId);
+  void sourceSelected(ResolvedFilterCatalog resolved);
 
   void candidateRejected(FilterCatalogSource source, Object error);
 }
@@ -53,27 +68,27 @@ final class FilterCatalogCoordinator {
       final snapshot = await remote.getActiveFilterCatalog();
       _validate(snapshot);
       await _writeVerifiedBestEffort(snapshot);
-      observer.sourceSelected(FilterCatalogSource.remote, snapshot.releaseId);
-      return ResolvedFilterCatalog(
+      final resolved = ResolvedFilterCatalog(
         snapshot: snapshot,
         source: FilterCatalogSource.remote,
       );
+      observer.sourceSelected(resolved);
+      return resolved;
     } catch (error) {
       observer.candidateRejected(FilterCatalogSource.remote, error);
     }
 
     try {
-      final cached = await verifiedStore.read();
-      if (cached != null) {
-        _validate(cached);
-        observer.sourceSelected(
-          FilterCatalogSource.verifiedCache,
-          cached.releaseId,
-        );
-        return ResolvedFilterCatalog(
-          snapshot: cached,
+      final cachedEntry = await verifiedStore.read();
+      if (cachedEntry != null) {
+        _validate(cachedEntry.snapshot);
+        final resolved = ResolvedFilterCatalog(
+          snapshot: cachedEntry.snapshot,
           source: FilterCatalogSource.verifiedCache,
+          cacheVerifiedAt: cachedEntry.verifiedAt,
         );
+        observer.sourceSelected(resolved);
+        return resolved;
       }
     } catch (error) {
       observer.candidateRejected(FilterCatalogSource.verifiedCache, error);
@@ -84,14 +99,12 @@ final class FilterCatalogCoordinator {
       final bootstrap = await bootstrapReader.read();
       _validate(bootstrap);
       await _writeVerifiedBestEffort(bootstrap);
-      observer.sourceSelected(
-        FilterCatalogSource.bootstrapReplica,
-        bootstrap.releaseId,
-      );
-      return ResolvedFilterCatalog(
+      final resolved = ResolvedFilterCatalog(
         snapshot: bootstrap,
         source: FilterCatalogSource.bootstrapReplica,
       );
+      observer.sourceSelected(resolved);
+      return resolved;
     } catch (error) {
       observer.candidateRejected(FilterCatalogSource.bootstrapReplica, error);
     }

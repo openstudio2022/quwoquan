@@ -124,14 +124,25 @@ void main() {
       await tester.pump();
       final scrollable = find.byType(Scrollable).first;
       await tester.dragUntilVisible(
-        find.text('圈子名称'),
+        find.text('圈子封面'),
         scrollable,
         const Offset(0, -240),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('圈子设置'), findsOneWidget);
-      expect(find.text('头像与封面'), findsOneWidget);
+      expect(find.text('圈子封面'), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('圈子头像'),
+        scrollable,
+        const Offset(0, -240),
+      );
+      expect(find.text('圈子头像'), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('圈子名称'),
+        scrollable,
+        const Offset(0, -240),
+      );
       expect(find.text('圈子名称'), findsOneWidget);
       expect(find.text('圈子简介'), findsOneWidget);
       expect(find.text('保存更改'), findsWidgets);

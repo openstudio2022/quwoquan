@@ -433,7 +433,7 @@ entries:
       rollout_impact: low
       breaking_contract: false
     notes:
-      - "验证：verify_concept_naming OK（含「影响力」禁用）；dart analyze 6 文件 0 issue；flutter test my_intersection_inbox_page/profile_tab_navigation_journey/profile_shell_widget/author_impact_card/circle_shell_widget/homepage_detail_page/lin_mo_travel_intersection_acceptance/author_impact_evidence_contract 108/108 OK；全 test 目录 0 硬编码旧词字面量；git diff --check clean。"
+      - "验证：verify_concept_naming OK（含「影响力」禁用）；dart analyze 6 文件 0 issue；flutter test my_intersection_inbox_page/profile_journey/profile_shell_widget/author_impact_card/circle_shell_widget/homepage_detail_page/lin_mo_travel_intersection_acceptance/author_impact_evidence_contract 108/108 OK；全 test 目录 0 硬编码旧词字面量；git diff --check clean。"
       - "术语横切收尾：入口子段 + 影响力子段均落地，前台旧词「今日同趣机会/兴趣配对/影响力」已退场并入门禁禁用集；「找同趣」入口主标题已替换，情感修饰「找同趣的人/同趣搭子」按 §18.7.1 保留。机器名 interest_match/impact/intersection 的 surface/route/字段全程不变。"
       - "剩余：verify_dart_semantic 预存视觉字面量债（chat/interest_match/image_book 6 处）与术语无关、跨领域、含 pageflip/media guardrails，属独立视觉 token 收口工作，未在本子段处理（诚实上报，本轮 0 新增违规）。C0 仍 GATE_BLOCK（coWishlistedEntity 数据供给），E runner-blocked（R-IX05），均已在 backlog。"
 

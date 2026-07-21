@@ -63,11 +63,9 @@ def _runtime_paths(
         if config_version:
             paths.append(
                 root
-                / "quwoquan_service"
-                / "services"
-                / service_name
-                / "configs"
                 / "releases"
+                / "config"
+                / service_name
                 / f"{config_version}.yaml"
             )
         return paths

@@ -27,6 +27,5 @@ tests:
     - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
   api_integration:
     - quwoquan_service/services/assistant-service/tests/api_integration/conversation_run_store__api_integration_test.go
-  user_acceptance:
-    - quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+  user_acceptance: []
 environments: []

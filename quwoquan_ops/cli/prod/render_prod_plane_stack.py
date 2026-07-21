@@ -18,8 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.output_paths import output_root as resolve_output_root
-from quwoquan_ops.cli.lib.output_paths import service_release_dir
-from quwoquan_ops.cli.lib.output_paths import target_process_dir
+from quwoquan_ops.cli.lib.output_paths import deployment_work_root
+from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
+from quwoquan_ops.cli.lib.output_paths import portal_deployment_package_dir
+from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import target_local_dir as resolve_target_local_dir
 
 try:
@@ -29,7 +31,8 @@ except ImportError:  # pragma: no cover
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
 TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
-DEFAULT_OUTPUT_ROOT = target_process_dir("prod-hosted")
+OBSERVABILITY_SOURCE_ROOT = ROOT / "quwoquan_ops/observability/monitoring"
+DEFAULT_OUTPUT_ROOT = deployment_work_root("prod-hosted") / "rendered"
 
 CONFIG_PACKAGE_ALIAS = {
     "recommendation-service": "rec-model-service",
@@ -52,6 +55,7 @@ RUNTIME_LOG_EXPORT_SERVICES = {
     "integration-service",
     "notification-service",
     "platform-ops-service",
+    "product-ops-service",
     "realtime-gateway",
     "rtc-service",
     "search-service",
@@ -87,6 +91,21 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _sha256(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _require_external_deployment_root(output_root: Path) -> None:
+    """Reject deployment configs under disposable repository output."""
+    output_root = output_root.expanduser().resolve()
+    repository_output_root = resolve_output_root().expanduser().resolve()
+    try:
+        output_root.relative_to(repository_output_root)
+    except ValueError:
+        return
+    raise SystemExit(
+        "FAIL: prod deployment rendering must use QWQ_DEPLOY_WORK_ROOT outside "
+        "QWQ_OUTPUT_ROOT; .qwq_output may only retain redacted evidence, "
+        "observability, process and cache records"
+    )
 
 
 def _verified_package_release(
@@ -249,8 +268,9 @@ def _rewrite_service(
         )
         if name in RUNTIME_LOG_EXPORT_SERVICES:
             # 云侧服务日志上云：stdout 镜像批量推送到 product-ops 内部
-            # runtime log ingest（机器凭据）并先写持久 spool；
-            # product-ops 自身直写 SLS。
+            # runtime log ingest（机器凭据）并先写持久 spool。product-ops
+            # 也通过同一端点回灌；其内部 ingest 路径绕开自身 access logger，
+            # 因而不会形成 HTTP feedback loop。
             if "product-ops-service" in selected:
                 environment["RUNTIME_LOG_INGEST_URL"] = (
                     "http://product-ops-service:18086/ops/internal/runtime-logs:ingest"
@@ -360,6 +380,8 @@ def _rewrite_service(
             environment["NOTIFICATION_REDIS_ADDR"] = (
                 f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             )
+            environment["NOTIFICATION_REDIS_GENERAL_DB"] = "1"
+            environment["NOTIFICATION_REDIS_REALTIME_DB"] = "4"
             environment["NOTIFICATION_REALTIME_BASE_URL"] = (
                 f"http://{EXTERNAL_DATA_HOST}:"
                 "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
@@ -373,14 +395,14 @@ def _rewrite_service(
             environment["REDIS_ADDR"] = (
                 f"{EXTERNAL_DATA_HOST}:{EXTERNAL_REDIS_PORT}"
             )
-            environment["LIVEKIT_URL"] = (
-                "${PROD_LIVEKIT_PUBLIC_URL:?PROD_LIVEKIT_PUBLIC_URL is required}"
+            environment["RTC_MEDIA_CONNECTION_URL"] = (
+                "${PROD_RTC_MEDIA_CONNECTION_URL:?PROD_RTC_MEDIA_CONNECTION_URL is required}"
             )
-            environment["LIVEKIT_API_KEY"] = (
-                "${PROD_LIVEKIT_API_KEY:?PROD_LIVEKIT_API_KEY is required}"
+            environment["RTC_MEDIA_API_KEY"] = (
+                "${PROD_RTC_MEDIA_API_KEY:?PROD_RTC_MEDIA_API_KEY is required}"
             )
-            environment["LIVEKIT_API_SECRET"] = (
-                "${PROD_LIVEKIT_API_SECRET:?PROD_LIVEKIT_API_SECRET is required}"
+            environment["RTC_MEDIA_API_SECRET"] = (
+                "${PROD_RTC_MEDIA_API_SECRET:?PROD_RTC_MEDIA_API_SECRET is required}"
             )
     if name != "gamma-proxy":
         extra_hosts = list(updated.get("extra_hosts") or [])
@@ -564,7 +586,11 @@ def _write_config_tree(
     sources: dict[str, Any] = {}
     for service in config_services:
         package_service = CONFIG_PACKAGE_ALIAS.get(service, service)
-        package_dir = service_release_dir("prod", package_service)
+        package_dir = service_deployment_package_dir(
+            "prod",
+            package_service,
+            target="prod-hosted",
+        )
         if not package_dir.is_dir():
             raise SystemExit(f"FAIL: missing prod service package for {service}: {package_dir}")
         default_src = package_dir / "default_config.yaml"
@@ -671,6 +697,11 @@ def _render_gray_routing_block(rollout_stage: str) -> str:
     policy = (_load_yaml(policy_path).get("policy") or {}) if policy_path.is_file() else {}
     if not policy.get("enabled"):
         return ""
+    if rollout_stage not in {"gray-initial", "carry-on", "full"}:
+        raise SystemExit(
+            "FAIL: gray routing policy received an unsupported rollout stage "
+            f"{rollout_stage!r}"
+        )
     stage_dimensions = policy.get("stageDimensions") or {}
     dimensions = stage_dimensions.get(rollout_stage) or {}
     upstream = str(policy.get("grayUpstream") or "").strip()
@@ -1058,6 +1089,128 @@ def _write_env_file(
     (output_root / "stack.env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _write_observability_tree(
+    output_root: Path,
+    plane_name: str,
+) -> dict[str, Any] | None:
+    plane = _plane_spec(plane_name)
+    runtime = plane.get("rootlessObservabilityRuntime")
+    if runtime is None:
+        return None
+    if not isinstance(runtime, dict):
+        raise SystemExit(
+            f"FAIL: {plane_name}.rootlessObservabilityRuntime must be an object"
+        )
+
+    directory = Path(str(runtime.get("composeDirectory") or ""))
+    compose_file = str(runtime.get("composeFile") or "").strip()
+    systemd_unit_file = str(runtime.get("systemdUnitFile") or "").strip()
+    runtime_env_file = str(runtime.get("runtimeEnvFile") or "").strip()
+    service_network_name = str(runtime.get("serviceNetworkName") or "").strip()
+    if (
+        not directory.parts
+        or directory.is_absolute()
+        or ".." in directory.parts
+        or not compose_file
+        or Path(compose_file).name != compose_file
+        or not systemd_unit_file.endswith(".service")
+        or Path(systemd_unit_file).name != systemd_unit_file
+        or not runtime_env_file
+        or Path(runtime_env_file).name != runtime_env_file
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,62}", service_network_name)
+    ):
+        raise SystemExit(
+            "FAIL: rootlessObservabilityRuntime compose directory/file must be safe"
+        )
+    source_compose = OBSERVABILITY_SOURCE_ROOT / compose_file
+    required_files = (
+        source_compose,
+        OBSERVABILITY_SOURCE_ROOT / "prometheus.yml",
+        OBSERVABILITY_SOURCE_ROOT / "alertmanager.yml",
+        OBSERVABILITY_SOURCE_ROOT / "otel-collector.yml",
+    )
+    if any(not path.is_file() for path in required_files):
+        missing = ", ".join(
+            str(path.relative_to(ROOT))
+            for path in required_files
+            if not path.is_file()
+        )
+        raise SystemExit(f"FAIL: observability source is incomplete: {missing}")
+    alerts = OBSERVABILITY_SOURCE_ROOT / "alerts"
+    if not alerts.is_dir():
+        raise SystemExit(f"FAIL: observability alerts directory is missing: {alerts}")
+
+    destination = output_root / directory
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    for source in required_files:
+        shutil.copy2(source, destination / source.name)
+    shutil.copytree(alerts, destination / "alerts")
+    (destination / runtime_env_file).write_text(
+        f"PROD_SERVICE_NETWORK={service_network_name}\n",
+        encoding="utf-8",
+    )
+    compose_root = str(plane.get("composeProjectRoot") or "").strip()
+    credentials_root = str(plane.get("credentialsPath") or "").strip()
+    credentials_env = str(runtime.get("credentialsEnvFile") or "").strip()
+    if not (
+        compose_root.startswith("/")
+        and credentials_root.startswith("/")
+        and credentials_env
+        and not Path(credentials_env).is_absolute()
+        and ".." not in Path(credentials_env).parts
+    ):
+        raise SystemExit("FAIL: observability systemd paths must be absolute/safe")
+    unit_dir = destination / "systemd"
+    unit_dir.mkdir()
+    credentials_env_path = f"{credentials_root.rstrip('/')}/{credentials_env}"
+    unit_dir.joinpath(systemd_unit_file).write_text(
+        "\n".join(
+            [
+                "[Unit]",
+                "Description=Quwoquan production observability rootless stack",
+                "Wants=network-online.target",
+                "After=network-online.target",
+                "",
+                "[Service]",
+                "Type=oneshot",
+                "RemainAfterExit=yes",
+                f"WorkingDirectory={compose_root}",
+                (
+                    "ExecStart=/usr/bin/podman compose --env-file stack.env "
+                    f"--env-file {directory.as_posix()}/{runtime_env_file} "
+                    f"--env-file {credentials_env_path} "
+                    f"-f {directory.as_posix()}/{compose_file} "
+                    "-p quwoquan-observability-prod up -d --remove-orphans"
+                ),
+                (
+                    "ExecStop=/usr/bin/podman compose --env-file stack.env "
+                    f"--env-file {directory.as_posix()}/{runtime_env_file} "
+                    f"--env-file {credentials_env_path} "
+                    f"-f {directory.as_posix()}/{compose_file} "
+                    "-p quwoquan-observability-prod down"
+                ),
+                "",
+                "[Install]",
+                "WantedBy=default.target",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "composeDirectory": directory.as_posix(),
+        "composeFile": compose_file,
+        "systemdUnitFile": systemd_unit_file,
+        "runtimeEnvFile": runtime_env_file,
+        "serviceNetworkName": service_network_name,
+        "credentialsEnvFile": str(runtime.get("credentialsEnvFile") or ""),
+        "requiredEnvironment": list(runtime.get("requiredEnvironment") or []),
+        "healthURLs": list(runtime.get("healthURLs") or []),
+    }
+
+
 def main() -> int:
     args = parse_args()
     plane = _plane_spec(args.plane)
@@ -1099,16 +1252,13 @@ def main() -> int:
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
     output_root = Path(args.output_dir).expanduser().resolve()
+    _require_external_deployment_root(output_root)
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
     Path(media_root).mkdir(parents=True, exist_ok=True)
     legal_package_public = (
-        resolve_output_root()
-        / "env"
-        / "prod"
-        / "release"
-        / "legal-static"
+        legal_static_deployment_package_dir("prod", target="prod-hosted")
         / "current"
         / "public"
     )
@@ -1122,11 +1272,7 @@ def main() -> int:
     # 运维运营 Portal 静态站点：只消费 build_portal_release.py 发布的不可变
     # release 产物；缺失时保留空目录（Caddy 返回 404，不回退 dev server）。
     portal_release_dist = (
-        resolve_output_root()
-        / "env"
-        / "prod"
-        / "release"
-        / "ops-portal"
+        portal_deployment_package_dir("prod", target="prod-hosted")
         / "current"
         / "dist"
     )
@@ -1144,13 +1290,17 @@ def main() -> int:
     rendered_services: dict[str, Any] = {}
     selected_names = set(selected)
     governed_names = set(governed)
+    observability_config = plane.get("rootlessObservabilityRuntime") or {}
+    service_network_name = str(
+        observability_config.get("serviceNetworkName") or ""
+    ).strip()
     for service_name in selected:
         raw = services.get(service_name)
         if raw is None:
             raise SystemExit(
                 f"FAIL: compose template missing selected service {service_name}: {compose_template}"
             )
-        rendered_services[service_name] = _rewrite_service(
+        rendered = _rewrite_service(
             service_name,
             raw,
             selected_names,
@@ -1166,8 +1316,15 @@ def main() -> int:
             credentials_root=credentials_root,
             runtime_credentials=runtime_credentials,
         )
+        if service_network_name:
+            rendered["networks"] = ["service-plane"]
+        rendered_services[service_name] = rendered
 
     compose_payload: dict[str, Any] = {"services": rendered_services}
+    if service_network_name:
+        compose_payload["networks"] = {
+            "service-plane": {"name": service_network_name}
+        }
     top_level_volumes = dict(template.get("volumes") or {})
     if any(name in RUNTIME_LOG_EXPORT_SERVICES for name in rendered_services):
         top_level_volumes.setdefault("runtime-log-spool", {})
@@ -1185,6 +1342,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    observability_runtime = _write_observability_tree(output_root, args.plane)
     config_sources = _write_config_tree(
         config_services=config_services,
         config_version=args.config_version,
@@ -1212,6 +1370,7 @@ def main() -> int:
         "legalStaticSource": str(legal_package_public),
         "portalStaticRoot": portal_root,
         "portalStaticSource": str(portal_release_dist),
+        "observabilityRuntime": observability_runtime,
     }
     (output_root / "provenance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",

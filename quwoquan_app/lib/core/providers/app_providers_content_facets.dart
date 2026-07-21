@@ -53,12 +53,14 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
 final profileMediaUploadGatewayProvider = Provider<ProfileMediaUploadGateway>((
   ref,
 ) {
-  final gateway = ContentProfileMediaUploadGateway(
-    ref.watch(profileEditContentMediaFacetProvider),
-    httpClient: ref.watch(cloudHttpClientProvider),
+  return ContentProfileMediaUploadGateway(
+    ContentMediaUploadCoordinator(
+      media: ref.watch(profileEditContentMediaFacetProvider),
+      telemetry: ref.watch(appTelemetryReporterProvider),
+    ),
+    ref.watch(contentMediaSourceReaderProvider),
+    ref.watch(contentMediaStreamObjectUploadProvider),
   );
-  ref.onDispose(gateway.dispose);
-  return gateway;
 });
 
 final contentDiscoveryFeedQueryProvider = Provider<ContentDiscoveryFeedQuery>(
@@ -196,16 +198,31 @@ final class _AppTelemetryFilterCatalogResolutionObserver
   final AppTelemetryRecorder _telemetry;
 
   @override
-  void sourceSelected(FilterCatalogSource source, String releaseId) {
-    _record('resolved_${source.name}');
+  void sourceSelected(ResolvedFilterCatalog resolved) {
+    final source = resolved.source;
+    final releaseIdHash = sha256
+        .convert(utf8.encode(resolved.snapshot.releaseId))
+        .toString();
+    unawaited(
+      _telemetry.record(
+        AppTelemetryPayload.filterCatalogLoad(
+          catalogSource: _catalogSource(source),
+          releaseIdHash: releaseIdHash,
+          digestMatch: true,
+          cacheAgeBucket: _cacheAgeBucket(resolved),
+          result: 'resolved',
+        ),
+        pageName: PageNames.createEditImage,
+      ),
+    );
   }
 
   @override
   void candidateRejected(FilterCatalogSource source, Object error) {
-    _record('rejected_${source.name}');
+    _recordOperationResult('rejected_${source.name}');
   }
 
-  void _record(String result) {
+  void _recordOperationResult(String result) {
     unawaited(
       _telemetry.record(
         AppTelemetryPayload.operationResult(
@@ -216,6 +233,24 @@ final class _AppTelemetryFilterCatalogResolutionObserver
         pageName: PageNames.createEditImage,
       ),
     );
+  }
+
+  static String _catalogSource(FilterCatalogSource source) => switch (source) {
+    FilterCatalogSource.remote => 'remote',
+    FilterCatalogSource.verifiedCache => 'verified_cache',
+    FilterCatalogSource.bootstrapReplica => 'bootstrap_replica',
+  };
+
+  static String _cacheAgeBucket(ResolvedFilterCatalog resolved) {
+    final verifiedAt = resolved.cacheVerifiedAt;
+    if (resolved.source != FilterCatalogSource.verifiedCache ||
+        verifiedAt == null) {
+      return 'not_applicable';
+    }
+    final age = DateTime.now().toUtc().difference(verifiedAt);
+    if (age <= const Duration(hours: 1)) return 'under_1h';
+    if (age <= const Duration(hours: 24)) return 'one_to_24h';
+    return 'over_24h';
   }
 }
 

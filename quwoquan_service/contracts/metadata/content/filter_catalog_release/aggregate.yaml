@@ -39,7 +39,7 @@ members:
 
 business_rules:
   - releaseId、canonicalDigest、categories、presets 与 recommendedFallbackPresetIds 在 Stage 成功后不可变
-  - categories 数量 1..32、presets 数量 1..256，categoryId 与 presetId 分别全局唯一
+  - categories 数量 1..32、presets 数量 1..256，categoryId、category sort 与 presetId 分别全局唯一
   - 每个 enabled preset 必须引用同 release 内 enabled category；同分类 sort 唯一
   - original preset 必须存在、defaultStrength 为 0 且全部 adjustment 值为 0
   - defaultStrength 范围 0..100；全部 adjustment 值范围 -100..100

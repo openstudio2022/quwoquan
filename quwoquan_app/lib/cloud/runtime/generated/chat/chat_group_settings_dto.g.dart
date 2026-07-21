@@ -5,11 +5,13 @@ class ChatGroupSettingsDto {
   final bool nameEditableByAdminOnly;
   final String conversationType;
   final String circleId;
+  final String circleGroupId;
 
   ChatGroupSettingsDto({
     this.nameEditableByAdminOnly = false,
     this.conversationType = 'group',
     this.circleId = '',
+    this.circleGroupId = '',
   });
 
   factory ChatGroupSettingsDto.fromMap(Map<String, dynamic> m) {
@@ -17,6 +19,7 @@ class ChatGroupSettingsDto {
       nameEditableByAdminOnly: m['nameEditableByAdminOnly'] as bool? ?? false,
       conversationType: m['conversationType']?.toString() ?? 'group',
       circleId: m['circleId']?.toString() ?? '',
+      circleGroupId: m['circleGroupId']?.toString() ?? '',
     );
   }
 
@@ -25,6 +28,7 @@ class ChatGroupSettingsDto {
       'nameEditableByAdminOnly': source['nameEditableByAdminOnly'],
       'conversationType': source['type'],
       'circleId': source['circleId'],
+      'circleGroupId': source['circleGroupId'],
     });
   }
 
@@ -33,6 +37,7 @@ class ChatGroupSettingsDto {
       'nameEditableByAdminOnly': nameEditableByAdminOnly,
       'conversationType': conversationType,
       'circleId': circleId,
+      'circleGroupId': circleGroupId,
     };
   }
 
@@ -40,11 +45,13 @@ class ChatGroupSettingsDto {
     bool? nameEditableByAdminOnly,
     String? conversationType,
     String? circleId,
+    String? circleGroupId,
   }) {
     return ChatGroupSettingsDto(
       nameEditableByAdminOnly: nameEditableByAdminOnly ?? this.nameEditableByAdminOnly,
       conversationType: conversationType ?? this.conversationType,
       circleId: circleId ?? this.circleId,
+      circleGroupId: circleGroupId ?? this.circleGroupId,
     );
   }
 }

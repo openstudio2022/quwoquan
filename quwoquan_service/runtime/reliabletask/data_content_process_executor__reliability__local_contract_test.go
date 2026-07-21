@@ -56,6 +56,26 @@ func TestDataContentProcessExecutorRejectsMultipleJSONValues(t *testing.T) {
 	}
 }
 
+func TestDataContentProcessExecutorIncludesOnlyProtocolWorkerDiagnostic(t *testing.T) {
+	_, err := (DataContentProcessExecutor{
+		Command:     []string{os.Args[0], "-test.run=^TestDataContentProcessExecutorHelper$"},
+		Environment: append(os.Environ(), "QWQ_DATA_PROCESS_HELPER=failed"),
+	}).ExecuteDataContentObject(context.Background(), DataContentWorkItem{})
+	if err == nil {
+		t.Fatal("expected worker failure")
+	}
+	message := err.Error()
+	if !strings.Contains(
+		message,
+		"[data-content-worker] ValueError: typed failure",
+	) {
+		t.Fatalf("protocol diagnostic missing from error: %q", message)
+	}
+	if strings.Contains(message, "untrusted diagnostic") {
+		t.Fatalf("untrusted stderr leaked into error: %q", message)
+	}
+}
+
 func TestDataContentProcessExecutorHelper(t *testing.T) {
 	t.Helper()
 }
@@ -93,6 +113,14 @@ func runDataContentProcessExecutorHelper(mode string) int {
 	_, _ = os.Stdout.Write(append(data, '\n'))
 	if mode == "multiple" {
 		_, _ = os.Stdout.Write(append(data, '\n'))
+	}
+	if mode == "failed" {
+		_, _ = fmt.Fprintln(os.Stderr, "untrusted diagnostic")
+		_, _ = fmt.Fprintln(
+			os.Stderr,
+			"[data-content-worker] ValueError: typed failure",
+		)
+		return 7
 	}
 	return 0
 }

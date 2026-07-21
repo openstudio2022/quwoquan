@@ -186,10 +186,10 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
 }) async {
   final runFacet = _RecordingAssistantRunFacet(
     events: <AssistantStreamEventWire>[
-      _event(seq: 1, eventType: 'turn_started'),
+      _event(seq: 1, eventType: 'run_started'),
       _event(
         seq: 2,
-        eventType: 'final_answer',
+        eventType: 'completed',
         payload: const <String, dynamic>{'text': '这是可反馈的 UAT 回答。'},
       ),
     ],
@@ -280,6 +280,12 @@ AssistantStreamEventWire _event({
   required String eventType,
   Map<String, dynamic> payload = const <String, dynamic>{},
 }) {
+  final wirePayload = <String, dynamic>{...payload};
+  if (eventType == 'completed' &&
+      !wirePayload.containsKey('finalAnswer') &&
+      wirePayload['text'] is String) {
+    wirePayload['finalAnswer'] = wirePayload['text'];
+  }
   return AssistantStreamEventWire(
     schema: 'assistant_stream_event',
     eventId: 'evt_uat_$seq',
@@ -287,7 +293,7 @@ AssistantStreamEventWire _event({
     turnId: 'atn_uat_personal',
     seq: seq,
     eventType: eventType,
-    payload: payload,
+    payload: wirePayload,
     createdAt: '2026-07-19T00:00:00Z',
   );
 }
@@ -383,6 +389,8 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
     String turnType = 'user',
     String skillId = '',
     String domainId = '',
+    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
+        const <AssistantIntersectionEvidenceRef>[],
   }) async {
     return AssistantTurnEnvelopeWire(
       turnId: 'atn_uat_personal',

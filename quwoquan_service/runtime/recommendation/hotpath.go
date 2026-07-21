@@ -131,6 +131,7 @@ type BehaviorSignal struct {
 	ClientEventID   string    `json:"clientEventId,omitempty"`
 	State           string    `json:"state,omitempty"`
 	UserID          string    `json:"userId"`
+	PersonaID       string    `json:"personaId,omitempty"`
 	DeviceActorID   string    `json:"deviceActorId,omitempty"`
 	SessionID       string    `json:"sessionId"`
 	FeedSessionID   string    `json:"feedSessionId,omitempty"`

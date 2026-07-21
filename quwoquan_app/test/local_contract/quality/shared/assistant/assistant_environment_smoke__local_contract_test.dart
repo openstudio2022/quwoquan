@@ -189,7 +189,7 @@ Future<void> _sendAndExpect(
     expect(streamState.answer, isNot(contains('根据工具')));
   }
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
-    for (final eventType in const ['turn_started', 'final_answer']) {
+    for (final eventType in const ['run_started', 'completed']) {
       expect(
         streamState.events.any((event) => event.eventType == eventType),
         isTrue,
@@ -201,17 +201,13 @@ Future<void> _sendAndExpect(
     if (isFullSemanticSmoke) {
       final hasSearchEvidence =
           streamState.processSummary.searchCount > 0 ||
-          streamState.events.any(
-            (event) =>
-                event.eventType == 'search_query_generated' ||
-                event.eventType == 'assistant.search_query.generated' ||
-                event.eventType == 'search_query_accepted' ||
-                event.eventType == 'assistant.search_query.accepted' ||
-                event.eventType == 'tool_use_requested' ||
-                event.eventType == 'assistant.tool.requested' ||
-                event.eventType == 'tool_result_received' ||
-                event.eventType == 'assistant.tool.completed',
-          );
+          streamState.events.any((event) {
+            final process = event.payload['process'];
+            return process is Map &&
+                process['stage'] == 'tool_execution' &&
+                (event.eventType == 'process_append' ||
+                    event.eventType == 'process_commit');
+          });
       // 云侧在 geocode miss / 检索无可靠摘要场景会返回 searchedDocumentCount=0，
       // 但仍应保留真实的检索或工具链事件证据。
       expect(hasSearchEvidence, isTrue);
@@ -244,7 +240,7 @@ Future<void> _sendAndExpect(
   }
 }
 
-/// Beta/Gamma：禁止回归模板叙事泄漏，并要求模型交互事件下发（端上 debug 控制台可读）。
+/// Beta/Gamma：禁止回归模板叙事与内部模型过程泄漏。
 void _assertCloudPersonalAssistantNarrativeQuality(
   PersonalAssistantStreamState state,
 ) {
@@ -261,11 +257,25 @@ void _assertCloudPersonalAssistantNarrativeQuality(
   expect(narrative, isNot(contains('该用户')));
   expect(narrative, isNot(contains('nextAction')));
   expect(narrative, isNot(contains('reliable=')));
-  expect(
-    state.events.any((e) => e.eventType == 'assistant.model.interaction'),
-    isTrue,
-    reason: '期望存在 assistant.model.interaction，对应云侧模型请求/响应镜像事件',
-  );
+  for (final event in state.events) {
+    expect(
+      event.eventType,
+      isIn(const <String>[
+        'run_started',
+        'process_replace',
+        'process_append',
+        'process_commit',
+        'answer_delta',
+        'completed',
+        'failed',
+        'cancelled',
+      ]),
+    );
+    expect(event.payload.containsKey('debugTrace'), isFalse);
+    expect(event.payload.containsKey('reasoning'), isFalse);
+    expect(event.payload.containsKey('toolUse'), isFalse);
+    expect(event.payload.containsKey('toolInput'), isFalse);
+  }
 }
 
 Future<void> _tapSend(WidgetTester tester, String question) async {

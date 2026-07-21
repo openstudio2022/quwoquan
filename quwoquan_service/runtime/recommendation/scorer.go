@@ -124,10 +124,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		detail["popularity"] = popularity
 
 		// Freshness: exponential decay, half-life from policy
-		ageHours := now.Sub(c.PublishedAt).Hours()
-		if ageHours < 0 {
-			ageHours = 0
-		}
+		ageHours := candidateAgeHoursAt(c.PublishedAt, now)
 		freshness := math.Exp(-ageHours / halfLife)
 		detail["freshness"] = freshness
 
@@ -535,13 +532,23 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 	return result, nil
 }
 
+// candidateAgeHoursAt 是规则评分、在线模型输入与训练曝光快照共用的发布时间派生。
+// 缺少发布时间必须收敛到稳定的 0 值，不能把 Go 零值时间解释为数十万小时的伪陈旧内容。
+func candidateAgeHoursAt(publishedAt, snapshotAt time.Time) float64 {
+	if publishedAt.IsZero() || snapshotAt.IsZero() {
+		return 0
+	}
+	ageHours := snapshotAt.Sub(publishedAt).Hours()
+	if ageHours < 0 {
+		return 0
+	}
+	return ageHours
+}
+
 // candidateInputAt 是在线模型请求与曝光训练快照共用的候选特征装配真相源。
 // 任何新增/退役候选特征都必须只在此处完成一次，并由两条链路共同消费。
 func candidateInputAt(c ContentCandidate, snapshotAt time.Time) CandidateInput {
-	ageHours := snapshotAt.Sub(c.PublishedAt).Hours()
-	if ageHours < 0 {
-		ageHours = 0
-	}
+	ageHours := candidateAgeHoursAt(c.PublishedAt, snapshotAt)
 	publishHour := -1
 	if !c.PublishedAt.IsZero() {
 		publishHour = c.PublishedAt.UTC().Hour()

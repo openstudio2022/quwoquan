@@ -32,21 +32,39 @@ type ListInboxRequest struct {
 	Cursor string
 }
 
+// InboxPage preserves the keyset cursor emitted by the UserState reader while
+// joining each state with its active Conversation aggregate.
+type InboxPage struct {
+	Items      []InboxItem
+	NextCursor string
+}
+
 // ListInbox returns the user's conversation inbox sorted by pinned first,
 // then by lastMessageTime descending (via ConversationUserState.UpdatedAt).
 func (s *InboxService) ListInbox(ctx context.Context, req ListInboxRequest) ([]InboxItem, error) {
+	page, err := s.ListInboxPage(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+// ListInboxPage is the HTTP-facing typed Slice. It is deliberately separate
+// from ListInbox so existing internal one-shot readers retain their narrow
+// list contract while remote clients receive the actual keyset continuation.
+func (s *InboxService) ListInboxPage(ctx context.Context, req ListInboxRequest) (InboxPage, error) {
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
 	}
 
-	states, err := s.userStates.ListUserStates(ctx, req.UserId, limit, req.Cursor)
+	statePage, err := s.userStates.ListUserStatePage(ctx, req.UserId, limit, req.Cursor)
 	if err != nil {
-		return nil, err
+		return InboxPage{}, err
 	}
 
-	items := make([]InboxItem, 0, len(states))
-	for _, state := range states {
+	items := make([]InboxItem, 0, len(statePage.Items))
+	for _, state := range statePage.Items {
 		conv, err := s.conversations.FindConversationByID(ctx, state.ConversationId)
 		if err != nil {
 			continue
@@ -60,7 +78,10 @@ func (s *InboxService) ListInbox(ctx context.Context, req ListInboxRequest) ([]I
 		})
 	}
 
-	return items, nil
+	return InboxPage{
+		Items:      items,
+		NextCursor: statePage.NextCursor,
+	}, nil
 }
 
 // 未读推进的唯一写入口是 InboxProjector（消费 MessageSent 事件），已读

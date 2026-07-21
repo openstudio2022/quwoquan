@@ -21,22 +21,19 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
               sort: circleState.sortMode.name,
             ),
           );
-      final postMapper = ref.read(contentPostProjectionMapperProvider);
       final entries = page.items
           .map(
-            (projection) => CircleHubFeedPostEntry.fromProjection(
-              projection: projection,
-              post: postMapper.toDto(projection.post),
-            ),
+            (projection) =>
+                CircleHubFeedPostEntry.fromProjection(projection: projection),
           )
           .toList(growable: false);
       var circleCategoryId = circleState.circleData?.category;
       if (circleCategoryId == null || circleCategoryId.trim().isEmpty) {
         try {
           final circleDetail = await ref
-              .read(circleRepositoryProvider)
-              .getCircle(widget.circleId);
-          circleCategoryId = circleDetail.categoryId;
+              .read(circleDetailQueryProvider)
+              .get(CircleDetailQuery(circleId: widget.circleId));
+          circleCategoryId = circleDetail.category;
         } on Object {
           // 推荐标签是增强信息；详情暂不可用时仍应展示强类型作品流。
           circleCategoryId = null;

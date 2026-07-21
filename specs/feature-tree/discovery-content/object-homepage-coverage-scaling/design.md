@@ -22,7 +22,7 @@ coverage matrix/discover/merge     → object-local source catalog + evidence �
 | author stage | composer 成稿（只消费就绪对象） | writing_pack + page.md |
 | ReliableTask fleet | Mongo 持久任务、Redis ready index、lease/retry、typed Python worker | task store + AgentResultEnvelope + fleet report |
 | object transaction | review 后的单对象 canonical 原子写、幂等、回滚 | apply/verify/rollback audit |
-| entity-service importer | homepage_state 灌库 + reload | import report v2 |
+| entity-service importer | `homepages` 权威集合 CAS + receipt + outbox 导入 | import report v2 |
 
 ## 关键设计决策
 

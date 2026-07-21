@@ -43,7 +43,14 @@ func NewInboxProjector(
 	}
 }
 
-func (p *InboxProjector) Drain(ctx context.Context, limit int) (int, error) {
+func (p *InboxProjector) Drain(ctx context.Context, limit int) (processed int, err error) {
+	defer func() {
+		result := "succeeded"
+		if err != nil {
+			result = "failed"
+		}
+		chatInboxProjectionDrainTotal.WithLabelValues(result).Inc()
+	}()
 	if p == nil || p.messageOutbox == nil || p.checkpoints == nil ||
 		p.members == nil || p.userStates == nil {
 		return 0, errors.New("inbox projector is not fully configured")
@@ -61,6 +68,9 @@ func (p *InboxProjector) Drain(ctx context.Context, limit int) (int, error) {
 			return index, fmt.Errorf("message outbox event %s has no checkpoint", event.EventID)
 		}
 		if event.EventType == string(messageevent.MessageSent) {
+			if occurredAt, ok := event.Payload["timestamp"].(time.Time); ok {
+				observeChatInboxProjectionEventLag(occurredAt.UTC())
+			}
 			if err := p.applyMessageSent(ctx, event); err != nil {
 				return index, err
 			}

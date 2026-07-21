@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/shell/flows/pip_call_hangup_flow.dart';
-import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
+import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -56,7 +56,7 @@ void main() {
     CallParticipantCommandWriter? participantWriter,
     CallMediaControlWriter? mediaWriter,
     CallScreenShareWriter? screenShareWriter,
-    LiveKitRoomService? liveKit,
+    RtcRoomService? liveKit,
   }) {
     final container = ProviderContainer(
       overrides: [
@@ -78,8 +78,7 @@ void main() {
           rtcCallScreenShareWriterProvider.overrideWith(
             (ref, surface) => screenShareWriter,
           ),
-        if (liveKit != null)
-          liveKitRoomServiceProvider.overrideWithValue(liveKit),
+        if (liveKit != null) rtcRoomServiceProvider.overrideWithValue(liveKit),
       ],
     );
     addTearDown(container.dispose);
@@ -192,7 +191,7 @@ void main() {
         lifecycle: lifecycle,
         participantWriter: participantWriter,
         query: query,
-        liveKit: _ConnectedLiveKitRoomService(),
+        liveKit: _ConnectedRtcRoomService(),
       );
       final notifier = container.read(callSessionProvider.notifier);
 
@@ -352,7 +351,7 @@ void main() {
     test('控制入口同步调用 LiveKit 与 typed ScreenShare Facet', () async {
       final eventOrder = <String>[];
       final writer = _RecordingScreenShareWriter(events: eventOrder);
-      final liveKit = _ScreenShareLiveKitRoomService(events: eventOrder);
+      final liveKit = _ScreenShareRtcRoomService(events: eventOrder);
       final (container, _) = createHarness(
         screenShareWriter: writer,
         liveKit: liveKit,
@@ -379,7 +378,7 @@ void main() {
     test('LiveKit 发布失败会补偿已成功的聚合共享命令', () async {
       final eventOrder = <String>[];
       final writer = _RecordingScreenShareWriter(events: eventOrder);
-      final liveKit = _ScreenShareLiveKitRoomService(
+      final liveKit = _ScreenShareRtcRoomService(
         events: eventOrder,
         shouldFailStart: true,
       );
@@ -414,7 +413,7 @@ void main() {
         events: events,
         shouldFailMute: true,
       );
-      final liveKit = _MediaControlLiveKitRoomService(events: events);
+      final liveKit = _MediaControlRtcRoomService(events: events);
       final (container, _) = createHarness(
         mediaWriter: mediaWriter,
         liveKit: liveKit,
@@ -435,7 +434,7 @@ void main() {
     test('开启摄像头先提交聚合；本地开启失败会关闭并补偿聚合', () async {
       final events = <String>[];
       final mediaWriter = _RecordingMediaControlWriter(events: events);
-      final liveKit = _MediaControlLiveKitRoomService(events: events);
+      final liveKit = _MediaControlRtcRoomService(events: events);
       final (container, _) = createHarness(
         mediaWriter: mediaWriter,
         liveKit: liveKit,
@@ -598,7 +597,7 @@ void main() {
       final (container, _) = createHarness(
         lifecycle: lifecycle,
         participantWriter: participantWriter,
-        liveKit: _ConnectedLiveKitRoomService(),
+        liveKit: _ConnectedRtcRoomService(),
       );
       final notifier = container.read(callSessionProvider.notifier);
       notifier.seedIncomingCall(
@@ -681,8 +680,9 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
   Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) async {
     return RtcAnswerCallResultDto(
       session: _fixtureSession(callId: command.callId, status: 'connecting'),
-      token: 'fixture-livekit-token',
-      livekitUrl: 'wss://rtc.local.test',
+      mediaAccess: const RtcMediaSessionAccessDto(
+        accessToken: 'fixture-media-access',
+      ),
     );
   }
 
@@ -719,8 +719,9 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
         callType: command.callType,
         conversationId: command.conversationId,
       ),
-      token: 'fixture-livekit-token',
-      livekitUrl: 'wss://rtc.local.test',
+      mediaAccess: const RtcMediaSessionAccessDto(
+        accessToken: 'fixture-media-access',
+      ),
     );
   }
 
@@ -773,11 +774,10 @@ final class _RecordingParticipantWriter
       throw UnimplementedError();
 }
 
-final class _ConnectedLiveKitRoomService extends LiveKitRoomService {
+final class _ConnectedRtcRoomService extends RtcRoomService {
   @override
   Future<void> connect({
-    required String url,
-    required String token,
+    required String accessToken,
     bool enableVideo = false,
     bool enableAudio = true,
   }) async {}
@@ -814,8 +814,8 @@ final class _RecordingMediaControlWriter implements CallMediaControlWriter {
   }
 }
 
-final class _MediaControlLiveKitRoomService extends LiveKitRoomService {
-  _MediaControlLiveKitRoomService({required this.events});
+final class _MediaControlRtcRoomService extends RtcRoomService {
+  _MediaControlRtcRoomService({required this.events});
 
   final List<String> events;
   bool shouldFailMicrophoneEnable = false;
@@ -870,8 +870,8 @@ final class _RecordingScreenShareWriter implements CallScreenShareWriter {
   }
 }
 
-final class _ScreenShareLiveKitRoomService extends LiveKitRoomService {
-  _ScreenShareLiveKitRoomService({this.events, this.shouldFailStart = false});
+final class _ScreenShareRtcRoomService extends RtcRoomService {
+  _ScreenShareRtcRoomService({this.events, this.shouldFailStart = false});
 
   final List<String>? events;
   final bool shouldFailStart;

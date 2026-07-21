@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
-import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -88,13 +86,16 @@ CircleFeedPageSlice _articleCircleFeedFixture(CircleFeedQuery query) {
 Widget _wrap(
   Widget child, {
   double textScaleFactor = 1.0,
-  CircleRepository? repository,
+  CircleQueryReader? circleQuery,
   CircleFeedQueryReader? feedQuery,
   CirclePostPlacementCommandWriter? placementWriter,
 }) => ProviderScope(
   overrides: [
-    circleRepositoryProvider.overrideWithValue(
-      repository ?? MockCircleRepository(),
+    circleDetailQueryProvider.overrideWithValue(
+      circleQuery ?? CircleQueryReaderTestDouble(),
+    ),
+    circlesListQueryProvider.overrideWithValue(
+      circleQuery ?? CircleQueryReaderTestDouble(),
     ),
     circleDetailFeedQueryProvider.overrideWithValue(
       feedQuery ?? CircleFeedQueryTestDouble(_defaultCircleFeedFixture),
@@ -234,9 +235,7 @@ void main() {
       expect(placementWriter.lastPin?.enabled, isTrue);
       expect(
         find.byKey(
-          const ValueKey<String>(
-            'circle-post-presentation-fixture_photo_1-置顶',
-          ),
+          const ValueKey<String>('circle-post-presentation-fixture_photo_1-置顶'),
         ),
         findsOneWidget,
       );
@@ -300,7 +299,7 @@ void main() {
     });
 
     testWidgets('owner 模式可切换列表视图', (tester) async {
-      final repository = _ArticleFixtureCircleRepository();
+      final circleQuery = _ArticleFixtureCircleQuery();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
@@ -311,7 +310,7 @@ void main() {
               role: CircleRole.owner,
             ),
           ),
-          repository: repository,
+          circleQuery: circleQuery,
           feedQuery: CircleFeedQueryTestDouble(_articleCircleFeedFixture),
         ),
       );
@@ -362,7 +361,7 @@ void main() {
     });
 
     testWidgets('笔记双列区分封面卡与文字卡并展示频道推荐', (tester) async {
-      final repository = _ArticleFixtureCircleRepository();
+      final circleQuery = _ArticleFixtureCircleQuery();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
@@ -373,7 +372,7 @@ void main() {
               role: CircleRole.owner,
             ),
           ),
-          repository: repository,
+          circleQuery: circleQuery,
           feedQuery: CircleFeedQueryTestDouble(_articleCircleFeedFixture),
         ),
       );
@@ -567,19 +566,17 @@ final class _CircleFileFixture
       throw UnimplementedError();
 }
 
-class _ArticleFixtureCircleRepository extends MockCircleRepository {
+class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleDetailPayload> getCircle(String circleId) async {
-    return CircleDetailPayload.fromWire(<String, dynamic>{
-      'id': circleId,
-      'name': '契约摄影社',
-      'ownerId': 'fixture_user_owner',
-      'category': 'photography',
-      'visibility': 'public',
-      'joinPolicy': 'approval',
-      'createdAt': '2026-05-06T00:00:00Z',
-      'updatedAt': '2026-05-06T00:00:00Z',
-      'sectionConfig': const <Map<String, dynamic>>[],
-    });
-  }
+  Future<CircleProjection> get(CircleDetailQuery query) async =>
+      CircleProjection(
+        circleId: query.circleId,
+        name: '契约摄影社',
+        ownerId: 'fixture_user_owner',
+        category: 'photography',
+        visibility: 'public',
+        joinPolicy: 'approval',
+        createdAt: DateTime.utc(2026, 5, 6),
+        updatedAt: DateTime.utc(2026, 5, 6),
+      );
 }

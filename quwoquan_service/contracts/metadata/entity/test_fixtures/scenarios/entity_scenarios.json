@@ -74,6 +74,16 @@
           "verified": true,
           "establishedYear": 1982,
           "followerCount": 1286,
+          "averageRating": 4.7,
+          "ratingCount": 328,
+          "reviewSummary": {
+            "averageRating": 4.7,
+            "ratingCount": 328,
+            "highlightTags": [
+              "湖景",
+              "适合散步"
+            ]
+          },
           "contentPreview": [
             {
               "postId": "west_lake_record_1",
@@ -256,7 +266,26 @@
               "ownerAvatarUrlSnapshot": "",
               "evidenceSnapshotId": "circle:fixture_circle_photo:members:v1"
             }
-          ]
+          ],
+          "impactSummary": {
+            "total": 1,
+            "items": [
+              {
+                "helpType": "interest",
+                "action": "open",
+                "intersectionDimension": "interest",
+                "tagRef": "Entity/地点/景区/西湖景区",
+                "source": "entity fixture",
+                "count": 9,
+                "primaryText": "这里打动的人",
+                "subtitleText": "9 位同趣用户关注西湖景区",
+                "impactId": "impact:homepage_sight_west_lake:interest",
+                "evidenceSnapshotId": "impact:homepage_sight_west_lake:v1",
+                "countObjectKind": "user",
+                "iconKey": "sparkles"
+              }
+            ]
+          }
         },
         {
           "homepageId": "fixture_homepage_university_pku",
@@ -685,6 +714,25 @@
               "linkedHomepageTitle": "新东方"
             }
           ],
+          "impactSummary": {
+            "total": 1,
+            "items": [
+              {
+                "helpType": "identity",
+                "action": "open",
+                "intersectionDimension": "identity",
+                "tagRef": "Entity/教育/新东方",
+                "source": "entity fixture",
+                "count": 3,
+                "primaryText": "这里打动的人",
+                "subtitleText": "3 位校友与新东方有共同经历",
+                "impactId": "impact:fixture_homepage_school_neworiental:identity",
+                "evidenceSnapshotId": "impact:fixture_homepage_school_neworiental:v1",
+                "countObjectKind": "user",
+                "iconKey": "sparkles"
+              }
+            ]
+          },
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-06-30T00:00:00Z",
           "publishedAt": "2026-06-30T00:00:00Z"

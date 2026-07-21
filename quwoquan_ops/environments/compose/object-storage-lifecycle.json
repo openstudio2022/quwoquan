@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-content-temporary-uploads-after-24h",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "uploads/"
+      },
+      "Expiration": {
+        "Days": 1
+      }
+    }
+  ]
+}

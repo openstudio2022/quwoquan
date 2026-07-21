@@ -19,16 +19,17 @@ FEATURE_TREE = ROOT / "specs" / "feature-tree"
 ALLOWED_LAYERS = {"local_contract", "api_integration", "user_acceptance"}
 ALLOWED_ENVS = {"local", "alpha", "beta", "gamma", "prod", "gamma_local"}
 ALLOWED_ENVS_BY_LAYER = {
-    "local_contract": {"local", "alpha"},
-    "api_integration": {"beta", "gamma", "prod"},
-    "user_acceptance": {"gamma_local", "prod"},
+    # 外部 Provider 的 3×3 矩阵允许 local_contract 加载对应环境 Binding 下的
+    # production Adapter 类，但 baseline runner 仍禁止 endpoint/Secret 和网络访问。
+    "local_contract": {"local", "alpha", "beta", "gamma"},
+    "api_integration": {"alpha", "beta", "gamma", "prod"},
+    "user_acceptance": {"alpha", "beta", "gamma_local", "prod"},
 }
 ALLOWED_ROLLOUT_STAGES = {"gray_initial", "carry_on", "full"}
 ALLOWED_EXECUTION_PROFILES = {"baseline", "smoke", "integration", "release"}
 ALLOWED_ENVS_BY_PROFILE = {
-    # `envs: alpha` may describe an alpha configuration fixture while the
-    # local-contract runner itself remains environment-free.
-    "baseline": {"local", "alpha"},
+    # baseline 中的 env 只描述被验证的 Binding profile；runner 本身不跨网络。
+    "baseline": {"local", "alpha", "beta", "gamma"},
     "smoke": {"alpha"},
     "integration": {"beta", "gamma"},
     "release": {"gamma", "gamma_local", "prod"},

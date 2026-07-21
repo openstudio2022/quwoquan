@@ -17,6 +17,14 @@ import (
 	"quwoquan_service/runtime/recpolicy"
 )
 
+func testImpressionTrainingSnapshot() *trainingFeatureSnapshot {
+	return &trainingFeatureSnapshot{
+		userFeatures: map[string]any{"totalEvents": 1},
+		itemFeatures: map[string]any{"contentType": "article"},
+		capturedAt:   time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC),
+	}
+}
+
 func TestRuleScorerUsesUnifiedFeatureSnapshotTime(t *testing.T) {
 	policy := recpolicy.Baseline()
 	snapshotAt := time.Date(2026, 7, 20, 16, 45, 0, 0, time.UTC)
@@ -80,8 +88,21 @@ func TestGetFeed_DeferDeliveryAccountingSkipsServedWrite(t *testing.T) {
 		t.Fatalf("defer mode must not record served: first=%d second=%d", len(resp.Items), len(second.Items))
 	}
 
-	// RecordDelivery 按最终下发集记账：只记 c1（模拟装配层丢弃 c2）。
-	engine.RecordDelivery(ctx, "u_defer", "s1", resp.Attribution, []FeedItem{{ContentID: "c1"}})
+	// RecordDelivery 按最终下发集记账：只记第一项（模拟装配层丢弃另一项）。
+	deliveredID := resp.Items[0].ContentID
+	undeliveredID := "c1"
+	if deliveredID == "c1" {
+		undeliveredID = "c2"
+	}
+	if err := engine.RecordDelivery(
+		ctx,
+		"u_defer",
+		"s1",
+		resp.Attribution,
+		resp.Items[:1],
+	); err != nil {
+		t.Fatalf("record final delivery: %v", err)
+	}
 	// RecordDelivery 的曝光写是异步（500ms 超时 goroutine），等待其落库。
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -93,8 +114,8 @@ func TestGetFeed_DeferDeliveryAccountingSkipsServedWrite(t *testing.T) {
 		for _, c := range filtered {
 			got[c.ContentID] = true
 		}
-		if !got["c1"] && got["c2"] {
-			break // c1 被 served 过滤、c2 存活——最终下发集口径生效
+		if !got[deliveredID] && got[undeliveredID] {
+			break // 最终下发项被 served 过滤、未下发项仍可见。
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("served accounting by final delivery set not observed: %+v", filtered)
@@ -115,7 +136,7 @@ func TestRemoteModelScorer_CarriesOnlineTimeFeaturesAndReleaseIdentity(t *testin
 		FeatureSnapshotAt: scoredAt,
 	}, []ContentCandidate{
 		{ContentID: "c1", PublishedAt: publishedAt},
-		{ContentID: "c2"}, // PublishedAt 零值 → publishHour = -1（缺失语义）
+		{ContentID: "c2"}, // 发布时间缺失有明确的 publishHour/ageHours 缺失语义。
 	})
 	if err != nil {
 		t.Fatalf("score: %v", err)
@@ -129,6 +150,9 @@ func TestRemoteModelScorer_CarriesOnlineTimeFeaturesAndReleaseIdentity(t *testin
 	if got := captured.Candidates[1].PublishHour; got != -1 {
 		t.Fatalf("missing publishedAt must map to publishHour -1, got %d", got)
 	}
+	if got := captured.Candidates[1].AgeHours; got != 0 {
+		t.Fatalf("missing publishedAt must map to ageHours 0, got %v", got)
+	}
 	if got := captured.Context["requestHour"]; got != 16 {
 		t.Fatalf("requestHour must use feature snapshot UTC hour, got %v", got)
 	}
@@ -137,6 +161,18 @@ func TestRemoteModelScorer_CarriesOnlineTimeFeaturesAndReleaseIdentity(t *testin
 	}
 	if len(scored) != 2 || scored[0].ModelReleaseID != "model_release_test_001" {
 		t.Fatalf("model release identity must survive scoring response: %+v", scored)
+	}
+}
+
+func TestRuleScorerTreatsMissingPublishedAtAsNeutralFreshness(t *testing.T) {
+	scored, err := (&RuleScorer{}).ScoreBatch(context.Background(), &ScoringFeatures{
+		FeatureSnapshotAt: time.Date(2026, 7, 20, 16, 45, 0, 0, time.UTC),
+	}, []ContentCandidate{{ContentID: "missing_published_at"}})
+	if err != nil {
+		t.Fatalf("rule score: %v", err)
+	}
+	if len(scored) != 1 || scored[0].Detail["freshness"] != 1 {
+		t.Fatalf("missing publishedAt freshness=%v, want 1", scored)
 	}
 }
 
@@ -219,8 +255,9 @@ func TestRecordDeliveryPersistsOnlineFeatureSnapshot(t *testing.T) {
 	)
 
 	response, err := engine.GetFeed(context.Background(), GetFeedRequest{
-		UserID: "snapshot_user", SessionID: "snapshot_session", Limit: 1,
-		DeferDeliveryAccounting: true,
+		UserID: "snapshot_user", PersonaID: "snapshot_persona",
+		SessionID: "snapshot_session", Limit: 1,
+		FeedRequestID: "snapshot_request", DeferDeliveryAccounting: true,
 	})
 	if err != nil || len(response.Items) != 1 {
 		t.Fatalf("GetFeed snapshot setup: response=%+v err=%v", response, err)
@@ -229,16 +266,33 @@ func TestRecordDeliveryPersistsOnlineFeatureSnapshot(t *testing.T) {
 	// 快照必须在 GetFeed 在线评分时冻结；之后修改源对象不得污染训练事实。
 	userFeatures.TotalLikes = 999
 	source.candidates[0].ViewCount = 999
-	engine.RecordDelivery(
+	if err := engine.RecordDelivery(
 		context.Background(),
 		"snapshot_user",
 		"snapshot_session",
 		response.Attribution,
 		response.Items,
-	)
+	); err != nil {
+		t.Fatalf("record snapshot delivery: %v", err)
+	}
 
 	select {
 	case event := <-recorder.events:
+		if event.UserID != "snapshot_user" {
+			t.Fatalf("impression actor=%q, want the recommendation actor", event.UserID)
+		}
+		if event.PersonaID != "snapshot_persona" {
+			t.Fatalf("impression persona=%q, want snapshot_persona", event.PersonaID)
+		}
+		if got := event.Labels["contentType"]; got != "article" {
+			t.Fatalf("impression target type=%q, want article", got)
+		}
+		if got := event.Context["feedRequestId"]; got != "snapshot_request" {
+			t.Fatalf("impression request correlation=%v, want snapshot_request", got)
+		}
+		if got := event.Context["rank"]; got != 1 {
+			t.Fatalf("impression server rank=%v, want 1", got)
+		}
 		userSnapshot, ok := event.Context["userFeatureSnapshot"].(map[string]any)
 		if !ok {
 			t.Fatalf("missing userFeatureSnapshot: %+v", event.Context)
@@ -287,10 +341,102 @@ func TestFeedbackRecorderDoesNotSwallowImpressionWriteFailure(t *testing.T) {
 		"user-1",
 		"session-1",
 		ImpressionAttribution{FeedRequestID: "request-1"},
-		[]FeedItem{{ContentID: "content-1"}},
+		[]FeedItem{{ContentID: "content-1", trainingFeatures: testImpressionTrainingSnapshot()}},
 	)
 	if err == nil {
 		t.Fatal("learning sink failure must remain observable")
+	}
+}
+
+func TestEngineRecordDeliveryPropagatesImpressionBufferFailure(t *testing.T) {
+	engine := &Engine{feedback: NewFeedbackRecorder(failingLearningRecorder{})}
+	err := engine.RecordDelivery(
+		context.Background(),
+		"delivery-user",
+		"delivery-session",
+		DeliveryAttribution{FeedRequestID: "delivery-request"},
+		[]FeedItem{{
+			ContentID:        "delivery-content",
+			trainingFeatures: testImpressionTrainingSnapshot(),
+		}},
+	)
+	if err == nil {
+		t.Fatal("final delivery must fail when its learning fact cannot enter the buffer")
+	}
+}
+
+func TestFeedbackRecorderRejectsMissingOnlineFeatureSnapshot(t *testing.T) {
+	events := &snapshotLearningRecorder{events: make(chan runtimelearning.Event, 1)}
+	recorder := NewFeedbackRecorder(events)
+	err := recorder.RecordImpression(
+		context.Background(),
+		"snapshot-user",
+		"snapshot-session",
+		ImpressionAttribution{FeedRequestID: "snapshot-request"},
+		[]FeedItem{{ContentID: "missing-snapshot"}},
+	)
+	if err == nil {
+		t.Fatal("impression without an immutable online feature snapshot must fail closed")
+	}
+	select {
+	case event := <-events.events:
+		t.Fatalf("missing snapshot must not emit partial learning fact: %+v", event)
+	default:
+	}
+}
+
+func TestFeedbackRecorderRejectsLearningFactsWithoutFeedRequestID(t *testing.T) {
+	events := &snapshotLearningRecorder{events: make(chan runtimelearning.Event, 2)}
+	recorder := NewFeedbackRecorder(events)
+
+	err := recorder.RecordImpression(
+		context.Background(),
+		"unattributed-user",
+		"unattributed-session",
+		ImpressionAttribution{},
+		[]FeedItem{{
+			ContentID:        "unattributed-content",
+			trainingFeatures: testImpressionTrainingSnapshot(),
+		}},
+	)
+	if err == nil {
+		t.Fatal("impression without feedRequestId must fail closed")
+	}
+	err = recorder.RecordEngagement(context.Background(), BehaviorSignal{
+		UserID: "unattributed-user", SessionID: "unattributed-session",
+		ContentID: "unattributed-content", Action: "like",
+	}, 0)
+	if err == nil {
+		t.Fatal("engagement without feedRequestId must fail closed")
+	}
+	select {
+	case event := <-events.events:
+		t.Fatalf("unattributed learning fact must not be emitted: %+v", event)
+	default:
+	}
+}
+
+func TestFeedbackRecorderPreservesVerifiedPersona(t *testing.T) {
+	events := &snapshotLearningRecorder{events: make(chan runtimelearning.Event, 1)}
+	recorder := NewFeedbackRecorder(events)
+	if err := recorder.RecordEngagement(context.Background(), BehaviorSignal{
+		UserID:        "recommendation_actor",
+		PersonaID:     "verified_persona",
+		SessionID:     "feedback_session",
+		FeedRequestID: "feedback_request",
+		ContentID:     "feedback_content",
+		ContentType:   "article",
+		Action:        "click",
+	}, 0.5); err != nil {
+		t.Fatalf("record engagement: %v", err)
+	}
+	select {
+	case event := <-events.events:
+		if event.UserID != "recommendation_actor" || event.PersonaID != "verified_persona" {
+			t.Fatalf("feedback identity drifted: %+v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for feedback fact")
 	}
 }
 
@@ -329,13 +475,15 @@ func TestEngine_ModelReleaseIdentityReachesImpressionFact(t *testing.T) {
 	if response.Attribution.ModelReleaseID != "model_release_20260720" {
 		t.Fatalf("delivery attribution lost model release: %+v", response.Attribution)
 	}
-	engine.RecordDelivery(
+	if err := engine.RecordDelivery(
 		context.Background(),
 		"release_user",
 		"release_session",
 		response.Attribution,
 		response.Items,
-	)
+	); err != nil {
+		t.Fatalf("record release-attributed delivery: %v", err)
+	}
 
 	select {
 	case event := <-recorder.events:

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 )
@@ -42,7 +43,9 @@ func TestContentPostConsumerProjectsTypedStreamFactAndAcks(t *testing.T) {
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()
 	spy := &postProjectionSpy{}
-	consumer := NewContentPostConsumer(client, spy, spy, "test", nil)
+	consumer := NewContentPostConsumer(
+		newCircleTestMessageTransport(t, client), spy, spy, "test", nil,
+	).WithDiscoveryFeedCache(client)
 	consumer.minIdle = 0
 	if _, err := client.XAdd(ctx, ContentPostLifecycleStream, postLifecycleValues("evt-1", 2)); err != nil {
 		t.Fatal(err)
@@ -54,6 +57,9 @@ func TestContentPostConsumerProjectsTypedStreamFactAndAcks(t *testing.T) {
 		spy.events[0].OwnerPersonaID != "persona-1" || spy.events[0].PostVersion != 2 {
 		t.Fatalf("typed event drift: %#v", spy.events)
 	}
+	if generation, err := client.Get(ctx, "cache:circle-discovery:generation"); err != nil || generation != "1" {
+		t.Fatalf("post projection must invalidate discovery feed cache generation=%q err=%v", generation, err)
+	}
 	claimed, _, err := client.XAutoClaim(ctx, ContentPostLifecycleStream, contentPostConsumerGroup, "other", 0, "0-0", 10)
 	if err != nil || len(claimed) != 0 {
 		t.Fatalf("acked message remained pending: claimed=%d err=%v", len(claimed), err)
@@ -64,7 +70,7 @@ func TestContentPostConsumerReclaimsAndDeadLettersAfterBoundedRetries(t *testing
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()
 	spy := &postProjectionSpy{fail: true}
-	consumer := NewContentPostConsumer(client, spy, spy, "test", nil)
+	consumer := NewContentPostConsumer(newCircleTestMessageTransport(t, client), spy, spy, "test", nil)
 	consumer.minIdle = 0
 	if _, err := client.XAdd(ctx, ContentPostLifecycleStream, postLifecycleValues("evt-fail", 1)); err != nil {
 		t.Fatal(err)
@@ -94,4 +100,21 @@ func postLifecycleValues(eventID string, version int64) map[string]string {
 		"payload":    "{\"_id\":\"post-1\",\"authorId\":\"persona-1\",\"status\":\"published\"}",
 		"occurredAt": time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC).Format(time.RFC3339Nano),
 	}
+}
+
+func newCircleTestMessageTransport(
+	t *testing.T,
+	client rtredis.Client,
+) *runtimemessaging.RedisMessageTransport {
+	t.Helper()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"circle-service-test",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("new circle test message transport: %v", err)
+	}
+	return transport
 }

@@ -285,9 +285,9 @@
       "canonicalOperationId": "assistant.assistant_preference_fact.ListAssistantPreferences",
       "clientContract": null,
       "commercial": {
-        "blockReason": "新对象 packet 尚待实现、三层测试与四环境证据闭环",
+        "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
         "explicit": true,
-        "gapId": "ASSISTANT_PREFERENCE_FACT_WIRING",
+        "gapId": "ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE",
         "status": "blocked",
         "targetStory": "session-preference-memory-control"
       },
@@ -334,6 +334,7 @@
       },
       "sourcePath": "assistant/assistant_preference_fact/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -356,9 +357,9 @@
       "canonicalOperationId": "assistant.assistant_preference_fact.RestoreAssistantPreference",
       "clientContract": null,
       "commercial": {
-        "blockReason": "新对象 packet 尚待实现、三层测试与四环境证据闭环",
+        "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
         "explicit": true,
-        "gapId": "ASSISTANT_PREFERENCE_FACT_WIRING",
+        "gapId": "ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE",
         "status": "blocked",
         "targetStory": "session-preference-memory-control"
       },
@@ -406,6 +407,7 @@
       },
       "sourcePath": "assistant/assistant_preference_fact/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -426,9 +428,9 @@
       "canonicalOperationId": "assistant.assistant_preference_fact.RevokeAssistantPreference",
       "clientContract": null,
       "commercial": {
-        "blockReason": "新对象 packet 尚待实现、三层测试与四环境证据闭环",
+        "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
         "explicit": true,
-        "gapId": "ASSISTANT_PREFERENCE_FACT_WIRING",
+        "gapId": "ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE",
         "status": "blocked",
         "targetStory": "session-preference-memory-control"
       },
@@ -475,6 +477,7 @@
       },
       "sourcePath": "assistant/assistant_preference_fact/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -495,9 +498,9 @@
       "canonicalOperationId": "assistant.assistant_preference_fact.SetAssistantPreference",
       "clientContract": null,
       "commercial": {
-        "blockReason": "新对象 packet 尚待实现、三层测试与四环境证据闭环",
+        "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
         "explicit": true,
-        "gapId": "ASSISTANT_PREFERENCE_FACT_WIRING",
+        "gapId": "ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE",
         "status": "blocked",
         "targetStory": "session-preference-memory-control"
       },
@@ -505,6 +508,7 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_invalid_argument",
+        "ASSISTANT.USER.preference_not_found",
         "ASSISTANT.USER.unauthorized",
         "ASSISTANT.SYSTEM.preference_storage_unavailable"
       ],
@@ -544,6 +548,7 @@
       },
       "sourcePath": "assistant/assistant_preference_fact/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -1257,7 +1262,9 @@
         "ASSISTANT.USER.conversation_not_found",
         "ASSISTANT.USER.run_idempotency_conflict",
         "ASSISTANT.USER.skill_consent_required",
+        "ASSISTANT.USER.intersection_evidence_not_found",
         "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
       "facadeMethod": "startRun",
@@ -1506,6 +1513,7 @@
       },
       "sourcePath": "assistant/skill_consent/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -1575,6 +1583,7 @@
       },
       "sourcePath": "assistant/skill_consent/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -1644,6 +1653,7 @@
       },
       "sourcePath": "assistant/skill_consent/service.yaml",
       "surfaceIds": [
+        "assistantManagement",
         "assistantSettings",
         "personalAssistantDialog"
       ],
@@ -1940,7 +1950,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.BatchGetConversations",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatBatchGetConversationsQuery",
+        "requestType": "ChatBatchGetConversationsQuery",
+        "responseDecoder": "decodeChatConversationBatchSlice",
+        "responseType": "ChatConversationBatchSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -1977,8 +1993,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "page",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2003,7 +2019,13 @@
       "aggregateOwner": "Conversation",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.CreateConversation",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatCreateConversationCommand",
+        "requestType": "ChatCreateConversationCommand",
+        "responseDecoder": "decodeChatConversation",
+        "responseType": "ChatConversation"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2012,6 +2034,8 @@
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
+        "CHAT.USER.invalid_argument",
+        "CHAT.USER.circle_group_binding_write_forbidden",
         "CHAT.USER.not_mutual",
         "CHAT.USER.greeting_required",
         "CHAT.USER.blocked",
@@ -2046,8 +2070,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "Conversation",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "object",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -2072,7 +2096,13 @@
       "aggregateOwner": "Conversation",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.DissolveConversation",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatDissolveConversationCommand",
+        "requestType": "ChatDissolveConversationCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2083,6 +2113,7 @@
         "CHAT.USER.unauthorized",
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "dissolveConversation",
@@ -2112,7 +2143,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -2137,7 +2168,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.GetConversation",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatGetConversationQuery",
+        "requestType": "ChatGetConversationQuery",
+        "responseDecoder": "decodeChatConversation",
+        "responseType": "ChatConversation"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2175,8 +2212,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "object",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2206,7 +2243,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.GetGroupHome",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatGetGroupHomeQuery",
+        "requestType": "ChatGetGroupHomeQuery",
+        "responseDecoder": "decodeChatGroupHome",
+        "responseType": "ChatGroupHome"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2244,8 +2287,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "GroupHome",
+      "responseBodyKind": "object",
       "responseEntity": "GroupHome",
       "scopes": [],
       "slo": {
@@ -2270,7 +2313,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.GetReceipts",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatGetMessageReceiptsQuery",
+        "requestType": "ChatGetMessageReceiptsQuery",
+        "responseDecoder": "decodeChatMessageReceiptPageSlice",
+        "responseType": "ChatMessageReceiptPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2309,8 +2358,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatMessageReceipt",
+      "responseBodyKind": "page",
       "responseEntity": "MessageReceipt",
       "scopes": [],
       "slo": {
@@ -2335,7 +2384,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListContactHome",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListContactHomeQuery",
+        "requestType": "ChatListContactHomeQuery",
+        "responseDecoder": "decodeChatContactHomePageSlice",
+        "responseType": "ChatContactHomePageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2372,8 +2427,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ContactHomeRow",
+      "responseBodyKind": "page",
       "responseEntity": "ContactHomeRow",
       "scopes": [],
       "slo": {
@@ -2398,7 +2453,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListContacts",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListContactsQuery",
+        "requestType": "ChatListContactsQuery",
+        "responseDecoder": "decodeChatContactPageSlice",
+        "responseType": "ChatContactPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2435,8 +2496,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatContactListRow",
+      "responseBodyKind": "page",
       "responseEntity": "ChatContactListRow",
       "scopes": [],
       "slo": {
@@ -2462,7 +2523,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListConversationTimestamps",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatListConversationTimestampsQuery",
+        "requestType": "ChatListConversationTimestampsQuery",
+        "responseDecoder": "decodeChatConversationTimestampPageSlice",
+        "responseType": "ChatConversationTimestampPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2499,8 +2566,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversationTimestamp",
+      "responseBodyKind": "page",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2525,7 +2592,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListConversations",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatListConversationsQuery",
+        "requestType": "ChatListConversationsQuery",
+        "responseDecoder": "decodeChatConversationPageSlice",
+        "responseType": "ChatConversationPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2534,6 +2607,7 @@
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
+        "CHAT.USER.invalid_argument",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "listConversations",
@@ -2562,8 +2636,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "page",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2589,7 +2663,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListGroupCandidates",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListGroupCandidatesQuery",
+        "requestType": "ChatListGroupCandidatesQuery",
+        "responseDecoder": "decodeChatGroupCandidatePageSlice",
+        "responseType": "ChatContactPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2626,8 +2706,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatContactListRow",
+      "responseBodyKind": "page",
       "responseEntity": "ChatContactListRow",
       "scopes": [],
       "slo": {
@@ -2652,7 +2732,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListInbox",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListInboxQuery",
+        "requestType": "ChatListInboxQuery",
+        "responseDecoder": "decodeChatInboxPageSlice",
+        "responseType": "ChatInboxPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2689,8 +2775,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatInbox",
+      "responseBodyKind": "page",
       "responseEntity": "ChatInbox",
       "scopes": [],
       "slo": {
@@ -2713,8 +2799,83 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
+      "canonicalOperationId": "chat.conversation.ListMessageHome",
+      "clientContract": {
+        "dartImport": "../chat/message_home_contracts.dart",
+        "requestEncoder": "encodeChatListMessageHomeQuery",
+        "requestType": "ChatListMessageHomeQuery",
+        "responseDecoder": "decodeChatMessageHomePageSlice",
+        "responseType": "ChatMessageHomePageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "chat",
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "listMessageHome",
+      "facet": "MessageHomeQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListMessageHome",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "chat.conversation",
+      "ownershipPolicy": "active_persona_inbox",
+      "pathTemplate": "/chat/message-home",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "MessageHomeRow",
+      "responseBodyKind": "page",
+      "responseEntity": "MessageHomeRow",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "messages/conversation/service.yaml",
+      "surfaceIds": [
+        "chatList"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome"
+        ],
+        "metric": "chat_conversation_query",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListSelectableGroupContactMembers",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListSelectableGroupContactMembersQuery",
+        "requestType": "ChatListSelectableGroupContactMembersQuery",
+        "responseDecoder": "decodeChatSelectableGroupContactMemberPageSlice",
+        "responseType": "ChatContactPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2752,8 +2913,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatContactListRow",
+      "responseBodyKind": "page",
       "responseEntity": "ChatContactListRow",
       "scopes": [],
       "slo": {
@@ -2778,7 +2939,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.ListSelectableGroupConversations",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/contact_contracts.dart",
+        "requestEncoder": "encodeChatListSelectableGroupConversationsQuery",
+        "requestType": "ChatListSelectableGroupConversationsQuery",
+        "responseDecoder": "decodeChatSelectableGroupConversationPageSlice",
+        "responseType": "ChatSelectableGroupConversationPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2787,6 +2954,7 @@
       "domain": "chat",
       "errorCodes": [
         "CHAT.USER.unauthorized",
+        "CHAT.USER.invalid_argument",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "listSelectableGroupConversations",
@@ -2815,8 +2983,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "SelectableGroupConversationRow",
+      "responseBodyKind": "page",
       "responseEntity": "SelectableGroupConversationRow",
       "scopes": [],
       "slo": {
@@ -2841,7 +3009,13 @@
       "aggregateOwner": "Conversation",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation.UpdateAnnouncement",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatUpdateAnnouncementCommand",
+        "requestType": "ChatUpdateAnnouncementCommand",
+        "responseDecoder": "decodeChatConversation",
+        "responseType": "ChatConversation"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2852,6 +3026,7 @@
         "CHAT.USER.unauthorized",
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.USER.conversation_dissolved",
         "CHAT.USER.message_too_long",
         "CHAT.SYSTEM.internal_error"
@@ -2882,8 +3057,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "object",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2908,8 +3083,14 @@
       "actorRequirement": "persona",
       "aggregateOwner": "Conversation",
       "authMode": "required",
-      "canonicalOperationId": "chat.conversation.UpdateGroupGovernanceSettings",
-      "clientContract": null,
+      "canonicalOperationId": "chat.conversation.UpdateConversationTitle",
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatUpdateConversationTitleCommand",
+        "requestType": "ChatUpdateConversationTitleCommand",
+        "responseDecoder": "decodeChatConversation",
+        "responseType": "ChatConversation"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2920,6 +3101,80 @@
         "CHAT.USER.unauthorized",
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
+        "CHAT.USER.conversation_dissolved",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "updateConversationTitle",
+      "facet": "ConversationLifecycleCommandFacet",
+      "invariantTarget": "Conversation",
+      "kind": "command",
+      "localOperationId": "UpdateConversationTitle",
+      "method": "PATCH",
+      "mutationTarget": "Conversation",
+      "objectId": "chat.conversation",
+      "ownershipPolicy": "conversation_member",
+      "pathTemplate": "/chat/conversations/{conversationId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 3000
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "object",
+      "responseEntity": "Conversation",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "messages/conversation/service.yaml",
+      "surfaceIds": [
+        "chatSettings"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome"
+        ],
+        "metric": "chat_conversation_command",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "Conversation",
+      "authMode": "required",
+      "canonicalOperationId": "chat.conversation.UpdateGroupGovernanceSettings",
+      "clientContract": {
+        "dartImport": "../chat/conversation_contracts.dart",
+        "requestEncoder": "encodeChatUpdateGroupGovernanceSettingsCommand",
+        "requestType": "ChatUpdateGroupGovernanceSettingsCommand",
+        "responseDecoder": "decodeChatConversation",
+        "responseType": "ChatConversation"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "chat",
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.USER.conversation_not_found",
+        "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.USER.conversation_dissolved",
         "CHAT.SYSTEM.internal_error"
       ],
@@ -2949,8 +3204,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatConversation",
+      "responseBodyKind": "object",
       "responseEntity": "Conversation",
       "scopes": [],
       "slo": {
@@ -2975,7 +3230,13 @@
       "aggregateOwner": "ConversationMembership",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.AddMembers",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatAddConversationMembersCommand",
+        "requestType": "ChatAddConversationMembersCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -2987,6 +3248,7 @@
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.conversation_dissolved",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.USER.group_member_not_mutual",
         "CHAT.USER.group_member_blocked",
         "CHAT.USER.group_full",
@@ -3019,7 +3281,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3043,8 +3305,85 @@
       "actorRequirement": "persona",
       "aggregateOwner": "ConversationMembership",
       "authMode": "required",
+      "canonicalOperationId": "chat.conversation_membership.InviteAssistant",
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatInviteConversationAssistantCommand",
+        "requestType": "ChatInviteConversationAssistantCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "chat",
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.USER.conversation_not_found",
+        "CHAT.USER.circle_group_managed_by_circle",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "inviteAssistant",
+      "facet": "ConversationAssistantCommandFacet",
+      "invariantTarget": "ConversationMembership",
+      "kind": "command",
+      "localOperationId": "InviteAssistant",
+      "method": "POST",
+      "mutationTarget": "ConversationMembership",
+      "objectId": "chat.conversation_membership",
+      "ownershipPolicy": "conversation_member",
+      "pathTemplate": "/chat/conversations/{conversationId}/assistant",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 3000
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "ack",
+      "responseEntity": "",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "messages/conversation_membership/service.yaml",
+      "surfaceIds": [
+        "chatDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome"
+        ],
+        "metric": "chat_membership_command",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "ConversationMembership",
+      "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.LeaveConversation",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatLeaveConversationCommand",
+        "requestType": "ChatLeaveConversationCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3056,6 +3395,7 @@
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.conversation_dissolved",
         "CHAT.USER.group_owner_must_transfer_before_leave",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "leaveConversation",
@@ -3085,7 +3425,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3110,7 +3450,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.ListMembers",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatListConversationMembersQuery",
+        "requestType": "ChatListConversationMembersQuery",
+        "responseDecoder": "decodeChatConversationMemberPageSlice",
+        "responseType": "ChatConversationMemberPageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3148,8 +3494,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ConversationMemberListRow",
+      "responseBodyKind": "page",
       "responseEntity": "ConversationMember",
       "scopes": [],
       "slo": {
@@ -3179,8 +3525,85 @@
       "actorRequirement": "persona",
       "aggregateOwner": "ConversationMembership",
       "authMode": "required",
+      "canonicalOperationId": "chat.conversation_membership.RemoveAssistant",
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatRemoveConversationAssistantCommand",
+        "requestType": "ChatRemoveConversationAssistantCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "chat",
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.USER.conversation_not_found",
+        "CHAT.USER.circle_group_managed_by_circle",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "removeAssistant",
+      "facet": "ConversationAssistantCommandFacet",
+      "invariantTarget": "ConversationMembership",
+      "kind": "command",
+      "localOperationId": "RemoveAssistant",
+      "method": "DELETE",
+      "mutationTarget": "ConversationMembership",
+      "objectId": "chat.conversation_membership",
+      "ownershipPolicy": "conversation_member",
+      "pathTemplate": "/chat/conversations/{conversationId}/assistant",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 3000
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "ack",
+      "responseEntity": "",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "messages/conversation_membership/service.yaml",
+      "surfaceIds": [
+        "chatDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome"
+        ],
+        "metric": "chat_membership_command",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "ConversationMembership",
+      "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.RemoveMember",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatRemoveConversationMemberCommand",
+        "requestType": "ChatRemoveConversationMemberCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3192,6 +3615,7 @@
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.conversation_dissolved",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "removeMember",
@@ -3221,7 +3645,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3246,7 +3670,13 @@
       "aggregateOwner": "ConversationMembership",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.TransferOwnership",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatTransferConversationOwnershipCommand",
+        "requestType": "ChatTransferConversationOwnershipCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3257,6 +3687,7 @@
         "CHAT.USER.unauthorized",
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "transferOwnership",
@@ -3286,7 +3717,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3311,7 +3742,13 @@
       "aggregateOwner": "ConversationMembership",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_membership.UpdateGroupAdmins",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_membership_contracts.dart",
+        "requestEncoder": "encodeChatUpdateConversationAdminsCommand",
+        "requestType": "ChatUpdateConversationAdminsCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3322,6 +3759,7 @@
         "CHAT.USER.unauthorized",
         "CHAT.USER.conversation_not_found",
         "CHAT.USER.group_governance_forbidden",
+        "CHAT.USER.circle_group_managed_by_circle",
         "CHAT.SYSTEM.internal_error"
       ],
       "facadeMethod": "updateGroupAdmins",
@@ -3351,7 +3789,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3376,7 +3814,13 @@
       "aggregateOwner": "ConversationUserState",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_user_state.MarkAsRead",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_user_state_contracts.dart",
+        "requestEncoder": "encodeChatMarkConversationMessageReadCommand",
+        "requestType": "ChatMarkConversationMessageReadCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3417,7 +3861,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3442,7 +3886,13 @@
       "aggregateOwner": "ConversationUserState",
       "authMode": "required",
       "canonicalOperationId": "chat.conversation_user_state.UpdateConversationSettings",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/conversation_user_state_contracts.dart",
+        "requestEncoder": "encodeChatUpdateConversationSettingsCommand",
+        "requestType": "ChatUpdateConversationSettingsCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3481,7 +3931,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3506,7 +3956,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.message.ListMessages",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/message_contracts.dart",
+        "requestEncoder": "encodeChatListMessagesQuery",
+        "requestType": "ChatListMessagesQuery",
+        "responseDecoder": "decodeChatMessagePageSlice",
+        "responseType": "ChatMessagePageSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3544,8 +4000,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatMessageClient",
+      "responseBodyKind": "page",
       "responseEntity": "Message",
       "scopes": [],
       "slo": {
@@ -3570,7 +4026,13 @@
       "aggregateOwner": "Message",
       "authMode": "required",
       "canonicalOperationId": "chat.message.RecallMessage",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/message_contracts.dart",
+        "requestEncoder": "encodeChatRecallMessageCommand",
+        "requestType": "ChatRecallMessageCommand",
+        "responseDecoder": "decodeChatCommandAck",
+        "responseType": "ChatCommandAck"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3612,7 +4074,7 @@
       "requestBodyKind": "",
       "requestEntity": "",
       "responseBody": "",
-      "responseBodyKind": "",
+      "responseBodyKind": "ack",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3687,8 +4149,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "Message",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatSendMessageResult",
+      "responseBodyKind": "object",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -3713,7 +4175,13 @@
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "chat.message.SyncMessages",
-      "clientContract": null,
+      "clientContract": {
+        "dartImport": "../chat/message_contracts.dart",
+        "requestEncoder": "encodeChatSyncMessagesQuery",
+        "requestType": "ChatSyncMessagesQuery",
+        "responseDecoder": "decodeChatMessageSyncSlice",
+        "responseType": "ChatMessageSyncSlice"
+      },
       "commercial": {
         "explicit": true,
         "status": "ready"
@@ -3751,8 +4219,8 @@
       },
       "requestBodyKind": "",
       "requestEntity": "",
-      "responseBody": "",
-      "responseBodyKind": "",
+      "responseBody": "ChatMessageSyncSlice",
+      "responseBodyKind": "object",
       "responseEntity": "",
       "scopes": [],
       "slo": {
@@ -4032,7 +4500,7 @@
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "",
+      "responseEntity": "CircleFeedPageSlice",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -4170,7 +4638,7 @@
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "",
+      "responseEntity": "CircleStatsWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -4201,11 +4669,8 @@
         "responseType": "CircleDiscoveryFeedPageSlice"
       },
       "commercial": {
-        "blockReason": "待聚合读模型、端侧单请求消费与三层测试证据全部通过后翻牌",
         "explicit": true,
-        "gapId": "R-CIRCLE-001",
-        "status": "blocked",
-        "targetStory": "circle-homepage-redesign"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "circle",
@@ -4241,7 +4706,7 @@
       "requestEntity": "",
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "CircleDiscoveryFeedView",
+      "responseEntity": "CircleDiscoveryFeedPageSlice",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -5435,6 +5900,7 @@
         "CIRCLE.USER.group_not_found",
         "CIRCLE.USER.group_archived",
         "CIRCLE.USER.group_membership_already_active",
+        "CIRCLE.USER.group_membership_full",
         "CIRCLE.USER.group_membership_idempotency_conflict",
         "CIRCLE.SYSTEM.group_membership_storage_write_failed"
       ],
@@ -5508,6 +5974,7 @@
         "CIRCLE.USER.permission_denied",
         "CIRCLE.USER.group_membership_not_found",
         "CIRCLE.USER.group_membership_state_conflict",
+        "CIRCLE.USER.group_membership_full",
         "CIRCLE.USER.group_membership_version_conflict",
         "CIRCLE.USER.group_membership_idempotency_conflict",
         "CIRCLE.SYSTEM.group_membership_storage_write_failed"
@@ -6949,6 +7416,7 @@
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.comment_not_found",
         "CONTENT.USER.comment_forbidden_delete",
+        "CONTENT.USER.comment_attachment_limit_exceeded",
         "CONTENT.USER.version_conflict",
         "CONTENT.USER.idempotency_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
@@ -7024,6 +7492,8 @@
         "CONTENT.USER.comment_not_found",
         "CONTENT.USER.comment_parent_invalid",
         "CONTENT.USER.comment_too_long",
+        "CONTENT.USER.comment_attachment_limit_exceeded",
+        "CONTENT.USER.comment_rate_limited",
         "CONTENT.USER.idempotency_conflict",
         "CONTENT.USER.version_conflict",
         "CONTENT.SYSTEM.storage_write_failed"
@@ -8023,11 +8493,8 @@
         "responseType": "ContentMediaCoverSelectionResult"
       },
       "commercial": {
-        "blockReason": "MediaAsset typed Facet and aggregate command are complete; Gamma video-cover page evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8096,11 +8563,8 @@
         "responseType": "ContentMediaCoverSelectionResult"
       },
       "commercial": {
-        "blockReason": "MediaAsset typed Facet and aggregate command are complete; Gamma video-cover page evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8170,11 +8634,8 @@
         "responseType": "ContentMediaOriginalAccessGrant"
       },
       "commercial": {
-        "blockReason": "typed Media Facet, Mongo append/outbox and real S3-compatible integration are complete; Gamma original-access page evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8228,7 +8689,8 @@
       "telemetry": {
         "attributes": [
           "purpose",
-          "outcome"
+          "outcome",
+          "access_policy"
         ],
         "metric": "content_media_original_access_request",
         "trace": true
@@ -8247,11 +8709,8 @@
         "responseType": "ContentMediaUploadSessionCommandResult"
       },
       "commercial": {
-        "blockReason": "typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8327,11 +8786,8 @@
         "responseType": "ContentMediaUploadSessionCommandResult"
       },
       "commercial": {
-        "blockReason": "typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8408,11 +8864,8 @@
         "responseType": "ContentMediaUploadSessionSlice"
       },
       "commercial": {
-        "blockReason": "owner-scoped Mongo Reader and typed App query are implemented; Gamma resume evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -8480,11 +8933,8 @@
         "responseType": "ContentMediaUploadSessionCommandResult"
       },
       "commercial": {
-        "blockReason": "typed App/HTTP/Mongo/real S3-compatible chain is implemented; Gamma page and recovery evidence remains required",
         "explicit": true,
-        "gapId": "CONTENT_MEDIA_GAMMA_UAT",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "content",
@@ -10594,6 +11044,7 @@
         "INTEGRATION.USER.location_unavailable",
         "INTEGRATION.USER.location_permission_required",
         "INTEGRATION.MIDDLEWARE.upstream_timeout",
+        "INTEGRATION.MIDDLEWARE.location_provider_unavailable",
         "INTEGRATION.SYSTEM.internal_error"
       ],
       "facadeMethod": "getNearbyLocations",
@@ -10665,6 +11116,7 @@
         "INTEGRATION.USER.location_unavailable",
         "INTEGRATION.USER.invalid_argument",
         "INTEGRATION.MIDDLEWARE.upstream_timeout",
+        "INTEGRATION.MIDDLEWARE.location_provider_unavailable",
         "INTEGRATION.SYSTEM.internal_error"
       ],
       "facadeMethod": "searchLocations",
@@ -11158,11 +11610,8 @@
         "responseType": "RtcAnswerCallResultDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11173,8 +11622,7 @@
         "RTC.USER.call_ended",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
-        "RTC.SYSTEM.livekit_unavailable",
-        "RTC.SYSTEM.token_generation_failed",
+        "RTC.SYSTEM.media_transport_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "answerCall",
@@ -11239,11 +11687,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11317,11 +11762,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11394,11 +11836,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11473,11 +11912,8 @@
         "responseType": "RtcInitiateCallResultDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11488,8 +11924,7 @@
         "RTC.USER.blocked",
         "RTC.USER.idempotency_conflict",
         "RTC.USER.rate_limited",
-        "RTC.SYSTEM.livekit_unavailable",
-        "RTC.SYSTEM.token_generation_failed",
+        "RTC.SYSTEM.media_transport_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "initiateCall",
@@ -11555,11 +11990,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11635,11 +12067,8 @@
         "responseType": "RtcJoinCredentialsDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11650,8 +12079,7 @@
         "RTC.USER.call_ended",
         "RTC.USER.version_conflict",
         "RTC.USER.idempotency_conflict",
-        "RTC.SYSTEM.livekit_unavailable",
-        "RTC.SYSTEM.token_generation_failed",
+        "RTC.SYSTEM.media_transport_unavailable",
         "RTC.SYSTEM.internal_error"
       ],
       "facadeMethod": "joinCall",
@@ -11717,11 +12145,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11796,11 +12221,8 @@
         "responseType": "RtcCallHistoryPage"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11868,11 +12290,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -11946,11 +12365,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -12025,11 +12441,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -12105,11 +12518,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -12184,11 +12594,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -12263,11 +12670,8 @@
         "responseType": "CallSessionDto"
       },
       "commercial": {
-        "blockReason": "gamma full cold-start and LiveKit runtime evidence blocked by missing controlled product telemetry SLS credential",
         "explicit": true,
-        "gapId": "RTC_CALL_SESSION_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready"
       },
       "concurrency": {},
       "domain": "rtc",
@@ -18228,13 +18632,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "a67c34eecefdf4d0414fc85dfe0e43a60f2e3c12b21927e88ae4f146221fa273"
+    "sha256": "06e7718b0aa259699a195ababca79dd6ee720bdf3b5e67b130d32212e2b636b4"
   },
   "contractGraph": {
     "compilerHash": "sha256:b599e70b9b89104f50dfbe15cad1b8616e6222994ac5a3c7099391f877b9c315",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "d6708aa9593452c7a321bf3d8950e80efa42d5c3e3fc63b066d4dff93fd1d63b",
-    "sourceDigestSetSha256": "a95f07978e2324ad22119911113d8408eb0214df975b93b0dc035a1bca23abc2"
+    "sha256": "5c3bcccc328f531db204714e15e51ab1b2da2115c55622f1ee616cf1c0f2a903",
+    "sourceDigestSetSha256": "798515a76814cc7c9aa88bdf6bd734d7119e0cc6226a276c07847fc1f945152b"
   },
   "generator": "app-cloud-handoff"
 }

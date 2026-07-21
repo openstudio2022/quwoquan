@@ -15,12 +15,38 @@ void main() {
       client = GeneratedCloudOperationClient(executor);
     });
 
+    test('15 个 CallSession operation 对受控 Remote 验证均显式可执行', () {
+      const operationIds = <String>[
+        AppCloudOperationIds.rtcCallSessionInitiateCall,
+        AppCloudOperationIds.rtcCallSessionAnswerCall,
+        AppCloudOperationIds.rtcCallSessionRejectCall,
+        AppCloudOperationIds.rtcCallSessionCancelCall,
+        AppCloudOperationIds.rtcCallSessionHangupCall,
+        AppCloudOperationIds.rtcCallSessionJoinCall,
+        AppCloudOperationIds.rtcCallSessionLeaveCall,
+        AppCloudOperationIds.rtcCallSessionReportMediaConnected,
+        AppCloudOperationIds.rtcCallSessionInviteToCall,
+        AppCloudOperationIds.rtcCallSessionGetCall,
+        AppCloudOperationIds.rtcCallSessionListCalls,
+        AppCloudOperationIds.rtcCallSessionToggleMute,
+        AppCloudOperationIds.rtcCallSessionToggleCamera,
+        AppCloudOperationIds.rtcCallSessionStartScreenShare,
+        AppCloudOperationIds.rtcCallSessionStopScreenShare,
+      ];
+
+      for (final operationId in operationIds) {
+        final contract = appCloudOperationContracts[operationId];
+        expect(contract, isNotNull, reason: '$operationId must be generated');
+        expect(contract!.commercialStatus, 'ready');
+        expect(contract.commercialBlockReason, isEmpty);
+      }
+    });
+
     test('InitiateCall 使用 canonical operation 与 typed body', () async {
       executor.responses[AppCloudOperationIds.rtcCallSessionInitiateCall] =
           <String, Object?>{
             'session': _session('call-init'),
-            'token': 'token-init',
-            'livekitUrl': 'wss://livekit.example',
+            'mediaAccess': <String, Object?>{'accessToken': 'token-init'},
           };
       final facet = RemoteCallLifecycleCommandWriter(
         client: client,
@@ -43,7 +69,7 @@ void main() {
         'maxParticipants': 8,
       });
       expect(result.session.callId, 'call-init');
-      expect(result.livekitUrl, 'wss://livekit.example');
+      expect(result.mediaAccess.accessToken, 'token-init');
       expect(executor.context?.idempotencyKey, 'rtc-test-intent');
     });
 

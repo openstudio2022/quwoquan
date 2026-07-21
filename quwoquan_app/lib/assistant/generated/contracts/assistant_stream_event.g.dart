@@ -2,6 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 
 class AssistantStreamEventWire {
@@ -23,7 +24,7 @@ class AssistantStreamEventWire {
   final String conversationId;
   final String turnId;
   final int seq;
-  final String eventType;
+  final AssistantStreamEventType eventType;
   final String traceId;
   final Map<String, dynamic> payload;
   final RuntimeFailureWire? runtimeFailure;
@@ -35,7 +36,7 @@ class AssistantStreamEventWire {
         'conversationId': conversationId,
         'turnId': turnId,
         'seq': seq,
-        'eventType': eventType,
+        'eventType': eventType.wireName,
         'traceId': traceId,
         'payload': payload,
         'runtimeFailure': runtimeFailure?.toJson(),
@@ -49,7 +50,7 @@ class AssistantStreamEventWire {
       conversationId: (json['conversationId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
-      eventType: (json['eventType'] as String?)?.trim() ?? "",
+      eventType: parseAssistantStreamEventType((json['eventType'] as String?)?.trim() ?? ""),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,

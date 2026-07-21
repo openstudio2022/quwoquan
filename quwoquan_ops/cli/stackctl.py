@@ -40,6 +40,7 @@ from quwoquan_ops.cli.lib.common import (
     write_json,
     write_markdown,
 )
+from quwoquan_ops.cli import provider_conformance_runner
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     TARGETS,
@@ -80,6 +81,10 @@ from quwoquan_ops.cli.lib.dev_up import (
     pick_dev_up_env,
     resolve_device_id,
 )
+from quwoquan_ops.cli.lib.filter_catalog_release import (
+    PUBLISH_TOKEN_ENV_DEFAULT,
+    execute_filter_catalog_command,
+)
 from quwoquan_ops.cli.lib.port_manifest import canonical_port, load_port_manifest, profile_ports
 from quwoquan_ops.cli.lib.observability import (
     append_log_line,
@@ -91,13 +96,16 @@ from quwoquan_ops.cli.lib.observability import (
     write_stackctl_links,
 )
 from quwoquan_ops.cli.lib.output_paths import (
-    app_release_dir,
+    app_deployment_package_dir,
+    deployment_package_root,
+    deployment_work_root,
     env_observability_run_dir,
-    env_release_root,
     env_runs_root,
+    legal_static_deployment_package_dir,
     repo_local_dir,
     repo_run_dir,
-    service_release_dir,
+    runtime_shared_deployment_package_dir,
+    service_deployment_package_dir,
     target_cache_dir,
     target_process_dir,
 )
@@ -137,6 +145,40 @@ DEFAULT_TARGET_BY_ENV = {
 # CLI summaries should retain every concise prerequisite failure while keeping
 # the terminal surface bounded. Full child-process output remains in report.json.
 COMMAND_SUMMARY_DETAIL_LIMIT = 12
+# A cold iOS simulator build can legitimately take several minutes while
+# Xcode compiles native plugins. Treat it as a launch failure only after this
+# bounded first-build allowance, rather than reporting a false environment
+# failure while the app continues to start in the background.
+ALPHA_APP_FIRST_BUILD_TIMEOUT_SECONDS = 300.0
+PROVIDER_CONFORMANCE_SCRIPT = "quwoquan_ops/cli/lib/provider_conformance.py"
+_PROVIDER_CAPABILITY_ID_PATTERN = re.compile(
+    r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]+)+$"
+)
+GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS: tuple[tuple[str, str], ...] = (
+    ("rec-model-service", "LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE"),
+    ("content-service", "LOCAL_GAMMA_CONTENT_SERVICE_IMAGE"),
+    ("chat-service", "LOCAL_GAMMA_CHAT_SERVICE_IMAGE"),
+    ("user-service", "LOCAL_GAMMA_USER_SERVICE_IMAGE"),
+    ("assistant-service", "LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE"),
+    ("product-ops-service", "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE"),
+    ("platform-ops-service", "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE"),
+    ("tag-service", "LOCAL_GAMMA_TAG_SERVICE_IMAGE"),
+    ("search-service", "LOCAL_GAMMA_SEARCH_SERVICE_IMAGE"),
+    ("entity-service", "LOCAL_GAMMA_ENTITY_SERVICE_IMAGE"),
+    ("circle-service", "LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE"),
+    ("integration-service", "LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE"),
+    ("notification-service", "LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE"),
+    ("rtc-service", "LOCAL_GAMMA_RTC_SERVICE_IMAGE"),
+    ("realtime-gateway", "LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE"),
+)
+GAMMA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS = (
+    "LOCAL_GAMMA_EMBEDDING_ENDPOINT",
+    "LOCAL_GAMMA_EMBEDDING_API_KEY",
+)
+BETA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS = (
+    "CONTENT_EMBEDDING_ENDPOINT",
+    "CONTENT_EMBEDDING_API_KEY",
+)
 
 
 def _sha256_file(path: Path) -> str:
@@ -148,7 +190,7 @@ def _sha256_file(path: Path) -> str:
 
 
 def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
-    report_path = service_release_dir(env_name, service) / "report.json"
+    report_path = service_deployment_package_dir(env_name, service) / "report.json"
     if not report_path.is_file():
         raise FileNotFoundError(f"service package report missing: {report_path}")
     report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -165,9 +207,72 @@ def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
     return f"localhost/quwoquan_service_{repository}:{source_digest[7:19]}"
 
 
-def _build_runtime_shared_package(env_name: str) -> Path:
+def _bind_gamma_packaged_service_image_refs(
+    env_name: str,
+    environment: dict[str, str],
+) -> None:
+    """把本次 package 的源码指纹显式绑定到 Gamma Compose 镜像引用。"""
+
+    for service, environment_key in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        environment[environment_key] = _packaged_service_source_image_ref(
+            env_name,
+            service,
+        )
+
+
+def _bind_gamma_external_provider_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """仅透传受控环境密钥；缺商用 provider 绑定时在构建前阻断。"""
+
+    values = {
+        name: os.environ.get(name, "").strip()
+        for name in GAMMA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS
+    }
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        return (
+            "gamma-local external provider prerequisite is missing: "
+            + ", ".join(missing)
+        )
+    environment.update(values)
+    return None
+
+
+def _bind_beta_external_provider_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """透传 Beta 内容 Provider Binding，并在启动后台进程前失败。"""
+
+    values = {
+        name: os.environ.get(name, "").strip()
+        for name in BETA_REQUIRED_EXTERNAL_PROVIDER_ENVIRONMENTS
+    }
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        return (
+            "beta-local external provider prerequisite is missing: "
+            + ", ".join(missing)
+        )
+    environment.update(values)
+    return None
+
+
+def _gamma_start_command(args: argparse.Namespace) -> list[str]:
+    command = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
+    if getattr(args, "skip_build", False):
+        command.append("--skip-build")
+    if getattr(args, "build_only", False):
+        command.append("--build-only")
+        build_services = str(getattr(args, "build_services", "")).strip()
+        if build_services:
+            command.extend(["--build-services", build_services])
+    return command
+
+
+def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
     """将运行栈共享静态配置封装为环境 package，禁止启动期直读仓内源文件。"""
-    package_dir = env_release_root(env_name) / "runtime-shared"
+    package_dir = runtime_shared_deployment_package_dir(env_name, target=target)
     if package_dir.exists():
         shutil.rmtree(package_dir)
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -197,7 +302,7 @@ def _build_runtime_shared_package(env_name: str) -> Path:
     return package_dir
 
 
-def _materialize_prod_release_artifact() -> str:
+def _materialize_prod_release_artifact(*, target: str = "") -> str:
     """把 CI 已验证的不可变 release artifact 物化进 prod 环境包。"""
     artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
     if not artifact_root_value:
@@ -213,7 +318,7 @@ def _materialize_prod_release_artifact() -> str:
     release_files = manifest.get("releaseFiles")
     if not config_version or not isinstance(release_files, dict):
         raise ValueError(f"invalid prod release artifact manifest: {manifest_path}")
-    package_root = env_release_root("prod") / "service"
+    package_root = deployment_package_root("prod", target=target) / "service"
     artifact_digest = _sha256_file(manifest_path)
     for service, relative_path in release_files.items():
         source = artifact_root / str(relative_path)
@@ -278,6 +383,31 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    provider_conformance_parser = subparsers.add_parser(
+        "provider-conformance",
+        help="执行一个 Provider Conformance 九格单元并写入受证明证据",
+    )
+    provider_conformance_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
+    provider_conformance_parser.add_argument("--adapter-id", required=True)
+    provider_conformance_parser.add_argument(
+        "--env",
+        required=True,
+        choices=provider_conformance_runner.provider_conformance.ENVIRONMENTS,
+    )
+    provider_conformance_parser.add_argument(
+        "--layer",
+        required=True,
+        choices=provider_conformance_runner.provider_conformance.LAYERS,
+    )
+    provider_conformance_parser.add_argument("--execute", action="store_true")
+    provider_conformance_parser.add_argument("--image-digest", default="")
+    provider_conformance_parser.add_argument("--data-digest", default="")
+    provider_conformance_parser.add_argument("--switch-compatibility-receipt-ref", default="")
+    provider_conformance_parser.add_argument("--callback-drain-receipt-ref", default="")
+    provider_conformance_parser.add_argument("--last-good-receipt-ref", default="")
+    provider_conformance_parser.add_argument("--rollback-receipt-ref", default="")
+    provider_conformance_parser.add_argument("--prod-binding-preflight-receipt-ref", default="")
+
     up_parser = subparsers.add_parser("up")
     up_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     up_parser.add_argument("--target", choices=TARGETS, default="")
@@ -285,6 +415,16 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser.add_argument("--device-id", default="")
     up_parser.add_argument("--skip-app", action="store_true")
     up_parser.add_argument("--skip-build", action="store_true")
+    up_parser.add_argument(
+        "--build-only",
+        action="store_true",
+        help="仅构建 Gamma 本地服务镜像，不启动 Compose 或 App。",
+    )
+    up_parser.add_argument(
+        "--build-services",
+        default="",
+        help="与 --build-only 配合，构建逗号分隔的 Gamma 服务镜像。",
+    )
     up_parser.add_argument(
         "--workload",
         choices=["content-release", "full"],
@@ -341,6 +481,32 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
     content_readiness_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
+
+    filter_catalog_parser = subparsers.add_parser(
+        "filter-catalog",
+        help="按环境绑定的受信发布身份发布或复核 FilterCatalogRelease",
+    )
+    filter_catalog_parser.add_argument(
+        "--target",
+        choices=("beta-local", "gamma-local", "prod-hosted"),
+        required=True,
+    )
+    filter_catalog_parser.add_argument(
+        "--action",
+        choices=("stage", "activate", "stage-and-activate", "verify", "rollback"),
+        required=True,
+    )
+    filter_catalog_parser.add_argument("--rollback-release-id", default="")
+    filter_catalog_parser.add_argument(
+        "--token-env",
+        default=PUBLISH_TOKEN_ENV_DEFAULT,
+        help="prod service-principal bearer 的环境变量名；值绝不进入 argv 或报告",
+    )
+    filter_catalog_parser.add_argument(
+        "--prod-gray-activation",
+        action="store_true",
+        help="仅在 prod gray 已获人工审批后允许 activate",
+    )
 
     repair_parser = subparsers.add_parser("repair")
     repair_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -950,10 +1116,186 @@ def _write_stdout_markdown(report_dir: Path, sections: list[tuple[str, str]]) ->
     write_markdown(report_dir / "stdout.md", "\n".join(lines))
 
 
+def _provider_readiness_failure_categories(
+    report: dict[str, Any] | None,
+    *,
+    report_is_valid: bool,
+    required_capabilities_ready: bool,
+    child_exit_code: int,
+) -> list[str]:
+    """Map Provider diagnostics to stable, non-sensitive remediation categories."""
+    categories: set[str] = set()
+    if not report_is_valid:
+        categories.add("provider-readiness-report")
+    if not required_capabilities_ready:
+        categories.add("readiness")
+    if child_exit_code != 0:
+        categories.add("provider-readiness")
+    issues = report.get("issues") if isinstance(report, dict) else []
+    if not isinstance(issues, list):
+        return sorted(categories | {"provider-readiness-report"})
+    for issue in issues:
+        if not isinstance(issue, str):
+            categories.add("provider-readiness-report")
+            continue
+        normalized = issue.lower()
+        if any(
+            marker in normalized
+            for marker in (
+                "evidence",
+                "artifactref",
+                "nine-cell",
+                "executedat",
+                "24-hour",
+            )
+        ):
+            categories.add("evidence")
+        if any(marker in normalized for marker in ("config", "binding", "state")):
+            categories.add("configuration")
+        if any(
+            marker in normalized
+            for marker in ("adapter", "commit", "imagedigest", "adapterdigest")
+        ):
+            categories.add("adapter-continuity")
+        if any(marker in normalized for marker in ("capability", "required", "ready")):
+            categories.add("readiness")
+    return sorted(categories or {"provider-readiness"})
+
+
+def _sanitized_provider_readiness_report(
+    environment: str,
+    *,
+    child_exit_code: int,
+    child_stdout: str,
+) -> tuple[dict[str, Any], bool]:
+    """Keep Provider readiness evidence locatable without persisting child output."""
+    parsed: dict[str, Any] | None = None
+    try:
+        candidate = json.loads(child_stdout)
+    except json.JSONDecodeError:
+        candidate = None
+    if isinstance(candidate, dict):
+        parsed = candidate
+
+    issues = parsed.get("issues") if parsed is not None else None
+    readiness = parsed.get("readiness") if parsed is not None else None
+    environment_readiness = (
+        readiness.get(environment)
+        if isinstance(readiness, dict)
+        else None
+    )
+    report_is_valid = (
+        parsed is not None
+        and parsed.get("schema") == "provider-conformance-readiness"
+        and parsed.get("version") == 1
+        and isinstance(issues, list)
+        and all(isinstance(issue, str) for issue in issues)
+        and isinstance(environment_readiness, dict)
+        and isinstance(parsed.get("evidenceCount"), int)
+        and parsed["evidenceCount"] >= 0
+    )
+    required_capabilities: list[dict[str, Any]] = []
+    required_capabilities_ready = report_is_valid
+    if isinstance(environment_readiness, dict):
+        for capability_id, capability in sorted(environment_readiness.items()):
+            if (
+                not isinstance(capability_id, str)
+                or not _PROVIDER_CAPABILITY_ID_PATTERN.fullmatch(capability_id)
+                or not isinstance(capability, dict)
+                or not isinstance(capability.get("required"), bool)
+                or not isinstance(capability.get("capability_ready"), bool)
+            ):
+                report_is_valid = False
+                required_capabilities_ready = False
+                continue
+            if capability["required"]:
+                ready = capability["capability_ready"]
+                required_capabilities.append(
+                    {
+                        "capabilityId": capability_id,
+                        "ready": ready,
+                    }
+                )
+                required_capabilities_ready = required_capabilities_ready and ready
+    else:
+        required_capabilities_ready = False
+
+    categories = _provider_readiness_failure_categories(
+        parsed,
+        report_is_valid=report_is_valid,
+        required_capabilities_ready=required_capabilities_ready,
+        child_exit_code=child_exit_code,
+    )
+    passed = (
+        child_exit_code == 0
+        and report_is_valid
+        and not issues
+        and required_capabilities_ready
+    )
+    return (
+        {
+            "schema": "stackctl-provider-readiness-preflight",
+            "environment": environment,
+            "status": "passed" if passed else "gate_block",
+            "providerExitCode": child_exit_code,
+            "evidenceCount": parsed["evidenceCount"] if report_is_valid else 0,
+            "requiredCapabilities": required_capabilities,
+            "failureCategories": [] if passed else categories,
+        },
+        passed,
+    )
+
+
+def _run_provider_readiness_preflight(
+    environment: str,
+    report_dir: Path,
+) -> dict[str, Any]:
+    """Run the single Provider readiness CLI and persist only its safe projection."""
+    command = [
+        "python3",
+        PROVIDER_CONFORMANCE_SCRIPT,
+        "--require-ready",
+        environment,
+    ]
+    try:
+        result = run(command)
+        child_exit_code = result.returncode
+        child_stdout = str(result.stdout or "")
+    except OSError:
+        child_exit_code = 127
+        child_stdout = ""
+    report, passed = _sanitized_provider_readiness_report(
+        environment,
+        child_exit_code=child_exit_code,
+        child_stdout=child_stdout,
+    )
+    report_path = report_dir / "provider-readiness.json"
+    write_json(report_path, report)
+    failure_categories = report["failureCategories"]
+    details = (
+        []
+        if passed
+        else [
+            "provider readiness preflight is GATE_BLOCK "
+            f"({', '.join(failure_categories)}); inspect {relpath(report_path)}"
+        ]
+    )
+    return {
+        "kind": "provider-readiness",
+        "environment": environment,
+        "argv": command,
+        "exitCode": 0 if passed else 2,
+        "reportPath": relpath(report_path),
+        "details": details,
+        "report": report,
+    }
+
+
 def _selected_verify_commands(
     kind: str,
     env_name: str = "",
     *,
+    target_name: str = "",
     profile: VerificationProfile,
 ) -> list[list[str]]:
     packaging_commands = [
@@ -961,8 +1303,18 @@ def _selected_verify_commands(
         + (["--env", env_name] if env_name in ENVIRONMENTS else []),
         ["python3", "quwoquan_ops/gate/verify_env_artifact_isolation.py"]
         + (["--env", env_name] if env_name in ENVIRONMENTS else []),
-        ["python3", "quwoquan_app/scripts/env/verify_prod_package_purity.py"],
+        [
+            "python3",
+            "quwoquan_app/scripts/env/verify_prod_package_purity.py",
+            "--target",
+            target_name
+            if env_name == "prod" and target_name
+            else DEFAULT_TARGET_BY_ENV["prod"],
+        ],
     ]
+    if target_name:
+        packaging_commands[0].extend(["--target", target_name])
+        packaging_commands[1].extend(["--target", target_name])
     if kind == "all":
         commands: list[list[str]] = []
         group_names = ("topology", "config")
@@ -1103,9 +1455,59 @@ def _selected_profile_commands(
             commands.append(
                 {
                     "name": "gamma-local-t3",
-                    "argv": ["python3", "quwoquan_app/scripts/gamma/run_local_gamma_t3.py"],
+                    "argv": [
+                        "python3",
+                        "quwoquan_app/scripts/gamma/run_local_gamma_t3.py",
+                        "--enabled-domain",
+                        "content",
+                    ],
                 }
             )
+    if (
+        profile in {VerificationProfile.INTEGRATION, VerificationProfile.RELEASE}
+        and target_name in {"beta-local", "gamma-local", "prod-hosted"}
+    ):
+        commands.append(
+            {
+                "name": "filter-catalog-active-release",
+                "argv": [
+                    "python3",
+                    "quwoquan_ops/cli/stackctl.py",
+                    "--output-format",
+                    "json",
+                    "filter-catalog",
+                    "--target",
+                    target_name,
+                    "--action",
+                    "verify",
+                ],
+                "cwd": ROOT,
+            }
+        )
+    report_feedback_command = _report_feedback_lifecycle_profile_command(
+        env_name,
+        target_name,
+        profile,
+        report_dir,
+    )
+    if report_feedback_command is not None:
+        commands.append(report_feedback_command)
+    media_publication_command = _media_publication_lifecycle_profile_command(
+        env_name,
+        target_name,
+        profile,
+        report_dir,
+    )
+    if media_publication_command is not None:
+        commands.append(media_publication_command)
+    chat_group_lifecycle_command = _chat_group_lifecycle_profile_command(
+        env_name,
+        target_name,
+        profile,
+        report_dir,
+    )
+    if chat_group_lifecycle_command is not None:
+        commands.append(chat_group_lifecycle_command)
     if profile is VerificationProfile.RELEASE:
         if target_name == "prod-hosted":
             target = get_target(load_environment_topology(), target_name)
@@ -1151,6 +1553,205 @@ def _selected_profile_commands(
             }
         )
     return commands
+
+
+def _report_feedback_lifecycle_profile_command(
+    env_name: str,
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """为本地可变更环境和只读生产环境绑定同一对象级旅程证据。"""
+
+    mode = ""
+    if target_name == "beta-local" and profile is VerificationProfile.INTEGRATION:
+        mode = "lifecycle"
+    elif target_name == "gamma-local" and profile is VerificationProfile.RELEASE:
+        mode = "lifecycle"
+    elif target_name == "prod-hosted" and profile is VerificationProfile.RELEASE:
+        # 生产证据只能验证举报人的私有可读状态；写入、运营裁决和
+        # 负反馈补偿均不得在真实生产环境由自动化触发。
+        mode = "read-only"
+    if not mode:
+        return None
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    api_base_url = str(public_bases.get("api") or "").strip()
+    if not api_base_url:
+        raise ValueError(
+            f"{target_name} lacks publicBases.api for report-feedback lifecycle probe"
+        )
+    probe_report = (
+        report_dir / "report-feedback-lifecycle.json"
+        if report_dir is not None
+        else env_runs_root(env_name)
+        / "report-feedback-lifecycle"
+        / target_name
+        / "report-feedback-lifecycle.json"
+    )
+    argv = [
+        "python3",
+        "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+        "content-service/smoke/run_report_feedback_lifecycle_probe.py",
+        "--env",
+        env_name,
+        "--base-url",
+        api_base_url,
+        "--mode",
+        mode,
+        "--report",
+        str(probe_report),
+    ]
+    resolve_host = _local_public_connect_host(
+        topology,
+        target_name,
+        api_base_url,
+    )
+    if resolve_host:
+        argv.extend(["--resolve-host", resolve_host])
+    return {
+        "name": f"{target_name}-report-feedback-lifecycle",
+        "argv": argv,
+        "cwd": ROOT,
+        "stopOnFailure": True,
+        "reportPath": relpath(probe_report),
+    }
+
+
+def _media_publication_lifecycle_profile_command(
+    env_name: str,
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """将真实媒体上传、处理和发布闭环绑定到适用环境验证。"""
+
+    mode = ""
+    if target_name == "beta-local" and profile is VerificationProfile.INTEGRATION:
+        mode = "lifecycle"
+    elif target_name == "gamma-local" and profile is VerificationProfile.RELEASE:
+        mode = "lifecycle"
+    elif target_name == "prod-sim" and profile is VerificationProfile.INTEGRATION:
+        # prod-sim 是唯一允许受控可变 canary 的生产镜像演练目标。
+        mode = "lifecycle"
+    elif target_name == "prod-hosted" and profile is VerificationProfile.RELEASE:
+        # hosted production 不允许由默认验证链写入，只做显式凭据的只读探测。
+        mode = "read-only"
+    if not mode:
+        return None
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    api_base_url = str(public_bases.get("api") or "").strip()
+    if not api_base_url:
+        raise ValueError(
+            f"{target_name} lacks publicBases.api for media publication lifecycle probe"
+        )
+    probe_report = (
+        report_dir / "media-publication-lifecycle.json"
+        if report_dir is not None
+        else env_runs_root(env_name)
+        / "media-publication-lifecycle"
+        / target_name
+        / "media-publication-lifecycle.json"
+    )
+    argv = [
+        "python3",
+        "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+        "content-service/smoke/run_media_publication_lifecycle_probe.py",
+        "--env",
+        env_name,
+        "--target-name",
+        target_name,
+        "--base-url",
+        api_base_url,
+        "--mode",
+        mode,
+        "--report",
+        str(probe_report),
+    ]
+    resolve_host = _local_public_connect_host(
+        topology,
+        target_name,
+        api_base_url,
+    )
+    if resolve_host:
+        argv.extend(["--resolve-host", resolve_host])
+    return {
+        "name": f"{target_name}-media-publication-lifecycle",
+        "argv": argv,
+        "cwd": ROOT,
+        "stopOnFailure": True,
+        "reportPath": relpath(probe_report),
+    }
+
+
+def _chat_group_lifecycle_profile_command(
+    env_name: str,
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """将群候选、建群、mention 与 Inbox 闭环绑定到统一环境验证链。"""
+
+    mutating = False
+    if target_name == "beta-local" and profile is VerificationProfile.INTEGRATION:
+        mutating = True
+    elif target_name == "gamma-local" and profile is VerificationProfile.RELEASE:
+        mutating = True
+    elif target_name == "prod-hosted" and profile is VerificationProfile.RELEASE:
+        # 真实生产只能读取受控验收账号的既有来源；Probe 本身会拒绝 prod 写入。
+        mutating = False
+    else:
+        return None
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    api_base_url = str(public_bases.get("api") or "").strip()
+    if not api_base_url:
+        raise ValueError(
+            f"{target_name} lacks publicBases.api for chat group lifecycle probe"
+        )
+    probe_report = (
+        report_dir / "chat-group-lifecycle.json"
+        if report_dir is not None
+        else env_runs_root(env_name)
+        / "chat-group-lifecycle"
+        / target_name
+        / "chat-group-lifecycle.json"
+    )
+    argv = [
+        "python3",
+        "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+        "chat-service/smoke/run_chat_group_lifecycle_probe.py",
+        "--env",
+        env_name,
+        "--base-url",
+        api_base_url,
+        "--require-nonempty-sources",
+        "--report",
+        str(probe_report),
+    ]
+    if mutating:
+        argv.append("--mutating")
+    resolve_host = _local_public_connect_host(
+        topology,
+        target_name,
+        api_base_url,
+    )
+    if resolve_host:
+        argv.extend(["--resolve-host", resolve_host])
+    return {
+        "name": f"{target_name}-chat-group-lifecycle",
+        "argv": argv,
+        "cwd": ROOT,
+        "stopOnFailure": True,
+        "reportPath": relpath(probe_report),
+    }
 
 
 def _target_media_preflight_profile_command(
@@ -2218,6 +2819,39 @@ def _prod_release_lock() -> Any:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+@contextlib.contextmanager
+def _local_stack_operation_lock(target_name: str) -> Any:
+    """为一个本地环境操作保留唯一的 Compose/package 临界区。"""
+    target = str(target_name).strip()
+    if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        raise ValueError(f"local stack operation lock does not support {target!r}")
+    lock_path = target_process_dir(target) / ".stackctl-operation.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    owner = f"pid={os.getpid()} target={target} startedAt={utc_now()}"
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            handle.seek(0)
+            holder = handle.read().strip() or "unknown"
+            raise RuntimeError(
+                f"{target} stack operation is already running: {holder}"
+            ) from error
+        handle.seek(0)
+        handle.truncate()
+        handle.write(owner + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            handle.truncate()
+            handle.flush()
+            os.fsync(handle.fileno())
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _commit_release_transition(
     *,
     service: str,
@@ -2382,7 +3016,7 @@ def _legal_static_command(
     subcommand: str,
     env_name: str,
     *,
-    output_root: str = ".qwq_output/env",
+    target: str = "",
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     cmd = [
         "python3",
@@ -2390,10 +3024,10 @@ def _legal_static_command(
         subcommand,
         "--env",
         env_name,
-        "--output-root",
-        output_root,
     ]
-    result = run(cmd)
+    if target:
+        cmd.extend(["--target", target])
+    result = run(cmd, env={"QWQ_DEPLOY_TARGET": target} if target else None)
     payload: dict[str, Any] = {}
     if result.stdout.strip():
         try:
@@ -2433,7 +3067,11 @@ def _command_package_legal_static(args: argparse.Namespace) -> dict[str, Any]:
             **timing,
         }
 
-    result, legal_payload = _legal_static_command("package", env_name)
+    result, legal_payload = _legal_static_command(
+        "package",
+        env_name,
+        target=target_name,
+    )
     timing = _finish_timing(started_monotonic, started_at)
     status = "ok" if result.returncode == 0 else "failed"
     details = []
@@ -2505,9 +3143,10 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
     details: list[str] = []
     reports: list[dict[str, Any]] = []
+    package_environment = {"QWQ_DEPLOY_TARGET": target_name}
 
     app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
-    app_result = run(app_cmd)
+    app_result = run(app_cmd, env=package_environment)
     reports.append(
         {
             "name": "app-package",
@@ -2538,7 +3177,9 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": relpath(report_dir),
             **timing,
         }
-    details.append(f"app package ready: {relpath(app_release_dir(env_name))}")
+    details.append(
+        f"app package ready: {relpath(app_deployment_package_dir(env_name, target=target_name))}"
+    )
 
     if args.include_services or args.service:
         services = [args.service] if args.service else _all_services()
@@ -2551,7 +3192,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 "--env",
                 env_name,
             ]
-            svc_result = run(svc_cmd)
+            svc_result = run(svc_cmd, env=package_environment)
             reports.append(
                 {
                     "name": f"service-package:{service}",
@@ -2585,11 +3226,16 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     "reportDir": relpath(report_dir),
                     **timing,
                 }
-            details.append(f"service package ready: {relpath(service_release_dir(env_name, service))}")
+            details.append(
+                "service package ready: "
+                f"{relpath(service_deployment_package_dir(env_name, service, target=target_name))}"
+            )
 
     if env_name == "prod":
         try:
-            materialized_config_version = _materialize_prod_release_artifact()
+            materialized_config_version = _materialize_prod_release_artifact(
+                target=target_name
+            )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             timing = _finish_timing(started_monotonic, started_at)
             write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
@@ -2616,7 +3262,10 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             )
 
     try:
-        shared_package_dir = _build_runtime_shared_package(env_name)
+        shared_package_dir = _build_runtime_shared_package(
+            env_name,
+            target=target_name,
+        )
     except (OSError, FileNotFoundError) as exc:
         timing = _finish_timing(started_monotonic, started_at)
         write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
@@ -2713,7 +3362,11 @@ def _command_verify_legal_static(
             )
             continue
 
-        verify_result, verify_payload = _legal_static_command("verify-package", package_env)
+        verify_result, verify_payload = _legal_static_command(
+            "verify-package",
+            package_env,
+            target=package_args.target,
+        )
         steps.append(
             {
                 "kind": "verify",
@@ -2811,6 +3464,57 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
     steps: list[dict[str, Any]] = []
     issues: list[str] = []
+    provider_readiness: dict[str, Any] = {}
+    if (
+        profile is VerificationProfile.RELEASE
+        and env_name in {"gamma", "prod"}
+    ):
+        provider_preflight = _run_provider_readiness_preflight(env_name, report_dir)
+        provider_readiness = provider_preflight["report"]
+        steps.append(
+            {
+                "kind": provider_preflight["kind"],
+                "environment": env_name,
+                "argv": provider_preflight["argv"],
+                "exitCode": provider_preflight["exitCode"],
+                "reportPath": provider_preflight["reportPath"],
+                "details": provider_preflight["details"],
+            }
+        )
+        if provider_preflight["exitCode"] != 0:
+            timing = _finish_timing(started_monotonic, started_at)
+            payload = {
+                "status": ProbeOutcome.GATE_BLOCK.value,
+                "command": "verify",
+                "timestamp": utc_now(),
+                "kind": args.kind,
+                "profile": profile.value,
+                "providerReadiness": provider_readiness,
+                "steps": steps,
+                **timing,
+            }
+            write_json(report_dir / "report.json", payload)
+            write_json(
+                report_dir / "findings.json",
+                {"issues": provider_preflight["details"]},
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="verify",
+                target=target_name,
+                status="blocked",
+                summary=f"stackctl verify {profile.value} is GATE_BLOCK",
+                details=provider_preflight["details"],
+                extra={"kind": args.kind, "profile": profile.value},
+                timing=timing,
+            )
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl verify {profile.value} is GATE_BLOCK",
+                "details": provider_preflight["details"],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
     package_envs = [env_name] if env_name in ENVIRONMENTS and profile.requires_environment else []
     for package_env in package_envs:
         package_args = argparse.Namespace(
@@ -2839,10 +3543,11 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     commands = _selected_verify_commands(
         args.kind,
         env_name if env_name in ENVIRONMENTS else "",
+        target_name=target_name,
         profile=profile,
     )
     for command in commands:
-        result = run(command)
+        result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
         command_key = " ".join(command)
         steps.append(
             {
@@ -2884,6 +3589,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 "timestamp": utc_now(),
                 "kind": args.kind,
                 "profile": profile.value,
+                "providerReadiness": provider_readiness,
                 "steps": steps,
                 **timing,
             }
@@ -2966,6 +3672,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "timestamp": utc_now(),
         "kind": args.kind,
         "profile": profile.value,
+        "providerReadiness": provider_readiness,
         "steps": steps,
         "runtimeMediaT4EvidencePath": t4_evidence_path,
         **timing,
@@ -3036,6 +3743,33 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         if not requested_target:
             requested_target = app_target_for_env(args.env)
 
+    build_only = bool(getattr(args, "build_only", False))
+    build_services = str(getattr(args, "build_services", "")).strip()
+    if build_services and not build_only:
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl up failed",
+            "details": ["--build-services requires --build-only"],
+            **timing,
+        }
+    if build_only and getattr(args, "skip_build", False):
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl up failed",
+            "details": ["--build-only cannot be combined with --skip-build"],
+            **timing,
+        }
+    if build_only and requested_target != "gamma-local":
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl up failed",
+            "details": ["--build-only is supported only for gamma-local"],
+            **timing,
+        }
+
     target = get_target(topology, requested_target)
     env_name = str(target["env"])
     report_target = args.env or requested_target
@@ -3053,6 +3787,51 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     str(exc),
                     "use --workload content-release for import/API/media validation",
                 ],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+    local_operation_lock: Any | None = None
+    if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+        try:
+            local_operation_lock = _local_stack_operation_lock(requested_target)
+            local_operation_lock.__enter__()
+        except RuntimeError as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            details = [
+                str(exc),
+                f"wait for the active {requested_target} operation to finish",
+            ]
+            write_json(
+                report_dir / "report.json",
+                {
+                    "command": "up",
+                    "target": report_target,
+                    "resolvedTarget": requested_target,
+                    "workload": args.workload,
+                    "steps": [
+                        {
+                            "name": f"{requested_target}-operation-lock",
+                            "exitCode": 2,
+                            "stdout": "",
+                            "stderr": str(exc),
+                        }
+                    ],
+                    **timing,
+                },
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="up",
+                target=report_target,
+                status="gate_block",
+                summary=f"stackctl up is blocked for {report_target}",
+                details=details,
+                timing=timing,
+            )
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+                "details": details,
                 "reportDir": relpath(report_dir),
                 **timing,
             }
@@ -3186,6 +3965,20 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         env.update(telemetry_env)
         env["QWQ_WORKLOAD"] = args.workload
+        external_provider_error = (
+            None
+            if args.workload == "content-release"
+            else _bind_beta_external_provider_environment(env)
+        )
+        if external_provider_error:
+            steps.append(
+                {
+                    "name": "beta-external-provider-prerequisite",
+                    "exitCode": 2,
+                    "stdout": "",
+                    "stderr": external_provider_error,
+                }
+            )
         if telemetry_advisory:
             steps.append(
                 {
@@ -3196,17 +3989,25 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     "stderr": telemetry_advisory,
                 }
             )
-        result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
-        background_tail = tail_beta_background_logs()
-        steps.append(
-            {
-                "kind": "beta-background-tail",
-                "exitCode": 0,
-                "stdout": "tailed beta background logs",
-                "stderr": "",
-                "tail": background_tail,
-            }
-        )
+        if external_provider_error:
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=external_provider_error,
+            )
+        else:
+            result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
+            background_tail = tail_beta_background_logs()
+            steps.append(
+                {
+                    "kind": "beta-background-tail",
+                    "exitCode": 0,
+                    "stdout": "tailed beta background logs",
+                    "stderr": "",
+                    "tail": background_tail,
+                }
+            )
         if result.returncode == 0:
             beta_content_port = canonical_port(
                 load_port_manifest(),
@@ -3313,6 +4114,20 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         env.update(telemetry_env)
         env["QWQ_WORKLOAD"] = args.workload
+        external_provider_error = (
+            None
+            if build_only or args.workload == "content-release"
+            else _bind_gamma_external_provider_environment(env)
+        )
+        if external_provider_error:
+            steps.append(
+                {
+                    "name": "gamma-external-provider-prerequisite",
+                    "exitCode": 2,
+                    "stdout": "",
+                    "stderr": external_provider_error,
+                }
+            )
         if telemetry_advisory:
             steps.append(
                 {
@@ -3323,7 +4138,34 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     "stderr": telemetry_advisory,
                 }
             )
-        package_result = run(package_cmd, env=env)
+        gamma_start_script = "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+        syntax_cmd = ["bash", "-n", gamma_start_script]
+        syntax_result = run(syntax_cmd, env=env)
+        steps.append(
+            {
+                "name": "gamma-start-script-syntax",
+                "argv": syntax_cmd,
+                "exitCode": syntax_result.returncode,
+                "stdout": syntax_result.stdout,
+                "stderr": syntax_result.stderr,
+            }
+        )
+        if syntax_result.returncode != 0 or external_provider_error is not None:
+            package_result = subprocess.CompletedProcess(
+                package_cmd,
+                2,
+                stdout="",
+                stderr=external_provider_error or syntax_result.stderr,
+            )
+        elif args.skip_build:
+            package_result = subprocess.CompletedProcess(
+                package_cmd,
+                0,
+                stdout="reused existing gamma deployment packages (--skip-build)",
+                stderr="",
+            )
+        else:
+            package_result = run(package_cmd, env=env)
         steps.append(
             {
                 "name": "gamma-package",
@@ -3333,9 +4175,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "stderr": package_result.stderr,
             }
         )
-        cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
-        if getattr(args, "skip_build", False):
-            cmd.append("--skip-build")
+        cmd = _gamma_start_command(args)
         if package_result.returncode != 0:
             result = subprocess.CompletedProcess(
                 cmd,
@@ -3345,18 +4185,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             )
         else:
             try:
-                env["LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE"] = (
-                    _packaged_service_source_image_ref(
-                        "gamma",
-                        "realtime-gateway",
-                    )
-                )
-                env["LOCAL_GAMMA_RTC_SERVICE_IMAGE"] = (
-                    _packaged_service_source_image_ref(
-                        "gamma",
-                        "rtc-service",
-                    )
-                )
+                _bind_gamma_packaged_service_image_refs("gamma", env)
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 result = subprocess.CompletedProcess(
                     cmd,
@@ -3371,7 +4200,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     env=env,
                     live_prefix="[gamma-local] ",
                 )
-        if result.returncode == 0 and not args.skip_app:
+        if result.returncode == 0 and not args.skip_app and not build_only:
             args.device_id = maybe_resolve_device_id(include_web=True)
             try:
                 app_launch = start_app_process("gamma", args.device_id)
@@ -3463,7 +4292,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     process=app_launch["process"],
                     prefix=f"[{app_launch['stageHeader']} app] ",
                     idle_timeout_seconds=6.0,
-                    max_follow_seconds=60.0,
+                    max_follow_seconds=ALPHA_APP_FIRST_BUILD_TIMEOUT_SECONDS,
                     ready_patterns=(
                         "Syncing files to device",
                         "Flutter run key commands",
@@ -3722,13 +4551,16 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         details=_command_details(result),
         timing=timing,
     )
-    return {
+    payload = {
         "exitCode": result.returncode,
         "summary": f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {report_target}",
         "details": _command_details(result),
         "reportDir": relpath(report_dir),
         **timing,
     }
+    if local_operation_lock is not None:
+        local_operation_lock.__exit__(None, None, None)
+    return payload
 
 
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
@@ -3990,17 +4822,35 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         inspection["metrics"] = _metrics_report(topology, args.target)
     if "security" in scopes:
         inspection["security"] = _security_report(topology, args.target)
+    output_inspection = dict(inspection)
+    if "config" in inspection:
+        config_workspace = (
+            deployment_work_root(args.target)
+            / "inspection"
+            / report_dir.name
+        )
+        config_workspace.mkdir(parents=True, exist_ok=True)
+        write_json(config_workspace / "config.json", inspection["config"])
+        output_inspection["config"] = {
+            "status": "stored_outside_output",
+            "externalConfigRef": (
+                f"deployment-work://{args.target}/inspection/"
+                f"{report_dir.name}/config.json"
+            ),
+        }
     timing = _finish_timing(started_monotonic, started_at)
     write_json(
         report_dir / "report.json",
         {
             "command": "inspect",
-            "inspection": inspection,
+            "inspection": output_inspection,
             "findings": findings,
             **timing,
         },
     )
     for key, value in inspection.items():
+        if key == "config":
+            continue
         write_json(report_dir / f"{key}.json", value)
     write_json(
         report_dir / "findings.json",
@@ -4101,7 +4951,9 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                     findings.append("prod service plane rootless env file is missing")
                 if int(runtime.get("containerCount", 0) or 0) == 0:
                     findings.append("prod service plane rootless runtime has no running containers")
-    packages = [app_release_dir(env_name) / "report.json"]
+    packages = [
+        app_deployment_package_dir(env_name, target=args.target) / "report.json"
+    ]
     require_package_artifacts = bool(target.get("portProfile"))
     if require_package_artifacts and not all(path.exists() for path in packages):
         findings.append("packaged app artifact is missing")
@@ -4157,6 +5009,154 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": relpath(report_dir),
         **timing,
     }
+
+
+def command_filter_catalog(args: argparse.Namespace) -> dict[str, Any]:
+    topology = load_environment_topology()
+    target = get_target(topology, args.target)
+    environment = str(target["env"])
+    public_bases = target.get("publicBases") or {}
+    api_base_url = str(public_bases.get("api") or "")
+    report_dir = resolve_report_dir(args, environment, args.target)
+    started_monotonic, started_at = _start_timing()
+    if not api_base_url:
+        detail = "target topology has no public API base"
+        timing = _finish_timing(started_monotonic, started_at)
+        _write_filter_catalog_command_report(
+            report_dir=report_dir,
+            target_name=args.target,
+            action=args.action,
+            status="gate_block",
+            details=[detail],
+            publish_receipt=None,
+            argv=(),
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": "stackctl filter-catalog is GATE_BLOCK",
+            "details": [detail],
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+    try:
+        execution = execute_filter_catalog_command(
+            repo_root=ROOT,
+            target_name=args.target,
+            environment=environment,
+            api_base_url=api_base_url,
+            action=args.action,
+            rollback_release_id=args.rollback_release_id,
+            token_env=args.token_env,
+            prod_gray_activation=bool(args.prod_gray_activation),
+        )
+    except (RuntimeError, ValueError) as exc:
+        detail = str(exc)
+        timing = _finish_timing(started_monotonic, started_at)
+        _write_filter_catalog_command_report(
+            report_dir=report_dir,
+            target_name=args.target,
+            action=args.action,
+            status="gate_block",
+            details=[detail],
+            publish_receipt=None,
+            argv=(),
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": "stackctl filter-catalog is GATE_BLOCK",
+            "details": [detail],
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
+    publish_receipt: dict[str, Any] | None = None
+    details: list[str]
+    status = "ok"
+    exit_code = 0
+    if execution.return_code == 0:
+        try:
+            decoded = json.loads(execution.stdout)
+            if not isinstance(decoded, dict) or not bool(decoded.get("passed")):
+                raise ValueError("qwq-data filter-catalog publish did not emit a passed receipt")
+            publish_receipt = decoded
+            details = [
+                f"{args.action} release={decoded.get('releaseId', '')}",
+                f"digest={decoded.get('canonicalDigest', '')}",
+            ]
+        except (json.JSONDecodeError, ValueError) as exc:
+            status = "failed"
+            exit_code = 1
+            details = [f"invalid filter catalog publish receipt: {exc}"]
+    else:
+        status = "failed"
+        exit_code = 1
+        details = [
+            "qwq-data filter-catalog publish failed; "
+            "credential and child-process output are intentionally omitted from evidence"
+        ]
+    timing = _finish_timing(started_monotonic, started_at)
+    _write_filter_catalog_command_report(
+        report_dir=report_dir,
+        target_name=args.target,
+        action=args.action,
+        status=status,
+        details=details,
+        publish_receipt=publish_receipt,
+        argv=execution.argv,
+        timing=timing,
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": (
+            "stackctl filter-catalog passed"
+            if exit_code == 0
+            else "stackctl filter-catalog failed"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _write_filter_catalog_command_report(
+    *,
+    report_dir: Path,
+    target_name: str,
+    action: str,
+    status: str,
+    details: list[str],
+    publish_receipt: dict[str, Any] | None,
+    argv: tuple[str, ...],
+    timing: dict[str, Any],
+) -> None:
+    payload = {
+        "command": "filter-catalog",
+        "target": target_name,
+        "action": action,
+        "status": status,
+        "details": details,
+        "argv": list(argv),
+        "publishReceipt": publish_receipt,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(report_dir / "findings.json", {"issues": details if status != "ok" else []})
+    _write_summary_bundle(
+        report_dir,
+        command="filter-catalog",
+        target=target_name,
+        status=status,
+        summary=(
+            "FilterCatalogRelease publish receipt verified"
+            if status == "ok"
+            else "FilterCatalogRelease publish is blocked or failed"
+        ),
+        details=details,
+        extra={"action": action, "publishReceipt": publish_receipt},
+        timing=timing,
+    )
 
 
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
@@ -4600,7 +5600,7 @@ def _verify_release_registry_attestations(manifest: dict[str, Any]) -> None:
             )
 
 
-def _prod_gray_canary_contract() -> dict[str, Any]:
+def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
     policy_path = ROOT / "quwoquan_ops" / "environments" / "gray_routing_policy.yaml"
     payload = load_json_yaml(policy_path)
     policy = payload.get("policy") if isinstance(payload, dict) else None
@@ -4618,23 +5618,46 @@ def _prod_gray_canary_contract() -> dict[str, Any]:
         or not path.startswith("/")
     ):
         raise RuntimeError("production gray synthetic canary contract is incomplete")
-    dimensions = policy.get("dimensions")
+    stage_dimensions = policy.get("stageDimensions")
+    if not isinstance(stage_dimensions, dict):
+        raise RuntimeError("production gray routing stageDimensions are missing")
+    dimensions = stage_dimensions.get(rollout_stage)
     if not isinstance(dimensions, dict):
-        raise RuntimeError("production gray routing dimensions are missing")
+        raise RuntimeError(
+            f"production gray routing dimensions are missing for stage {rollout_stage}"
+        )
     header_dimensions = {
         "X-Client-App-Version": "appVersions",
         "X-Client-User-Id": "userIds",
         "X-Client-Region-Code": "provinces",
         "X-Client-Carrier": "carriers",
     }
-    if not any(
-        str(headers.get(header) or "") in {
-            str(value) for value in dimensions.get(dimension) or []
-        }
+    matching_headers = {
+        header: str(headers.get(header) or "")
         for header, dimension in header_dimensions.items()
-    ):
+        if str(headers.get(header) or "")
+        in {str(value) for value in dimensions.get(dimension) or []}
+    }
+    if rollout_stage == "full":
+        # full 阶段没有灰度路由维度；canary 只验证稳定面 healthz，不能把此前
+        # stage 的用户/地区 header 误报为仍在灰度。
+        return {
+            **canary,
+            "headers": {
+                key: value
+                for key, value in headers.items()
+                if key not in header_dimensions
+            },
+            "rolloutStage": rollout_stage,
+            "expectedRoute": "stable",
+        }
+    if not matching_headers:
         raise RuntimeError("synthetic canary headers do not match any enabled gray dimension")
-    return canary
+    return {
+        **canary,
+        "rolloutStage": rollout_stage,
+        "expectedRoute": "gray",
+    }
 
 
 def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
@@ -4873,6 +5896,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     release_state_snapshot: dict[str, str] = {}
     gray_canary_contract: dict[str, Any] | None = None
     gray_canary_traffic: dict[str, Any] | None = None
+    provider_readiness: dict[str, Any] = {}
     if args.target == "prod-hosted":
         try:
             rollout_stage = _resolve_prod_rollout_stage(args.step, args.stage)
@@ -4884,6 +5908,50 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "details": [],
                 **timing,
             }
+        if rollout_stage == "gray-initial":
+            provider_preflight = _run_provider_readiness_preflight("prod", report_dir)
+            provider_readiness = provider_preflight["report"]
+            if provider_preflight["exitCode"] != 0:
+                timing = _finish_timing(started_monotonic, started_at)
+                payload = {
+                    "status": ProbeOutcome.GATE_BLOCK.value,
+                    "command": "deploy",
+                    "target": args.target,
+                    "rolloutStage": rollout_stage,
+                    "providerReadiness": provider_readiness,
+                    "steps": [
+                        {
+                            "kind": provider_preflight["kind"],
+                            "environment": "prod",
+                            "argv": provider_preflight["argv"],
+                            "exitCode": provider_preflight["exitCode"],
+                            "reportPath": provider_preflight["reportPath"],
+                            "details": provider_preflight["details"],
+                        }
+                    ],
+                    **timing,
+                }
+                write_json(report_dir / "report.json", payload)
+                write_json(
+                    report_dir / "findings.json",
+                    {"target": args.target, "issues": provider_preflight["details"]},
+                )
+                _write_summary_bundle(
+                    report_dir,
+                    command="deploy",
+                    target=args.target,
+                    status="blocked",
+                    summary="stackctl deploy is GATE_BLOCK by Provider readiness",
+                    details=provider_preflight["details"],
+                    timing=timing,
+                )
+                return {
+                    "exitCode": 2,
+                    "summary": "stackctl deploy is GATE_BLOCK by Provider readiness",
+                    "details": provider_preflight["details"],
+                    "reportDir": relpath(report_dir),
+                    **timing,
+                }
         prometheus_url = str(
             getattr(args, "prometheus_url", "")
             or os.environ.get("PROMETHEUS_URL", "")
@@ -4909,7 +5977,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             }
         if not dry_run_requested:
             try:
-                gray_canary_contract = _prod_gray_canary_contract()
+                gray_canary_contract = _prod_gray_canary_contract(rollout_stage)
             except RuntimeError as error:
                 timing = _finish_timing(started_monotonic, started_at)
                 return {
@@ -5328,6 +6396,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "releaseState": committed_release_state or {},
             "wiredWorkloads": _prod_rollout_workloads() if args.target == "prod-hosted" else [],
+            "providerReadiness": provider_readiness,
             "postDeployChecks": post_deploy_checks,
             "postDeployFailures": post_deploy_failures,
             "rollbackPostChecks": rollback_post_checks,
@@ -5482,7 +6551,7 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL": str(public_bases["mediaVideo"]),
         "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
-        "LOCAL_GAMMA_LIVEKIT_PUBLIC_URL": str(public_bases["rtc"]),
+        "LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL": str(public_bases["rtc"]),
         "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": str(ports["livekit-http"]),
         "LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT": str(ports["livekit-rtc-tcp"]),
         "LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT": str(ports["livekit-rtc-udp"]),
@@ -5705,6 +6774,11 @@ def _full_scope_health_checks(
     checks: list[dict[str, Any]] = []
     env_name = str(env_cfg.get("artifactPolicy", {}).get("app", {}).get("runtimeEnv", ""))
     if target_name == "beta-local":
+        notification_port = canonical_port(
+            load_port_manifest(),
+            "beta-local",
+            "notification-service",
+        )
         checks.append(
             {
                 "name": "app-config",
@@ -5725,9 +6799,9 @@ def _full_scope_health_checks(
                     "url": f"{str(public_bases['api']).rstrip('/')}/chat/contacts",
                 },
                 {
-                    "name": "app-messages-unread-count",
+                    "name": "notification-service-health",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/app-messages/unread-count",
+                    "url": f"http://127.0.0.1:{notification_port}/healthz",
                 },
                 {
                     "name": "feed-intersections",
@@ -5825,8 +6899,11 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "ops-portal",
             "media-edge",
             "media-origin",
+            "content-service",
             "assistant-service",
             "chat-service",
+            "notification-service",
+            "fixture-gateway",
         ],
         "gamma-local": [
             "api-edge",
@@ -6043,12 +7120,52 @@ def _command_details(result: Any) -> list[str]:
     return retained
 
 
+def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
+    runner_args = [
+        "--adapter-id",
+        args.adapter_id,
+        "--environment",
+        args.env,
+        "--layer",
+        args.layer,
+    ]
+    if args.execute:
+        runner_args.append("--execute")
+    for option, value in (
+        ("--image-digest", args.image_digest),
+        ("--data-digest", args.data_digest),
+        ("--switch-compatibility-receipt-ref", args.switch_compatibility_receipt_ref),
+        ("--callback-drain-receipt-ref", args.callback_drain_receipt_ref),
+        ("--last-good-receipt-ref", args.last_good_receipt_ref),
+        ("--rollback-receipt-ref", args.rollback_receipt_ref),
+        ("--prod-binding-preflight-receipt-ref", args.prod_binding_preflight_receipt_ref),
+    ):
+        if value:
+            runner_args.extend((option, value))
+    exit_code = provider_conformance_runner.main(runner_args)
+    return {
+        "exitCode": exit_code,
+        "summary": (
+            "stackctl provider-conformance passed"
+            if exit_code == 0
+            else "stackctl provider-conformance failed"
+        ),
+        "details": [
+            f"adapter={args.adapter_id}",
+            f"environment={args.env}",
+            f"layer={args.layer}",
+            f"executed={args.execute}",
+        ],
+    }
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     dispatch = {
         "package": command_package,
         "verify": command_verify,
+        "provider-conformance": command_provider_conformance,
         "up": command_up,
         "down": command_down,
         "status": command_status,
@@ -6056,6 +7173,7 @@ def main() -> int:
         "inspect": command_inspect,
         "doctor": command_doctor,
         "content-readiness": command_content_readiness,
+        "filter-catalog": command_filter_catalog,
         "repair": command_repair,
         "roll": command_roll,
         "deploy": command_deploy,

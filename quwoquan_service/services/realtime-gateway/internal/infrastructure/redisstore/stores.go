@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/realtime-gateway/internal/application"
 )
@@ -355,18 +356,21 @@ func parsePresenceEntry(
 // EventSource 按可信 identity 订阅明确语义的通道；RTC 只按 persona，
 // generic/recommendation 仍按 account，不订阅任何 rtc:user/account alias。
 type EventSource struct {
-	client rtredis.Client
+	transport runtimemessaging.MessageTransport
 }
 
-func NewEventSource(client rtredis.Client) *EventSource {
-	return &EventSource{client: client}
+func NewEventSource(transport runtimemessaging.MessageTransport) *EventSource {
+	if transport == nil {
+		panic("realtime event source requires a message transport")
+	}
+	return &EventSource{transport: transport}
 }
 
 func (s *EventSource) SubscribeIdentity(
 	ctx context.Context,
 	identity application.TrustedIdentity,
-) (rtredis.Subscription, error) {
-	source, err := s.client.Subscribe(
+) (runtimemessaging.EphemeralSubscription, error) {
+	source, err := s.transport.SubscribeEphemeral(
 		ctx,
 		"rt:user:"+strings.TrimSpace(identity.AccountID),
 		"rt:rtc:persona:"+strings.TrimSpace(identity.PersonaID),
@@ -379,9 +383,9 @@ func (s *EventSource) SubscribeIdentity(
 }
 
 type identitySubscription struct {
-	source    rtredis.Subscription
+	source    runtimemessaging.EphemeralSubscription
 	identity  application.TrustedIdentity
-	messages  chan rtredis.Message
+	messages  chan runtimemessaging.EphemeralDelivery
 	done      chan struct{}
 	closeOnce sync.Once
 	closeErr  error
@@ -389,20 +393,20 @@ type identitySubscription struct {
 
 func newIdentitySubscription(
 	ctx context.Context,
-	source rtredis.Subscription,
+	source runtimemessaging.EphemeralSubscription,
 	identity application.TrustedIdentity,
 ) *identitySubscription {
 	subscription := &identitySubscription{
 		source:   source,
 		identity: identity,
-		messages: make(chan rtredis.Message),
+		messages: make(chan runtimemessaging.EphemeralDelivery),
 		done:     make(chan struct{}),
 	}
 	go subscription.forward(ctx)
 	return subscription
 }
 
-func (s *identitySubscription) Channel() <-chan rtredis.Message {
+func (s *identitySubscription) Channel() <-chan runtimemessaging.EphemeralDelivery {
 	return s.messages
 }
 
@@ -446,7 +450,7 @@ func (s *identitySubscription) forward(ctx context.Context) {
 }
 
 func realtimeMessageMatchesIdentity(
-	message rtredis.Message,
+	message runtimemessaging.EphemeralDelivery,
 	identity application.TrustedIdentity,
 ) bool {
 	if !strings.HasPrefix(message.Channel, "rt:rtc:persona:") {
@@ -456,7 +460,7 @@ func realtimeMessageMatchesIdentity(
 		TargetPersonaID string `json:"targetPersonaId"`
 		DeviceID        string `json:"deviceId"`
 	}
-	if json.Unmarshal([]byte(message.Payload), &target) != nil {
+	if json.Unmarshal(message.Payload, &target) != nil {
 		return true
 	}
 	if personaID := strings.TrimSpace(target.TargetPersonaID); personaID != "" &&

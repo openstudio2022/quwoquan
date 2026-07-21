@@ -11,8 +11,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
+	embeddinginfra "quwoquan_service/services/content-service/internal/infrastructure/embedding"
 	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
@@ -77,7 +79,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	// External mounted config root mode:
 	//   <root>/configs/<service>/default/config.yaml
 	//   <root>/configs/<service>/<env>/config.yaml
-	//   <root>/quwoquan_service/services/<service>/configs/releases/<version>.yaml
+	//   <root>/releases/config/<service>/<version>.yaml
 	if strings.TrimSpace(configRoot) != "" {
 		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
 		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
@@ -89,7 +91,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -184,7 +186,21 @@ func preflightConfig(cfg config, appEnv string) error {
 	if cfg.ES.Enabled && len(cfg.ES.Endpoints) == 0 {
 		return fmt.Errorf("%s content runtime enables search projection but has no es.endpoints/SEARCH_ES_ENDPOINTS", appEnv)
 	}
+	if appEnv != "alpha" && cfg.Embedding.Enabled {
+		if _, err := resolveContentEmbeddingBinding(appEnv); err != nil {
+			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
+		}
+	}
 	return nil
+}
+
+func resolveContentEmbeddingBinding(
+	appEnv string,
+) (embeddinginfra.OpenAICompatibleBinding, error) {
+	return embeddinginfra.LoadOpenAICompatibleBinding(
+		appEnv,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
 }
 
 func validateCommentRateLimitConfig(cfg config, appEnv string) error {
@@ -377,24 +393,6 @@ func applyEnvOverrides(cfg *config) {
 		}
 	}
 
-	// Embedding（N2-3 gamma 配置路径）：endpoint/api_key 是外部凭据，只经运行时
-	// 环境注入（不落 config yaml / 镜像）；enabled 与向量召回读通道独立控制，
-	// 无凭据时保持 disabled（诚实关闭，不假开启）。
-	if v := os.Getenv("CONTENT_EMBEDDING_ENDPOINT"); v != "" {
-		cfg.Embedding.Endpoint = v
-	}
-	if v := os.Getenv("CONTENT_EMBEDDING_API_KEY"); v != "" {
-		cfg.Embedding.APIKey = v
-	}
-	if v := os.Getenv("CONTENT_EMBEDDING_MODEL"); v != "" {
-		cfg.Embedding.Model = v
-	}
-	if v := os.Getenv("CONTENT_EMBEDDING_ENABLED"); v == "true" || v == "1" {
-		cfg.Embedding.Enabled = true
-	}
-	if v := os.Getenv("CONTENT_EMBEDDING_VECTOR_RECALL_ENABLED"); v == "true" || v == "1" {
-		cfg.Embedding.VectorRecallEnabled = true
-	}
 }
 
 // applyRedisSceneEnv reads env vars with the given prefix and writes them into cfg.

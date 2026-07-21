@@ -91,6 +91,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
           journey: 'content_report',
           action: 'submit_report',
           pageName: 'user_profile_shell',
+          error: error,
           payload: {
             'result': 'failure',
             'failReasonCode': error is CloudException

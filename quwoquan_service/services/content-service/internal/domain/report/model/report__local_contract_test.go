@@ -13,13 +13,14 @@ func TestReportStateMachineOwnsVersionedTransitions(t *testing.T) {
 
 	createdAt := time.Date(2026, 7, 13, 1, 0, 0, 0, time.UTC)
 	report, err := reportmodel.Create(reportmodel.CreateParams{
-		ID:          "report-1",
-		ReporterID:  "persona-reporter",
-		TargetType:  reportmodel.TargetPost,
-		TargetID:    "post-1",
-		Reason:      reportmodel.ReasonSpam,
-		Description: "重复广告",
-		Now:         createdAt,
+		ID:                "report-1",
+		ReporterID:        "persona-reporter",
+		ReporterAccountID: "account-reporter",
+		TargetType:        reportmodel.TargetPost,
+		TargetID:          "post-1",
+		Reason:            reportmodel.ReasonSpam,
+		Description:       "重复广告",
+		Now:               createdAt,
 	})
 	if err != nil {
 		t.Fatalf("create report: %v", err)
@@ -84,17 +85,34 @@ func TestReportRestoreRejectsInconsistentTerminalState(t *testing.T) {
 
 	now := time.Date(2026, 7, 13, 2, 0, 0, 0, time.UTC)
 	_, err := reportmodel.Restore(reportmodel.Snapshot{
-		ID:         "report-invalid",
-		Version:    2,
+		ID:                "report-invalid",
+		Version:           2,
+		ReporterID:        "persona-reporter",
+		ReporterAccountID: "account-reporter",
+		TargetType:        reportmodel.TargetPost,
+		TargetID:          "post-1",
+		Reason:            reportmodel.ReasonSpam,
+		Status:            reportmodel.StatusResolved,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	if !errors.Is(err, reportmodel.ErrInvalidReport) {
+		t.Fatalf("inconsistent terminal snapshot must fail, got %v", err)
+	}
+}
+
+func TestReportRequiresTrustedReporterAccountForResultDelivery(t *testing.T) {
+	t.Parallel()
+
+	_, err := reportmodel.Create(reportmodel.CreateParams{
+		ID:         "report-without-account",
 		ReporterID: "persona-reporter",
 		TargetType: reportmodel.TargetPost,
 		TargetID:   "post-1",
 		Reason:     reportmodel.ReasonSpam,
-		Status:     reportmodel.StatusResolved,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		Now:        time.Date(2026, 7, 13, 3, 0, 0, 0, time.UTC),
 	})
 	if !errors.Is(err, reportmodel.ErrInvalidReport) {
-		t.Fatalf("inconsistent terminal snapshot must fail, got %v", err)
+		t.Fatalf("report without trusted reporter account must fail, got %v", err)
 	}
 }
