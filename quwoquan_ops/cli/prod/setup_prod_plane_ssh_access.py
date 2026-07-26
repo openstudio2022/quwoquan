@@ -22,7 +22,6 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 
 
@@ -77,11 +76,10 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 def _resolve_prod_host(override: str | None) -> str:
     if override:
         return override
-    topology = load_environment_topology()
-    target = get_target(topology, "prod-hosted")
-    host = str(target.get("sshHost") or "").strip()
+    access = _load_yaml(ACCESS_MANIFEST)
+    host = str(access.get("sshHost") or "").strip()
     if not host:
-        raise SystemExit("FAIL: prod-hosted target 缺少独立 sshHost")
+        raise SystemExit("FAIL: prod access-isolation 缺少独立 sshHost")
     return host
 
 
@@ -571,7 +569,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=None,
-        help="覆盖 prod-hosted SSH host；默认读取 prod/runtime.yaml targets.prod-hosted.sshHost",
+        help="覆盖 prod-hosted SSH host；默认读取 prod/access-isolation.yaml sshHost",
     )
     parser.add_argument(
         "--include-relay",

@@ -65,6 +65,14 @@ def main() -> int:
         errors.append("schema 必须为 prod-plane-access-isolation")
     if access.get("target") != "prod-hosted":
         errors.append("target 必须为 prod-hosted（远端唯一托管目标）")
+    ssh_host = str(access.get("sshHost") or "").strip()
+    if (
+        not ssh_host
+        or "://" in ssh_host
+        or "/" in ssh_host
+        or any(character.isspace() for character in ssh_host)
+    ):
+        errors.append("sshHost 必须是独立的 SSH hostname 或 IP，且不得包含 URL/path")
     if access.get("rolloutStages") != EXPECTED_STAGES:
         errors.append(f"rolloutStages 必须为 {EXPECTED_STAGES}")
 

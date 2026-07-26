@@ -10,6 +10,8 @@ description: >
 
 # 远端唯一托管目标：取消远端 gamma 后，只有 prod-hosted 一个远端访问面。
 target: prod-hosted
+# 仅供 SSH 管理与预验证传输；禁止投影到 App public base 或正式公网入口。
+sshHost: 118.31.239.122
 
 # 非 root 中转/bootstrap 账号：仅用于 SSH 登录、按平面分发凭据、触发受限发布命令；无日常 root。
 relayAccount:

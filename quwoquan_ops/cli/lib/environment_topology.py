@@ -497,16 +497,6 @@ def validate_environment_topology(
         if target_name == "prod-hosted" and backend != "ssh-hosted":
             issues.append("prod-hosted target must use ssh-hosted backend")
         if backend == "ssh-hosted":
-            ssh_host = str(target.get("sshHost") or "").strip()
-            if (
-                not ssh_host
-                or "://" in ssh_host
-                or "/" in ssh_host
-                or any(character.isspace() for character in ssh_host)
-            ):
-                issues.append(
-                    f"{target_name}: sshHost must be a bare SSH hostname or IP address"
-                )
             build_images = target.get("buildImages")
             if not isinstance(build_images, dict):
                 issues.append(f"{target_name}: buildImages must be a mapping")

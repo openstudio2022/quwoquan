@@ -17,8 +17,6 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
-
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
 
@@ -56,13 +54,10 @@ def _resolve_host(override: str) -> str:
     explicit = override or os.environ.get("PROD_SSH_HOST", "").strip()
     if explicit:
         return explicit
-    topology = load_environment_topology()
-    host = str(
-        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("sshHost")
-        or ""
-    ).strip()
+    access = _load_yaml(ACCESS_MANIFEST)
+    host = str(access.get("sshHost") or "").strip()
     if not host:
-        raise SystemExit("FAIL: prod-hosted target is missing sshHost")
+        raise SystemExit("FAIL: prod access-isolation is missing sshHost")
     return host
 
 

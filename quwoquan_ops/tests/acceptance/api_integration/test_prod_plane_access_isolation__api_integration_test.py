@@ -64,6 +64,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
     @unittest.skipIf(yaml is None, "PyYAML required")
     def test_planes_accounts_and_secrets_single_source(self) -> None:
         data = yaml.safe_load(ACCESS.read_text(encoding="utf-8"))
+        self.assertEqual(data["sshHost"], "118.31.239.122")
         planes = {p["plane"]: p for p in data["planes"]}
         self.assertEqual(set(planes), {"edge", "media", "service", "data"})
         for plane, spec in planes.items():
