@@ -152,26 +152,44 @@ def _verify_pubspec(failures: list[str]) -> None:
         )
 
 
-def _verify_ios_pods(failures: list[str]) -> None:
-    if not PODFILE_LOCK.exists():
-        _fail(failures, f"Missing {PODFILE_LOCK.relative_to(ROOT)}")
+def _display_path(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _verify_ios_pods(
+    failures: list[str],
+    *,
+    podfile_lock: Path = PODFILE_LOCK,
+    pods_manifest_lock: Path = PODS_MANIFEST_LOCK,
+    pods_dir: Path = PODS_DIR,
+) -> None:
+    if not podfile_lock.exists():
+        _fail(failures, f"Missing {_display_path(podfile_lock)}")
         return
-    if not PODS_MANIFEST_LOCK.exists():
-        _fail(failures, f"Missing {PODS_MANIFEST_LOCK.relative_to(ROOT)}")
+
+    # Podfile.lock is source truth. Pods/ is a local generated projection and is
+    # intentionally absent from a clean checkout; validate it only when present.
+    if not pods_dir.exists():
         return
-    if PODFILE_LOCK.read_text(encoding="utf-8") != PODS_MANIFEST_LOCK.read_text(encoding="utf-8"):
+    if not pods_manifest_lock.exists():
+        _fail(failures, f"Missing {_display_path(pods_manifest_lock)}")
+        return
+    if podfile_lock.read_text(encoding="utf-8") != pods_manifest_lock.read_text(encoding="utf-8"):
         _fail(
             failures,
             "quwoquan_app/ios/Pods/Manifest.lock must match quwoquan_app/ios/Podfile.lock so local iOS builds never need implicit pod graph repair",
         )
-    lock_data = yaml.safe_load(PODFILE_LOCK.read_text(encoding="utf-8"))
+    lock_data = yaml.safe_load(podfile_lock.read_text(encoding="utf-8"))
     trunk_pods = lock_data.get("SPEC REPOS", {}).get("trunk", [])
     for pod_name in trunk_pods:
-        pod_dir = PODS_DIR / pod_name
+        pod_dir = pods_dir / pod_name
         if not pod_dir.exists():
             _fail(
                 failures,
-                f"Missing vendored CocoaPod directory for trunk pod {pod_name!r}: {pod_dir.relative_to(ROOT)}",
+                f"Missing vendored CocoaPod directory for trunk pod {pod_name!r}: {_display_path(pod_dir)}",
             )
 
 
