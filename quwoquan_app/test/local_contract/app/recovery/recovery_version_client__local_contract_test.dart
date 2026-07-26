@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/recovery/recovery_version_client.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 
 void main() {
   test(
@@ -28,7 +29,7 @@ void main() {
         buildNumber: 18100,
       );
 
-      expect(requested.path, '/ops/app-recovery/version');
+      expect(requested.path, OpsApiMetadata.getAppRecoveryVersionPath);
       expect(requested.queryParameters, <String, String>{
         'platform': 'android',
         'appVersion': '1.8.1',
